@@ -1,0 +1,618 @@
+use crate::auth::AuthPrompter;
+use crate::bridge::{ChannelReader, ChannelWriter};
+use russh::client::{self, Handle, Msg};
+use russh::keys::agent::client::AgentClient;
+use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate, load_secret_key};
+use russh::{Channel, ChannelMsg, Disconnect};
+use std::collections::HashMap;
+use std::fmt;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::sync::Mutex as AsyncMutex;
+use tokio::task::JoinHandle;
+use transom_core::{
+    AppError, ConnectionSecrets, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore,
+    PromptInfo, SessionOptions, SshConnection, TerminalControl, TerminalControlHandle, TerminalIo,
+    TerminalSize,
+};
+
+#[derive(Debug)]
+pub struct ClientError(pub AppError);
+
+impl fmt::Display for ClientError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl std::error::Error for ClientError {}
+
+impl From<russh::Error> for ClientError {
+    fn from(error: russh::Error) -> Self {
+        Self(AppError::with_detail(
+            ErrorCode::Protocol,
+            error.to_string(),
+        ))
+    }
+}
+
+impl From<AppError> for ClientError {
+    fn from(error: AppError) -> Self {
+        Self(error)
+    }
+}
+
+struct ClientHandler {
+    host: String,
+    port: u16,
+    known_hosts: Arc<dyn KnownHostsStore>,
+    remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+}
+
+impl client::Handler for ClientHandler {
+    type Error = ClientError;
+
+    async fn check_server_key(
+        &mut self,
+        server_key: &PublicKeyOrCertificate,
+    ) -> Result<bool, Self::Error> {
+        let public_key = server_key.public_key();
+        let fingerprint = public_key.fingerprint(HashAlg::Sha256).to_string();
+        let info = HostKeyInfo::new(
+            format!("{:?}", public_key.algorithm()),
+            fingerprint.clone(),
+            public_key.to_openssh().ok(),
+        );
+
+        match self.known_hosts.check(&self.host, self.port, &info)? {
+            HostKeyStatus::Match => Ok(true),
+            HostKeyStatus::Unknown => {
+                self.known_hosts.record(&self.host, self.port, &info)?;
+                tracing::info!(host = %self.host, port = self.port, %fingerprint, "recorded new host key");
+                Ok(true)
+            }
+            HostKeyStatus::Mismatch {
+                previous_fingerprint,
+            } => Err(ClientError(AppError::with_detail(
+                ErrorCode::HostKeyMismatch,
+                format!(
+                    "host key mismatch for {}:{}: previous {previous_fingerprint}, current {fingerprint}",
+                    self.host, self.port
+                ),
+            ))),
+        }
+    }
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: Channel<Msg>,
+        _connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        let target = self
+            .remote_forwards
+            .lock()
+            .ok()
+            .and_then(|map| map.get(&(connected_port as u16)).cloned());
+        reply.accept().await;
+        let Some((host, port)) = target else {
+            return Ok(());
+        };
+        let mut stream = channel.into_stream();
+        tokio::spawn(async move {
+            if let Ok(mut tcp) = TcpStream::connect((host.as_str(), port)).await {
+                let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+            } else {
+                let _ = stream.shutdown().await;
+            }
+        });
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct SshRemote {
+    inner: Arc<AsyncMutex<Handle<ClientHandler>>>,
+    remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+}
+
+impl SshRemote {
+    pub(crate) async fn open_session(&self) -> Result<Channel<Msg>, AppError> {
+        let session = self.inner.lock().await;
+        session
+            .channel_open_session()
+            .await
+            .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))
+    }
+
+    pub(crate) async fn open_direct_tcpip(
+        &self,
+        host: &str,
+        port: u16,
+    ) -> Result<Channel<Msg>, AppError> {
+        let session = self.inner.lock().await;
+        session
+            .channel_open_direct_tcpip(host.to_string(), port as u32, "127.0.0.1", 0)
+            .await
+            .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
+    }
+
+    pub(crate) async fn tcpip_forward(&self, host: &str, port: u16) -> Result<u32, AppError> {
+        let session = self.inner.lock().await;
+        session
+            .tcpip_forward(host.to_string(), port as u32)
+            .await
+            .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
+    }
+
+    pub(crate) async fn cancel_tcpip_forward(&self, host: &str, port: u16) -> Result<(), AppError> {
+        let session = self.inner.lock().await;
+        session
+            .cancel_tcpip_forward(host.to_string(), port as u32)
+            .await
+            .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
+    }
+
+    pub(crate) fn register_remote_target(&self, port: u16, host: String, target_port: u16) {
+        if let Ok(mut map) = self.remote_forwards.lock() {
+            map.insert(port, (host, target_port));
+        }
+    }
+
+    pub(crate) fn unregister_remote_target(&self, port: u16) {
+        if let Ok(mut map) = self.remote_forwards.lock() {
+            map.remove(&port);
+        }
+    }
+
+    pub async fn exec_command(&self, command: &str) -> Result<String, AppError> {
+        let mut channel = self.open_session().await?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
+
+        let mut output = Vec::new();
+        while let Some(msg) = channel.wait().await {
+            match msg {
+                ChannelMsg::Data { data } => {
+                    output.extend_from_slice(&data);
+                }
+                ChannelMsg::Eof | ChannelMsg::Close => break,
+                _ => {}
+            }
+        }
+        Ok(String::from_utf8_lossy(&output).to_string())
+    }
+
+    pub async fn disconnect(&self, description: &str) {
+        let session = self.inner.lock().await;
+        let _ = session
+            .disconnect(Disconnect::ByApplication, description, "en")
+            .await;
+    }
+}
+
+pub struct SshSession {
+    pub io: TerminalIo,
+    pub join: JoinHandle<()>,
+    pub remote: SshRemote,
+}
+
+pub async fn connect_ssh(
+    connection: &SshConnection,
+    size: TerminalSize,
+    credentials: ConnectionSecrets,
+    prompter: Arc<dyn AuthPrompter>,
+    known_hosts: Arc<dyn KnownHostsStore>,
+) -> Result<SshSession, AppError> {
+    if connection.host.trim().is_empty() {
+        return Err(AppError::with_detail(
+            ErrorCode::Configuration,
+            "host is empty",
+        ));
+    }
+    if connection.username.trim().is_empty() {
+        return Err(AppError::with_detail(
+            ErrorCode::Configuration,
+            "username is empty",
+        ));
+    }
+
+    let config = client::Config {
+        nodelay: true,
+        keepalive_interval: keepalive_interval(&connection.options),
+        keepalive_max: 3,
+        ..Default::default()
+    };
+
+    let remote_forwards = Arc::new(Mutex::new(HashMap::new()));
+    let handler = ClientHandler {
+        host: connection.host.clone(),
+        port: connection.port,
+        known_hosts,
+        remote_forwards: remote_forwards.clone(),
+    };
+    let connect_timeout = Duration::from_secs(connection.options.connect_timeout_secs.max(1));
+    let connect = client::connect(
+        Arc::new(config),
+        (connection.host.as_str(), connection.port),
+        handler,
+    );
+    let mut session = tokio::time::timeout(connect_timeout, connect)
+        .await
+        .map_err(|_| AppError::new(ErrorCode::Timeout))?
+        .map_err(map_connect_error)?;
+
+    if let Err(error) = authenticate(&mut session, connection, credentials, prompter).await {
+        let _ = session
+            .disconnect(Disconnect::ByApplication, "authentication failed", "en")
+            .await;
+        return Err(error);
+    }
+
+    let channel = session
+        .channel_open_session()
+        .await
+        .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
+
+    channel
+        .request_pty(
+            false,
+            "xterm-256color",
+            size.cols as u32,
+            size.rows as u32,
+            0,
+            0,
+            &[],
+        )
+        .await
+        .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
+    let _ = channel.set_env(false, "COLORTERM", "truecolor").await;
+    channel
+        .request_shell(false)
+        .await
+        .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
+
+    let (input_tx, input_rx) = flume::bounded::<Vec<u8>>(64);
+    let (output_tx, output_rx) = flume::bounded::<Vec<u8>>(128);
+    let (control, control_rx) = TerminalControlHandle::channel(16);
+    let remote = SshRemote {
+        inner: Arc::new(AsyncMutex::new(session)),
+        remote_forwards,
+    };
+
+    let join = tokio::spawn(run_terminal_actor(
+        remote.clone(),
+        channel,
+        input_rx,
+        control_rx,
+        output_tx,
+    ));
+
+    let io = TerminalIo::new(
+        Box::new(ChannelReader::new(output_rx)),
+        Box::new(ChannelWriter::new(input_tx)),
+        control,
+    );
+
+    Ok(SshSession { io, join, remote })
+}
+
+fn keepalive_interval(options: &SessionOptions) -> Option<Duration> {
+    (options.keepalive_secs > 0).then(|| Duration::from_secs(options.keepalive_secs))
+}
+
+fn map_connect_error(error: ClientError) -> AppError {
+    if matches!(
+        error.0.code,
+        ErrorCode::HostKeyMismatch | ErrorCode::HostKeyUnknown
+    ) {
+        error.0
+    } else {
+        AppError::with_detail(ErrorCode::ConnectionFailed, error.0.to_string())
+    }
+}
+
+async fn authenticate(
+    session: &mut Handle<ClientHandler>,
+    connection: &SshConnection,
+    credentials: ConnectionSecrets,
+    prompter: Arc<dyn AuthPrompter>,
+) -> Result<(), AppError> {
+    let user = connection.username.clone();
+    let authenticated = match &connection.auth {
+        transom_core::AuthMethod::Password { .. } => {
+            let password = credentials.password.as_ref().ok_or_else(|| {
+                AppError::with_detail(ErrorCode::AuthFailed, "password is required")
+            })?;
+            session
+                .authenticate_password(user.clone(), password.to_string())
+                .await
+                .map_err(auth_error)?
+                .success()
+        }
+        transom_core::AuthMethod::PrivateKey { path, .. } => {
+            let passphrase = credentials
+                .key_passphrase
+                .as_ref()
+                .map(|passphrase| passphrase.as_str());
+            let key = load_secret_key(path, passphrase).map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::AuthFailed,
+                    format!("failed to load private key {}: {error}", path.display()),
+                )
+            })?;
+            let hash_alg = session
+                .best_supported_rsa_hash()
+                .await
+                .map_err(auth_error)?
+                .flatten();
+            session
+                .authenticate_publickey(
+                    user.clone(),
+                    PrivateKeyWithHashAlg::new(Arc::new(key), hash_alg),
+                )
+                .await
+                .map_err(auth_error)?
+                .success()
+        }
+        transom_core::AuthMethod::Agent => authenticate_agent(session, &user).await?,
+        _ => {
+            return Err(AppError::with_detail(
+                ErrorCode::Configuration,
+                "unsupported authentication method",
+            ));
+        }
+    };
+
+    if authenticated {
+        return Ok(());
+    }
+
+    if connection.options.allow_keyboard_interactive
+        && authenticate_keyboard_interactive(session, &user, prompter).await?
+    {
+        return Ok(());
+    }
+
+    Err(AppError::with_detail(
+        ErrorCode::AuthFailed,
+        "authentication failed",
+    ))
+}
+
+fn auth_error(error: russh::Error) -> AppError {
+    AppError::with_detail(ErrorCode::AuthFailed, error.to_string())
+}
+
+async fn authenticate_agent(
+    session: &mut Handle<ClientHandler>,
+    user: &str,
+) -> Result<bool, AppError> {
+    #[cfg(unix)]
+    {
+        let mut agent = AgentClient::connect_env().await.map_err(|error| {
+            AppError::with_detail(ErrorCode::AuthFailed, format!("ssh-agent: {error}"))
+        })?;
+        let identities = agent.request_identities().await.map_err(|error| {
+            AppError::with_detail(ErrorCode::AuthFailed, format!("ssh-agent: {error}"))
+        })?;
+        for identity in identities {
+            let public_key = identity.public_key().into_owned();
+            let result = session
+                .authenticate_publickey_with(user.to_owned(), public_key, None, &mut agent)
+                .await
+                .map_err(|error| {
+                    AppError::with_detail(ErrorCode::AuthFailed, format!("ssh-agent: {error}"))
+                })?;
+            if result.success() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (session, user);
+        Err(AppError::with_detail(
+            ErrorCode::AuthFailed,
+            "ssh-agent authentication is not implemented on this platform yet",
+        ))
+    }
+}
+
+async fn authenticate_keyboard_interactive(
+    session: &mut Handle<ClientHandler>,
+    user: &str,
+    prompter: Arc<dyn AuthPrompter>,
+) -> Result<bool, AppError> {
+    use russh::client::KeyboardInteractiveAuthResponse;
+
+    let mut response = session
+        .authenticate_keyboard_interactive_start(user.to_owned(), None)
+        .await
+        .map_err(auth_error)?;
+
+    for _ in 0..8 {
+        match response {
+            KeyboardInteractiveAuthResponse::Success => return Ok(true),
+            KeyboardInteractiveAuthResponse::Failure { .. } => return Ok(false),
+            KeyboardInteractiveAuthResponse::InfoRequest {
+                name,
+                instructions,
+                prompts,
+            } => {
+                let prompt_info: Vec<PromptInfo> = prompts
+                    .iter()
+                    .map(|prompt| PromptInfo {
+                        prompt: prompt.prompt.clone(),
+                        echo: prompt.echo,
+                    })
+                    .collect();
+                let answers = prompter
+                    .keyboard_interactive(&name, &instructions, &prompt_info)
+                    .await?;
+                if answers.len() != prompt_info.len() {
+                    return Err(AppError::with_detail(
+                        ErrorCode::KeyboardInteractiveFailed,
+                        "prompt response count mismatch",
+                    ));
+                }
+                response = session
+                    .authenticate_keyboard_interactive_respond(answers)
+                    .await
+                    .map_err(auth_error)?;
+            }
+        }
+    }
+
+    Err(AppError::with_detail(
+        ErrorCode::KeyboardInteractiveFailed,
+        "too many keyboard-interactive rounds",
+    ))
+}
+
+async fn run_terminal_actor(
+    remote: SshRemote,
+    mut channel: Channel<Msg>,
+    input_rx: flume::Receiver<Vec<u8>>,
+    control_rx: flume::Receiver<TerminalControl>,
+    output_tx: flume::Sender<Vec<u8>>,
+) {
+    enum Activity {
+        Channel(Option<ChannelMsg>),
+        Input(Result<Vec<u8>, flume::RecvError>),
+        Control(Result<TerminalControl, flume::RecvError>),
+    }
+
+    loop {
+        let activity = tokio::select! {
+            message = channel.wait() => Activity::Channel(message),
+            input = input_rx.recv_async() => Activity::Input(input),
+            control = control_rx.recv_async() => Activity::Control(control),
+        };
+
+        match activity {
+            Activity::Channel(Some(ChannelMsg::Data { data })) => {
+                if output_tx.send_async(data.to_vec()).await.is_err() {
+                    break;
+                }
+            }
+            Activity::Channel(Some(ChannelMsg::ExtendedData { data, .. })) => {
+                if output_tx.send_async(data.to_vec()).await.is_err() {
+                    break;
+                }
+            }
+            Activity::Channel(Some(ChannelMsg::Eof))
+            | Activity::Channel(Some(ChannelMsg::Close)) => {
+                break;
+            }
+            Activity::Channel(Some(ChannelMsg::ExitStatus { .. }))
+            | Activity::Channel(Some(ChannelMsg::ExitSignal { .. }))
+            | Activity::Channel(None) => break,
+            Activity::Channel(Some(_)) => {}
+            Activity::Input(Ok(bytes)) => {
+                if channel.data_bytes(bytes).await.is_err() {
+                    break;
+                }
+            }
+            Activity::Input(Err(_)) => break,
+            Activity::Control(Ok(TerminalControl::Resize(size))) => {
+                let _ = channel
+                    .window_change(size.cols as u32, size.rows as u32, 0, 0)
+                    .await;
+            }
+            Activity::Control(Ok(TerminalControl::Close)) => {
+                let _ = channel.eof().await;
+                let _ = channel.close().await;
+                break;
+            }
+            Activity::Control(Err(_)) => break,
+        }
+    }
+
+    remote.disconnect("terminal closed").await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parking_lot::Mutex;
+    use russh::client::Handler;
+    use russh::keys::key::safe_rng;
+    use russh::keys::{Algorithm, PrivateKey};
+
+    struct MemoryKnownHosts {
+        inner: Mutex<Vec<(String, u16, String)>>,
+    }
+
+    impl KnownHostsStore for MemoryKnownHosts {
+        fn check(
+            &self,
+            host: &str,
+            port: u16,
+            info: &HostKeyInfo,
+        ) -> Result<HostKeyStatus, AppError> {
+            let inner = self.inner.lock();
+            match inner
+                .iter()
+                .find(|(saved_host, saved_port, _)| saved_host == host && *saved_port == port)
+            {
+                Some((_, _, fingerprint)) if fingerprint == &info.fingerprint => {
+                    Ok(HostKeyStatus::Match)
+                }
+                Some((_, _, fingerprint)) => Ok(HostKeyStatus::Mismatch {
+                    previous_fingerprint: fingerprint.clone(),
+                }),
+                None => Ok(HostKeyStatus::Unknown),
+            }
+        }
+
+        fn record(&self, host: &str, port: u16, info: &HostKeyInfo) -> Result<(), AppError> {
+            self.inner
+                .lock()
+                .push((host.to_owned(), port, info.fingerprint.clone()));
+            Ok(())
+        }
+
+        fn remove(&self, _host: &str, _port: u16) -> Result<(), AppError> {
+            Ok(())
+        }
+
+        fn list(&self) -> Result<Vec<transom_core::HostKeyRecord>, AppError> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn handler_records_unknown_and_rejects_changed_keys() {
+        let key = PrivateKey::random(&mut safe_rng(), Algorithm::Ed25519).unwrap();
+        let public = key.public_key();
+        let server_key = PublicKeyOrCertificate::from(public.clone());
+
+        let known_hosts = Arc::new(MemoryKnownHosts {
+            inner: Mutex::new(Vec::new()),
+        });
+        let mut handler = ClientHandler {
+            host: "example.com".into(),
+            port: 22,
+            known_hosts: known_hosts.clone(),
+            remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        };
+
+        assert!(handler.check_server_key(&server_key).await.unwrap());
+        assert!(handler.check_server_key(&server_key).await.unwrap());
+        assert_eq!(known_hosts.inner.lock().len(), 1);
+
+        let other = PrivateKey::random(&mut safe_rng(), Algorithm::Ed25519).unwrap();
+        let other_key = PublicKeyOrCertificate::from(other.public_key().clone());
+        assert!(handler.check_server_key(&other_key).await.is_err());
+    }
+}

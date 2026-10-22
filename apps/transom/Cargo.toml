@@ -1,0 +1,18 @@
+[package]
+name = "transom"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+transom-core.workspace = true
+transom-net.workspace = true
+transom-store.workspace = true
+transom-ui.workspace = true
+tokio.workspace = true
+flume.workspace = true
+async-trait.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+portable-pty.workspace = true

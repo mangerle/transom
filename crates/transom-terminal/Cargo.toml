@@ -1,0 +1,15 @@
+[package]
+name = "transom-terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+transom-core.workspace = true
+alacritty_terminal.workspace = true
+gpui-kit.workspace = true
+flume.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+portable-pty.workspace = true

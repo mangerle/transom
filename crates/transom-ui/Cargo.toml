@@ -1,0 +1,17 @@
+[package]
+name = "transom-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+transom-core.workspace = true
+transom-terminal.workspace = true
+gpui-kit.workspace = true
+flume.workspace = true
+rust-i18n.workspace = true
+zeroize.workspace = true
+rfd.workspace = true
+directories.workspace = true
+notify-rust.workspace = true
+

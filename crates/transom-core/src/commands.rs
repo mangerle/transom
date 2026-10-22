@@ -1,0 +1,113 @@
+use crate::error::AppError;
+use crate::forward::{ForwardRule, ForwardStatus};
+use crate::ids::{ConnectionId, ForwardId, TabId, TransferId};
+use crate::prompt::PromptInfo;
+use crate::secrets::ConnectionSecrets;
+use crate::session::Session;
+use crate::sftp::{RemoteFile, SftpOperation};
+use crate::terminal::{TerminalIo, TerminalSize};
+
+pub enum AppCommand {
+    Connect {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        session: Box<Session>,
+        size: TerminalSize,
+        secrets: ConnectionSecrets,
+    },
+    Sftp {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        op: SftpOperation,
+    },
+    SftpCancel {
+        tab_id: TabId,
+        op_id: TransferId,
+    },
+    ForwardStart {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        rule: ForwardRule,
+    },
+    ForwardStop {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        rule_id: ForwardId,
+    },
+    CloseTab {
+        tab_id: TabId,
+    },
+    Shutdown,
+}
+
+pub enum AppEvent {
+    TerminalReady {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        io: TerminalIo,
+    },
+    ConnectionFailed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        error: AppError,
+    },
+    Disconnected {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+    },
+    AuthPrompt {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        name: String,
+        instructions: String,
+        prompts: Vec<PromptInfo>,
+        responder: flume::Sender<Vec<String>>,
+    },
+    SftpListing {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        path: String,
+        entries: Vec<RemoteFile>,
+    },
+    SftpProgress {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        transferred: u64,
+        total: Option<u64>,
+    },
+    SftpFinished {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        transferred: Option<u64>,
+    },
+    SftpFailed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        error: AppError,
+    },
+    ForwardChanged {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        status: ForwardStatus,
+    },
+    SystemStatsUpdated {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        stats: SystemStats,
+    },
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct SystemStats {
+    pub cpu_percent: f32,
+    pub mem_used_bytes: u64,
+    pub mem_total_bytes: u64,
+    pub disk_used_bytes: u64,
+    pub disk_total_bytes: u64,
+    pub uptime_secs: u64,
+    pub os_name: String,
+}

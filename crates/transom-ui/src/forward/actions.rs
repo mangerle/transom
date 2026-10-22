@@ -1,0 +1,427 @@
+//! 端口转发规则管理与启停控制方法。
+
+use super::{ForwardKindChoice, ForwardPanelState, PendingForwardConfirm, is_public_bind_address};
+use crate::app::{AppShell, TabStatus};
+use crate::keymap;
+use crate::palette::{localized_error, sftp_text_input};
+use gpui_kit::*;
+use transom_core::{
+    AppCommand, AppError, BindAddress, ConnectionId, ForwardId, ForwardKind, ForwardRule,
+    ForwardState, ForwardStatus, SessionId, SocksOptions, TabId, TargetAddress,
+};
+
+impl AppShell {
+    pub(crate) fn mark_forwards_stopped(&mut self, tab_id: TabId) {
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+            for status in tab.forward_statuses.values_mut() {
+                if !matches!(status.state, ForwardState::Stopped) {
+                    status.state = ForwardState::Stopped;
+                    status.error = None;
+                }
+            }
+        }
+    }
+
+    pub(crate) fn set_forward_status(
+        &mut self,
+        tab_id: TabId,
+        rule_id: ForwardId,
+        state: ForwardState,
+        error: Option<AppError>,
+    ) {
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+            tab.forward_statuses.insert(
+                rule_id,
+                ForwardStatus {
+                    rule_id,
+                    state,
+                    error,
+                },
+            );
+        }
+    }
+
+    pub(crate) fn auto_start_forwards(
+        &mut self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        session_id: SessionId,
+        cx: &mut Context<Self>,
+    ) {
+        let rules: Vec<ForwardRule> = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.forwards.clone())
+            .unwrap_or_default();
+        for rule in rules.into_iter().filter(|rule| rule.enabled) {
+            self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
+            let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+                tab_id,
+                connection_id,
+                rule,
+            });
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn forward_panel_mut(&mut self, tab_id: TabId) -> Option<&mut ForwardPanelState> {
+        self.tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.forwards_panel.as_mut())
+    }
+
+    pub(crate) fn toggle_forward_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(tab_id) = self.active_tab else {
+            return;
+        };
+        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+            return;
+        };
+        if self.tabs[index].forwards_panel.is_some() {
+            self.tabs[index].forwards_panel = None;
+            cx.notify();
+            return;
+        }
+        if !matches!(self.tabs[index].status, TabStatus::Connected) {
+            self.error = Some(rust_i18n::t!("error.forward_failed").to_string());
+            cx.notify();
+            return;
+        }
+        let name = sftp_text_input(window, cx, "", rust_i18n::t!("forward.name").as_ref());
+        let bind_host = sftp_text_input(
+            window,
+            cx,
+            "127.0.0.1",
+            rust_i18n::t!("forward.bind_host").as_ref(),
+        );
+        let bind_port = sftp_text_input(
+            window,
+            cx,
+            "8080",
+            rust_i18n::t!("forward.bind_port").as_ref(),
+        );
+        let target_host = sftp_text_input(
+            window,
+            cx,
+            "127.0.0.1",
+            rust_i18n::t!("forward.target_host").as_ref(),
+        );
+        let target_port = sftp_text_input(
+            window,
+            cx,
+            "80",
+            rust_i18n::t!("forward.target_port").as_ref(),
+        );
+        self.tabs[index].forwards_panel = Some(ForwardPanelState {
+            name_input: name,
+            bind_host_input: bind_host,
+            bind_port_input: bind_port,
+            target_host_input: target_host,
+            target_port_input: target_port,
+            kind: ForwardKindChoice::Local,
+            error: None,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn add_forward_rule(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+            return;
+        };
+        let Some(connection_id) = tab.connection_id else {
+            return;
+        };
+        let session_id = tab.session_id;
+        let Some(panel) = tab.forwards_panel.as_ref() else {
+            return;
+        };
+        let name = panel.name_input.read(cx).value().trim().to_string();
+        let bind_host = panel.bind_host_input.read(cx).value().trim().to_string();
+        let target_host = panel.target_host_input.read(cx).value().trim().to_string();
+        let bind_port: u16 = match panel.bind_port_input.read(cx).value().trim().parse() {
+            Ok(port) if port > 0 => port,
+            _ => {
+                if let Some(panel) = self.forward_panel_mut(tab_id) {
+                    panel.error = Some(rust_i18n::t!("forward.error_port").to_string());
+                }
+                cx.notify();
+                return;
+            }
+        };
+        let target_port: u16 = match panel.target_port_input.read(cx).value().trim().parse() {
+            Ok(port) if port > 0 => port,
+            _ => {
+                if let Some(panel) = self.forward_panel_mut(tab_id) {
+                    panel.error = Some(rust_i18n::t!("forward.error_port").to_string());
+                }
+                cx.notify();
+                return;
+            }
+        };
+        if bind_host.is_empty() {
+            if let Some(panel) = self.forward_panel_mut(tab_id) {
+                panel.error = Some(rust_i18n::t!("forward.bind_host").to_string());
+            }
+            cx.notify();
+            return;
+        }
+        if panel.kind != ForwardKindChoice::Dynamic && target_host.is_empty() {
+            if let Some(panel) = self.forward_panel_mut(tab_id) {
+                panel.error = Some(rust_i18n::t!("forward.error_target").to_string());
+            }
+            cx.notify();
+            return;
+        }
+        let kind = match panel.kind {
+            ForwardKindChoice::Local => ForwardKind::Local {
+                bind: BindAddress {
+                    host: bind_host.clone(),
+                    port: bind_port,
+                },
+                target: TargetAddress {
+                    host: target_host,
+                    port: target_port,
+                },
+            },
+            ForwardKindChoice::Remote => ForwardKind::Remote {
+                bind: BindAddress {
+                    host: bind_host.clone(),
+                    port: bind_port,
+                },
+                target: TargetAddress {
+                    host: target_host,
+                    port: target_port,
+                },
+            },
+            ForwardKindChoice::Dynamic => ForwardKind::Dynamic {
+                bind: BindAddress {
+                    host: bind_host.clone(),
+                    port: bind_port,
+                },
+                socks: SocksOptions::default(),
+            },
+        };
+        let name = if name.is_empty() {
+            format!("{bind_host}:{bind_port}")
+        } else {
+            name
+        };
+        let rule = ForwardRule::new(name, kind);
+        if let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        {
+            session.forwards.push(rule.clone());
+        }
+        if let Err(error) = self.services.session_store.save(&self.sessions) {
+            self.error = Some(localized_error(&error));
+        }
+        if let Some(panel) = self.forward_panel_mut(tab_id) {
+            panel.error = None;
+        }
+
+        if is_public_bind_address(&bind_host) {
+            self.confirm_forward_any = Some(PendingForwardConfirm {
+                tab_id,
+                connection_id,
+                rule,
+            });
+            cx.notify();
+            return;
+        }
+
+        self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
+        let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+            tab_id,
+            connection_id,
+            rule,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn start_forward_rule(
+        &mut self,
+        tab_id: TabId,
+        rule_id: ForwardId,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+            return;
+        };
+        let Some(connection_id) = tab.connection_id else {
+            return;
+        };
+        let session_id = tab.session_id;
+        let Some(rule) = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .and_then(|session| session.forwards.iter().find(|rule| rule.id == rule_id))
+            .cloned()
+        else {
+            return;
+        };
+
+        let bind_host = match &rule.kind {
+            ForwardKind::Local { bind, .. } => bind.host.as_str(),
+            ForwardKind::Remote { bind, .. } => bind.host.as_str(),
+            ForwardKind::Dynamic { bind, .. } => bind.host.as_str(),
+            _ => "",
+        };
+
+        if is_public_bind_address(bind_host) {
+            self.confirm_forward_any = Some(PendingForwardConfirm {
+                tab_id,
+                connection_id,
+                rule,
+            });
+            cx.notify();
+            return;
+        }
+
+        if let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+            && let Some(rule) = session.forwards.iter_mut().find(|rule| rule.id == rule_id)
+        {
+            rule.enabled = true;
+        }
+        if let Err(error) = self.services.session_store.save(&self.sessions) {
+            self.error = Some(localized_error(&error));
+        }
+        self.set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
+        let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+            tab_id,
+            connection_id,
+            rule,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn confirm_forward_start(&mut self, cx: &mut Context<Self>) {
+        let Some(pending) = self.confirm_forward_any.take() else {
+            return;
+        };
+        let PendingForwardConfirm {
+            tab_id,
+            connection_id,
+            rule,
+        } = pending;
+        let session_id = self
+            .tabs
+            .iter()
+            .find(|t| t.id == tab_id)
+            .map(|t| t.session_id);
+        if let Some(session_id) = session_id {
+            if let Some(session) = self.sessions.iter_mut().find(|s| s.id == session_id)
+                && let Some(r) = session.forwards.iter_mut().find(|r| r.id == rule.id)
+            {
+                r.enabled = true;
+            }
+            if let Err(error) = self.services.session_store.save(&self.sessions) {
+                self.error = Some(localized_error(&error));
+            }
+        }
+        self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
+        let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+            tab_id,
+            connection_id,
+            rule,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn cancel_forward_confirm(&mut self, cx: &mut Context<Self>) {
+        self.confirm_forward_any = None;
+        cx.notify();
+    }
+
+    pub(crate) fn stop_forward_rule(
+        &mut self,
+        tab_id: TabId,
+        rule_id: ForwardId,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+            return;
+        };
+        let Some(connection_id) = tab.connection_id else {
+            return;
+        };
+        let session_id = tab.session_id;
+        if let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+            && let Some(rule) = session.forwards.iter_mut().find(|rule| rule.id == rule_id)
+        {
+            rule.enabled = false;
+        }
+        if let Err(error) = self.services.session_store.save(&self.sessions) {
+            self.error = Some(localized_error(&error));
+        }
+        self.set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
+        let _ = self.services.command_tx.send(AppCommand::ForwardStop {
+            tab_id,
+            connection_id,
+            rule_id,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn delete_forward_rule(
+        &mut self,
+        tab_id: TabId,
+        rule_id: ForwardId,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+            return;
+        };
+        let connection_id = tab.connection_id;
+        let session_id = tab.session_id;
+        if let (Some(connection_id), Some(status)) = (
+            connection_id,
+            self.tabs
+                .iter()
+                .find(|tab| tab.id == tab_id)
+                .and_then(|tab| tab.forward_statuses.get(&rule_id)),
+        ) && matches!(
+            status.state,
+            ForwardState::Active { .. } | ForwardState::Starting
+        ) {
+            let _ = self.services.command_tx.send(AppCommand::ForwardStop {
+                tab_id,
+                connection_id,
+                rule_id,
+            });
+        }
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+            tab.forward_statuses.remove(&rule_id);
+        }
+        if let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        {
+            session.forwards.retain(|rule| rule.id != rule_id);
+        }
+        if let Err(error) = self.services.session_store.save(&self.sessions) {
+            self.error = Some(localized_error(&error));
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn on_toggle_forward(
+        &mut self,
+        _: &keymap::ToggleForward,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.toggle_forward_panel(window, cx);
+    }
+}

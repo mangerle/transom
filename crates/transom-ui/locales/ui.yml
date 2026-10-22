@@ -1,0 +1,629 @@
+_version: 2
+app:
+  name:
+    en: Transom
+    zh-CN: Transom
+  new_session:
+    en: New Session
+    zh-CN: 新建会话
+  sessions:
+    en: Sessions
+    zh-CN: 会话
+  search:
+    en: Search sessions
+    zh-CN: 搜索会话
+  no_sessions:
+    en: No sessions yet
+    zh-CN: 还没有会话
+  no_sessions_hint:
+    en: Create a session to connect to a remote host.
+    zh-CN: 新建一个会话来连接远程主机。
+  no_tab:
+    en: No session open
+    zh-CN: 没有打开的会话
+  no_tab_hint:
+    en: Select a session on the left, or create a new one.
+    zh-CN: 从左侧选择会话，或新建一个。
+  language:
+    en: EN
+    zh-CN: 中文
+  toggle_sidebar:
+    en: Toggle sidebar
+    zh-CN: 显示/隐藏侧边栏
+  new_local:
+    en: Local Terminal
+    zh-CN: 本地终端
+  import_ssh_config:
+    en: Import SSH Config
+    zh-CN: 导入 SSH 配置
+  import_success:
+    en: "Imported %{count} sessions from ~/.ssh/config"
+    zh-CN: "已从 ~/.ssh/config 导入 %{count} 个会话"
+  import_none:
+    en: No new hosts found in ~/.ssh/config
+    zh-CN: 未在 ~/.ssh/config 中发现新主机
+  quick_open:
+    en: Quick Open
+    zh-CN: 快速打开
+  quick_open_placeholder:
+    en: Type to search sessions or local terminal...
+    zh-CN: 输入关键字搜索会话或本地终端...
+  error:
+    en: Error
+    zh-CN: 错误
+  close:
+    en: Close
+    zh-CN: 关闭
+  minimize:
+    en: Minimize
+    zh-CN: 最小化
+  maximize:
+    en: Maximize
+    zh-CN: 最大化
+  restore:
+    en: Restore
+    zh-CN: 还原
+common:
+  save:
+    en: Save
+    zh-CN: 保存
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+  delete:
+    en: Delete
+    zh-CN: 删除
+  confirm_delete:
+    en: Confirm delete
+    zh-CN: 确认删除
+  yes:
+    en: "On"
+    zh-CN: 开
+  no:
+    en: "Off"
+    zh-CN: 关
+  reconnect:
+    en: Reconnect
+    zh-CN: 重连
+  copy:
+    en: Copy
+    zh-CN: 复制
+  paste:
+    en: Paste
+    zh-CN: 粘贴
+tab:
+  connecting:
+    en: Connecting
+    zh-CN: 连接中
+  connected:
+    en: Connected
+    zh-CN: 已连接
+  disconnected:
+    en: Disconnected
+    zh-CN: 已断开
+  failed:
+    en: Connection failed
+    zh-CN: 连接失败
+form:
+  new_title:
+    en: New Session
+    zh-CN: 新建会话
+  edit_title:
+    en: Edit Session
+    zh-CN: 编辑会话
+  name:
+    en: Name
+    zh-CN: 名称
+  group:
+    en: Group
+    zh-CN: 分组
+  host:
+    en: Host
+    zh-CN: 主机
+  port:
+    en: Port
+    zh-CN: 端口
+  username:
+    en: Username
+    zh-CN: 用户名
+  auth:
+    en: Authentication
+    zh-CN: 认证方式
+  password:
+    en: Password
+    zh-CN: 密码
+  key_path:
+    en: Private key
+    zh-CN: 私钥路径
+  passphrase:
+    en: Key passphrase
+    zh-CN: 私钥口令
+  save_password:
+    en: Save password
+    zh-CN: 保存密码
+  save_passphrase:
+    en: Save passphrase
+    zh-CN: 保存口令
+  auth_password:
+    en: Password
+    zh-CN: 密码
+  auth_key:
+    en: Private key
+    zh-CN: 私钥
+  auth_agent:
+    en: SSH agent
+    zh-CN: SSH Agent
+  name_placeholder:
+    en: Production server
+    zh-CN: 生产服务器
+  group_placeholder:
+    en: Optional group
+    zh-CN: 可选分组
+  host_placeholder:
+    en: example.com
+    zh-CN: example.com
+  username_placeholder:
+    en: root
+    zh-CN: root
+  key_placeholder:
+    en: ~/.ssh/id_ed25519
+    zh-CN: ~/.ssh/id_ed25519
+  password_placeholder:
+    en: Password, or leave blank to keep saved
+    zh-CN: 输入密码，留空则保持已保存密码
+  passphrase_placeholder:
+    en: Passphrase, or leave blank to keep saved
+    zh-CN: 输入口令，留空则保持已保存口令
+  error_name:
+    en: Name is required.
+    zh-CN: 名称不能为空。
+  error_host:
+    en: Host is required.
+    zh-CN: 主机不能为空。
+  error_port:
+    en: Port must be between 1 and 65535.
+    zh-CN: 端口必须在 1 到 65535 之间。
+  error_username:
+    en: Username is required.
+    zh-CN: 用户名不能为空。
+  error_key:
+    en: Private key path is required.
+    zh-CN: 私钥路径不能为空。
+prompt:
+  password_title:
+    en: Password required
+    zh-CN: 需要密码
+  password_hint:
+    en: The session will connect after the password is submitted.
+    zh-CN: 提交密码后将开始连接。
+  connect:
+    en: Connect
+    zh-CN: 连接
+  auth_title:
+    en: Authentication required
+    zh-CN: 需要身份验证
+  auth_hint:
+    en: The server requested additional information.
+    zh-CN: 服务器要求提供额外信息。
+  submit:
+    en: Submit
+    zh-CN: 提交
+status:
+  ready:
+    en: Ready
+    zh-CN: 就绪
+  connected:
+    en: Connected
+    zh-CN: 已连接
+  connecting:
+    en: Connecting...
+    zh-CN: 连接中...
+  waiting_password:
+    en: Waiting for password
+    zh-CN: 等待输入密码
+  disconnected:
+    en: Disconnected
+    zh-CN: 已断开
+  failed:
+    en: Failed
+    zh-CN: 失败
+  copied:
+    en: Copied to clipboard
+    zh-CN: 已复制到剪贴板
+  bell:
+    en: Terminal bell
+    zh-CN: 终端响铃
+error:
+  configuration:
+    en: Configuration error
+    zh-CN: 配置错误
+  connection_failed:
+    en: Connection failed
+    zh-CN: 连接失败
+  dns:
+    en: Host not found
+    zh-CN: 找不到主机
+  timeout:
+    en: Connection timed out
+    zh-CN: 连接超时
+  auth_failed:
+    en: Authentication failed
+    zh-CN: 认证失败
+  keyboard_interactive_failed:
+    en: Interactive authentication failed
+    zh-CN: 交互式认证失败
+  host_key_unknown:
+    en: Unknown host key
+    zh-CN: 未知的主机密钥
+  host_key_mismatch:
+    en: Host key changed
+    zh-CN: 主机密钥已变化
+  channel_failed:
+    en: Failed to open SSH channel
+    zh-CN: 打开 SSH 通道失败
+  secret_store_unavailable:
+    en: System keychain unavailable
+    zh-CN: 系统钥匙串不可用
+  cancelled:
+    en: Cancelled
+    zh-CN: 已取消
+  protocol:
+    en: SSH protocol error
+    zh-CN: SSH 协议错误
+  io:
+    en: I/O error
+    zh-CN: I/O 错误
+  sftp_failed:
+    en: SFTP error
+    zh-CN: SFTP 错误
+  forward_failed:
+    en: Port forwarding error
+    zh-CN: 端口转发错误
+sftp:
+  title:
+    en: SFTP
+    zh-CN: SFTP
+  path:
+    en: Remote path
+    zh-CN: 远程路径
+  up:
+    en: Up
+    zh-CN: 上级
+  refresh:
+    en: Refresh
+    zh-CN: 刷新
+  local_folder:
+    en: Local folder
+    zh-CN: 本地目录
+  upload_file:
+    en: Local file to upload
+    zh-CN: 要上传的本地文件
+  name:
+    en: Name
+    zh-CN: 名称
+  download:
+    en: Download
+    zh-CN: 下载
+  upload:
+    en: Upload
+    zh-CN: 上传
+  new_folder:
+    en: New Folder
+    zh-CN: 新建目录
+  rename:
+    en: Rename
+    zh-CN: 重命名
+  delete:
+    en: Delete
+    zh-CN: 删除
+  confirm_delete:
+    en: Confirm delete
+    zh-CN: 确认删除
+  loading:
+    en: Loading...
+    zh-CN: 加载中...
+  empty:
+    en: Empty directory
+    zh-CN: 空目录
+  select_file:
+    en: Select a remote file first
+    zh-CN: 请先选择一个远程文件
+  transfer_done:
+    en: Transfer complete
+    zh-CN: 传输完成
+  operation_done:
+    en: Done
+    zh-CN: 操作完成
+  folder_tag:
+    en: DIR
+    zh-CN: 目录
+  local_title:
+    en: Local
+    zh-CN: 本地
+  remote_title:
+    en: Remote
+    zh-CN: 远程
+  pick_folder:
+    en: Browse Folder
+    zh-CN: 浏览目录
+  pick_file:
+    en: Browse File
+    zh-CN: 浏览文件
+  queue:
+    en: Transfer Queue
+    zh-CN: 传输队列
+  resume_transfer:
+    en: Resume
+    zh-CN: 断点续传
+  clear_done:
+    en: Clear Done
+    zh-CN: 清空已完成
+  no_transfers:
+    en: No active or queued transfers
+    zh-CN: 暂无传输任务
+
+forward:
+  title:
+    en: Port Forwarding
+    zh-CN: 端口转发
+  mode:
+    en: Mode
+    zh-CN: 模式
+  local:
+    en: Local
+    zh-CN: 本地
+  remote:
+    en: Remote
+    zh-CN: 远程
+  dynamic:
+    en: Dynamic
+    zh-CN: 动态
+  name:
+    en: Rule name
+    zh-CN: 规则名称
+  bind_host:
+    en: Bind host
+    zh-CN: 绑定地址
+  bind_port:
+    en: Bind port
+    zh-CN: 绑定端口
+  target_host:
+    en: Target host
+    zh-CN: 目标地址
+  target_port:
+    en: Target port
+    zh-CN: 目标端口
+  add:
+    en: Add rule
+    zh-CN: 添加规则
+  start:
+    en: Start
+    zh-CN: 启动
+  stop:
+    en: Stop
+    zh-CN: 停止
+  delete:
+    en: Delete
+    zh-CN: 删除
+  stopped:
+    en: Stopped
+    zh-CN: 已停止
+  starting:
+    en: Starting
+    zh-CN: 启动中
+  active:
+    en: Active
+    zh-CN: 运行中
+  failed:
+    en: Failed
+    zh-CN: 失败
+  empty:
+    en: No forwarding rules
+    zh-CN: 还没有转发规则
+  error_port:
+    en: Ports must be between 1 and 65535.
+    zh-CN: 端口必须在 1 到 65535 之间。
+  error_target:
+    en: Target host and port are required.
+    zh-CN: 目标地址和端口不能为空。
+  confirm_any_title:
+    en: "Security Warning: Public Bind Address"
+    zh-CN: 安全警告：公开绑定地址
+  confirm_any_hint:
+    en: "The rule binds to 0.0.0.0, exposing this port to all network interfaces. Anyone who can reach this machine can access this port. Are you sure you want to proceed?"
+    zh-CN: "当前规则绑定了 0.0.0.0，将向所有网络接口暴露此端口，任何可访问本机的设备均可连接该端口。确认要继续启动吗？"
+  confirm_start:
+    en: Confirm & Start
+    zh-CN: 确认并启动
+known_hosts:
+  title:
+    en: Known Hosts
+    zh-CN: 主机指纹管理
+  empty:
+    en: No known host records yet.
+    zh-CN: 暂无已知主机密钥记录。
+  deleted:
+    en: Host key removed
+    zh-CN: 已删除主机密钥
+  algorithm:
+    en: Algorithm
+    zh-CN: 算法
+  fingerprint:
+    en: Fingerprint
+    zh-CN: 指纹
+  host_port:
+    en: Host & Port
+    zh-CN: 主机与端口
+menu:
+  connect:
+    en: Connect
+    zh-CN: 连接
+  open_new_tab:
+    en: Open in New Tab
+    zh-CN: 在新标签打开
+  open_sftp:
+    en: Open SFTP
+    zh-CN: 打开 SFTP
+  duplicate:
+    en: Duplicate
+    zh-CN: 复制会话
+  edit:
+    en: Edit Session
+    zh-CN: 编辑会话
+  delete:
+    en: Delete
+    zh-CN: 删除
+  reconnect:
+    en: Reconnect
+    zh-CN: 重新连接
+  close_tab:
+    en: Close Tab
+    zh-CN: 关闭标签
+  close_other_tabs:
+    en: Close Other Tabs
+    zh-CN: 关闭其他标签
+settings:
+  title:
+    en: Preferences & Settings
+    zh-CN: 偏好设置
+  tab_rendering:
+    en: Rendering & Font
+    zh-CN: 外观与渲染
+  tab_themes:
+    en: Color Schemes
+    zh-CN: 配色方案
+  tab_mouse_clipboard:
+    en: Mouse & Clipboard
+    zh-CN: 鼠标与剪贴板
+  tab_shortcuts:
+    en: Shortcuts Guide
+    zh-CN: 快捷键指南
+  tab_tabs_window:
+    en: Tabs & Window
+    zh-CN: 标签与窗口
+  tab_general:
+    en: General & Sound
+    zh-CN: 通用与声音
+  general:
+    en: General
+    zh-CN: 常规
+  appearance:
+    en: Appearance & Font
+    zh-CN: 外观与字体
+  font_size:
+    en: Font Size
+    zh-CN: 字体大小
+  line_height:
+    en: Line Height
+    zh-CN: 行高倍数
+  scrollback:
+    en: Scrollback Buffer Lines
+    zh-CN: 历史回滚行数
+  cursor_blink:
+    en: Cursor Blink
+    zh-CN: 光标闪烁
+  bold_is_bright:
+    en: Show Bold Text as Bright
+    zh-CN: 以亮色显示粗体
+  scroll_on_input:
+    en: Scroll to Bottom on Input
+    zh-CN: 输入时自动滚动到底部
+  current_theme:
+    en: Current Color Scheme
+    zh-CN: 当前配色方案
+  theme_preview:
+    en: Terminal Preview
+    zh-CN: 终端色彩效果预览
+  interaction:
+    en: Mouse & Interaction
+    zh-CN: 鼠标交互
+  clipboard:
+    en: Clipboard & Safety
+    zh-CN: 剪贴板与安全
+  right_click_action:
+    en: Right Click Action
+    zh-CN: 鼠标右键动作
+  right_click_menu:
+    en: Context Menu
+    zh-CN: 弹出右键菜单
+  right_click_paste_action:
+    en: Paste from Clipboard
+    zh-CN: 快速粘贴
+  middle_click_paste:
+    en: Paste on Middle Click
+    zh-CN: 按下鼠标中键时粘贴
+  copy_on_select:
+    en: Copy on Select
+    zh-CN: 划词选中自动复制
+  right_click_paste:
+    en: Right Click to Paste
+    zh-CN: 鼠标右键快速粘贴
+  multiline_paste:
+    en: Confirm Multiline Paste
+    zh-CN: 多行粘贴前弹窗确认
+  trim_trailing_whitespace:
+    en: Trim Surrounding Spaces and Newlines
+    zh-CN: 粘贴时去除周围空格和换行
+  show_tab_close_button:
+    en: Show Close Button on Tabs
+    zh-CN: 在标签页上显示关闭按钮
+  close_window_on_all_tabs_closed:
+    en: Close Window When All Tabs Are Closed
+    zh-CN: 所有标签页关闭时退出应用
+  bell_style:
+    en: Terminal Bell
+    zh-CN: 终端响铃提示
+  bell_none:
+    en: Off
+    zh-CN: 关闭
+  bell_visual:
+    en: Visual Flash
+    zh-CN: 屏幕可视闪烁
+  bell_audible:
+    en: Audible Sound
+    zh-CN: 播放提示音
+  shortcut_new_session:
+    en: New Session
+    zh-CN: 新建会话连接
+  shortcut_new_local:
+    en: New Local Terminal
+    zh-CN: 新建本地终端
+  shortcut_quick_open:
+    en: Quick Open / Search
+    zh-CN: 快速打开与搜索
+  shortcut_toggle_sidebar:
+    en: Toggle Sidebar
+    zh-CN: 展开/折叠侧边栏
+  shortcut_toggle_sftp:
+    en: Toggle SFTP File Transfer
+    zh-CN: 切换 SFTP 文件传输面板
+  shortcut_toggle_forward:
+    en: Toggle Port Forwarding
+    zh-CN: 切换端口转发面板
+  shortcut_next_tab:
+    en: Switch to Next Tab
+    zh-CN: 切换至下一个标签页
+  shortcut_prev_tab:
+    en: Switch to Previous Tab
+    zh-CN: 切换至上一个标签页
+  shortcut_close_tab:
+    en: Close Current Tab
+    zh-CN: 关闭当前标签页
+  shortcut_reconnect:
+    en: Reconnect Current Tab
+    zh-CN: 重新连接当前终端
+monitor:
+  cpu:
+    en: CPU
+    zh-CN: CPU
+  mem:
+    en: Memory
+    zh-CN: 内存
+  uptime:
+    en: Uptime
+    zh-CN: 运行时间
+  disk:
+    en: Disk
+    zh-CN: 磁盘
+
+
