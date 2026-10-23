@@ -19,11 +19,12 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use transom_core::{
-    AppError, AppSettings, ConnectionId, ConnectionSecrets, FolderId, ForwardId, ForwardStatus,
-    GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, Session, SessionCatalog, SessionId,
+    AppError, AppSettings, Connection, ConnectionId, FolderId, ForwardId, ForwardStatus, GroupId,
+    HostKeyRecord, NetworkTraffic, PromptInfo, SecretKind, Session, SessionCatalog, SessionId,
     SplitId, SystemStats, TabId,
 };
 use transom_terminal::TerminalView;
+use zeroize::Zeroizing;
 
 pub(crate) enum TabStatus {
     Connecting,
@@ -39,6 +40,11 @@ pub(crate) enum TabStatus {
 /// 生命周期都要沿树查询，这部分复杂度由 `pane_tree` 与 `workspace` 吸收。
 pub(crate) struct TabGroup {
     pub(crate) id: GroupId,
+    /// 组内所有窗格共用的会话配置，用于给同会话的并列标签分配序号。
+    pub(crate) session_id: SessionId,
+    /// 同会话的额外标签序号：0 表示该会话的原始标签（不显示后缀），之后依次 1、2...
+    /// 创建时定下、永不回改已有标签，见 `AppShell::create_group`。
+    pub(crate) serial: usize,
     /// 分割树根节点，至少含一个窗格叶子。
     pub(crate) root: LayoutNode,
     pub(crate) active_pane: TabId,
@@ -50,9 +56,11 @@ pub(crate) struct TabGroup {
 }
 
 impl TabGroup {
-    pub(crate) fn new(pane: TabId) -> Self {
+    pub(crate) fn new(pane: TabId, session_id: SessionId, serial: usize) -> Self {
         Self {
             id: GroupId::new(),
+            session_id,
+            serial,
             root: LayoutNode::pane(pane),
             active_pane: pane,
             zoomed: None,
@@ -78,6 +86,8 @@ pub(crate) struct TerminalTab {
     pub(crate) session_id: SessionId,
     pub(crate) session: Session,
     pub(crate) connection_id: Option<ConnectionId>,
+    /// 运行期标题：初值取会话名，连接建立后会被远端 shell 的 OSC 序列覆盖。
+    /// 只供 SFTP 目录联动等内部解析使用，界面显示一律走 `display_name`。
     pub(crate) title: String,
     pub(crate) status: TabStatus,
     pub(crate) terminal: Option<Entity<TerminalView>>,
@@ -93,6 +103,27 @@ pub(crate) struct TerminalTab {
 }
 
 impl TerminalTab {
+    /// 标签栏、窗格头、拖拽预览与状态栏显示的会话名称。
+    ///
+    /// 为什么不复用 `title`：`title` 是运行期标题，会被远端 `PS1` 里的 OSC 序列改写，
+    /// 拿它当标签名会出现"标签跟着 cd 变名"，而且同会话多标签也无法靠它区分。
+    /// 会话名在表单里是必填项，因此兜底分支只对手工编辑的目录文件生效：
+    /// SSH 用 `用户@主机`，串口用设备名，本地终端用 shell 名。
+    pub(crate) fn display_name(&self) -> String {
+        let name = self.session.name.trim();
+        if !name.is_empty() {
+            return name.to_string();
+        }
+        match &self.session.connection {
+            Connection::Ssh(ssh) => format!("{}@{}", ssh.username, ssh.host),
+            Connection::Serial(serial) => serial.port.clone(),
+            Connection::Local(local) => local.shell.clone().unwrap_or_else(|| "shell".to_string()),
+            // `Connection` 标记为 non-exhaustive：将来新增连接类型时退回运行期标题，
+            // 总比标签显示空白好。
+            _ => self.title.clone(),
+        }
+    }
+
     /// 建立一个尚未连接的窗格：连接、终端视图与事件订阅由 `start_connection` 补齐。
     ///
     /// 字段多且初始值一律为空，集中一处构造可避免新建、分屏、窗口恢复三条路径漏项。
@@ -115,18 +146,6 @@ impl TerminalTab {
             _subscription: None,
         }
     }
-}
-
-pub(crate) struct PendingConnect {
-    pub(crate) tab_id: TabId,
-    pub(crate) connection_id: ConnectionId,
-    pub(crate) session: Session,
-    pub(crate) secrets: ConnectionSecrets,
-}
-
-pub(crate) struct PasswordPrompt {
-    pub(crate) input: Entity<InputState>,
-    pub(crate) error: Option<String>,
 }
 
 /// 新建或重命名文件夹的轻量模态表单。
@@ -188,13 +207,34 @@ pub(crate) struct ShortcutCapture {
     pub(crate) focus: FocusHandle,
 }
 
+/// 用户勾选"保存到系统钥匙串"、但认证结果尚未揭晓的凭据。
+///
+/// 为什么不在提交时就写：此刻还不知道服务器是否接受这个密码。先写下去会把打错的口令
+/// 持久化，下次连接拿同一份错密码去撞服务器，用户既没有纠正机会，又会出现"明明输
+/// 对了还是失败"的现象。
+pub(crate) struct PendingCredential {
+    pub(crate) session_id: SessionId,
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) kind: SecretKind,
+    pub(crate) value: Zeroizing<String>,
+}
+
 pub(crate) struct AuthPromptState {
+    pub(crate) connection_id: ConnectionId,
     pub(crate) name: String,
     pub(crate) instructions: String,
     pub(crate) prompts: Vec<PromptInfo>,
     pub(crate) inputs: Vec<Entity<InputState>>,
     pub(crate) responder: flume::Sender<Vec<String>>,
     pub(crate) error: Option<String>,
+    /// 待回答凭据属于哪个会话，保存时需要它作为钥匙串条目的键。
+    pub(crate) session_id: SessionId,
+    /// 可写入钥匙串的凭据类型。`None` 表示服务器下发的一次性挑战，
+    /// 保存没有意义，因此界面不显示保存开关。
+    pub(crate) secret_kind: Option<SecretKind>,
+    /// "保存到系统钥匙串"勾选状态。默认不勾选：建会话时用户已表达过是否保存，
+    /// 这里不该替他改主意。
+    pub(crate) save: bool,
 }
 
 pub struct AppShell {
@@ -214,9 +254,10 @@ pub struct AppShell {
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
     pub(crate) folder_form: Option<FolderForm>,
-    pub(crate) password_prompt: Option<PasswordPrompt>,
+    /// 认证阶段由 net 层发起的凭据询问；连接前不再拦截。
     pub(crate) auth_prompt: Option<AuthPromptState>,
-    pub(crate) pending_connect: Option<PendingConnect>,
+    /// 认证成功后才落盘的凭据，见 [`PendingCredential`]。
+    pub(crate) pending_credential: Option<PendingCredential>,
     pub(crate) show_known_hosts_modal: bool,
     pub(crate) known_hosts_records: Vec<HostKeyRecord>,
     pub(crate) known_hosts_search: Entity<InputState>,
@@ -247,6 +288,11 @@ pub struct AppShell {
     /// 侧边栏多选模式与已选会话。
     pub(crate) selection_mode: bool,
     pub(crate) selected_sessions: HashSet<SessionId>,
+    /// 单击会话行留下的单选高亮。
+    ///
+    /// 与 `selected_sessions`（多选批量操作）分开：单击只是"看住这一行"，
+    /// 既不该被当成加入批量操作的意图，也不该触发连接。
+    pub(crate) tree_selection: Option<SessionId>,
     pub(crate) batch_edit: Option<BatchEditForm>,
     pub(crate) backup_prompt: Option<BackupPromptState>,
     pub(crate) _backup_task: Option<Task<()>>,
@@ -323,9 +369,8 @@ impl AppShell {
             search,
             form: None,
             folder_form: None,
-            password_prompt: None,
             auth_prompt: None,
-            pending_connect: None,
+            pending_credential: None,
             show_known_hosts_modal: false,
             known_hosts_records,
             known_hosts_search,
@@ -351,6 +396,7 @@ impl AppShell {
             applied_shortcut_keys,
             shortcut_capture: None,
             selection_mode: false,
+            tree_selection: None,
             selected_sessions: HashSet::with_capacity(8),
             batch_edit: None,
             backup_prompt: None,
@@ -494,9 +540,6 @@ impl AppShell {
         }
         if self.folder_form.is_some() {
             overlays.push(self.render_folder_form(window, cx, &p));
-        }
-        if self.password_prompt.is_some() {
-            overlays.push(self.render_password_prompt(window, cx, &p));
         }
         if self.auth_prompt.is_some() {
             overlays.push(self.render_auth_prompt(window, cx, &p));

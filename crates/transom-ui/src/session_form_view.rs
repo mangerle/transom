@@ -77,19 +77,14 @@ impl AppShell {
             cx.notify();
         }));
 
-        let mut panel = v_flex()
-            .id(ElementId::Name("session-form-panel".into()))
-            .w(px(620.0))
-            .max_h(px(640.0))
+        // 内容区自带有限高度的滚动区：标题、错误提示与操作按钮由 `dialog_frame`
+        // 固定在外壳上，字段再多也不会把它们移出视野。
+        // 这里不能改用 `flex_1`：外壳高度是自适应的，flex basis 归零会把整块内容压成 0 高。
+        let mut content = v_flex()
+            .id(ElementId::Name("session-form-body".into()))
+            .max_h(px(460.0))
             .overflow_y_scroll()
             .gap_3()
-            .p_5()
-            .rounded_lg()
-            .bg(p.popover)
-            .text_color(p.popover_foreground)
-            .border_1()
-            .border_color(p.border)
-            .child(div().text_lg().font_weight(FontWeight::BOLD).child(title))
             .child(
                 h_flex()
                     .gap_3()
@@ -151,7 +146,7 @@ impl AppShell {
 
         match form.connection {
             ConnectionChoice::Ssh => {
-                panel = panel
+                content = content
                     .child(
                         h_flex()
                             .gap_3()
@@ -191,78 +186,102 @@ impl AppShell {
                     );
                 match form.auth {
                     AuthChoice::Password => {
-                        panel = panel
-                            .child(Self::form_field(
+                        content = content.child(
+                            h_flex()
+                                .justify_between()
+                                .items_center()
+                                .py_1()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .child(rust_i18n::t!("form.save_password").to_string()),
+                                )
+                                .child(
+                                    Switch::new("toggle-save-password")
+                                        .small()
+                                        .checked(form.save_password)
+                                        .on_click(cx.listener(|this, &checked, _, cx| {
+                                            if let Some(form) = this.form.as_mut() {
+                                                form.save_password = checked;
+                                            }
+                                            cx.notify();
+                                        })),
+                                ),
+                        );
+                        // 只有保存到系统钥匙串时表单才收这份密码：不勾选就没有存放处，
+                        // 交由连接时的认证询问负责，消除"填了却被丢弃"的歧义。
+                        content = if form.save_password {
+                            content.child(Self::secret_field(
                                 rust_i18n::t!("form.password").to_string(),
                                 form.password.clone(),
                                 p,
                             ))
-                            .child(
-                                h_flex()
-                                    .justify_between()
-                                    .items_center()
-                                    .py_1()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .child(rust_i18n::t!("form.save_password").to_string()),
-                                    )
-                                    .child(
-                                        Switch::new("toggle-save-password")
-                                            .small()
-                                            .checked(form.save_password)
-                                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                                if let Some(form) = this.form.as_mut() {
-                                                    form.save_password = checked;
-                                                }
-                                                cx.notify();
-                                            })),
-                                    ),
-                            );
+                        } else {
+                            content.child(Self::credential_deferred_hint(p))
+                        };
                     }
                     AuthChoice::PrivateKey => {
-                        panel =
-                            panel
-                                .child(Self::form_field(
+                        content = content.child(
+                            h_flex()
+                                .gap_2()
+                                .items_end()
+                                .child(div().flex_1().child(Self::form_field(
                                     rust_i18n::t!("form.key_path").to_string(),
                                     form.key_path.clone(),
                                     p,
-                                ))
-                                .child(Self::form_field(
-                                    rust_i18n::t!("form.passphrase").to_string(),
-                                    form.passphrase.clone(),
-                                    p,
-                                ))
+                                )))
                                 .child(
-                                    h_flex()
-                                        .justify_between()
-                                        .items_center()
-                                        .py_1()
-                                        .child(div().text_sm().child(
-                                            rust_i18n::t!("form.save_passphrase").to_string(),
-                                        ))
-                                        .child(
-                                            Switch::new("toggle-save-passphrase")
-                                                .small()
-                                                .checked(form.save_passphrase)
-                                                .on_click(cx.listener(|this, &checked, _, cx| {
-                                                    if let Some(form) = this.form.as_mut() {
-                                                        form.save_passphrase = checked;
-                                                    }
-                                                    cx.notify();
-                                                })),
-                                        ),
-                                );
+                                    Button::new("browse-key-path")
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::FolderOpen)
+                                        .label(rust_i18n::t!("form.browse").to_string())
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.pick_private_key_path(window, cx);
+                                        })),
+                                ),
+                        );
+                        content = content.child(
+                            h_flex()
+                                .justify_between()
+                                .items_center()
+                                .py_1()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .child(rust_i18n::t!("form.save_passphrase").to_string()),
+                                )
+                                .child(
+                                    Switch::new("toggle-save-passphrase")
+                                        .small()
+                                        .checked(form.save_passphrase)
+                                        .on_click(cx.listener(|this, &checked, _, cx| {
+                                            if let Some(form) = this.form.as_mut() {
+                                                form.save_passphrase = checked;
+                                            }
+                                            cx.notify();
+                                        })),
+                                ),
+                        );
+                        content = if form.save_passphrase {
+                            content.child(Self::secret_field(
+                                rust_i18n::t!("form.passphrase").to_string(),
+                                form.passphrase.clone(),
+                                p,
+                            ))
+                        } else {
+                            content.child(Self::credential_deferred_hint(p))
+                        };
                     }
                     AuthChoice::Agent => {}
                 }
             }
             ConnectionChoice::Serial => {
-                panel = panel.child(render_serial_fields(form, cx, p));
+                content = content.child(render_serial_fields(form, cx, p));
             }
         }
 
-        panel = panel.child(
+        content = content.child(
             v_flex()
                 .gap_1()
                 .child(
@@ -279,10 +298,6 @@ impl AppShell {
                         .child(rust_i18n::t!("form.startup_hint").to_string()),
                 ),
         );
-
-        if let Some(error) = &form.error {
-            panel = panel.child(div().text_sm().text_color(p.danger).child(error.clone()));
-        }
 
         let editing = form.base.is_some();
         let confirm_delete = form.confirm_delete;
@@ -328,12 +343,57 @@ impl AppShell {
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.save_session_form(window, cx)),
-                    ),
+                    .on_click(cx.listener(|this, _, _, cx| this.save_session_form(cx))),
             );
-        panel = panel.child(footer);
+        // 校验错误与按钮同处外壳：内容区会滚动，报错不能被滚出视野，
+        // 否则保存失败看起来就像"点了没反应"。
+        let mut footer_block = v_flex().gap_2().items_end();
+        if let Some(error) = &form.error {
+            footer_block =
+                footer_block.child(div().text_sm().text_color(p.danger).child(error.clone()));
+        }
+        footer_block = footer_block.child(footer);
 
-        Self::overlay(panel, p)
+        let dialog = Self::dialog_frame(
+            "session-form-modal",
+            title,
+            None,
+            content,
+            Some(footer_block),
+            px(620.0),
+            p,
+        );
+        Self::overlay(dialog, p)
+    }
+
+    /// 用系统文件选择器挑选私钥，起始目录 `~/.ssh`。
+    ///
+    /// 不设扩展名过滤：OpenSSH 私钥通常没有扩展名，过滤反而挡掉常见文件。
+    /// 输入框仍可手输，路径在保存时统一展开 `~`。
+    pub(crate) fn pick_private_key_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(form) = self.form.as_mut() else {
+            return;
+        };
+        let title = rust_i18n::t!("form.pick_key").to_string();
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(&title)
+            .set_directory(crate::keys::default_ssh_dir())
+            .pick_file()
+        else {
+            return;
+        };
+        let text = path.to_string_lossy().to_string();
+        form.key_path
+            .update(cx, |state, cx| state.set_value(&text, window, cx));
+        cx.notify();
+    }
+
+    /// "本次不保存凭据"的说明行：告诉用户密码会在连接时询问，而不是漏填。
+    fn credential_deferred_hint(p: &Palette) -> AnyElement {
+        div()
+            .text_xs()
+            .text_color(p.muted_foreground)
+            .child(rust_i18n::t!("form.credential_deferred").to_string())
+            .into_any_element()
     }
 }

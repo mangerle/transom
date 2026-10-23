@@ -142,23 +142,34 @@ impl AppShell {
     }
 
     pub(crate) fn form_field(label: String, input: Entity<InputState>, p: &Palette) -> AnyElement {
+        Self::field_with_reveal(label, input, false, p)
+    }
+
+    /// 机密字段（登录密码、私钥口令）：在普通字段之上启用输入框自带的明文切换按钮。
+    ///
+    /// 复用组件库的 `mask_toggle` 而不是自己画一只眼睛：图标朝向、无障碍标签与掩码
+    /// 状态都由输入框自身维护，切换只影响显示，取值仍是真实文本。
+    pub(crate) fn secret_field(
+        label: String,
+        input: Entity<InputState>,
+        p: &Palette,
+    ) -> AnyElement {
+        Self::field_with_reveal(label, input, true, p)
+    }
+
+    fn field_with_reveal(
+        label: String,
+        input: Entity<InputState>,
+        reveal: bool,
+        p: &Palette,
+    ) -> AnyElement {
+        let field = Input::new(&input).w_full();
         v_flex()
             .gap_1()
             .child(div().text_xs().text_color(p.muted_foreground).child(label))
-            .child(Input::new(&input).w_full())
+            .child(if reveal { field.mask_toggle() } else { field })
             .into_any_element()
     }
-}
-
-pub(crate) fn password_input(
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) -> Entity<InputState> {
-    cx.new(|cx| {
-        InputState::new(window, cx)
-            .masked(true)
-            .placeholder(rust_i18n::t!("form.password").to_string())
-    })
 }
 
 pub(crate) fn sftp_text_input(

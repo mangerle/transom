@@ -9,7 +9,7 @@ use crate::sftp::{
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
 use std::sync::Arc;
-use transom_core::{AppEvent, TabId, TransferDirection, TransferStatus};
+use transom_core::{AppEvent, PromptKind, SecretKind, TabId, TransferDirection, TransferStatus};
 use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
 
 impl AppShell {
@@ -67,6 +67,8 @@ impl AppShell {
                 if let Some(group_index) = self.group_index_for_tab(tab_id) {
                     self.groups[group_index].active_pane = tab_id;
                 }
+                // 认证已确定通过，此刻才允许把用户勾选保存的凭据写入钥匙串。
+                self.flush_pending_credential(session_id, connection_id);
                 window.focus(&focus_handle, cx);
                 self.schedule_startup_commands(tab_id, connection_id, window, cx);
                 self.auto_start_forwards(tab_id, connection_id, session_id, cx);
@@ -83,6 +85,7 @@ impl AppShell {
                     tab.network_traffic = None;
                     self.error = Some(localized_error(&error));
                 }
+                self.discard_pending_credential(connection_id);
                 self.mark_forwards_stopped(tab_id);
             }
             AppEvent::Disconnected {
@@ -112,6 +115,10 @@ impl AppShell {
                 if tab.connection_id != Some(connection_id) {
                     return;
                 }
+                let session_id = tab.session_id;
+                // 同一连接的新问题会作废上一次答案的保存意图：只有最后一次提交的
+                // 凭据才可能认证成功，留着旧值会把已被拒绝的口令写进钥匙串。
+                self.discard_pending_credential(connection_id);
                 let inputs = prompts
                     .iter()
                     .map(|prompt| {
@@ -123,13 +130,24 @@ impl AppShell {
                         })
                     })
                     .collect();
+                // 只有我们自己索取的提示才具备"保存"的意义；服务器下发的 keyboard-interactive
+                // 文本可能是一次性挑战（OTP），存下来下次也用不上。
+                let secret_kind = match prompts.first().map(|info| info.kind) {
+                    Some(PromptKind::Password) => Some(SecretKind::Password),
+                    Some(PromptKind::Passphrase) => Some(SecretKind::KeyPassphrase),
+                    _ => None,
+                };
                 self.auth_prompt = Some(AuthPromptState {
+                    connection_id,
                     name,
                     instructions,
                     prompts,
                     inputs,
                     responder,
                     error: None,
+                    session_id,
+                    secret_kind,
+                    save: false,
                 });
             }
             AppEvent::SftpListing {

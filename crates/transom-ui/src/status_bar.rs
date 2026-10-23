@@ -44,7 +44,7 @@ impl AppShell {
                 }
                 TabStatus::Failed(_) => (p.danger, rust_i18n::t!("status.failed").to_string()),
             };
-            (color, format!("{}: {}", tab.title, text))
+            (color, format!("{}: {}", tab.display_name(), text))
         } else {
             (
                 p.muted_foreground,

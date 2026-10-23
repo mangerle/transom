@@ -97,6 +97,9 @@ common:
   copy:
     en: Copy
     zh-CN: 复制
+  duplicate_name:
+    en: "%{name} (Copy)"
+    zh-CN: "%{name} 副本"
   paste:
     en: Paste
     zh-CN: 粘贴
@@ -147,6 +150,15 @@ form:
   password:
     en: Password
     zh-CN: 密码
+  browse:
+    en: Browse
+    zh-CN: 浏览
+  pick_key:
+    en: Select a private key file
+    zh-CN: 选择私钥文件
+  credential_deferred:
+    en: Not saved locally. You will be asked for this credential when connecting.
+    zh-CN: 不保存到本机，连接时会询问该凭据。
   key_path:
     en: Private key
     zh-CN: 私钥路径
@@ -280,18 +292,18 @@ form:
     en: Private key path is required.
     zh-CN: 私钥路径不能为空。
 prompt:
-  password_title:
-    en: Password required
-    zh-CN: 需要密码
-  password_hint:
-    en: The session will connect after the password is submitted.
-    zh-CN: 提交密码后将开始连接。
-  password_required:
-    en: Password cannot be empty
-    zh-CN: 密码不能为空
-  connect:
-    en: Connect
-    zh-CN: 连接
+  password_field:
+    en: Login password
+    zh-CN: 登录密码
+  passphrase_field:
+    en: Private key passphrase
+    zh-CN: 私钥口令
+  save_credential:
+    en: Save to system keyring
+    zh-CN: 保存到系统钥匙串
+  credential_hint:
+    en: This credential is not stored on this machine. It is used for this connection only.
+    zh-CN: 本机未保存该凭据，仅用于本次连接，不会写入任何文件。
   auth_title:
     en: Authentication required
     zh-CN: 需要身份验证

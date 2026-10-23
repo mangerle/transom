@@ -115,7 +115,16 @@ impl AppShell {
         if group.zoomed == Some(tab_id) {
             group.zoomed = None;
         }
-        self.create_group(tab_id);
+        // 摘出后的标签仍属于原会话，序号按"该会话第几个标签"继续排。
+        let Some(session_id) = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .map(|tab| tab.session_id)
+        else {
+            return;
+        };
+        self.create_group(tab_id, session_id);
         self.prune_pane_split_states();
         self.activate_tab(tab_id, window, cx);
         cx.notify();

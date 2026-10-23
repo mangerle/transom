@@ -283,6 +283,7 @@ impl AppShell {
         let is_active = active_session == Some(session_id);
         let selection_mode = self.selection_mode;
         let is_selected = self.selected_sessions.contains(&session_id);
+        let is_marked = self.tree_selection == Some(session_id);
         let drag_label = session.name.clone();
         let drag_icon = icon_name;
         let element = div()
@@ -294,12 +295,17 @@ impl AppShell {
             .flex()
             .items_center()
             .cursor_pointer()
-            .on_click(cx.listener(move |this, _, window, cx| {
+            // 单击只负责选中这一行，双击才建立连接：会话行是列表里最容易被顺手点到的
+            // 元素，把连接挂在单击上会让"看一眼"和"连上去"没法区分。
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 if this.selection_mode {
                     let selected = this.selected_sessions.contains(&session_id);
                     this.toggle_session_selection(session_id, !selected, cx);
-                } else {
+                } else if event.click_count() >= 2 {
                     this.connect_session(session_id, window, cx);
+                } else {
+                    this.tree_selection = Some(session_id);
+                    cx.notify();
                 }
             }))
             .on_drag(SidebarDrag::Session(session_id), move |_, _, _, cx| {
@@ -394,7 +400,8 @@ impl AppShell {
                 }
             });
         // 高亮与悬停只作用于内层内容条，缩进区保持透明，层级靠左偏移表达。
-        let is_selected_row = selection_mode && is_selected;
+        // 单击选中的行与多选勾选的行共用"选中"这一档深浅，避免再引入第五种底色。
+        let is_selected_row = is_marked || (selection_mode && is_selected);
         let tint = if is_active {
             1.0
         } else if is_selected_row {

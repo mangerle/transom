@@ -13,8 +13,19 @@ use transom_core::{
 
 impl AppShell {
     /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
-    pub(crate) fn create_group(&mut self, tab_id: TabId) -> GroupId {
-        let group = TabGroup::new(tab_id);
+    ///
+    /// 顺带分配同会话的额外标签序号：该会话的第一个标签拿 0（界面不显示后缀），
+    /// 之后依次 1、2... 序号一经确定就不回改已有标签——新开一个标签不该让原来那个
+    /// 从 "web-01" 变成 "web-01 #1"。当前同会话标签全部关完后，下一个重新回到 0。
+    pub(crate) fn create_group(&mut self, tab_id: TabId, session_id: SessionId) -> GroupId {
+        let serial = self
+            .groups
+            .iter()
+            .filter(|group| group.session_id == session_id)
+            .map(|group| group.serial)
+            .max()
+            .map_or(0, |max| max + 1);
+        let group = TabGroup::new(tab_id, session_id, serial);
         let id = group.id;
         self.groups.push(group);
         id
@@ -24,6 +35,9 @@ impl AppShell {
     ///
     /// 布局直接来自设置里的分割树形状。设置文件属外部输入：叶子数超过上限或
     /// 形状损坏时按单窗格处理，绝不一次拉起大量连接。
+    ///
+    /// 这里不按会话去重：同一会话并列多个标签组是正常状态，去重会让第二个及以后的
+    /// 同会话标签在重启后凭空消失。恢复的组数天然等于关窗口时实际打开的标签数。
     pub(crate) fn restore_tab_group(
         &mut self,
         saved: &SavedTabGroup,
@@ -34,13 +48,6 @@ impl AppShell {
 
         if saved.session == "local" {
             self.open_local_terminal(window, cx);
-        } else if self
-            .tabs
-            .iter()
-            .any(|tab| tab.session_id.to_string() == saved.session)
-        {
-            // 同一会话已在更早恢复的标签组中打开，避免损坏设置重复拉起连接。
-            return;
         } else if let Some(session) = self
             .catalog
             .sessions
@@ -182,14 +189,56 @@ impl AppShell {
             .folder_id
             .and_then(|id| self.catalog.folder_path(id));
         let is_serial = matches!(session.connection, Connection::Serial(_));
-        self.form = Some(SessionForm::new(window, cx, Some(session), folder_path));
+        let mut form = SessionForm::new(window, cx, Some(session), folder_path);
+        self.prefill_secrets(&mut form, window, cx);
+        self.form = Some(form);
         if is_serial {
             self.refresh_serial_ports(window, cx);
+        }
+    }
+
+    /// 把编辑中会话已保存在钥匙串里的凭据填回表单输入框。
+    ///
+    /// 界面因此把输入框当作"已存口令的编辑视图"：显示为掩码点，点眼睛可以看，
+    /// 清空它就表示要删掉这条凭据（见 `save_session_form`）。只填当前会显示出来的
+    /// 那一项；读不到就留空，由界面上的空值提示说明后果。
+    fn prefill_secrets(
+        &mut self,
+        form: &mut SessionForm,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(base) = form.base.as_ref() else {
+            return;
+        };
+        let session_id = base.id;
+        let password_field = form.password.clone();
+        let passphrase_field = form.passphrase.clone();
+        for (kind, field, shown) in [
+            (SecretKind::Password, password_field, form.save_password),
+            (
+                SecretKind::KeyPassphrase,
+                passphrase_field,
+                form.save_passphrase,
+            ),
+        ] {
+            if !shown {
+                continue;
+            }
+            let key = SecretKey::new(session_id, kind);
+            if let Ok(Some(secret)) = self.services.secret_store.get(&key) {
+                field.update(cx, |state, cx| state.set_value(secret.as_str(), window, cx));
+            }
         }
         cx.notify();
     }
 
-    pub(crate) fn save_session_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
+    ///
+    /// 保存与连接是两个动作：新建会话后要用它，去列表里双击（或右键"连接"）。
+    /// 早先新建路径会顺手 `connect_session`，那既绕过了"双击才连接"的约定，
+    /// 也会在没保存凭据时刚填完表单又被追问一次密码。
+    pub(crate) fn save_session_form(&mut self, cx: &mut Context<Self>) {
         let Some(form) = self.form.as_mut() else {
             return;
         };
@@ -213,12 +262,20 @@ impl AppShell {
             .and_then(|path| self.catalog.ensure_folder_path(path));
         let password_key = SecretKey::new(built.session.id, SecretKind::Password);
         let passphrase_key = SecretKey::new(built.session.id, SecretKind::KeyPassphrase);
+        // 勾选保存但把内容清空，语义就是"删掉这条凭据"：输入框现在是已存口令的
+        // 编辑视图，清空必须能生效，否则用户的删除意图会被无声忽略。
         if save_password {
             if let Some(password) = &built.password
                 && let Err(error) = self
                     .services
                     .secret_store
                     .set(&password_key, password.as_str())
+            {
+                self.error = Some(localized_error(&error));
+            }
+            if built.password.is_none()
+                && let Err(error) = self.services.secret_store.delete(&password_key)
+                && error.code != ErrorCode::SecretStoreUnavailable
             {
                 self.error = Some(localized_error(&error));
             }
@@ -233,6 +290,13 @@ impl AppShell {
                     .services
                     .secret_store
                     .set(&passphrase_key, passphrase.as_str())
+            {
+                self.error = Some(localized_error(&error));
+            }
+            // 与登录密码同规则：清空已回填的口令即表示删除。
+            if built.key_passphrase.is_none()
+                && let Err(error) = self.services.secret_store.delete(&passphrase_key)
+                && error.code != ErrorCode::SecretStoreUnavailable
             {
                 self.error = Some(localized_error(&error));
             }
@@ -256,9 +320,6 @@ impl AppShell {
             self.catalog.sessions.push(built.session);
         }
         self.persist_catalog();
-        if !editing {
-            self.connect_session(session_id, window, cx);
-        }
         cx.notify();
     }
 
@@ -315,18 +376,64 @@ impl AppShell {
     }
 
     pub(crate) fn duplicate_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        if let Some(mut session) = self
+        let Some(mut session) = self
             .catalog
             .sessions
             .iter()
             .find(|s| s.id == session_id)
             .cloned()
-        {
-            session.id = SessionId::new();
-            session.name = format!("{} (Copy)", session.name);
-            self.catalog.sessions.push(session);
-            self.persist_catalog();
-            cx.notify();
+        else {
+            return;
+        };
+        let new_id = SessionId::new();
+        let name = session.name.clone();
+        session.id = new_id;
+        session.name = self.unique_duplicate_name(&name);
+        self.catalog.sessions.push(session);
+        // 凭据按会话 ID 存放：不跟着复制，副本就成了"配置一样却要重新输密码"的会话。
+        self.copy_secrets(session_id, new_id);
+        self.persist_catalog();
+        cx.notify();
+    }
+
+    /// 为副本挑一个目录里未被占用的名字：`X 副本`、`X 副本 #1`、`X 副本 #2`...
+    ///
+    /// 与标签序号同构的约定：已有会话的名字一个都不改，只在候选里取第一个空闲位，
+    /// 因此连点两次复制不会造出两个同名会话。候选上界取目录大小 + 2，按鸽笼原理
+    /// 必然存在未占用位；最后的兜底分支理论上不可达，只为免掉 unwrap。
+    fn unique_duplicate_name(&self, original: &str) -> String {
+        let base = duplicate_base(original);
+        let first = rust_i18n::t!("common.duplicate_name", name = base).to_string();
+        let taken = |candidate: &str| self.catalog.sessions.iter().any(|s| s.name == candidate);
+        if !taken(&first) {
+            return first;
+        }
+        let limit = self.catalog.sessions.len() + 2;
+        (1..=limit)
+            .map(|index| format!("{first} #{index}"))
+            .find(|candidate| !taken(candidate))
+            .unwrap_or_else(|| format!("{first} #{}", limit + 1))
+    }
+
+    /// 把一个会话名下的钥匙串条目复制到另一个会话 ID。
+    ///
+    /// 钥匙串不可用只降级为提示，副本记录照常创建：复制会话本身不依赖凭据。
+    fn copy_secrets(&mut self, from: SessionId, to: SessionId) {
+        for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
+            let source = SecretKey::new(from, kind);
+            let target = SecretKey::new(to, kind);
+            match self.services.secret_store.get(&source) {
+                Ok(Some(secret)) => {
+                    if let Err(error) = self.services.secret_store.set(&target, &secret)
+                        && error.code != ErrorCode::SecretStoreUnavailable
+                    {
+                        self.error = Some(localized_error(&error));
+                    }
+                }
+                Ok(None) => {}
+                Err(error) if error.code == ErrorCode::SecretStoreUnavailable => {}
+                Err(error) => self.error = Some(localized_error(&error)),
+            }
         }
     }
 
@@ -511,5 +618,60 @@ impl AppShell {
             self.error = Some(localized_error(&error));
         }
         cx.notify();
+    }
+}
+
+/// 计算副本命名基准：剥掉我们自己加上的"副本"后缀、以及紧随其后的 ` #N` 编号。
+///
+/// 只有确认剥到了"副本"后缀时才继续剥编号，避免误伤用户自己的命名：
+/// `db #12` 会被复制成 `db #12 副本`，而不是被剪成 `db 副本`。
+fn duplicate_base(name: &str) -> String {
+    let suffix = rust_i18n::t!("common.duplicate_name", name = "").to_string();
+    let trimmed = name.trim_end();
+    if let Some(base) = strip_copy_suffix(trimmed, &suffix) {
+        return base.to_string();
+    }
+    if let Some(position) = trimmed.rfind(" #")
+        && let Some(tail) = trimmed.get(position + 2..)
+        && !tail.is_empty()
+        && tail.chars().all(|c| c.is_ascii_digit())
+        && let Some(base) = strip_copy_suffix(trimmed[..position].trim_end(), &suffix)
+    {
+        return base.to_string();
+    }
+    trimmed.to_string()
+}
+
+/// 去掉本地化的"副本"后缀；不是我们生成的后缀就返回 None，不猜测用户命名。
+fn strip_copy_suffix<'a>(text: &'a str, suffix: &str) -> Option<&'a str> {
+    text.strip_suffix(suffix).map(str::trim_end)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{duplicate_base, strip_copy_suffix};
+
+    #[test]
+    fn duplicate_base_strips_only_our_own_suffix() {
+        let suffix = rust_i18n::t!("common.duplicate_name", name = "").to_string();
+        // 单层副本与"副本叠副本"都回到原始名。
+        assert_eq!(
+            duplicate_base(&format!("web-01{suffix}")),
+            "web-01".to_string()
+        );
+        assert_eq!(
+            duplicate_base(&format!("web-01{suffix} #2")),
+            "web-01".to_string()
+        );
+        // 用户自己的命名绝不改动：没有我们的后缀时，连尾部的 #N 也不剥。
+        assert_eq!(duplicate_base("db #12"), "db #12".to_string());
+        assert_eq!(duplicate_base("web-01"), "web-01".to_string());
+        assert_eq!(
+            duplicate_base("release #12 #13"),
+            "release #12 #13".to_string()
+        );
+        // 只剥一次我们的后缀，不做递归猜测。
+        assert_eq!(strip_copy_suffix(&format!("a{suffix}"), &suffix), Some("a"));
+        assert_eq!(strip_copy_suffix("plain", &suffix), None);
     }
 }

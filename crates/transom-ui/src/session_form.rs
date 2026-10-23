@@ -304,6 +304,10 @@ impl SessionForm {
         if self.auth == AuthChoice::PrivateKey && key_path.is_empty() {
             return Err(rust_i18n::t!("form.error_key").to_string());
         }
+        // 存展开后的绝对路径：与 ssh_config 导入同一口径，连接层不必再理解 `~`。
+        let key_path = crate::keys::expand_home(&key_path)
+            .to_string_lossy()
+            .to_string();
         let options = self
             .base
             .as_ref()

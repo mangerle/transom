@@ -1,16 +1,18 @@
 //! 会话连接建立、SSH 配置导入与密码/多因子认证交互模块。
 
-use crate::app::{AppShell, PasswordPrompt, PendingConnect, TerminalTab};
+use crate::app::{AppShell, PendingCredential, TerminalTab};
 use crate::keymap;
-use crate::palette::{Palette, localized_error, password_input};
+use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::Input;
-use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::component::input::Enter;
+use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, AuthMethod, Connection, ConnectionId, ConnectionSecrets, LocalConnection,
-    SecretKey, SecretKind, Session, SessionId, TabId, TerminalSize, parse_ssh_config,
+    AppCommand, AuthMethod, Connection, ConnectionId, ConnectionSecrets, ErrorCode,
+    LocalConnection, PromptKind, SecretKey, SecretKind, Session, SessionId, TabId, TerminalSize,
+    parse_ssh_config,
 };
 use zeroize::Zeroizing;
 
@@ -50,7 +52,7 @@ impl AppShell {
             rust_i18n::t!("app.new_local").to_string(),
             Connection::Local(LocalConnection::default()),
         );
-        self.create_group(tab_id);
+        self.create_group(tab_id, session.id);
         self.tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
@@ -110,21 +112,17 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 为某个会话新建一个标签组并发起连接。
+    ///
+    /// 不做"该会话已开就切过去"的去重：一个标签可以有多个同会话窗格，标签本身
+    /// 也允许并列多个同会话实例（不同目录、不同任务），去重会让"再开一个"这个
+    /// 明确动作没有入口。
     pub(crate) fn connect_session(
         &mut self,
         session_id: SessionId,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self
-            .tabs
-            .iter()
-            .find(|tab| tab.session_id == session_id)
-            .map(|tab| tab.id)
-        {
-            self.activate_tab(tab_id, window, cx);
-            return;
-        }
         let Some(session) = self
             .catalog
             .sessions
@@ -136,34 +134,7 @@ impl AppShell {
         };
 
         let tab_id = TabId::new();
-        self.create_group(tab_id);
-        self.tabs
-            .push(TerminalTab::pending(tab_id, session.clone()));
-        self.active_tab = Some(tab_id);
-        self.start_connection(tab_id, session, window, cx);
-    }
-
-    /// 无论该会话是否已打开，都在新标签组里再开一个连接。
-    ///
-    /// `connect_session` 对已打开的会话只做激活，分屏后同一会话会有多个窗格，
-    /// 沿用它会令"复制标签"永远退化为切换；此处显式绕开去重。
-    pub(crate) fn open_session_in_new_tab(
-        &mut self,
-        session_id: SessionId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(session) = self
-            .catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .cloned()
-        else {
-            return;
-        };
-        let tab_id = TabId::new();
-        self.create_group(tab_id);
+        self.create_group(tab_id, session_id);
         self.tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
@@ -174,7 +145,7 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
         session: Session,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let connection_id = ConnectionId::new();
@@ -186,8 +157,8 @@ impl AppShell {
             // 旧连接的初始化命令队列随重连一并取消。
             tab._startup_task = None;
         }
+        // 凭据只负责"有就带上"：缺失不在这里拦截，认证阶段由 net 层按需向界面索取。
         let mut secrets = ConnectionSecrets::default();
-        let mut needs_password = false;
 
         match &session.connection {
             Connection::Ssh(ssh) => match &ssh.auth {
@@ -195,11 +166,9 @@ impl AppShell {
                     let key = SecretKey::new(session.id, SecretKind::Password);
                     match self.services.secret_store.get(&key) {
                         Ok(Some(secret)) => secrets.password = Some(secret),
-                        Ok(None) => needs_password = true,
-                        Err(error) => {
-                            self.error = Some(localized_error(&error));
-                            needs_password = true;
-                        }
+                        Ok(None) => {}
+                        // 钥匙串不可用属于可恢复异常：照常发起连接，改为在认证阶段询问用户。
+                        Err(error) => self.error = Some(localized_error(&error)),
                     }
                 }
                 AuthMethod::PrivateKey {
@@ -224,21 +193,7 @@ impl AppShell {
             }
         }
 
-        if needs_password {
-            let password_prompt = PasswordPrompt {
-                input: password_input(window, cx),
-                error: None,
-            };
-            self.pending_connect = Some(PendingConnect {
-                tab_id,
-                connection_id,
-                session,
-                secrets,
-            });
-            self.password_prompt = Some(password_prompt);
-        } else {
-            self.send_connect(tab_id, connection_id, session, secrets, cx);
-        }
+        self.send_connect(tab_id, connection_id, session, secrets, cx);
         cx.notify();
     }
 
@@ -265,46 +220,6 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn submit_password(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let Some(prompt) = self.password_prompt.as_mut() else {
-            return;
-        };
-        let value = prompt.input.read(cx).value().to_string();
-        if value.trim().is_empty() {
-            prompt.error = Some(rust_i18n::t!("prompt.password_required").to_string());
-            cx.notify();
-            return;
-        }
-        let Some(mut pending) = self.pending_connect.take() else {
-            self.password_prompt = None;
-            return;
-        };
-        if let Connection::Ssh(ssh) = &pending.session.connection
-            && let AuthMethod::Password { save: true } = &ssh.auth
-        {
-            let key = SecretKey::new(pending.session.id, SecretKind::Password);
-            if let Err(error) = self.services.secret_store.set(&key, value.as_str()) {
-                self.error = Some(localized_error(&error));
-            }
-        }
-        pending.secrets.password = Some(Zeroizing::new(value));
-        self.password_prompt = None;
-        self.send_connect(
-            pending.tab_id,
-            pending.connection_id,
-            pending.session,
-            pending.secrets,
-            cx,
-        );
-    }
-
-    pub(crate) fn cancel_password(&mut self) {
-        if let Some(pending) = self.pending_connect.take() {
-            self.remove_tab(pending.tab_id);
-        }
-        self.password_prompt = None;
-    }
-
     pub(crate) fn submit_auth_prompt(&mut self, cx: &mut Context<Self>) {
         let Some(state) = self.auth_prompt.take() else {
             return;
@@ -314,60 +229,88 @@ impl AppShell {
             .iter()
             .map(|input| input.read(cx).value().to_string())
             .collect();
+        // 勾选了保存只先暂存：此刻还不知道服务器是否接受这个密码，写早了会把错口令
+        // 持久化，见 `PendingCredential`。连接成功建立时才由 `flush_pending_credential` 落盘。
+        if let Some(kind) = state.secret_kind
+            && state.save
+            && let Some(value) = answers.first().filter(|value| !value.is_empty())
+        {
+            self.pending_credential = Some(PendingCredential {
+                session_id: state.session_id,
+                connection_id: state.connection_id,
+                kind,
+                value: Zeroizing::new(value.clone()),
+            });
+        }
         let _ = state.responder.send(answers);
         cx.notify();
     }
 
-    pub(crate) fn cancel_auth_prompt(&mut self) {
-        self.auth_prompt = None;
+    /// 连接成功建立后，把用户勾选保存的凭据写入钥匙串。
+    ///
+    /// 同时打开会话记录上的保存标记：否则下次在会话表单里保存，会因为标记仍是
+    /// "不保存"而把这条凭据删掉，用户又被问一遍。
+    pub(crate) fn flush_pending_credential(
+        &mut self,
+        session_id: SessionId,
+        connection_id: ConnectionId,
+    ) {
+        let matched = self.pending_credential.as_ref().is_some_and(|pending| {
+            pending.session_id == session_id && pending.connection_id == connection_id
+        });
+        if !matched {
+            return;
+        }
+        let Some(pending) = self.pending_credential.take() else {
+            return;
+        };
+        let key = SecretKey::new(pending.session_id, pending.kind);
+        if let Err(error) = self.services.secret_store.set(&key, &pending.value)
+            && error.code != ErrorCode::SecretStoreUnavailable
+        {
+            self.error = Some(localized_error(&error));
+        }
+        self.mark_credential_saved(pending.session_id);
     }
 
-    pub(crate) fn render_password_prompt(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(prompt) = self.password_prompt.as_ref() else {
-            return div().into_any_element();
+    /// 连接失败时丢弃待保存凭据，避免这次没通过的口令被下一条连接写入。
+    pub(crate) fn discard_pending_credential(&mut self, connection_id: ConnectionId) {
+        let matched = self
+            .pending_credential
+            .as_ref()
+            .is_some_and(|pending| pending.connection_id == connection_id);
+        if matched {
+            self.pending_credential = None;
+        }
+    }
+
+    /// 打开会话上的"凭据保存到钥匙串"标记，使目录记录与钥匙串实际状态一致。
+    fn mark_credential_saved(&mut self, session_id: SessionId) {
+        let Some(session) = self
+            .catalog
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        else {
+            return;
         };
+        let Connection::Ssh(ssh) = &mut session.connection else {
+            return;
+        };
+        match &mut ssh.auth {
+            AuthMethod::Password { save } => *save = true,
+            AuthMethod::PrivateKey {
+                save_passphrase, ..
+            } => *save_passphrase = true,
+            // agent 等方式没有可保存的凭据，能到这里说明目录已被改过，保持原样即可。
+            _ => {}
+        }
+        self.refresh_tab_sessions();
+        self.persist_catalog();
+    }
 
-        let content = v_flex()
-            .gap_3()
-            .child(Input::new(&prompt.input).w_full())
-            .when_some(prompt.error.clone(), |this, err| {
-                this.child(div().text_sm().text_color(p.danger).child(err))
-            });
-
-        let footer = h_flex()
-            .gap_2()
-            .child(
-                Button::new("cancel-password")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.cancel_password();
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("submit-password")
-                    .primary()
-                    .label(rust_i18n::t!("prompt.connect").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| this.submit_password(window, cx))),
-            );
-
-        let dialog = Self::dialog_frame(
-            "password-prompt-modal",
-            rust_i18n::t!("prompt.password_title").to_string(),
-            Some(rust_i18n::t!("prompt.password_hint").to_string()),
-            content,
-            Some(footer),
-            px(440.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+    pub(crate) fn cancel_auth_prompt(&mut self) {
+        self.auth_prompt = None;
     }
 
     pub(crate) fn render_auth_prompt(
@@ -379,35 +322,28 @@ impl AppShell {
         let Some(prompt) = self.auth_prompt.as_ref() else {
             return div().into_any_element();
         };
-        let mut panel = v_flex()
-            .id(ElementId::Name("auth-prompt-panel".into()))
-            .w(px(480.0))
-            .max_h(px(520.0))
+        // 我们自己生成的提示（登录密码、私钥口令）没有服务器文本可依，只能按语义类别
+        // 取本地化标签；服务器下发的 keyboard-interactive 文本保持原样，避免改写用户
+        // 需要核对的挑战内容。
+        let client_generated = prompt
+            .prompts
+            .iter()
+            .any(|info| !matches!(info.kind, PromptKind::Text));
+        // 服务器可能下发多条挑战，内容区自带有限高度的滚动区。
+        // 回车与"提交"按钮等效：这个弹窗里没有需要换行的输入，Enter 不会被文本域吃掉。
+        let mut content = v_flex()
+            .id(ElementId::Name("auth-prompt-body".into()))
+            .max_h(px(360.0))
             .overflow_y_scroll()
             .gap_3()
-            .p_5()
-            .rounded_lg()
-            .bg(p.popover)
-            .text_color(p.popover_foreground)
-            .border_1()
-            .border_color(p.border)
-            .child(
-                div()
-                    .text_lg()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("prompt.auth_title").to_string()),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("prompt.auth_hint").to_string()),
-            );
+            .on_action(cx.listener(|this, _: &Enter, _, cx| {
+                this.submit_auth_prompt(cx);
+            }));
         if !prompt.name.is_empty() {
-            panel = panel.child(div().text_sm().child(prompt.name.clone()));
+            content = content.child(div().text_sm().child(prompt.name.clone()));
         }
         if !prompt.instructions.is_empty() {
-            panel = panel.child(
+            content = content.child(
                 div()
                     .text_sm()
                     .text_color(p.muted_foreground)
@@ -416,12 +352,49 @@ impl AppShell {
         }
         for (index, prompt_info) in prompt.prompts.iter().enumerate() {
             let input = prompt.inputs[index].clone();
-            panel = panel.child(Self::form_field(prompt_info.prompt.clone(), input, p));
+            let label = match prompt_info.kind {
+                PromptKind::Password => rust_i18n::t!("prompt.password_field").to_string(),
+                PromptKind::Passphrase => rust_i18n::t!("prompt.passphrase_field").to_string(),
+                PromptKind::Text => prompt_info.prompt.clone(),
+            };
+            let field = if prompt_info.echo {
+                Self::form_field(label, input, p)
+            } else {
+                Self::secret_field(label, input, p)
+            };
+            content = content.child(field);
         }
+
+        if prompt.secret_kind.is_some() {
+            content = content.child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("prompt.save_credential").to_string()),
+                    )
+                    .child(
+                        Switch::new("toggle-save-credential")
+                            .small()
+                            .checked(prompt.save)
+                            .on_click(cx.listener(|this, &checked, _, cx| {
+                                if let Some(state) = this.auth_prompt.as_mut() {
+                                    state.save = checked;
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            );
+        }
+
+        // 错误提示与按钮一起放在外壳上：内容区会滚动，报错不能被滚出视野。
+        let mut footer = v_flex().gap_2().items_end();
         if let Some(error) = &prompt.error {
-            panel = panel.child(div().text_sm().text_color(p.danger).child(error.clone()));
+            footer = footer.child(div().text_sm().text_color(p.danger).child(error.clone()));
         }
-        panel = panel.child(
+        footer = footer.child(
             h_flex()
                 .gap_2()
                 .justify_end()
@@ -441,6 +414,20 @@ impl AppShell {
                         .on_click(cx.listener(|this, _, _, cx| this.submit_auth_prompt(cx))),
                 ),
         );
-        Self::overlay(panel, p)
+        let hint = if client_generated {
+            rust_i18n::t!("prompt.credential_hint").to_string()
+        } else {
+            rust_i18n::t!("prompt.auth_hint").to_string()
+        };
+        let dialog = Self::dialog_frame(
+            "auth-prompt-modal",
+            rust_i18n::t!("prompt.auth_title").to_string(),
+            Some(hint),
+            content,
+            Some(footer),
+            px(440.0),
+            p,
+        );
+        Self::overlay(dialog, p)
     }
 }

@@ -4,7 +4,7 @@ use crate::app::{AppShell, TabStatus};
 use crate::palette::Palette;
 use crate::pane_tree::MAX_PANES;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::h_flex;
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
@@ -44,9 +44,15 @@ impl AppShell {
             let group_id = group.id;
             let active_pane = group.active_pane;
             let session_id = tab.session_id;
-            let title = tab.title.clone();
+            let title = tab.display_name();
             let pane_count = group.pane_count();
             let root_axis = group.root.root_axis();
+            // 只有同会话的额外标签才带后缀，原始标签（serial 为 0）始终不带：
+            // 新开标签只给自己贴号，绝不回改已经存在的标签。
+            // 序号不拼进 tab.title —— 那个字段会被远端 OSC 标题序列覆盖，
+            // 而且 SFTP 目录联动靠解析它。
+            let serial = group.serial;
+            let is_extra = serial > 0;
             let is_local = matches!(tab.session.connection, Connection::Local(_));
             let active = self.active_tab == Some(active_pane);
             let dot_color = match &tab.status {
@@ -82,11 +88,21 @@ impl AppShell {
                         .text_color(p.foreground)
                 });
             }
-            let tooltip_text = if pane_count > 1 {
-                rust_i18n::t!("tab.pane_count", title = title, count = pane_count).to_string()
+            let labeled = if is_extra {
+                format!("{title} #{serial}")
             } else {
                 title.clone()
             };
+            let tooltip_title = if pane_count > 1 {
+                rust_i18n::t!("tab.pane_count", title = labeled, count = pane_count).to_string()
+            } else {
+                labeled
+            };
+            // 标签主名固定用会话名，远端 OSC 上报的运行期标题（通常是 `用户@主机: 目录`
+            // 或当前编辑器文件）只在 tooltip 第二行附带，且与主名重复时不显示。
+            let runtime_title = tab.title.trim().to_string();
+            let show_runtime = !runtime_title.is_empty() && runtime_title != tab.display_name();
+            let tooltip_muted = p.muted_foreground;
             let tab_element = attach_tab_drag(
                 tab_element,
                 group_id,
@@ -96,7 +112,30 @@ impl AppShell {
                 p,
             );
             let mut element = tab_element
-                .tooltip(move |_window, cx| Tooltip::new(tooltip_text.clone()).build(_window, cx))
+                .tooltip(move |_window, cx| {
+                    // 外层闭包会被反复调用，字符串必须每轮重新交出所有权。
+                    let tooltip_title = tooltip_title.clone();
+                    let runtime_title = runtime_title.clone();
+                    Tooltip::element(move |_, _| {
+                        let mut tip = v_flex()
+                            .gap_0p5()
+                            .child(div().text_sm().child(tooltip_title.clone()));
+                        if show_runtime {
+                            tip = tip.child(
+                                div()
+                                    .text_xs()
+                                    .max_w(px(360.0))
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .truncate()
+                                    .text_color(tooltip_muted)
+                                    .child(runtime_title.clone()),
+                            );
+                        }
+                        tip
+                    })
+                    .build(_window, cx)
+                })
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.activate_tab(active_pane, window, cx);
                 }))
@@ -128,9 +167,7 @@ impl AppShell {
                                                 if is_local {
                                                     this.open_local_terminal(window, cx);
                                                 } else {
-                                                    this.open_session_in_new_tab(
-                                                        session_id, window, cx,
-                                                    );
+                                                    this.connect_session(session_id, window, cx);
                                                 }
                                             });
                                         }
@@ -261,8 +298,17 @@ impl AppShell {
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .truncate()
-                        .child(tab.title.clone()),
+                        .child(title.clone()),
                 );
+            if is_extra {
+                element = element.child(
+                    div()
+                        .text_xs()
+                        .flex_none()
+                        .text_color(p.muted_foreground)
+                        .child(format!("#{serial}")),
+                );
+            }
             if pane_count > 1 {
                 // 徽标即窗格选择器：放大态下其他窗格不在界面上，这里是唯一的鼠标出口。
                 let rows: Vec<PaneRow> = group
@@ -275,7 +321,7 @@ impl AppShell {
                         Some(PaneRow {
                             tab_id: pane_id,
                             ordinal: position + 1,
-                            title: tab.title.clone(),
+                            title: tab.display_name(),
                             dot_color,
                             icon,
                             active: pane_id == active_pane,

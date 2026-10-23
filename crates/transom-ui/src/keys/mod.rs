@@ -344,21 +344,21 @@ impl AppShell {
                 Some(KeyTarget {
                     tab_id: tab.id,
                     connection_id: tab.connection_id?,
-                    title: tab.title.clone(),
+                    title: tab.display_name(),
                 })
             })
             .collect()
     }
 }
 
-fn default_ssh_dir() -> PathBuf {
+pub(crate) fn default_ssh_dir() -> PathBuf {
     directories::BaseDirs::new()
         .map(|dirs| dirs.home_dir().join(".ssh"))
         .unwrap_or_else(|| PathBuf::from(".ssh"))
 }
 
 /// 展开 `~` 与 `~/` 前缀，方便用户按 OpenSSH 习惯输入路径。
-fn expand_home(input: &str) -> PathBuf {
+pub(crate) fn expand_home(input: &str) -> PathBuf {
     let input = input.trim();
     let Some(dirs) = directories::BaseDirs::new() else {
         return PathBuf::from(input);
@@ -370,4 +370,32 @@ fn expand_home(input: &str) -> PathBuf {
         return dirs.home_dir().join(rest);
     }
     PathBuf::from(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expand_home;
+    use std::path::PathBuf;
+
+    /// `~` 展开是会话表单与密钥向导共用的口径，绝对路径必须原样通过。
+    #[test]
+    fn expand_home_handles_tilde_and_absolute_paths() {
+        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+        let Some(home) = home else {
+            // 拿不到家目录的环境属于可用降级：原样返回，不 panic。
+            assert_eq!(expand_home("~/id_rsa"), PathBuf::from("~/id_rsa"));
+            return;
+        };
+        assert_eq!(
+            expand_home("~/.ssh/id_ed25519"),
+            home.join(".ssh/id_ed25519")
+        );
+        assert_eq!(expand_home("  ~/id_rsa  "), home.join("id_rsa"));
+        assert_eq!(expand_home("~"), home);
+        assert_eq!(
+            expand_home("/etc/ssh/host_key"),
+            PathBuf::from("/etc/ssh/host_key")
+        );
+        assert_eq!(expand_home("./id_rsa"), PathBuf::from("./id_rsa"));
+    }
 }

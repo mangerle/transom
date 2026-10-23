@@ -234,7 +234,7 @@ impl AppShell {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .truncate()
-                    .child(self.tabs[index].title.clone()),
+                    .child(self.tabs[index].display_name()),
             )
             .child(
                 div()
