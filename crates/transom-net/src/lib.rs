@@ -5,6 +5,7 @@ mod bridge;
 mod client;
 mod forward;
 mod sftp;
+mod sftp_dir;
 
 pub use auth::{AuthPrompter, PasswordPrompter};
 pub use client::{SshRemote, SshSession, connect_ssh};

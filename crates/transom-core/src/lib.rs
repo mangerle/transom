@@ -11,6 +11,7 @@ pub mod secrets;
 pub mod session;
 pub mod settings;
 pub mod sftp;
+pub mod sftp_filter;
 pub mod ssh_config;
 pub mod storage;
 pub mod system_stats;
@@ -31,10 +32,14 @@ pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
 pub use session::{
     AuthMethod, Connection, LocalConnection, Session, SessionOptions, SshConnection,
 };
-pub use settings::{AppSettings, BellStyle, WindowSettings};
+pub use settings::{AppSettings, BellStyle, SftpSettings, WindowSettings};
 pub use sftp::{
-    RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferMode, TransferStatus,
-    TransferTask, format_octal_permissions, format_rwx_permissions, parse_octal_permissions,
+    RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferKind, TransferMode,
+    TransferStatus, TransferSummary, TransferTask, format_octal_permissions,
+    format_rwx_permissions, parse_octal_permissions,
+};
+pub use sftp_filter::{
+    DEFAULT_TRANSFER_EXCLUDES, TransferFilter, TransferMatcher, validate_transfer_filter,
 };
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
 pub use storage::{SecretStore, SessionStore, SettingsStore};

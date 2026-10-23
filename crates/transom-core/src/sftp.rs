@@ -1,4 +1,5 @@
 use crate::ids::TransferId;
+use crate::sftp_filter::TransferFilter;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -52,6 +53,26 @@ pub enum TransferMode {
     Overwrite,
 }
 
+/// 传输目标类型：单文件或整棵目录树。
+///
+/// 目录传输在队列中只占一个任务，由后台逐项递归执行；`kind` 决定队列调度器
+/// 选择单文件操作还是目录递归操作，避免根据路径实时猜测类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum TransferKind {
+    #[default]
+    File,
+    Directory,
+}
+
+/// 目录递归传输的汇总结果。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TransferSummary {
+    /// 实际完成（含断点续传已存在）的字节数
+    pub transferred: u64,
+    /// 被排除规则或符号链接跳过的条目数
+    pub skipped: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransferStatus {
     Pending,
@@ -66,6 +87,8 @@ pub enum TransferStatus {
 pub struct TransferTask {
     pub id: TransferId,
     pub direction: TransferDirection,
+    #[serde(default)]
+    pub kind: TransferKind,
     pub local_path: PathBuf,
     pub remote_path: String,
     pub size: Option<u64>,
@@ -85,6 +108,7 @@ impl TransferTask {
         Self {
             id: TransferId::new(),
             direction,
+            kind: TransferKind::File,
             local_path,
             remote_path,
             size,
@@ -92,6 +116,19 @@ impl TransferTask {
             status: TransferStatus::Pending,
             mode,
         }
+    }
+
+    /// 创建目录递归传输任务（队列中一个任务代表整棵目录树）。
+    pub fn new_directory(
+        direction: TransferDirection,
+        local_path: PathBuf,
+        remote_path: String,
+        size: Option<u64>,
+        mode: TransferMode,
+    ) -> Self {
+        let mut task = Self::new(direction, local_path, remote_path, size, mode);
+        task.kind = TransferKind::Directory;
+        task
     }
 }
 
@@ -109,6 +146,20 @@ pub enum SftpOperation {
         local_path: PathBuf,
         remote_path: String,
         resume: bool,
+    },
+    /// 递归上传整棵本地目录；`filter` 在遍历时剪枝被排除的子目录与文件。
+    UploadDir {
+        local_path: PathBuf,
+        remote_path: String,
+        resume: bool,
+        filter: TransferFilter,
+    },
+    /// 递归下载整棵远端目录；`filter` 语义与 `UploadDir` 一致。
+    DownloadDir {
+        remote_path: String,
+        local_path: PathBuf,
+        resume: bool,
+        filter: TransferFilter,
     },
     Mkdir {
         path: String,

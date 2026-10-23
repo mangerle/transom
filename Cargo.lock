@@ -7923,6 +7923,7 @@ name = "transom-core"
 version = "0.1.0"
 dependencies = [
  "flume",
+ "globset",
  "serde",
  "serde_json",
  "uuid",

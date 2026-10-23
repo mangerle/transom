@@ -82,6 +82,8 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         op_id: TransferId,
         transferred: Option<u64>,
+        /// 目录传输中被排除规则或符号链接跳过的条目数；单文件操作为 0。
+        skipped: u64,
     },
     SftpMetadata {
         tab_id: TabId,

@@ -166,6 +166,7 @@ impl AppShell {
                 connection_id,
                 op_id,
                 transferred,
+                skipped,
             } => {
                 let mut refresh = None;
                 let mut refresh_local = false;
@@ -195,13 +196,21 @@ impl AppShell {
                     if panel.active_op == Some(op_id) || panel.active_op.is_none() {
                         panel.active_op = None;
                         panel.progress = None;
-                        panel.status = Some(match transferred {
+                        let base = match transferred {
                             Some(bytes) => format!(
                                 "{} ({})",
                                 rust_i18n::t!("sftp.transfer_done"),
                                 format_size(bytes)
                             ),
                             None => rust_i18n::t!("sftp.operation_done").to_string(),
+                        };
+                        panel.status = Some(if skipped > 0 {
+                            format!(
+                                "{base} | {}: {skipped}",
+                                rust_i18n::t!("sftp.skipped_items")
+                            )
+                        } else {
+                            base
                         });
                         refresh = Some(panel.path.clone());
                     }

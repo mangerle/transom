@@ -2,6 +2,7 @@
 
 mod chmod;
 mod file_ops;
+mod filter;
 mod local_pane_view;
 mod modals;
 mod nav_actions;
@@ -43,6 +44,12 @@ pub(crate) struct SftpChmodModalState {
     pub(crate) file_name: String,
     pub(crate) permissions: u32,
     pub(crate) octal_input: Entity<InputState>,
+    pub(crate) error: Option<String>,
+}
+
+/// 传输排除规则编辑弹窗状态。
+pub(crate) struct SftpFilterModalState {
+    pub(crate) textarea: Entity<TextareaState>,
     pub(crate) error: Option<String>,
 }
 

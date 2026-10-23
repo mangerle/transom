@@ -9,7 +9,7 @@ const TRANSFER_CHUNK: usize = 64 * 1024;
 
 #[derive(Clone)]
 pub struct SftpClient {
-    session: Arc<SftpSession>,
+    pub(crate) session: Arc<SftpSession>,
     home: String,
 }
 
@@ -287,6 +287,46 @@ impl SftpClient {
         self.session.create_dir(path).await.map_err(sftp_error)
     }
 
+    /// 递归创建远端目录，已存在的目录视为成功。
+    ///
+    /// 设计原理（Why）：SFTP 只有单层 MKDIR，没有 `mkdir -p`；目录传输需要
+    /// 逐级创建。逐段调用并校验失败后目录是否真实存在，可避免把“已存在”
+    /// 与权限不足、磁盘故障等真实错误混为一谈。
+    pub(crate) async fn create_dir_all(&self, path: &str) -> Result<(), AppError> {
+        if path.is_empty() || path == "/" || path == "." {
+            return Ok(());
+        }
+        let absolute = path.starts_with('/');
+        let mut current = String::new();
+        for segment in path.split('/').filter(|segment| !segment.is_empty()) {
+            if absolute || !current.is_empty() {
+                current.push('/');
+            }
+            current.push_str(segment);
+            self.ensure_dir(&current).await?;
+        }
+        Ok(())
+    }
+
+    /// 确保单个远端目录存在；创建失败时通过属性确认是否已存在同名目录。
+    pub(crate) async fn ensure_dir(&self, path: &str) -> Result<(), AppError> {
+        if let Err(error) = self.session.create_dir(path).await {
+            let exists_as_dir = self
+                .session
+                .metadata(path)
+                .await
+                .map(|metadata| metadata.is_dir())
+                .unwrap_or(false);
+            if !exists_as_dir {
+                return Err(AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("创建远端目录失败 {path}: {error}"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub async fn rename(&self, from: &str, to: &str) -> Result<(), AppError> {
         self.session.rename(from, to).await.map_err(sftp_error)
     }
@@ -340,10 +380,10 @@ impl SftpClient {
     }
 }
 
-fn sftp_error(error: russh_sftp::client::error::Error) -> AppError {
+pub(crate) fn sftp_error(error: russh_sftp::client::error::Error) -> AppError {
     AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
 }
 
-fn sftp_io_error(error: std::io::Error) -> AppError {
+pub(crate) fn sftp_io_error(error: std::io::Error) -> AppError {
     AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
 }

@@ -4,8 +4,8 @@ use super::join_remote;
 use crate::app::AppShell;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, SftpOperation, TabId, TransferDirection, TransferId, TransferMode, TransferStatus,
-    TransferTask,
+    AppCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId, TransferKind,
+    TransferMode, TransferStatus, TransferTask,
 };
 
 impl AppShell {
@@ -27,19 +27,34 @@ impl AppShell {
             return;
         };
         let remote_path = join_remote(&panel.path, file_name);
-        let size = std::fs::metadata(&local_path).map(|m| m.len()).ok();
+        let is_directory = local_path.is_dir();
+        let size = if is_directory {
+            None
+        } else {
+            std::fs::metadata(&local_path).map(|m| m.len()).ok()
+        };
         let mode = if panel.resume_enabled {
             TransferMode::Resume
         } else {
             TransferMode::Overwrite
         };
-        let task = TransferTask::new(
-            TransferDirection::Upload,
-            local_path,
-            remote_path,
-            size,
-            mode,
-        );
+        let task = if is_directory {
+            TransferTask::new_directory(
+                TransferDirection::Upload,
+                local_path,
+                remote_path,
+                size,
+                mode,
+            )
+        } else {
+            TransferTask::new(
+                TransferDirection::Upload,
+                local_path,
+                remote_path,
+                size,
+                mode,
+            )
+        };
         panel.queue.push(task);
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
@@ -62,30 +77,36 @@ impl AppShell {
             cx.notify();
             return;
         };
-        if remote_entry.is_dir {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        }
         let local_path = panel.local_path.join(&remote_entry.name);
         let mode = if panel.resume_enabled {
             TransferMode::Resume
         } else {
             TransferMode::Overwrite
         };
-        let task = TransferTask::new(
-            TransferDirection::Download,
-            local_path,
-            remote_entry.path.clone(),
-            Some(remote_entry.size),
-            mode,
-        );
+        let task = if remote_entry.is_dir {
+            TransferTask::new_directory(
+                TransferDirection::Download,
+                local_path,
+                remote_entry.path.clone(),
+                None,
+                mode,
+            )
+        } else {
+            TransferTask::new(
+                TransferDirection::Download,
+                local_path,
+                remote_entry.path.clone(),
+                Some(remote_entry.size),
+                mode,
+            )
+        };
         panel.queue.push(task);
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }
 
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let filter = TransferFilter::from_text(&self.settings.sftp.transfer_filter);
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -113,13 +134,25 @@ impl AppShell {
         panel.error = None;
 
         let resume = task.mode != TransferMode::Overwrite;
-        let op = match task.direction {
-            TransferDirection::Upload => SftpOperation::Upload {
+        let op = match (task.kind, task.direction) {
+            (TransferKind::Directory, TransferDirection::Upload) => SftpOperation::UploadDir {
+                local_path: task.local_path,
+                remote_path: task.remote_path,
+                resume,
+                filter,
+            },
+            (TransferKind::Directory, TransferDirection::Download) => SftpOperation::DownloadDir {
+                remote_path: task.remote_path,
+                local_path: task.local_path,
+                resume,
+                filter,
+            },
+            (TransferKind::File, TransferDirection::Upload) => SftpOperation::Upload {
                 local_path: task.local_path,
                 remote_path: task.remote_path,
                 resume,
             },
-            TransferDirection::Download => SftpOperation::Download {
+            (TransferKind::File, TransferDirection::Download) => SftpOperation::Download {
                 remote_path: task.remote_path,
                 local_path: task.local_path,
                 resume,

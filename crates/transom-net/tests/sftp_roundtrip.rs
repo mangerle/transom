@@ -10,7 +10,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use transom_core::{AuthMethod, ConnectionSecrets, SessionOptions, SshConnection, TerminalSize};
+use transom_core::{
+    AuthMethod, ConnectionSecrets, SessionOptions, SshConnection, TerminalSize, TransferFilter,
+};
 use transom_net::{PasswordPrompter, SftpClient, SshSession, connect_ssh};
 use transom_store::JsonKnownHostsStore;
 
@@ -468,6 +470,72 @@ async fn sftp_list_upload_download_and_mutations() {
         .expect("delete symlink");
     assert!(!dir.path().join("seed.link").exists());
     assert!(dir.path().join("seed.txt").exists());
+
+    let local_tree = dir.path().join("local-tree");
+    std::fs::create_dir_all(local_tree.join("src")).unwrap();
+    std::fs::create_dir_all(local_tree.join("empty/nested")).unwrap();
+    std::fs::create_dir_all(local_tree.join(".git/objects")).unwrap();
+    std::fs::create_dir_all(local_tree.join("node_modules/pkg")).unwrap();
+    std::fs::write(local_tree.join("src/main.rs"), b"fn main() {}\n").unwrap();
+    std::fs::write(local_tree.join(".git/config"), b"[core]\n").unwrap();
+    std::fs::write(
+        local_tree.join("node_modules/pkg/index.js"),
+        b"module.exports = 1;\n",
+    )
+    .unwrap();
+    std::fs::write(local_tree.join("cache.tmp"), b"temporary").unwrap();
+
+    let filter = TransferFilter::from_text(".git/\nnode_modules/\n*.tmp");
+    let expected_tree_bytes = "fn main() {}\n".len() as u64;
+    let summary = client
+        .upload_dir(&local_tree, "/tree", true, &filter, |_, _| {})
+        .await
+        .expect("upload directory");
+    assert_eq!(summary.transferred, expected_tree_bytes);
+    assert!(summary.skipped >= 3, "应跳过 .git、node_modules 与 *.tmp");
+
+    let (_, tree_entries) = client.list("/tree").await.expect("list uploaded tree");
+    assert!(
+        tree_entries
+            .iter()
+            .any(|entry| entry.name == "src" && entry.is_dir)
+    );
+    assert!(
+        tree_entries
+            .iter()
+            .any(|entry| entry.name == "empty" && entry.is_dir)
+    );
+    assert!(!tree_entries.iter().any(|entry| entry.name == ".git"));
+    assert!(
+        !tree_entries
+            .iter()
+            .any(|entry| entry.name == "node_modules")
+    );
+    assert!(!tree_entries.iter().any(|entry| entry.name == "cache.tmp"));
+    let empty_meta = client.stat("/tree/empty/nested").await.expect("empty dir");
+    assert!(empty_meta.is_dir);
+
+    let downloaded_tree = dir.path().join("downloaded-tree");
+    let summary = client
+        .download_dir("/tree", &downloaded_tree, true, &filter, |_, _| {})
+        .await
+        .expect("download directory");
+    assert_eq!(summary.transferred, expected_tree_bytes);
+    assert_eq!(
+        std::fs::read(downloaded_tree.join("src/main.rs")).unwrap(),
+        b"fn main() {}\n"
+    );
+    assert!(downloaded_tree.join("empty/nested").is_dir());
+    assert!(!downloaded_tree.join(".git").exists());
+
+    let invalid_filter = TransferFilter::from_text("[broken");
+    assert!(
+        client
+            .upload_dir(&local_tree, "/invalid", true, &invalid_filter, |_, _| {})
+            .await
+            .is_err(),
+        "非法过滤规则应直接失败"
+    );
 
     client.close().await;
     drop(client);

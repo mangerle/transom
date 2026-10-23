@@ -227,7 +227,10 @@ async fn run_controller(
 
                 let is_transfer = matches!(
                     op,
-                    SftpOperation::Download { .. } | SftpOperation::Upload { .. }
+                    SftpOperation::Download { .. }
+                        | SftpOperation::Upload { .. }
+                        | SftpOperation::DownloadDir { .. }
+                        | SftpOperation::UploadDir { .. }
                 );
                 let event_tx = event_tx.clone();
                 let handle = tokio::spawn(async move {
@@ -570,6 +573,58 @@ async fn execute_sftp_op(
                 .await;
             finish_sftp(event_tx, tab_id, connection_id, op_id, result);
         }
+        SftpOperation::UploadDir {
+            local_path,
+            remote_path,
+            resume,
+            filter,
+        } => {
+            let progress_tx = event_tx.clone();
+            let result = client
+                .upload_dir(
+                    &local_path,
+                    &remote_path,
+                    resume,
+                    &filter,
+                    move |transferred, total| {
+                        let _ = progress_tx.send(AppEvent::SftpProgress {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            transferred,
+                            total,
+                        });
+                    },
+                )
+                .await;
+            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
+        }
+        SftpOperation::DownloadDir {
+            remote_path,
+            local_path,
+            resume,
+            filter,
+        } => {
+            let progress_tx = event_tx.clone();
+            let result = client
+                .download_dir(
+                    &remote_path,
+                    &local_path,
+                    resume,
+                    &filter,
+                    move |transferred, total| {
+                        let _ = progress_tx.send(AppEvent::SftpProgress {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            transferred,
+                            total,
+                        });
+                    },
+                )
+                .await;
+            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
+        }
         SftpOperation::Mkdir { path } => {
             let result = client.create_dir(&path).await;
             finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
@@ -625,6 +680,35 @@ fn finish_sftp(
                 connection_id,
                 op_id,
                 transferred: Some(transferred),
+                skipped: 0,
+            });
+        }
+        Err(error) => {
+            let _ = event_tx.send(AppEvent::SftpFailed {
+                tab_id,
+                connection_id,
+                op_id,
+                error,
+            });
+        }
+    }
+}
+
+fn finish_sftp_summary(
+    event_tx: flume::Sender<AppEvent>,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op_id: TransferId,
+    result: Result<transom_core::TransferSummary, AppError>,
+) {
+    match result {
+        Ok(summary) => {
+            let _ = event_tx.send(AppEvent::SftpFinished {
+                tab_id,
+                connection_id,
+                op_id,
+                transferred: Some(summary.transferred),
+                skipped: summary.skipped,
             });
         }
         Err(error) => {
@@ -652,6 +736,7 @@ fn finish_sftp_none(
                 connection_id,
                 op_id,
                 transferred: None,
+                skipped: 0,
             });
         }
         Err(error) => {

@@ -1,3 +1,4 @@
+use crate::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
 use crate::terminal::{TerminalInteraction, TerminalProfile};
 use serde::{Deserialize, Serialize};
 
@@ -87,6 +88,27 @@ pub struct AppSettings {
     pub terminal_profile: TerminalProfile,
     #[serde(default)]
     pub window: WindowSettings,
+    #[serde(default)]
+    pub sftp: SftpSettings,
+}
+
+/// SFTP 传输偏好：排除规则位于设置中，跨会话与重启保持生效。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftpSettings {
+    #[serde(default = "default_transfer_filter")]
+    pub transfer_filter: String,
+}
+
+impl Default for SftpSettings {
+    fn default() -> Self {
+        Self {
+            transfer_filter: default_transfer_filter(),
+        }
+    }
+}
+
+fn default_transfer_filter() -> String {
+    DEFAULT_TRANSFER_EXCLUDES.to_string()
 }
 
 impl Default for AppSettings {
@@ -96,6 +118,7 @@ impl Default for AppSettings {
             terminal_interaction: TerminalInteraction::default(),
             terminal_profile: TerminalProfile::default(),
             window: WindowSettings::default(),
+            sftp: SftpSettings::default(),
         }
     }
 }

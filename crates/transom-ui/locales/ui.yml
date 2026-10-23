@@ -373,6 +373,18 @@ sftp:
   no_transfers:
     en: No active or queued transfers
     zh-CN: 暂无传输任务
+  skipped_items:
+    en: Excluded items
+    zh-CN: 已排除条目
+  filter_rules:
+    en: Transfer Filter Rules
+    zh-CN: 传输过滤规则
+  filter_rules_hint:
+    en: One glob per line. Rules without / match names at any depth; rules with / match paths relative to the transfer root; a trailing / matches directories only. Lines starting with # are comments.
+    zh-CN: 每行一个通配符；不含 / 的规则匹配任意层级的名称，含 / 的规则匹配相对传输根目录的路径，末尾 / 仅匹配目录；以 # 开头为注释。
+  filter_rules_saved:
+    en: Transfer filter rules saved
+    zh-CN: 传输过滤规则已保存
 
 forward:
   title:

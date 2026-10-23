@@ -14,6 +14,65 @@ use gpui_kit::*;
 use transom_core::{format_octal_permissions, format_rwx_permissions};
 
 impl AppShell {
+    pub(crate) fn render_sftp_filter_modal(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(modal) = self.sftp_filter_modal.as_ref() else {
+            return div().into_any_element();
+        };
+        let textarea = modal.textarea.clone();
+        let error = modal.error.clone();
+
+        let content = v_flex()
+            .gap_3()
+            .child(Textarea::new(&textarea).h(px(220.0)).w_full())
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("sftp.filter_rules_hint").to_string()),
+            )
+            .when_some(error, |this, err| {
+                this.child(div().text_xs().text_color(p.danger).child(err))
+            });
+
+        let footer = h_flex()
+            .gap_2()
+            .child(
+                Button::new("cancel-sftp-filter")
+                    .ghost()
+                    .label(rust_i18n::t!("common.cancel").to_string())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.sftp_filter_modal = None;
+                        cx.notify();
+                    })),
+            )
+            .child(
+                Button::new("save-sftp-filter")
+                    .primary()
+                    .icon(IconName::Check)
+                    .label("保存规则")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.save_sftp_filter_modal(cx);
+                    })),
+            );
+
+        let dialog = Self::dialog_frame(
+            "sftp-filter-modal",
+            rust_i18n::t!("sftp.filter_rules").to_string(),
+            Some("仅对目录上传/下载生效；单文件传输不受影响。".to_string()),
+            content,
+            Some(footer),
+            px(560.0),
+            p,
+        );
+
+        Self::overlay(dialog, p)
+    }
+
     pub(crate) fn render_sftp_editor_modal(
         &mut self,
         _window: &mut Window,

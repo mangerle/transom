@@ -12,7 +12,9 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{TabId, TransferDirection, TransferId, TransferStatus, TransferTask};
+use transom_core::{
+    TabId, TransferDirection, TransferId, TransferKind, TransferStatus, TransferTask,
+};
 
 pub(crate) struct SftpStatusBarProps {
     pub(crate) tab_id: TabId,
@@ -224,6 +226,16 @@ impl AppShell {
                                 })
                                 .child(dir_tag),
                         )
+                        .when(task.kind == TransferKind::Directory, |this| {
+                            this.child(
+                                div()
+                                    .px_1()
+                                    .rounded_sm()
+                                    .bg(p.muted)
+                                    .text_color(p.muted_foreground)
+                                    .child(rust_i18n::t!("sftp.folder_tag").to_string()),
+                            )
+                        })
                         .child(div().flex_1().overflow_hidden().child(file_name))
                         .child(div().text_color(p.muted_foreground).child(match task.size {
                             Some(total) => format!(
@@ -330,6 +342,16 @@ impl AppShell {
                                         })),
                                 )
                             })
+                            .child(
+                                Button::new("sftp-filter-rules")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::ListFilter)
+                                    .tooltip("传输过滤规则（仅对目录传输生效）")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.sftp_open_filter_modal(window, cx);
+                                    })),
+                            )
                             .child(
                                 Button::new("clear-queue-done")
                                     .ghost()
