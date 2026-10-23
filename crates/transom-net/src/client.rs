@@ -525,9 +525,17 @@ async fn run_terminal_actor(
             }
             Activity::Input(Err(_)) => break,
             Activity::Control(Ok(TerminalControl::Resize(size))) => {
-                let _ = channel
+                if let Err(error) = channel
                     .window_change(size.cols as u32, size.rows as u32, 0, 0)
-                    .await;
+                    .await
+                {
+                    tracing::warn!(
+                        cols = size.cols,
+                        rows = size.rows,
+                        %error,
+                        "同步远端 PTY 窗口尺寸失败，远端 shell 将以旧尺寸排版，画面可能持续错位"
+                    );
+                }
             }
             Activity::Control(Ok(TerminalControl::Close)) => {
                 let _ = channel.eof().await;

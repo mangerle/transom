@@ -13,6 +13,31 @@ pub struct RemoteFile {
     pub permissions: Option<u32>,
 }
 
+/// 远端文件/目录的详细属性快照（来自 SFTP lstat 与 readlink，用于属性查看弹窗）。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：SFTP 目录列表条目仅携带展示所需的最小字段，属性弹窗需要完整的
+///   POSIX 元数据（uid/gid、访问时间、符号链接目标），故独立定义完整契约；
+/// - 核心优势：可缺省字段全部使用 `Option` 兜底，不同服务端未返回的字段
+///   只会降级展示，不会导致读取失败或界面中断；
+/// - 代价与局限：部分服务端仅提供 uid/gid 数字或仅提供 user/group 名称，
+///   展示层需要做“名称优先、数字兜底”的降级处理。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteMetadata {
+    pub path: String,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub size: u64,
+    pub uid: Option<u32>,
+    pub user: Option<String>,
+    pub gid: Option<u32>,
+    pub group: Option<String>,
+    pub permissions: Option<u32>,
+    pub atime: Option<u32>,
+    pub mtime: Option<u32>,
+    pub link_target: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransferDirection {
     Download,
@@ -99,6 +124,15 @@ pub enum SftpOperation {
     Chmod {
         path: String,
         permissions: u32,
+    },
+    /// 读取远端路径的详细属性（lstat 语义，不跟随符号链接）
+    Stat {
+        path: String,
+    },
+    /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径
+    Symlink {
+        target: String,
+        link_path: String,
     },
 }
 

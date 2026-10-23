@@ -192,7 +192,7 @@ impl AppShell {
                                             .find(|tab| tab.id == tab_id)
                                             .and_then(|tab| tab.sftp.as_mut())
                                         {
-                                            panel.selected = Some(entry_path.clone());
+                                            panel.select_remote(entry_path.clone());
                                             let name = entry_name.clone();
                                             panel.name_input.update(cx, |state, cx| {
                                                 state.set_value(name, window, cx);
@@ -231,6 +231,9 @@ impl AppShell {
                                     let app = app_cm.clone();
                                     let p_dl = entry_path_cm.clone();
                                     let p_edit = entry_path_cm.clone();
+                                    let p_cp = entry_path_cm.clone();
+                                    let p_sym = entry_path_cm.clone();
+                                    let p_prop = entry_path_cm.clone();
                                     let p_chmod = entry_path_cm.clone();
                                     let p_ren = entry_path_cm.clone();
                                     let p_del = entry_path_cm.clone();
@@ -247,7 +250,7 @@ impl AppShell {
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
                                                         {
-                                                            panel.selected = Some(p_dl.clone());
+                                                            panel.select_remote(p_dl.clone());
                                                         }
                                                         this.sftp_queue_download(tab_id, cx);
                                                     });
@@ -273,6 +276,69 @@ impl AppShell {
                                         );
                                     }
                                     m.item(
+                                        PopupMenuItem::new("复制绝对路径")
+                                            .icon(IconName::Copy)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, _, cx| {
+                                                    cx.write_to_clipboard(
+                                                        ClipboardItem::new_string(p_cp.clone()),
+                                                    );
+                                                    app.update(cx, |this, cx| {
+                                                        if let Some(panel) = this
+                                                            .tabs
+                                                            .iter_mut()
+                                                            .find(|t| t.id == tab_id)
+                                                            .and_then(|t| t.sftp.as_mut())
+                                                        {
+                                                            panel.status = Some(format!(
+                                                                "已复制远端路径: {p_cp}"
+                                                            ));
+                                                        }
+                                                        cx.notify();
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("创建软链接")
+                                            .icon(IconName::Link2)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, window, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        if let Some(panel) = this
+                                                            .tabs
+                                                            .iter_mut()
+                                                            .find(|t| t.id == tab_id)
+                                                            .and_then(|t| t.sftp.as_mut())
+                                                        {
+                                                            panel.select_remote(p_sym.clone());
+                                                        }
+                                                        this.sftp_open_symlink_modal(
+                                                            tab_id, true, window, cx,
+                                                        );
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("查看属性")
+                                            .icon(IconName::Info)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, _, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        this.sftp_request_remote_properties(
+                                                            tab_id,
+                                                            p_prop.clone(),
+                                                            cx,
+                                                        );
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
                                         PopupMenuItem::new("修改权限 (Chmod)")
                                             .icon(IconName::Settings)
                                             .on_click({
@@ -285,7 +351,7 @@ impl AppShell {
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
                                                         {
-                                                            panel.selected = Some(p_chmod.clone());
+                                                            panel.select_remote(p_chmod.clone());
                                                         }
                                                         this.sftp_open_chmod_modal(
                                                             tab_id, window, cx,
@@ -321,7 +387,7 @@ impl AppShell {
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
                                                         {
-                                                            panel.selected = Some(p_ren.clone());
+                                                            panel.select_remote(p_ren.clone());
                                                         }
                                                         this.sftp_open_rename_modal(
                                                             tab_id, true, window, cx,
@@ -342,7 +408,7 @@ impl AppShell {
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
                                                         {
-                                                            panel.selected = Some(p_del.clone());
+                                                            panel.select_remote(p_del.clone());
                                                         }
                                                         this.sftp_delete(tab_id, cx);
                                                     });
@@ -613,6 +679,7 @@ impl AppShell {
             .key_context(keymap::SFTP_CONTEXT)
             .on_action(cx.listener(Self::on_focus_sftp_filter))
             .on_action(cx.listener(Self::on_toggle_sftp_hidden))
+            .on_action(cx.listener(Self::on_delete_sftp_selection))
             .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
                 this.sftp_update_resize_queue(tab_id, event.position.y.into(), cx);
             }))

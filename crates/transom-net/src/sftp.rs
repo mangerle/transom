@@ -3,7 +3,7 @@ use russh_sftp::client::SftpSession;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use transom_core::{AppError, ErrorCode, RemoteFile};
+use transom_core::{AppError, ErrorCode, RemoteFile, RemoteMetadata};
 
 const TRANSFER_CHUNK: usize = 64 * 1024;
 
@@ -65,6 +65,45 @@ impl SftpClient {
             })
         });
         Ok((canonical, entries))
+    }
+
+    /// 读取远端路径的详细属性（lstat 语义，不跟随符号链接）。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：属性查看弹窗需要 uid/gid、访问时间与符号链接目标等完整元数据，
+    ///   目录列表条目仅为展示优化的最小字段，故通过独立请求即时获取最新属性；
+    /// - 核心优势：采用 lstat 语义可准确识别符号链接本体；链接目标读取失败时
+    ///   降级为 `None` 而不中断整体属性展示（错误局部消化）；
+    /// - 代价与局限：每次查看属性都会产生额外网络往返，适用于低频交互场景。
+    ///
+    /// # Errors
+    /// 远端路径不存在、权限不足或会话中断时返回 `ErrorCode::SftpFailed`。
+    pub async fn stat(&self, path: &str) -> Result<RemoteMetadata, AppError> {
+        let metadata = self
+            .session
+            .symlink_metadata(path)
+            .await
+            .map_err(sftp_error)?;
+        let is_symlink = metadata.is_symlink();
+        let link_target = if is_symlink {
+            self.session.read_link(path).await.ok()
+        } else {
+            None
+        };
+        Ok(RemoteMetadata {
+            path: path.to_string(),
+            is_dir: metadata.is_dir(),
+            is_symlink,
+            size: metadata.size.unwrap_or(0),
+            uid: metadata.uid,
+            user: metadata.user,
+            gid: metadata.gid,
+            group: metadata.group,
+            permissions: metadata.permissions,
+            atime: metadata.atime,
+            mtime: metadata.mtime,
+            link_target,
+        })
     }
 
     pub async fn download<F>(
@@ -250,6 +289,27 @@ impl SftpClient {
 
     pub async fn rename(&self, from: &str, to: &str) -> Result<(), AppError> {
         self.session.rename(from, to).await.map_err(sftp_error)
+    }
+
+    /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：`SSH_FXP_SYMLINK` 报文内两个路径参数的先后顺序存在历史分歧——
+    ///   OpenSSH 服务端将首个字符串解释为 targetpath（被指向目标）、次个为 linkpath
+    ///   （新建链接），与协议草案的字段声明顺序恰好相反；主流服务端均遵循 OpenSSH 行为；
+    /// - 核心优势：在客户端封装层统一消化该分歧，参数语义以本方法签名为准，
+    ///   上层无需感知报文细节，杜绝链接方向被静默颠倒；
+    /// - 代价与局限：面向严格遵循协议草案的少数非 OpenSSH 服务端时链接方向会相反，
+    ///   当前以事实标准（OpenSSH）为准；russh-sftp 客户端形参命名沿用草案顺序，
+    ///   因此这里对调传入，实际报文顺序为 (target, link_path)。
+    ///
+    /// # Errors
+    /// 链接目标不存在、链接路径已存在或权限不足时返回 `ErrorCode::SftpFailed`。
+    pub async fn symlink(&self, target: &str, link_path: &str) -> Result<(), AppError> {
+        self.session
+            .symlink(target, link_path)
+            .await
+            .map_err(sftp_error)
     }
 
     pub async fn delete(&self, path: &str, is_dir: bool) -> Result<(), AppError> {

@@ -4,7 +4,7 @@ use crate::ids::{ConnectionId, ForwardId, TabId, TransferId};
 use crate::prompt::PromptInfo;
 use crate::secrets::ConnectionSecrets;
 use crate::session::Session;
-use crate::sftp::{RemoteFile, SftpOperation};
+use crate::sftp::{RemoteFile, RemoteMetadata, SftpOperation};
 use crate::terminal::{TerminalIo, TerminalSize};
 
 pub enum AppCommand {
@@ -82,6 +82,12 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         op_id: TransferId,
         transferred: Option<u64>,
+    },
+    SftpMetadata {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        metadata: RemoteMetadata,
     },
     SftpFailed {
         tab_id: TabId,

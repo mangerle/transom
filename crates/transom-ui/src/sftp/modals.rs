@@ -1,5 +1,6 @@
-//! SFTP 内置文本编辑器与 Linux 文件权限 (Chmod) 模态对话框视图渲染。
+//! SFTP 内置文本编辑器、Linux 文件权限 (Chmod) 与文件属性模态对话框视图渲染。
 
+use super::{format_size, format_unix_time};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -10,7 +11,7 @@ use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::format_rwx_permissions;
+use transom_core::{format_octal_permissions, format_rwx_permissions};
 
 impl AppShell {
     pub(crate) fn render_sftp_editor_modal(
@@ -302,4 +303,101 @@ impl AppShell {
 
         Self::overlay(dialog, p)
     }
+
+    pub(crate) fn render_sftp_properties_modal(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(modal) = self.sftp_properties_modal.as_ref() else {
+            return div().into_any_element();
+        };
+        let scope = modal.scope.clone();
+        let properties = modal.properties.clone();
+        let name = properties.name.clone();
+        let path = properties.path.clone();
+
+        let mut rows: Vec<AnyElement> = Vec::with_capacity(9);
+        rows.push(property_row("名称", name.clone(), p));
+        rows.push(property_row("类型", properties.kind.clone(), p));
+        if let Some(size) = properties.size {
+            rows.push(property_row(
+                "大小",
+                format!("{} ({} 字节)", format_size(size), size),
+                p,
+            ));
+        }
+        if let Some(permissions) = properties.permissions {
+            rows.push(property_row(
+                "权限",
+                format!(
+                    "{} ({})",
+                    format_rwx_permissions(permissions),
+                    format_octal_permissions(permissions)
+                ),
+                p,
+            ));
+        }
+        if let Some(owner) = properties.owner.clone() {
+            rows.push(property_row("属主", owner, p));
+        }
+        if let Some(group) = properties.group.clone() {
+            rows.push(property_row("属组", group, p));
+        }
+        if let Some(modified) = properties.modified {
+            rows.push(property_row("修改时间", format_unix_time(modified), p));
+        }
+        if let Some(accessed) = properties.accessed {
+            rows.push(property_row("访问时间", format_unix_time(accessed), p));
+        }
+        if let Some(link_target) = properties.link_target.clone() {
+            rows.push(property_row("符号链接指向", link_target, p));
+        }
+
+        let content = v_flex().gap_1().children(rows);
+
+        let footer = h_flex().gap_2().child(
+            Button::new("close-sftp-properties")
+                .ghost()
+                .icon(IconName::Close)
+                .label("关闭")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.sftp_properties_modal = None;
+                    cx.notify();
+                })),
+        );
+
+        let dialog = Self::dialog_frame(
+            "sftp-properties-modal",
+            format!("属性: {name}"),
+            Some(format!("{scope}路径: {path}")),
+            content,
+            Some(footer),
+            px(520.0),
+            p,
+        );
+
+        Self::overlay(dialog, p)
+    }
+}
+
+/// 渲染属性弹窗中的单行「标签 - 值」条目
+fn property_row(label: &str, value: String, p: &Palette) -> AnyElement {
+    h_flex()
+        .gap_3()
+        .py_1p5()
+        .px_3()
+        .rounded_md()
+        .bg(p.muted.opacity(0.3))
+        .items_start()
+        .child(
+            div()
+                .w(px(110.0))
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(label.to_string()),
+        )
+        .child(div().flex_1().text_sm().child(value))
+        .into_any_element()
 }

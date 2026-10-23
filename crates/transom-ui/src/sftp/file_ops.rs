@@ -1,14 +1,13 @@
 use super::{
-    SftpChmodModalState, SftpInputModalState, SftpInputTarget, join_remote, list_local_dir,
+    SftpActivePane, SftpInputModalState, SftpInputTarget, join_remote, list_local_dir,
     parent_remote,
 };
 use crate::app::AppShell;
+use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
-use transom_core::{
-    SftpOperation, TabId, TransferDirection, TransferMode, TransferTask, format_octal_permissions,
-    parse_octal_permissions,
-};
+use std::path::Path;
+use transom_core::{SftpOperation, TabId, TransferDirection, TransferMode, TransferTask};
 
 impl AppShell {
     pub(crate) fn sftp_delete(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
@@ -35,6 +34,56 @@ impl AppShell {
             }
         };
         self.send_sftp_op(tab_id, op, cx);
+    }
+
+    /// Delete 快捷键：直接删除当前活动栏选中的项目（与右键“删除”行为一致，无二次确认）。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：文件管理器惯例是选中后按 Delete 直接删除；双栏共用同一键盘上下文，
+    ///   因此以“最近交互栏”（`active_pane`）确定删除目标；
+    /// - 核心优势：与右键菜单删除共用同一操作路径，行为完全一致，
+    ///   活动栏由统一选中方法维护，不会出现删错栏位的失配；
+    /// - 代价与局限：无二次确认，Delete 按下即删除；如需误删保护需在设计层面
+    ///   为所有删除入口统一补确认机制。
+    pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some((active_pane, local_selected)) = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_ref())
+            .map(|panel| (panel.active_pane, panel.local_selected.clone()))
+        else {
+            return;
+        };
+        match active_pane {
+            SftpActivePane::Remote => self.sftp_delete(tab_id, cx),
+            SftpActivePane::Local => {
+                let Some(path) = local_selected else {
+                    if let Some(panel) = self
+                        .tabs
+                        .iter_mut()
+                        .find(|tab| tab.id == tab_id)
+                        .and_then(|tab| tab.sftp.as_mut())
+                    {
+                        panel.local_error = Some("请先选择一个本地项目".to_string());
+                        cx.notify();
+                    }
+                    return;
+                };
+                self.sftp_local_delete(tab_id, path, cx);
+            }
+        }
+    }
+
+    pub(crate) fn on_delete_sftp_selection(
+        &mut self,
+        _: &keymap::DeleteSftpSelection,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(tab_id) = self.active_tab {
+            self.sftp_delete_selected(tab_id, cx);
+        }
     }
 
     pub(crate) fn sftp_open_mkdir_modal(
@@ -124,6 +173,71 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 打开「创建软链接」输入弹窗：远端基于当前选中条目，本地基于当前选中项目。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：创建软链接需要用户为新链接命名，且必须明确被指向的目标路径，
+    ///   因此复用通用输入弹窗承载「名称输入 + 目标信息提示」；
+    /// - 核心优势：默认名称在所选项目名后追加 `.link` 后缀，避免与既有项目重名
+    ///   导致服务端直接拒绝，用户也可按需改写；
+    /// - 代价与局限：链接固定创建于当前目录，暂不支持跨目录指定链接存放位置。
+    pub(crate) fn sftp_open_symlink_modal(
+        &mut self,
+        tab_id: TabId,
+        is_remote: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+            return;
+        };
+        let Some(panel) = tab.sftp.as_ref() else {
+            return;
+        };
+        let (title, prompt, initial_value, target) = if is_remote {
+            let Some(selected) = panel.selected.clone() else {
+                return;
+            };
+            let Some(entry) = panel.entries.iter().find(|entry| entry.path == selected) else {
+                return;
+            };
+            (
+                "创建远端软链接".to_string(),
+                format!("新链接将创建于当前远端目录，指向: {}", entry.path),
+                format!("{}.link", entry.name),
+                SftpInputTarget::RemoteSymlink {
+                    target: entry.path.clone(),
+                },
+            )
+        } else {
+            let Some(selected) = panel.local_selected.clone() else {
+                return;
+            };
+            let initial_name = selected
+                .file_name()
+                .map(|name| format!("{}.link", name.to_string_lossy()))
+                .unwrap_or_else(|| "link".to_string());
+            (
+                "创建本地软链接".to_string(),
+                format!("新链接将创建于当前本地目录，指向: {}", selected.display()),
+                initial_name,
+                SftpInputTarget::LocalSymlink {
+                    target_path: selected,
+                },
+            )
+        };
+        let input = sftp_text_input(window, cx, &initial_value, "软链接名称");
+        self.sftp_input_modal = Some(SftpInputModalState {
+            tab_id,
+            title,
+            prompt,
+            input,
+            target,
+            error: None,
+        });
+        cx.notify();
+    }
+
     pub(crate) fn commit_sftp_input_modal(&mut self, cx: &mut Context<Self>) {
         let Some(modal) = self.sftp_input_modal.take() else {
             return;
@@ -133,6 +247,13 @@ impl AppShell {
         if name.is_empty() {
             let mut modal = modal;
             modal.error = Some("名称不能为空".to_string());
+            self.sftp_input_modal = Some(modal);
+            cx.notify();
+            return;
+        }
+        if let Some(message) = name_validation_error(&modal.target, &name) {
+            let mut modal = modal;
+            modal.error = Some(message);
             self.sftp_input_modal = Some(modal);
             cx.notify();
             return;
@@ -155,6 +276,19 @@ impl AppShell {
                 let op = SftpOperation::Rename {
                     from: old_path.clone(),
                     to: join_remote(&parent_remote(&old_path), &name),
+                };
+                self.send_sftp_op(tab_id, op, cx);
+            }
+            SftpInputTarget::RemoteSymlink { target } => {
+                let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
+                    return;
+                };
+                let Some(panel) = tab.sftp.as_ref() else {
+                    return;
+                };
+                let op = SftpOperation::Symlink {
+                    target,
+                    link_path: join_remote(&panel.path, &name),
                 };
                 self.send_sftp_op(tab_id, op, cx);
             }
@@ -189,14 +323,59 @@ impl AppShell {
                         } else {
                             panel.local_entries =
                                 list_local_dir(&panel.local_path).unwrap_or_default();
-                            panel.local_selected = Some(new_path);
+                            panel.select_local(new_path);
                             panel.status = Some(format!("已重命名为: {name}"));
                         }
                     }
                     cx.notify();
                 }
             }
+            SftpInputTarget::LocalSymlink { target_path } => {
+                self.create_local_symlink(tab_id, &target_path, &name, cx);
+            }
         }
+    }
+
+    /// 在当前本地目录创建指向指定目标的软链接（仅 Unix 平台支持）。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：本地栏与远端栏保持右键菜单能力对称，避免用户在两栏间形成心智差异；
+    /// - 核心优势：直接复用标准库 `std::os::unix::fs::symlink`，无额外依赖，
+    ///   且创建后立即刷新并选中新链接，反馈闭环完整；
+    /// - 代价与局限：Windows 需要特权与文件/目录区分调用，当前不提供该平台支持，
+    ///   以显式报错提示代替静默失败。
+    fn create_local_symlink(
+        &mut self,
+        tab_id: TabId,
+        target_path: &Path,
+        name: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(panel) = self
+            .tabs
+            .iter_mut()
+            .find(|t| t.id == tab_id)
+            .and_then(|t| t.sftp.as_mut())
+        else {
+            return;
+        };
+        let link_path = panel.local_path.join(name);
+        #[cfg(unix)]
+        let result =
+            std::os::unix::fs::symlink(target_path, &link_path).map_err(|error| error.to_string());
+        #[cfg(not(unix))]
+        let result = Err("当前平台暂不支持创建本地软链接".to_string());
+        match result {
+            Ok(()) => {
+                panel.local_entries = list_local_dir(&panel.local_path).unwrap_or_default();
+                panel.select_local(link_path);
+                panel.status = Some(format!("已创建本地软链接: {name}"));
+            }
+            Err(err) => {
+                panel.local_error = Some(format!("创建本地软链接失败: {err}"));
+            }
+        }
+        cx.notify();
     }
 
     pub(crate) fn sftp_local_delete(
@@ -308,111 +487,68 @@ impl AppShell {
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }
+}
 
-    pub(crate) fn sftp_open_chmod_modal(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
-            return;
-        };
-        let Some(panel) = tab.sftp.as_mut() else {
-            return;
-        };
-        let Some(selected) = panel.selected.clone() else {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        };
-        let Some(entry) = panel.entries.iter().find(|e| e.path == selected) else {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        };
-        let default_mode = if entry.is_dir { 0o755 } else { 0o644 };
-        let permissions = entry.permissions.unwrap_or(default_mode) & 0o777;
-        let octal_str = format_octal_permissions(permissions);
-        let octal_input = sftp_text_input(window, cx, &octal_str, "例如 755 或 644");
-        self.sftp_chmod_modal = Some(SftpChmodModalState {
-            tab_id,
-            remote_path: entry.path.clone(),
-            file_name: entry.name.clone(),
-            permissions,
-            octal_input,
-            error: None,
-        });
-        cx.notify();
-    }
-
-    pub(crate) fn sftp_toggle_chmod_bit(
-        &mut self,
-        mask: u32,
-        checked: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(modal) = self.sftp_chmod_modal.as_mut() else {
-            return;
-        };
-        if checked {
-            modal.permissions |= mask;
-        } else {
-            modal.permissions &= !mask;
+/// 校验输入弹窗中的名称是否可以安全地参与路径拼接，非法时返回中文提示文本。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：新建/重命名/软链接的名称会与当前目录直接拼接成完整路径，
+///   若允许 `/` 或 `..` 输入，操作会逃逸出当前目录（路径穿越），
+///   与文件管理器中用户可见的范围不一致，软链接场景影响面尤大；
+/// - 核心优势：在唯一提交口（`commit_sftp_input_modal`）统一拦截，
+///   新增目标类型不会遗漏校验，也无需在各调用点重复判断；
+/// - 代价与局限：本地「新建文件夹」保留 `a/b` 相对多级创建能力，
+///   但同样拒绝绝对路径与 `..` 逃逸片段；其余目标严格要求单层名称，
+///   重命名等场景不再支持输入含 `/` 的路径。
+fn name_validation_error(target: &SftpInputTarget, name: &str) -> Option<String> {
+    if matches!(target, SftpInputTarget::LocalMkdir) {
+        if name.starts_with('/') {
+            return Some("名称不能是绝对路径（仅支持当前目录内的相对多级路径）".to_string());
         }
-        modal.error = None;
-        let octal_str = format_octal_permissions(modal.permissions);
-        let input = modal.octal_input.clone();
-        input.update(cx, |state, cx| {
-            state.set_value(octal_str, window, cx);
-        });
-        cx.notify();
+        return name
+            .split('/')
+            .any(|segment| segment == "..")
+            .then(|| "名称不能包含 .. 路径片段（不允许逃逸当前目录）".to_string());
+    }
+    if name.contains('/') {
+        return Some("名称不能包含路径分隔符 /".to_string());
+    }
+    if name == "." || name == ".." {
+        return Some("名称不能为 . 或 ..".to_string());
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    // 显式导入被测函数：避免 glob 引入 gpui 同名 `test` 属性宏导致展开递归
+    use super::{SftpInputTarget, name_validation_error};
+
+    #[test]
+    fn test_name_validation_rejects_traversal() {
+        let remote_symlink = SftpInputTarget::RemoteSymlink {
+            target: "/srv/app".to_string(),
+        };
+        assert!(name_validation_error(&remote_symlink, "../evil").is_some());
+        assert!(name_validation_error(&remote_symlink, "sub/link").is_some());
+        assert!(name_validation_error(&remote_symlink, "..").is_some());
+        assert!(name_validation_error(&remote_symlink, "app.link").is_none());
+
+        assert!(name_validation_error(&SftpInputTarget::RemoteMkdir, "a/b").is_some());
+        assert!(name_validation_error(&SftpInputTarget::RemoteMkdir, "目录").is_none());
+
+        let local_rename = SftpInputTarget::LocalRename {
+            old_path: std::path::PathBuf::from("/tmp/old"),
+        };
+        assert!(name_validation_error(&local_rename, "..").is_some());
+        assert!(name_validation_error(&local_rename, "new-name").is_none());
     }
 
-    pub(crate) fn sftp_set_chmod_preset(
-        &mut self,
-        mode: u32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(modal) = self.sftp_chmod_modal.as_mut() else {
-            return;
-        };
-        modal.permissions = mode & 0o777;
-        modal.error = None;
-        let octal_str = format_octal_permissions(modal.permissions);
-        let input = modal.octal_input.clone();
-        input.update(cx, |state, cx| {
-            state.set_value(octal_str, window, cx);
-        });
-        cx.notify();
-    }
-
-    pub(crate) fn save_sftp_chmod_modal(&mut self, cx: &mut Context<Self>) {
-        let Some(mut modal) = self.sftp_chmod_modal.take() else {
-            return;
-        };
-        let input_text = modal.octal_input.read(cx).value().trim().to_string();
-        let target_perms = if input_text.is_empty() {
-            modal.permissions & 0o777
-        } else {
-            match parse_octal_permissions(&input_text) {
-                Some(p) => p,
-                None => {
-                    modal.error =
-                        Some("无效的八进制权限码（请输入 000 - 777 之间的八进制数字）".to_string());
-                    self.sftp_chmod_modal = Some(modal);
-                    cx.notify();
-                    return;
-                }
-            }
-        };
-        let tab_id = modal.tab_id;
-        let op = SftpOperation::Chmod {
-            path: modal.remote_path,
-            permissions: target_perms,
-        };
-        self.send_sftp_op(tab_id, op, cx);
+    #[test]
+    fn test_name_validation_local_mkdir_keeps_multi_level() {
+        assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "a/b").is_none());
+        assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "a/../b").is_some());
+        assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "..").is_some());
+        assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "/tmp/escape").is_some());
     }
 }

@@ -33,8 +33,8 @@ pub use session::{
 };
 pub use settings::{AppSettings, BellStyle, WindowSettings};
 pub use sftp::{
-    RemoteFile, SftpOperation, TransferDirection, TransferMode, TransferStatus, TransferTask,
-    format_octal_permissions, format_rwx_permissions, parse_octal_permissions,
+    RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferMode, TransferStatus,
+    TransferTask, format_octal_permissions, format_rwx_permissions, parse_octal_permissions,
 };
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
 pub use storage::{SecretStore, SessionStore, SettingsStore};

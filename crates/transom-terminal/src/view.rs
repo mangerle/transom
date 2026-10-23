@@ -672,7 +672,21 @@ impl Render for TerminalView {
                             let mut engine = engine_prepaint.lock();
                             if engine.size() != size {
                                 engine.resize(size);
-                                let _ = control.resize(size);
+                                // 尺寸同步失败会直接导致网格与 PTY 失配（提示符错位），
+                                // 因此不再静默忽略，按警告记录并给出排查方向
+                                if control.resize(size) {
+                                    tracing::debug!(
+                                        cols = size.cols,
+                                        rows = size.rows,
+                                        "终端网格尺寸已更新并同步至 PTY"
+                                    );
+                                } else {
+                                    tracing::warn!(
+                                        cols = size.cols,
+                                        rows = size.rows,
+                                        "PTY 窗口尺寸同步失败（控制通道已断开），画面可能持续错位，请重连会话"
+                                    );
+                                }
                             }
                         }
                         let metrics = LayoutMetrics {

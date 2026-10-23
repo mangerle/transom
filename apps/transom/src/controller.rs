@@ -586,6 +586,28 @@ async fn execute_sftp_op(
             let result = client.chmod(&path, permissions).await;
             finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
         }
+        SftpOperation::Stat { path } => match client.stat(&path).await {
+            Ok(metadata) => {
+                let _ = event_tx.send(AppEvent::SftpMetadata {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    metadata,
+                });
+            }
+            Err(error) => {
+                let _ = event_tx.send(AppEvent::SftpFailed {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    error,
+                });
+            }
+        },
+        SftpOperation::Symlink { target, link_path } => {
+            let result = client.symlink(&target, &link_path).await;
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+        }
     }
 }
 

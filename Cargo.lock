@@ -7969,6 +7969,7 @@ dependencies = [
  "gpui-kit",
  "parking_lot",
  "portable-pty",
+ "tracing",
  "transom-core",
 ]
 
@@ -7976,6 +7977,7 @@ dependencies = [
 name = "transom-ui"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "directories",
  "flume",
  "gpui-kit",

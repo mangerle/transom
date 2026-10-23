@@ -70,6 +70,9 @@ common:
   cancel:
     en: Cancel
     zh-CN: 取消
+  confirm:
+    en: Confirm
+    zh-CN: 确定
   delete:
     en: Delete
     zh-CN: 删除
@@ -196,6 +199,9 @@ prompt:
   password_hint:
     en: The session will connect after the password is submitted.
     zh-CN: 提交密码后将开始连接。
+  password_required:
+    en: Password cannot be empty
+    zh-CN: 密码不能为空
   connect:
     en: Connect
     zh-CN: 连接
@@ -334,6 +340,12 @@ sftp:
   operation_done:
     en: Done
     zh-CN: 操作完成
+  pending:
+    en: Pending
+    zh-CN: 等待中
+  transferring:
+    en: Transferring
+    zh-CN: 传输中
   folder_tag:
     en: DIR
     zh-CN: 目录

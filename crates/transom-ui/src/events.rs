@@ -3,7 +3,10 @@
 use crate::app::{AppShell, AuthPromptState, TabStatus};
 use crate::keymap;
 use crate::palette::localized_error;
-use crate::sftp::{SftpEditorModalState, format_size, send_desktop_notification};
+use crate::sftp::{
+    SftpEditorModalState, SftpPropertiesModalState, format_size, remote_file_properties,
+    send_desktop_notification,
+};
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
 use std::sync::Arc;
@@ -242,6 +245,26 @@ impl AppShell {
                 if let Some(path) = refresh {
                     self.request_sftp_list(tab_id, path, cx);
                 }
+                self.process_sftp_queue(tab_id, cx);
+            }
+            AppEvent::SftpMetadata {
+                tab_id,
+                connection_id,
+                op_id,
+                metadata,
+            } => {
+                let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) else {
+                    // 标签页已关闭（或连接已切换）：忽略迟到的属性响应，不再弹出属性窗
+                    return;
+                };
+                if panel.active_op == Some(op_id) {
+                    panel.active_op = None;
+                    panel.progress = None;
+                }
+                self.sftp_properties_modal = Some(SftpPropertiesModalState {
+                    scope: "远端".to_string(),
+                    properties: remote_file_properties(&metadata),
+                });
                 self.process_sftp_queue(tab_id, cx);
             }
             AppEvent::SftpFailed {

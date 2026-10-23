@@ -89,11 +89,28 @@ impl FsSftp {
     }
 
     fn attrs(&self, path: &str) -> Result<FileAttributes, StatusCode> {
-        let metadata = std::fs::metadata(self.local(path)).map_err(|_| StatusCode::NoSuchFile)?;
+        self.attrs_with(path, true)
+    }
+
+    /// OpenSSH 一致的 lstat 语义属性（不跟随符号链接，供 LSTAT 与 READDIR 使用）
+    fn lstat_attrs(&self, path: &str) -> Result<FileAttributes, StatusCode> {
+        self.attrs_with(path, false)
+    }
+
+    fn attrs_with(&self, path: &str, follow: bool) -> Result<FileAttributes, StatusCode> {
+        let fs_path = self.local(path);
+        let metadata = if follow {
+            std::fs::metadata(&fs_path)
+        } else {
+            std::fs::symlink_metadata(&fs_path)
+        }
+        .map_err(|_| StatusCode::NoSuchFile)?;
         let mut attrs = FileAttributes::empty();
         attrs.size = Some(metadata.len());
         if metadata.is_dir() {
             attrs.set_dir(true);
+        } else if metadata.file_type().is_symlink() {
+            attrs.set_symlink(true);
         } else {
             attrs.set_regular(true);
         }
@@ -226,7 +243,7 @@ impl SftpHandler for FsSftp {
             let entry = entry.map_err(|_| StatusCode::Failure)?;
             let name = entry.file_name().to_string_lossy().to_string();
             let path = format!("{}/{}", handle.trim_end_matches('/'), name);
-            if let Ok(attrs) = self.attrs(&path) {
+            if let Ok(attrs) = self.lstat_attrs(&path) {
                 files.push(File::new(name, attrs));
             }
         }
@@ -255,7 +272,10 @@ impl SftpHandler for FsSftp {
     }
 
     async fn lstat(&mut self, id: u32, path: String) -> Result<Attrs, Self::Error> {
-        self.stat(id, path).await
+        Ok(Attrs {
+            id,
+            attrs: self.lstat_attrs(&path)?,
+        })
     }
 
     async fn fstat(&mut self, id: u32, handle: String) -> Result<Attrs, Self::Error> {
@@ -291,6 +311,37 @@ impl SftpHandler for FsSftp {
         std::fs::rename(self.local(&oldpath), self.local(&newpath))
             .map_err(|_| StatusCode::Failure)?;
         Ok(ok(id))
+    }
+
+    /// 模拟 OpenSSH 事实标准：报文首参为被指向目标（oldpath），次参为新建链接（newpath）。
+    /// russh-sftp 服务端骨架按协议草案命名形参（首参落在 `linkpath`、次参落在 `targetpath`），
+    /// 因此这里将首参当作目标、次参当作链接路径调用系统 symlink，以验证客户端报文顺序正确。
+    async fn symlink(
+        &mut self,
+        id: u32,
+        linkpath: String,
+        targetpath: String,
+    ) -> Result<Status, Self::Error> {
+        let (oldpath, newpath) = (linkpath, targetpath);
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(oldpath, self.local(&newpath))
+                .map_err(|_| StatusCode::Failure)?;
+            Ok(ok(id))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (id, oldpath, newpath);
+            Err(StatusCode::OpUnsupported)
+        }
+    }
+
+    async fn readlink(&mut self, id: u32, path: String) -> Result<Name, Self::Error> {
+        let target = std::fs::read_link(self.local(&path)).map_err(|_| StatusCode::NoSuchFile)?;
+        Ok(Name {
+            id,
+            files: vec![File::dummy(target.to_string_lossy().to_string())],
+        })
     }
 }
 
@@ -392,6 +443,31 @@ async fn sftp_list_upload_download_and_mutations() {
         .await
         .expect("delete file");
     client.delete("/folder", true).await.expect("delete folder");
+
+    let meta = client.stat("/seed.txt").await.expect("stat seed");
+    assert!(!meta.is_dir);
+    assert!(!meta.is_symlink);
+    assert_eq!(meta.size, 4);
+    assert!(meta.mtime.is_some());
+
+    client
+        .symlink("/seed.txt", "/seed.link")
+        .await
+        .expect("create symlink");
+    let link_meta = client.stat("/seed.link").await.expect("stat symlink");
+    assert!(link_meta.is_symlink);
+    assert_eq!(link_meta.link_target.as_deref(), Some("/seed.txt"));
+    #[cfg(unix)]
+    assert_eq!(
+        std::fs::read_link(dir.path().join("seed.link")).expect("read created link"),
+        std::path::PathBuf::from("/seed.txt")
+    );
+    client
+        .delete("/seed.link", false)
+        .await
+        .expect("delete symlink");
+    assert!(!dir.path().join("seed.link").exists());
+    assert!(dir.path().join("seed.txt").exists());
 
     client.close().await;
     drop(client);

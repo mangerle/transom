@@ -1,6 +1,9 @@
 //! SFTP 双栏目录导航、路径跳转、终端联动与过滤控制方法。
 
-use super::{SftpPanelState, extract_candidate_path, list_local_dir, local_home, parent_remote};
+use super::{
+    SftpActivePane, SftpPanelState, extract_candidate_path, list_local_dir, local_home,
+    parent_remote,
+};
 use crate::app::{AppShell, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
@@ -103,6 +106,7 @@ impl AppShell {
             show_filter: false,
             show_hidden: false,
             sync_navigation: false,
+            active_pane: SftpActivePane::default(),
             queue: Vec::new(),
             resume_enabled: true,
             queue_expanded: true,

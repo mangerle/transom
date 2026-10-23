@@ -14,7 +14,8 @@ actions!(
         ToggleSftp,
         ToggleForward,
         FocusSftpFilter,
-        ToggleSftpHidden
+        ToggleSftpHidden,
+        DeleteSftpSelection
     ]
 );
 
@@ -22,6 +23,9 @@ pub const WORKSPACE_CONTEXT: &str = "Workspace";
 pub const OVERLAY_CONTEXT: &str = "Overlay";
 pub const SFTP_CONTEXT: &str = "SftpPanel";
 const WORKSPACE_ONLY: &str = "Workspace && !Overlay";
+/// SFTP 面板内需要独占按键的场景：排除文本输入框（`Input`），
+/// 保证在路径/过滤框中按 Delete 时正常编辑文本而不是触发删除文件。
+const SFTP_ACTION_CONTEXT: &str = "SftpPanel && !Input";
 
 pub fn bindings() -> Vec<KeyBinding> {
     #[cfg(target_os = "macos")]
@@ -47,6 +51,7 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("secondary-f", FocusSftpFilter, Some(SFTP_CONTEXT)),
         KeyBinding::new("ctrl-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
         KeyBinding::new("secondary-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
+        KeyBinding::new("delete", DeleteSftpSelection, Some(SFTP_ACTION_CONTEXT)),
     ]
 }
 

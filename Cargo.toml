@@ -38,6 +38,7 @@ async-trait = "0.1"
 rust-i18n = "4.2"
 rfd = "0.15"
 notify-rust = "4"
+chrono = "0.4"
 
 transom-core = { path = "crates/transom-core" }
 transom-store = { path = "crates/transom-store" }

@@ -115,7 +115,7 @@ impl AppShell {
                                             .find(|tab| tab.id == tab_id)
                                             .and_then(|tab| tab.sftp.as_mut())
                                         {
-                                            panel.local_selected = Some(entry_path.clone());
+                                            panel.select_local(entry_path.clone());
                                             let name = entry_name.clone();
                                             panel.name_input.update(cx, |state, cx| {
                                                 state.set_value(name, window, cx);
@@ -142,6 +142,9 @@ impl AppShell {
                                 .context_menu(move |menu, _window, _cx| {
                                     let app = app_cm.clone();
                                     let p_up = entry_path_cm.clone();
+                                    let p_cp = entry_path_cm.clone();
+                                    let p_sym = entry_path_cm.clone();
+                                    let p_prop = entry_path_cm.clone();
                                     let p_ren = entry_path_cm.clone();
                                     let p_del = entry_path_cm.clone();
                                     menu.item(
@@ -156,14 +159,79 @@ impl AppShell {
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
                                                         {
-                                                            panel.local_selected =
-                                                                Some(p_up.clone());
+                                                            panel.select_local(p_up.clone());
                                                         }
                                                         this.sftp_queue_upload(tab_id, cx);
                                                     });
                                                 }
                                             },
                                         ),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("复制绝对路径")
+                                            .icon(IconName::Copy)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, _, cx| {
+                                                    cx.write_to_clipboard(
+                                                        ClipboardItem::new_string(
+                                                            p_cp.display().to_string(),
+                                                        ),
+                                                    );
+                                                    app.update(cx, |this, cx| {
+                                                        if let Some(panel) = this
+                                                            .tabs
+                                                            .iter_mut()
+                                                            .find(|t| t.id == tab_id)
+                                                            .and_then(|t| t.sftp.as_mut())
+                                                        {
+                                                            panel.status = Some(format!(
+                                                                "已复制本地路径: {}",
+                                                                p_cp.display()
+                                                            ));
+                                                        }
+                                                        cx.notify();
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("创建软链接")
+                                            .icon(IconName::Link2)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, window, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        if let Some(panel) = this
+                                                            .tabs
+                                                            .iter_mut()
+                                                            .find(|t| t.id == tab_id)
+                                                            .and_then(|t| t.sftp.as_mut())
+                                                        {
+                                                            panel.select_local(p_sym.clone());
+                                                        }
+                                                        this.sftp_open_symlink_modal(
+                                                            tab_id, false, window, cx,
+                                                        );
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("查看属性")
+                                            .icon(IconName::Info)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, _, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        this.sftp_show_local_properties(
+                                                            tab_id,
+                                                            p_prop.clone(),
+                                                            cx,
+                                                        );
+                                                    });
+                                                }
+                                            }),
                                     )
                                     .item(
                                         PopupMenuItem::new("新建本地文件夹")
@@ -192,8 +260,7 @@ impl AppShell {
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
                                                         {
-                                                            panel.local_selected =
-                                                                Some(p_ren.clone());
+                                                            panel.select_local(p_ren.clone());
                                                         }
                                                         this.sftp_open_rename_modal(
                                                             tab_id, false, window, cx,
