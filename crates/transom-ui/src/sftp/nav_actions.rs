@@ -27,6 +27,17 @@ impl AppShell {
         tab.sftp.as_mut()
     }
 
+    /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
+    pub(crate) fn focus_active_sftp_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(panel) = self
+            .active_tab
+            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab| tab.sftp.as_ref())
+        {
+            window.focus(&panel.focus_handle, cx);
+        }
+    }
+
     pub(crate) fn toggle_sftp(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(tab_id) = self.active_tab else {
             return;

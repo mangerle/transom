@@ -45,8 +45,9 @@ impl AppShell {
                 Button::new("cancel-sftp-filter")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.sftp_filter_modal = None;
+                        this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
             )
@@ -55,8 +56,8 @@ impl AppShell {
                     .primary()
                     .icon(IconName::Check)
                     .label("保存规则")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.save_sftp_filter_modal(cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.save_sftp_filter_modal(window, cx);
                     })),
             );
 
