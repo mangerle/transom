@@ -436,6 +436,10 @@ impl Render for AppShell {
         }
 
         let mut main_row = h_flex().flex_1().overflow_hidden();
+        if !self.immersive {
+            // 与顶栏、状态栏、活动栏的边框一起围合主内容区，补齐右侧轮廓。
+            main_row = main_row.border_r_1().border_color(p.border);
+        }
         if let Some(activity_bar) = activity_bar {
             main_row = main_row.child(activity_bar);
         }
