@@ -265,6 +265,8 @@ pub struct AppShell {
     pub(crate) quick_open_state: Entity<CommandState>,
     pub(crate) show_settings_modal: bool,
     pub(crate) key_wizard: Option<KeyWizardState>,
+    pub(crate) settings_font_family: Entity<InputState>,
+    pub(crate) settings_cjk_font: Entity<InputState>,
     pub(crate) settings_font_size: Entity<InputState>,
     pub(crate) settings_line_height: Entity<InputState>,
     pub(crate) settings_scrollback: Entity<InputState>,
@@ -339,6 +341,26 @@ impl AppShell {
         });
         let known_hosts_records = services.known_hosts.list().unwrap_or_default();
 
+        let settings_font_family_val = settings
+            .terminal_profile
+            .font_family
+            .clone()
+            .unwrap_or_default();
+        let settings_font_family = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.font_family_hint").to_string())
+                .default_value(settings_font_family_val)
+        });
+        let settings_cjk_font_val = settings
+            .terminal_profile
+            .cjk_font_family
+            .clone()
+            .unwrap_or_default();
+        let settings_cjk_font = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.cjk_font_hint").to_string())
+                .default_value(settings_cjk_font_val)
+        });
         let font_size_val = settings.terminal_profile.font_size.to_string();
         let settings_font_size = cx.new(|cx| {
             InputState::new(window, cx)
@@ -378,6 +400,8 @@ impl AppShell {
             quick_open_state,
             show_settings_modal: false,
             key_wizard: None,
+            settings_font_family,
+            settings_cjk_font,
             settings_font_size,
             settings_line_height,
             settings_scrollback,

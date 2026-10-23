@@ -228,6 +228,20 @@ impl TerminalView {
         &self.focus_handle
     }
 
+    /// 热应用全局排版偏好：字体族、中文字体族、字号与行高。
+    ///
+    /// 为什么需要这个入口：渲染器每帧都从 `self.profile` 重建，只改设置里的字体而已经
+    /// 打开的窗格毫无反应，等于"设置不生效"。配色、scrollback 与光标外观不在这里覆盖，
+    /// 那些仍归会话自己的 profile，避免全局偏好悄悄吃掉会话级配置。
+    /// 网格列数会随字号变化，由下一帧 prepaint 统一走既有的 resize + PTY 同步通路。
+    pub fn apply_typography(&mut self, profile: &TerminalProfile, cx: &mut Context<Self>) {
+        self.profile.font_family = profile.font_family.clone();
+        self.profile.cjk_font_family = profile.cjk_font_family.clone();
+        self.profile.font_size = profile.font_size;
+        self.profile.line_height = profile.line_height;
+        cx.notify();
+    }
+
     fn write_input(&mut self, bytes: &[u8]) -> bool {
         if bytes.is_empty() {
             return true;

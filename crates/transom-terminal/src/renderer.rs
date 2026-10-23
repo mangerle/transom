@@ -30,7 +30,11 @@ pub(crate) struct PaintRequest<'a> {
 
 pub(crate) struct TerminalRenderer {
     pub font_family: SharedString,
+    /// 双格字符（中日韩）的专用字体族；`None` 表示不做双字体路由。
+    pub cjk_font_family: Option<SharedString>,
     pub font_size: Pixels,
+    /// 双格字体字号：由 [`fit_cjk_size`] 反推到"恰好两格宽"，与 `font_size` 不同。
+    pub cjk_font_size: Pixels,
     pub cell_width: Pixels,
     pub cell_height: Pixels,
     pub(crate) palette: TerminalPalette,
@@ -44,9 +48,12 @@ impl TerminalRenderer {
             .clone()
             .map(SharedString::from)
             .unwrap_or_else(|| cx.theme().mono_font_family.clone());
+        let cjk_font_family = profile.cjk_font_family.as_ref().map(SharedString::from);
         let mut renderer = Self {
             font_family,
+            cjk_font_family,
             font_size: px(profile.font_size.max(6.0)),
+            cjk_font_size: px(profile.font_size.max(6.0)),
             cell_width: px(8.0),
             cell_height: px(16.0),
             palette: profile.palette.clone(),
@@ -59,7 +66,7 @@ impl TerminalRenderer {
     fn measure(&mut self, window: &mut Window) {
         let run = TextRun {
             len: 1,
-            font: self.font(FontWeight::NORMAL, FontStyle::Normal),
+            font: self.font_for(false, FontWeight::NORMAL, FontStyle::Normal),
             color: black(),
             background_color: None,
             underline: None,
@@ -70,6 +77,30 @@ impl TerminalRenderer {
             .shape_line("M".into(), self.font_size, &[run], None);
         self.cell_width = shaped.width().max(px(1.0));
         self.cell_height = ((shaped.ascent + shaped.descent) * self.line_height).max(px(1.0));
+        self.measure_cjk(window);
+    }
+
+    /// 反推双格字体的字号，让一个汉字正好占两格宽。
+    ///
+    /// 不做这件事的话，"选了中文字体"仍可能错位：西文等宽字体自带的汉字字面宽度
+    /// 普遍不等于 `2 × cell_width`。探针取 `中`——它是 CJK 字体里最稳定的全宽字形。
+    fn measure_cjk(&mut self, window: &mut Window) {
+        if self.cjk_font_family.is_none() {
+            return;
+        }
+        let run = TextRun {
+            len: 1,
+            font: self.font_for(true, FontWeight::NORMAL, FontStyle::Normal),
+            color: black(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let probe =
+            window
+                .text_system()
+                .shape_line(CJK_PROBE_CHAR.into(), self.font_size, &[run], None);
+        self.cjk_font_size = fit_cjk_size(probe.width(), self.cell_width * 2.0, self.font_size);
     }
 
     pub const TERMINAL_PADDING_X: Pixels = px(8.0);
@@ -89,13 +120,33 @@ impl TerminalRenderer {
         (cols, rows)
     }
 
-    fn font(&self, weight: FontWeight, style: FontStyle) -> Font {
+    fn font_for(&self, wide: bool, weight: FontWeight, style: FontStyle) -> Font {
+        let cjk = self.uses_cjk_font(wide);
         Font {
-            family: self.font_family.clone(),
+            family: if cjk {
+                self.cjk_font_family
+                    .clone()
+                    .unwrap_or_else(|| self.font_family.clone())
+            } else {
+                self.font_family.clone()
+            },
             features: FontFeatures::default(),
             fallbacks: None,
             weight,
             style,
+        }
+    }
+
+    /// 该字符是否应改走双格字体：只在确实配置了中文字体时才成立。
+    fn uses_cjk_font(&self, wide: bool) -> bool {
+        wide && self.cjk_font_family.is_some()
+    }
+
+    fn font_size_for(&self, wide: bool) -> Pixels {
+        if self.uses_cjk_font(wide) {
+            self.cjk_font_size
+        } else {
+            self.font_size
         }
     }
 
@@ -406,6 +457,9 @@ impl TerminalRenderer {
                 bold,
                 italic,
                 underline,
+                // 网格已经用 WIDE_CHAR 标记替我们判过宽度（含 wcwidth 的全部边界），
+                // 直接采信标记，比在渲染侧再维护一份宽度表更可靠。
+                wide: cell.flags.contains(Flags::WIDE_CHAR),
             };
 
             let text = cell_text(cell);
@@ -462,7 +516,8 @@ impl TerminalRenderer {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let font = self.font(
+        let font = self.font_for(
+            style.wide,
             if style.bold {
                 FontWeight::BOLD
             } else {
@@ -488,7 +543,7 @@ impl TerminalRenderer {
         };
         let shaped = window.text_system().shape_line(
             SharedString::from(text.to_owned()),
-            self.font_size,
+            self.font_size_for(style.wide),
             &[text_run],
             None,
         );
@@ -625,9 +680,10 @@ impl TerminalRenderer {
             let underline = marked_chars
                 .as_ref()
                 .is_some_and(|range| range.contains(&index));
+            let wide = is_cjk_char(ch);
             let run = TextRun {
                 len: ch.len_utf8(),
-                font: self.font(FontWeight::NORMAL, FontStyle::Normal),
+                font: self.font_for(wide, FontWeight::NORMAL, FontStyle::Normal),
                 color: self.color(self.palette.foreground),
                 background_color: None,
                 underline: underline.then_some(UnderlineStyle {
@@ -639,7 +695,7 @@ impl TerminalRenderer {
             };
             let shaped = window.text_system().shape_line(
                 SharedString::from(ch.to_string()),
-                self.font_size,
+                self.font_size_for(wide),
                 &[run],
                 None,
             );
@@ -661,6 +717,9 @@ struct RunStyle {
     bold: bool,
     italic: bool,
     underline: bool,
+    /// 是否属于双格字符：决定取主字体还是中文专用字体，必须参与 run 合并判定，
+    /// 否则两种字体的字符会被拼进同一次 `shape_line`。
+    wide: bool,
 }
 
 struct TextRunBuilder {
@@ -677,7 +736,51 @@ impl TextRunBuilder {
             && self.style.bold == cell.flags.contains(Flags::BOLD)
             && self.style.italic == cell.flags.contains(Flags::ITALIC)
             && self.style.underline == cell.flags.intersects(Flags::ALL_UNDERLINES)
+            && self.style.wide == cell.flags.contains(Flags::WIDE_CHAR)
     }
+}
+
+/// 双格字号探针用的字符：`中` 在 CJK 字体里是最稳定的全宽字形。
+const CJK_PROBE_CHAR: char = '中';
+
+/// IME 预编辑串里哪些字符按中文专用字体渲染。
+///
+/// 正文走的是网格的 `WIDE_CHAR` 标记，只有预编辑阶段的字符还没进网格、没有标记可用，
+/// 才需要这份范围表兜底：范围取 Unicode 东亚宽度表里判为 Wide 的那批（汉字及扩展、假名、
+/// 谚文、注音、中日韩标点与全角形式），半角假名从 U+FF61 起只占一格、刻意排除。
+/// 判定偏窄只会让候选字暂时用回退字体渲染，偏宽才会撑破邻格，因此宁可偏窄。
+fn is_cjk_char(ch: char) -> bool {
+    matches!(ch as u32,
+        0x1100..=0x115F      // 谚文字母（初声，占两格）
+        | 0x2E80..=0x303E    // 中日韩部首补充、康熙部首、假名、注音以外的中日韩符号标点
+        | 0x3041..=0x33FF    // 平假名、片假名、注音符号、中日韩兼容符号
+        | 0x3400..=0x4DBF    // 汉字扩展 A
+        | 0x4E00..=0x9FFF    // 中日韩统一表意文字
+        | 0xA000..=0xA4CF    // 彝文
+        | 0xAC00..=0xD7A3    // 谚文音节
+        | 0xF900..=0xFAFF    // 中日韩兼容表意文字
+        | 0xFE30..=0xFE6F    // 小写变体、中日韩兼容形式、全角小符号
+        | 0xFF00..=0xFF60    // 全角形式（半角假名从 FF61 起，不在此列）
+        | 0xFFE0..=0xFFE6    // 全角货币与空格
+        | 0x20000..=0x2FFFD  // 汉字扩展 B 及之后
+        | 0x30000..=0x3FFFD
+    )
+}
+
+/// 把双格字体字号缩放到"一个汉字恰好等于两格宽"。
+///
+/// 夹在基准字号的 ±50% 内：字体不存在时 gpui 会回退到别的字形、宽度探针可能离谱，
+/// 与其把中文拽成蚂蚁字，不如保持接近原字号的结果。
+fn fit_cjk_size(probe_width: Pixels, target_width: Pixels, base: Pixels) -> Pixels {
+    let natural = f32::from(probe_width);
+    let target = f32::from(target_width);
+    if natural <= 0.0 || target <= 0.0 {
+        return base;
+    }
+    let scaled = f32::from(base) * (target / natural);
+    px(scaled
+        .clamp(f32::from(base) * 0.5, f32::from(base) * 1.5)
+        .max(1.0))
 }
 
 fn cell_text(cell: &Cell) -> String {
@@ -735,5 +838,58 @@ fn utf16_range_to_char_range(text: &str, range: &Range<usize>) -> Option<Range<u
     match (start, end) {
         (Some(start), Some(end)) if start <= end => Some(start..end),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CJK_PROBE_CHAR, fit_cjk_size, is_cjk_char};
+    use gpui_kit::px;
+
+    /// 双字体路由的判定边界：走错一侧就会让 Latin 字符被中文字体接管，
+    /// 或让全角字符继续用等宽字体而错位。
+    #[test]
+    fn classifies_double_width_characters() {
+        assert!(is_cjk_char('中'));
+        assert!(is_cjk_char(CJK_PROBE_CHAR));
+        assert!(is_cjk_char('あ'));
+        assert!(is_cjk_char('カ'));
+        assert!(is_cjk_char('한'));
+        assert!(is_cjk_char('　')); // 全角空格
+        assert!(is_cjk_char('，'));
+        assert!(is_cjk_char('！')); // 全角感叹
+        assert!(is_cjk_char('Ａ')); // 全角拉丁
+        assert!(is_cjk_char('ㄅ')); // 注音符号按东亚宽度占两格
+    }
+
+    #[test]
+    fn keeps_narrow_characters_on_the_primary_font() {
+        for ch in ['a', 'Z', '0', ' ', '~', 'é', 'ß', 'ф', 'é'] {
+            assert!(!is_cjk_char(ch), "{ch} 不应被判定为双格");
+        }
+        // 半角假名在网格里只占一格，用中文专用字体会撑破邻格。
+        assert!(!is_cjk_char('ｱ'));
+        assert!(!is_cjk_char('¦'));
+        // 组合用零宽字符也不该抢双格字体。
+        assert!(!is_cjk_char('\u{0301}'));
+    }
+
+    #[test]
+    fn fits_cjk_size_to_exactly_two_cells() {
+        // 探针 20px 的目标是 16px（两格 = 2 × 8px）→ 字号按 0.8 缩放。
+        let fitted = fit_cjk_size(px(20.0), px(16.0), px(14.0));
+        assert!((f32::from(fitted) - 11.2).abs() < 0.01);
+        // 已经正好两格时不变。
+        assert_eq!(fit_cjk_size(px(16.0), px(16.0), px(14.0)), px(14.0));
+    }
+
+    /// 字体缺失时 gpui 的回退宽度可能离谱，缩放必须夹在可用范围内。
+    #[test]
+    fn clamps_degenerate_probe_widths() {
+        assert_eq!(fit_cjk_size(px(0.0), px(16.0), px(14.0)), px(14.0));
+        assert_eq!(fit_cjk_size(px(1.0), px(16.0), px(14.0)), px(21.0));
+        assert_eq!(fit_cjk_size(px(1000.0), px(16.0), px(14.0)), px(7.0));
+        assert_eq!(fit_cjk_size(px(-3.0), px(16.0), px(14.0)), px(14.0));
+        assert_eq!(fit_cjk_size(px(20.0), px(0.0), px(14.0)), px(14.0));
     }
 }

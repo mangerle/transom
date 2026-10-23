@@ -766,6 +766,21 @@ settings:
   appearance:
     en: Appearance & Font
     zh-CN: 外观与字体
+  font_family:
+    en: Primary Font (Latin and digits)
+    zh-CN: 主字体（英文与数字）
+  font_family_hint:
+    en: Empty follows the app default monospace font
+    zh-CN: 留空跟随应用默认等宽字体
+  cjk_font:
+    en: Second Font (Chinese, Japanese, Korean)
+    zh-CN: 中文字体（独立渲染双格字符）
+  cjk_font_hint:
+    en: Empty falls back to system font substitution
+    zh-CN: 留空交给系统字体回退
+  cjk_font_note:
+    en: CJK glyphs are scaled to exactly two cells, so any CJK font lines up; a proportional font may look squeezed.
+    zh-CN: 中文字形会自动缩放到恰好两格宽，因此任意中文字体都能对齐；比例字体只是观感偏紧。
   font_size:
     en: Font Size
     zh-CN: 字体大小

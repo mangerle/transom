@@ -148,6 +148,12 @@ fn default_theme_name() -> String {
 pub struct TerminalProfile {
     /// 为 `None` 时跟随应用默认等宽字体
     pub font_family: Option<String>,
+    /// 中日韩等双格字符的专用字体；为 `None` 时交给系统字体回退。
+    ///
+    /// 为什么要独立配置：等宽西文字体自带的汉字字面宽度往往不等于两格，混排就会错位；
+    /// 指定后渲染器会按"恰好两格宽"缩放该字号，让中文对齐由排版保证而不是靠挑选字体。
+    #[serde(default)]
+    pub cjk_font_family: Option<String>,
     pub font_size: f32,
     pub line_height: f32,
     pub scrollback: usize,
@@ -168,6 +174,7 @@ impl Default for TerminalProfile {
     fn default() -> Self {
         Self {
             font_family: None,
+            cjk_font_family: None,
             font_size: 14.0,
             line_height: 1.2,
             scrollback: 10_000,
@@ -228,5 +235,35 @@ mod tests {
         assert_eq!(profile.palette.ansi.len(), 16);
         assert!(TerminalInteraction::default().copy_on_select);
         assert!(TerminalInteraction::default().right_click_paste);
+    }
+
+    /// 双重字体是后加的字段：老的会话与设置文件里没有它，必须按"跟随系统回退"降级，
+    /// 而不是让整份配置加载失败。
+    #[test]
+    fn profile_without_cjk_font_still_loads() {
+        let profile = TerminalProfile {
+            cjk_font_family: Some("Sarasa Mono SC".into()),
+            ..TerminalProfile::default()
+        };
+        let mut value = serde_json::to_value(&profile).expect("默认配置应可序列化");
+        value
+            .as_object_mut()
+            .expect("配置序列化为对象")
+            .remove("cjk_font_family");
+        let decoded: TerminalProfile =
+            serde_json::from_value(value).expect("缺少 cjk_font_family 的旧配置应能解析");
+        assert_eq!(decoded.cjk_font_family, None);
+    }
+
+    /// 双重字体字段必须能原样往返，否则用户在设置里选的中文字体存不住。
+    #[test]
+    fn cjk_font_round_trips() {
+        let profile = TerminalProfile {
+            cjk_font_family: Some("更纱黑体 Mono SC".into()),
+            ..TerminalProfile::default()
+        };
+        let json = serde_json::to_string(&profile).unwrap();
+        let decoded: TerminalProfile = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.cjk_font_family.as_deref(), Some("更纱黑体 Mono SC"));
     }
 }

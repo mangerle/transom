@@ -9,14 +9,30 @@ use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::input::InputState;
 use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Settings};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TerminalCursorShape;
+use transom_terminal::TerminalView;
+
+/// 读取字体族输入框：留空表示"不指定"，交给默认字体或系统回退。
+fn read_font_family(input: &Entity<InputState>, cx: &App) -> Option<String> {
+    let value = input.read(cx).value();
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
 
 impl AppShell {
     pub(crate) fn open_settings_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let profile = self.settings.terminal_profile.clone();
+        self.settings_font_family.update(cx, |input, cx| {
+            input.set_value(profile.font_family.unwrap_or_default(), window, cx);
+        });
+        self.settings_cjk_font.update(cx, |input, cx| {
+            input.set_value(profile.cjk_font_family.unwrap_or_default(), window, cx);
+        });
         let font_size = self.settings.terminal_profile.font_size.to_string();
         self.settings_font_size.update(cx, |input, cx| {
             input.set_value(&font_size, window, cx);
@@ -34,6 +50,10 @@ impl AppShell {
     }
 
     pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>) {
+        self.settings.terminal_profile.font_family =
+            read_font_family(&self.settings_font_family, cx);
+        self.settings.terminal_profile.cjk_font_family =
+            read_font_family(&self.settings_cjk_font, cx);
         if let Ok(font_size) = self
             .settings_font_size
             .read(cx)
@@ -67,11 +87,30 @@ impl AppShell {
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             self.error = Some(localized_error(&error));
         } else {
+            self.apply_typography_to_live_panes(cx);
             self.apply_shortcut_settings(cx);
             self.status = Some(rust_i18n::t!("status.ready").to_string());
         }
         self.show_settings_modal = false;
         cx.notify();
+    }
+
+    /// 把排版偏好下发到所有已打开的窗格。
+    ///
+    /// 不做这件事的话，改完字体要重开标签才见效，等于"设置了但没反应"。
+    /// 会话本身也带 profile，但当前没有任何界面在会话级别改字体，因此以全局偏好为准；
+    /// 将来开放会话级字体时，这里必须改成只补空白、不覆盖会话选择。
+    fn apply_typography_to_live_panes(&self, cx: &mut Context<Self>) {
+        let profile = self.settings.terminal_profile.clone();
+        // 先收集实体再逐个更新：遍历 self.tabs 与逐条 update 会同时借用 self。
+        let terminals: Vec<Entity<TerminalView>> = self
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.terminal.clone())
+            .collect();
+        for terminal in terminals {
+            terminal.update(cx, |view, cx| view.apply_typography(&profile, cx));
+        }
     }
 
     pub(crate) fn render_settings_modal(
@@ -274,6 +313,22 @@ impl AppShell {
                     .text_sm()
                     .font_weight(FontWeight::BOLD)
                     .child(rust_i18n::t!("settings.appearance").to_string()),
+            )
+            .child(Self::form_field(
+                rust_i18n::t!("settings.font_family").to_string(),
+                self.settings_font_family.clone(),
+                p,
+            ))
+            .child(Self::form_field(
+                rust_i18n::t!("settings.cjk_font").to_string(),
+                self.settings_cjk_font.clone(),
+                p,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.cjk_font_note").to_string()),
             )
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_size").to_string(),
