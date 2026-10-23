@@ -143,6 +143,20 @@ impl AppShell {
                     ))
                     .child(Self::render_activity_button(
                         ActivityButtonProps {
+                            id: "nav-snippets",
+                            icon: IconName::ListChecks,
+                            tooltip: rust_i18n::t!("snippets.title").to_string(),
+                            selected: self.snippets_expanded,
+                            disabled: false,
+                        },
+                        p,
+                        |this, _, cx| {
+                            this.toggle_snippets_bar(cx);
+                        },
+                        cx,
+                    ))
+                    .child(Self::render_activity_button(
+                        ActivityButtonProps {
                             id: "nav-sftp",
                             icon: IconName::Folder,
                             tooltip: rust_i18n::t!("sftp.title").to_string(),

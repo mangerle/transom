@@ -22,6 +22,7 @@ mod settings;
 mod sftp;
 mod shortcuts;
 mod sidebar;
+mod snippets;
 mod split;
 mod startup;
 mod status_bar;

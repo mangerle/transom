@@ -11,6 +11,7 @@ use crate::sftp::{
     SftpChmodModalState, SftpEditorModalState, SftpFilterModalState, SftpInputModalState,
     SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
 };
+use crate::snippets::SnippetEditor;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
@@ -277,6 +278,10 @@ pub struct AppShell {
     pub(crate) sftp_properties_modal: Option<SftpPropertiesModalState>,
     pub(crate) sftp_filter_modal: Option<SftpFilterModalState>,
     pub(crate) sftp_sync_modal: Option<SftpSyncModalState>,
+    /// 底部快捷命令条是否展开（运行期状态，与侧边栏、沉浸模式同口径）。
+    pub(crate) snippets_expanded: bool,
+    /// 快捷命令库编辑弹窗。
+    pub(crate) snippet_editor: Option<SnippetEditor>,
     pub(crate) status: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) sidebar_visible: bool,
@@ -412,6 +417,8 @@ impl AppShell {
             sftp_properties_modal: None,
             sftp_filter_modal: None,
             sftp_sync_modal: None,
+            snippets_expanded: false,
+            snippet_editor: None,
             status: None,
             error,
             sidebar_visible: true,
@@ -609,6 +616,9 @@ impl AppShell {
         }
         if self.sftp_sync_modal.is_some() {
             overlays.push(self.render_sftp_sync_modal(window, cx, &p));
+        }
+        if self.snippet_editor.is_some() {
+            overlays.push(self.render_snippet_editor(&p, cx));
         }
         overlays
     }

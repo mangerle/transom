@@ -1,3 +1,4 @@
+use crate::ids::SnippetId;
 use crate::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
 use crate::terminal::{TerminalInteraction, TerminalProfile};
 use serde::{Deserialize, Serialize};
@@ -137,6 +138,68 @@ pub struct AppSettings {
     pub sftp: SftpSettings,
     #[serde(default)]
     pub shortcuts: ShortcutSettings,
+    #[serde(default)]
+    pub snippets: SnippetSettings,
+}
+
+/// 快捷命令条上的一键命令。
+///
+/// 为什么放在全局设置而不是会话里：这条特性的动机是"同一条长命令在几十台机器上反复敲"，
+/// 命令本身与具体会话无关；会话级差异由终端里已有的 cd/别名承担。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Snippet {
+    pub id: SnippetId,
+    /// 按钮上显示的名字。
+    pub name: String,
+    /// 实际写入终端的文本。
+    pub command: String,
+}
+
+/// 名字长度上限：按钮要能并排放进底栏。
+const SNIPPET_NAME_MAX_CHARS: usize = 40;
+/// 命令长度上限，避免把整段脚本塞进一个按钮后无法点击。
+const SNIPPET_COMMAND_MAX_CHARS: usize = 4000;
+
+impl Snippet {
+    /// 命令条目的最小合法性：名字与命令都不能为空，长度要有界。
+    ///
+    /// 校验放在 core 而不是界面层，设置文件属外部输入（可手工编辑、可被导入），
+    /// 任何一条不合格就整条丢弃，而不是让底栏画出个空白按钮。
+    pub fn is_valid(&self) -> bool {
+        let name = self.name.trim();
+        let command = self.command.trim();
+        !name.is_empty()
+            && !command.is_empty()
+            && name.chars().count() <= SNIPPET_NAME_MAX_CHARS
+            && command.chars().count() <= SNIPPET_COMMAND_MAX_CHARS
+    }
+}
+
+/// 快捷命令库。命令内容跨重启保持，展开状态属运行期不在此列。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SnippetSettings {
+    #[serde(default)]
+    pub items: Vec<Snippet>,
+}
+
+impl SnippetSettings {
+    /// 丢弃不合法条目并按名字去重（同名以后出现的那条为准）。
+    pub fn sanitized(mut self) -> Self {
+        self.items.retain(Snippet::is_valid);
+        let mut deduped: Vec<Snippet> = Vec::with_capacity(self.items.len());
+        for item in self.items {
+            if let Some(position) = deduped
+                .iter()
+                .position(|existing| existing.name.trim() == item.name.trim())
+            {
+                deduped[position] = item;
+            } else {
+                deduped.push(item);
+            }
+        }
+        self.items = deduped;
+        self
+    }
 }
 
 /// 用户覆盖的快捷键配置。
@@ -190,6 +253,7 @@ impl Default for AppSettings {
             window: WindowSettings::default(),
             sftp: SftpSettings::default(),
             shortcuts: ShortcutSettings::default(),
+            snippets: SnippetSettings::default(),
         }
     }
 }
@@ -207,6 +271,80 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
         assert!(settings.window.previous_tab_groups.is_empty());
         assert_eq!(settings.window.previous_tab_sessions.len(), 0);
+    }
+
+    /// 快捷命令库是后加的字段：老设置文件里没有它也要能加载，并按空库降级。
+    #[test]
+    fn settings_without_snippets_still_load() {
+        let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
+        assert!(settings.snippets.items.is_empty());
+    }
+
+    #[test]
+    fn snippets_round_trip_and_reject_invalid_entries() {
+        let settings = SnippetSettings {
+            items: vec![
+                Snippet {
+                    id: SnippetId::new(),
+                    name: "看日志".into(),
+                    command: "journalctl -f".into(),
+                },
+                Snippet {
+                    id: SnippetId::new(),
+                    name: "  ".into(),
+                    command: "ls".into(),
+                },
+                Snippet {
+                    id: SnippetId::new(),
+                    name: "空命令".into(),
+                    command: "".into(),
+                },
+            ],
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let decoded: SnippetSettings = serde_json::from_str(&json).unwrap();
+        let cleaned = decoded.sanitized();
+        assert_eq!(cleaned.items.len(), 1);
+        assert_eq!(cleaned.items[0].name, "看日志");
+    }
+
+    /// 同名条目留着两个只会让底栏出现两个分不清的按钮，后出现的覆盖先出现的。
+    #[test]
+    fn snippets_deduplicate_by_name() {
+        let settings = SnippetSettings {
+            items: vec![
+                Snippet {
+                    id: SnippetId::new(),
+                    name: "重启".into(),
+                    command: "systemctl reboot a".into(),
+                },
+                Snippet {
+                    id: SnippetId::new(),
+                    name: "重启 ".into(),
+                    command: "systemctl reboot b".into(),
+                },
+            ],
+        };
+        let cleaned = settings.sanitized();
+        assert_eq!(cleaned.items.len(), 1);
+        assert_eq!(cleaned.items[0].command, "systemctl reboot b");
+    }
+
+    /// 超长命令不该把底栏撑坏：超过上限的条目直接判为不合法。
+    #[test]
+    fn snippets_enforce_length_bounds() {
+        let long = Snippet {
+            id: SnippetId::new(),
+            name: "n".into(),
+            command: "y".repeat(5_000),
+        };
+        assert!(!long.is_valid());
+        let long_name = Snippet {
+            id: SnippetId::new(),
+            name: "名".repeat(41),
+            command: "ls".into(),
+        };
+        assert!(!long_name.is_valid());
     }
 
     #[test]

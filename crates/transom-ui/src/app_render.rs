@@ -77,6 +77,9 @@ impl Render for AppShell {
                 .overflow_hidden()
                 .child(resizable_group),
         );
+        // 快捷命令条贴在状态栏上方：底栏属于工作区全局，不随窗格分屏重复出现。
+        let snippets_bar =
+            (!self.immersive && self.snippets_expanded).then(|| self.render_snippets_bar(&p, cx));
         let error_banner = self
             .error
             .as_ref()
@@ -98,6 +101,7 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_toggle_forward))
             .on_action(cx.listener(Self::on_toggle_immersive))
             .on_action(cx.listener(Self::on_search_buffer))
+            .on_action(cx.listener(Self::on_toggle_snippets))
             .on_action(cx.listener(Self::on_split_right))
             .on_action(cx.listener(Self::on_split_down))
             .on_action(cx.listener(Self::on_close_pane))
@@ -117,6 +121,9 @@ impl Render for AppShell {
             root = root.child(top_bar);
         }
         root = root.child(main_row);
+        if let Some(snippets_bar) = snippets_bar {
+            root = root.child(snippets_bar);
+        }
         if let Some(error_banner) = error_banner {
             root = root.child(error_banner);
         }

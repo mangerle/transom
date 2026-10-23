@@ -313,6 +313,59 @@ prompt:
   submit:
     en: Submit
     zh-CN: 提交
+snippets:
+  title:
+    en: Snippets
+    zh-CN: 快捷命令
+  empty:
+    en: No quick commands yet
+    zh-CN: 还没有快捷命令
+  add:
+    en: Add
+    zh-CN: 新增
+  manage:
+    en: Manage
+    zh-CN: 管理
+  collapse:
+    en: Collapse snippets bar
+    zh-CN: 收起快捷命令条
+  editor_title:
+    en: Quick Command Library
+    zh-CN: 快捷命令库
+  editor_note:
+    en: Click a button to fill the focused pane; Shift+Click sends and executes. Commands are shared by all sessions.
+    zh-CN: 点击按钮填充当前窗格；按住 Shift 点击则直接发送执行。命令库全局共用，不区分会话。
+  name_column:
+    en: Button label
+    zh-CN: 按钮名称
+  command_column:
+    en: Command
+    zh-CN: 命令内容
+  name_hint:
+    en: e.g. Disk usage
+    zh-CN: 例如：看磁盘占用
+  command_hint:
+    en: e.g. df -h --total
+    zh-CN: 例如：df -h --total
+  filled:
+    en: Command filled into the pane
+    zh-CN: 已填充到当前窗格
+  no_terminal:
+    en: No terminal is ready in the current pane
+    zh-CN: 当前窗格还没有可用的终端
+  send_failed:
+    en: Terminal connection is closed, command not written
+    zh-CN: 终端连接已断开，命令未写入
+  saved:
+    en: Snippets saved
+    zh-CN: 快捷命令已保存
+  too_many:
+    en: Too many snippets (max 40)
+    zh-CN: 快捷命令数量已达上限（40 条）
+  row_invalid:
+    en: "Row %{row} is invalid: both label and command are required, label up to 40 chars, command up to 4000 chars"
+    zh-CN: "第 %{row} 行不合格：名称与命令都不能为空，名称不超过 40 字，命令不超过 4000 字"
+
 search:
   terminal_unavailable:
     en: No terminal is ready in the current pane
@@ -910,6 +963,9 @@ settings:
   shortcut_toggle_split_axis:
     en: Toggle Split Direction of Focused Pane
     zh-CN: 翻转当前窗格的切分方向
+  shortcut_toggle_snippets:
+    en: Toggle Snippets Bar
+    zh-CN: 显示/隐藏快捷命令条
   shortcut_terminal_search:
     en: Search Terminal Buffer
     zh-CN: 搜索终端缓冲区

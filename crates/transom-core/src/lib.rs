@@ -31,7 +31,9 @@ pub use forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,
     TargetAddress,
 };
-pub use ids::{ConnectionId, FolderId, ForwardId, GroupId, SessionId, SplitId, TabId, TransferId};
+pub use ids::{
+    ConnectionId, FolderId, ForwardId, GroupId, SessionId, SnippetId, SplitId, TabId, TransferId,
+};
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use prompt::{PromptInfo, PromptKind};
@@ -42,8 +44,8 @@ pub use session::{
     SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
 };
 pub use settings::{
-    AppSettings, BellStyle, SavedLayout, SavedTabGroup, SftpSettings, ShortcutSettings, SplitAxis,
-    WindowSettings,
+    AppSettings, BellStyle, SavedLayout, SavedTabGroup, SftpSettings, ShortcutSettings, Snippet,
+    SnippetSettings, SplitAxis, WindowSettings,
 };
 pub use sftp::{
     RemoteDeleteTarget, RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferKind,

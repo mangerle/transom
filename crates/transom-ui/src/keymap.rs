@@ -22,6 +22,7 @@ actions!(
         ToggleSftp,
         ToggleForward,
         ToggleImmersive,
+        ToggleSnippets,
         SearchBuffer,
         SplitRight,
         SplitDown,
@@ -74,6 +75,7 @@ bind_fn!(bind_toggle_sftp, ToggleSftp);
 bind_fn!(bind_toggle_forward, ToggleForward);
 bind_fn!(bind_toggle_immersive, ToggleImmersive);
 bind_fn!(bind_search_buffer, SearchBuffer);
+bind_fn!(bind_toggle_snippets, ToggleSnippets);
 bind_fn!(bind_split_right, SplitRight);
 bind_fn!(bind_split_down, SplitDown);
 bind_fn!(bind_close_pane, ClosePane);
@@ -150,6 +152,12 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_immersive",
         defaults: &["f11", "alt-enter"],
         bind: bind_toggle_immersive,
+    },
+    ShortcutSpec {
+        id: "toggle_snippets",
+        label_key: "settings.shortcut_toggle_snippets",
+        defaults: &["$app-j"],
+        bind: bind_toggle_snippets,
     },
     // 终端缓冲区检索：默认 `$app-f`，与 SFTP 面板的 `secondary-f` 过滤框错开，
     // 且不会吞掉 shell 里 Ctrl+F 的光标前移；用户可在快捷键设置里改成别的键。

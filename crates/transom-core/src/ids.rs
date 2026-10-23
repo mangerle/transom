@@ -46,4 +46,6 @@ id_type!(GroupId);
 // 分割树内部节点标识：渲染时用作可拖拽容器的稳定 ElementId。
 id_type!(SplitId);
 id_type!(ConnectionId);
+// 快捷命令条条目标识：编辑弹窗按它定位要替换哪一行，不能依赖数组下标。
+id_type!(SnippetId);
 id_type!(TransferId);
