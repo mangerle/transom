@@ -346,6 +346,23 @@ impl SftpHandler for FsSftp {
             files: vec![File::dummy(target.to_string_lossy().to_string())],
         })
     }
+
+    async fn setstat(
+        &mut self,
+        id: u32,
+        path: String,
+        attrs: FileAttributes,
+    ) -> Result<Status, Self::Error> {
+        if let Some(mtime) = attrs.mtime {
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(self.local(&path))
+                .map_err(|_| StatusCode::Failure)?;
+            file.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(u64::from(mtime)))
+                .map_err(|_| StatusCode::Failure)?;
+        }
+        Ok(ok(id))
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -417,11 +434,21 @@ async fn sftp_list_upload_download_and_mutations() {
 
     let local = dir.path().join("local.txt");
     tokio::fs::write(&local, b"hello sftp").await.unwrap();
+    set_modified(&local, 12_345);
     let transferred = client
         .upload(&local, "/uploaded.txt", |_, _| {})
         .await
         .expect("upload");
     assert_eq!(transferred, 10);
+    assert_eq!(
+        client
+            .stat("/uploaded.txt")
+            .await
+            .expect("stat uploaded")
+            .mtime,
+        Some(12_345),
+        "上传后应保留本地文件修改时间"
+    );
     client
         .verify_file(&local, "/uploaded.txt")
         .await
@@ -442,6 +469,11 @@ async fn sftp_list_upload_download_and_mutations() {
     assert_eq!(
         tokio::fs::read(&downloaded).await.unwrap(),
         b"hello sftp".to_vec()
+    );
+    assert_eq!(
+        modified_seconds(&downloaded),
+        12_345,
+        "下载后应保留远端文件修改时间"
     );
 
     client.create_dir("/folder").await.expect("mkdir");
@@ -488,6 +520,7 @@ async fn sftp_list_upload_download_and_mutations() {
     std::fs::create_dir_all(local_tree.join(".git/objects")).unwrap();
     std::fs::create_dir_all(local_tree.join("node_modules/pkg")).unwrap();
     std::fs::write(local_tree.join("src/main.rs"), b"fn main() {}\n").unwrap();
+    set_modified(&local_tree.join("src/main.rs"), 5_000);
     std::fs::write(local_tree.join(".git/config"), b"[core]\n").unwrap();
     std::fs::write(
         local_tree.join("node_modules/pkg/index.js"),
@@ -525,6 +558,14 @@ async fn sftp_list_upload_download_and_mutations() {
     assert!(!tree_entries.iter().any(|entry| entry.name == "cache.tmp"));
     let empty_meta = client.stat("/tree/empty/nested").await.expect("empty dir");
     assert!(empty_meta.is_dir);
+    assert_eq!(
+        client
+            .stat("/tree/src/main.rs")
+            .await
+            .expect("stat uploaded tree file")
+            .mtime,
+        Some(5_000)
+    );
 
     let downloaded_tree = dir.path().join("downloaded-tree");
     let summary = client
@@ -535,6 +576,10 @@ async fn sftp_list_upload_download_and_mutations() {
     assert_eq!(
         std::fs::read(downloaded_tree.join("src/main.rs")).unwrap(),
         b"fn main() {}\n"
+    );
+    assert_eq!(
+        modified_seconds(&downloaded_tree.join("src/main.rs")),
+        5_000
     );
     assert!(downloaded_tree.join("empty/nested").is_dir());
     assert!(!downloaded_tree.join(".git").exists());
@@ -659,6 +704,19 @@ async fn sftp_list_upload_download_and_mutations() {
     );
     assert!(sync_local.join(".git/config").exists());
 
+    let comparison_after_sync = client
+        .compare_directories(&sync_local, "/sync-remote", &filter)
+        .await
+        .expect("compare after sync");
+    assert!(
+        comparison_after_sync
+            .entries
+            .iter()
+            .all(|entry| entry.status == DirDiffStatus::TypeMismatch),
+        "同步后除类型冲突外不应残留差异: {:?}",
+        comparison_after_sync.entries
+    );
+
     client.close().await;
     drop(client);
     drop(io);
@@ -673,4 +731,14 @@ fn set_modified(path: &std::path::Path, seconds: u64) {
         .expect("打开文件以设置修改时间");
     file.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(seconds))
         .expect("设置文件修改时间");
+}
+
+fn modified_seconds(path: &std::path::Path) -> u64 {
+    std::fs::metadata(path)
+        .expect("读取文件属性")
+        .modified()
+        .expect("读取修改时间")
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("修改时间早于 Unix 纪元")
+        .as_secs()
 }

@@ -2,6 +2,7 @@ use crate::client::SshRemote;
 use russh_sftp::client::SftpSession;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use transom_core::{AppError, ErrorCode, RemoteFile, RemoteMetadata};
 
@@ -130,11 +131,9 @@ impl SftpClient {
         F: FnMut(u64, Option<u64>) + Send,
     {
         let mut remote = self.session.open(remote_path).await.map_err(sftp_error)?;
-        let total = remote
-            .metadata()
-            .await
-            .ok()
-            .and_then(|metadata| metadata.size);
+        let remote_metadata = remote.metadata().await.ok();
+        let total = remote_metadata.as_ref().and_then(|metadata| metadata.size);
+        let mtime = remote_metadata.as_ref().and_then(|metadata| metadata.mtime);
 
         let mut offset = 0u64;
         let mut open_options = tokio::fs::OpenOptions::new();
@@ -147,6 +146,9 @@ impl SftpClient {
                     && local_size >= total_size
                     && total_size > 0
                 {
+                    if let Some(mtime) = mtime {
+                        let _ = set_local_mtime(local_path, mtime).await;
+                    }
                     progress(total_size, Some(total_size));
                     return Ok(total_size);
                 }
@@ -191,6 +193,15 @@ impl SftpClient {
         }
         local.flush().await.map_err(sftp_io_error)?;
         let _ = remote.close().await;
+        if let Some(mtime) = mtime
+            && let Err(error) = set_local_mtime(local_path, mtime).await
+        {
+            tracing::debug!(
+                path = %local_path.display(),
+                %error,
+                "保留本地文件修改时间失败"
+            );
+        }
         Ok(transferred)
     }
 
@@ -223,7 +234,10 @@ impl SftpClient {
                 format!("打开本地文件失败 {}: {error}", local_path.display()),
             )
         })?;
-        let total = local.metadata().await.ok().map(|metadata| metadata.len());
+        let local_metadata = local.metadata().await.ok();
+        let total = local_metadata.as_ref().map(|metadata| metadata.len());
+        let local_mtime =
+            unix_seconds(local_metadata.and_then(|metadata| metadata.modified().ok()));
 
         let mut offset = 0u64;
         let mut remote_file = if resume {
@@ -233,6 +247,9 @@ impl SftpClient {
                     && remote_size >= total_size
                     && total_size > 0
                 {
+                    if let Some(mtime) = local_mtime {
+                        let _ = self.set_mtime(remote_path, mtime).await;
+                    }
                     progress(total_size, Some(total_size));
                     return Ok(total_size);
                 }
@@ -280,6 +297,11 @@ impl SftpClient {
             progress(transferred, total);
         }
         remote_file.shutdown().await.map_err(sftp_io_error)?;
+        if let Some(mtime) = local_mtime
+            && let Err(error) = self.set_mtime(remote_path, mtime).await
+        {
+            tracing::debug!(path = %remote_path, %error, "保留远端文件修改时间失败");
+        }
         Ok(transferred)
     }
 
@@ -375,9 +397,58 @@ impl SftpClient {
             .map_err(sftp_error)
     }
 
+    /// 仅设置远端文件的修改时间，不触碰权限与其他属性。
+    ///
+    /// 目录同步依赖两端 mtime 判断新旧；若上传后不保留源文件时间，
+    /// 下一次比较会把刚上传的文件误判为对端更新，从而反复回传。
+    ///
+    /// # Errors
+    /// 远端路径不存在、权限不足或服务端不支持 SETSTAT 时返回
+    /// `ErrorCode::SftpFailed`；调用方通常以降级方式处理该错误。
+    pub async fn set_mtime(&self, path: &str, mtime: u32) -> Result<(), AppError> {
+        let mut attributes = russh_sftp::protocol::FileAttributes::empty();
+        attributes.mtime = Some(mtime);
+        self.session
+            .set_metadata(path, attributes)
+            .await
+            .map_err(sftp_error)
+    }
+
     pub async fn close(&self) {
         let _ = self.session.close().await;
     }
+}
+
+/// 将本地文件修改时间设置为 Unix 秒；阻塞 IO 调度到专用线程池。
+pub(crate) async fn set_local_mtime(path: &Path, mtime: u32) -> Result<(), AppError> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let file = std::fs::File::open(&path).map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("打开本地文件失败 {}: {error}", path.display()),
+            )
+        })?;
+        file.set_modified(UNIX_EPOCH + Duration::from_secs(u64::from(mtime)))
+            .map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("设置本地文件修改时间失败 {}: {error}", path.display()),
+                )
+            })
+    })
+    .await
+    .map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("设置本地文件修改时间任务异常结束: {error}"),
+        )
+    })?
+}
+
+fn unix_seconds(time: Option<SystemTime>) -> Option<u32> {
+    let seconds = time?.duration_since(UNIX_EPOCH).ok()?.as_secs();
+    Some(seconds.min(u64::from(u32::MAX)) as u32)
 }
 
 pub(crate) fn sftp_error(error: russh_sftp::client::error::Error) -> AppError {
