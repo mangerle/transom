@@ -34,7 +34,7 @@ pub use forward::{
 pub use ids::{ConnectionId, FolderId, ForwardId, GroupId, SessionId, SplitId, TabId, TransferId};
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
-pub use prompt::PromptInfo;
+pub use prompt::{PromptInfo, PromptKind};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
 pub use serial::{SerialPortDescriptor, SerialPortProvider};
 pub use session::{

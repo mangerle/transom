@@ -15,9 +15,10 @@ use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore,
-    PromptInfo, SessionOptions, SshConnection, TerminalControl, TerminalControlHandle, TerminalIo,
-    TerminalSize, TrafficCounter,
+    PromptInfo, PromptKind, SessionOptions, SshConnection, TerminalControl, TerminalControlHandle,
+    TerminalIo, TerminalSize, TrafficCounter,
 };
+use zeroize::Zeroizing;
 
 #[derive(Debug)]
 pub struct ClientError(pub AppError);
@@ -376,32 +377,35 @@ fn map_connect_error(error: ClientError) -> AppError {
 async fn authenticate(
     session: &mut Handle<ClientHandler>,
     connection: &SshConnection,
-    credentials: ConnectionSecrets,
+    mut credentials: ConnectionSecrets,
     prompter: Arc<dyn AuthPrompter>,
 ) -> Result<(), AppError> {
     let user = connection.username.clone();
     let authenticated = match &connection.auth {
         transom_core::AuthMethod::Password { .. } => {
-            let password = credentials.password.as_ref().ok_or_else(|| {
-                AppError::with_detail(ErrorCode::AuthFailed, "password is required")
-            })?;
-            session
-                .authenticate_password(user.clone(), password.to_string())
-                .await
-                .map_err(auth_error)?
-                .success()
+            password_flow(
+                session,
+                &user,
+                prompter.as_ref(),
+                credentials.password.take(),
+            )
+            .await?
         }
         transom_core::AuthMethod::PrivateKey { path, .. } => {
-            let passphrase = credentials
-                .key_passphrase
-                .as_ref()
-                .map(|passphrase| passphrase.as_str());
-            let key = load_secret_key(path, passphrase).map_err(|error| {
-                AppError::with_detail(
-                    ErrorCode::AuthFailed,
-                    format!("failed to load private key {}: {error}", path.display()),
-                )
-            })?;
+            let key = match load_secret_key(path, credential_ref(&credentials.key_passphrase)) {
+                Ok(key) => key,
+                // 未加密私钥用 None 必然加载成功，因此失败只可能是"私钥带口令而本机没存口令"
+                // 或口令本身错误。前者问一次就能继续，后者会在用户输入错口令后走同样的分支报错。
+                Err(first_error) => match &credentials.key_passphrase {
+                    Some(_) => return Err(load_key_error(path, &first_error)),
+                    None => {
+                        let passphrase =
+                            request_secret(prompter.as_ref(), PromptKind::Passphrase).await?;
+                        load_secret_key(path, Some(passphrase.as_str()))
+                            .map_err(|error| load_key_error(path, &error))?
+                    }
+                },
+            };
             let hash_alg = session
                 .best_supported_rsa_hash()
                 .await
@@ -439,6 +443,77 @@ async fn authenticate(
         ErrorCode::AuthFailed,
         "authentication failed",
     ))
+}
+
+/// 密码认证的尝试上限，对齐 OpenSSH 给用户的三次机会。
+const MAX_PASSWORD_ATTEMPTS: usize = 3;
+
+/// 密码认证流程：先用手上的凭据试，被服务器拒绝后重新索取，最多三次。
+///
+/// 为什么要在同一次认证里重试：服务器拒绝密码不返回任何原因文本，早期实现一次即
+/// 判死，打错一个字符就得回标签页点"重新连接"。手上的凭据可能来自钥匙串，也可能
+/// 为空（本机从未保存），为空时第一次就问用户。
+async fn password_flow(
+    session: &mut Handle<ClientHandler>,
+    user: &str,
+    prompter: &dyn AuthPrompter,
+    stored: Option<Zeroizing<String>>,
+) -> Result<bool, AppError> {
+    let mut candidate = stored;
+    for attempt in 0..MAX_PASSWORD_ATTEMPTS {
+        let password = match candidate.take() {
+            Some(password) => password,
+            None => request_secret(prompter, PromptKind::Password).await?,
+        };
+        let accepted = session
+            .authenticate_password(user.to_string(), password.to_string())
+            .await
+            .map_err(auth_error)?
+            .success();
+        if accepted {
+            return Ok(true);
+        }
+        if attempt + 1 < MAX_PASSWORD_ATTEMPTS {
+            tracing::warn!(
+                user,
+                attempt = attempt + 1,
+                max = MAX_PASSWORD_ATTEMPTS,
+                "密码被服务器拒绝，将在本次认证中重新询问"
+            );
+        }
+    }
+    Ok(false)
+}
+
+/// 借用 `Option<Zeroizing<String>>` 里的字符串引用，避免为一次性参数克隆口令。
+fn credential_ref(value: &Option<Zeroizing<String>>) -> Option<&str> {
+    value.as_ref().map(|secret| secret.as_str())
+}
+
+/// 私钥加载失败的统一错误描述。
+fn load_key_error(path: &std::path::Path, error: &russh::keys::Error) -> AppError {
+    AppError::with_detail(
+        ErrorCode::AuthFailed,
+        format!("failed to load private key {}: {error}", path.display()),
+    )
+}
+
+/// 认证过程中向调用方索取一个机密输入（登录密码或私钥口令）。
+///
+/// 复用 `AuthPrompter` 而不是新开一条通道：控制器侧的 `UiPrompter` 已经实现了
+/// "发事件 -> 等 responder"的完整往返，这里只是把提示语义换成我们自己生成的类别。
+async fn request_secret(
+    prompter: &dyn AuthPrompter,
+    kind: PromptKind,
+) -> Result<Zeroizing<String>, AppError> {
+    let answers = prompter
+        .keyboard_interactive("", "", &[PromptInfo::secret(kind)])
+        .await?;
+    let answer = answers
+        .first()
+        .filter(|answer| !answer.is_empty())
+        .ok_or_else(|| AppError::with_detail(ErrorCode::Cancelled, "credential input was empty"))?;
+    Ok(Zeroizing::new(answer.clone()))
 }
 
 fn auth_error(error: russh::Error) -> AppError {
@@ -507,6 +582,7 @@ async fn authenticate_keyboard_interactive(
                     .map(|prompt| PromptInfo {
                         prompt: prompt.prompt.clone(),
                         echo: prompt.echo,
+                        kind: PromptKind::Text,
                     })
                     .collect();
                 let answers = prompter
@@ -610,6 +686,28 @@ mod tests {
     use russh::keys::key::safe_rng;
     use russh::keys::{Algorithm, PrivateKey};
 
+    /// 测试替身：按预设答案回应认证索取，`Err` 分支模拟用户取消。
+    struct ScriptedPrompter {
+        answers: Result<Vec<String>, ()>,
+    }
+
+    #[async_trait::async_trait]
+    impl AuthPrompter for ScriptedPrompter {
+        async fn keyboard_interactive(
+            &self,
+            _name: &str,
+            _instructions: &str,
+            prompts: &[PromptInfo],
+        ) -> Result<Vec<String>, AppError> {
+            self.answers.clone().map_err(|_| {
+                AppError::with_detail(
+                    ErrorCode::Cancelled,
+                    format!("模拟用户取消认证，待回答提示数: {}", prompts.len()),
+                )
+            })
+        }
+    }
+
     struct MemoryKnownHosts {
         inner: Mutex<Vec<(String, u16, String)>>,
     }
@@ -675,5 +773,35 @@ mod tests {
         let other = PrivateKey::random(&mut safe_rng(), Algorithm::Ed25519).unwrap();
         let other_key = PublicKeyOrCertificate::from(other.public_key().clone());
         assert!(handler.check_server_key(&other_key).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn request_secret_returns_the_prompted_answer() {
+        let prompter = ScriptedPrompter {
+            answers: Ok(vec!["s3cret".to_string()]),
+        };
+        let secret = request_secret(&prompter, PromptKind::Password)
+            .await
+            .expect("应当取回用户输入的凭据");
+        assert_eq!(&*secret, "s3cret");
+    }
+
+    #[tokio::test]
+    async fn request_secret_fails_on_empty_or_cancelled_input() {
+        let blank = ScriptedPrompter {
+            answers: Ok(vec![String::new()]),
+        };
+        assert!(
+            request_secret(&blank, PromptKind::Passphrase)
+                .await
+                .is_err()
+        );
+
+        let cancelled = ScriptedPrompter { answers: Err(()) };
+        assert!(
+            request_secret(&cancelled, PromptKind::Password)
+                .await
+                .is_err()
+        );
     }
 }
