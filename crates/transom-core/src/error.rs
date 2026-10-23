@@ -19,6 +19,10 @@ pub enum ErrorCode {
     ForwardFailed,
     Io,
     SecretStoreUnavailable,
+    /// 备份文件是加密信封，但调用方按明文文件处理。
+    BackupEncrypted,
+    /// 备份文件不是加密信封，但调用方提供了解密口令。
+    BackupNotEncrypted,
     Cancelled,
     Protocol,
 }

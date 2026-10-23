@@ -201,6 +201,8 @@ pub(crate) fn localized_error(error: &AppError) -> String {
         ErrorCode::HostKeyMismatch => rust_i18n::t!("error.host_key_mismatch"),
         ErrorCode::ChannelFailed => rust_i18n::t!("error.channel_failed"),
         ErrorCode::SecretStoreUnavailable => rust_i18n::t!("error.secret_store_unavailable"),
+        ErrorCode::BackupEncrypted => rust_i18n::t!("error.backup_encrypted"),
+        ErrorCode::BackupNotEncrypted => rust_i18n::t!("error.backup_not_encrypted"),
         ErrorCode::Cancelled => rust_i18n::t!("error.cancelled"),
         ErrorCode::Protocol => rust_i18n::t!("error.protocol"),
         ErrorCode::Io => rust_i18n::t!("error.io"),

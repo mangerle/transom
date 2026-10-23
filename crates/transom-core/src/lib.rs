@@ -1,5 +1,6 @@
 //! Domain models and application-facing contracts shared by the workspace.
 
+pub mod backup;
 pub mod catalog;
 pub mod color;
 pub mod commands;
@@ -23,6 +24,10 @@ pub mod terminal;
 pub mod theme;
 pub mod traffic;
 
+pub use backup::{
+    BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,
+    SecretRestoreReport,
+};
 pub use catalog::{CatalogError, CatalogMergeSummary, DropSide, SessionCatalog, SessionFolder};
 pub use color::Rgb;
 pub use commands::{AppCommand, AppEvent, SystemStats};

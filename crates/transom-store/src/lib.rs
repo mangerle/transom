@@ -10,8 +10,8 @@ pub mod sessions;
 pub mod settings;
 
 pub use backup::{
-    BackupFormat, EncryptedBackupService, decrypt_catalog, encrypt_catalog, read_encrypted_backup,
-    write_encrypted_backup,
+    BackupFormat, CatalogBackupService, decrypt_document, encrypt_document, read_backup,
+    write_backup,
 };
 pub use known_hosts::JsonKnownHostsStore;
 pub use secrets::KeyringSecretStore;

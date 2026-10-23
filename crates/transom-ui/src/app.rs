@@ -178,11 +178,18 @@ impl BackupAction {
     }
 }
 
-/// 备份口令输入弹窗状态。
+/// 备份弹窗状态。
 pub(crate) struct BackupPromptState {
     pub(crate) action: BackupAction,
     pub(crate) passphrase: Entity<InputState>,
+    /// 确认口令；仅导出加密备份时存在。
     pub(crate) confirm: Option<Entity<InputState>>,
+    /// 导出时是否加密备份。
+    pub(crate) encrypt: bool,
+    /// 导出时是否把系统钥匙串里的口令一并写入。
+    pub(crate) include_secrets: bool,
+    /// 导入时用户声明该文件已加密。
+    pub(crate) encrypted_file: bool,
     pub(crate) error: Option<String>,
     pub(crate) busy: bool,
 }

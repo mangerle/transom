@@ -444,6 +444,12 @@ error:
   secret_store_unavailable:
     en: System keychain unavailable
     zh-CN: 系统钥匙串不可用
+  backup_encrypted:
+    en: The backup file is encrypted
+    zh-CN: 备份文件已加密
+  backup_not_encrypted:
+    en: The backup file is not encrypted
+    zh-CN: 备份文件未加密
   cancelled:
     en: Cancelled
     zh-CN: 已取消
@@ -1064,26 +1070,41 @@ backup:
     en: Session Backup
     zh-CN: 会话备份
   settings_hint:
-    en: Export all sessions and folders to a passphrase-encrypted JSON/YAML file. System keychain secrets are not included.
-    zh-CN: 将全部会话与文件夹导出为口令加密的 JSON/YAML 文件；系统钥匙串中的密码不会包含在内。
+    en: Export all sessions and folders to a JSON/YAML backup file, optionally encrypted with a passphrase. Stored passphrases are only included when you ask for them.
+    zh-CN: 将全部会话与文件夹导出为 JSON/YAML 备份文件，可选用口令加密；系统钥匙串中的口令仅在你勾选后才会写入。
   export_title:
-    en: Export Encrypted Backup
-    zh-CN: 导出加密备份
+    en: Export Session Backup
+    zh-CN: 导出会话备份
   import_title:
-    en: Import Encrypted Backup
-    zh-CN: 导入加密备份
+    en: Import Session Backup
+    zh-CN: 导入会话备份
   export_action:
     en: Export Backup
-    zh-CN: 导出加密备份
+    zh-CN: 导出备份
   import_action:
     en: Import Backup
-    zh-CN: 导入加密备份
+    zh-CN: 导入备份
   dialog_hint:
-    en: Argon2id key derivation with XChaCha20-Poly1305 authenticated encryption.
-    zh-CN: 使用 Argon2id 派生密钥，并通过 XChaCha20-Poly1305 认证加密保护内容。
+    en: Encrypted backups derive the key with Argon2id and protect the content with XChaCha20-Poly1305 authenticated encryption.
+    zh-CN: 加密备份使用 Argon2id 派生密钥，并通过 XChaCha20-Poly1305 认证加密保护内容。
   hint:
     en: The backup contains sessions and folders only. On import, sessions with the same ID are updated and the rest are appended. Only import backups from trusted sources, as sessions may contain automatic startup commands.
     zh-CN: 备份仅包含会话与文件夹配置；导入时同 ID 会话会被更新，其余会话追加。会话可能包含连接后自动执行的命令，请只导入可信来源的备份。
+  encrypt:
+    en: Encrypt the backup with a passphrase
+    zh-CN: 使用口令加密备份
+  plain_hint:
+    en: "Plain backup is not encrypted: host names, user names and ports are stored in clear text."
+    zh-CN: 明文备份不加密：主机名、用户名与端口都以明文保存，请妥善保管文件。
+  include_secrets:
+    en: Include stored passphrases
+    zh-CN: 包含已保存的口令
+  include_secrets_hint:
+    en: Writes the login passphrases and key passphrases from the system keychain into the backup file. Only do this for a destination you trust.
+    zh-CN: 把系统钥匙串里的登录口令与私钥口令一并写入备份文件；请只写入你信任的存放位置。
+  file_encrypted:
+    en: This backup file is encrypted
+    zh-CN: 该备份文件已加密
   passphrase:
     en: Backup passphrase
     zh-CN: 备份口令
@@ -1108,9 +1129,18 @@ backup:
   exported:
     en: "Backup exported to %{path}"
     zh-CN: "备份已导出到 %{path}"
+  exported_secrets:
+    en: "(with %{count} stored passphrases)"
+    zh-CN: "（含 %{count} 个口令）"
   imported:
     en: "Import complete: %{added} sessions added, %{updated} updated, %{folders} folders added."
     zh-CN: "导入完成：新增 %{added} 个会话、更新 %{updated} 个会话、新增 %{folders} 个文件夹。"
+  imported_secrets:
+    en: "Restored %{restored} passphrases, kept %{kept} existing ones."
+    zh-CN: "已写回 %{restored} 个口令，保留 %{kept} 个本机已存在的口令。"
+  imported_secrets_failed:
+    en: "Stored passphrases could not be restored"
+    zh-CN: "口令未能写回"
 keys:
   title:
     en: SSH Key Manager

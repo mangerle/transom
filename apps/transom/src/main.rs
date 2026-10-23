@@ -7,7 +7,7 @@ use transom_core::{
 };
 use transom_net::SystemSerialPortProvider;
 use transom_store::{
-    EncryptedBackupService, JsonKnownHostsStore, JsonSessionStore, JsonSettingsStore,
+    CatalogBackupService, JsonKnownHostsStore, JsonSessionStore, JsonSettingsStore,
     KeyringSecretStore, paths,
 };
 
@@ -27,7 +27,7 @@ fn main() -> anyhow::Result<()> {
         Arc::new(JsonSettingsStore::new(paths::settings_path()));
     let secret_store: Arc<dyn SecretStore> = Arc::new(KeyringSecretStore::new("transom"));
     let serial_ports: Arc<dyn SerialPortProvider> = Arc::new(SystemSerialPortProvider);
-    let backup: Arc<dyn BackupService> = Arc::new(EncryptedBackupService);
+    let backup: Arc<dyn BackupService> = Arc::new(CatalogBackupService::new(secret_store.clone()));
 
     let controller = Controller::start(known_hosts.clone())?;
     let services = transom_ui::UiServices {

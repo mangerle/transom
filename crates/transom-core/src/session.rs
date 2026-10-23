@@ -1,5 +1,6 @@
 use crate::forward::ForwardRule;
 use crate::ids::{FolderId, SessionId};
+use crate::secrets::SecretKind;
 use crate::terminal::TerminalProfile;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -30,6 +31,21 @@ impl Session {
             terminal: TerminalProfile::default(),
             forwards: Vec::new(),
             startup: StartupCommands::default(),
+        }
+    }
+
+    /// 该会话可能使用的钥匙串口令种类。
+    ///
+    /// 只有口令认证与私钥认证的 SSH 会话才会在系统钥匙串里留条目；本地 Shell
+    /// 与串口会话没有可保存的口令，导出备份时也无须去读钥匙串。
+    pub fn secret_kinds(&self) -> &'static [SecretKind] {
+        match &self.connection {
+            Connection::Ssh(ssh) => match &ssh.auth {
+                AuthMethod::Password { .. } => &[SecretKind::Password],
+                AuthMethod::PrivateKey { .. } => &[SecretKind::KeyPassphrase],
+                AuthMethod::Agent => &[],
+            },
+            _ => &[],
         }
     }
 }
