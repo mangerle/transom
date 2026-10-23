@@ -19,7 +19,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::{Icon, VirtualListScrollHandle};
 use gpui_kit::*;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use transom_core::{
     ConnectionId, DirDiffEntry, RemoteFile, RemoteMetadata, TabId, TransferId, TransferTask,
@@ -136,6 +136,8 @@ pub(crate) struct SftpPanelState {
     pub(crate) drag_start_height: f32,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) active_op: Option<TransferId>,
+    /// 当前正在由队列执行的任务集合，支持并行传输。
+    pub(crate) active_transfers: HashSet<TransferId>,
     pub(crate) progress: Option<(u64, Option<u64>)>,
     pub(crate) status: Option<String>,
     pub(crate) error: Option<String>,
@@ -233,6 +235,28 @@ impl SftpPanelState {
             self.local_selected = None;
             self.local_anchor = None;
         }
+    }
+
+    /// 汇总所有活动任务的字节进度；无活动任务时清空进度。
+    pub(crate) fn recompute_progress(&mut self) {
+        if self.active_transfers.is_empty() {
+            self.progress = None;
+            return;
+        }
+        let mut transferred = 0u64;
+        let mut total = 0u64;
+        let mut total_known = true;
+        for task in &self.queue {
+            if !self.active_transfers.contains(&task.id) {
+                continue;
+            }
+            transferred = transferred.saturating_add(task.transferred);
+            match task.size {
+                Some(size) => total = total.saturating_add(size),
+                None => total_known = false,
+            }
+        }
+        self.progress = Some((transferred, total_known.then_some(total)));
     }
 }
 

@@ -10,7 +10,7 @@ use crate::palette::sftp_text_input;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use transom_core::{AppCommand, ConnectionId, SftpOperation, TabId, TransferId};
 
@@ -128,6 +128,7 @@ impl AppShell {
             drag_start_height: 160.0,
             focus_handle: cx.focus_handle(),
             active_op: None,
+            active_transfers: HashSet::new(),
             progress: None,
             status: None,
             error: None,
@@ -178,7 +179,9 @@ impl AppShell {
         let op_id = TransferId::new();
         if let Some(panel) = tab.sftp.as_mut() {
             panel.active_op = Some(op_id);
-            panel.progress = None;
+            if panel.active_transfers.is_empty() {
+                panel.progress = None;
+            }
             panel.status = None;
             panel.error = None;
         }

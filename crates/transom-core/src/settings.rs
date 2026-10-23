@@ -100,6 +100,9 @@ pub struct SftpSettings {
     /// 传输完成后是否计算并比对两端 SHA256；默认关闭以避免大文件额外读盘。
     #[serde(default)]
     pub verify_after_transfer: bool,
+    /// 同时执行的传输任务数上限，默认 3。
+    #[serde(default = "default_max_concurrent_transfers")]
+    pub max_concurrent_transfers: usize,
 }
 
 impl Default for SftpSettings {
@@ -107,8 +110,13 @@ impl Default for SftpSettings {
         Self {
             transfer_filter: default_transfer_filter(),
             verify_after_transfer: false,
+            max_concurrent_transfers: default_max_concurrent_transfers(),
         }
     }
+}
+
+fn default_max_concurrent_transfers() -> usize {
+    3
 }
 
 fn default_transfer_filter() -> String {

@@ -2,6 +2,7 @@
 
 use super::join_remote;
 use crate::app::AppShell;
+use crate::palette::localized_error;
 use gpui_kit::*;
 use transom_core::{
     AppCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId, TransferKind,
@@ -118,8 +119,10 @@ impl AppShell {
         self.process_sftp_queue(tab_id, cx);
     }
 
+    /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let filter = TransferFilter::from_text(&self.settings.sftp.transfer_filter);
+        let max_concurrent = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -129,73 +132,42 @@ impl AppShell {
         let Some(panel) = tab.sftp.as_mut() else {
             return;
         };
-        if panel.active_op.is_some() {
-            return;
-        }
-        let pending_index = panel
-            .queue
-            .iter()
-            .position(|task| task.status == TransferStatus::Pending);
-        let Some(index) = pending_index else {
-            return;
-        };
 
-        panel.queue[index].status = TransferStatus::Transferring;
-        let task = panel.queue[index].clone();
-        panel.active_op = Some(task.id);
-        panel.progress = Some((task.transferred, task.size));
-        panel.error = None;
-
-        let resume = task.mode != TransferMode::Overwrite;
-        let op = match (task.kind, task.direction) {
-            (TransferKind::Directory, TransferDirection::Upload) => SftpOperation::UploadDir {
-                local_path: task.local_path,
-                remote_path: task.remote_path,
-                resume,
-                filter,
-                verify: task.verify,
-            },
-            (TransferKind::Directory, TransferDirection::Download) => SftpOperation::DownloadDir {
-                remote_path: task.remote_path,
-                local_path: task.local_path,
-                resume,
-                filter,
-                verify: task.verify,
-            },
-            (TransferKind::File, TransferDirection::Upload) => SftpOperation::Upload {
-                local_path: task.local_path,
-                remote_path: task.remote_path,
-                resume,
-                verify: task.verify,
-            },
-            (TransferKind::File, TransferDirection::Download) => SftpOperation::Download {
-                remote_path: task.remote_path,
-                local_path: task.local_path,
-                resume,
-                verify: task.verify,
-            },
-            (TransferKind::Sync, TransferDirection::Sync) => SftpOperation::SyncDirs {
-                local_path: task.local_path,
-                remote_path: task.remote_path,
-                items: task.sync_items,
-                verify: task.verify,
-            },
-            _ => {
+        let mut commands = Vec::new();
+        while panel.active_transfers.len() < max_concurrent {
+            let Some(index) = panel
+                .queue
+                .iter()
+                .position(|task| task.status == TransferStatus::Pending)
+            else {
+                break;
+            };
+            let task = panel.queue[index].clone();
+            let Some(op) = sftp_operation_for_task(&task, &filter) else {
                 panel.queue[index].status =
                     TransferStatus::Failed("不支持的传输任务类型组合".to_string());
-                panel.active_op = None;
-                panel.progress = None;
-                cx.notify();
-                return;
-            }
-        };
+                continue;
+            };
+            panel.queue[index].status = TransferStatus::Transferring;
+            panel.active_transfers.insert(task.id);
+            commands.push((task.id, op));
+        }
 
-        let _ = self.services.command_tx.send(AppCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id: task.id,
-            op,
-        });
+        if commands.is_empty() {
+            panel.recompute_progress();
+            cx.notify();
+            return;
+        }
+        panel.error = None;
+        panel.recompute_progress();
+        for (op_id, op) in commands {
+            let _ = self.services.command_tx.send(AppCommand::Sftp {
+                tab_id,
+                connection_id,
+                op_id,
+                op,
+            });
+        }
         cx.notify();
     }
 
@@ -211,6 +183,21 @@ impl AppShell {
             });
             cx.notify();
         }
+    }
+
+    /// 循环切换并发传输数；增加时立即补位启动待处理任务。
+    pub(crate) fn sftp_cycle_concurrency(&mut self, cx: &mut Context<Self>) {
+        let current = self.settings.sftp.max_concurrent_transfers.clamp(1, 4);
+        let next = if current >= 4 { 1 } else { current + 1 };
+        self.settings.sftp.max_concurrent_transfers = next;
+        if let Err(error) = self.services.settings_store.save(&self.settings) {
+            self.error = Some(localized_error(&error));
+        }
+        self.status = Some(format!("并发传输数: {next}"));
+        if let Some(tab_id) = self.active_tab {
+            self.process_sftp_queue(tab_id, cx);
+        }
+        cx.notify();
     }
 
     /// 一键重试传输队列中全部处于失败状态（`TransferStatus::Failed`）的任务。
@@ -271,9 +258,9 @@ impl AppShell {
                     .send(AppCommand::SftpCancel { tab_id, op_id });
                 task.status = TransferStatus::Paused;
             }
-            if panel.active_op == Some(op_id) {
-                panel.active_op = None;
-                panel.progress = None;
+            panel.active_transfers.remove(&op_id);
+            panel.recompute_progress();
+            if panel.active_transfers.is_empty() {
                 panel.status = Some("传输已暂停".to_string());
             }
             cx.notify();
@@ -330,12 +317,9 @@ impl AppShell {
                     .command_tx
                     .send(AppCommand::SftpCancel { tab_id, op_id });
             }
-            if panel.active_op == Some(op_id) {
-                panel.active_op = None;
-                panel.progress = None;
-                panel.status = Some("已取消传输".to_string());
-            } else if panel.active_op.is_none() {
-                panel.progress = None;
+            panel.active_transfers.remove(&op_id);
+            panel.recompute_progress();
+            if panel.active_transfers.is_empty() {
                 panel.status = Some("已取消传输".to_string());
             }
             cx.notify();
@@ -355,7 +339,9 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_mut())
         {
+            panel.active_transfers.remove(&op_id);
             panel.queue.retain(|task| task.id != op_id);
+            panel.recompute_progress();
             cx.notify();
         }
     }
@@ -372,19 +358,17 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_mut())
         {
-            if let Some(active_id) = panel.active_op
-                && active_id != op_id
-                && let Some(active_task) = panel.queue.iter_mut().find(|t| t.id == active_id)
+            if panel.active_transfers.contains(&op_id)
+                && let Some(active_task) = panel.queue.iter_mut().find(|t| t.id == op_id)
                 && active_task.status == TransferStatus::Transferring
             {
-                let _ = self.services.command_tx.send(AppCommand::SftpCancel {
-                    tab_id,
-                    op_id: active_id,
-                });
+                let _ = self
+                    .services
+                    .command_tx
+                    .send(AppCommand::SftpCancel { tab_id, op_id });
                 active_task.status = TransferStatus::Pending;
                 active_task.mode = TransferMode::Resume;
-                panel.active_op = None;
-                panel.progress = None;
+                panel.active_transfers.remove(&op_id);
             }
 
             if let Some(pos) = panel.queue.iter().position(|t| t.id == op_id) {
@@ -396,8 +380,143 @@ impl AppShell {
                 panel.queue.insert(0, task);
                 panel.status = Some("已将传输任务置顶并优先开始传输".to_string());
             }
+            panel.recompute_progress();
             cx.notify();
         }
         self.process_sftp_queue(tab_id, cx);
     }
+
+    /// 暂停全部活动与排队任务；队列收起时由状态栏调用。
+    pub(crate) fn sftp_pause_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(panel) = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_mut())
+        {
+            let active_ids = panel.active_transfers.iter().copied().collect::<Vec<_>>();
+            let mut paused = 0u32;
+            for task in &mut panel.queue {
+                match task.status {
+                    TransferStatus::Transferring | TransferStatus::Pending => {
+                        task.status = TransferStatus::Paused;
+                        paused = paused.saturating_add(1);
+                    }
+                    _ => {}
+                }
+            }
+            for op_id in active_ids {
+                let _ = self
+                    .services
+                    .command_tx
+                    .send(AppCommand::SftpCancel { tab_id, op_id });
+            }
+            panel.active_transfers.clear();
+            panel.recompute_progress();
+            if paused > 0 {
+                panel.status = Some(format!("已暂停 {paused} 个传输任务"));
+            }
+            cx.notify();
+        }
+    }
+
+    /// 继续全部暂停任务。
+    pub(crate) fn sftp_resume_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let mut resumed = 0u32;
+        if let Some(panel) = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_mut())
+        {
+            for task in &mut panel.queue {
+                if task.status == TransferStatus::Paused {
+                    task.status = TransferStatus::Pending;
+                    task.mode = TransferMode::Resume;
+                    resumed = resumed.saturating_add(1);
+                }
+            }
+            if resumed > 0 {
+                panel.status = Some(format!("已继续 {resumed} 个传输任务"));
+            }
+            cx.notify();
+        }
+        if resumed > 0 {
+            self.process_sftp_queue(tab_id, cx);
+        }
+    }
+
+    /// 取消全部活动、排队与暂停任务。
+    pub(crate) fn sftp_cancel_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(panel) = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_mut())
+        {
+            let active_ids = panel.active_transfers.iter().copied().collect::<Vec<_>>();
+            let mut cancelled = 0u32;
+            for task in &mut panel.queue {
+                if matches!(
+                    task.status,
+                    TransferStatus::Transferring | TransferStatus::Pending | TransferStatus::Paused
+                ) {
+                    task.status = TransferStatus::Cancelled;
+                    cancelled = cancelled.saturating_add(1);
+                }
+            }
+            for op_id in active_ids {
+                let _ = self
+                    .services
+                    .command_tx
+                    .send(AppCommand::SftpCancel { tab_id, op_id });
+            }
+            panel.active_transfers.clear();
+            panel.recompute_progress();
+            if cancelled > 0 {
+                panel.status = Some(format!("已取消 {cancelled} 个传输任务"));
+            }
+            cx.notify();
+        }
+    }
+}
+
+fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Option<SftpOperation> {
+    let resume = task.mode != TransferMode::Overwrite;
+    let op = match (task.kind, task.direction) {
+        (TransferKind::Directory, TransferDirection::Upload) => SftpOperation::UploadDir {
+            local_path: task.local_path.clone(),
+            remote_path: task.remote_path.clone(),
+            resume,
+            filter: filter.clone(),
+            verify: task.verify,
+        },
+        (TransferKind::Directory, TransferDirection::Download) => SftpOperation::DownloadDir {
+            remote_path: task.remote_path.clone(),
+            local_path: task.local_path.clone(),
+            resume,
+            filter: filter.clone(),
+            verify: task.verify,
+        },
+        (TransferKind::File, TransferDirection::Upload) => SftpOperation::Upload {
+            local_path: task.local_path.clone(),
+            remote_path: task.remote_path.clone(),
+            resume,
+            verify: task.verify,
+        },
+        (TransferKind::File, TransferDirection::Download) => SftpOperation::Download {
+            remote_path: task.remote_path.clone(),
+            local_path: task.local_path.clone(),
+            resume,
+            verify: task.verify,
+        },
+        (TransferKind::Sync, TransferDirection::Sync) => SftpOperation::SyncDirs {
+            local_path: task.local_path.clone(),
+            remote_path: task.remote_path.clone(),
+            items: task.sync_items.clone(),
+            verify: task.verify,
+        },
+        _ => return None,
+    };
+    Some(op)
 }

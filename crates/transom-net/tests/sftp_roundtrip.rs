@@ -507,6 +507,27 @@ async fn sftp_list_upload_download_and_mutations() {
         "上传续传不能保留远端文件多余的尾部"
     );
 
+    let concurrency_dir = dir.path().join("concurrency-src");
+    std::fs::create_dir_all(&concurrency_dir).unwrap();
+    let concurrent_one = concurrency_dir.join("one.txt");
+    let concurrent_two = concurrency_dir.join("two.txt");
+    tokio::fs::write(&concurrent_one, b"first").await.unwrap();
+    tokio::fs::write(&concurrent_two, b"second").await.unwrap();
+    let (first, second) = tokio::join!(
+        client.upload(&concurrent_one, "/concurrent-one.txt", |_, _| {}),
+        client.upload(&concurrent_two, "/concurrent-two.txt", |_, _| {})
+    );
+    assert_eq!(first.expect("并发上传一"), 5);
+    assert_eq!(second.expect("并发上传二"), 6);
+    assert_eq!(
+        std::fs::read(dir.path().join("concurrent-one.txt")).unwrap(),
+        b"first"
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("concurrent-two.txt")).unwrap(),
+        b"second"
+    );
+
     client.create_dir("/folder").await.expect("mkdir");
     client
         .rename("/uploaded.txt", "/folder/moved.txt")

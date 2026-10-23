@@ -70,7 +70,7 @@ impl AppShell {
         let remote_error = panel.error.clone();
         let status = panel.status.clone();
         let progress = panel.progress;
-        let active_op = panel.active_op;
+        let active_count = panel.active_transfers.len();
 
         let local_path_input = panel.local_path_input.clone();
         let local_entries: Vec<LocalFileEntry> = panel
@@ -88,21 +88,39 @@ impl AppShell {
         let queue = panel.queue.clone();
         let resume_enabled = panel.resume_enabled;
         let verify_after_transfer = self.settings.sftp.verify_after_transfer;
+        let max_concurrent_transfers = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
         let queue_expanded = panel.queue_expanded;
-        // 没有活动任务时回退到暂停任务进度，避免暂停后进度条消失
-        let paused_task = if active_op.is_none() {
+        // 没有活动任务时回退汇总暂停任务进度，避免暂停后进度条消失
+        let paused_count = panel
+            .queue
+            .iter()
+            .filter(|task| task.status == TransferStatus::Paused)
+            .count();
+        let paused_tasks = if active_count == 0 {
             panel
                 .queue
                 .iter()
-                .rev()
-                .find(|task| task.status == TransferStatus::Paused)
+                .filter(|task| task.status == TransferStatus::Paused)
+                .collect::<Vec<_>>()
         } else {
-            None
+            Vec::new()
         };
-        let paused_op = paused_task.map(|task| task.id);
-        let display_progress = paused_task
-            .map(|task| (task.transferred, task.size))
-            .or(progress);
+        let display_progress = if active_count == 0 && !paused_tasks.is_empty() {
+            let transferred = paused_tasks
+                .iter()
+                .fold(0u64, |sum, task| sum.saturating_add(task.transferred));
+            let mut total_known = true;
+            let total = paused_tasks.iter().fold(0u64, |sum, task| match task.size {
+                Some(size) => sum.saturating_add(size),
+                None => {
+                    total_known = false;
+                    sum
+                }
+            });
+            Some((transferred, total_known.then_some(total)))
+        } else {
+            progress
+        };
 
         let local_pane = self.render_sftp_local_pane(
             SftpLocalPaneProps {
@@ -677,6 +695,7 @@ impl AppShell {
                 queue: &queue,
                 resume_enabled,
                 verify_after_transfer,
+                max_concurrent_transfers,
                 queue_expanded,
                 queue_height,
             },
@@ -688,8 +707,8 @@ impl AppShell {
                 tab_id,
                 loading,
                 progress: display_progress,
-                active_op,
-                paused_op,
+                active_count,
+                paused_count,
                 queue_expanded,
                 remote_error,
                 local_error,

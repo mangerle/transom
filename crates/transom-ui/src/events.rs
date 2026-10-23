@@ -152,16 +152,14 @@ impl AppShell {
                 transferred,
                 total,
             } => {
-                if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
-                    if panel.active_op == Some(op_id) {
-                        panel.progress = Some((transferred, total));
+                if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id)
+                    && let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
+                {
+                    task.transferred = transferred;
+                    if total.is_some() {
+                        task.size = total;
                     }
-                    if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
-                        task.transferred = transferred;
-                        if total.is_some() {
-                            task.size = total;
-                        }
-                    }
+                    panel.recompute_progress();
                 }
             }
             AppEvent::SftpFinished {
@@ -180,7 +178,9 @@ impl AppShell {
                     if let Some(info) = panel.pending_edit_ops.remove(&op_id) {
                         open_editor_info = Some(info);
                     }
+                    let mut completed_transfer = false;
                     if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
+                        completed_transfer = true;
                         task.status = TransferStatus::Completed;
                         if let Some(bytes) = transferred {
                             task.transferred = bytes;
@@ -199,9 +199,37 @@ impl AppShell {
                             notify_info = Some((task.direction, file_name, task.transferred));
                         }
                     }
-                    if panel.active_op == Some(op_id) || panel.active_op.is_none() {
+                    if completed_transfer {
+                        panel.active_transfers.remove(&op_id);
+                        panel.recompute_progress();
+                        if panel.active_transfers.is_empty() && panel.active_op.is_none() {
+                            let base = match transferred {
+                                Some(bytes) => format!(
+                                    "{} ({})",
+                                    rust_i18n::t!("sftp.transfer_done"),
+                                    format_size(bytes)
+                                ),
+                                None => rust_i18n::t!("sftp.operation_done").to_string(),
+                            };
+                            let mut message = base;
+                            if skipped > 0 {
+                                message.push_str(&format!(
+                                    " | {}: {skipped}",
+                                    rust_i18n::t!("sftp.skipped_items")
+                                ));
+                            }
+                            if verified {
+                                message.push_str(&format!(
+                                    " | {}",
+                                    rust_i18n::t!("sftp.sha256_verified")
+                                ));
+                            }
+                            panel.status = Some(message);
+                            panel.error = None;
+                            refresh = Some(panel.path.clone());
+                        }
+                    } else if panel.active_op == Some(op_id) {
                         panel.active_op = None;
-                        panel.progress = None;
                         let base = match transferred {
                             Some(bytes) => format!(
                                 "{} ({})",
@@ -210,18 +238,7 @@ impl AppShell {
                             ),
                             None => rust_i18n::t!("sftp.operation_done").to_string(),
                         };
-                        let mut message = base;
-                        if skipped > 0 {
-                            message.push_str(&format!(
-                                " | {}: {skipped}",
-                                rust_i18n::t!("sftp.skipped_items")
-                            ));
-                        }
-                        if verified {
-                            message
-                                .push_str(&format!(" | {}", rust_i18n::t!("sftp.sha256_verified")));
-                        }
-                        panel.status = Some(message);
+                        panel.status = Some(base);
                         refresh = Some(panel.path.clone());
                     }
                 }
@@ -280,7 +297,6 @@ impl AppShell {
                 };
                 if panel.active_op == Some(op_id) {
                     panel.active_op = None;
-                    panel.progress = None;
                 }
                 self.sftp_properties_modal = Some(SftpPropertiesModalState {
                     scope: "远端".to_string(),
@@ -328,7 +344,9 @@ impl AppShell {
                 if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
                     panel.pending_edit_ops.remove(&op_id);
                     let err_msg = localized_error(&error);
+                    let mut failed_transfer = false;
                     if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
+                        failed_transfer = true;
                         task.status = TransferStatus::Failed(err_msg.clone());
                         let file_name = task
                             .local_path
@@ -337,9 +355,12 @@ impl AppShell {
                             .unwrap_or_else(|| task.remote_path.clone());
                         failed_notify = Some((file_name, err_msg.clone()));
                     }
-                    if panel.active_op == Some(op_id) || panel.active_op.is_none() {
+                    if failed_transfer {
+                        panel.active_transfers.remove(&op_id);
+                        panel.recompute_progress();
+                        panel.error = Some(err_msg);
+                    } else if panel.active_op == Some(op_id) || panel.active_op.is_none() {
                         panel.active_op = None;
-                        panel.progress = None;
                         panel.loading = false;
                         panel.error = Some(err_msg);
                     }

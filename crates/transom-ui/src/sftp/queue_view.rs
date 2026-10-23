@@ -12,17 +12,16 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{
-    TabId, TransferDirection, TransferId, TransferKind, TransferStatus, TransferTask,
-};
+use transom_core::{TabId, TransferDirection, TransferKind, TransferStatus, TransferTask};
 
 pub(crate) struct SftpStatusBarProps {
     pub(crate) tab_id: TabId,
     pub(crate) loading: bool,
     pub(crate) progress: Option<(u64, Option<u64>)>,
-    pub(crate) active_op: Option<TransferId>,
-    /// 当前没有活动任务时，最近一个暂停任务；用于在队列收起时提供继续/取消入口。
-    pub(crate) paused_op: Option<TransferId>,
+    /// 当前活动传输任务数。
+    pub(crate) active_count: usize,
+    /// 当前暂停任务数。
+    pub(crate) paused_count: usize,
     /// 传输队列是否展开；展开时底部只保留进度条，避免与队列行重复。
     pub(crate) queue_expanded: bool,
     pub(crate) remote_error: Option<String>,
@@ -35,6 +34,7 @@ pub(crate) struct SftpQueuePaneProps<'a> {
     pub(crate) queue: &'a [TransferTask],
     pub(crate) resume_enabled: bool,
     pub(crate) verify_after_transfer: bool,
+    pub(crate) max_concurrent_transfers: usize,
     pub(crate) queue_expanded: bool,
     pub(crate) queue_height: f32,
 }
@@ -50,6 +50,7 @@ impl AppShell {
         let queue = props.queue;
         let resume_enabled = props.resume_enabled;
         let verify_after_transfer = props.verify_after_transfer;
+        let max_concurrent_transfers = props.max_concurrent_transfers;
         let queue_expanded = props.queue_expanded;
         let queue_height = props.queue_height;
         let mut queue_rows: Vec<AnyElement> = Vec::with_capacity(queue.len().max(1));
@@ -379,6 +380,16 @@ impl AppShell {
                                                 cx.notify();
                                             })),
                                     ),
+                            )
+                            .child(
+                                Button::new("sftp-concurrency")
+                                    .ghost()
+                                    .xsmall()
+                                    .label(format!("并发 {max_concurrent_transfers}"))
+                                    .tooltip("同时传输的任务数，点击切换 1-4")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.sftp_cycle_concurrency(cx);
+                                    })),
                             ),
                     )
                     .child(
@@ -511,8 +522,10 @@ impl AppShell {
                 ),
                 None => format_size(transferred),
             };
-            let progress_str = if props.paused_op.is_some() {
-                format!("已暂停 · {progress_str}")
+            let progress_str = if props.active_count > 0 {
+                format!("{} 个任务传输中 · {progress_str}", props.active_count)
+            } else if props.paused_count > 0 {
+                format!("已暂停 {} 个任务 · {progress_str}", props.paused_count)
             } else {
                 progress_str
             };
@@ -520,55 +533,55 @@ impl AppShell {
                 .justify_between()
                 .items_center()
                 .child(div().text_xs().child(progress_str));
-            if let Some(op_id) = props.active_op {
+            if props.active_count > 0 {
                 header = header.child(
                     h_flex()
                         .gap_1()
                         .items_center()
                         .child(
-                            Button::new("top-sftp-pause")
+                            Button::new("top-sftp-pause-all")
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Pause)
-                                .tooltip("暂停传输")
+                                .tooltip("暂停全部传输")
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_pause_task(tab_id, op_id, cx);
+                                    this.sftp_pause_all(tab_id, cx);
                                 })),
                         )
                         .child(
-                            Button::new("top-sftp-cancel")
+                            Button::new("top-sftp-cancel-all")
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::X)
-                                .tooltip("取消传输")
+                                .tooltip("取消全部传输")
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_cancel_task(tab_id, op_id, cx);
+                                    this.sftp_cancel_all(tab_id, cx);
                                 })),
                         ),
                 );
-            } else if let Some(op_id) = props.paused_op {
+            } else if props.paused_count > 0 {
                 header = header.child(
                     h_flex()
                         .gap_1()
                         .items_center()
                         .child(
-                            Button::new("top-sftp-resume")
+                            Button::new("top-sftp-resume-all")
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Play)
-                                .tooltip("继续传输")
+                                .tooltip("继续全部传输")
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_resume_task(tab_id, op_id, cx);
+                                    this.sftp_resume_all(tab_id, cx);
                                 })),
                         )
                         .child(
-                            Button::new("top-sftp-cancel-paused")
+                            Button::new("top-sftp-cancel-paused-all")
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::X)
-                                .tooltip("取消传输")
+                                .tooltip("取消全部传输")
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_cancel_task(tab_id, op_id, cx);
+                                    this.sftp_cancel_all(tab_id, cx);
                                 })),
                         ),
                 );
