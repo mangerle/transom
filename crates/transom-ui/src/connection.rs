@@ -65,6 +65,7 @@ impl AppShell {
             forward_statuses: HashMap::new(),
             system_stats: None,
             network_traffic: None,
+            _startup_task: None,
             _subscription: None,
         });
         self.active_tab = Some(tab_id);
@@ -163,6 +164,7 @@ impl AppShell {
             forward_statuses: HashMap::new(),
             system_stats: None,
             network_traffic: None,
+            _startup_task: None,
             _subscription: None,
         });
         self.active_tab = Some(tab_id);
@@ -182,6 +184,8 @@ impl AppShell {
             tab.sftp = None;
             tab.forward_statuses.clear();
             tab.network_traffic = None;
+            // 旧连接的初始化命令队列随重连一并取消。
+            tab._startup_task = None;
         }
         let mut secrets = ConnectionSecrets::default();
         let mut needs_password = false;

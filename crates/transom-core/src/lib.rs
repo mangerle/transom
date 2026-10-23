@@ -37,6 +37,7 @@ pub use prompt::PromptInfo;
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
 pub use session::{
     AuthMethod, Connection, LocalConnection, Session, SessionOptions, SshConnection,
+    StartupCommands,
 };
 pub use settings::{AppSettings, BellStyle, SftpSettings, WindowSettings};
 pub use sftp::{

@@ -156,6 +156,12 @@ form:
   save_passphrase:
     en: Save passphrase
     zh-CN: 保存口令
+  startup_commands:
+    en: Commands after connect
+    zh-CN: 连接后自动执行
+  startup_hint:
+    en: One command per line, executed in the interactive shell after the session is ready. For example cd /srv, export PATH=..., or sudo -i.
+    zh-CN: 每行一条命令，在会话就绪后写入交互式 Shell 顺序执行，例如 cd /srv、export PATH=... 或 sudo -i。
   auth_password:
     en: Password
     zh-CN: 密码

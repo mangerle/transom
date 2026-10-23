@@ -7,6 +7,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::input::Textarea;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 
@@ -208,6 +209,24 @@ impl AppShell {
             }
             AuthChoice::Agent => {}
         }
+
+        panel = panel.child(
+            v_flex()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("form.startup_commands").to_string()),
+                )
+                .child(Textarea::new(&form.startup_commands).h(px(88.0)).w_full())
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("form.startup_hint").to_string()),
+                ),
+        );
 
         if let Some(error) = &form.error {
             panel = panel.child(div().text_sm().text_color(p.danger).child(error.clone()));

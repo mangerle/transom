@@ -44,6 +44,8 @@ pub(crate) struct TerminalTab {
     pub(crate) system_stats: Option<SystemStats>,
     /// 当前 SSH 连接的传输层实时速率；本地终端为 `None`。
     pub(crate) network_traffic: Option<NetworkTraffic>,
+    /// 初始化命令的后台调度任务；重连或关标签时丢弃以取消。
+    pub(crate) _startup_task: Option<Task<()>>,
     pub(crate) _subscription: Option<Subscription>,
 }
 

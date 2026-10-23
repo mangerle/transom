@@ -15,6 +15,9 @@ pub struct Session {
     pub terminal: TerminalProfile,
     #[serde(default)]
     pub forwards: Vec<ForwardRule>,
+    /// 连接建立后自动在交互式 Shell 中执行的命令。
+    #[serde(default)]
+    pub startup: StartupCommands,
 }
 
 impl Session {
@@ -26,7 +29,44 @@ impl Session {
             connection,
             terminal: TerminalProfile::default(),
             forwards: Vec::new(),
+            startup: StartupCommands::default(),
         }
+    }
+}
+
+/// 连接成功后自动执行的初始化命令序列。
+///
+/// 命令写入交互式 Shell，而不是独立的 exec 通道，这样 `cd`、环境变量导出与
+/// `sudo` 等状态才能保留在当前终端会话中；代价是必须等远端 Shell 就绪，
+/// 因此执行端会在连接完成后先等待一个短暂的稳定窗口。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartupCommands {
+    /// 按顺序逐条执行，空行在编辑阶段即被丢弃。
+    #[serde(default)]
+    pub commands: Vec<String>,
+}
+
+impl StartupCommands {
+    /// 从多行文本解析命令列表。
+    ///
+    /// 仅去除每行首尾空白并忽略空行；行内空白原样保留，避免破坏带参数的
+    /// 复杂命令（如带引号的 `export A="x y"`）。
+    pub fn from_multiline(text: &str) -> Self {
+        let commands = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect();
+        Self { commands }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+
+    pub fn to_multiline(&self) -> String {
+        self.commands.join("\n")
     }
 }
 
@@ -148,5 +188,30 @@ mod tests {
         let decoded: Session = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.name, "local");
         assert!(matches!(decoded.connection, Connection::Local(_)));
+    }
+
+    #[test]
+    fn startup_commands_ignore_blank_lines_and_round_trip() {
+        let startup = StartupCommands::from_multiline("cd /srv\n\n  export A=\"x y\"  \n");
+        assert_eq!(
+            startup.commands,
+            vec!["cd /srv".to_string(), "export A=\"x y\"".to_string()]
+        );
+        assert_eq!(startup.to_multiline(), "cd /srv\nexport A=\"x y\"");
+
+        let mut session = Session::new("prod", Connection::Local(LocalConnection::default()));
+        session.startup = startup;
+        let json = serde_json::to_string(&session).unwrap();
+        let decoded: Session = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.startup.commands.len(), 2);
+    }
+
+    #[test]
+    fn missing_startup_field_defaults_to_empty() {
+        let session = Session::new("local", Connection::Local(LocalConnection::default()));
+        let mut value = serde_json::to_value(session).unwrap();
+        value.as_object_mut().unwrap().remove("startup");
+        let decoded: Session = serde_json::from_value(value).unwrap();
+        assert!(decoded.startup.is_empty());
     }
 }

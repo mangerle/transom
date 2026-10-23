@@ -217,6 +217,19 @@ impl TerminalView {
         self.input_tx.send(bytes.to_vec()).is_ok()
     }
 
+    /// 将程序化文本写入终端输入通道。
+    ///
+    /// 与键盘输入复用同一条有界队列，保证初始化命令按调用顺序到达 Shell；
+    /// 返回 `false` 表示终端写入线程已退出（连接已断开）。
+    pub fn send_text(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
+        let sent = self.write_input(text.as_bytes());
+        if sent {
+            self.engine.lock().scroll_to_bottom();
+            cx.notify();
+        }
+        sent
+    }
+
     fn mark_exited(&mut self, cx: &mut Context<Self>) {
         if !self.exited {
             self.exited = true;

@@ -15,6 +15,7 @@ mod session_form_view;
 mod settings;
 mod sftp;
 mod sidebar;
+mod startup;
 mod status_bar;
 mod tabs;
 mod workspace;

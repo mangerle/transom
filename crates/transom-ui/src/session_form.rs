@@ -1,7 +1,9 @@
-use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
 use std::path::PathBuf;
-use transom_core::{AuthMethod, Connection, Session, SshConnection, TerminalProfile};
+use transom_core::{
+    AuthMethod, Connection, Session, SshConnection, StartupCommands, TerminalProfile,
+};
 use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +24,7 @@ pub(crate) struct SessionForm {
     pub password: Entity<InputState>,
     pub key_path: Entity<InputState>,
     pub passphrase: Entity<InputState>,
+    pub startup_commands: Entity<TextareaState>,
     pub auth: AuthChoice,
     pub save_password: bool,
     pub save_passphrase: bool,
@@ -44,6 +47,7 @@ struct SessionFormSeed {
     save_passphrase: bool,
     key_path: String,
     folder_path: String,
+    startup_commands: String,
 }
 
 impl SessionForm {
@@ -73,6 +77,10 @@ impl SessionForm {
             Some(AuthMethod::Agent) => (AuthChoice::Agent, false, false, String::new()),
             _ => (AuthChoice::Password, true, false, String::new()),
         };
+        let startup_commands = base
+            .as_ref()
+            .map(|session| session.startup.to_multiline())
+            .unwrap_or_default();
         Self::build(
             window,
             cx,
@@ -83,6 +91,7 @@ impl SessionForm {
                 save_passphrase,
                 key_path,
                 folder_path: folder_path.unwrap_or_default(),
+                startup_commands,
             },
         )
     }
@@ -95,6 +104,7 @@ impl SessionForm {
             save_passphrase,
             key_path,
             folder_path,
+            startup_commands,
         } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
@@ -135,6 +145,8 @@ impl SessionForm {
                 &rust_i18n::t!("form.key_placeholder"),
             ),
             passphrase: password_input(window, cx, &rust_i18n::t!("form.passphrase_placeholder")),
+            startup_commands: cx
+                .new(|cx| TextareaState::new(window, cx).default_value(startup_commands)),
             auth,
             save_password,
             save_passphrase,
@@ -208,6 +220,7 @@ impl SessionForm {
             let path = self.folder_path.read(cx).value().trim().to_string();
             (!path.is_empty()).then_some(path)
         };
+        session.startup = StartupCommands::from_multiline(&self.startup_commands.read(cx).value());
         session.connection = Connection::Ssh(SshConnection {
             host,
             port,

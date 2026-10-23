@@ -60,6 +60,7 @@ impl AppShell {
                 tab._subscription = Some(subscription);
                 self.active_tab = Some(tab_id);
                 window.focus(&focus_handle, cx);
+                self.schedule_startup_commands(tab_id, connection_id, window, cx);
                 self.auto_start_forwards(tab_id, connection_id, session_id, cx);
             }
             AppEvent::ConnectionFailed {
