@@ -241,6 +241,7 @@ impl AppShell {
                         Ok(content) => {
                             let textarea =
                                 cx.new(|cx| TextareaState::new(window, cx).default_value(content));
+                            textarea.update(cx, |state, cx| state.focus(window, cx));
                             self.sftp_editor_modal = Some(SftpEditorModalState {
                                 tab_id,
                                 local_path,

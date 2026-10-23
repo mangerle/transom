@@ -33,6 +33,7 @@ impl AppShell {
         let permissions = entry.permissions.unwrap_or(default_mode) & 0o777;
         let octal_str = format_octal_permissions(permissions);
         let octal_input = sftp_text_input(window, cx, &octal_str, "例如 755 或 644");
+        octal_input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_chmod_modal = Some(SftpChmodModalState {
             tab_id,
             remote_path: entry.path.clone(),
@@ -87,7 +88,7 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn save_sftp_chmod_modal(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn save_sftp_chmod_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(mut modal) = self.sftp_chmod_modal.take() else {
             return;
         };
@@ -100,7 +101,9 @@ impl AppShell {
                 None => {
                     modal.error =
                         Some("无效的八进制权限码（请输入 000 - 777 之间的八进制数字）".to_string());
+                    let input = modal.octal_input.clone();
                     self.sftp_chmod_modal = Some(modal);
+                    input.update(cx, |state, cx| state.focus(window, cx));
                     cx.notify();
                     return;
                 }
@@ -112,5 +115,6 @@ impl AppShell {
             permissions: target_perms,
         };
         self.send_sftp_op(tab_id, op, cx);
+        self.focus_active_sftp_panel(window, cx);
     }
 }

@@ -218,8 +218,9 @@ impl AppShell {
                 Button::new("cancel-sftp-sync")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.sftp_sync_modal = None;
+                        this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
             )
@@ -247,8 +248,8 @@ impl AppShell {
                         .primary()
                         .icon(IconName::GitCompareArrows)
                         .label(format!("开始同步 ({selected_count})"))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.start_sftp_sync(cx);
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.start_sftp_sync(window, cx);
                         })),
                 )
             });

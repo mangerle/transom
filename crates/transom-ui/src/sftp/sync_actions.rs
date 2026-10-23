@@ -85,7 +85,7 @@ impl AppShell {
     }
 
     /// 将勾选的差异项打包成一个同步任务入队并启动队列。
-    pub(crate) fn start_sftp_sync(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn start_sftp_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let verify = self.settings.sftp.verify_after_transfer;
         let Some(mut modal) = self.sftp_sync_modal.take() else {
             return;
@@ -143,6 +143,7 @@ impl AppShell {
                 "已加入目录同步任务（上传 {upload_count} 项，下载 {download_count} 项）"
             ));
         }
+        self.focus_active_sftp_panel(window, cx);
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }

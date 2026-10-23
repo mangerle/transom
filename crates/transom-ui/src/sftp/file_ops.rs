@@ -107,6 +107,7 @@ impl AppShell {
             )
         };
         let input = sftp_text_input(window, cx, "", "文件夹名称");
+        input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_input_modal = Some(SftpInputModalState {
             tab_id,
             title,
@@ -162,6 +163,7 @@ impl AppShell {
             )
         };
         let input = sftp_text_input(window, cx, &initial_value, "新名称");
+        input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_input_modal = Some(SftpInputModalState {
             tab_id,
             title,
@@ -227,6 +229,7 @@ impl AppShell {
             )
         };
         let input = sftp_text_input(window, cx, &initial_value, "软链接名称");
+        input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_input_modal = Some(SftpInputModalState {
             tab_id,
             title,
@@ -238,7 +241,7 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn commit_sftp_input_modal(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn commit_sftp_input_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(modal) = self.sftp_input_modal.take() else {
             return;
         };
@@ -247,14 +250,18 @@ impl AppShell {
         if name.is_empty() {
             let mut modal = modal;
             modal.error = Some("名称不能为空".to_string());
+            let input = modal.input.clone();
             self.sftp_input_modal = Some(modal);
+            input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
         }
         if let Some(message) = name_validation_error(&modal.target, &name) {
             let mut modal = modal;
             modal.error = Some(message);
+            let input = modal.input.clone();
             self.sftp_input_modal = Some(modal);
+            input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
         }
@@ -334,6 +341,8 @@ impl AppShell {
                 self.create_local_symlink(tab_id, &target_path, &name, cx);
             }
         }
+        self.focus_active_sftp_panel(window, cx);
+        cx.notify();
     }
 
     /// 在当前本地目录创建指向指定目标的软链接（仅 Unix 平台支持）。
@@ -460,7 +469,7 @@ impl AppShell {
         self.process_sftp_queue(tab_id, cx);
     }
 
-    pub(crate) fn save_sftp_editor_modal(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn save_sftp_editor_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let verify = self.settings.sftp.verify_after_transfer;
         let Some(modal) = self.sftp_editor_modal.take() else {
             return;
@@ -469,7 +478,9 @@ impl AppShell {
         if let Err(err) = std::fs::write(&modal.local_path, content.as_bytes()) {
             let mut modal = modal;
             modal.error = Some(format!("写入临时缓存文件失败: {err}"));
+            let textarea = modal.textarea.clone();
             self.sftp_editor_modal = Some(modal);
+            textarea.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
         }
@@ -488,6 +499,7 @@ impl AppShell {
             panel.queue.push(task);
             panel.status = Some(format!("已保存并回传远端文件: {}", modal.file_name));
         }
+        self.focus_active_sftp_panel(window, cx);
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }

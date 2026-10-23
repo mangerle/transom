@@ -101,8 +101,9 @@ impl AppShell {
                 Button::new("cancel-sftp-editor")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.sftp_editor_modal = None;
+                        this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
             )
@@ -111,8 +112,8 @@ impl AppShell {
                     .primary()
                     .icon(IconName::Check)
                     .label("保存并上传")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.save_sftp_editor_modal(cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.save_sftp_editor_modal(window, cx);
                     })),
             );
 
@@ -281,8 +282,9 @@ impl AppShell {
                 Button::new("cancel-sftp-chmod")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.sftp_chmod_modal = None;
+                        this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
             )
@@ -291,8 +293,8 @@ impl AppShell {
                     .primary()
                     .icon(IconName::Check)
                     .label("应用权限")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.save_sftp_chmod_modal(cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.save_sftp_chmod_modal(window, cx);
                     })),
             );
 
@@ -336,8 +338,9 @@ impl AppShell {
                 Button::new("cancel-sftp-input")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.sftp_input_modal = None;
+                        this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
             )
@@ -346,8 +349,8 @@ impl AppShell {
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("common.confirm").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.commit_sftp_input_modal(cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.commit_sftp_input_modal(window, cx);
                     })),
             );
 
@@ -422,8 +425,9 @@ impl AppShell {
                 .ghost()
                 .icon(IconName::Close)
                 .label("关闭")
-                .on_click(cx.listener(|this, _, _, cx| {
+                .on_click(cx.listener(|this, _, window, cx| {
                     this.sftp_properties_modal = None;
+                    this.focus_active_sftp_panel(window, cx);
                     cx.notify();
                 })),
         );
