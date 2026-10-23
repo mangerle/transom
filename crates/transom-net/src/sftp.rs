@@ -142,18 +142,23 @@ impl SftpClient {
         if resume && local_path.exists() {
             if let Ok(meta) = tokio::fs::metadata(local_path).await {
                 let local_size = meta.len();
-                if let Some(total_size) = total
-                    && local_size >= total_size
-                    && total_size > 0
-                {
-                    if let Some(mtime) = mtime {
-                        let _ = set_local_mtime(local_path, mtime).await;
+                match total {
+                    Some(total_size) if local_size == total_size => {
+                        if let Some(mtime) = mtime {
+                            let _ = set_local_mtime(local_path, mtime).await;
+                        }
+                        progress(total_size, Some(total_size));
+                        return Ok(total_size);
                     }
-                    progress(total_size, Some(total_size));
-                    return Ok(total_size);
+                    Some(total_size) if local_size > total_size => {
+                        // 目标比源大时不可能只是“尚未传完”，多出的尾部必须截断重传
+                        open_options.truncate(true);
+                    }
+                    _ => {
+                        offset = local_size;
+                        open_options.append(true);
+                    }
                 }
-                offset = local_size;
-                open_options.append(true);
             } else {
                 open_options.truncate(true);
             }
@@ -243,36 +248,41 @@ impl SftpClient {
         let mut remote_file = if resume {
             if let Ok(meta) = self.session.metadata(remote_path).await {
                 let remote_size = meta.size.unwrap_or(0);
-                if let Some(total_size) = total
-                    && remote_size >= total_size
-                    && total_size > 0
-                {
-                    if let Some(mtime) = local_mtime {
-                        let _ = self.set_mtime(remote_path, mtime).await;
+                match total {
+                    Some(total_size) if remote_size == total_size => {
+                        if let Some(mtime) = local_mtime {
+                            let _ = self.set_mtime(remote_path, mtime).await;
+                        }
+                        progress(total_size, Some(total_size));
+                        return Ok(total_size);
                     }
-                    progress(total_size, Some(total_size));
-                    return Ok(total_size);
+                    Some(total_size) if remote_size > total_size => {
+                        // 远端比源文件大时不能视为已完成，截断后从头上传
+                        self.session.create(remote_path).await.map_err(sftp_error)?
+                    }
+                    _ => {
+                        offset = remote_size;
+                        let mut f = self
+                            .session
+                            .open_with_flags(
+                                remote_path,
+                                russh_sftp::protocol::OpenFlags::WRITE
+                                    | russh_sftp::protocol::OpenFlags::CREATE,
+                            )
+                            .await
+                            .map_err(sftp_error)?;
+                        if offset > 0 {
+                            f.seek(std::io::SeekFrom::Start(offset))
+                                .await
+                                .map_err(sftp_io_error)?;
+                            local
+                                .seek(std::io::SeekFrom::Start(offset))
+                                .await
+                                .map_err(sftp_io_error)?;
+                        }
+                        f
+                    }
                 }
-                offset = remote_size;
-                let mut f = self
-                    .session
-                    .open_with_flags(
-                        remote_path,
-                        russh_sftp::protocol::OpenFlags::WRITE
-                            | russh_sftp::protocol::OpenFlags::CREATE,
-                    )
-                    .await
-                    .map_err(sftp_error)?;
-                if offset > 0 {
-                    f.seek(std::io::SeekFrom::Start(offset))
-                        .await
-                        .map_err(sftp_io_error)?;
-                    local
-                        .seek(std::io::SeekFrom::Start(offset))
-                        .await
-                        .map_err(sftp_io_error)?;
-                }
-                f
             } else {
                 self.session.create(remote_path).await.map_err(sftp_error)?
             }

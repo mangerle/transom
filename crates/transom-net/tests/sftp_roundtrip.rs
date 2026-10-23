@@ -478,6 +478,35 @@ async fn sftp_list_upload_download_and_mutations() {
         "下载后应保留远端文件修改时间"
     );
 
+    let oversized_local = dir.path().join("oversized-local.txt");
+    tokio::fs::write(&oversized_local, b"0123456789ABCDEF")
+        .await
+        .unwrap();
+    let transferred = client
+        .download_resumable("/uploaded.txt", &oversized_local, true, |_, _| {})
+        .await
+        .expect("目标更大时应截断重传");
+    assert_eq!(transferred, 10);
+    assert_eq!(
+        tokio::fs::read(&oversized_local).await.unwrap(),
+        b"hello sftp".to_vec(),
+        "下载续传不能保留目标文件多余的尾部"
+    );
+
+    let small_local = dir.path().join("small.txt");
+    tokio::fs::write(&small_local, b"small").await.unwrap();
+    std::fs::write(dir.path().join("remote-larger.txt"), b"0123456789ABCDEF").unwrap();
+    let transferred = client
+        .upload_resumable(&small_local, "/remote-larger.txt", true, |_, _| {})
+        .await
+        .expect("远端更大时应截断重传");
+    assert_eq!(transferred, 5);
+    assert_eq!(
+        std::fs::read(dir.path().join("remote-larger.txt")).unwrap(),
+        b"small",
+        "上传续传不能保留远端文件多余的尾部"
+    );
+
     client.create_dir("/folder").await.expect("mkdir");
     client
         .rename("/uploaded.txt", "/folder/moved.txt")
