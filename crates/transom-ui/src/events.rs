@@ -39,7 +39,7 @@ impl AppShell {
                     .find(|session| session.id == session_id)
                     .map(|session| session.terminal.clone())
                     .unwrap_or_else(|| self.tabs[index].session.terminal.clone());
-                // 光标外观与排版（字体族、中文字体、字号、行高）属于全局偏好，
+                // 光标外观与外观偏好（字体族、中文字体、字号、行高、关键词高亮）属于全局设置，
                 // 覆盖会话里可能残留的旧默认值：界面上没有任何会话级字体入口，
                 // 若这里不覆盖，用户在设置里改的字体只会作用于已打开的窗格。
                 profile.cursor_shape = self.settings.terminal_profile.cursor_shape;
@@ -51,6 +51,7 @@ impl AppShell {
                 // 分隔符同样没有会话级入口，且老会话文件里存的是内核默认值；
                 // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
                 profile.word_separators = self.settings.terminal_profile.word_separators.clone();
+                profile.highlight = self.settings.terminal_profile.highlight.clone();
                 let interaction = self.settings.terminal_interaction;
                 let reserved = self.shortcut_filter.clone();
                 let key_filter: KeyFilter = Arc::new(move |keystroke| {

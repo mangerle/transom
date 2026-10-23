@@ -848,6 +848,18 @@ settings:
   font_family_hint:
     en: Empty follows the app default monospace font
     zh-CN: 留空跟随应用默认等宽字体
+  keyword_highlight:
+    en: Highlight keywords in output
+    zh-CN: 输出关键词自动高亮
+  highlight_keywords:
+    en: Custom keywords (comma or space separated)
+    zh-CN: 自定义关键词（逗号或空格分隔）
+  highlight_keywords_hint:
+    en: e.g. timeout, OOM, connection refused
+    zh-CN: 例如：timeout、OOM、连接失败
+  highlight_keywords_note:
+    en: Built-in rules colour ERROR / FATAL / WARN / INFO / DEBUG, IPv4 addresses and UUIDs. Built-ins match uppercase only; custom keywords ignore case. Up to 32 keywords.
+    zh-CN: 内建规则为 ERROR / FATAL / WARN / INFO / DEBUG、IPv4 与 UUID 上色，只认大写形式；自定义关键词不区分大小写，最多 32 个。颜色取自当前主题的调色板槽位。
   selection:
     en: Selection
     zh-CN: 选词与选择

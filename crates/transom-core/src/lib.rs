@@ -6,6 +6,7 @@ pub mod color;
 pub mod commands;
 pub mod error;
 pub mod forward;
+mod highlight;
 pub mod ids;
 pub mod keys;
 pub mod known_hosts;
@@ -36,6 +37,7 @@ pub use forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,
     TargetAddress,
 };
+pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan, TerminalHighlight};
 pub use ids::{
     ConnectionId, FolderId, ForwardId, GroupId, SessionId, SnippetId, SplitId, TabId, TransferId,
 };

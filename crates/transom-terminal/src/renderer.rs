@@ -11,7 +11,10 @@ use alacritty_terminal::vte::ansi::{Color, CursorShape, NamedColor};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::*;
 use std::ops::Range;
-use transom_core::{Rgb as PaletteColor, TerminalPalette, TerminalProfile};
+use transom_core::{
+    CompiledHighlight, HighlightSpan, Rgb as PaletteColor, TerminalHighlight, TerminalPalette,
+    TerminalProfile,
+};
 
 const SELECTION_ALPHA: f32 = 0.4;
 
@@ -38,6 +41,10 @@ pub(crate) struct TerminalRenderer {
     pub cell_width: Pixels,
     pub cell_height: Pixels,
     pub(crate) palette: TerminalPalette,
+    /// 关键词自动高亮配置。
+    pub(crate) highlight: TerminalHighlight,
+    /// 每帧编译一次规则集：扫描路径里不再逐行预处理关键词。
+    pub(crate) highlight_rules: CompiledHighlight,
     line_height: f32,
 }
 
@@ -57,6 +64,8 @@ impl TerminalRenderer {
             cell_width: px(8.0),
             cell_height: px(16.0),
             palette: profile.palette.clone(),
+            highlight: profile.highlight.clone(),
+            highlight_rules: CompiledHighlight::compile(&profile.highlight),
             line_height: profile.line_height.max(1.0),
         };
         renderer.measure(window);
@@ -275,12 +284,35 @@ impl TerminalRenderer {
             && (0..rows as i32).contains(&cursor_row)
             && ime.is_none();
         let block_cursor = cursor_visible && cursor_style.shape == CursorShape::Block;
+        // 逐行扫描的缓冲在整帧里复用，避免每行都重新分配字符串与列映射。
+        let mut scratch = RowScratch::default();
 
         for row in 0..rows {
             let line = Line(row as i32 - display_offset);
             let y = origin.y + self.cell_height * row as f32;
 
-            self.paint_backgrounds(origin, y, line, cols, grid, colors, default_bg, window);
+            scratch.fill(
+                grid,
+                line,
+                cols,
+                &self.highlight,
+                &self.highlight_rules,
+                &self.palette,
+            );
+            self.paint_backgrounds(
+                origin,
+                y,
+                RowInput {
+                    line,
+                    cols,
+                    grid,
+                    colors,
+                    cursor_cell: None,
+                    highlights: &scratch.colors,
+                },
+                default_bg,
+                window,
+            );
 
             if let Some(paint) = search {
                 self.paint_row_hits(paint.rows.get(row), y, origin, window);
@@ -321,13 +353,16 @@ impl TerminalRenderer {
             self.paint_text_row(
                 origin,
                 row,
-                line,
-                cols,
-                grid,
-                colors,
+                RowInput {
+                    line,
+                    cols,
+                    grid,
+                    colors,
+                    cursor_cell: block_cursor.then_some((cursor_row, cursor_col)),
+                    highlights: &scratch.colors,
+                },
                 window,
                 cx,
-                block_cursor.then_some((cursor_row, cursor_col)),
             );
 
             if cursor_visible && cursor_row == row as i32 && cursor_col < cols {
@@ -361,18 +396,21 @@ impl TerminalRenderer {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn paint_backgrounds(
         &self,
         origin: Point<Pixels>,
         y: Pixels,
-        line: Line,
-        cols: usize,
-        grid: &alacritty_terminal::grid::Grid<Cell>,
-        colors: &Colors,
+        row: RowInput<'_>,
         default_bg: Hsla,
         window: &mut Window,
     ) {
+        let RowInput {
+            line,
+            cols,
+            grid,
+            colors,
+            ..
+        } = row;
         let mut current: Option<(usize, usize, Hsla)> = None;
         let mut runs = Vec::new();
         for col in 0..cols {
@@ -409,19 +447,22 @@ impl TerminalRenderer {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn paint_text_row(
         &self,
         origin: Point<Pixels>,
         row: usize,
-        line: Line,
-        cols: usize,
-        grid: &alacritty_terminal::grid::Grid<Cell>,
-        colors: &Colors,
+        input: RowInput<'_>,
         window: &mut Window,
         cx: &mut App,
-        cursor_cell: Option<(i32, usize)>,
     ) {
+        let RowInput {
+            line,
+            cols,
+            grid,
+            colors,
+            cursor_cell,
+            highlights,
+        } = input;
         let mut run: Option<TextRunBuilder> = None;
         for col in 0..cols {
             let cell = &grid[AlacPoint::new(line, Column(col))];
@@ -443,6 +484,13 @@ impl TerminalRenderer {
             }
 
             let (mut fg, bg) = self.cell_colors(cell, colors);
+            // 关键词上色只覆盖"程序自己没着色"的字符：已经是红字的 ERROR 再压一层
+            // 我们的红只是白做功，还会抢掉程序刻意表达的语义。
+            if let Some(override_fg) = highlights.get(col).copied().flatten()
+                && cell.fg == Color::Named(NamedColor::Foreground)
+            {
+                fg = override_fg;
+            }
             if let Some((cursor_row, cursor_col)) = cursor_cell
                 && cursor_row == line.0
                 && cursor_col == col
@@ -711,6 +759,102 @@ impl TerminalRenderer {
     }
 }
 
+/// 单个屏幕行的绘制输入。
+///
+/// 打包成结构体而不是继续平铺：原先网格、列数、颜色表、光标格已经排到 9 个参数，
+/// 再加一份逐列高亮色就会更多，参数顺序也更容易传错。
+struct RowInput<'a> {
+    line: Line,
+    cols: usize,
+    grid: &'a alacritty_terminal::grid::Grid<Cell>,
+    colors: &'a Colors,
+    cursor_cell: Option<(i32, usize)>,
+    /// 每个列上该覆盖的前景色；`None` 表示该列不上色。
+    highlights: &'a [Option<Hsla>],
+}
+
+/// 一行关键词扫描的复用缓冲。
+#[derive(Default)]
+struct RowScratch {
+    /// 去掉宽字符占位格后的行文本。
+    text: String,
+    /// 每个字符对应的列号。
+    columns: Vec<usize>,
+    /// 每个字符占用的列宽（宽字符为 2）。
+    widths: Vec<usize>,
+    /// 命中区间展开到每列的前景色。
+    colors: Vec<Option<Hsla>>,
+    spans: Vec<HighlightSpan>,
+}
+
+impl RowScratch {
+    /// 扫描一行，把命中的关键词展开成"每列一个覆盖色"。
+    ///
+    /// 收配置/规则集/调色板三个引用而不是 `&TerminalRenderer`：后者只能在带窗口的环境里
+    /// 构造，那样最容易出错的"字符下标 → 真实列号"换算就没法在单元测试里直接验证。
+    fn fill(
+        &mut self,
+        grid: &alacritty_terminal::grid::Grid<Cell>,
+        line: Line,
+        cols: usize,
+        config: &TerminalHighlight,
+        rules: &CompiledHighlight,
+        palette: &TerminalPalette,
+    ) {
+        self.colors.clear();
+        self.colors.resize(cols, None);
+        if !config.enabled {
+            return;
+        }
+        self.text.clear();
+        self.columns.clear();
+        self.widths.clear();
+        for col in 0..cols {
+            let cell = &grid[AlacPoint::new(line, Column(col))];
+            if cell
+                .flags
+                .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+            {
+                continue;
+            }
+            self.columns.push(col);
+            self.widths.push(if cell.flags.contains(Flags::WIDE_CHAR) {
+                2
+            } else {
+                1
+            });
+            self.text.push(cell.c);
+        }
+        if self.text.is_empty() {
+            return;
+        }
+        self.spans = rules.scan(&self.text, config);
+        for span in &self.spans {
+            // 命中区间是按"打印字符"编号的，必须换算回真实列号：宽字符占两列，
+            // 直接把字符下标当列号会让中文行整体错位；反过来把列号拿去索引字符数组
+            // 会把区间画宽。两个索引空间要分开取，不能混用。
+            let Some(last_char) = span.end.checked_sub(1) else {
+                continue;
+            };
+            let (Some(&first), Some(&last_col), Some(&width)) = (
+                self.columns.get(span.start),
+                self.columns.get(last_char),
+                self.widths.get(last_char),
+            ) else {
+                continue;
+            };
+            let end_col = (last_col + width).min(cols);
+            if end_col <= first {
+                continue;
+            }
+            let color = Hsla::from(rgb(palette.ansi[span.kind.ansi_index().min(15)].to_hex()));
+            for slot in &mut self.colors[first..end_col] {
+                *slot = Some(color);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 struct RunStyle {
     fg: Hsla,
@@ -843,8 +987,13 @@ fn utf16_range_to_char_range(text: &str, range: &Range<usize>) -> Option<Range<u
 
 #[cfg(test)]
 mod tests {
-    use super::{CJK_PROBE_CHAR, fit_cjk_size, is_cjk_char};
-    use gpui_kit::px;
+    use super::{CJK_PROBE_CHAR, RowScratch, fit_cjk_size, is_cjk_char};
+    use crate::engine::TerminalEngine;
+    use alacritty_terminal::index::Line;
+    use gpui_kit::{Hsla, px, rgb};
+    use transom_core::{
+        CompiledHighlight, TerminalHighlight, TerminalPalette, TerminalProfile, TerminalSize,
+    };
 
     /// 双字体路由的判定边界：走错一侧就会让 Latin 字符被中文字体接管，
     /// 或让全角字符继续用等宽字体而错位。
@@ -891,5 +1040,164 @@ mod tests {
         assert_eq!(fit_cjk_size(px(1000.0), px(16.0), px(14.0)), px(7.0));
         assert_eq!(fit_cjk_size(px(-3.0), px(16.0), px(14.0)), px(14.0));
         assert_eq!(fit_cjk_size(px(20.0), px(0.0), px(14.0)), px(14.0));
+    }
+
+    /// 用一行真实网格内容填充高亮，返回每列覆盖色的十六进制（`None` 表示该列不上色）。
+    ///
+    /// 断言比色值而不是比调色板下标：默认调色板里 ansi[1] 与 ansi[9] 同值，
+    /// 反查下标会先命中前者，测试会变成在测查找顺序而不是测上色。
+    fn highlighted_columns(text: &str, keywords: &[&str], cols: u16) -> Vec<Option<u32>> {
+        let (tx, _rx) = flume::bounded(16);
+        let profile = TerminalProfile {
+            highlight: TerminalHighlight {
+                enabled: true,
+                keywords: keywords.iter().map(|k| (*k).to_string()).collect(),
+            },
+            ..TerminalProfile::default()
+        };
+        let mut engine = TerminalEngine::new(TerminalSize::new(cols, 3), &profile, tx);
+        engine.process(text.as_bytes());
+        let rules = CompiledHighlight::compile(&profile.highlight);
+        let mut scratch = RowScratch::default();
+        // 扫描时刻意不看渲染结果，只比对"这列该染成调色板里的哪个 ANSI 槽位"。
+        scratch.fill(
+            engine.grid(),
+            Line(0),
+            cols as usize,
+            &profile.highlight,
+            &rules,
+            &profile.palette,
+        );
+        let ansi = &profile.palette.ansi;
+        scratch
+            .colors
+            .iter()
+            .map(|color| {
+                color.map(|color| {
+                    ansi.iter()
+                        .find(|candidate| Hsla::from(rgb(candidate.to_hex())) == color)
+                        .expect("覆盖色必须来自调色板")
+                        .to_hex()
+                })
+            })
+            .collect()
+    }
+
+    /// 关键词必须落在它真正所在的列上：ANSI 9 是错误级别（ERROR/FATAL）的槽位。
+    #[test]
+    fn highlights_expected_columns() {
+        let red = TerminalPalette::default().ansi[9].to_hex();
+        let colors = highlighted_columns("ERROR boom here", &[], 20);
+        assert_eq!(colors[0], Some(red));
+        assert_eq!(colors[4], Some(red));
+        assert_eq!(colors[5], None, "关键词后一列不该继续染色");
+    }
+
+    /// 宽字符占两列：只按字符下标定列会让中文行的染色整体左移。
+    #[test]
+    fn wide_characters_shift_columns() {
+        // 「中文」占 0..4 四列，ERROR 起于第 4 列。
+        let red = TerminalPalette::default().ansi[9].to_hex();
+        let colors = highlighted_columns("中文ERROR tail", &[], 20);
+        assert_eq!(colors[3], None, "汉字本身不染色");
+        assert_eq!(colors[4], Some(red));
+        assert_eq!(colors[8], Some(red));
+        assert_eq!(colors[9], None);
+    }
+
+    #[test]
+    fn custom_keyword_columns_use_green_slot() {
+        let green = TerminalPalette::default().ansi[10].to_hex();
+        let colors = highlighted_columns("a refused b", &["refused"], 20);
+        assert_eq!(colors[2], Some(green));
+        assert_eq!(colors[8], Some(green), "refused 覆盖到第 8 列");
+        assert_eq!(colors[9], None, "词后空格不该染色");
+    }
+
+    #[test]
+    fn ipv4_and_uuid_slots() {
+        let palette = TerminalPalette::default();
+        let colors = highlighted_columns("ip 10.0.0.1 ok", &[], 20);
+        assert_eq!(colors[3], Some(palette.ansi[14].to_hex()));
+        assert_eq!(colors[10], Some(palette.ansi[14].to_hex()));
+        assert_eq!(colors[11], None);
+        let colors = highlighted_columns("id 6f1c2b3a-4d5e-4f60-7a8b-9c0d1e2f3a4b", &[], 40);
+        assert_eq!(colors[3], Some(palette.ansi[13].to_hex()));
+    }
+
+    /// 行尾空白列与越界列都不能panic：网格列数会随窗口缩放。
+    #[test]
+    fn empty_and_partial_rows_are_safe() {
+        let colors = highlighted_columns("ERROR", &[], 40);
+        assert_eq!(colors.len(), 40);
+        assert_eq!(colors[6], None, "行尾空白列不上色");
+        let colors = highlighted_columns("", &[], 10);
+        assert!(colors.iter().all(|color| color.is_none()));
+    }
+
+    /// 关掉总开关时零染色，且不做任何扫描工作。
+    #[test]
+    fn disabled_highlight_colors_nothing() {
+        let (tx, _rx) = flume::bounded(16);
+        let profile = TerminalProfile {
+            highlight: TerminalHighlight {
+                enabled: false,
+                keywords: vec!["boom".into()],
+            },
+            ..TerminalProfile::default()
+        };
+        let mut engine = TerminalEngine::new(TerminalSize::new(20, 3), &profile, tx);
+        engine.process(b"ERROR boom");
+        let rules = CompiledHighlight::compile(&profile.highlight);
+        let mut scratch = RowScratch::default();
+        scratch.fill(
+            engine.grid(),
+            Line(0),
+            20,
+            &profile.highlight,
+            &rules,
+            &profile.palette,
+        );
+        assert!(scratch.colors.iter().all(|color| color.is_none()));
+        assert!(scratch.text.is_empty());
+    }
+
+    /// 相邻两行复用同一缓冲：上一行的字符与染色不能残留到下一行。
+    #[test]
+    fn scratch_reuse_does_not_leak_between_rows() {
+        let (tx, _rx) = flume::bounded(16);
+        let profile = TerminalProfile::default();
+        let mut engine = TerminalEngine::new(TerminalSize::new(20, 3), &profile, tx);
+        // 必须带 `\r`：单独的 `\n` 在终端里只是下移一行而不复位列，两行文字会错位到同一列起点。
+        let stream = "ERROR first\r\nsecond line\r\n";
+        engine.process(stream.as_bytes());
+        let rules = CompiledHighlight::compile(&profile.highlight);
+        let mut scratch = RowScratch::default();
+        scratch.fill(
+            engine.grid(),
+            Line(0),
+            20,
+            &profile.highlight,
+            &rules,
+            &profile.palette,
+        );
+        assert!(scratch.colors[0].is_some(), "第一行有 ERROR，必须染色");
+        scratch.fill(
+            engine.grid(),
+            Line(1),
+            20,
+            &profile.highlight,
+            &rules,
+            &profile.palette,
+        );
+        assert!(
+            scratch.colors.iter().all(|color| color.is_none()),
+            "第二行没有关键词，必须全空"
+        );
+        assert_eq!(
+            scratch.text.trim_end(),
+            "second line",
+            "行尾补白不该留下上一行痕迹"
+        );
     }
 }

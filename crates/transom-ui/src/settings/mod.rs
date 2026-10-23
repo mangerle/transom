@@ -14,7 +14,7 @@ use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Setti
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::TerminalCursorShape;
+use transom_core::{TerminalCursorShape, TerminalHighlight};
 use transom_terminal::TerminalView;
 
 /// 读取字体族输入框：留空表示"不指定"，交给默认字体或系统回退。
@@ -48,6 +48,9 @@ impl AppShell {
                 cx,
             );
         });
+        self.settings_highlight_keywords.update(cx, |input, cx| {
+            input.set_value(profile.highlight.keywords_joined(), window, cx);
+        });
         let notify_threshold = self.settings.window.notify_threshold_secs.to_string();
         self.settings_notify_threshold.update(cx, |input, cx| {
             input.set_value(notify_threshold, window, cx);
@@ -65,6 +68,16 @@ impl AppShell {
             read_font_family(&self.settings_font_family, cx);
         self.settings.terminal_profile.cjk_font_family =
             read_font_family(&self.settings_cjk_font, cx);
+        // 关键词列表先解析再清洗（去空、不分大小写去重、限长限条数），
+        // 让"界面上看到的"与"存进文件的"是同一份。
+        self.settings.terminal_profile.highlight.keywords = TerminalHighlight {
+            enabled: self.settings.terminal_profile.highlight.enabled,
+            keywords: TerminalHighlight::parse_keywords(
+                self.settings_highlight_keywords.read(cx).value().as_ref(),
+            ),
+        }
+        .sanitized()
+        .keywords;
         if let Ok(font_size) = self
             .settings_font_size
             .read(cx)
@@ -106,7 +119,7 @@ impl AppShell {
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             self.error = Some(localized_error(&error));
         } else {
-            self.apply_typography_to_live_panes(cx);
+            self.apply_appearance_to_live_panes(cx);
             self.apply_shortcut_settings(cx);
             self.status = Some(rust_i18n::t!("status.ready").to_string());
         }
@@ -114,12 +127,12 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 把排版偏好下发到所有已打开的窗格。
+    /// 把外观偏好下发到所有已打开的窗格。
     ///
     /// 不做这件事的话，改完字体要重开标签才见效，等于"设置了但没反应"。
     /// 会话本身也带 profile，但当前没有任何界面在会话级别改字体，因此以全局偏好为准；
     /// 将来开放会话级字体时，这里必须改成只补空白、不覆盖会话选择。
-    fn apply_typography_to_live_panes(&self, cx: &mut Context<Self>) {
+    fn apply_appearance_to_live_panes(&self, cx: &mut Context<Self>) {
         let profile = self.settings.terminal_profile.clone();
         // 先收集实体再逐个更新：遍历 self.tabs 与逐条 update 会同时借用 self。
         let terminals: Vec<Entity<TerminalView>> = self
@@ -128,7 +141,7 @@ impl AppShell {
             .filter_map(|tab| tab.terminal.clone())
             .collect();
         for terminal in terminals {
-            terminal.update(cx, |view, cx| view.apply_typography(&profile, cx));
+            terminal.update(cx, |view, cx| view.apply_appearance(&profile, cx));
         }
     }
 
@@ -348,6 +361,36 @@ impl AppShell {
                     .text_xs()
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("settings.cjk_font_note").to_string()),
+            )
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .py_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("settings.keyword_highlight").to_string()),
+                    )
+                    .child(
+                        Switch::new("toggle-keyword-highlight")
+                            .checked(self.settings.terminal_profile.highlight.enabled)
+                            .on_click(cx.listener(|this, &checked, _, cx| {
+                                this.settings.terminal_profile.highlight.enabled = checked;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(Self::form_field(
+                rust_i18n::t!("settings.highlight_keywords").to_string(),
+                self.settings_highlight_keywords.clone(),
+                p,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.highlight_keywords_note").to_string()),
             )
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_size").to_string(),

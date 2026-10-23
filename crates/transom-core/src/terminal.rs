@@ -1,4 +1,5 @@
 use crate::color::Rgb;
+use crate::highlight::TerminalHighlight;
 use flume::{Receiver, Sender};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -178,6 +179,9 @@ pub struct TerminalProfile {
     pub bold_is_bright: bool,
     #[serde(default = "default_true")]
     pub scroll_on_input: bool,
+    /// 关键词规则集自动高亮。
+    #[serde(default)]
+    pub highlight: TerminalHighlight,
     #[serde(default = "default_theme_name")]
     pub theme_name: String,
     pub palette: TerminalPalette,
@@ -197,6 +201,7 @@ impl Default for TerminalProfile {
             bold_is_bright: true,
             scroll_on_input: true,
             theme_name: default_theme_name(),
+            highlight: TerminalHighlight::default(),
             palette: TerminalPalette::default(),
         }
     }
