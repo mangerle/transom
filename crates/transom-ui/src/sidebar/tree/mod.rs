@@ -14,6 +14,32 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{Connection, FolderId, Session, SessionId};
 
+/// 行槽位高度：虚拟列表按它分配空间，渲染时必须严格一致，否则行会错位或裁切。
+const ROW_HEIGHT: Pixels = px(38.0);
+/// 内层高亮条高度：小于行槽位，留出上下间隙，同时把背景限制在内容区，缩进区保持透明。
+const BAND_HEIGHT: Pixels = px(34.0);
+/// 缩进基准与每级步长（逻辑像素）。
+const INDENT_BASE: f32 = 6.0;
+const INDENT_STEP: f32 = 18.0;
+/// 行内图标尺寸：与 34px 内容条匹配，默认的 14px 图标在这个高度下显得偏弱。
+const ROW_ICON_SIZE: Pixels = px(18.0);
+/// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
+const ROW_CHEVRON_SIZE: Pixels = px(14.0);
+/// 行背景深浅梯度：常态最轻，悬停加重，选中再加重，当前会话用实色最重。
+const TINT_IDLE: f32 = 0.14;
+const TINT_HOVER: f32 = 0.28;
+const TINT_SELECTED: f32 = 0.42;
+/// 已选行被悬停时继续加重，避免悬停反而把选中态冲淡。
+const TINT_SELECTED_HOVER: f32 = 0.5;
+/// 文件夹行整体比会话行更重一档，用于区分层级容器。
+const TINT_FOLDER_IDLE: f32 = 0.22;
+const TINT_FOLDER_HOVER: f32 = 0.36;
+
+/// 按层级计算行左内边距，文件夹与会话共用，保证同层对齐。
+fn indent_padding(depth: usize) -> Pixels {
+    px(INDENT_BASE + depth as f32 * INDENT_STEP)
+}
+
 /// 侧边栏拖动载荷：会话与文件夹共用一条拖放通道。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SidebarDrag {
@@ -77,10 +103,8 @@ pub(crate) enum SidebarRow {
 
 impl SidebarRow {
     pub(crate) fn height(&self) -> Pixels {
-        match self {
-            Self::Folder(_) => px(30.0),
-            Self::Session(_) => px(44.0),
-        }
+        // 文件夹与会话保持统一行高；内层内容条再压缩，兼顾两行信息与紧凑度。
+        ROW_HEIGHT
     }
 }
 
@@ -144,18 +168,15 @@ impl AppShell {
             IconName::ChevronDown
         };
 
-        let mut element = h_flex()
+        let element = div()
             .id(ElementId::Name(format!("folder-{folder_id}").into()))
             .w_full()
-            .h(px(30.0))
-            .pl(px(8.0 + row.depth as f32 * 14.0))
-            .pr_2()
-            .gap_1()
+            .h(ROW_HEIGHT)
+            .pl(indent_padding(row.depth))
+            .pr(px(4.0))
+            .flex()
             .items_center()
-            .rounded_md()
             .cursor_pointer()
-            .text_color(p.muted_foreground)
-            .hover(|style| style.bg(p.sidebar_accent.opacity(0.7)))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.toggle_folder_collapsed(folder_id, cx);
             }))
@@ -226,36 +247,48 @@ impl AppShell {
                             }),
                     )
                 }
-            })
-            .child(Icon::new(chevron).xsmall())
+            });
+        let mut band = h_flex()
+            .w_full()
+            .h(BAND_HEIGHT)
+            .px_2()
+            .gap_1()
+            .items_center()
+            .rounded_md()
+            .bg(p.sidebar_accent.opacity(TINT_FOLDER_IDLE))
+            .border_b_1()
+            .border_color(p.sidebar_border.opacity(0.55))
+            .text_color(p.sidebar_foreground)
+            .hover(|style| style.bg(p.sidebar_accent.opacity(TINT_FOLDER_HOVER)))
+            .child(Icon::new(chevron).with_size(ROW_CHEVRON_SIZE))
             .child(
                 Icon::new(if row.collapsed {
                     IconName::Folder
                 } else {
                     IconName::FolderOpen
                 })
-                .small(),
+                .with_size(ROW_ICON_SIZE),
             )
             .child(
                 div()
                     .flex_1()
                     .overflow_hidden()
                     .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
+                    .font_weight(FontWeight::SEMIBOLD)
                     .truncate()
                     .child(row.name.clone()),
             )
             .child(div().text_xs().child(row.session_count.to_string()));
 
         if row.folder_count > 0 {
-            element = element.child(
+            band = band.child(
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground.opacity(0.7))
                     .child(format!("({})", row.folder_count)),
             );
         }
-        element.into_any_element()
+        element.child(band).into_any_element()
     }
 
     pub(crate) fn render_session_row(
@@ -286,32 +319,15 @@ impl AppShell {
         let is_selected = self.selected_sessions.contains(&session_id);
         let drag_label = session.name.clone();
         let drag_icon = icon_name;
-        let mut row_element = div()
+        let element = div()
             .id(ElementId::Name(format!("session-{session_id}").into()))
             .w_full()
+            .h(ROW_HEIGHT)
+            .pl(indent_padding(row.depth))
+            .pr(px(4.0))
             .flex()
-            .flex_row()
-            .gap_2()
             .items_center()
-            .pl(px(8.0 + row.depth as f32 * 14.0))
-            .pr_2()
-            .py_2()
-            .rounded_md()
-            .cursor_pointer();
-        if is_active {
-            row_element = row_element
-                .bg(p.sidebar_accent)
-                .text_color(p.sidebar_accent_foreground);
-        } else if selection_mode && is_selected {
-            row_element = row_element.bg(p.sidebar_accent.opacity(0.45));
-        } else {
-            row_element = row_element.hover(|style| {
-                style
-                    .bg(p.sidebar_accent.opacity(0.7))
-                    .text_color(p.sidebar_accent_foreground)
-            });
-        }
-        let mut element = row_element
+            .cursor_pointer()
             .on_click(cx.listener(move |this, _, window, cx| {
                 if this.selection_mode {
                     let selected = this.selected_sessions.contains(&session_id);
@@ -406,8 +422,38 @@ impl AppShell {
                     )
                 }
             });
+        // 高亮与悬停只作用于内层内容条，缩进区保持透明，层级靠左偏移表达。
+        let is_selected_row = selection_mode && is_selected;
+        let tint = if is_active {
+            1.0
+        } else if is_selected_row {
+            TINT_SELECTED
+        } else {
+            TINT_IDLE
+        };
+        let hover_tint = if is_selected_row {
+            TINT_SELECTED_HOVER
+        } else {
+            TINT_HOVER
+        };
+        let mut inner = h_flex()
+            .w_full()
+            .h(BAND_HEIGHT)
+            .px_2()
+            .gap_2()
+            .items_center()
+            .rounded_md()
+            .bg(p.sidebar_accent.opacity(tint))
+            .text_color(if is_active {
+                p.sidebar_accent_foreground
+            } else {
+                p.sidebar_foreground
+            });
+        if !is_active {
+            inner = inner.hover(|style| style.bg(p.sidebar_accent.opacity(hover_tint)));
+        }
         if selection_mode {
-            element = element.child(
+            inner = inner.child(
                 Checkbox::new(ElementId::Name(
                     format!("session-select-{session_id}").into(),
                 ))
@@ -419,26 +465,33 @@ impl AppShell {
                 })),
             );
         }
-        element
-            .child(Icon::new(icon_name).text_color(if is_active {
-                p.sidebar_accent_foreground
-            } else {
-                p.muted_foreground
-            }))
+        let inner = inner
+            .child(
+                Icon::new(icon_name)
+                    .with_size(ROW_ICON_SIZE)
+                    .text_color(if is_active {
+                        p.sidebar_accent_foreground
+                    } else {
+                        p.muted_foreground
+                    }),
+            )
             .child(
                 v_flex()
                     .flex_1()
                     .overflow_hidden()
-                    .gap_0p5()
                     .child(
                         div()
                             .text_sm()
+                            .line_height(px(17.0))
                             .font_weight(FontWeight::MEDIUM)
+                            .truncate()
                             .child(session.name.clone()),
                     )
                     .child(
                         div()
                             .text_xs()
+                            .line_height(px(14.0))
+                            .truncate()
                             .text_color(if is_active {
                                 p.sidebar_accent_foreground
                             } else {
@@ -446,8 +499,8 @@ impl AppShell {
                             })
                             .child(detail_text),
                     ),
-            )
-            .into_any_element()
+            );
+        element.child(inner).into_any_element()
     }
 }
 
