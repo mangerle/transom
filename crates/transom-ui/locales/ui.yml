@@ -642,6 +642,9 @@ settings:
   shortcut_reconnect:
     en: Reconnect Current Tab
     zh-CN: 重新连接当前终端
+  shortcut_immersive:
+    en: Toggle Immersive Fullscreen
+    zh-CN: 切换沉浸式全屏
 monitor:
   cpu:
     en: CPU

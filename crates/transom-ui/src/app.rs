@@ -96,6 +96,8 @@ pub struct AppShell {
     pub(crate) status: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) sidebar_visible: bool,
+    /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
+    pub(crate) immersive: bool,
     pub(crate) _event_task: Task<()>,
 }
 
@@ -184,6 +186,7 @@ impl AppShell {
             status: None,
             error,
             sidebar_visible: true,
+            immersive: false,
             _event_task: event_task,
         };
 
@@ -210,7 +213,8 @@ impl AppShell {
 
     /// 保存当前窗口几何尺寸、坐标以及打开的会话标签页列表
     pub(crate) fn save_window_state(&mut self, window: &mut Window) {
-        if self.settings.window.remember_window_bounds {
+        // 全屏时的窗口几何是屏幕尺寸，写入设置会污染下次普通启动的窗口位置。
+        if self.settings.window.remember_window_bounds && !window.is_fullscreen() {
             let bounds = window.bounds();
             self.settings.window.window_width = bounds.size.width / px(1.0);
             self.settings.window.window_height = bounds.size.height / px(1.0);
@@ -296,6 +300,30 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 切换沉浸式全屏：同步系统窗口全屏状态与应用外框显隐。
+    ///
+    /// 侧边栏、SFTP 与转发面板只做“隐藏渲染”而不清除自身开关状态，
+    /// 退出沉浸模式后能原样恢复用户此前的工作布局。
+    pub(crate) fn on_toggle_immersive(
+        &mut self,
+        _: &keymap::ToggleImmersive,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.immersive = !self.immersive;
+        window.toggle_fullscreen();
+        if self.immersive
+            && let Some(focus_handle) = self
+                .active_tab
+                .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+                .and_then(|tab| tab.terminal.as_ref())
+                .map(|terminal| terminal.read(cx).focus_handle().clone())
+        {
+            window.focus(&focus_handle, cx);
+        }
+        cx.notify();
+    }
+
     pub(crate) fn render_overlays(
         &mut self,
         window: &mut Window,
@@ -349,11 +377,11 @@ impl AppShell {
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
-        let top_bar = self.render_top_bar(window, cx, &p);
-        let activity_bar = self.render_activity_bar(window, cx, &p);
+        let top_bar = (!self.immersive).then(|| self.render_top_bar(window, cx, &p));
+        let activity_bar = (!self.immersive).then(|| self.render_activity_bar(window, cx, &p));
 
         let mut resizable_group = h_resizable("workspace-panels");
-        if self.sidebar_visible {
+        if self.sidebar_visible && !self.immersive {
             resizable_group = resizable_group.child(
                 resizable_panel()
                     .size(px(270.0))
@@ -367,7 +395,7 @@ impl Render for AppShell {
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.sftp.is_some());
-        if show_sftp {
+        if show_sftp && !self.immersive {
             resizable_group = resizable_group.child(
                 resizable_panel()
                     .size(px(760.0))
@@ -379,7 +407,7 @@ impl Render for AppShell {
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.forwards_panel.is_some());
-        if show_forwards {
+        if show_forwards && !self.immersive {
             resizable_group = resizable_group.child(
                 resizable_panel()
                     .size(px(340.0))
@@ -388,25 +416,25 @@ impl Render for AppShell {
             );
         }
 
-        let main_row = h_flex()
-            .flex_1()
-            .overflow_hidden()
-            .child(activity_bar)
-            .child(
-                div()
-                    .flex_1()
-                    .h_full()
-                    .overflow_hidden()
-                    .child(resizable_group),
-            );
+        let mut main_row = h_flex().flex_1().overflow_hidden();
+        if let Some(activity_bar) = activity_bar {
+            main_row = main_row.child(activity_bar);
+        }
+        main_row = main_row.child(
+            div()
+                .flex_1()
+                .h_full()
+                .overflow_hidden()
+                .child(resizable_group),
+        );
         let error_banner = self
             .error
             .as_ref()
             .map(|_| self.render_error_banner(&p, cx));
-        let status_bar = self.render_status_bar(&p);
+        let status_bar = (!self.immersive).then(|| self.render_status_bar(&p));
         let overlays = self.render_overlays(window, cx);
 
-        div()
+        let mut root = div()
             .key_context(keymap::WORKSPACE_CONTEXT)
             .on_action(cx.listener(Self::on_new_session))
             .on_action(cx.listener(Self::on_new_local_terminal))
@@ -418,16 +446,23 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_toggle_sidebar))
             .on_action(cx.listener(Self::on_toggle_sftp))
             .on_action(cx.listener(Self::on_toggle_forward))
+            .on_action(cx.listener(Self::on_toggle_immersive))
             .relative()
             .size_full()
             .flex()
             .flex_col()
             .bg(p.background)
-            .text_color(p.foreground)
-            .child(top_bar)
-            .child(main_row)
-            .children(error_banner)
-            .child(status_bar)
-            .children(overlays)
+            .text_color(p.foreground);
+        if let Some(top_bar) = top_bar {
+            root = root.child(top_bar);
+        }
+        root = root.child(main_row);
+        if let Some(error_banner) = error_banner {
+            root = root.child(error_banner);
+        }
+        if let Some(status_bar) = status_bar {
+            root = root.child(status_bar);
+        }
+        root.children(overlays)
     }
 }

@@ -13,6 +13,7 @@ actions!(
         ToggleSidebar,
         ToggleSftp,
         ToggleForward,
+        ToggleImmersive,
         FocusSftpFilter,
         ToggleSftpHidden,
         DeleteSftpSelection
@@ -48,6 +49,8 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new(&format!("{prefix}-p"), ToggleForward, Some(WORKSPACE_ONLY)),
         KeyBinding::new("ctrl-tab", NextTab, Some(WORKSPACE_ONLY)),
         KeyBinding::new("ctrl-shift-tab", PrevTab, Some(WORKSPACE_ONLY)),
+        KeyBinding::new("f11", ToggleImmersive, Some(WORKSPACE_ONLY)),
+        KeyBinding::new("alt-enter", ToggleImmersive, Some(WORKSPACE_ONLY)),
         KeyBinding::new("secondary-f", FocusSftpFilter, Some(SFTP_CONTEXT)),
         KeyBinding::new("ctrl-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
         KeyBinding::new("secondary-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
@@ -59,6 +62,14 @@ pub fn bindings() -> Vec<KeyBinding> {
 /// control characters; it lets the workspace action handle them instead.
 pub fn is_app_shortcut(keystroke: &Keystroke) -> bool {
     let key = keystroke.key.to_ascii_lowercase();
+    if key == "f11"
+        || (key == "enter"
+            && keystroke.modifiers.alt
+            && !keystroke.modifiers.control
+            && !keystroke.modifiers.platform)
+    {
+        return true;
+    }
     let is_action = matches!(key.as_str(), "n" | "t" | "k" | "w" | "r" | "b" | "s" | "p");
 
     #[cfg(target_os = "macos")]

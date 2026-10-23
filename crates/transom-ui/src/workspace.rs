@@ -232,8 +232,10 @@ impl AppShell {
             .flex_1()
             .h_full()
             .overflow_hidden()
-            .bg(p.background)
-            .child(tab_strip);
+            .bg(p.background);
+        if !self.immersive {
+            main = main.child(tab_strip);
+        }
         if let Some(tab_id) = disconnected_tab {
             main = main.child(self.render_reconnect_banner(tab_id, p, cx));
         }

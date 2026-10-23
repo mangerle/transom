@@ -395,6 +395,7 @@ impl AppShell {
             ("settings.shortcut_next_tab", &["Ctrl", "Tab"][..]),
             ("settings.shortcut_prev_tab", &["Ctrl", "Shift", "Tab"][..]),
             ("settings.shortcut_reconnect", &["Ctrl", "R"][..]),
+            ("settings.shortcut_immersive", &["F11", "Alt", "Enter"][..]),
         ];
 
         v_flex()
