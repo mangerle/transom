@@ -86,6 +86,7 @@ impl AppShell {
 
     /// 将勾选的差异项打包成一个同步任务入队并启动队列。
     pub(crate) fn start_sftp_sync(&mut self, cx: &mut Context<Self>) {
+        let verify = self.settings.sftp.verify_after_transfer;
         let Some(mut modal) = self.sftp_sync_modal.take() else {
             return;
         };
@@ -124,12 +125,13 @@ impl AppShell {
             return;
         }
 
-        let task = TransferTask::new_sync(
+        let mut task = TransferTask::new_sync(
             modal.local_root.clone(),
             modal.remote_root.clone(),
             items,
             Some(total_size),
         );
+        task.verify = verify;
         if let Some(panel) = self
             .tabs
             .iter_mut()

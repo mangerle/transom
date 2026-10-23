@@ -7939,6 +7939,7 @@ dependencies = [
  "parking_lot",
  "russh",
  "russh-sftp",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "tracing",

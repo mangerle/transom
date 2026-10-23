@@ -40,6 +40,7 @@ rfd = "0.15"
 notify-rust = "4"
 chrono = "0.4"
 globset = "0.4"
+sha2 = "0.10"
 
 transom-core = { path = "crates/transom-core" }
 transom-store = { path = "crates/transom-store" }

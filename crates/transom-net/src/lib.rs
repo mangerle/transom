@@ -6,6 +6,7 @@ mod client;
 mod forward;
 mod sftp;
 mod sftp_dir;
+mod sftp_hash;
 mod sftp_sync;
 
 pub use auth::{AuthPrompter, PasswordPrompter};

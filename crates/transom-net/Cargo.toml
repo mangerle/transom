@@ -13,6 +13,7 @@ flume.workspace = true
 zeroize.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 parking_lot.workspace = true

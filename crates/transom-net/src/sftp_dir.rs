@@ -45,6 +45,7 @@ impl SftpClient {
         remote_root: &str,
         resume: bool,
         filter: &TransferFilter,
+        verify: bool,
         mut progress: F,
     ) -> Result<TransferSummary, AppError>
     where
@@ -71,12 +72,16 @@ impl SftpClient {
                     progress(base.saturating_add(transferred), Some(total));
                 })
                 .await?;
+            if verify {
+                self.verify_file(&local_path, &remote_path).await?;
+            }
             completed = completed.saturating_add(transferred);
         }
 
         Ok(TransferSummary {
             transferred: completed,
             skipped: scan.skipped,
+            verified: verify,
         })
     }
 
@@ -94,6 +99,7 @@ impl SftpClient {
         local_root: &Path,
         resume: bool,
         filter: &TransferFilter,
+        verify: bool,
         mut progress: F,
     ) -> Result<TransferSummary, AppError>
     where
@@ -129,12 +135,16 @@ impl SftpClient {
                     progress(base.saturating_add(transferred), Some(total));
                 })
                 .await?;
+            if verify {
+                self.verify_file(&local_path, &remote_path).await?;
+            }
             completed = completed.saturating_add(transferred);
         }
 
         Ok(TransferSummary {
             transferred: completed,
             skipped: scan.skipped,
+            verified: verify,
         })
     }
 

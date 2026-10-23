@@ -76,6 +76,8 @@ pub struct TransferSummary {
     pub transferred: u64,
     /// 被排除规则或符号链接跳过的条目数
     pub skipped: u64,
+    /// 是否请求了 SHA256 校验且全部文件校验通过
+    pub verified: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,6 +105,9 @@ pub struct TransferTask {
     /// 同步任务携带的差异项；其他任务为空。
     #[serde(default)]
     pub sync_items: Vec<SyncItem>,
+    /// 任务入队时是否要求传输完成后做 SHA256 校验。
+    #[serde(default)]
+    pub verify: bool,
 }
 
 impl TransferTask {
@@ -124,6 +129,7 @@ impl TransferTask {
             status: TransferStatus::Pending,
             mode,
             sync_items: Vec::new(),
+            verify: false,
         }
     }
 
@@ -169,11 +175,13 @@ pub enum SftpOperation {
         remote_path: String,
         local_path: PathBuf,
         resume: bool,
+        verify: bool,
     },
     Upload {
         local_path: PathBuf,
         remote_path: String,
         resume: bool,
+        verify: bool,
     },
     /// 递归上传整棵本地目录；`filter` 在遍历时剪枝被排除的子目录与文件。
     UploadDir {
@@ -181,6 +189,7 @@ pub enum SftpOperation {
         remote_path: String,
         resume: bool,
         filter: TransferFilter,
+        verify: bool,
     },
     /// 递归下载整棵远端目录；`filter` 语义与 `UploadDir` 一致。
     DownloadDir {
@@ -188,6 +197,7 @@ pub enum SftpOperation {
         local_path: PathBuf,
         resume: bool,
         filter: TransferFilter,
+        verify: bool,
     },
     Mkdir {
         path: String,
@@ -224,6 +234,7 @@ pub enum SftpOperation {
         local_path: PathBuf,
         remote_path: String,
         items: Vec<SyncItem>,
+        verify: bool,
     },
 }
 

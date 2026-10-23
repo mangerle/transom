@@ -43,6 +43,7 @@ impl SftpClient {
         local_root: &Path,
         remote_root: &str,
         items: &[SyncItem],
+        verify: bool,
         mut progress: F,
     ) -> Result<TransferSummary, AppError>
     where
@@ -96,6 +97,9 @@ impl SftpClient {
                             progress(base.saturating_add(transferred), Some(total));
                         })
                         .await?;
+                    if verify {
+                        self.verify_file(&local_path, &remote_path).await?;
+                    }
                     completed = completed.saturating_add(transferred);
                 }
                 (SyncDirection::Download, false) => {
@@ -112,6 +116,9 @@ impl SftpClient {
                             progress(base.saturating_add(transferred), Some(total));
                         })
                         .await?;
+                    if verify {
+                        self.verify_file(&local_path, &remote_path).await?;
+                    }
                     completed = completed.saturating_add(transferred);
                 }
             }
@@ -120,6 +127,7 @@ impl SftpClient {
         Ok(TransferSummary {
             transferred: completed,
             skipped: 0,
+            verified: verify,
         })
     }
 }

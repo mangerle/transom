@@ -417,6 +417,7 @@ impl AppShell {
         remote_path: String,
         cx: &mut Context<Self>,
     ) {
+        let verify = self.settings.sftp.verify_after_transfer;
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -441,13 +442,14 @@ impl AppShell {
         }
         let sanitized_name = entry.path.trim_start_matches('/').replace('/', "__");
         let local_path = edit_dir.join(sanitized_name);
-        let task = TransferTask::new(
+        let mut task = TransferTask::new(
             TransferDirection::Download,
             local_path.clone(),
             entry.path.clone(),
             Some(entry.size),
             TransferMode::Overwrite,
         );
+        task.verify = verify;
         panel.pending_edit_ops.insert(
             task.id,
             (local_path, entry.path.clone(), entry.name.clone()),
@@ -459,6 +461,7 @@ impl AppShell {
     }
 
     pub(crate) fn save_sftp_editor_modal(&mut self, cx: &mut Context<Self>) {
+        let verify = self.settings.sftp.verify_after_transfer;
         let Some(modal) = self.sftp_editor_modal.take() else {
             return;
         };
@@ -474,13 +477,14 @@ impl AppShell {
         if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id)
             && let Some(panel) = tab.sftp.as_mut()
         {
-            let task = TransferTask::new(
+            let mut task = TransferTask::new(
                 TransferDirection::Upload,
                 modal.local_path,
                 modal.remote_path,
                 Some(content.len() as u64),
                 TransferMode::Overwrite,
             );
+            task.verify = verify;
             panel.queue.push(task);
             panel.status = Some(format!("已保存并回传远端文件: {}", modal.file_name));
         }

@@ -87,6 +87,7 @@ impl AppShell {
 
         let queue = panel.queue.clone();
         let resume_enabled = panel.resume_enabled;
+        let verify_after_transfer = self.settings.sftp.verify_after_transfer;
         let queue_expanded = panel.queue_expanded;
 
         let local_pane = self.render_sftp_local_pane(
@@ -661,6 +662,7 @@ impl AppShell {
                 tab_id,
                 queue: &queue,
                 resume_enabled,
+                verify_after_transfer,
                 queue_expanded,
                 queue_height,
             },

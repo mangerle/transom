@@ -422,6 +422,16 @@ async fn sftp_list_upload_download_and_mutations() {
         .await
         .expect("upload");
     assert_eq!(transferred, 10);
+    client
+        .verify_file(&local, "/uploaded.txt")
+        .await
+        .expect("上传文件 SHA256 校验");
+    tokio::fs::write(&local, b"tampered").await.unwrap();
+    assert!(
+        client.verify_file(&local, "/uploaded.txt").await.is_err(),
+        "本地内容被篡改后校验必须失败"
+    );
+    tokio::fs::write(&local, b"hello sftp").await.unwrap();
 
     let downloaded = dir.path().join("downloaded.txt");
     let transferred = client
@@ -489,7 +499,7 @@ async fn sftp_list_upload_download_and_mutations() {
     let filter = TransferFilter::from_text(".git/\nnode_modules/\n*.tmp");
     let expected_tree_bytes = "fn main() {}\n".len() as u64;
     let summary = client
-        .upload_dir(&local_tree, "/tree", true, &filter, |_, _| {})
+        .upload_dir(&local_tree, "/tree", true, &filter, true, |_, _| {})
         .await
         .expect("upload directory");
     assert_eq!(summary.transferred, expected_tree_bytes);
@@ -518,7 +528,7 @@ async fn sftp_list_upload_download_and_mutations() {
 
     let downloaded_tree = dir.path().join("downloaded-tree");
     let summary = client
-        .download_dir("/tree", &downloaded_tree, true, &filter, |_, _| {})
+        .download_dir("/tree", &downloaded_tree, true, &filter, true, |_, _| {})
         .await
         .expect("download directory");
     assert_eq!(summary.transferred, expected_tree_bytes);
@@ -532,7 +542,14 @@ async fn sftp_list_upload_download_and_mutations() {
     let invalid_filter = TransferFilter::from_text("[broken");
     assert!(
         client
-            .upload_dir(&local_tree, "/invalid", true, &invalid_filter, |_, _| {})
+            .upload_dir(
+                &local_tree,
+                "/invalid",
+                true,
+                &invalid_filter,
+                true,
+                |_, _| {}
+            )
             .await
             .is_err(),
         "非法过滤规则应直接失败"
@@ -612,7 +629,7 @@ async fn sftp_list_upload_download_and_mutations() {
         .collect::<Vec<_>>();
     let expected_sync_bytes = items.iter().map(|item| item.size).sum::<u64>();
     let summary = client
-        .sync_items(&sync_local, "/sync-remote", &items, |_, _| {})
+        .sync_items(&sync_local, "/sync-remote", &items, true, |_, _| {})
         .await
         .expect("sync directories");
     assert_eq!(summary.transferred, expected_sync_bytes);

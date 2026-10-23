@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::process::Command;
 use tokio::runtime::Runtime;
@@ -530,6 +531,7 @@ async fn execute_sftp_op(
             remote_path,
             local_path,
             resume,
+            verify,
         } => {
             let progress_tx = event_tx.clone();
             let result = client
@@ -548,12 +550,15 @@ async fn execute_sftp_op(
                     },
                 )
                 .await;
+            let result =
+                verify_transfer_result(&client, result, verify, &local_path, &remote_path).await;
             finish_sftp(event_tx, tab_id, connection_id, op_id, result);
         }
         SftpOperation::Upload {
             local_path,
             remote_path,
             resume,
+            verify,
         } => {
             let progress_tx = event_tx.clone();
             let result = client
@@ -572,6 +577,8 @@ async fn execute_sftp_op(
                     },
                 )
                 .await;
+            let result =
+                verify_transfer_result(&client, result, verify, &local_path, &remote_path).await;
             finish_sftp(event_tx, tab_id, connection_id, op_id, result);
         }
         SftpOperation::UploadDir {
@@ -579,6 +586,7 @@ async fn execute_sftp_op(
             remote_path,
             resume,
             filter,
+            verify,
         } => {
             let progress_tx = event_tx.clone();
             let result = client
@@ -587,6 +595,7 @@ async fn execute_sftp_op(
                     &remote_path,
                     resume,
                     &filter,
+                    verify,
                     move |transferred, total| {
                         let _ = progress_tx.send(AppEvent::SftpProgress {
                             tab_id,
@@ -605,6 +614,7 @@ async fn execute_sftp_op(
             local_path,
             resume,
             filter,
+            verify,
         } => {
             let progress_tx = event_tx.clone();
             let result = client
@@ -613,6 +623,7 @@ async fn execute_sftp_op(
                     &local_path,
                     resume,
                     &filter,
+                    verify,
                     move |transferred, total| {
                         let _ = progress_tx.send(AppEvent::SftpProgress {
                             tab_id,
@@ -693,6 +704,7 @@ async fn execute_sftp_op(
             local_path,
             remote_path,
             items,
+            verify,
         } => {
             let progress_tx = event_tx.clone();
             let result = client
@@ -700,6 +712,7 @@ async fn execute_sftp_op(
                     &local_path,
                     &remote_path,
                     &items,
+                    verify,
                     move |transferred, total| {
                         let _ = progress_tx.send(AppEvent::SftpProgress {
                             tab_id,
@@ -716,21 +729,36 @@ async fn execute_sftp_op(
     }
 }
 
+async fn verify_transfer_result(
+    client: &SftpClient,
+    result: Result<u64, AppError>,
+    verify: bool,
+    local_path: &Path,
+    remote_path: &str,
+) -> Result<(u64, bool), AppError> {
+    let transferred = result?;
+    if verify {
+        client.verify_file(local_path, remote_path).await?;
+    }
+    Ok((transferred, verify))
+}
+
 fn finish_sftp(
     event_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
     connection_id: ConnectionId,
     op_id: TransferId,
-    result: Result<u64, AppError>,
+    result: Result<(u64, bool), AppError>,
 ) {
     match result {
-        Ok(transferred) => {
+        Ok((transferred, verified)) => {
             let _ = event_tx.send(AppEvent::SftpFinished {
                 tab_id,
                 connection_id,
                 op_id,
                 transferred: Some(transferred),
                 skipped: 0,
+                verified,
             });
         }
         Err(error) => {
@@ -759,6 +787,7 @@ fn finish_sftp_summary(
                 op_id,
                 transferred: Some(summary.transferred),
                 skipped: summary.skipped,
+                verified: summary.verified,
             });
         }
         Err(error) => {
@@ -787,6 +816,7 @@ fn finish_sftp_none(
                 op_id,
                 transferred: None,
                 skipped: 0,
+                verified: false,
             });
         }
         Err(error) => {

@@ -376,6 +376,12 @@ sftp:
   skipped_items:
     en: Excluded items
     zh-CN: 已排除条目
+  sha256_verified:
+    en: SHA256 verified
+    zh-CN: SHA256 校验通过
+  verify_after_transfer:
+    en: SHA256 Verify
+    zh-CN: 传输后校验
   filter_rules:
     en: Transfer Filter Rules
     zh-CN: 传输过滤规则

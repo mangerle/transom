@@ -167,6 +167,7 @@ impl AppShell {
                 op_id,
                 transferred,
                 skipped,
+                verified,
             } => {
                 let mut refresh = None;
                 let mut refresh_local = false;
@@ -206,14 +207,18 @@ impl AppShell {
                             ),
                             None => rust_i18n::t!("sftp.operation_done").to_string(),
                         };
-                        panel.status = Some(if skipped > 0 {
-                            format!(
-                                "{base} | {}: {skipped}",
+                        let mut message = base;
+                        if skipped > 0 {
+                            message.push_str(&format!(
+                                " | {}: {skipped}",
                                 rust_i18n::t!("sftp.skipped_items")
-                            )
-                        } else {
-                            base
-                        });
+                            ));
+                        }
+                        if verified {
+                            message
+                                .push_str(&format!(" | {}", rust_i18n::t!("sftp.sha256_verified")));
+                        }
+                        panel.status = Some(message);
                         refresh = Some(panel.path.clone());
                     }
                 }

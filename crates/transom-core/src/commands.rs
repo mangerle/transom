@@ -85,6 +85,8 @@ pub enum AppEvent {
         transferred: Option<u64>,
         /// 目录传输中被排除规则或符号链接跳过的条目数；单文件操作为 0。
         skipped: u64,
+        /// 是否请求并完成了 SHA256 校验。
+        verified: bool,
     },
     SftpMetadata {
         tab_id: TabId,

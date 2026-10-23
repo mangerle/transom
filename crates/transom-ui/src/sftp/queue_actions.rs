@@ -10,6 +10,7 @@ use transom_core::{
 
 impl AppShell {
     pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let verify = self.settings.sftp.verify_after_transfer;
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -38,7 +39,7 @@ impl AppShell {
         } else {
             TransferMode::Overwrite
         };
-        let task = if is_directory {
+        let mut task = if is_directory {
             TransferTask::new_directory(
                 TransferDirection::Upload,
                 local_path,
@@ -55,12 +56,14 @@ impl AppShell {
                 mode,
             )
         };
+        task.verify = verify;
         panel.queue.push(task);
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }
 
     pub(crate) fn sftp_queue_download(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let verify = self.settings.sftp.verify_after_transfer;
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -83,7 +86,7 @@ impl AppShell {
         } else {
             TransferMode::Overwrite
         };
-        let task = if remote_entry.is_dir {
+        let mut task = if remote_entry.is_dir {
             TransferTask::new_directory(
                 TransferDirection::Download,
                 local_path,
@@ -100,6 +103,7 @@ impl AppShell {
                 mode,
             )
         };
+        task.verify = verify;
         panel.queue.push(task);
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
@@ -140,27 +144,32 @@ impl AppShell {
                 remote_path: task.remote_path,
                 resume,
                 filter,
+                verify: task.verify,
             },
             (TransferKind::Directory, TransferDirection::Download) => SftpOperation::DownloadDir {
                 remote_path: task.remote_path,
                 local_path: task.local_path,
                 resume,
                 filter,
+                verify: task.verify,
             },
             (TransferKind::File, TransferDirection::Upload) => SftpOperation::Upload {
                 local_path: task.local_path,
                 remote_path: task.remote_path,
                 resume,
+                verify: task.verify,
             },
             (TransferKind::File, TransferDirection::Download) => SftpOperation::Download {
                 remote_path: task.remote_path,
                 local_path: task.local_path,
                 resume,
+                verify: task.verify,
             },
             (TransferKind::Sync, TransferDirection::Sync) => SftpOperation::SyncDirs {
                 local_path: task.local_path,
                 remote_path: task.remote_path,
                 items: task.sync_items,
+                verify: task.verify,
             },
             _ => {
                 panel.queue[index].status =

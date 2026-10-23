@@ -2,7 +2,7 @@
 
 use super::format_size;
 use crate::app::AppShell;
-use crate::palette::Palette;
+use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -30,6 +30,7 @@ pub(crate) struct SftpQueuePaneProps<'a> {
     pub(crate) tab_id: TabId,
     pub(crate) queue: &'a [TransferTask],
     pub(crate) resume_enabled: bool,
+    pub(crate) verify_after_transfer: bool,
     pub(crate) queue_expanded: bool,
     pub(crate) queue_height: f32,
 }
@@ -44,6 +45,7 @@ impl AppShell {
         let tab_id = props.tab_id;
         let queue = props.queue;
         let resume_enabled = props.resume_enabled;
+        let verify_after_transfer = props.verify_after_transfer;
         let queue_expanded = props.queue_expanded;
         let queue_height = props.queue_height;
         let mut queue_rows: Vec<AnyElement> = Vec::with_capacity(queue.len().max(1));
@@ -239,6 +241,16 @@ impl AppShell {
                                     .child(rust_i18n::t!("sftp.folder_tag").to_string()),
                             )
                         })
+                        .when(task.verify, |this| {
+                            this.child(
+                                div()
+                                    .px_1()
+                                    .rounded_sm()
+                                    .bg(p.muted)
+                                    .text_color(p.muted_foreground)
+                                    .child("SHA256"),
+                            )
+                        })
                         .child(div().flex_1().overflow_hidden().child(file_name))
                         .child(div().text_color(p.muted_foreground).child(match task.size {
                             Some(total) => format!(
@@ -325,6 +337,42 @@ impl AppShell {
                                                     panel.resume_enabled = checked;
                                                     cx.notify();
                                                 }
+                                            })),
+                                    ),
+                            )
+                            .child(
+                                h_flex()
+                                    .gap_1p5()
+                                    .items_center()
+                                    .child(div().text_xs().text_color(p.muted_foreground).child(
+                                        rust_i18n::t!("sftp.verify_after_transfer").to_string(),
+                                    ))
+                                    .child(
+                                        Switch::new("toggle-verify-after-transfer")
+                                            .small()
+                                            .checked(verify_after_transfer)
+                                            .on_click(cx.listener(move |this, &checked, _, cx| {
+                                                this.settings.sftp.verify_after_transfer = checked;
+                                                match this
+                                                    .services
+                                                    .settings_store
+                                                    .save(&this.settings)
+                                                {
+                                                    Ok(()) => {
+                                                        this.status = Some(
+                                                            if checked {
+                                                                "已开启传输后 SHA256 校验"
+                                                            } else {
+                                                                "已关闭传输后 SHA256 校验"
+                                                            }
+                                                            .to_string(),
+                                                        );
+                                                    }
+                                                    Err(error) => {
+                                                        this.error = Some(localized_error(&error));
+                                                    }
+                                                }
+                                                cx.notify();
                                             })),
                                     ),
                             ),

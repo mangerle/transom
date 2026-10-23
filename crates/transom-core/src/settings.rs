@@ -97,12 +97,16 @@ pub struct AppSettings {
 pub struct SftpSettings {
     #[serde(default = "default_transfer_filter")]
     pub transfer_filter: String,
+    /// 传输完成后是否计算并比对两端 SHA256；默认关闭以避免大文件额外读盘。
+    #[serde(default)]
+    pub verify_after_transfer: bool,
 }
 
 impl Default for SftpSettings {
     fn default() -> Self {
         Self {
             transfer_filter: default_transfer_filter(),
+            verify_after_transfer: false,
         }
     }
 }
