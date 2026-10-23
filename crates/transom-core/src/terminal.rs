@@ -140,6 +140,12 @@ fn default_true() -> bool {
     true
 }
 
+/// 与 `alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS` 逐字一致，保证不改设置时行为与内核
+/// 口径相同；两者一致性由 transom-terminal 的对照测试兜住（core 不依赖仿真内核，拿不到常量）。
+fn default_word_separators() -> String {
+    ",│`|:\"' ()[]{}<>\t".to_string()
+}
+
 fn default_theme_name() -> String {
     "One Dark".to_string()
 }
@@ -161,6 +167,13 @@ pub struct TerminalProfile {
     /// 默认光标形状；应用可通过转义序列覆盖。
     #[serde(default)]
     pub cursor_shape: TerminalCursorShape,
+    /// 双击选词时的分隔字符：命中其中任意一个即断词。
+    ///
+    /// 放在 profile 而不是 interaction：断词是仿真内核算的（`SelectionType::Semantic`
+    /// 由 alacritty_terminal 的 `Config::semantic_escape_chars` 驱动），不是视图层行为。
+    /// 刻意不做 trim：空格本身就是合法分隔符，去掉首尾空格会让"只按空格断词"无法表达。
+    #[serde(default = "default_word_separators")]
+    pub word_separators: String,
     #[serde(default = "default_true")]
     pub bold_is_bright: bool,
     #[serde(default = "default_true")]
@@ -180,6 +193,7 @@ impl Default for TerminalProfile {
             scrollback: 10_000,
             cursor_blink: true,
             cursor_shape: TerminalCursorShape::default(),
+            word_separators: default_word_separators(),
             bold_is_bright: true,
             scroll_on_input: true,
             theme_name: default_theme_name(),
@@ -225,6 +239,30 @@ mod tests {
             TerminalControl::Resize(TerminalSize::new(120, 40))
         );
         assert_eq!(receiver.try_recv().unwrap(), TerminalControl::Close);
+    }
+
+    /// 分隔符属仿真内核配置：老配置没有这个字段时要退回内核默认，而不是加载失败。
+    #[test]
+    fn word_separators_default_and_round_trip() {
+        let default_separators = TerminalProfile::default().word_separators.clone();
+        assert!(default_separators.contains(','));
+        assert!(default_separators.contains(' '), "空格默认应断词");
+        assert!(default_separators.contains('('));
+        let profile = TerminalProfile {
+            word_separators: "-/.".into(),
+            ..TerminalProfile::default()
+        };
+        let json = serde_json::to_string(&profile).unwrap();
+        let decoded: TerminalProfile = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.word_separators, "-/.");
+
+        let mut value = serde_json::to_value(&profile).unwrap();
+        value.as_object_mut().unwrap().remove("word_separators");
+        let legacy: TerminalProfile = serde_json::from_value(value).unwrap();
+        assert_eq!(
+            legacy.word_separators,
+            TerminalProfile::default().word_separators
+        );
     }
 
     #[test]

@@ -41,6 +41,13 @@ impl AppShell {
         self.settings_line_height.update(cx, |input, cx| {
             input.set_value(&line_height, window, cx);
         });
+        self.settings_word_separators.update(cx, |input, cx| {
+            input.set_value(
+                self.settings.terminal_profile.word_separators.clone(),
+                window,
+                cx,
+            );
+        });
         let scrollback = self.settings.terminal_profile.scrollback.to_string();
         self.settings_scrollback.update(cx, |input, cx| {
             input.set_value(&scrollback, window, cx);
@@ -74,6 +81,9 @@ impl AppShell {
         {
             self.settings.terminal_profile.line_height = line_height;
         }
+        // 空串是有值意义的（不按任何字符断词），因此这里不 trim、也不拒绝空值。
+        self.settings.terminal_profile.word_separators =
+            self.settings_word_separators.read(cx).value().to_string();
         if let Ok(scrollback) = self
             .settings_scrollback
             .read(cx)

@@ -271,6 +271,7 @@ pub struct AppShell {
     pub(crate) settings_font_size: Entity<InputState>,
     pub(crate) settings_line_height: Entity<InputState>,
     pub(crate) settings_scrollback: Entity<InputState>,
+    pub(crate) settings_word_separators: Entity<InputState>,
     pub(crate) confirm_forward_any: Option<PendingForwardConfirm>,
     pub(crate) sftp_editor_modal: Option<SftpEditorModalState>,
     pub(crate) sftp_chmod_modal: Option<SftpChmodModalState>,
@@ -378,6 +379,12 @@ impl AppShell {
                 .placeholder("1.2")
                 .default_value(&line_height_val)
         });
+        // 分隔符必须原样回填：空格本身就是合法分隔符，任何 trim 都会吃掉用户意图。
+        let settings_word_separators = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.word_separators_hint").to_string())
+                .default_value(settings.terminal_profile.word_separators.clone())
+        });
         let scrollback_val = settings.terminal_profile.scrollback.to_string();
         let settings_scrollback = cx.new(|cx| {
             InputState::new(window, cx)
@@ -410,6 +417,7 @@ impl AppShell {
             settings_font_size,
             settings_line_height,
             settings_scrollback,
+            settings_word_separators,
             confirm_forward_any: None,
             sftp_editor_modal: None,
             sftp_chmod_modal: None,

@@ -825,6 +825,18 @@ settings:
   font_family_hint:
     en: Empty follows the app default monospace font
     zh-CN: 留空跟随应用默认等宽字体
+  selection:
+    en: Selection
+    zh-CN: 选词与选择
+  word_separators:
+    en: Word Separators (double-click)
+    zh-CN: 双击选词分隔符
+  word_separators_hint:
+    en: Characters that break a word, e.g. - _ . /
+    zh-CN: 出现在这些字符处即断开单词，例如 - _ . /
+  word_separators_note:
+    en: Space and tab count as separators if listed; the string is used verbatim. Applies to newly opened panes — the emulator fixes this at startup, and rebuilding it would drop scrollback.
+    zh-CN: 字符串按原样使用：需要空格或制表符断词就得把它们写进来。改动只对之后新建的窗格生效——仿真内核在建立时固定该配置，重建会丢掉回滚历史。
   cjk_font:
     en: Second Font (Chinese, Japanese, Korean)
     zh-CN: 中文字体（独立渲染双格字符）

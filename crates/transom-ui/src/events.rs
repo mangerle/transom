@@ -48,6 +48,9 @@ impl AppShell {
                 profile.cjk_font_family = self.settings.terminal_profile.cjk_font_family.clone();
                 profile.font_size = self.settings.terminal_profile.font_size;
                 profile.line_height = self.settings.terminal_profile.line_height;
+                // 分隔符同样没有会话级入口，且老会话文件里存的是内核默认值；
+                // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
+                profile.word_separators = self.settings.terminal_profile.word_separators.clone();
                 let interaction = self.settings.terminal_interaction;
                 let reserved = self.shortcut_filter.clone();
                 let key_filter: KeyFilter = Arc::new(move |keystroke| {

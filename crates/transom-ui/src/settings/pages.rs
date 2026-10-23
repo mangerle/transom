@@ -210,7 +210,7 @@ impl AppShell {
 
     pub(crate) fn render_settings_mouse_clipboard(
         &mut self,
-        _p: &Palette,
+        p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let is_paste_mode = self.settings.terminal_interaction.right_click_paste;
@@ -281,6 +281,24 @@ impl AppShell {
                                 cx.notify();
                             })),
                     ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .pt_2()
+                    .child(rust_i18n::t!("settings.selection").to_string()),
+            )
+            .child(Self::form_field(
+                rust_i18n::t!("settings.word_separators").to_string(),
+                self.settings_word_separators.clone(),
+                p,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.word_separators_note").to_string()),
             )
             .child(
                 div()

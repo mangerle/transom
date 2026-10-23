@@ -63,6 +63,9 @@ impl TerminalEngine {
     ) -> Self {
         let config = Config {
             scrolling_history: profile.scrollback,
+            // 双击选词的分隔符由设置驱动；语义选择（`SelectionType::Semantic`）在仿真
+            // 内核里解析，所以必须在这里传入，视图层拿不到第二套口径。
+            semantic_escape_chars: profile.word_separators.clone(),
             default_cursor_style: AlacCursorStyle {
                 shape: match profile.cursor_shape {
                     TerminalCursorShape::Block => AlacCursorShape::Block,
@@ -174,6 +177,20 @@ mod tests {
     use alacritty_terminal::term::cell::Flags;
     use alacritty_terminal::vte::ansi::{Color, NamedColor};
 
+    /// 用指定 profile 建引擎；分隔符行为测试需要非默认配置。
+    fn engine_with_profile(
+        profile: TerminalProfile,
+    ) -> (
+        TerminalEngine,
+        flume::Receiver<alacritty_terminal::event::Event>,
+    ) {
+        let (tx, rx) = flume::bounded(16);
+        (
+            TerminalEngine::new(TerminalSize::new(20, 4), &profile, tx),
+            rx,
+        )
+    }
+
     fn engine(
         cols: u16,
         rows: u16,
@@ -187,6 +204,49 @@ mod tests {
             TerminalEngine::new(TerminalSize::new(cols, rows), &profile, tx),
             rx,
         )
+    }
+
+    /// 分隔符设置必须真的改变双击选词边界。
+    #[test]
+    fn word_separators_drive_semantic_selection() {
+        let (mut engine, _events) = engine_with_profile(TerminalProfile::default());
+        engine.process(b"aa-bb cc");
+        engine.start_selection(
+            SelectionType::Semantic,
+            Point::new(Line(0), Column(4)),
+            Side::Left,
+        );
+        assert_eq!(
+            engine.selection_text().as_deref(),
+            Some("aa-bb"),
+            "默认分隔符不含连字符，应整段选中"
+        );
+
+        let dashed = TerminalProfile {
+            word_separators: "- \t".into(),
+            ..TerminalProfile::default()
+        };
+        let (mut engine, _events) = engine_with_profile(dashed);
+        engine.process(b"aa-bb cc");
+        engine.start_selection(
+            SelectionType::Semantic,
+            Point::new(Line(0), Column(4)),
+            Side::Left,
+        );
+        assert_eq!(
+            engine.selection_text().as_deref(),
+            Some("bb"),
+            "把连字符与空格列为分隔符后只应选中后半段"
+        );
+    }
+
+    /// 默认分隔符必须与仿真内核常量逐字一致，否则不改设置时的双击行为就会悄悄漂移。
+    #[test]
+    fn default_word_separators_match_kernel_constant() {
+        assert_eq!(
+            TerminalProfile::default().word_separators,
+            alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS
+        );
     }
 
     #[test]
