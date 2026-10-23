@@ -10,6 +10,8 @@ mod panel_view;
 mod properties;
 mod queue_actions;
 mod queue_view;
+mod sync_actions;
+mod sync_modal;
 
 use crate::palette::Palette;
 use chrono::{Local, TimeZone};
@@ -19,7 +21,9 @@ use gpui_kit::component::{Icon, VirtualListScrollHandle};
 use gpui_kit::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use transom_core::{RemoteFile, RemoteMetadata, TabId, TransferId, TransferTask};
+use transom_core::{
+    ConnectionId, DirDiffEntry, RemoteFile, RemoteMetadata, TabId, TransferId, TransferTask,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LocalFileEntry {
@@ -51,6 +55,23 @@ pub(crate) struct SftpChmodModalState {
 pub(crate) struct SftpFilterModalState {
     pub(crate) textarea: Entity<TextareaState>,
     pub(crate) error: Option<String>,
+}
+
+/// 目录对比与增量同步弹窗状态。
+pub(crate) struct SftpSyncModalState {
+    pub(crate) tab_id: TabId,
+    pub(crate) connection_id: ConnectionId,
+    /// 正在进行的对比操作 ID；对比结果异步回传后用于匹配。
+    pub(crate) op_id: TransferId,
+    pub(crate) local_root: PathBuf,
+    pub(crate) remote_root: String,
+    pub(crate) scanning: bool,
+    pub(crate) entries: Vec<DirDiffEntry>,
+    /// 与 `entries` 等长，`true` 表示该差异项参与同步。
+    pub(crate) selected: Vec<bool>,
+    pub(crate) skipped: u64,
+    pub(crate) error: Option<String>,
+    pub(crate) scroll_handle: VirtualListScrollHandle,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -410,7 +431,7 @@ fn identity_text(name: Option<&str>, id: Option<u32>) -> Option<String> {
 ///
 /// 设计原理（Why）：属性弹窗的时间需要与用户在服务器上 `ls -l` 看到的
 /// 本地时间对齐（而非 UTC），故借助已在依赖树内的 chrono 做本地时区转换。
-fn format_unix_time(seconds: u32) -> String {
+pub(crate) fn format_unix_time(seconds: u32) -> String {
     match Local.timestamp_opt(i64::from(seconds), 0).single() {
         Some(datetime) => datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
         None => format!("{seconds} (Unix 时间戳)"),

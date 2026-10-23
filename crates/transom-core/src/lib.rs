@@ -12,6 +12,7 @@ pub mod session;
 pub mod settings;
 pub mod sftp;
 pub mod sftp_filter;
+pub mod sftp_sync;
 pub mod ssh_config;
 pub mod storage;
 pub mod system_stats;
@@ -40,6 +41,10 @@ pub use sftp::{
 };
 pub use sftp_filter::{
     DEFAULT_TRANSFER_EXCLUDES, TransferFilter, TransferMatcher, validate_transfer_filter,
+};
+pub use sftp_sync::{
+    DirComparison, DirDiffEntry, DirDiffStatus, DirEntryMeta, DirSnapshotEntry, SyncDirection,
+    SyncItem, build_dir_comparison,
 };
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
 pub use storage::{SecretStore, SessionStore, SettingsStore};

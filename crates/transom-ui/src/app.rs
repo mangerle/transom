@@ -7,7 +7,7 @@ use crate::palette::{Palette, localized_error};
 use crate::session_form::SessionForm;
 use crate::sftp::{
     SftpChmodModalState, SftpEditorModalState, SftpFilterModalState, SftpInputModalState,
-    SftpPanelState, SftpPropertiesModalState,
+    SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
 };
 use gpui_kit::base::h_flex;
 use gpui_kit::component::command::CommandState;
@@ -90,6 +90,7 @@ pub struct AppShell {
     pub(crate) sftp_input_modal: Option<SftpInputModalState>,
     pub(crate) sftp_properties_modal: Option<SftpPropertiesModalState>,
     pub(crate) sftp_filter_modal: Option<SftpFilterModalState>,
+    pub(crate) sftp_sync_modal: Option<SftpSyncModalState>,
     pub(crate) status: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) sidebar_visible: bool,
@@ -177,6 +178,7 @@ impl AppShell {
             sftp_input_modal: None,
             sftp_properties_modal: None,
             sftp_filter_modal: None,
+            sftp_sync_modal: None,
             status: None,
             error,
             sidebar_visible: true,
@@ -334,6 +336,9 @@ impl AppShell {
         }
         if self.sftp_filter_modal.is_some() {
             overlays.push(self.render_sftp_filter_modal(window, cx, &p));
+        }
+        if self.sftp_sync_modal.is_some() {
+            overlays.push(self.render_sftp_sync_modal(window, cx, &p));
         }
         overlays
     }

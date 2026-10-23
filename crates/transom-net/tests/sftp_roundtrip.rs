@@ -11,7 +11,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use transom_core::{
-    AuthMethod, ConnectionSecrets, SessionOptions, SshConnection, TerminalSize, TransferFilter,
+    AuthMethod, ConnectionSecrets, DirDiffStatus, SessionOptions, SshConnection, TerminalSize,
+    TransferFilter,
 };
 use transom_net::{PasswordPrompter, SftpClient, SshSession, connect_ssh};
 use transom_store::JsonKnownHostsStore;
@@ -537,9 +538,122 @@ async fn sftp_list_upload_download_and_mutations() {
         "非法过滤规则应直接失败"
     );
 
+    let sync_local = dir.path().join("sync-local");
+    let sync_remote = dir.path().join("sync-remote");
+    std::fs::create_dir_all(&sync_local).unwrap();
+    std::fs::create_dir_all(&sync_remote).unwrap();
+    std::fs::create_dir_all(sync_local.join("empty-local")).unwrap();
+    std::fs::create_dir_all(sync_local.join(".git")).unwrap();
+    std::fs::create_dir_all(sync_remote.join(".git")).unwrap();
+    std::fs::write(sync_local.join(".git/config"), b"local-git").unwrap();
+    std::fs::write(sync_remote.join(".git/config"), b"remote-git").unwrap();
+    std::fs::write(sync_local.join("same.txt"), b"same").unwrap();
+    std::fs::write(sync_remote.join("same.txt"), b"same").unwrap();
+    set_modified(&sync_local.join("same.txt"), 1_000);
+    set_modified(&sync_remote.join("same.txt"), 1_000);
+    std::fs::write(sync_local.join("local-newer.txt"), b"local-newer!").unwrap();
+    std::fs::write(sync_remote.join("local-newer.txt"), b"remote-newer").unwrap();
+    set_modified(&sync_local.join("local-newer.txt"), 2_000);
+    set_modified(&sync_remote.join("local-newer.txt"), 1_000);
+    std::fs::write(sync_local.join("remote-newer.txt"), b"local-newer!").unwrap();
+    std::fs::write(sync_remote.join("remote-newer.txt"), b"remote-newer").unwrap();
+    set_modified(&sync_local.join("remote-newer.txt"), 1_000);
+    set_modified(&sync_remote.join("remote-newer.txt"), 2_000);
+    std::fs::write(sync_local.join("local-only.txt"), b"local-only").unwrap();
+    std::fs::write(sync_remote.join("remote-only.txt"), b"remote-only!").unwrap();
+    std::fs::write(sync_local.join("conflict"), b"file").unwrap();
+    std::fs::create_dir_all(sync_remote.join("conflict")).unwrap();
+    std::fs::write(sync_remote.join("conflict/child.txt"), b"child").unwrap();
+
+    let filter = TransferFilter::from_text(".git/");
+    let comparison = client
+        .compare_directories(&sync_local, "/sync-remote", &filter)
+        .await
+        .expect("compare directories");
+    assert_eq!(comparison.skipped, 2, "两端各有被排除的 .git 目录");
+    let status_of = |path: &str| {
+        comparison
+            .entries
+            .iter()
+            .find(|entry| entry.relative_path == path)
+            .map(|entry| entry.status)
+    };
+    assert_eq!(
+        status_of("local-newer.txt"),
+        Some(DirDiffStatus::LocalNewer)
+    );
+    assert_eq!(
+        status_of("remote-newer.txt"),
+        Some(DirDiffStatus::RemoteNewer)
+    );
+    assert_eq!(status_of("local-only.txt"), Some(DirDiffStatus::LocalOnly));
+    assert_eq!(
+        status_of("remote-only.txt"),
+        Some(DirDiffStatus::RemoteOnly)
+    );
+    assert_eq!(status_of("empty-local"), Some(DirDiffStatus::LocalOnly));
+    assert_eq!(status_of("conflict"), Some(DirDiffStatus::TypeMismatch));
+    assert_eq!(
+        status_of("conflict/child.txt"),
+        Some(DirDiffStatus::TypeMismatch),
+        "祖先类型冲突必须传染到子树"
+    );
+    assert!(
+        !comparison
+            .entries
+            .iter()
+            .any(|entry| entry.relative_path == "same.txt")
+    );
+
+    let items = comparison
+        .entries
+        .iter()
+        .filter_map(|entry| entry.sync_item())
+        .collect::<Vec<_>>();
+    let expected_sync_bytes = items.iter().map(|item| item.size).sum::<u64>();
+    let summary = client
+        .sync_items(&sync_local, "/sync-remote", &items, |_, _| {})
+        .await
+        .expect("sync directories");
+    assert_eq!(summary.transferred, expected_sync_bytes);
+    assert_eq!(
+        std::fs::read(sync_remote.join("local-only.txt")).unwrap(),
+        b"local-only"
+    );
+    assert_eq!(
+        std::fs::read(sync_remote.join("local-newer.txt")).unwrap(),
+        b"local-newer!"
+    );
+    assert_eq!(
+        std::fs::read(sync_local.join("remote-newer.txt")).unwrap(),
+        b"remote-newer"
+    );
+    assert_eq!(
+        std::fs::read(sync_local.join("remote-only.txt")).unwrap(),
+        b"remote-only!"
+    );
+    assert!(sync_remote.join("empty-local").is_dir());
+    assert!(sync_local.join("conflict").is_file());
+    assert!(sync_remote.join("conflict").is_dir());
+    assert_eq!(
+        std::fs::read(sync_remote.join(".git/config")).unwrap(),
+        b"remote-git",
+        "被排除的远端目录不应被同步修改"
+    );
+    assert!(sync_local.join(".git/config").exists());
+
     client.close().await;
     drop(client);
     drop(io);
     let _ = tokio::time::timeout(Duration::from_secs(3), join).await;
     server_task.abort();
+}
+
+fn set_modified(path: &std::path::Path, seconds: u64) {
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .expect("打开文件以设置修改时间");
+    file.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(seconds))
+        .expect("设置文件修改时间");
 }

@@ -62,6 +62,7 @@ impl AppShell {
                 let dir_tag = match task.direction {
                     TransferDirection::Upload => "↑ 上传",
                     TransferDirection::Download => "↓ 下载",
+                    TransferDirection::Sync => "↕ 同步",
                 };
                 let status_str = match &task.status {
                     TransferStatus::Pending => rust_i18n::t!("sftp.pending").to_string(),
@@ -221,8 +222,10 @@ impl AppShell {
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(if task.direction == TransferDirection::Upload {
                                     p.sidebar_accent_foreground
-                                } else {
+                                } else if task.direction == TransferDirection::Download {
                                     p.success
+                                } else {
+                                    p.sidebar_accent_foreground
                                 })
                                 .child(dir_tag),
                         )

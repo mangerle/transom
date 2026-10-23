@@ -5,6 +5,7 @@ use crate::prompt::PromptInfo;
 use crate::secrets::ConnectionSecrets;
 use crate::session::Session;
 use crate::sftp::{RemoteFile, RemoteMetadata, SftpOperation};
+use crate::sftp_sync::DirComparison;
 use crate::terminal::{TerminalIo, TerminalSize};
 
 pub enum AppCommand {
@@ -90,6 +91,12 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         op_id: TransferId,
         metadata: RemoteMetadata,
+    },
+    SftpDirCompared {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        comparison: DirComparison,
     },
     SftpFailed {
         tab_id: TabId,

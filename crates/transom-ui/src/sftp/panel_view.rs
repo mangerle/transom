@@ -619,6 +619,16 @@ impl AppShell {
                                     })),
                             )
                             .child(
+                                Button::new("sftp-compare-sync")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::GitCompareArrows)
+                                    .tooltip("目录对比与增量同步")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.sftp_open_sync_modal(tab_id, cx);
+                                    })),
+                            )
+                            .child(
                                 Button::new("toggle-sftp-filter")
                                     .ghost()
                                     .xsmall()

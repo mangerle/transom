@@ -2,38 +2,26 @@
 
 use crate::sftp::{SftpClient, sftp_error};
 use std::path::{Path, PathBuf};
-use transom_core::{AppError, ErrorCode, TransferFilter, TransferMatcher, TransferSummary};
+use transom_core::{
+    AppError, DirEntryMeta, DirSnapshotEntry, ErrorCode, TransferFilter, TransferMatcher,
+    TransferSummary,
+};
 
-#[derive(Debug, Clone)]
-struct ScannedFile {
-    relative: String,
-    size: u64,
+/// 单侧目录扫描结果。
+pub(crate) struct ScanResult {
+    pub entries: Vec<DirSnapshotEntry>,
+    pub skipped: u64,
 }
 
-#[derive(Debug, Default)]
-struct ScannedTree {
-    directories: Vec<String>,
-    files: Vec<ScannedFile>,
-    skipped: u64,
-}
-
-impl ScannedTree {
-    fn total_bytes(&self) -> u64 {
-        self.files
-            .iter()
-            .fold(0u64, |total, file| total.saturating_add(file.size))
-    }
-
-    fn sort(&mut self) {
-        self.directories.sort_by(|left, right| {
-            left.matches('/')
-                .count()
-                .cmp(&right.matches('/').count())
-                .then_with(|| left.cmp(right))
-        });
-        self.directories.dedup();
-        self.files
-            .sort_by(|left, right| left.relative.cmp(&right.relative));
+impl ScanResult {
+    pub(crate) fn total_bytes(&self) -> u64 {
+        self.entries.iter().fold(0u64, |total, entry| {
+            if entry.meta.is_dir {
+                total
+            } else {
+                total.saturating_add(entry.meta.size)
+            }
+        })
     }
 }
 
@@ -63,20 +51,20 @@ impl SftpClient {
         F: FnMut(u64, Option<u64>) + Send,
     {
         let matcher = filter.matcher()?;
-        let tree = scan_local_tree(local_root, &matcher).await?;
-        let total = tree.total_bytes();
+        let scan = scan_local_snapshot(local_root, &matcher).await?;
+        let total = scan.total_bytes();
         progress(0, Some(total));
 
         self.create_dir_all(remote_root).await?;
-        for relative in &tree.directories {
+        for relative in sorted_directories(&scan.entries) {
             let remote_path = join_remote_path(remote_root, relative);
             self.ensure_dir(&remote_path).await?;
         }
 
         let mut completed = 0u64;
-        for file in &tree.files {
-            let local_path = local_path_for(local_root, &file.relative)?;
-            let remote_path = join_remote_path(remote_root, &file.relative);
+        for file in sorted_files(&scan.entries) {
+            let local_path = local_path_for(local_root, &file.relative_path)?;
+            let remote_path = join_remote_path(remote_root, &file.relative_path);
             let base = completed;
             let transferred = self
                 .upload_resumable(&local_path, &remote_path, resume, |transferred, _| {
@@ -88,7 +76,7 @@ impl SftpClient {
 
         Ok(TransferSummary {
             transferred: completed,
-            skipped: tree.skipped,
+            skipped: scan.skipped,
         })
     }
 
@@ -112,14 +100,14 @@ impl SftpClient {
         F: FnMut(u64, Option<u64>) + Send,
     {
         let matcher = filter.matcher()?;
-        let tree = self.scan_remote_tree(remote_root, &matcher).await?;
-        let total = tree.total_bytes();
+        let scan = self.scan_remote_snapshot(remote_root, &matcher).await?;
+        let total = scan.total_bytes();
         progress(0, Some(total));
 
         tokio::fs::create_dir_all(local_root)
             .await
             .map_err(|error| local_io_error("创建本地目录失败", local_root, error))?;
-        for relative in &tree.directories {
+        for relative in sorted_directories(&scan.entries) {
             let local_path = local_path_for(local_root, relative)?;
             tokio::fs::create_dir_all(&local_path)
                 .await
@@ -127,9 +115,9 @@ impl SftpClient {
         }
 
         let mut completed = 0u64;
-        for file in &tree.files {
-            let remote_path = join_remote_path(remote_root, &file.relative);
-            let local_path = local_path_for(local_root, &file.relative)?;
+        for file in sorted_files(&scan.entries) {
+            let remote_path = join_remote_path(remote_root, &file.relative_path);
+            let local_path = local_path_for(local_root, &file.relative_path)?;
             if let Some(parent) = local_path.parent() {
                 tokio::fs::create_dir_all(parent)
                     .await
@@ -146,61 +134,73 @@ impl SftpClient {
 
         Ok(TransferSummary {
             transferred: completed,
-            skipped: tree.skipped,
+            skipped: scan.skipped,
         })
     }
 
-    async fn scan_remote_tree(
+    /// 递归扫描远端目录，供目录对比与同步使用。
+    pub(crate) async fn scan_remote_snapshot(
         &self,
         root: &str,
         matcher: &TransferMatcher,
-    ) -> Result<ScannedTree, AppError> {
+    ) -> Result<ScanResult, AppError> {
         let canonical = self.session.canonicalize(root).await.map_err(sftp_error)?;
-        let mut tree = ScannedTree::default();
+        let mut entries = Vec::new();
+        let mut skipped = 0u64;
         let mut stack: Vec<(String, String)> = vec![(canonical, String::new())];
         while let Some((directory, relative_prefix)) = stack.pop() {
-            let entries = self
+            let children = self
                 .session
                 .read_dir(&directory)
                 .await
                 .map_err(sftp_error)?;
-            let mut children = Vec::new();
-            for entry in entries {
+            let mut batch = Vec::new();
+            for entry in children {
                 let name = entry.file_name();
                 let metadata = entry.metadata();
-                children.push((
+                batch.push((
                     name,
                     metadata.is_dir(),
                     metadata.is_symlink(),
                     metadata.size.unwrap_or(0),
+                    metadata.mtime,
                 ));
             }
-            children.sort_by(|left, right| left.0.cmp(&right.0));
+            batch.sort_by(|left, right| left.0.cmp(&right.0));
 
-            for (name, is_dir, is_symlink, size) in children {
+            for (name, is_dir, is_symlink, size, mtime) in batch {
                 if !safe_component(&name) || is_symlink {
-                    tree.skipped = tree.skipped.saturating_add(1);
+                    skipped = skipped.saturating_add(1);
                     continue;
                 }
                 let relative = join_relative(&relative_prefix, &name);
                 if matcher.matches(&relative, is_dir) {
-                    tree.skipped = tree.skipped.saturating_add(1);
+                    skipped = skipped.saturating_add(1);
                     continue;
                 }
+                entries.push(DirSnapshotEntry {
+                    relative_path: relative.clone(),
+                    meta: DirEntryMeta {
+                        is_dir,
+                        size,
+                        mtime,
+                    },
+                });
                 if is_dir {
-                    tree.directories.push(relative.clone());
                     stack.push((join_remote_path(&directory, &name), relative));
-                } else {
-                    tree.files.push(ScannedFile { relative, size });
                 }
             }
         }
-        tree.sort();
-        Ok(tree)
+        entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+        Ok(ScanResult { entries, skipped })
     }
 }
 
-async fn scan_local_tree(root: &Path, matcher: &TransferMatcher) -> Result<ScannedTree, AppError> {
+/// 递归扫描本地目录，供目录传输、对比与同步使用。
+pub(crate) async fn scan_local_snapshot(
+    root: &Path,
+    matcher: &TransferMatcher,
+) -> Result<ScanResult, AppError> {
     let metadata = tokio::fs::symlink_metadata(root)
         .await
         .map_err(|error| local_io_error("读取本地目录失败", root, error))?;
@@ -211,7 +211,8 @@ async fn scan_local_tree(root: &Path, matcher: &TransferMatcher) -> Result<Scann
         ));
     }
 
-    let mut tree = ScannedTree::default();
+    let mut entries = Vec::new();
+    let mut skipped = 0u64;
     let mut stack: Vec<(PathBuf, String)> = vec![(root.to_path_buf(), String::new())];
     while let Some((directory, relative_prefix)) = stack.pop() {
         let mut read_dir = tokio::fs::read_dir(&directory)
@@ -230,41 +231,69 @@ async fn scan_local_tree(root: &Path, matcher: &TransferMatcher) -> Result<Scann
         for entry in children {
             let name = entry.file_name().to_string_lossy().to_string();
             if !safe_component(&name) {
-                tree.skipped = tree.skipped.saturating_add(1);
+                skipped = skipped.saturating_add(1);
                 continue;
             }
             let file_type = match entry.file_type().await {
                 Ok(file_type) => file_type,
                 Err(_) => {
-                    tree.skipped = tree.skipped.saturating_add(1);
+                    skipped = skipped.saturating_add(1);
                     continue;
                 }
             };
             if file_type.is_symlink() {
-                tree.skipped = tree.skipped.saturating_add(1);
+                skipped = skipped.saturating_add(1);
                 continue;
             }
             let relative = join_relative(&relative_prefix, &name);
             let is_dir = file_type.is_dir();
             if matcher.matches(&relative, is_dir) {
-                tree.skipped = tree.skipped.saturating_add(1);
+                skipped = skipped.saturating_add(1);
                 continue;
             }
+            let metadata = entry.metadata().await.ok();
+            let size = metadata.as_ref().map(|meta| meta.len()).unwrap_or(0);
+            let mtime = unix_seconds(metadata.and_then(|meta| meta.modified().ok()));
+            entries.push(DirSnapshotEntry {
+                relative_path: relative.clone(),
+                meta: DirEntryMeta {
+                    is_dir,
+                    size,
+                    mtime,
+                },
+            });
             if is_dir {
-                tree.directories.push(relative.clone());
                 stack.push((entry.path(), relative));
-            } else {
-                let size = entry
-                    .metadata()
-                    .await
-                    .map(|metadata| metadata.len())
-                    .unwrap_or(0);
-                tree.files.push(ScannedFile { relative, size });
             }
         }
     }
-    tree.sort();
-    Ok(tree)
+    entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(ScanResult { entries, skipped })
+}
+
+/// 目录按层级深度排序，保证父目录先于子目录创建。
+pub(crate) fn sorted_directories(entries: &[DirSnapshotEntry]) -> Vec<&str> {
+    let mut directories = entries
+        .iter()
+        .filter(|entry| entry.meta.is_dir)
+        .map(|entry| entry.relative_path.as_str())
+        .collect::<Vec<_>>();
+    directories.sort_by(|left, right| {
+        left.matches('/')
+            .count()
+            .cmp(&right.matches('/').count())
+            .then_with(|| left.cmp(right))
+    });
+    directories
+}
+
+pub(crate) fn sorted_files(entries: &[DirSnapshotEntry]) -> Vec<&DirSnapshotEntry> {
+    let mut files = entries
+        .iter()
+        .filter(|entry| !entry.meta.is_dir)
+        .collect::<Vec<_>>();
+    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    files
 }
 
 fn join_relative(prefix: &str, name: &str) -> String {
@@ -275,7 +304,7 @@ fn join_relative(prefix: &str, name: &str) -> String {
     }
 }
 
-fn join_remote_path(root: &str, relative: &str) -> String {
+pub(crate) fn join_remote_path(root: &str, relative: &str) -> String {
     if root == "/" {
         format!("/{relative}")
     } else {
@@ -284,7 +313,7 @@ fn join_remote_path(root: &str, relative: &str) -> String {
 }
 
 /// 将相对路径逐段拼接到本地根目录，并拒绝任何越界片段。
-fn local_path_for(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
+pub(crate) fn local_path_for(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
     let mut path = root.to_path_buf();
     for component in relative.split('/') {
         if !safe_component(component) {
@@ -298,15 +327,20 @@ fn local_path_for(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
     Ok(path)
 }
 
-fn safe_component(name: &str) -> bool {
+pub(crate) fn safe_component(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains('/') && !name.contains('\\')
 }
 
-fn local_io_error(context: &str, path: &Path, error: std::io::Error) -> AppError {
+pub(crate) fn local_io_error(context: &str, path: &Path, error: std::io::Error) -> AppError {
     AppError::with_detail(
         ErrorCode::SftpFailed,
         format!("{context} {}: {error}", path.display()),
     )
+}
+
+fn unix_seconds(time: Option<std::time::SystemTime>) -> Option<u32> {
+    let seconds = time?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    Some(seconds.min(u64::from(u32::MAX)) as u32)
 }
 
 #[cfg(test)]

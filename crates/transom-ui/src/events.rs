@@ -181,7 +181,9 @@ impl AppShell {
                         if let Some(bytes) = transferred {
                             task.transferred = bytes;
                         }
-                        if task.direction == TransferDirection::Download {
+                        if task.direction == TransferDirection::Download
+                            || task.direction == TransferDirection::Sync
+                        {
                             refresh_local = true;
                         }
                         if open_editor_info.is_none() {
@@ -219,6 +221,7 @@ impl AppShell {
                     let action = match dir {
                         TransferDirection::Upload => "上传完成",
                         TransferDirection::Download => "下载完成",
+                        TransferDirection::Sync => "同步完成",
                     };
                     send_desktop_notification(
                         &format!("Transom SFTP {action}"),
@@ -276,12 +279,42 @@ impl AppShell {
                 });
                 self.process_sftp_queue(tab_id, cx);
             }
+            AppEvent::SftpDirCompared {
+                tab_id: _,
+                connection_id,
+                op_id,
+                comparison,
+            } => {
+                if let Some(modal) = self.sftp_sync_modal.as_mut()
+                    && modal.op_id == op_id
+                    && modal.connection_id == connection_id
+                {
+                    modal.scanning = false;
+                    modal.skipped = comparison.skipped;
+                    modal.selected = comparison
+                        .entries
+                        .iter()
+                        .map(|entry| entry.sync_item().is_some())
+                        .collect();
+                    modal.entries = comparison.entries;
+                    modal.error = None;
+                }
+            }
             AppEvent::SftpFailed {
                 tab_id,
                 connection_id,
                 op_id,
                 error,
             } => {
+                if let Some(modal) = self.sftp_sync_modal.as_mut()
+                    && modal.op_id == op_id
+                    && modal.connection_id == connection_id
+                {
+                    modal.scanning = false;
+                    modal.error = Some(localized_error(&error));
+                    cx.notify();
+                    return;
+                }
                 let mut failed_notify: Option<(String, String)> = None;
                 if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
                     panel.pending_edit_ops.remove(&op_id);

@@ -231,6 +231,7 @@ async fn run_controller(
                         | SftpOperation::Upload { .. }
                         | SftpOperation::DownloadDir { .. }
                         | SftpOperation::UploadDir { .. }
+                        | SftpOperation::SyncDirs { .. }
                 );
                 let event_tx = event_tx.clone();
                 let handle = tokio::spawn(async move {
@@ -662,6 +663,55 @@ async fn execute_sftp_op(
         SftpOperation::Symlink { target, link_path } => {
             let result = client.symlink(&target, &link_path).await;
             finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+        }
+        SftpOperation::CompareDirs {
+            local_path,
+            remote_path,
+            filter,
+        } => match client
+            .compare_directories(&local_path, &remote_path, &filter)
+            .await
+        {
+            Ok(comparison) => {
+                let _ = event_tx.send(AppEvent::SftpDirCompared {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    comparison,
+                });
+            }
+            Err(error) => {
+                let _ = event_tx.send(AppEvent::SftpFailed {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    error,
+                });
+            }
+        },
+        SftpOperation::SyncDirs {
+            local_path,
+            remote_path,
+            items,
+        } => {
+            let progress_tx = event_tx.clone();
+            let result = client
+                .sync_items(
+                    &local_path,
+                    &remote_path,
+                    &items,
+                    move |transferred, total| {
+                        let _ = progress_tx.send(AppEvent::SftpProgress {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            transferred,
+                            total,
+                        });
+                    },
+                )
+                .await;
+            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
         }
     }
 }

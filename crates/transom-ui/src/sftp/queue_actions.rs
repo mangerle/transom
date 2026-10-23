@@ -157,6 +157,19 @@ impl AppShell {
                 local_path: task.local_path,
                 resume,
             },
+            (TransferKind::Sync, TransferDirection::Sync) => SftpOperation::SyncDirs {
+                local_path: task.local_path,
+                remote_path: task.remote_path,
+                items: task.sync_items,
+            },
+            _ => {
+                panel.queue[index].status =
+                    TransferStatus::Failed("不支持的传输任务类型组合".to_string());
+                panel.active_op = None;
+                panel.progress = None;
+                cx.notify();
+                return;
+            }
         };
 
         let _ = self.services.command_tx.send(AppCommand::Sftp {

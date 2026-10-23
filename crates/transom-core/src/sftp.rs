@@ -1,5 +1,6 @@
 use crate::ids::TransferId;
 use crate::sftp_filter::TransferFilter;
+use crate::sftp_sync::SyncItem;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -43,6 +44,8 @@ pub struct RemoteMetadata {
 pub enum TransferDirection {
     Download,
     Upload,
+    /// 目录双向增量同步：单个任务内同时包含上传与下载项
+    Sync,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -62,6 +65,8 @@ pub enum TransferKind {
     #[default]
     File,
     Directory,
+    /// 目录对比后按差异计划双向同步
+    Sync,
 }
 
 /// 目录递归传输的汇总结果。
@@ -95,6 +100,9 @@ pub struct TransferTask {
     pub transferred: u64,
     pub status: TransferStatus,
     pub mode: TransferMode,
+    /// 同步任务携带的差异项；其他任务为空。
+    #[serde(default)]
+    pub sync_items: Vec<SyncItem>,
 }
 
 impl TransferTask {
@@ -115,6 +123,7 @@ impl TransferTask {
             transferred: 0,
             status: TransferStatus::Pending,
             mode,
+            sync_items: Vec::new(),
         }
     }
 
@@ -128,6 +137,25 @@ impl TransferTask {
     ) -> Self {
         let mut task = Self::new(direction, local_path, remote_path, size, mode);
         task.kind = TransferKind::Directory;
+        task
+    }
+
+    /// 创建目录双向同步任务：`local_path`/`remote_path` 为两端根目录。
+    pub fn new_sync(
+        local_root: PathBuf,
+        remote_root: String,
+        items: Vec<SyncItem>,
+        size: Option<u64>,
+    ) -> Self {
+        let mut task = Self::new(
+            TransferDirection::Sync,
+            local_root,
+            remote_root,
+            size,
+            TransferMode::Overwrite,
+        );
+        task.kind = TransferKind::Sync;
+        task.sync_items = items;
         task
     }
 }
@@ -184,6 +212,18 @@ pub enum SftpOperation {
     Symlink {
         target: String,
         link_path: String,
+    },
+    /// 对比本地与远端目录差异（只读扫描，不修改任何一侧）
+    CompareDirs {
+        local_path: PathBuf,
+        remote_path: String,
+        filter: TransferFilter,
+    },
+    /// 按用户确认的差异项执行双向增量同步
+    SyncDirs {
+        local_path: PathBuf,
+        remote_path: String,
+        items: Vec<SyncItem>,
     },
 }
 
