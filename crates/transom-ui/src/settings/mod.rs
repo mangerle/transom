@@ -439,6 +439,9 @@ impl AppShell {
             ("settings.shortcut_prev_tab", &["Ctrl", "Shift", "Tab"][..]),
             ("settings.shortcut_reconnect", &["Ctrl", "R"][..]),
             ("settings.shortcut_immersive", &["F11", "Alt", "Enter"][..]),
+            ("settings.shortcut_split_right", &["Ctrl", "Shift", "D"][..]),
+            ("settings.shortcut_split_down", &["Ctrl", "Shift", "E"][..]),
+            ("settings.shortcut_close_pane", &["Ctrl", "Shift", "X"][..]),
         ];
 
         v_flex()

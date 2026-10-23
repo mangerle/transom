@@ -18,8 +18,8 @@ use gpui_kit::*;
 use std::collections::HashMap;
 use transom_core::{
     AppError, AppSettings, Connection, ConnectionId, ConnectionSecrets, FolderId, ForwardId,
-    ForwardStatus, HostKeyRecord, NetworkTraffic, PromptInfo, Session, SessionCatalog, SessionId,
-    SystemStats, TabId,
+    ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, SavedTabGroup, Session,
+    SessionCatalog, SessionId, SplitAxis, SystemStats, TabId,
 };
 use transom_terminal::TerminalView;
 
@@ -28,6 +28,29 @@ pub(crate) enum TabStatus {
     Connected,
     Failed(AppError),
     Disconnected,
+}
+
+/// 标签组：一个标签栏条目下挂载一个或多个终端窗格。
+///
+/// 采用扁平窗格列表而非递归分割树：同一时刻只允许一种分屏方向，
+/// 切换方向会整体重排所有窗格。这样在满足并排对照的同时，标签生命周期、
+/// 焦点与连接事件仍保持简单可预测。
+pub(crate) struct TabGroup {
+    pub(crate) id: GroupId,
+    pub(crate) panes: Vec<TabId>,
+    pub(crate) active_pane: TabId,
+    pub(crate) axis: SplitAxis,
+}
+
+impl TabGroup {
+    pub(crate) fn new(pane: TabId) -> Self {
+        Self {
+            id: GroupId::new(),
+            panes: vec![pane],
+            active_pane: pane,
+            axis: SplitAxis::Horizontal,
+        }
+    }
 }
 
 pub(crate) struct TerminalTab {
@@ -86,6 +109,8 @@ pub struct AppShell {
     /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
     pub(crate) catalog: SessionCatalog,
     pub(crate) tabs: Vec<TerminalTab>,
+    /// 标签栏显示顺序；成员为各标签下的窗格。
+    pub(crate) groups: Vec<TabGroup>,
     pub(crate) active_tab: Option<TabId>,
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
@@ -178,6 +203,7 @@ impl AppShell {
             settings,
             catalog,
             tabs: Vec::new(),
+            groups: Vec::new(),
             active_tab: None,
             search,
             form: None,
@@ -209,21 +235,26 @@ impl AppShell {
             _event_task: event_task,
         };
 
-        if this.settings.window.restore_previous_tabs
-            && !this.settings.window.previous_tab_sessions.is_empty()
-        {
-            let session_keys = this.settings.window.previous_tab_sessions.clone();
-            for key in session_keys {
-                if key == "local" {
-                    this.open_local_terminal(window, cx);
-                } else if let Some(session) = this
-                    .catalog
-                    .sessions
-                    .iter()
-                    .find(|s| s.id.to_string() == key)
-                    .cloned()
-                {
-                    this.connect_session(session.id, window, cx);
+        if this.settings.window.restore_previous_tabs {
+            let saved_groups = this.settings.window.previous_tab_groups.clone();
+            if !saved_groups.is_empty() {
+                for group in saved_groups {
+                    this.restore_tab_group(&group, window, cx);
+                }
+            } else if !this.settings.window.previous_tab_sessions.is_empty() {
+                let session_keys = this.settings.window.previous_tab_sessions.clone();
+                for key in session_keys {
+                    if key == "local" {
+                        this.open_local_terminal(window, cx);
+                    } else if let Some(session) = this
+                        .catalog
+                        .sessions
+                        .iter()
+                        .find(|s| s.id.to_string() == key)
+                        .cloned()
+                    {
+                        this.connect_session(session.id, window, cx);
+                    }
                 }
             }
         }
@@ -255,15 +286,17 @@ impl AppShell {
             self.settings.window.window_x = Some(bounds.origin.x / px(1.0));
             self.settings.window.window_y = Some(bounds.origin.y / px(1.0));
         }
-        self.settings.window.previous_tab_sessions = self
-            .tabs
+        self.settings.window.previous_tab_sessions = self.tabs.iter().map(session_key).collect();
+        self.settings.window.previous_tab_groups = self
+            .groups
             .iter()
-            .map(|t| {
-                if matches!(t.session.connection, Connection::Local(_)) {
-                    "local".to_string()
-                } else {
-                    t.session_id.to_string()
-                }
+            .filter_map(|group| {
+                let tab = self.tabs.iter().find(|tab| tab.id == group.active_pane)?;
+                Some(SavedTabGroup {
+                    session: session_key(tab),
+                    panes: group.panes.len(),
+                    axis: group.axis,
+                })
             })
             .collect();
         let _ = self.services.settings_store.save(&self.settings);
@@ -414,6 +447,15 @@ impl AppShell {
     }
 }
 
+/// 窗口恢复使用的会话键：本地终端固定为 `local`，其余使用持久化会话 ID。
+pub(crate) fn session_key(tab: &TerminalTab) -> String {
+    if matches!(tab.session.connection, Connection::Local(_)) {
+        "local".to_string()
+    } else {
+        tab.session_id.to_string()
+    }
+}
+
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
@@ -504,6 +546,9 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_toggle_sftp))
             .on_action(cx.listener(Self::on_toggle_forward))
             .on_action(cx.listener(Self::on_toggle_immersive))
+            .on_action(cx.listener(Self::on_split_right))
+            .on_action(cx.listener(Self::on_split_down))
+            .on_action(cx.listener(Self::on_close_pane))
             .relative()
             .size_full()
             .flex()

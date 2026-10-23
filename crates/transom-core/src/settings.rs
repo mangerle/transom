@@ -47,6 +47,36 @@ pub struct WindowSettings {
     /// 上次打开的会话 ID 列表
     #[serde(default)]
     pub previous_tab_sessions: Vec<String>,
+    /// 上次打开的标签组与分屏布局；优先于扁平的会话列表。
+    #[serde(default)]
+    pub previous_tab_groups: Vec<SavedTabGroup>,
+}
+
+/// 分屏方向，同时用于运行期布局与窗口恢复。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SplitAxis {
+    /// 左右并排。
+    #[default]
+    Horizontal,
+    /// 上下堆叠。
+    Vertical,
+}
+
+/// 窗口恢复时重建的一个标签组。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedTabGroup {
+    /// `"local"` 或持久化会话 ID；组内窗格共享同一会话配置。
+    pub session: String,
+    /// 窗格数量；恢复时会被限制在合理范围内。
+    #[serde(default = "default_saved_panes")]
+    pub panes: usize,
+    #[serde(default)]
+    pub axis: SplitAxis,
+}
+
+fn default_saved_panes() -> usize {
+    1
 }
 
 impl Default for WindowSettings {
@@ -62,6 +92,7 @@ impl Default for WindowSettings {
             remember_window_bounds: true,
             restore_previous_tabs: true,
             previous_tab_sessions: Vec::new(),
+            previous_tab_groups: Vec::new(),
         }
     }
 }
@@ -137,4 +168,34 @@ impl Default for AppSettings {
 
 fn default_language() -> String {
     "zh-CN".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_settings_without_tab_groups_still_load() {
+        let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
+        assert!(settings.window.previous_tab_groups.is_empty());
+        assert_eq!(settings.window.previous_tab_sessions.len(), 0);
+    }
+
+    #[test]
+    fn saved_tab_groups_round_trip_axis_and_panes() {
+        let mut settings = AppSettings::default();
+        settings.window.previous_tab_groups = vec![SavedTabGroup {
+            session: "session-id".into(),
+            panes: 3,
+            axis: SplitAxis::Vertical,
+        }];
+        let json = serde_json::to_string(&settings).unwrap();
+        let decoded: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.window.previous_tab_groups.len(), 1);
+        assert_eq!(decoded.window.previous_tab_groups[0].panes, 3);
+        assert_eq!(
+            decoded.window.previous_tab_groups[0].axis,
+            SplitAxis::Vertical
+        );
+    }
 }

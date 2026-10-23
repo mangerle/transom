@@ -52,6 +52,7 @@ impl AppShell {
             Connection::Local(LocalConnection::default()),
         );
         let session_id = session.id;
+        self.create_group(tab_id);
         self.tabs.push(TerminalTab {
             id: tab_id,
             session_id,
@@ -151,6 +152,7 @@ impl AppShell {
         };
 
         let tab_id = TabId::new();
+        self.create_group(tab_id);
         self.tabs.push(TerminalTab {
             id: tab_id,
             session_id,

@@ -113,6 +113,9 @@ tab:
   failed:
     en: Connection failed
     zh-CN: 连接失败
+  pane_count:
+    en: "%{title} · %{count} panes"
+    zh-CN: "%{title} · %{count} 个窗格"
 form:
   new_title:
     en: New Session
@@ -375,6 +378,9 @@ error:
   sftp_requires_ssh:
     en: SFTP is only available for SSH sessions.
     zh-CN: SFTP 仅支持 SSH 会话。
+  serial_no_split:
+    en: A serial device cannot be opened by multiple panes. Use another connection type for split views.
+    zh-CN: 串口设备不支持被多个窗格同时打开，请使用其他连接类型进行分屏。
 sftp:
   title:
     en: SFTP
@@ -645,6 +651,18 @@ menu:
   close_other_tabs:
     en: Close Other Tabs
     zh-CN: 关闭其他标签
+  split_right:
+    en: Split Right
+    zh-CN: 向右分屏
+  split_down:
+    en: Split Down
+    zh-CN: 向下分屏
+  toggle_split_axis:
+    en: Toggle Split Direction
+    zh-CN: 切换分屏方向
+  close_pane:
+    en: Close Pane
+    zh-CN: 关闭窗格
 settings:
   title:
     en: Preferences & Settings
@@ -790,6 +808,15 @@ settings:
   shortcut_immersive:
     en: Toggle Immersive Fullscreen
     zh-CN: 切换沉浸式全屏
+  shortcut_split_right:
+    en: Split Right
+    zh-CN: 向右分屏
+  shortcut_split_down:
+    en: Split Down
+    zh-CN: 向下分屏
+  shortcut_close_pane:
+    en: Close Current Pane
+    zh-CN: 关闭当前窗格
 monitor:
   cpu:
     en: CPU

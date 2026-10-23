@@ -16,6 +16,7 @@ mod session_serial;
 mod settings;
 mod sftp;
 mod sidebar;
+mod split;
 mod startup;
 mod status_bar;
 mod tabs;

@@ -59,6 +59,9 @@ impl AppShell {
                 tab.network_traffic = None;
                 tab._subscription = Some(subscription);
                 self.active_tab = Some(tab_id);
+                if let Some(group_index) = self.group_index_for_tab(tab_id) {
+                    self.groups[group_index].active_pane = tab_id;
+                }
                 window.focus(&focus_handle, cx);
                 self.schedule_startup_commands(tab_id, connection_id, window, cx);
                 self.auto_start_forwards(tab_id, connection_id, session_id, cx);

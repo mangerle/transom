@@ -14,6 +14,9 @@ actions!(
         ToggleSftp,
         ToggleForward,
         ToggleImmersive,
+        SplitRight,
+        SplitDown,
+        ClosePane,
         FocusSftpFilter,
         ToggleSftpHidden,
         DeleteSftpSelection
@@ -51,6 +54,9 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-shift-tab", PrevTab, Some(WORKSPACE_ONLY)),
         KeyBinding::new("f11", ToggleImmersive, Some(WORKSPACE_ONLY)),
         KeyBinding::new("alt-enter", ToggleImmersive, Some(WORKSPACE_ONLY)),
+        KeyBinding::new(&format!("{prefix}-d"), SplitRight, Some(WORKSPACE_ONLY)),
+        KeyBinding::new(&format!("{prefix}-e"), SplitDown, Some(WORKSPACE_ONLY)),
+        KeyBinding::new(&format!("{prefix}-x"), ClosePane, Some(WORKSPACE_ONLY)),
         KeyBinding::new("secondary-f", FocusSftpFilter, Some(SFTP_CONTEXT)),
         KeyBinding::new("ctrl-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
         KeyBinding::new("secondary-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
@@ -70,7 +76,10 @@ pub fn is_app_shortcut(keystroke: &Keystroke) -> bool {
     {
         return true;
     }
-    let is_action = matches!(key.as_str(), "n" | "t" | "k" | "w" | "r" | "b" | "s" | "p");
+    let is_action = matches!(
+        key.as_str(),
+        "n" | "t" | "k" | "w" | "r" | "b" | "s" | "p" | "d" | "e" | "x"
+    );
 
     #[cfg(target_os = "macos")]
     {
