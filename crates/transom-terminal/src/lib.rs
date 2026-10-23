@@ -4,6 +4,9 @@ mod engine;
 mod event;
 mod input;
 mod renderer;
+mod renderer_search;
+mod search;
+mod search_bar;
 mod view;
 
 pub use engine::TerminalEngine;

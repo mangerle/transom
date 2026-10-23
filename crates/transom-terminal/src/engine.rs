@@ -1,4 +1,5 @@
 use crate::event::TerminalEventProxy;
+use crate::search::SearchState;
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionRange, SelectionType};
@@ -7,6 +8,7 @@ use alacritty_terminal::term::{Config, Term, TermMode};
 use alacritty_terminal::vte::ansi::{
     CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle, Processor,
 };
+use std::time::Instant;
 use transom_core::{TerminalCursorShape, TerminalProfile, TerminalSize};
 
 struct TermDimensions {
@@ -39,9 +41,18 @@ impl Dimensions for TermDimensions {
 }
 
 pub struct TerminalEngine {
-    term: Term<TerminalEventProxy>,
+    pub(crate) term: Term<TerminalEventProxy>,
     parser: Processor,
     size: TerminalSize,
+    /// 全文检索状态（查询、命中快照与游标），行为见 [`crate::search`]。
+    pub(crate) search: SearchState,
+    /// 最近一次收到字节流的时刻，用于把重扫推迟到输出停歇之后。
+    pub(crate) last_write: Option<Instant>,
+    /// 缓冲区纪元：任何新写入或网格重建都会推进，用于判定命中快照是否失效。
+    ///
+    /// 之所以只记"变过"而不做行号平移：`Line` 是相对视口底部的编号，新行滚入时全部
+    /// 命中行号同步 -1，而库外部拿不到绝对行数，平移无从校准（见 `search` 模块说明）。
+    pub(crate) epoch: u64,
 }
 
 impl TerminalEngine {
@@ -68,10 +79,17 @@ impl TerminalEngine {
             term,
             parser: Processor::new(),
             size,
+            search: SearchState::default(),
+            last_write: None,
+            epoch: 0,
         }
     }
 
     pub fn process(&mut self, bytes: &[u8]) {
+        if !bytes.is_empty() {
+            self.last_write = Some(Instant::now());
+            self.epoch = self.epoch.wrapping_add(1);
+        }
         self.parser.advance(&mut self.term, bytes);
     }
 
@@ -83,6 +101,8 @@ impl TerminalEngine {
         }
         self.size = TerminalSize::new(width as u16, height as u16);
         self.term.resize(TermDimensions::new(width, height));
+        // 折行重排会让所有缓存行号失去意义。
+        self.epoch = self.epoch.wrapping_add(1);
     }
 
     pub fn size(&self) -> TerminalSize {
@@ -251,5 +271,116 @@ mod tests {
         );
         engine.update_selection(Point::new(Line(0), Column(4)), Side::Right);
         assert_eq!(engine.selection_text().as_deref(), Some("hello"));
+    }
+
+    /// 锁定检索赖以成立的行号语义：`Line` 相对视口底部编号，新行滚入会让同一条内容
+    /// 的行号整体 -1，因此命中快照必须随缓冲区写入失效，而不是平移复用。
+    #[test]
+    fn line_indices_are_relative_to_viewport_bottom() {
+        let (mut engine, _events) = engine(20, 2);
+        engine.process(b"A\r\nB\r\nC");
+        assert_eq!(engine.grid()[Line(-1)][Column(0)].c, 'A');
+        assert_eq!(engine.grid()[Line(0)][Column(0)].c, 'B');
+        assert_eq!(engine.grid()[Line(1)][Column(0)].c, 'C');
+
+        // 再滚入一行：同样的内容整体下移一个行号，A 退到更深的位置。
+        engine.process(b"\r\nD");
+        assert_eq!(engine.grid()[Line(-2)][Column(0)].c, 'A');
+        assert_eq!(engine.grid()[Line(-1)][Column(0)].c, 'B');
+        assert_eq!(engine.grid()[Line(0)][Column(0)].c, 'C');
+        assert_eq!(engine.grid()[Line(1)][Column(0)].c, 'D');
+    }
+
+    /// 关键词模式按字面量匹配，正则模式按表达式匹配；中文与宽字符同样可检索。
+    #[test]
+    fn searches_literal_and_regex_queries() {
+        let (mut engine, _events) = engine(20, 4);
+        engine.process("alpha.bravo\r\n中文 错误码 404\r\ngamma".as_bytes());
+        let now = Instant::now();
+
+        engine.set_search_query("br.vo", false);
+        engine.refresh_search(now);
+        assert_eq!(
+            engine.search_status().total,
+            0,
+            "字面量 br.vo 不应命中 bravo"
+        );
+
+        engine.set_search_query("br.vo", true);
+        engine.refresh_search(now);
+        assert_eq!(engine.search_status().total, 1, "正则 br.vo 应命中 bravo");
+
+        engine.set_search_query("错误", false);
+        engine.refresh_search(now);
+        let hit = engine.search_select(true).expect("应命中中文关键词");
+        assert_eq!(hit.start.line, Line(1));
+
+        engine.set_search_query("\\d+", true);
+        engine.refresh_search(now);
+        assert_eq!(engine.search_status().total, 1);
+    }
+
+    /// 游标在首尾都要回绕，且当前命中变化后视线要跟到可见区。
+    #[test]
+    fn cursor_wraps_and_scrolls_history_into_view() {
+        let (mut engine, _events) = engine(20, 2);
+        engine.process(b"mark one\r\nfiller a\r\nfiller b\r\nmark two");
+        engine.set_search_query("mark", false);
+        engine.refresh_search(Instant::now());
+        assert_eq!(engine.search_status().total, 2);
+
+        // 命中按行号升序：第一条是已滚入历史的 `mark one`。
+        let oldest = engine.search_select(true).unwrap();
+        assert_eq!(oldest.start.line, Line(-2));
+        assert!(
+            engine.display_offset() > 0,
+            "历史命中必须把显示偏移推上去才看得见"
+        );
+
+        let newest = engine.search_select(true).unwrap();
+        assert_eq!(newest.start.line, Line(1));
+        assert_eq!(engine.display_offset(), 0, "屏内命中不应再滚动");
+
+        let wrapped = engine.search_select(true).unwrap();
+        assert_eq!(wrapped, oldest, "到末尾应回绕到第一个");
+        let back = engine.search_select(false).unwrap();
+        assert_eq!(back, newest, "反向越过头部应回绕到最后一个");
+    }
+
+    /// 新写入使快照失效：失效期间不绘制高亮，冷却期内也不重复全缓冲扫描。
+    #[test]
+    fn output_invalidates_snapshot_until_rescan_cooldown_allows() {
+        let (mut engine, _events) = engine(20, 4);
+        engine.process(b"needle in haystack");
+        let t0 = Instant::now();
+        engine.set_search_query("needle", false);
+        engine.refresh_search(t0);
+        assert!(engine.search_paint(40).is_some());
+
+        engine.process(b"\r\nmore");
+        // 输出仍在继续：既未停歇也在冷却期内，绝不重扫，因此不画任何可能指错位置的高亮。
+        assert!(
+            engine.search_paint(40).is_none(),
+            "缓冲区变化后不得沿用旧行号"
+        );
+        engine.refresh_search(t0);
+        assert!(engine.search_paint(40).is_none(), "冷却期内不重扫");
+        engine.refresh_search(t0 + std::time::Duration::from_millis(400));
+        assert!(engine.search_paint(40).is_some());
+    }
+
+    /// 非法正则只登记错误文本，不能影响既有渲染或让检索崩溃。
+    #[test]
+    fn invalid_query_keeps_engine_usable() {
+        let (mut engine, _events) = engine(20, 4);
+        engine.process(b"still works");
+        engine.set_search_query("(unclosed", true);
+        engine.refresh_search(Instant::now());
+        let status = engine.search_status();
+        assert!(status.error.is_some());
+        assert!(engine.search_paint(40).is_none());
+        assert!(engine.search_select(true).is_none());
+        engine.clear_search();
+        assert!(!engine.search_status().has_query);
     }
 }

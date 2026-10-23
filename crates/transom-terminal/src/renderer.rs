@@ -1,4 +1,5 @@
 use crate::event::TerminalEventProxy;
+use crate::search::SearchPaint;
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint};
 use alacritty_terminal::selection::SelectionRange;
@@ -14,12 +15,25 @@ use transom_core::{Rgb as PaletteColor, TerminalPalette, TerminalProfile};
 
 const SELECTION_ALPHA: f32 = 0.4;
 
+/// 一次绘制请求的全部输入。
+///
+/// 收敛成结构体而不是继续平铺参数：绘制需要网格、IME 预编辑、光标相位与检索命中，
+/// 参数已超过 5 个，平铺会让调用点难以对齐语义。
+pub(crate) struct PaintRequest<'a> {
+    pub(crate) bounds: Bounds<Pixels>,
+    pub(crate) term: &'a Term<TerminalEventProxy>,
+    pub(crate) ime: Option<(&'a str, Option<&'a Range<usize>>)>,
+    pub(crate) blink_visible: bool,
+    /// 检索命中绘制数据；`None` 表示当前没有可用快照（未开启或已失效）。
+    pub(crate) search: Option<&'a SearchPaint>,
+}
+
 pub(crate) struct TerminalRenderer {
     pub font_family: SharedString,
     pub font_size: Pixels,
     pub cell_width: Pixels,
     pub cell_height: Pixels,
-    palette: TerminalPalette,
+    pub(crate) palette: TerminalPalette,
     line_height: f32,
 }
 
@@ -85,7 +99,7 @@ impl TerminalRenderer {
         }
     }
 
-    fn color(&self, color: PaletteColor) -> Hsla {
+    pub(crate) fn color(&self, color: PaletteColor) -> Hsla {
         Hsla::from(rgb(color.to_hex()))
     }
 
@@ -175,15 +189,14 @@ impl TerminalRenderer {
         (fg, bg)
     }
 
-    pub fn paint(
-        &self,
-        bounds: Bounds<Pixels>,
-        term: &Term<TerminalEventProxy>,
-        window: &mut Window,
-        cx: &mut App,
-        ime: Option<(&str, Option<&Range<usize>>)>,
-        blink_visible: bool,
-    ) {
+    pub fn paint(&self, request: PaintRequest<'_>, window: &mut Window, cx: &mut App) {
+        let PaintRequest {
+            bounds,
+            term,
+            ime,
+            blink_visible,
+            search,
+        } = request;
         let grid = term.grid();
         let rows = grid.screen_lines();
         let cols = grid.columns();
@@ -217,6 +230,10 @@ impl TerminalRenderer {
             let y = origin.y + self.cell_height * row as f32;
 
             self.paint_backgrounds(origin, y, line, cols, grid, colors, default_bg, window);
+
+            if let Some(paint) = search {
+                self.paint_row_hits(paint.rows.get(row), y, origin, window);
+            }
 
             if let Some(range) = &selection
                 && let Some((start, end)) = selection_segment(range, line, cols)
@@ -272,6 +289,10 @@ impl TerminalRenderer {
                     window,
                 );
             }
+        }
+
+        if let Some(paint) = search {
+            self.paint_search_strip(bounds, paint, window);
         }
 
         if let Some((text, marked_range)) = ime.filter(|(text, _)| !text.is_empty()) {

@@ -26,6 +26,7 @@ mod split;
 mod startup;
 mod status_bar;
 mod tabs;
+mod terminal_search;
 mod window_state;
 mod workspace;
 

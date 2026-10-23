@@ -97,6 +97,7 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_toggle_sftp))
             .on_action(cx.listener(Self::on_toggle_forward))
             .on_action(cx.listener(Self::on_toggle_immersive))
+            .on_action(cx.listener(Self::on_search_buffer))
             .on_action(cx.listener(Self::on_split_right))
             .on_action(cx.listener(Self::on_split_down))
             .on_action(cx.listener(Self::on_close_pane))

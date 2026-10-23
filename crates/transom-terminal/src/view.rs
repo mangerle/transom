@@ -1,13 +1,14 @@
 use crate::engine::TerminalEngine;
 use crate::event::TerminalEvent;
 use crate::input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
-use crate::renderer::TerminalRenderer;
+use crate::renderer::{PaintRequest, TerminalRenderer};
 use alacritty_terminal::event::{Event, WindowSize};
 use alacritty_terminal::grid::Scroll;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint, Side};
 use alacritty_terminal::selection::SelectionType;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{CursorShape, Rgb as AnsiRgb};
+use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use parking_lot::Mutex;
 use std::io::{Read, Write};
@@ -21,26 +22,33 @@ use transom_core::{
 
 const CONTEXT: &str = "Terminal";
 
+/// 检索刻度带的分桶高度（像素）：命中再多也按像素合并，避免一帧画出上千个矩形。
+const SEARCH_TICK_PIXELS: f32 = 2.0;
+
 actions!(transom_terminal, [SendTab, SendBacktab]);
 
 pub type KeyFilter = Arc<dyn Fn(&Keystroke) -> bool + Send + Sync>;
 
 #[derive(Clone, Copy, Default)]
-struct LayoutMetrics {
+pub(crate) struct LayoutMetrics {
     origin: Point<Pixels>,
     cell_width: Pixels,
     cell_height: Pixels,
     cols: usize,
     rows: usize,
+    /// 检索刻度带的矩形；仅在检索栏打开的一帧里有值，供鼠标跳转命中测试。
+    pub(crate) search_strip: Option<Bounds<Pixels>>,
 }
 
 struct PreparedTerminal {
     renderer: TerminalRenderer,
+    /// 本帧可用的检索绘制数据；`None` 表示无检索或快照已失效。
+    search: Option<crate::search::SearchPaint>,
 }
 
 pub struct TerminalView {
-    engine: Arc<Mutex<TerminalEngine>>,
-    metrics: Arc<Mutex<LayoutMetrics>>,
+    pub(crate) engine: Arc<Mutex<TerminalEngine>>,
+    pub(crate) metrics: Arc<Mutex<LayoutMetrics>>,
     profile: TerminalProfile,
     interaction: TerminalInteraction,
     focus_handle: FocusHandle,
@@ -50,11 +58,19 @@ pub struct TerminalView {
     key_filter: Option<KeyFilter>,
     ime_text: String,
     ime_marked_range: Option<Range<usize>>,
-    dragging_selection: bool,
-    mouse_pressed: bool,
-    exited: bool,
+    pub(crate) dragging_selection: bool,
+    pub(crate) mouse_pressed: bool,
+    pub(crate) exited: bool,
     /// 当前闪烁相位；关闭闪烁或失焦时始终保持为 `true`。
     cursor_blink_on: bool,
+    /// 悬浮检索栏是否展开。
+    pub(crate) search_open: bool,
+    /// 检索输入框状态；首次展开时创建，收起后保留上次的查询词。
+    pub(crate) search_input: Option<Entity<InputState>>,
+    /// 是否把查询词当正则表达式解析（与引擎里的快照同步）。
+    pub(crate) search_regex_mode: bool,
+    /// 检索输入框的事件订阅；随实体存活，收起搜索栏也不释放（下次复用同一输入框）。
+    pub(crate) _search_subscription: Option<Subscription>,
     _reader_task: Task<()>,
     _blink_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
@@ -181,6 +197,10 @@ impl TerminalView {
             mouse_pressed: false,
             exited: false,
             cursor_blink_on: true,
+            search_open: false,
+            search_input: None,
+            search_regex_mode: false,
+            _search_subscription: None,
             _reader_task: reader_task,
             _blink_task: blink_task,
             _focus_subscriptions: vec![on_focus, on_blur],
@@ -458,6 +478,10 @@ impl TerminalView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // 刻度带点击优先于文本选择与焦点切换：此时输入框必须保住焦点。
+        if self.search_strip_click(event.position, window, cx) {
+            return;
+        }
         window.focus(&self.focus_handle, cx);
         let mode = self.engine.lock().mode();
 
@@ -702,8 +726,9 @@ impl Render for TerminalView {
         let ime_text = self.ime_text.clone();
         let ime_marked_range = self.ime_marked_range.clone();
         let cursor_blink_on = self.cursor_blink_on;
+        let search_open = self.search_open;
 
-        div()
+        let layer = div()
             .size_full()
             .overflow_hidden()
             .track_focus(&self.focus_handle)
@@ -723,27 +748,41 @@ impl Render for TerminalView {
                         let renderer = TerminalRenderer::new(&profile, window, cx);
                         let (cols, rows) = renderer.grid_size(bounds);
                         let size = TerminalSize::new(cols, rows);
-                        {
-                            let mut engine = engine_prepaint.lock();
-                            if engine.size() != size {
-                                engine.resize(size);
-                                // 尺寸同步失败会直接导致网格与 PTY 失配（提示符错位），
-                                // 因此不再静默忽略，按警告记录并给出排查方向
-                                if control.resize(size) {
-                                    tracing::debug!(
-                                        cols = size.cols,
-                                        rows = size.rows,
-                                        "终端网格尺寸已更新并同步至 PTY"
-                                    );
-                                } else {
-                                    tracing::warn!(
-                                        cols = size.cols,
-                                        rows = size.rows,
-                                        "PTY 窗口尺寸同步失败（控制通道已断开），画面可能持续错位，请重连会话"
-                                    );
-                                }
+                        let mut engine = engine_prepaint.lock();
+                        if engine.size() != size {
+                            engine.resize(size);
+                            // 尺寸同步失败会直接导致网格与 PTY 失配（提示符错位），
+                            // 因此不再静默忽略，按警告记录并给出排查方向
+                            if control.resize(size) {
+                                tracing::debug!(
+                                    cols = size.cols,
+                                    rows = size.rows,
+                                    "终端网格尺寸已更新并同步至 PTY"
+                                );
+                            } else {
+                                tracing::warn!(
+                                    cols = size.cols,
+                                    rows = size.rows,
+                                    "PTY 窗口尺寸同步失败（控制通道已断开），画面可能持续错位，请重连会话"
+                                );
                             }
                         }
+                        // 检索重扫放在尺寸变更之后：缩放会重排折行、让快照作废，
+                        // 放在数据流路径里又会把刷屏变成卡顿，所以只在渲染帧里按冷却触发。
+                        let search = if search_open {
+                            engine.refresh_search(std::time::Instant::now());
+                            let tick_rows =
+                                (f32::from(bounds.size.height) / SEARCH_TICK_PIXELS).max(1.0)
+                                    as usize;
+                            engine.search_paint(tick_rows)
+                        } else {
+                            None
+                        };
+                        // 刻度带只有在真的画了刻度时才登记靶区，否则会白白吃掉一列点击。
+                        let strip = search
+                            .as_ref()
+                            .filter(|paint| !paint.ticks.is_empty())
+                            .map(|_| TerminalRenderer::search_strip_bounds(bounds));
                         let metrics = LayoutMetrics {
                             origin: Point {
                                 x: bounds.origin.x + TerminalRenderer::TERMINAL_PADDING_X,
@@ -753,9 +792,10 @@ impl Render for TerminalView {
                             cell_height: renderer.cell_height,
                             cols: cols as usize,
                             rows: rows as usize,
+                            search_strip: strip,
                         };
                         *metrics_prepaint.lock() = metrics;
-                        PreparedTerminal { renderer }
+                        PreparedTerminal { renderer, search }
                     },
                     move |bounds, prepared, window, cx| {
                         window.handle_input(
@@ -769,13 +809,33 @@ impl Render for TerminalView {
                         } else {
                             Some((ime_text.as_str(), ime_marked_range.as_ref()))
                         };
-                        prepared
-                            .renderer
-                            .paint(bounds, engine.term(), window, cx, ime, cursor_blink_on);
+                        prepared.renderer.paint(
+                            PaintRequest {
+                                bounds,
+                                term: engine.term(),
+                                ime,
+                                blink_visible: cursor_blink_on,
+                                search: prepared.search.as_ref(),
+                            },
+                            window,
+                            cx,
+                        );
                     },
                 )
                 .size_full(),
-            )
+            );
+
+        let search_bar = self.render_search_bar(cx);
+        // 检索栏与终端层平级：放在终端层子树里会让输入框的按键沿焦点路径冒泡到
+        // `on_key_down`，敲搜索词的同时也把字符送进了 Shell。
+        div()
+            .size_full()
+            .relative()
+            .overflow_hidden()
+            .on_action(cx.listener(Self::on_search_enter))
+            .on_action(cx.listener(Self::on_search_escape))
+            .child(layer)
+            .children(search_bar)
     }
 }
 

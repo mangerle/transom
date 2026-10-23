@@ -313,6 +313,11 @@ prompt:
   submit:
     en: Submit
     zh-CN: 提交
+search:
+  terminal_unavailable:
+    en: No terminal is ready in the current pane
+    zh-CN: 当前窗格还没有可用的终端
+
 status:
   ready:
     en: Ready
@@ -890,6 +895,9 @@ settings:
   shortcut_toggle_split_axis:
     en: Toggle Split Direction of Focused Pane
     zh-CN: 翻转当前窗格的切分方向
+  shortcut_terminal_search:
+    en: Search Terminal Buffer
+    zh-CN: 搜索终端缓冲区
   shortcut_zoom_pane:
     en: Maximize Focused Pane
     zh-CN: 最大化当前窗格
