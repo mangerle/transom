@@ -4,8 +4,8 @@
 //! 拆开的直接原因是合在一起后生产代码行数超过单文件阈值。
 
 use super::{
-    BAND_HEIGHT, FolderRow, REORDER_ZONE, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow,
-    SidebarDrag, SidebarTarget, TINT_FOLDER_HOVER, TINT_FOLDER_IDLE, TINT_HOVER, TINT_IDLE,
+    BAND_HEIGHT, FolderRow, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow, SidebarDrag,
+    SidebarTarget, TINT_FOLDER_HOVER, TINT_FOLDER_IDLE, TINT_FOLDER_INTO, TINT_HOVER, TINT_IDLE,
     TINT_SELECTED, TINT_SELECTED_HOVER, indent_padding,
 };
 use crate::app::AppShell;
@@ -51,44 +51,55 @@ impl Render for SidebarDragPreview {
 }
 
 impl AppShell {
-    /// 行上下沿的排序落点：命中即把拖拽条目插到该行之前或之后。
+    /// 覆盖整行的排序落点：把行按份数等分，用户不需要瞄准行边缘。
     ///
-    /// 用绝对定位窄条覆盖行边缘，而不是把整行切成两块，是为了让行中部继续
-    /// 承担“放入本行容器”的语义；插入线直接借 `drag_over` 描边，
-    /// 无需额外维护悬停状态，也不会与行自身的选中/激活底色冲突。
-    fn reorder_drop_zone(
+    /// 会话行二分：上半插到该行之前、下半之后。文件夹行三分并留出中间一块，
+    /// 中间块不注册任何监听，因此不产生命中框，拖放会继续落到行本身，
+    /// 即“放入该文件夹”。等分用 `flex_1` 而非百分比宽度，gpui 没有宽度百分比。
+    fn reorder_overlay(
         app: &Entity<AppShell>,
         anchor: SidebarDrag,
+        keep_middle: bool,
+        p: &Palette,
+    ) -> AnyElement {
+        let overlay = div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .flex_col()
+            .child(Self::reorder_half(app, anchor, DropSide::Before, true, p));
+        let overlay = if keep_middle {
+            overlay.child(div().flex_1())
+        } else {
+            overlay
+        };
+        overlay
+            .child(Self::reorder_half(app, anchor, DropSide::After, false, p))
+            .into_any_element()
+    }
+
+    /// 半区落点本身：`top` 决定插入线画在上沿还是下沿。
+    ///
+    /// 插入线用 accent_foreground：accent 已经是行底色，同色描边看不出。
+    fn reorder_half(
+        app: &Entity<AppShell>,
+        anchor: SidebarDrag,
+        side: DropSide,
         top: bool,
         p: &Palette,
     ) -> AnyElement {
-        let target = SidebarTarget::Relative {
-            anchor,
-            side: if top {
-                DropSide::Before
-            } else {
-                DropSide::After
-            },
-        };
-        // `drag_over` 的闭包要求 `'static`，因此把颜色取成局部值再捕获。
-        // 插入线用 accent_foreground：accent 本身已经是行底色，画上去看不出。
+        let target = SidebarTarget::Relative { anchor, side };
+        // `drag_over` 的闭包要求 `'static`，颜色先取成局部值再捕获。
         let line_color = p.sidebar_accent_foreground;
-        let zone = div()
-            .absolute()
-            .left_0()
-            .w_full()
-            .h(REORDER_ZONE)
-            .border_color(line_color);
+        let zone = div().flex_1().border_color(line_color);
         let zone = if top {
-            zone.top_0()
-                .drag_over::<SidebarDrag>(move |style, _, _, _| {
-                    style.border_t_2().border_color(line_color)
-                })
+            zone.drag_over::<SidebarDrag>(move |style, _, _, _| {
+                style.border_t_2().border_color(line_color)
+            })
         } else {
-            zone.bottom_0()
-                .drag_over::<SidebarDrag>(move |style, _, _, _| {
-                    style.border_b_2().border_color(line_color)
-                })
+            zone.drag_over::<SidebarDrag>(move |style, _, _, _| {
+                style.border_b_2().border_color(line_color)
+            })
         };
         let app = app.clone();
         zone.on_drop(move |drag: &SidebarDrag, window, cx| {
@@ -196,6 +207,8 @@ impl AppShell {
                     )
                 }
             });
+        // `drag_over` 闭包要求 `'static`，先取成局部颜色再捕获。
+        let into_bg = p.sidebar_accent.opacity(TINT_FOLDER_INTO);
         let mut band = h_flex()
             .relative()
             .w_full()
@@ -209,6 +222,7 @@ impl AppShell {
             .border_color(p.sidebar_border.opacity(0.55))
             .text_color(p.sidebar_foreground)
             .hover(|style| style.bg(p.sidebar_accent.opacity(TINT_FOLDER_HOVER)))
+            .drag_over::<SidebarDrag>(move |style, _, _, _| style.bg(into_bg))
             .child(Icon::new(chevron).with_size(ROW_CHEVRON_SIZE))
             .child(
                 Icon::new(if row.collapsed {
@@ -238,9 +252,8 @@ impl AppShell {
             );
         }
         let anchor = SidebarDrag::Folder(folder_id);
-        band = band
-            .child(Self::reorder_drop_zone(&app_entity, anchor, true, p))
-            .child(Self::reorder_drop_zone(&app_entity, anchor, false, p));
+        // 文件夹行保留中段作为“放入该分组”，上下各三分之一用于同级换序。
+        band = band.child(Self::reorder_overlay(&app_entity, anchor, true, p));
         element.child(band).into_any_element()
     }
 
@@ -460,9 +473,8 @@ impl AppShell {
                     ),
             );
         let anchor = SidebarDrag::Session(session_id);
-        let inner = inner
-            .child(Self::reorder_drop_zone(&app_entity, anchor, true, p))
-            .child(Self::reorder_drop_zone(&app_entity, anchor, false, p));
+        // 会话行没有子级，整行二分为“插到之前/之后”，不存在落空的中间区。
+        let inner = inner.child(Self::reorder_overlay(&app_entity, anchor, false, p));
         element.child(inner).into_any_element()
     }
 }

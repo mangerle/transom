@@ -22,8 +22,6 @@ const INDENT_STEP: f32 = 18.0;
 const ROW_ICON_SIZE: Pixels = px(18.0);
 /// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
 const ROW_CHEVRON_SIZE: Pixels = px(14.0);
-/// 行上下沿排序落点的高度：只占内容条的一部分，行中部仍归“放入本行容器”。
-const REORDER_ZONE: Pixels = px(12.0);
 /// 行背景深浅梯度：常态最轻，悬停加重，选中再加重，当前会话用实色最重。
 const TINT_IDLE: f32 = 0.14;
 const TINT_HOVER: f32 = 0.28;
@@ -33,6 +31,8 @@ const TINT_SELECTED_HOVER: f32 = 0.5;
 /// 文件夹行整体比会话行更重一档，用于区分层级容器。
 const TINT_FOLDER_IDLE: f32 = 0.22;
 const TINT_FOLDER_HOVER: f32 = 0.36;
+/// 拖拽悬停在文件夹行中段时的“将放入此分组”提示底色。
+const TINT_FOLDER_INTO: f32 = 0.6;
 
 /// 按层级计算行左内边距，文件夹与会话共用，保证同层对齐。
 fn indent_padding(depth: usize) -> Pixels {
@@ -48,8 +48,9 @@ pub(crate) enum SidebarDrag {
 
 /// 侧边栏拖放落点。
 ///
-/// `Root`/`Folder` 表示放入容器末尾；`Relative` 表示插到某一行上/下沿定位的
-/// 相邻位置，父级跟随锚点行，因此跨分组拖一次就完成了“移动 + 排序”，
+/// `Root`/`Folder` 表示放入容器末尾；`Relative` 表示插到某一行前半区或后半区
+/// （会话行整行二分，文件夹行上下各三分之一、中段仍归放入分组），
+/// 父级跟随锚点行，因此跨分组拖一次就完成了“移动 + 排序”，
 /// 不需要用户先把条目移进目标分组再排第二次。
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum SidebarTarget {

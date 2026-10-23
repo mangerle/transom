@@ -11,9 +11,6 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::GroupId;
 
-/// 标签落点条宽度：只占标签左/右边缘，标签中部保持点击激活与右键菜单。
-const ZONE_WIDTH: Pixels = px(14.0);
-
 /// 标签拖拽载荷：拖动对象是整个分组，即标签栏上的一个标签。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct TabDrag(pub(super) GroupId);
@@ -52,9 +49,9 @@ impl Render for TabDragPreview {
 
 /// 给标签挂上拖拽源与左右换序落点。
 ///
-/// 落点用绝对定位贴在标签边缘，而不是把标签切成三块，是为了让标签中部的
-/// 点击激活、右键菜单与关闭按钮保持原样；插入线借 `drag_over` 描边，
-/// 不需要额外维护悬停状态。
+/// 落点是标签的左右两半，不需要用户瞄准细边缘：左半插到该标签之前，右半之后。
+/// 覆盖层只在拖拽落下时参与分发，标签中部的点击激活、右键菜单与关闭按钮
+/// 仍是原来的命中元素；插入线借 `drag_over` 描边，不需要额外维护悬停状态。
 pub(super) fn attach_tab_drag(
     tab: Stateful<Div>,
     group_id: GroupId,
@@ -67,12 +64,23 @@ pub(super) fn attach_tab_drag(
         .on_drag(TabDrag(group_id), move |_, _, _, cx| {
             cx.new(|_| TabDragPreview::new(title.clone(), icon))
         })
-        .child(tab_reorder_zone(app, group_id, true, p))
-        .child(tab_reorder_zone(app, group_id, false, p))
+        .child(tab_reorder_overlay(app, group_id, p))
 }
 
-/// 标签左/右边缘的换序落点：左边表示插到该标签之前，右边表示之后。
-fn tab_reorder_zone(
+/// 覆盖整个标签的换序容器：左右两半各承担一个落点。
+fn tab_reorder_overlay(app: &Entity<AppShell>, anchor: GroupId, p: &Palette) -> AnyElement {
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        .flex_row()
+        .child(tab_reorder_half(app, anchor, true, p))
+        .child(tab_reorder_half(app, anchor, false, p))
+        .into_any_element()
+}
+
+/// 半区落点：`left` 决定插到锚点之前还是之后，插入线画在对应一侧。
+fn tab_reorder_half(
     app: &Entity<AppShell>,
     anchor: GroupId,
     left: bool,
@@ -80,21 +88,14 @@ fn tab_reorder_zone(
 ) -> AnyElement {
     // `drag_over` 的闭包要求 `'static`，颜色先取成局部值再捕获。
     let line_color = p.tab_active_foreground;
-    let zone = div()
-        .absolute()
-        .top_0()
-        .bottom_0()
-        .w(ZONE_WIDTH)
-        .border_color(line_color);
-    let zone = if left {
-        zone.left_0()
-            .drag_over::<TabDrag>(move |style, _, _, _| style.border_l_2().border_color(line_color))
+    let half = div().flex_1().border_color(line_color);
+    let half = if left {
+        half.drag_over::<TabDrag>(move |style, _, _, _| style.border_l_2().border_color(line_color))
     } else {
-        zone.right_0()
-            .drag_over::<TabDrag>(move |style, _, _, _| style.border_r_2().border_color(line_color))
+        half.drag_over::<TabDrag>(move |style, _, _, _| style.border_r_2().border_color(line_color))
     };
     let app = app.clone();
-    zone.on_drop(move |drag: &TabDrag, window, cx| {
+    half.on_drop(move |drag: &TabDrag, window, cx| {
         let dragged = drag.0;
         app.update(cx, |this, cx| {
             reorder_groups(&mut this.groups, dragged, anchor, !left);
