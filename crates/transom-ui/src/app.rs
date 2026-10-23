@@ -5,6 +5,7 @@ use crate::forward::{ForwardPanelState, PendingForwardConfirm};
 use crate::keymap;
 use crate::keys::KeyWizardState;
 use crate::palette::{Palette, localized_error};
+use crate::pane_tree::LayoutNode;
 use crate::session_form::{AuthChoice, SessionForm};
 use crate::sftp::{
     SftpChmodModalState, SftpEditorModalState, SftpFilterModalState, SftpInputModalState,
@@ -12,6 +13,7 @@ use crate::sftp::{
 };
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::InputState;
+use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -19,7 +21,7 @@ use std::sync::Arc;
 use transom_core::{
     AppError, AppSettings, ConnectionId, ConnectionSecrets, FolderId, ForwardId, ForwardStatus,
     GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, Session, SessionCatalog, SessionId,
-    SplitAxis, SystemStats, TabId,
+    SplitId, SystemStats, TabId,
 };
 use transom_terminal::TerminalView;
 
@@ -30,26 +32,44 @@ pub(crate) enum TabStatus {
     Disconnected,
 }
 
-/// 标签组：一个标签栏条目下挂载一个或多个终端窗格。
+/// 标签组：一个标签栏条目下挂载的一棵分割树。
 ///
-/// 采用扁平窗格列表而非递归分割树：同一时刻只允许一种分屏方向，
-/// 切换方向会整体重排所有窗格。这样在满足并排对照的同时，标签生命周期、
-/// 焦点与连接事件仍保持简单可预测。
+/// 布局交给 [`LayoutNode`] 二叉分割树，方向因此是"每一刀"的属性而不是整组的
+/// 属性：切分焦点窗格不会重排兄弟，摘除窗格会收起退化的父节点。代价是焦点、
+/// 生命周期都要沿树查询，这部分复杂度由 `pane_tree` 与 `workspace` 吸收。
 pub(crate) struct TabGroup {
     pub(crate) id: GroupId,
-    pub(crate) panes: Vec<TabId>,
+    /// 分割树根节点，至少含一个窗格叶子。
+    pub(crate) root: LayoutNode,
     pub(crate) active_pane: TabId,
-    pub(crate) axis: SplitAxis,
+    /// 单窗格最大化目标；`None` 表示按分割树铺满整个内容区。
+    ///
+    /// 用独立字段而不是改写分割树，是为了让"恢复分屏"零成本：布局与用户
+    /// 拖出的比例都原样保留，只是渲染时暂时只看一个叶子。
+    pub(crate) zoomed: Option<TabId>,
 }
 
 impl TabGroup {
     pub(crate) fn new(pane: TabId) -> Self {
         Self {
             id: GroupId::new(),
-            panes: vec![pane],
+            root: LayoutNode::pane(pane),
             active_pane: pane,
-            axis: SplitAxis::Horizontal,
+            zoomed: None,
         }
+    }
+
+    /// 组内全部窗格，按视觉顺序（从左到右、从上到下）。
+    pub(crate) fn pane_ids(&self) -> Vec<TabId> {
+        self.root.pane_ids()
+    }
+
+    pub(crate) fn contains(&self, tab: TabId) -> bool {
+        self.root.contains(tab)
+    }
+
+    pub(crate) fn pane_count(&self) -> usize {
+        self.root.pane_count()
     }
 }
 
@@ -70,6 +90,31 @@ pub(crate) struct TerminalTab {
     /// 初始化命令的后台调度任务；重连或关标签时丢弃以取消。
     pub(crate) _startup_task: Option<Task<()>>,
     pub(crate) _subscription: Option<Subscription>,
+}
+
+impl TerminalTab {
+    /// 建立一个尚未连接的窗格：连接、终端视图与事件订阅由 `start_connection` 补齐。
+    ///
+    /// 字段多且初始值一律为空，集中一处构造可避免新建、分屏、窗口恢复三条路径漏项。
+    pub(crate) fn pending(id: TabId, session: Session) -> Self {
+        let title = session.name.clone();
+        Self {
+            id,
+            session_id: session.id,
+            session,
+            connection_id: None,
+            title,
+            status: TabStatus::Connecting,
+            terminal: None,
+            sftp: None,
+            forwards_panel: None,
+            forward_statuses: HashMap::new(),
+            system_stats: None,
+            network_traffic: None,
+            _startup_task: None,
+            _subscription: None,
+        }
+    }
 }
 
 pub(crate) struct PendingConnect {
@@ -158,8 +203,13 @@ pub struct AppShell {
     /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
     pub(crate) catalog: SessionCatalog,
     pub(crate) tabs: Vec<TerminalTab>,
-    /// 标签栏显示顺序；成员为各标签下的窗格。
+    /// 标签栏条目：每项持有一棵分割树，树里的叶子才是 `tabs` 中的窗格。
     pub(crate) groups: Vec<TabGroup>,
+    /// 各分割节点的拖拽尺寸状态，由外壳持有以跨过不可见的帧。
+    ///
+    /// 交给 gpui 的 keyed state 会在元素缺席一帧后被回收，切标签或窗格最大化
+    /// 再回来时用户拖出的比例就归零；见 `AppShell::pane_split_state`。
+    pub(crate) pane_split_states: HashMap<SplitId, Entity<ResizableState>>,
     pub(crate) active_tab: Option<TabId>,
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
@@ -268,6 +318,7 @@ impl AppShell {
             catalog,
             tabs: Vec::new(),
             groups: Vec::new(),
+            pane_split_states: HashMap::new(),
             active_tab: None,
             search,
             form: None,

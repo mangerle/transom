@@ -64,20 +64,33 @@ pub enum SplitAxis {
     Vertical,
 }
 
+/// 分割树的持久化形状，与运行期布局节点一一对应，但不携带窗格标识。
+///
+/// 为什么只存形状：同一标签组内的窗格共享一份会话配置，恢复时按叶子个数补齐
+/// 连接即可；无法从数量推断的信息是每层切分的方向与嵌套结构，这才是必须落盘的。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum SavedLayout {
+    /// 叶子窗格。同时是缺省形状：设置文件属外部输入，字段缺失时退化为单窗格，
+    /// 而不是让整个 `AppSettings` 加载失败。
+    #[default]
+    Pane,
+    /// 沿 `axis` 把空间分给两个子节点的内部节点。
+    Split {
+        axis: SplitAxis,
+        first: Box<SavedLayout>,
+        second: Box<SavedLayout>,
+    },
+}
+
 /// 窗口恢复时重建的一个标签组。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SavedTabGroup {
     /// `"local"` 或持久化会话 ID；组内窗格共享同一会话配置。
     pub session: String,
-    /// 窗格数量；恢复时会被限制在合理范围内。
-    #[serde(default = "default_saved_panes")]
-    pub panes: usize,
+    /// 分割树形状；窗格数量与每层方向都由它表达，恢复时按叶子顺序补齐连接。
     #[serde(default)]
-    pub axis: SplitAxis,
-}
-
-fn default_saved_panes() -> usize {
-    1
+    pub layout: SavedLayout,
 }
 
 impl Default for WindowSettings {
@@ -211,21 +224,34 @@ mod tests {
         );
     }
 
+    /// 嵌套布局必须原样往返：窗格数量与每层方向都只能靠树形表达。
     #[test]
-    fn saved_tab_groups_round_trip_axis_and_panes() {
+    fn saved_tab_groups_round_trip_nested_layout() {
         let mut settings = AppSettings::default();
         settings.window.previous_tab_groups = vec![SavedTabGroup {
             session: "session-id".into(),
-            panes: 3,
-            axis: SplitAxis::Vertical,
+            layout: SavedLayout::Split {
+                axis: SplitAxis::Horizontal,
+                first: Box::new(SavedLayout::Pane),
+                second: Box::new(SavedLayout::Split {
+                    axis: SplitAxis::Vertical,
+                    first: Box::new(SavedLayout::Pane),
+                    second: Box::new(SavedLayout::Pane),
+                }),
+            },
         }];
         let json = serde_json::to_string(&settings).unwrap();
         let decoded: AppSettings = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.window.previous_tab_groups.len(), 1);
-        assert_eq!(decoded.window.previous_tab_groups[0].panes, 3);
         assert_eq!(
-            decoded.window.previous_tab_groups[0].axis,
-            SplitAxis::Vertical
+            decoded.window.previous_tab_groups,
+            settings.window.previous_tab_groups
         );
+    }
+
+    /// 设置文件属外部输入：缺 `layout` 字段时退化为单窗格，而不是让整份设置加载失败。
+    #[test]
+    fn saved_group_without_layout_degrades_to_single_pane() {
+        let decoded: SavedTabGroup = serde_json::from_str(r#"{"session":"local"}"#).unwrap();
+        assert_eq!(decoded.layout, SavedLayout::Pane);
     }
 }

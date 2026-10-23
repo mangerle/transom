@@ -43,5 +43,7 @@ id_type!(FolderId);
 id_type!(ForwardId);
 id_type!(TabId);
 id_type!(GroupId);
+// 分割树内部节点标识：渲染时用作可拖拽容器的稳定 ElementId。
+id_type!(SplitId);
 id_type!(ConnectionId);
 id_type!(TransferId);

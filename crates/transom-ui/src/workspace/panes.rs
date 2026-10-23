@@ -1,12 +1,26 @@
-//! 标签内分屏窗格渲染。
+//! 标签内分屏渲染：按分割树铺满内容区，每一刀都是可拖拽的分隔线。
 
-use crate::app::{AppShell, TabStatus};
+use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::pane_tree::LayoutNode;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel, v_resizable};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::SplitAxis;
+use transom_core::{SplitAxis, SplitId, TabId};
+
+/// 渲染一帧窗格树时共享的上下文。
+///
+/// 递归渲染子节点时只读地需要活动窗格、最大化目标与视觉序号，而 `self` 在同一
+/// 趟渲染里还要被可变借用去取终端实体；因此先把这些标量从标签组里取出来。
+struct PaneFrame<'a> {
+    palette: &'a Palette,
+    active: TabId,
+    zoomed: Option<TabId>,
+    order: &'a [TabId],
+}
 
 impl AppShell {
     pub(super) fn render_active_content(
@@ -18,94 +32,117 @@ impl AppShell {
         let Some(group_index) = self.active_group_index() else {
             return self.render_empty_state(p, cx);
         };
-        let pane_ids = self.groups[group_index].panes.clone();
-        let axis = self.groups[group_index].axis;
-        let active_pane = self.groups[group_index].active_pane;
-        if pane_ids.len() == 1 {
-            let Some(index) = self.tabs.iter().position(|tab| tab.id == pane_ids[0]) else {
-                return self.render_empty_state(p, cx);
-            };
-            return self.render_pane_body(index, window, cx, p);
-        }
+        let group = &self.groups[group_index];
+        // 克隆布局树：渲染期间会改动 self.tabs，避免与 self.groups 的借用冲突。
+        let root = group.root.clone();
+        let order = root.pane_ids();
+        let frame = PaneFrame {
+            palette: p,
+            active: group.active_pane,
+            zoomed: group.zoomed,
+            order: &order,
+        };
 
-        let mut layout = match axis {
-            SplitAxis::Horizontal => h_flex(),
-            SplitAxis::Vertical => v_flex(),
+        if let Some(pane) = frame.zoomed.filter(|pane| order.contains(pane)) {
+            // 最大化：只铺这一个窗格。布局树与拖拽状态都没被改动，恢复即原样。
+            return self.render_split_pane(pane, &frame, window, cx);
         }
-        .flex_1()
-        .size_full()
-        .overflow_hidden();
-        for (position, pane_id) in pane_ids.into_iter().enumerate() {
-            if position > 0 {
-                layout = layout.child(match axis {
-                    SplitAxis::Horizontal => {
-                        div().w(px(1.0)).h_full().bg(p.border).into_any_element()
-                    }
-                    SplitAxis::Vertical => {
-                        div().h(px(1.0)).w_full().bg(p.border).into_any_element()
-                    }
-                });
-            }
-            let Some(index) = self.tabs.iter().position(|tab| tab.id == pane_id) else {
-                continue;
-            };
-            let pane = self.render_split_pane(index, pane_id == active_pane, window, cx, p);
-            layout = layout.child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.0))
-                    .min_h(px(0.0))
-                    .overflow_hidden()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |this, _, window, cx| {
-                            this.activate_tab(pane_id, window, cx);
-                        }),
-                    )
-                    .child(pane),
-            );
+        if let [only] = order.as_slice() {
+            // 单窗格不显示窗格头：状态与标题已由标签栏表达，再叠一条纯属重复。
+            return self.render_pane_body(*only, window, cx, p);
         }
-        div()
-            .flex_1()
-            .size_full()
-            .overflow_hidden()
-            .child(layout)
-            .into_any_element()
+        self.render_layout(&root, &frame, window, cx)
     }
 
-    fn render_pane_body(
+    /// 递归渲染分割树：内部节点用可拖拽容器把空间分给两个子节点。
+    fn render_layout(
         &mut self,
-        index: usize,
+        node: &LayoutNode,
+        frame: &PaneFrame,
         window: &mut Window,
         cx: &mut Context<Self>,
-        p: &Palette,
     ) -> AnyElement {
-        if let Some(terminal) = self.tabs[index].terminal.clone() {
-            div()
-                .flex_1()
-                .overflow_hidden()
-                .child(terminal)
-                .into_any_element()
-        } else {
-            self.render_tab_status(index, window, cx, p)
+        match node {
+            LayoutNode::Pane(tab) => self.render_split_pane(*tab, frame, window, cx),
+            LayoutNode::Split {
+                id,
+                axis,
+                first,
+                second,
+            } => {
+                let first_el = self.render_layout(first, frame, window, cx);
+                let second_el = self.render_layout(second, frame, window, cx);
+                let state = self.pane_split_state(*id, cx);
+                let group = match axis {
+                    SplitAxis::Horizontal => h_resizable(split_element_id(*id)),
+                    SplitAxis::Vertical => v_resizable(split_element_id(*id)),
+                }
+                .with_state(&state)
+                .child(resizable_panel().child(first_el))
+                .child(resizable_panel().child(second_el));
+                div().flex_1().size_full().child(group).into_any_element()
+            }
         }
     }
 
+    /// 取（必要时创建）某个分割节点的拖拽状态。
+    ///
+    /// 状态由 AppShell 持有而不是交给 gpui 的 keyed state：后者只在元素连续出现
+    /// 的帧里存活，切换标签或单窗格最大化后再回来，用户拖出的比例会被清零。
+    fn pane_split_state(&mut self, id: SplitId, cx: &mut Context<Self>) -> Entity<ResizableState> {
+        if let Some(state) = self.pane_split_states.get(&id) {
+            return state.clone();
+        }
+        let state = cx.new(|_| ResizableState::default());
+        self.pane_split_states.insert(id, state.clone());
+        state
+    }
+
+    /// 丢弃已从分割树上消失的拖拽状态，避免长期积累无用实体。
+    ///
+    /// 只在布局被改动后调用（渲染期不能调用：那会儿新节点的状态刚刚登记）。
+    pub(crate) fn prune_pane_split_states(&mut self) {
+        let alive: Vec<SplitId> = self
+            .groups
+            .iter()
+            .flat_map(|group| group.root.split_ids())
+            .collect();
+        self.pane_split_states.retain(|id, _| alive.contains(id));
+    }
+
+    /// 渲染单个窗格：细条头部（状态灯、序号、标题、关闭）加终端本体。
     fn render_split_pane(
         &mut self,
-        index: usize,
-        active: bool,
+        tab_id: TabId,
+        frame: &PaneFrame,
         window: &mut Window,
         cx: &mut Context<Self>,
-        p: &Palette,
     ) -> AnyElement {
-        let tab_id = self.tabs[index].id;
-        let title = self.tabs[index].title.clone();
-        let (dot_color, icon_name) = match &self.tabs[index].status {
-            TabStatus::Connecting => (p.muted_foreground, IconName::Loader),
-            TabStatus::Connected => (p.success, IconName::Terminal),
-            TabStatus::Failed(_) | TabStatus::Disconnected => (p.danger, IconName::CircleAlert),
+        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+            return div().into_any_element();
         };
+        let p = frame.palette;
+        let active = tab_id == frame.active;
+        let ordinal = frame
+            .order
+            .iter()
+            .position(|id| *id == tab_id)
+            .map_or(1, |position| position + 1);
+        let zoomed_here = frame.zoomed == Some(tab_id);
+        let app_entity = cx.entity().clone();
+        let (dot_color, status_icon) = super::pane_status_indicator(&self.tabs[index].status, p);
+        let (zoom_label, zoom_icon) = if zoomed_here {
+            (
+                rust_i18n::t!("menu.restore_panes").to_string(),
+                IconName::Minimize2,
+            )
+        } else {
+            (
+                rust_i18n::t!("menu.zoom_pane").to_string(),
+                IconName::Maximize2,
+            )
+        };
+
         let header = h_flex()
             .id(ElementId::Name(format!("pane-header-{tab_id}").into()))
             .h(px(28.0))
@@ -125,8 +162,71 @@ impl AppShell {
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.activate_tab(tab_id, window, cx);
             }))
+            .context_menu(move |menu, _window, _cx| {
+                let app = app_entity.clone();
+                menu.item(
+                    PopupMenuItem::new(rust_i18n::t!("menu.split_right").to_string())
+                        .icon(IconName::Columns2)
+                        .on_click({
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.activate_tab(tab_id, window, cx);
+                                    this.split_active_pane(SplitAxis::Horizontal, window, cx);
+                                });
+                            }
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new(rust_i18n::t!("menu.split_down").to_string())
+                        .icon(IconName::Rows2)
+                        .on_click({
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.activate_tab(tab_id, window, cx);
+                                    this.split_active_pane(SplitAxis::Vertical, window, cx);
+                                });
+                            }
+                        }),
+                )
+                .item(PopupMenuItem::separator())
+                .item(
+                    PopupMenuItem::new(zoom_label.clone())
+                        .icon(zoom_icon)
+                        .on_click({
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.activate_tab(tab_id, window, cx);
+                                    this.toggle_zoom_pane(tab_id, cx);
+                                });
+                            }
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new(rust_i18n::t!("menu.detach_pane").to_string())
+                        .icon(IconName::ArrowUpRight)
+                        .on_click({
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.activate_tab(tab_id, window, cx);
+                                    this.detach_pane_to_tab(tab_id, window, cx);
+                                });
+                            }
+                        }),
+                )
+            })
             .child(div().size(px(7.0)).rounded_full().flex_none().bg(dot_color))
-            .child(Icon::new(icon_name).xsmall())
+            .child(Icon::new(status_icon).xsmall())
+            .child(
+                div()
+                    .text_xs()
+                    .flex_none()
+                    .text_color(p.muted_foreground)
+                    .child(ordinal.to_string()),
+            )
             .child(
                 div()
                     .flex_1()
@@ -134,7 +234,7 @@ impl AppShell {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .truncate()
-                    .child(title),
+                    .child(self.tabs[index].title.clone()),
             )
             .child(
                 div()
@@ -159,12 +259,48 @@ impl AppShell {
                     }))
                     .child(Icon::new(IconName::X).xsmall()),
             );
-        let body = self.render_pane_body(index, window, cx, p);
+
+        let body = self.render_pane_body(tab_id, window, cx, p);
         v_flex()
             .size_full()
             .overflow_hidden()
             .child(header)
             .child(body)
+            // 点窗格任意位置即接管焦点：终端自身会消费事件，冒泡到这里只发生在
+            // 头部与空白区，代价是每次点击多一次焦点设置，换来不必非点标题条。
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, window, cx| {
+                    this.activate_tab(tab_id, window, cx);
+                }),
+            )
             .into_any_element()
     }
+
+    fn render_pane_body(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+            return div().into_any_element();
+        };
+        if let Some(terminal) = self.tabs[index].terminal.clone() {
+            div()
+                .flex_1()
+                .overflow_hidden()
+                .child(terminal)
+                .into_any_element()
+        } else {
+            self.render_tab_status(index, window, cx, p)
+        }
+    }
+}
+
+/// 分割节点的可拖拽容器标识：同一 SplitId 在任意一帧都拿到同一个 ElementId，
+/// 兄弟窗格增删后祖先重建也不会让子树误当成新元素而重置尺寸。
+fn split_element_id(id: SplitId) -> ElementId {
+    ElementId::Name(format!("pane-split-{id}").into())
 }

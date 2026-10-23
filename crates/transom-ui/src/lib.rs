@@ -13,6 +13,7 @@ mod keymap;
 mod keys;
 mod modals;
 mod palette;
+mod pane_tree;
 mod session_form;
 mod session_form_serial;
 mod session_form_view;

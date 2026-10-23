@@ -149,3 +149,15 @@ impl AppShell {
             .into_any_element()
     }
 }
+
+/// 窗格状态的可视标识：状态灯颜色与图标。
+///
+/// 窗格头与标签栏的窗格列表共用同一套映射，避免两处对"什么颜色代表连接失败"
+/// 的理解分叉。
+pub(super) fn pane_status_indicator(status: &TabStatus, p: &Palette) -> (Hsla, IconName) {
+    match status {
+        TabStatus::Connecting => (p.muted_foreground, IconName::Loader),
+        TabStatus::Connected => (p.success, IconName::Terminal),
+        TabStatus::Failed(_) | TabStatus::Disconnected => (p.danger, IconName::CircleAlert),
+    }
+}

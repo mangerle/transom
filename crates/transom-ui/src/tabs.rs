@@ -1,13 +1,14 @@
 //! 会话增删改查、标签页激活/关闭/轮转与界面语言切换模块。
 
-use crate::app::{AppShell, TabGroup, TabStatus};
+use crate::app::{AppShell, TabGroup, TabStatus, TerminalTab};
 use crate::palette::localized_error;
+use crate::pane_tree::{LayoutNode, RemoveOutcome};
 use crate::session_form::SessionForm;
 use gpui_kit::component::set_locale;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, Connection, ErrorCode, GroupId, SavedTabGroup, SecretKey, SecretKind, SessionId,
-    TabId,
+    AppCommand, Connection, ErrorCode, GroupId, SavedTabGroup, SecretKey, SecretKind, Session,
+    SessionId, TabId,
 };
 
 impl AppShell {
@@ -19,17 +20,18 @@ impl AppShell {
         id
     }
 
-    /// 根据窗口设置恢复一个标签组及其分屏窗格。
+    /// 根据窗口设置恢复一个标签组及其分割树布局。
     ///
-    /// 窗格数量限制在 1..=6：设置文件属于外部输入，避免损坏数据一次拉起
-    /// 大量并发连接；串口等不支持多窗格的会话在首次分屏失败后停止扩张。
+    /// 布局直接来自设置里的分割树形状。设置文件属外部输入：叶子数超过上限或
+    /// 形状损坏时按单窗格处理，绝不一次拉起大量连接。
     pub(crate) fn restore_tab_group(
         &mut self,
         saved: &SavedTabGroup,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let pane_count = saved.panes.clamp(1, 6);
+        let pane_count = LayoutNode::saved_pane_count(&saved.layout).unwrap_or(1);
+
         if saved.session == "local" {
             self.open_local_terminal(window, cx);
         } else if self
@@ -50,24 +52,50 @@ impl AppShell {
         } else {
             return;
         }
+
         let Some(group_index) = self.active_group_index() else {
             return;
         };
-        for _ in 1..pane_count {
-            let before = self.groups[group_index].panes.len();
-            self.split_active_pane(saved.axis, window, cx);
-            let after = self
-                .groups
-                .get(group_index)
-                .map_or(before, |group| group.panes.len());
-            if after == before {
-                break;
-            }
+        if pane_count < 2 {
+            return;
         }
-        if let Some(group) = self.groups.get_mut(group_index) {
-            group.axis = saved.axis;
+        let first = self.groups[group_index].active_pane;
+        let Some(session) = self.session_for_tab(first) else {
+            return;
+        };
+        // 串口端口独占，恢复时只保留首个窗格。
+        if matches!(session.connection, Connection::Serial(_)) {
+            return;
+        }
+        let extra: Vec<TabId> = (1..pane_count).map(|_| TabId::new()).collect();
+        let mut ids = std::iter::once(first).chain(extra.iter().copied());
+        let Some(root) = LayoutNode::from_saved(&saved.layout, &mut ids) else {
+            return;
+        };
+        self.groups[group_index].root = root;
+        for pane_id in extra {
+            self.tabs
+                .push(TerminalTab::pending(pane_id, session.clone()));
+            self.start_connection(pane_id, session.clone(), window, cx);
         }
         cx.notify();
+    }
+
+    /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
+    ///
+    /// 分屏、重连与窗口恢复都要拿"当前生效的会话"再开一条连接，集中一处，
+    /// 避免目录被批量编辑或导入替换后三条路径读到陈旧配置。
+    pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
+        let index = self.tabs.iter().position(|tab| tab.id == tab_id)?;
+        let session_id = self.tabs[index].session_id;
+        Some(
+            self.catalog
+                .sessions
+                .iter()
+                .find(|session| session.id == session_id)
+                .cloned()
+                .unwrap_or_else(|| self.tabs[index].session.clone()),
+        )
     }
 
     /// 将已打开标签的会话快照同步为目录中的最新配置。
@@ -88,9 +116,7 @@ impl AppShell {
     }
 
     pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
-        self.groups
-            .iter()
-            .position(|group| group.panes.contains(&tab_id))
+        self.groups.iter().position(|group| group.contains(tab_id))
     }
 
     pub(crate) fn active_group_index(&self) -> Option<usize> {
@@ -98,33 +124,38 @@ impl AppShell {
             .and_then(|tab_id| self.group_index_for_tab(tab_id))
     }
 
-    /// 从所属标签组中摘除一个窗格，返回替换后的活动窗格。
+    /// 从所属标签组的分割树里摘除一个窗格，返回应接管的焦点窗格。
     ///
-    /// 仅处理组与窗格关系，不触碰 `tabs` 本身或发送断开命令，供关闭窗格、
-    /// 删除会话等多条路径复用。
+    /// 仅处理组与布局关系，不触碰 `tabs` 本身或发送断开命令，供关闭窗格、
+    /// 删除会话、摘出为独立标签等多条路径复用。摘到无窗格时整组移除。
     fn detach_pane_from_group(&mut self, tab_id: TabId) -> Option<TabId> {
         let group_index = self.group_index_for_tab(tab_id)?;
-        let group = &mut self.groups[group_index];
-        let pane_index = group.panes.iter().position(|id| *id == tab_id)?;
-        group.panes.remove(pane_index);
-        let replacement = if group.panes.is_empty() {
-            self.groups.remove(group_index);
-            self.groups
-                .get(group_index.saturating_sub(1))
-                .or_else(|| self.groups.first())
-                .map(|group| group.active_pane)
-        } else {
-            if group.active_pane == tab_id {
-                let next = group.panes[pane_index.min(group.panes.len() - 1)];
-                group.active_pane = next;
+        let was_active = self.active_tab == Some(tab_id);
+        let replacement = match self.groups[group_index].root.remove_leaf(tab_id) {
+            RemoveOutcome::Empty => {
+                self.groups.remove(group_index);
+                if was_active {
+                    self.groups
+                        .get(group_index.saturating_sub(1))
+                        .or_else(|| self.groups.first())
+                        .map(|group| group.active_pane)
+                } else {
+                    None
+                }
             }
-            Some(group.active_pane)
+            RemoveOutcome::Removed { next_focus } => {
+                let group = &mut self.groups[group_index];
+                if group.active_pane == tab_id {
+                    group.active_pane = next_focus;
+                }
+                if group.zoomed == Some(tab_id) {
+                    group.zoomed = None;
+                }
+                if was_active { Some(next_focus) } else { None }
+            }
         };
-        if self.active_tab == Some(tab_id) {
-            replacement
-        } else {
-            None
-        }
+        self.prune_pane_split_states();
+        replacement
     }
 
     pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -329,14 +360,9 @@ impl AppShell {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
             return;
         };
-        let session_id = self.tabs[index].session_id;
-        let session = self
-            .catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .cloned()
-            .unwrap_or_else(|| self.tabs[index].session.clone());
+        let Some(session) = self.session_for_tab(tab_id) else {
+            return;
+        };
         let tab = &mut self.tabs[index];
         tab.terminal = None;
         tab.sftp = None;
@@ -397,15 +423,17 @@ impl AppShell {
             return;
         };
         let group = self.groups.remove(index);
-        for tab_id in &group.panes {
+        let panes = group.pane_ids();
+        for tab_id in &panes {
             let _ = self
                 .services
                 .command_tx
                 .send(AppCommand::CloseTab { tab_id: *tab_id });
         }
-        self.tabs.retain(|tab| !group.panes.contains(&tab.id));
+        self.tabs.retain(|tab| !panes.contains(&tab.id));
+        self.prune_pane_split_states();
 
-        let active_removed = self.active_tab.is_some_and(|id| group.panes.contains(&id));
+        let active_removed = self.active_tab.is_some_and(|id| panes.contains(&id));
         if active_removed {
             self.active_tab = self
                 .groups
@@ -433,7 +461,7 @@ impl AppShell {
         let Some(group_index) = self.group_index_for_tab(tab_id) else {
             return;
         };
-        if self.groups[group_index].panes.len() == 1 {
+        if self.groups[group_index].pane_count() == 1 {
             let group_id = self.groups[group_index].id;
             self.close_group(group_id, window, cx);
             return;

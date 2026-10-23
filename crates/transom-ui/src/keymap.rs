@@ -25,6 +25,12 @@ actions!(
         SplitRight,
         SplitDown,
         ClosePane,
+        ToggleSplitAxis,
+        ZoomPane,
+        FocusPaneLeft,
+        FocusPaneRight,
+        FocusPaneUp,
+        FocusPaneDown,
         FocusSftpFilter,
         ToggleSftpHidden,
         DeleteSftpSelection
@@ -69,6 +75,12 @@ bind_fn!(bind_toggle_immersive, ToggleImmersive);
 bind_fn!(bind_split_right, SplitRight);
 bind_fn!(bind_split_down, SplitDown);
 bind_fn!(bind_close_pane, ClosePane);
+bind_fn!(bind_toggle_split_axis, ToggleSplitAxis);
+bind_fn!(bind_zoom_pane, ZoomPane);
+bind_fn!(bind_focus_pane_left, FocusPaneLeft);
+bind_fn!(bind_focus_pane_right, FocusPaneRight);
+bind_fn!(bind_focus_pane_up, FocusPaneUp);
+bind_fn!(bind_focus_pane_down, FocusPaneDown);
 
 static SPECS: &[ShortcutSpec] = &[
     ShortcutSpec {
@@ -154,6 +166,44 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_close_pane",
         defaults: &["$app-x"],
         bind: bind_close_pane,
+    },
+    // 窗格导航与布局动作默认带 Alt：单纯 `$app-方向` 会吞掉 shell 里
+    // Ctrl+方向 的按词跳字，`$app-alt-*` 则不与终端透传序列冲突。
+    ShortcutSpec {
+        id: "toggle_split_axis",
+        label_key: "settings.shortcut_toggle_split_axis",
+        defaults: &["$app-alt-o"],
+        bind: bind_toggle_split_axis,
+    },
+    ShortcutSpec {
+        id: "zoom_pane",
+        label_key: "settings.shortcut_zoom_pane",
+        defaults: &["$app-enter"],
+        bind: bind_zoom_pane,
+    },
+    ShortcutSpec {
+        id: "focus_pane_left",
+        label_key: "settings.shortcut_focus_pane_left",
+        defaults: &["$app-alt-left"],
+        bind: bind_focus_pane_left,
+    },
+    ShortcutSpec {
+        id: "focus_pane_right",
+        label_key: "settings.shortcut_focus_pane_right",
+        defaults: &["$app-alt-right"],
+        bind: bind_focus_pane_right,
+    },
+    ShortcutSpec {
+        id: "focus_pane_up",
+        label_key: "settings.shortcut_focus_pane_up",
+        defaults: &["$app-alt-up"],
+        bind: bind_focus_pane_up,
+    },
+    ShortcutSpec {
+        id: "focus_pane_down",
+        label_key: "settings.shortcut_focus_pane_down",
+        defaults: &["$app-alt-down"],
+        bind: bind_focus_pane_down,
     },
 ];
 

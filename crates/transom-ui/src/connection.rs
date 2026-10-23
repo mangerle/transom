@@ -1,6 +1,6 @@
 //! 会话连接建立、SSH 配置导入与密码/多因子认证交互模块。
 
-use crate::app::{AppShell, PasswordPrompt, PendingConnect, TabStatus, TerminalTab};
+use crate::app::{AppShell, PasswordPrompt, PendingConnect, TerminalTab};
 use crate::keymap;
 use crate::palette::{Palette, localized_error, password_input};
 use gpui_kit::base::{h_flex, v_flex};
@@ -8,7 +8,6 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use std::collections::HashMap;
 use transom_core::{
     AppCommand, AuthMethod, Connection, ConnectionId, ConnectionSecrets, LocalConnection,
     SecretKey, SecretKind, Session, SessionId, TabId, TerminalSize, parse_ssh_config,
@@ -51,24 +50,9 @@ impl AppShell {
             rust_i18n::t!("app.new_local").to_string(),
             Connection::Local(LocalConnection::default()),
         );
-        let session_id = session.id;
         self.create_group(tab_id);
-        self.tabs.push(TerminalTab {
-            id: tab_id,
-            session_id,
-            session: session.clone(),
-            connection_id: None,
-            title: session.name.clone(),
-            status: TabStatus::Connecting,
-            terminal: None,
-            sftp: None,
-            forwards_panel: None,
-            forward_statuses: HashMap::new(),
-            system_stats: None,
-            network_traffic: None,
-            _startup_task: None,
-            _subscription: None,
-        });
+        self.tabs
+            .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
         self.start_connection(tab_id, session, window, cx);
     }
@@ -153,22 +137,35 @@ impl AppShell {
 
         let tab_id = TabId::new();
         self.create_group(tab_id);
-        self.tabs.push(TerminalTab {
-            id: tab_id,
-            session_id,
-            session: session.clone(),
-            connection_id: None,
-            title: session.name.clone(),
-            status: TabStatus::Connecting,
-            terminal: None,
-            sftp: None,
-            forwards_panel: None,
-            forward_statuses: HashMap::new(),
-            system_stats: None,
-            network_traffic: None,
-            _startup_task: None,
-            _subscription: None,
-        });
+        self.tabs
+            .push(TerminalTab::pending(tab_id, session.clone()));
+        self.active_tab = Some(tab_id);
+        self.start_connection(tab_id, session, window, cx);
+    }
+
+    /// 无论该会话是否已打开，都在新标签组里再开一个连接。
+    ///
+    /// `connect_session` 对已打开的会话只做激活，分屏后同一会话会有多个窗格，
+    /// 沿用它会令"复制标签"永远退化为切换；此处显式绕开去重。
+    pub(crate) fn open_session_in_new_tab(
+        &mut self,
+        session_id: SessionId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session) = self
+            .catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .cloned()
+        else {
+            return;
+        };
+        let tab_id = TabId::new();
+        self.create_group(tab_id);
+        self.tabs
+            .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
         self.start_connection(tab_id, session, window, cx);
     }

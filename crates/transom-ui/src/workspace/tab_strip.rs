@@ -2,13 +2,15 @@
 
 use crate::app::{AppShell, TabStatus};
 use crate::palette::Palette;
+use crate::pane_tree::MAX_PANES;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{Connection, SplitAxis};
+use transom_core::{Connection, SplitAxis, TabId};
 
 impl AppShell {
     pub(super) fn render_tab_strip(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
@@ -20,10 +22,18 @@ impl AppShell {
             .border_color(p.border)
             .overflow_hidden();
         let app_entity = cx.entity().clone();
+        // 工具栏的分屏按钮可用性：无活动标签、串口会话、或已达窗格上限都置灰。
         let can_split = self
             .active_tab
-            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
-            .is_some_and(|tab| !matches!(tab.session.connection, Connection::Serial(_)));
+            .and_then(|tab_id| {
+                let tab = self.tabs.iter().find(|tab| tab.id == tab_id)?;
+                let group_index = self.group_index_for_tab(tab_id)?;
+                Some((tab, group_index))
+            })
+            .is_some_and(|(tab, group_index)| {
+                !matches!(tab.session.connection, Connection::Serial(_))
+                    && self.groups[group_index].pane_count() < MAX_PANES
+            });
 
         for group in &self.groups {
             let Some(tab) = self.tabs.iter().find(|tab| tab.id == group.active_pane) else {
@@ -33,7 +43,8 @@ impl AppShell {
             let active_pane = group.active_pane;
             let session_id = tab.session_id;
             let title = tab.title.clone();
-            let pane_count = group.panes.len();
+            let pane_count = group.pane_count();
+            let root_axis = group.root.root_axis();
             let is_local = matches!(tab.session.connection, Connection::Local(_));
             let active = self.active_tab == Some(active_pane);
             let dot_color = match &tab.status {
@@ -107,7 +118,9 @@ impl AppShell {
                                                 if is_local {
                                                     this.open_local_terminal(window, cx);
                                                 } else {
-                                                    this.connect_session(session_id, window, cx);
+                                                    this.open_session_in_new_tab(
+                                                        session_id, window, cx,
+                                                    );
                                                 }
                                             });
                                         }
@@ -161,6 +174,21 @@ impl AppShell {
                                             app.update(cx, |this, cx| {
                                                 this.activate_tab(active_pane, window, cx);
                                                 this.toggle_split_axis(cx);
+                                            });
+                                        }
+                                    }),
+                                )
+                                .item(
+                                    PopupMenuItem::new(
+                                        rust_i18n::t!("menu.detach_pane").to_string(),
+                                    )
+                                    .icon(IconName::ArrowUpRight)
+                                    .on_click({
+                                        let app = app.clone();
+                                        move |_, window, cx| {
+                                            app.update(cx, |this, cx| {
+                                                this.activate_tab(active_pane, window, cx);
+                                                this.detach_pane_to_tab(active_pane, window, cx);
                                             });
                                         }
                                     }),
@@ -226,22 +254,114 @@ impl AppShell {
                         .child(tab.title.clone()),
                 );
             if pane_count > 1 {
+                // 徽标即窗格选择器：放大态下其他窗格不在界面上，这里是唯一的鼠标出口。
+                let rows: Vec<PaneRow> = group
+                    .pane_ids()
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(position, pane_id)| {
+                        let tab = self.tabs.iter().find(|tab| tab.id == pane_id)?;
+                        let (dot_color, icon) = super::pane_status_indicator(&tab.status, p);
+                        Some(PaneRow {
+                            tab_id: pane_id,
+                            ordinal: position + 1,
+                            title: tab.title.clone(),
+                            dot_color,
+                            icon,
+                            active: pane_id == active_pane,
+                        })
+                    })
+                    .collect();
+                let zoomed = group.zoomed.is_some();
+                let muted = p.muted_foreground;
+                let foreground = p.foreground;
+                let badge_icon = if root_axis == SplitAxis::Horizontal {
+                    IconName::Columns2
+                } else {
+                    IconName::Rows2
+                };
                 element = element.child(
-                    h_flex()
-                        .flex_none()
-                        .gap_0p5()
-                        .items_center()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(
-                            Icon::new(if group.axis == SplitAxis::Horizontal {
-                                IconName::Columns2
-                            } else {
-                                IconName::Rows2
-                            })
-                            .xsmall(),
-                        )
-                        .child(pane_count.to_string()),
+                    Button::new(ElementId::Name(format!("pane-list-{group_id}").into()))
+                        .ghost()
+                        .xsmall()
+                        .icon(badge_icon)
+                        .label(pane_count.to_string())
+                        .dropdown_menu({
+                            let app_entity = app_entity.clone();
+                            move |menu, _window, _cx| {
+                                let mut menu = menu;
+                                for row in rows.iter() {
+                                    let tab_id = row.tab_id;
+                                    let title = row.title.clone();
+                                    let (dot_color, icon, active, ordinal) =
+                                        (row.dot_color, row.icon, row.active, row.ordinal);
+                                    menu = menu.item(
+                                        PopupMenuItem::element(move |_window, _cx| {
+                                            let mut row = h_flex()
+                                                .gap_2()
+                                                .items_center()
+                                                .child(
+                                                    div()
+                                                        .size(px(7.0))
+                                                        .rounded_full()
+                                                        .flex_none()
+                                                        .bg(dot_color),
+                                                )
+                                                .child(Icon::new(icon).xsmall().text_color(muted))
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .flex_none()
+                                                        .text_color(muted)
+                                                        .child(ordinal.to_string()),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .flex_1()
+                                                        .overflow_hidden()
+                                                        .whitespace_nowrap()
+                                                        .truncate()
+                                                        .child(title.clone()),
+                                                );
+                                            if active {
+                                                row = row.child(
+                                                    Icon::new(IconName::Check)
+                                                        .xsmall()
+                                                        .text_color(foreground),
+                                                );
+                                            }
+                                            row
+                                        })
+                                        .on_click({
+                                            let app = app_entity.clone();
+                                            move |_, window, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    this.select_pane(tab_id, window, cx);
+                                                });
+                                            }
+                                        }),
+                                    );
+                                }
+                                if zoomed {
+                                    menu = menu.item(PopupMenuItem::separator()).item(
+                                        PopupMenuItem::new(
+                                            rust_i18n::t!("menu.restore_panes").to_string(),
+                                        )
+                                        .icon(IconName::Minimize2)
+                                        .on_click({
+                                            let app = app_entity.clone();
+                                            move |_, _window, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    this.toggle_zoom_pane(active_pane, cx)
+                                                });
+                                            }
+                                        }),
+                                    );
+                                }
+                                menu
+                            }
+                        }),
                 );
             }
             if self.settings.window.show_tab_close_button {
@@ -360,4 +480,17 @@ impl AppShell {
         }
         button.child(Icon::new(icon).xsmall()).into_any_element()
     }
+}
+
+/// 窗格列表里的一行预渲染数据。
+///
+/// 下拉内容是点开时才构建的，因此这里先把标题、状态标识等取成拥有值，
+/// 闭包内不再借用 `AppShell`。
+struct PaneRow {
+    tab_id: TabId,
+    ordinal: usize,
+    title: String,
+    dot_color: Hsla,
+    icon: IconName,
+    active: bool,
 }

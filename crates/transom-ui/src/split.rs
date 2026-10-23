@@ -1,16 +1,16 @@
-//! 标签内分屏：创建窗格、切换分屏方向与关闭窗格。
+//! 标签内分屏：窗格的切分、方向翻转、焦点移动、最大化与摘出为独立标签。
 
-use crate::app::{AppShell, TabStatus, TerminalTab};
+use crate::app::{AppShell, TerminalTab};
 use crate::keymap;
+use crate::pane_tree::{MAX_PANES, PaneDirection, RemoveOutcome};
 use gpui_kit::*;
-use std::collections::HashMap;
 use transom_core::{Connection, SplitAxis, TabId};
 
 impl AppShell {
-    /// 在当前标签组内追加一个窗格。
+    /// 把焦点窗格沿 `axis` 切一半，新窗格复用当前会话配置另开一条连接。
     ///
-    /// 新窗格复用当前会话配置重新建立连接（本地终端则新建 Shell）；
-    /// 串口设备通常不允许独占端口被重复打开，因此明确拒绝分屏。
+    /// 只切焦点窗格本身：兄弟窗格及其已拖出的比例原样保留，这是分割树相对
+    /// 扁平列表的核心收益。串口设备端口独占，不能被第二个窗格重复打开。
     pub(crate) fn split_active_pane(
         &mut self,
         axis: SplitAxis,
@@ -23,65 +23,140 @@ impl AppShell {
         let Some(group_index) = self.group_index_for_tab(active_id) else {
             return;
         };
-        let Some(active_index) = self.tabs.iter().position(|tab| tab.id == active_id) else {
+        let Some(session) = self.session_for_tab(active_id) else {
             return;
         };
-        if matches!(
-            self.tabs[active_index].session.connection,
-            Connection::Serial(_)
-        ) {
+        if matches!(session.connection, Connection::Serial(_)) {
             self.error = Some(rust_i18n::t!("error.serial_no_split").to_string());
             cx.notify();
             return;
         }
+        if self.groups[group_index].pane_count() >= MAX_PANES {
+            self.error = Some(rust_i18n::t!("error.too_many_panes", max = MAX_PANES).to_string());
+            cx.notify();
+            return;
+        }
 
-        let session_id = self.tabs[active_index].session_id;
-        let session = self
-            .catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .cloned()
-            .unwrap_or_else(|| self.tabs[active_index].session.clone());
         let pane_id = TabId::new();
-        self.tabs.push(TerminalTab {
-            id: pane_id,
-            session_id,
-            session: session.clone(),
-            connection_id: None,
-            title: session.name.clone(),
-            status: TabStatus::Connecting,
-            terminal: None,
-            sftp: None,
-            forwards_panel: None,
-            forward_statuses: HashMap::new(),
-            system_stats: None,
-            network_traffic: None,
-            _startup_task: None,
-            _subscription: None,
-        });
+        if !self.groups[group_index]
+            .root
+            .split_leaf(active_id, axis, pane_id)
+        {
+            return;
+        }
         let group = &mut self.groups[group_index];
-        group.panes.push(pane_id);
         group.active_pane = pane_id;
-        group.axis = axis;
+        // 切分后新窗格接管焦点，若仍停留在原窗格的最大化上会把它藏起来。
+        group.zoomed = None;
+        self.tabs
+            .push(TerminalTab::pending(pane_id, session.clone()));
         self.active_tab = Some(pane_id);
         self.start_connection(pane_id, session, window, cx);
         cx.notify();
     }
 
-    /// 在左右并排与上下堆叠之间切换整个标签组。
+    /// 翻转焦点窗格所在那一刀的方向，外层结构与兄弟窗格尺寸不受影响。
     pub(crate) fn toggle_split_axis(&mut self, cx: &mut Context<Self>) {
-        let Some(index) = self.active_group_index() else {
+        let Some(group_index) = self.active_group_index() else {
             return;
         };
-        if self.groups[index].panes.len() < 2 {
+        let active_pane = self.groups[group_index].active_pane;
+        // 单窗格没有父分割节点，toggle_axis 自然返回 false。
+        if !self.groups[group_index].root.toggle_axis(active_pane) {
             return;
         }
-        self.groups[index].axis = match self.groups[index].axis {
-            SplitAxis::Horizontal => SplitAxis::Vertical,
-            SplitAxis::Vertical => SplitAxis::Horizontal,
+        self.groups[group_index].zoomed = None;
+        cx.notify();
+    }
+
+    /// 在"只看这个窗格"与"按分割树铺满"之间切换。
+    ///
+    /// 最大化只改渲染视图、不动分割树，因此恢复分屏时布局与比例原样回来。
+    /// 目标窗格由调用方显式传入，而不是回读"当前活动标签组"：标签栏徽标可以在
+    /// 未激活的标签上点开，依赖激活顺序会让操作落到错误的组上。
+    pub(crate) fn toggle_zoom_pane(&mut self, pane: TabId, cx: &mut Context<Self>) {
+        let Some(group_index) = self.group_index_for_tab(pane) else {
+            return;
+        };
+        if self.groups[group_index].pane_count() < 2 {
+            return;
+        }
+        let group = &mut self.groups[group_index];
+        group.zoomed = if group.zoomed == Some(pane) {
+            None
+        } else {
+            Some(pane)
         };
         cx.notify();
+    }
+
+    /// 把窗格摘出为独立标签组：连接、终端视图与滚动缓冲原地保留。
+    pub(crate) fn detach_pane_to_tab(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group_index) = self.group_index_for_tab(tab_id) else {
+            return;
+        };
+        if self.groups[group_index].pane_count() < 2 {
+            return;
+        }
+        let RemoveOutcome::Removed { next_focus } =
+            self.groups[group_index].root.remove_leaf(tab_id)
+        else {
+            return;
+        };
+        let group = &mut self.groups[group_index];
+        if group.active_pane == tab_id {
+            group.active_pane = next_focus;
+        }
+        if group.zoomed == Some(tab_id) {
+            group.zoomed = None;
+        }
+        self.create_group(tab_id);
+        self.prune_pane_split_states();
+        self.activate_tab(tab_id, window, cx);
+        cx.notify();
+    }
+
+    /// 选中某个窗格：标签栏窗格列表与方向键共用一条规则。
+    ///
+    /// 放大态下"选中另一个窗格"是换看它，而不是退出放大 —— 否则用户点一次列表
+    /// 就把自己摆好的最大化视图丢掉了。
+    pub(crate) fn select_pane(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(group_index) = self.group_index_for_tab(tab_id)
+            && self.groups[group_index].zoomed.is_some()
+        {
+            self.groups[group_index].zoomed = Some(tab_id);
+        }
+        self.activate_tab(tab_id, window, cx);
+    }
+
+    /// 沿指定方向把焦点移到相邻窗格；该方向已到边时保持不动。
+    fn focus_neighbor_pane(
+        &mut self,
+        direction: PaneDirection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group_index) = self.active_group_index() else {
+            return;
+        };
+        let active_pane = self.groups[group_index].active_pane;
+        let Some(next) = self.groups[group_index]
+            .root
+            .focus_neighbor(active_pane, direction)
+        else {
+            return;
+        };
+        self.select_pane(next, window, cx);
     }
 
     pub(crate) fn on_split_right(
@@ -111,5 +186,61 @@ impl AppShell {
         if let Some(tab_id) = self.active_tab {
             self.close_pane(tab_id, window, cx);
         }
+    }
+
+    pub(crate) fn on_toggle_split_axis(
+        &mut self,
+        _: &keymap::ToggleSplitAxis,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.toggle_split_axis(cx);
+    }
+
+    pub(crate) fn on_zoom_pane(
+        &mut self,
+        _: &keymap::ZoomPane,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(pane) = self.active_tab {
+            self.toggle_zoom_pane(pane, cx);
+        }
+    }
+
+    pub(crate) fn on_focus_pane_left(
+        &mut self,
+        _: &keymap::FocusPaneLeft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(PaneDirection::Left, window, cx);
+    }
+
+    pub(crate) fn on_focus_pane_right(
+        &mut self,
+        _: &keymap::FocusPaneRight,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(PaneDirection::Right, window, cx);
+    }
+
+    pub(crate) fn on_focus_pane_up(
+        &mut self,
+        _: &keymap::FocusPaneUp,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(PaneDirection::Up, window, cx);
+    }
+
+    pub(crate) fn on_focus_pane_down(
+        &mut self,
+        _: &keymap::FocusPaneDown,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(PaneDirection::Down, window, cx);
     }
 }

@@ -22,8 +22,7 @@ impl AppShell {
                 let tab = self.tabs.iter().find(|tab| tab.id == group.active_pane)?;
                 Some(SavedTabGroup {
                     session: session_key(tab),
-                    panes: group.panes.len(),
-                    axis: group.axis,
+                    layout: group.root.to_saved(),
                 })
             })
             .collect();
