@@ -153,12 +153,13 @@ impl AppShell {
                 format!("sftp-remote-virtual-list-{tab_id}"),
                 remote_sizes,
                 move |this, range, _window, cx| {
-                    let remote_selected = this
+                    let (remote_selection, remote_primary) = this
                         .tabs
                         .iter()
                         .find(|tab| tab.id == tab_id)
                         .and_then(|tab| tab.sftp.as_ref())
-                        .and_then(|panel| panel.selected.clone());
+                        .map(|panel| (panel.remote_selection.clone(), panel.selected.clone()))
+                        .unwrap_or_default();
                     let app_entity = app_entity.clone();
                     range
                         .filter_map(|ix| {
@@ -166,8 +167,8 @@ impl AppShell {
                             let entry_path = entry.path.clone();
                             let entry_name = entry.name.clone();
                             let entry_is_dir = entry.is_dir;
-                            let is_selected =
-                                remote_selected.as_deref() == Some(entry.path.as_str());
+                            let is_selected = remote_selection.contains(&entry.path)
+                                || remote_primary.as_ref() == Some(&entry.path);
                             let row = h_flex()
                                 .id(ElementId::Name(
                                     format!("remote-file-{}", entry.path).into(),
@@ -189,7 +190,9 @@ impl AppShell {
                                 })
                             };
                             let entry_path_cm = entry.path.clone();
+                            let entry_path_right = entry.path.clone();
                             let app_cm = app_entity.clone();
+                            let click_entries = remote_entries_rc.clone();
                             let row = row
                                 .on_mouse_down(
                                     MouseButton::Left,
@@ -219,17 +222,70 @@ impl AppShell {
                                             }
                                             return;
                                         }
+                                        let Some(panel) = this
+                                            .tabs
+                                            .iter_mut()
+                                            .find(|tab| tab.id == tab_id)
+                                            .and_then(|tab| tab.sftp.as_mut())
+                                        else {
+                                            return;
+                                        };
+                                        if event.modifiers.shift {
+                                            let anchor_index =
+                                                panel.remote_anchor.as_ref().and_then(|anchor| {
+                                                    click_entries
+                                                        .iter()
+                                                        .position(|entry| &entry.path == anchor)
+                                                });
+                                            if let Some(anchor_index) = anchor_index {
+                                                let (start, end) = if anchor_index <= ix {
+                                                    (anchor_index, ix)
+                                                } else {
+                                                    (ix, anchor_index)
+                                                };
+                                                let paths = click_entries[start..=end]
+                                                    .iter()
+                                                    .map(|entry| entry.path.clone())
+                                                    .collect::<Vec<_>>();
+                                                panel
+                                                    .select_remote_range(paths, entry_path.clone());
+                                            } else {
+                                                panel.select_remote(entry_path.clone());
+                                            }
+                                        } else if event.modifiers.control
+                                            || event.modifiers.platform
+                                        {
+                                            panel.toggle_remote_selection(entry_path.clone());
+                                        } else {
+                                            panel.select_remote(entry_path.clone());
+                                        }
+                                        let selected_count = panel.selected_remote_paths().len();
+                                        if selected_count > 1 {
+                                            panel.status =
+                                                Some(format!("已选择 {selected_count} 个远端项目"));
+                                        }
+                                        let name = entry_name.clone();
+                                        panel.name_input.update(cx, |state, cx| {
+                                            state.set_value(name, window, cx);
+                                        });
+                                        cx.notify();
+                                    }),
+                                )
+                                .on_mouse_down(
+                                    MouseButton::Right,
+                                    cx.listener(move |this, _, window, cx| {
                                         if let Some(panel) = this
                                             .tabs
                                             .iter_mut()
                                             .find(|tab| tab.id == tab_id)
                                             .and_then(|tab| tab.sftp.as_mut())
                                         {
-                                            panel.select_remote(entry_path.clone());
-                                            let name = entry_name.clone();
-                                            panel.name_input.update(cx, |state, cx| {
-                                                state.set_value(name, window, cx);
-                                            });
+                                            if panel.remote_selection.contains(&entry_path_right) {
+                                                panel.set_remote_primary(entry_path_right.clone());
+                                            } else {
+                                                panel.select_remote(entry_path_right.clone());
+                                            }
+                                            window.focus(&panel.focus_handle, cx);
                                         }
                                         cx.notify();
                                     }),
@@ -283,7 +339,16 @@ impl AppShell {
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
                                                         {
-                                                            panel.select_remote(p_dl.clone());
+                                                            if panel
+                                                                .remote_selection
+                                                                .contains(&p_dl)
+                                                            {
+                                                                panel.set_remote_primary(
+                                                                    p_dl.clone(),
+                                                                );
+                                                            } else {
+                                                                panel.select_remote(p_dl.clone());
+                                                            }
                                                         }
                                                         this.sftp_queue_download(tab_id, cx);
                                                     });
@@ -440,10 +505,13 @@ impl AppShell {
                                                             .iter_mut()
                                                             .find(|t| t.id == tab_id)
                                                             .and_then(|t| t.sftp.as_mut())
+                                                            && !panel
+                                                                .remote_selection
+                                                                .contains(&p_del)
                                                         {
                                                             panel.select_remote(p_del.clone());
                                                         }
-                                                        this.sftp_delete(tab_id, cx);
+                                                        this.sftp_delete_selection(tab_id, cx);
                                                     });
                                                 }
                                             },
@@ -598,7 +666,7 @@ impl AppShell {
                                     .icon(IconName::Trash)
                                     .tooltip(rust_i18n::t!("sftp.delete").to_string())
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.sftp_delete(tab_id, cx);
+                                        this.sftp_delete_selection(tab_id, cx);
                                     })),
                             )
                             .child(

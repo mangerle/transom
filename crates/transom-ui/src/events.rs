@@ -134,11 +134,12 @@ impl AppShell {
                     panel.entries = entries;
                     panel.loading = false;
                     panel.error = None;
-                    if let Some(selected) = &panel.selected
-                        && !panel.entries.iter().any(|entry| &entry.path == selected)
-                    {
-                        panel.selected = None;
-                    }
+                    let valid_paths = panel
+                        .entries
+                        .iter()
+                        .map(|entry| entry.path.clone())
+                        .collect();
+                    panel.sync_remote_selection(&valid_paths);
                     update_input = Some((panel.path_input.clone(), path));
                 }
                 if let Some((input, path)) = update_input {

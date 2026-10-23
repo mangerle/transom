@@ -112,6 +112,10 @@ pub(crate) struct SftpPanelState {
     pub(crate) remote_filter_input: Entity<InputState>,
     pub(crate) entries: Vec<RemoteFile>,
     pub(crate) selected: Option<String>,
+    /// 远端栏多选集合；`selected` 始终指向其中最近操作的主项。
+    pub(crate) remote_selection: BTreeSet<String>,
+    /// 远端 Shift 连选的锚点路径。
+    pub(crate) remote_anchor: Option<String>,
     pub(crate) local_path: PathBuf,
     pub(crate) local_path_input: Entity<InputState>,
     pub(crate) local_filter_input: Entity<InputState>,
@@ -153,8 +157,82 @@ impl SftpPanelState {
     /// `selected` 字段，右键操作另一栏后会残留旧活动栏，导致快捷键删错栏位；
     /// 统一经本方法赋值可从机制上杜绝该失配。
     pub(crate) fn select_remote(&mut self, path: String) {
-        self.selected = Some(path);
+        self.selected = Some(path.clone());
+        self.remote_anchor = Some(path.clone());
+        self.remote_selection.clear();
+        self.remote_selection.insert(path);
         self.active_pane = SftpActivePane::Remote;
+    }
+
+    /// 设置远端主项但保留已有多选集合，供右键菜单定位单项操作。
+    pub(crate) fn set_remote_primary(&mut self, path: String) {
+        self.selected = Some(path.clone());
+        self.remote_selection.insert(path);
+        self.active_pane = SftpActivePane::Remote;
+    }
+
+    /// Ctrl/Cmd 点击切换远端条目的选中状态。
+    pub(crate) fn toggle_remote_selection(&mut self, path: String) {
+        if self.remote_selection.remove(&path) {
+            if self.selected.as_deref() == Some(path.as_str()) {
+                self.selected = self.remote_selection.iter().next_back().cloned();
+            }
+        } else {
+            self.remote_selection.insert(path.clone());
+            self.selected = Some(path.clone());
+        }
+        self.remote_anchor = Some(path);
+        self.active_pane = SftpActivePane::Remote;
+    }
+
+    /// Shift 连选：用可见列表中的一段路径替换远端集合。
+    pub(crate) fn select_remote_range(
+        &mut self,
+        paths: impl IntoIterator<Item = String>,
+        primary: String,
+    ) {
+        self.remote_selection = paths.into_iter().collect();
+        self.remote_selection.insert(primary.clone());
+        self.selected = Some(primary);
+        self.active_pane = SftpActivePane::Remote;
+    }
+
+    /// 返回当前需要批量操作的远端路径；无多选时退化为单选主项。
+    pub(crate) fn selected_remote_paths(&self) -> Vec<String> {
+        if self.remote_selection.is_empty() {
+            self.selected.iter().cloned().collect()
+        } else {
+            self.remote_selection.iter().cloned().collect()
+        }
+    }
+
+    pub(crate) fn clear_remote_selection(&mut self) {
+        self.selected = None;
+        self.remote_selection.clear();
+        self.remote_anchor = None;
+    }
+
+    /// 刷新远端列表后剔除已不存在的选中项，并修正主项与锚点。
+    pub(crate) fn sync_remote_selection(&mut self, valid: &BTreeSet<String>) {
+        self.remote_selection.retain(|path| valid.contains(path));
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|path| !valid.contains(path))
+        {
+            self.selected = self.remote_selection.iter().next_back().cloned();
+        }
+        if self
+            .remote_anchor
+            .as_ref()
+            .is_some_and(|path| !valid.contains(path))
+        {
+            self.remote_anchor = self.selected.clone();
+        }
+        if self.remote_selection.is_empty() {
+            self.selected = None;
+            self.remote_anchor = None;
+        }
     }
 
     /// 单选一个本地条目，同时清空多选集合并重置 Shift 锚点。

@@ -40,6 +40,13 @@ pub struct RemoteMetadata {
     pub link_target: Option<String>,
 }
 
+/// 远端批量删除的单个目标；目录会按递归语义删除。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteDeleteTarget {
+    pub path: String,
+    pub is_dir: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransferDirection {
     Download,
@@ -209,6 +216,10 @@ pub enum SftpOperation {
     Delete {
         path: String,
         is_dir: bool,
+    },
+    /// 批量删除多个远端目标；由控制器逐个执行
+    DeleteMany {
+        targets: Vec<RemoteDeleteTarget>,
     },
     Chmod {
         path: String,

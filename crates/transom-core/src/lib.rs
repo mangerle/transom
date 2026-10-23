@@ -36,8 +36,8 @@ pub use session::{
 };
 pub use settings::{AppSettings, BellStyle, SftpSettings, WindowSettings};
 pub use sftp::{
-    RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferKind, TransferMode,
-    TransferStatus, TransferSummary, TransferTask, format_octal_permissions,
+    RemoteDeleteTarget, RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferKind,
+    TransferMode, TransferStatus, TransferSummary, TransferTask, format_octal_permissions,
     format_rwx_permissions, parse_octal_permissions,
 };
 pub use sftp_filter::{

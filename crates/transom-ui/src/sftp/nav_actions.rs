@@ -106,6 +106,8 @@ impl AppShell {
             remote_filter_input,
             entries: Vec::new(),
             selected: None,
+            remote_selection: BTreeSet::new(),
+            remote_anchor: None,
             local_path,
             local_path_input,
             local_filter_input,
@@ -541,7 +543,7 @@ impl AppShell {
             && candidate != panel.path
         {
             panel.path = candidate.clone();
-            panel.selected = None;
+            panel.clear_remote_selection();
             self.request_sftp_list(tab_id, candidate, cx);
             cx.notify();
         }

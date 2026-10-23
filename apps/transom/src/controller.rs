@@ -708,6 +708,16 @@ async fn execute_sftp_op(
             let result = client.delete(&path, is_dir).await;
             finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
         }
+        SftpOperation::DeleteMany { targets } => {
+            let mut result = Ok(());
+            for target in targets {
+                if let Err(error) = client.delete(&target.path, target.is_dir).await {
+                    result = Err(error);
+                    break;
+                }
+            }
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+        }
         SftpOperation::Chmod { path, permissions } => {
             let result = client.chmod(&path, permissions).await;
             finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);

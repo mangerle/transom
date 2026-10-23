@@ -7,33 +7,54 @@ use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
 use std::path::Path;
-use transom_core::{SftpOperation, TabId, TransferDirection, TransferMode, TransferTask};
+use transom_core::{
+    RemoteDeleteTarget, SftpOperation, TabId, TransferDirection, TransferMode, TransferTask,
+};
 
 impl AppShell {
-    pub(crate) fn sftp_delete(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let op = {
-            let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
-                return;
-            };
-            let Some(panel) = tab.sftp.as_mut() else {
-                return;
-            };
-            let Some(selected) = panel.selected.clone() else {
-                panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
-                cx.notify();
-                return;
-            };
-            let Some(entry) = panel.entries.iter().find(|entry| entry.path == selected) else {
-                panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
-                cx.notify();
-                return;
-            };
-            SftpOperation::Delete {
-                path: entry.path.clone(),
-                is_dir: entry.is_dir,
-            }
+    /// 批量删除远端选中项；目录按递归语义删除。
+    pub(crate) fn sftp_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+            return;
         };
-        self.send_sftp_op(tab_id, op, cx);
+        let Some(panel) = tab.sftp.as_mut() else {
+            return;
+        };
+        let paths = panel.selected_remote_paths();
+        if paths.is_empty() {
+            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            cx.notify();
+            return;
+        }
+        let targets = paths
+            .iter()
+            .filter_map(|path| {
+                panel
+                    .entries
+                    .iter()
+                    .find(|entry| &entry.path == path)
+                    .map(|entry| RemoteDeleteTarget {
+                        path: entry.path.clone(),
+                        is_dir: entry.is_dir,
+                    })
+            })
+            .collect::<Vec<_>>();
+        if targets.is_empty() {
+            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            cx.notify();
+            return;
+        }
+        let count = targets.len();
+        self.send_sftp_op(tab_id, SftpOperation::DeleteMany { targets }, cx);
+        if let Some(panel) = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_mut())
+        {
+            panel.status = Some(format!("正在删除 {count} 个远端项目"));
+            cx.notify();
+        }
     }
 
     /// Delete 快捷键：直接删除当前活动栏选中的项目（与右键“删除”行为一致，无二次确认）。
@@ -56,7 +77,7 @@ impl AppShell {
             return;
         };
         match active_pane {
-            SftpActivePane::Remote => self.sftp_delete(tab_id, cx),
+            SftpActivePane::Remote => self.sftp_delete_selection(tab_id, cx),
             SftpActivePane::Local => self.sftp_local_delete_selection(tab_id, cx),
         }
     }

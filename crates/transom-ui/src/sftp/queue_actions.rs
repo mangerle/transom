@@ -80,41 +80,51 @@ impl AppShell {
         let Some(panel) = tab.sftp.as_mut() else {
             return;
         };
-        let Some(selected) = panel.selected.clone() else {
+        let paths = panel.selected_remote_paths();
+        if paths.is_empty() {
             panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
             cx.notify();
             return;
-        };
-        let Some(remote_entry) = panel.entries.iter().find(|e| e.path == selected) else {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        };
-        let local_path = panel.local_path.join(&remote_entry.name);
+        }
         let mode = if panel.resume_enabled {
             TransferMode::Resume
         } else {
             TransferMode::Overwrite
         };
-        let mut task = if remote_entry.is_dir {
-            TransferTask::new_directory(
-                TransferDirection::Download,
-                local_path,
-                remote_entry.path.clone(),
-                None,
-                mode,
-            )
-        } else {
-            TransferTask::new(
-                TransferDirection::Download,
-                local_path,
-                remote_entry.path.clone(),
-                Some(remote_entry.size),
-                mode,
-            )
-        };
-        task.verify = verify;
-        panel.queue.push(task);
+        let mut tasks = Vec::with_capacity(paths.len());
+        for path in paths {
+            let Some(remote_entry) = panel.entries.iter().find(|entry| entry.path == path) else {
+                continue;
+            };
+            let local_path = panel.local_path.join(&remote_entry.name);
+            let mut task = if remote_entry.is_dir {
+                TransferTask::new_directory(
+                    TransferDirection::Download,
+                    local_path,
+                    remote_entry.path.clone(),
+                    None,
+                    mode,
+                )
+            } else {
+                TransferTask::new(
+                    TransferDirection::Download,
+                    local_path,
+                    remote_entry.path.clone(),
+                    Some(remote_entry.size),
+                    mode,
+                )
+            };
+            task.verify = verify;
+            tasks.push(task);
+        }
+        if tasks.is_empty() {
+            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            cx.notify();
+            return;
+        }
+        let count = tasks.len();
+        panel.queue.extend(tasks);
+        panel.status = Some(format!("已加入 {count} 个下载任务"));
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }
