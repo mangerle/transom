@@ -21,6 +21,10 @@ pub(crate) struct SftpStatusBarProps {
     pub(crate) loading: bool,
     pub(crate) progress: Option<(u64, Option<u64>)>,
     pub(crate) active_op: Option<TransferId>,
+    /// 当前没有活动任务时，最近一个暂停任务；用于在队列收起时提供继续/取消入口。
+    pub(crate) paused_op: Option<TransferId>,
+    /// 传输队列是否展开；展开时底部只保留进度条，避免与队列行重复。
+    pub(crate) queue_expanded: bool,
     pub(crate) remote_error: Option<String>,
     pub(crate) local_error: Option<String>,
     pub(crate) status: Option<String>,
@@ -484,6 +488,20 @@ impl AppShell {
             } else {
                 0.0
             };
+            let progress_bar = Progress::new("sftp-transfer-progress").value(percent);
+
+            if props.queue_expanded {
+                // 队列展开时行内已有完整状态与操作，底部只保留进度条
+                return Some(
+                    v_flex()
+                        .px_3()
+                        .py_1p5()
+                        .bg(p.muted)
+                        .child(progress_bar)
+                        .into_any_element(),
+                );
+            }
+
             let progress_str = match total {
                 Some(tot) => format!(
                     "{} / {} ({:.1}%)",
@@ -492,6 +510,11 @@ impl AppShell {
                     percent
                 ),
                 None => format_size(transferred),
+            };
+            let progress_str = if props.paused_op.is_some() {
+                format!("已暂停 · {progress_str}")
+            } else {
+                progress_str
             };
             let mut header = h_flex()
                 .justify_between()
@@ -523,6 +546,32 @@ impl AppShell {
                                 })),
                         ),
                 );
+            } else if let Some(op_id) = props.paused_op {
+                header = header.child(
+                    h_flex()
+                        .gap_1()
+                        .items_center()
+                        .child(
+                            Button::new("top-sftp-resume")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Play)
+                                .tooltip("继续传输")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.sftp_resume_task(tab_id, op_id, cx);
+                                })),
+                        )
+                        .child(
+                            Button::new("top-sftp-cancel-paused")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::X)
+                                .tooltip("取消传输")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.sftp_cancel_task(tab_id, op_id, cx);
+                                })),
+                        ),
+                );
             }
             Some(
                 v_flex()
@@ -531,7 +580,7 @@ impl AppShell {
                     .gap_1()
                     .bg(p.muted)
                     .child(header)
-                    .child(Progress::new("sftp-transfer-progress").value(percent))
+                    .child(progress_bar)
                     .into_any_element(),
             )
         } else if let Some(error) = props.remote_error.or(props.local_error) {

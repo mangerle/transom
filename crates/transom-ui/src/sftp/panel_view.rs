@@ -16,7 +16,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Sizable, v_virtual_list};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{RemoteFile, format_octal_permissions};
+use transom_core::{RemoteFile, TransferStatus, format_octal_permissions};
 
 impl AppShell {
     pub(crate) fn render_sftp_panel(
@@ -89,6 +89,20 @@ impl AppShell {
         let resume_enabled = panel.resume_enabled;
         let verify_after_transfer = self.settings.sftp.verify_after_transfer;
         let queue_expanded = panel.queue_expanded;
+        // 没有活动任务时回退到暂停任务进度，避免暂停后进度条消失
+        let paused_task = if active_op.is_none() {
+            panel
+                .queue
+                .iter()
+                .rev()
+                .find(|task| task.status == TransferStatus::Paused)
+        } else {
+            None
+        };
+        let paused_op = paused_task.map(|task| task.id);
+        let display_progress = paused_task
+            .map(|task| (task.transferred, task.size))
+            .or(progress);
 
         let local_pane = self.render_sftp_local_pane(
             SftpLocalPaneProps {
@@ -673,8 +687,10 @@ impl AppShell {
             SftpStatusBarProps {
                 tab_id,
                 loading,
-                progress,
+                progress: display_progress,
                 active_op,
+                paused_op,
+                queue_expanded,
                 remote_error,
                 local_error,
                 status,

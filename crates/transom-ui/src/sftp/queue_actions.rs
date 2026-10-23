@@ -265,6 +265,7 @@ impl AppShell {
             if panel.active_op == Some(op_id) {
                 panel.active_op = None;
                 panel.progress = None;
+                panel.status = Some("传输已暂停".to_string());
             }
             cx.notify();
         }
@@ -323,6 +324,10 @@ impl AppShell {
             if panel.active_op == Some(op_id) {
                 panel.active_op = None;
                 panel.progress = None;
+                panel.status = Some("已取消传输".to_string());
+            } else if panel.active_op.is_none() {
+                panel.progress = None;
+                panel.status = Some("已取消传输".to_string());
             }
             cx.notify();
         }
