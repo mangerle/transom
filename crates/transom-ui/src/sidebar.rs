@@ -7,6 +7,7 @@ use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable, v_virtual_list};
@@ -68,6 +69,83 @@ impl AppShell {
         };
 
         let app_entity = cx.entity().clone();
+        let mut header = v_flex()
+            .w_full()
+            .p_3()
+            .gap_2()
+            .border_b_1()
+            .border_color(p.sidebar_border)
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_1()
+                    .items_center()
+                    .child(div().flex_1().child(Input::new(&self.search).w_full()))
+                    .child(Self::sidebar_icon_button(
+                        "sidebar-select",
+                        IconName::ListChecks,
+                        rust_i18n::t!("batch.select_mode").to_string(),
+                        self.selection_mode,
+                        p,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_selection_mode(cx);
+                        }),
+                    ))
+                    .child(Self::sidebar_icon_button(
+                        "sidebar-new-folder",
+                        IconName::FolderPlus,
+                        rust_i18n::t!("folder.new_title").to_string(),
+                        false,
+                        p,
+                        cx.listener(|this, _, window, cx| {
+                            this.open_new_folder(None, window, cx);
+                        }),
+                    ))
+                    .child(Self::sidebar_icon_button(
+                        "sidebar-new",
+                        IconName::Plus,
+                        rust_i18n::t!("app.new_session").to_string(),
+                        false,
+                        p,
+                        cx.listener(|this, _, window, cx| {
+                            this.open_new_session(window, cx);
+                        }),
+                    )),
+            );
+        if self.selection_mode {
+            let selected_count = self.selected_sessions.len();
+            header = header.child(
+                h_flex()
+                    .w_full()
+                    .justify_between()
+                    .items_center()
+                    .child(div().text_xs().text_color(p.muted_foreground).child(
+                        rust_i18n::t!("batch.selected_count", count = selected_count).to_string(),
+                    ))
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                Button::new("batch-select-all")
+                                    .ghost()
+                                    .xsmall()
+                                    .label(rust_i18n::t!("batch.select_all").to_string())
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.select_all_sessions(cx);
+                                    })),
+                            )
+                            .child(
+                                Button::new("batch-open")
+                                    .primary()
+                                    .xsmall()
+                                    .label(rust_i18n::t!("batch.edit").to_string())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_batch_edit(window, cx);
+                                    })),
+                            ),
+                    ),
+            );
+        }
         v_flex()
             .size_full()
             .overflow_hidden()
@@ -75,39 +153,7 @@ impl AppShell {
             .text_color(p.sidebar_foreground)
             .border_r_1()
             .border_color(p.sidebar_border)
-            .child(
-                v_flex()
-                    .w_full()
-                    .p_3()
-                    .gap_2()
-                    .border_b_1()
-                    .border_color(p.sidebar_border)
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .gap_1()
-                            .items_center()
-                            .child(div().flex_1().child(Input::new(&self.search).w_full()))
-                            .child(Self::sidebar_icon_button(
-                                "sidebar-new-folder",
-                                IconName::FolderPlus,
-                                rust_i18n::t!("folder.new_title").to_string(),
-                                p,
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_new_folder(None, window, cx);
-                                }),
-                            ))
-                            .child(Self::sidebar_icon_button(
-                                "sidebar-new",
-                                IconName::Plus,
-                                rust_i18n::t!("app.new_session").to_string(),
-                                p,
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_new_session(window, cx);
-                                }),
-                            )),
-                    ),
-            )
+            .child(header)
             .child(
                 v_flex()
                     .id("session-list")
@@ -131,10 +177,11 @@ impl AppShell {
         id: &'static str,
         icon: IconName,
         tooltip: String,
+        active: bool,
         p: &Palette,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> AnyElement {
-        div()
+        let mut button = div()
             .id(id)
             .size(px(26.0))
             .flex_none()
@@ -143,10 +190,18 @@ impl AppShell {
             .items_center()
             .justify_center()
             .cursor_pointer()
-            .text_color(p.muted_foreground)
-            .hover(|s| s.bg(p.sidebar_accent).text_color(p.sidebar_foreground))
+            .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx));
+        if active {
+            button = button
+                .bg(p.sidebar_accent)
+                .text_color(p.sidebar_accent_foreground);
+        } else {
+            button = button
+                .text_color(p.muted_foreground)
+                .hover(|s| s.bg(p.sidebar_accent).text_color(p.sidebar_foreground));
+        }
+        button
             .active(|s| s.bg(p.border))
-            .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
             .on_click(on_click)
             .child(Icon::new(icon).xsmall())
             .into_any_element()

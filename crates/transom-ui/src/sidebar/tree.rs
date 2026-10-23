@@ -4,6 +4,7 @@ use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -463,6 +464,8 @@ impl AppShell {
             _ => (IconName::Server, String::new()),
         };
         let is_active = active_session == Some(session_id);
+        let selection_mode = self.selection_mode;
+        let is_selected = self.selected_sessions.contains(&session_id);
         let drag_label = session.name.clone();
         let drag_icon = icon_name;
         let mut row_element = div()
@@ -481,6 +484,8 @@ impl AppShell {
             row_element = row_element
                 .bg(p.sidebar_accent)
                 .text_color(p.sidebar_accent_foreground);
+        } else if selection_mode && is_selected {
+            row_element = row_element.bg(p.sidebar_accent.opacity(0.45));
         } else {
             row_element = row_element.hover(|style| {
                 style
@@ -488,12 +493,15 @@ impl AppShell {
                     .text_color(p.sidebar_accent_foreground)
             });
         }
-        row_element
-            .on_click(
-                cx.listener(move |this, _, window, cx| {
-                    this.connect_session(session_id, window, cx)
-                }),
-            )
+        let mut element = row_element
+            .on_click(cx.listener(move |this, _, window, cx| {
+                if this.selection_mode {
+                    let selected = this.selected_sessions.contains(&session_id);
+                    this.toggle_session_selection(session_id, !selected, cx);
+                } else {
+                    this.connect_session(session_id, window, cx);
+                }
+            }))
             .on_drag(SidebarDrag::Session(session_id), move |_, _, _, cx| {
                 cx.new(|_| SidebarDragPreview::new(drag_label.clone(), drag_icon))
             })
@@ -579,7 +587,21 @@ impl AppShell {
                             }),
                     )
                 }
-            })
+            });
+        if selection_mode {
+            element = element.child(
+                Checkbox::new(ElementId::Name(
+                    format!("session-select-{session_id}").into(),
+                ))
+                .small()
+                .checked(is_selected)
+                .on_click(cx.listener(move |this, &checked, _, cx| {
+                    cx.stop_propagation();
+                    this.toggle_session_selection(session_id, checked, cx);
+                })),
+            );
+        }
+        element
             .child(Icon::new(icon_name).text_color(if is_active {
                 p.sidebar_accent_foreground
             } else {

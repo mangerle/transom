@@ -228,6 +228,7 @@ impl AppShell {
         self.catalog
             .sessions
             .retain(|session| session.id != session_id);
+        self.selected_sessions.remove(&session_id);
         let removed_tabs: Vec<TabId> = self
             .tabs
             .iter()

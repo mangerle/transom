@@ -5,7 +5,7 @@ use crate::forward::{ForwardPanelState, PendingForwardConfirm};
 use crate::keymap;
 use crate::keys::KeyWizardState;
 use crate::palette::{Palette, localized_error};
-use crate::session_form::SessionForm;
+use crate::session_form::{AuthChoice, SessionForm};
 use crate::sftp::{
     SftpChmodModalState, SftpEditorModalState, SftpFilterModalState, SftpInputModalState,
     SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
@@ -15,7 +15,7 @@ use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use transom_core::{
     AppError, AppSettings, Connection, ConnectionId, ConnectionSecrets, FolderId, ForwardId,
@@ -95,6 +95,20 @@ pub(crate) struct FolderForm {
     pub(crate) error: Option<String>,
 }
 
+/// 会话批量编辑弹窗状态。
+pub(crate) struct BatchEditForm {
+    pub(crate) selected_count: usize,
+    pub(crate) change_port: bool,
+    pub(crate) port: Entity<InputState>,
+    pub(crate) change_username: bool,
+    pub(crate) username: Entity<InputState>,
+    pub(crate) change_auth: bool,
+    pub(crate) auth: AuthChoice,
+    pub(crate) key_path: Entity<InputState>,
+    pub(crate) save_passphrase: bool,
+    pub(crate) error: Option<String>,
+}
+
 /// 快捷键录制弹窗状态。
 pub(crate) struct ShortcutCapture {
     pub(crate) id: &'static str,
@@ -153,6 +167,10 @@ pub struct AppShell {
     /// 上次应用到键位表的有效键位，改键时用于抑制旧绑定。
     pub(crate) applied_shortcut_keys: Vec<String>,
     pub(crate) shortcut_capture: Option<ShortcutCapture>,
+    /// 侧边栏多选模式与已选会话。
+    pub(crate) selection_mode: bool,
+    pub(crate) selected_sessions: HashSet<SessionId>,
+    pub(crate) batch_edit: Option<BatchEditForm>,
     pub(crate) _event_task: Task<()>,
 }
 
@@ -252,6 +270,9 @@ impl AppShell {
             shortcut_filter,
             applied_shortcut_keys,
             shortcut_capture: None,
+            selection_mode: false,
+            selected_sessions: HashSet::with_capacity(8),
+            batch_edit: None,
             _event_task: event_task,
         };
 
@@ -444,6 +465,9 @@ impl AppShell {
         }
         if self.shortcut_capture.is_some() {
             overlays.push(self.render_shortcut_capture(cx, &p));
+        }
+        if self.batch_edit.is_some() {
+            overlays.push(self.render_batch_edit(window, cx, &p));
         }
         if self.key_wizard.is_some() {
             overlays.push(self.render_key_wizard(window, cx, &p));

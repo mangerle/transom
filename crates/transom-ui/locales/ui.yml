@@ -580,6 +580,52 @@ known_hosts:
   host_port:
     en: Host & Port
     zh-CN: 主机与端口
+batch:
+  select_mode:
+    en: Select Sessions
+    zh-CN: 多选会话
+  selected_count:
+    en: "%{count} selected"
+    zh-CN: "已选 %{count} 项"
+  select_all:
+    en: Select All
+    zh-CN: 全选
+  edit:
+    en: Batch Edit
+    zh-CN: 批量编辑
+  none_selected:
+    en: Select at least one session first.
+    zh-CN: 请先选择至少一个会话。
+  title:
+    en: Batch Edit Sessions
+    zh-CN: 批量编辑会话
+  hint:
+    en: Changes apply to %{count} selected sessions. Local and serial sessions are skipped because these properties do not apply to them.
+    zh-CN: 修改将应用于已选中的 %{count} 个会话；本地与串口会话不适用这些属性，会被跳过。
+  apply_hint:
+    en: Only checked properties are changed.
+    zh-CN: 只有勾选的属性会被修改。
+  password_hint:
+    en: Saved passwords stay in the system keychain; sessions without a saved password will prompt on connect.
+    zh-CN: 已保存的密码会保留在系统钥匙串中；未保存密码的会话将在连接时提示输入。
+  error_no_change:
+    en: Check at least one property to change.
+    zh-CN: 请至少勾选一项要修改的属性。
+  error_port:
+    en: Port must be between 1 and 65535.
+    zh-CN: 端口必须在 1 到 65535 之间。
+  error_username:
+    en: Username cannot be empty.
+    zh-CN: 用户名不能为空。
+  error_key:
+    en: Private key path cannot be empty.
+    zh-CN: 私钥路径不能为空。
+  apply:
+    en: Apply Changes
+    zh-CN: 应用修改
+  updated:
+    en: "Updated %{updated} SSH sessions; skipped %{skipped} non-SSH sessions."
+    zh-CN: "已更新 %{updated} 个 SSH 会话，跳过 %{skipped} 个非 SSH 会话。"
 folder:
   new_title:
     en: New Folder
