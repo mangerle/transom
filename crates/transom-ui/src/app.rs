@@ -17,7 +17,7 @@ use gpui_kit::*;
 use std::collections::HashMap;
 use transom_core::{
     AppError, AppSettings, Connection, ConnectionId, ConnectionSecrets, ForwardId, ForwardStatus,
-    HostKeyRecord, PromptInfo, Session, SessionId, SystemStats, TabId,
+    HostKeyRecord, NetworkTraffic, PromptInfo, Session, SessionId, SystemStats, TabId,
 };
 use transom_terminal::TerminalView;
 
@@ -40,6 +40,8 @@ pub(crate) struct TerminalTab {
     pub(crate) forwards_panel: Option<ForwardPanelState>,
     pub(crate) forward_statuses: HashMap<ForwardId, ForwardStatus>,
     pub(crate) system_stats: Option<SystemStats>,
+    /// 当前 SSH 连接的传输层实时速率；本地终端为 `None`。
+    pub(crate) network_traffic: Option<NetworkTraffic>,
     pub(crate) _subscription: Option<Subscription>,
 }
 

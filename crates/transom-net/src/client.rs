@@ -1,5 +1,6 @@
 use crate::auth::AuthPrompter;
 use crate::bridge::{ChannelReader, ChannelWriter};
+use crate::traffic::CountingStream;
 use russh::client::{self, Handle, Msg};
 use russh::keys::agent::client::AgentClient;
 use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate, load_secret_key};
@@ -15,7 +16,7 @@ use tokio::task::JoinHandle;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore,
     PromptInfo, SessionOptions, SshConnection, TerminalControl, TerminalControlHandle, TerminalIo,
-    TerminalSize,
+    TerminalSize, TrafficCounter,
 };
 
 #[derive(Debug)]
@@ -203,6 +204,8 @@ pub struct SshSession {
     pub io: TerminalIo,
     pub join: JoinHandle<()>,
     pub remote: SshRemote,
+    /// 整条 SSH 连接的传输层累计流量，供状态栏采样。
+    pub traffic: Arc<TrafficCounter>,
 }
 
 pub async fn connect_ssh(
@@ -240,15 +243,30 @@ pub async fn connect_ssh(
         remote_forwards: remote_forwards.clone(),
     };
     let connect_timeout = Duration::from_secs(connection.options.connect_timeout_secs.max(1));
-    let connect = client::connect(
-        Arc::new(config),
-        (connection.host.as_str(), connection.port),
-        handler,
-    );
-    let mut session = tokio::time::timeout(connect_timeout, connect)
+    let host = connection.host.clone();
+    let port = connection.port;
+    let connect = async move {
+        let socket = TcpStream::connect((host.as_str(), port))
+            .await
+            .map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::ConnectionFailed,
+                    format!("连接远端节点失败，主机: {host}，端口: {port}，原因: {error}"),
+                )
+            })?;
+        if let Err(error) = socket.set_nodelay(true) {
+            tracing::debug!(%error, "设置 TCP_NODELAY 失败，将继续使用默认行为");
+        }
+        let traffic = Arc::new(TrafficCounter::default());
+        let stream = CountingStream::new(socket, traffic.clone());
+        let session = client::connect_stream(Arc::new(config), stream, handler)
+            .await
+            .map_err(map_connect_error)?;
+        Ok::<_, AppError>((session, traffic))
+    };
+    let (mut session, traffic) = tokio::time::timeout(connect_timeout, connect)
         .await
-        .map_err(|_| AppError::new(ErrorCode::Timeout))?
-        .map_err(map_connect_error)?;
+        .map_err(|_| AppError::new(ErrorCode::Timeout))??;
 
     if let Err(error) = authenticate(&mut session, connection, credentials, prompter).await {
         let _ = session
@@ -302,7 +320,12 @@ pub async fn connect_ssh(
         control,
     );
 
-    Ok(SshSession { io, join, remote })
+    Ok(SshSession {
+        io,
+        join,
+        remote,
+        traffic,
+    })
 }
 
 fn keepalive_interval(options: &SessionOptions) -> Option<Duration> {

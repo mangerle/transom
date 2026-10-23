@@ -7,6 +7,7 @@ use crate::session::Session;
 use crate::sftp::{RemoteFile, RemoteMetadata, SftpOperation};
 use crate::sftp_sync::DirComparison;
 use crate::terminal::{TerminalIo, TerminalSize};
+use crate::traffic::NetworkTraffic;
 
 pub enum AppCommand {
     Connect {
@@ -115,6 +116,12 @@ pub enum AppEvent {
         tab_id: TabId,
         connection_id: ConnectionId,
         stats: SystemStats,
+    },
+    /// SSH 传输层按固定周期采样得到的上下行速率。
+    NetworkTrafficUpdated {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        traffic: NetworkTraffic,
     },
 }
 

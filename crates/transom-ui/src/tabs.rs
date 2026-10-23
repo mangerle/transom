@@ -190,6 +190,7 @@ impl AppShell {
         tab._subscription = None;
         tab.connection_id = None;
         tab.forward_statuses.clear();
+        tab.network_traffic = None;
         tab.status = TabStatus::Connecting;
         tab.title = session.name.clone();
         self.active_tab = Some(tab_id);

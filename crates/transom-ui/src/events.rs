@@ -52,6 +52,7 @@ impl AppShell {
                 let tab = &mut self.tabs[index];
                 tab.terminal = Some(terminal);
                 tab.status = TabStatus::Connected;
+                tab.network_traffic = None;
                 tab._subscription = Some(subscription);
                 self.active_tab = Some(tab_id);
                 window.focus(&focus_handle, cx);
@@ -66,6 +67,7 @@ impl AppShell {
                     && tab.connection_id == Some(connection_id)
                 {
                     tab.status = TabStatus::Failed(error.clone());
+                    tab.network_traffic = None;
                     self.error = Some(localized_error(&error));
                 }
                 self.mark_forwards_stopped(tab_id);
@@ -79,6 +81,7 @@ impl AppShell {
                     && !matches!(tab.status, TabStatus::Failed(_))
                 {
                     tab.status = TabStatus::Disconnected;
+                    tab.network_traffic = None;
                 }
                 self.mark_forwards_stopped(tab_id);
             }
@@ -371,6 +374,17 @@ impl AppShell {
                     && tab.connection_id == Some(connection_id)
                 {
                     tab.system_stats = Some(stats);
+                }
+            }
+            AppEvent::NetworkTrafficUpdated {
+                tab_id,
+                connection_id,
+                traffic,
+            } => {
+                if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                    && tab.connection_id == Some(connection_id)
+                {
+                    tab.network_traffic = Some(traffic);
                 }
             }
         }

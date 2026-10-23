@@ -425,7 +425,9 @@ async fn sftp_list_upload_download_and_mutations() {
     .expect("connect timed out")
     .expect("connect failed");
 
-    let SshSession { io, join, remote } = session;
+    let SshSession {
+        io, join, remote, ..
+    } = session;
     let client = SftpClient::open(&remote).await.expect("open sftp");
 
     let (path, entries) = client.list("/").await.expect("list root");

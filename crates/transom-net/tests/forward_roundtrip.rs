@@ -177,7 +177,9 @@ async fn local_and_dynamic_forwarding_roundtrip() {
     });
 
     let session = connect(port, &dir).await;
-    let SshSession { io, join, remote } = session;
+    let SshSession {
+        io, join, remote, ..
+    } = session;
 
     let local_rule = ForwardRule::new(
         "local",

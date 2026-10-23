@@ -8,6 +8,7 @@ mod sftp;
 mod sftp_dir;
 mod sftp_hash;
 mod sftp_sync;
+mod traffic;
 
 pub use auth::{AuthPrompter, PasswordPrompter};
 pub use client::{SshRemote, SshSession, connect_ssh};

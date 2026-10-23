@@ -18,6 +18,7 @@ pub mod storage;
 pub mod system_stats;
 pub mod terminal;
 pub mod theme;
+pub mod traffic;
 
 pub use color::Rgb;
 pub use commands::{AppCommand, AppEvent, SystemStats};
@@ -53,3 +54,4 @@ pub use terminal::{
     TerminalProfile, TerminalSize,
 };
 pub use theme::{PresetTheme, preset_themes};
+pub use traffic::{NetworkTraffic, TrafficCounter};

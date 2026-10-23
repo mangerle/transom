@@ -4,9 +4,27 @@ use crate::app::{AppShell, TabStatus};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+
+/// 将字节/秒格式化为自适应单位，保留一位小数便于观察实时波动。
+pub(crate) fn format_rate(bytes_per_sec: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+
+    let value = bytes_per_sec as f64;
+    if value < KB {
+        format!("{bytes_per_sec} B/s")
+    } else if value < MB {
+        format!("{:.1} KB/s", value / KB)
+    } else if value < GB {
+        format!("{:.1} MB/s", value / MB)
+    } else {
+        format!("{:.1} GB/s", value / GB)
+    }
+}
 
 impl AppShell {
     pub(crate) fn render_status_bar(&self, p: &Palette) -> AnyElement {
@@ -35,6 +53,41 @@ impl AppShell {
         };
 
         let mut right_elements = Vec::new();
+
+        if let Some(tab) = active_tab_info
+            && let Some(traffic) = &tab.network_traffic
+        {
+            let rate_entry = |icon: IconName, value: String| {
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.foreground)
+                            .child(value),
+                    )
+            };
+            let traffic_badge = h_flex()
+                .gap_2p5()
+                .items_center()
+                .px_2()
+                .py_0p5()
+                .rounded_md()
+                .bg(p.muted)
+                .child(rate_entry(
+                    IconName::ArrowUp,
+                    format_rate(traffic.upload_bytes_per_sec),
+                ))
+                .child(rate_entry(
+                    IconName::ArrowDown,
+                    format_rate(traffic.download_bytes_per_sec),
+                ))
+                .into_any_element();
+            right_elements.push(traffic_badge);
+        }
 
         if let Some(tab) = active_tab_info
             && let Some(stats) = &tab.system_stats
@@ -202,5 +255,19 @@ impl AppShell {
                     })),
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_rate;
+
+    #[test]
+    fn formats_rates_with_adaptive_units() {
+        assert_eq!(format_rate(0), "0 B/s");
+        assert_eq!(format_rate(512), "512 B/s");
+        assert_eq!(format_rate(1536), "1.5 KB/s");
+        assert_eq!(format_rate(1024 * 1024), "1.0 MB/s");
+        assert_eq!(format_rate(3 * 1024 * 1024 * 1024), "3.0 GB/s");
     }
 }

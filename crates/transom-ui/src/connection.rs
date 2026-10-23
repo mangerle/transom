@@ -64,6 +64,7 @@ impl AppShell {
             forwards_panel: None,
             forward_statuses: HashMap::new(),
             system_stats: None,
+            network_traffic: None,
             _subscription: None,
         });
         self.active_tab = Some(tab_id);
@@ -160,6 +161,7 @@ impl AppShell {
             forwards_panel: None,
             forward_statuses: HashMap::new(),
             system_stats: None,
+            network_traffic: None,
             _subscription: None,
         });
         self.active_tab = Some(tab_id);
@@ -178,6 +180,7 @@ impl AppShell {
             tab.connection_id = Some(connection_id);
             tab.sftp = None;
             tab.forward_statuses.clear();
+            tab.network_traffic = None;
         }
         let mut secrets = ConnectionSecrets::default();
         let mut needs_password = false;

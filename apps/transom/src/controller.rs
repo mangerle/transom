@@ -6,7 +6,8 @@ use tokio::process::Command;
 use tokio::runtime::Runtime;
 use transom_core::{
     AppCommand, AppError, AppEvent, Connection, ConnectionId, ErrorCode, ForwardId, ForwardState,
-    ForwardStatus, KnownHostsStore, PromptInfo, SftpOperation, TabId, TerminalIo, TransferId,
+    ForwardStatus, KnownHostsStore, NetworkTraffic, PromptInfo, SftpOperation, TabId, TerminalIo,
+    TrafficCounter, TransferId,
 };
 use transom_net::{
     AuthPrompter, ForwardTask, SftpClient, SshRemote, SshSession, connect_ssh, start_forward,
@@ -84,6 +85,7 @@ async fn run_controller(
     let mut sftp_transfers: HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>> =
         HashMap::new();
     let mut forwards: HashMap<TabId, HashMap<ForwardId, ForwardTask>> = HashMap::new();
+    let mut traffic_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
 
     fn stop_forwards(
         forwards: &mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
@@ -96,6 +98,50 @@ async fn run_controller(
                 });
             }
         }
+    }
+
+    fn stop_traffic(
+        traffic_tasks: &mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+        tab_id: TabId,
+    ) {
+        if let Some(task) = traffic_tasks.remove(&tab_id) {
+            task.abort();
+        }
+    }
+
+    fn spawn_traffic_sampler(
+        traffic: Arc<TrafficCounter>,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        event_tx: flume::Sender<AppEvent>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            // 跳过 interval 的第一个瞬时 tick，保证首个速率窗口是完整的 1 秒。
+            interval.tick().await;
+            let mut previous = traffic.totals();
+            let mut previous_at = std::time::Instant::now();
+            loop {
+                interval.tick().await;
+                let now = std::time::Instant::now();
+                let elapsed = now.saturating_duration_since(previous_at);
+                previous_at = now;
+                let current = traffic.totals();
+                let sample = NetworkTraffic::from_delta(previous, current, elapsed);
+                previous = current;
+                if event_tx
+                    .send(AppEvent::NetworkTrafficUpdated {
+                        tab_id,
+                        connection_id,
+                        traffic: sample,
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
     }
 
     enum Incoming {
@@ -324,6 +370,7 @@ async fn run_controller(
             Incoming::Command(Ok(AppCommand::CloseTab { tab_id })) => {
                 current_connections.remove(&tab_id);
                 stop_forwards(&mut forwards, tab_id);
+                stop_traffic(&mut traffic_tasks, tab_id);
                 sftp_clients.remove(&tab_id);
                 sftp_transfers.retain(|(t, _), handle| {
                     if *t == tab_id {
@@ -347,9 +394,15 @@ async fn run_controller(
                 connection_id,
                 session,
             })) => {
-                let SshSession { io, join, remote } = session;
+                let SshSession {
+                    io,
+                    join,
+                    remote,
+                    traffic,
+                } = session;
                 current_connections.insert(tab_id, connection_id);
                 stop_forwards(&mut forwards, tab_id);
+                stop_traffic(&mut traffic_tasks, tab_id);
                 sftp_clients.remove(&tab_id);
                 let remote_clone = remote.clone();
                 if let Some((_, old_remote)) = remotes.insert(tab_id, (connection_id, remote)) {
@@ -370,6 +423,10 @@ async fn run_controller(
                         connection_id,
                     });
                 });
+
+                let traffic_task =
+                    spawn_traffic_sampler(traffic, tab_id, connection_id, event_tx.clone());
+                traffic_tasks.insert(tab_id, traffic_task);
 
                 let event_tx_stats = event_tx.clone();
                 tokio::spawn(async move {
@@ -410,6 +467,7 @@ async fn run_controller(
             })) => {
                 current_connections.insert(tab_id, connection_id);
                 stop_forwards(&mut forwards, tab_id);
+                stop_traffic(&mut traffic_tasks, tab_id);
                 sftp_clients.remove(&tab_id);
                 if let Some((_, old_remote)) = remotes.remove(&tab_id) {
                     tokio::spawn(async move {
@@ -480,6 +538,7 @@ async fn run_controller(
                 if is_current {
                     current_connections.remove(&tab_id);
                     stop_forwards(&mut forwards, tab_id);
+                    stop_traffic(&mut traffic_tasks, tab_id);
                     remotes.remove(&tab_id);
                     sftp_clients.remove(&tab_id);
                     sftp_transfers.retain(|(t, _), handle| {
