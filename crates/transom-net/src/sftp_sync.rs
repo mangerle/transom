@@ -21,8 +21,12 @@ impl SftpClient {
         filter: &TransferFilter,
     ) -> Result<DirComparison, AppError> {
         let matcher = filter.matcher()?;
-        let local = scan_local_snapshot(local_root, &matcher).await?;
-        let remote = self.scan_remote_snapshot(remote_root, &matcher).await?;
+        let (local, remote) = tokio::join!(
+            scan_local_snapshot(local_root, &matcher),
+            self.scan_remote_snapshot(remote_root, &matcher)
+        );
+        let local = local?;
+        let remote = remote?;
         Ok(build_dir_comparison(
             local.entries,
             remote.entries,
