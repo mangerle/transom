@@ -381,14 +381,18 @@ impl Render for AppShell {
         let activity_bar = (!self.immersive).then(|| self.render_activity_bar(window, cx, &p));
 
         let mut resizable_group = h_resizable("workspace-panels");
-        if self.sidebar_visible && !self.immersive {
-            resizable_group = resizable_group.child(
-                resizable_panel()
-                    .size(px(270.0))
-                    .fixed()
-                    .child(self.render_sidebar(window, cx, &p)),
-            );
+        // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
+        // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
+        // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
+        let sidebar_content_visible = self.sidebar_visible && !self.immersive;
+        let mut sidebar_panel = resizable_panel()
+            .size(px(270.0))
+            .fixed()
+            .visible(sidebar_content_visible);
+        if sidebar_content_visible {
+            sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
         }
+        resizable_group = resizable_group.child(sidebar_panel);
         resizable_group =
             resizable_group.child(resizable_panel().child(self.render_main(window, cx, &p)));
         let show_sftp = self
