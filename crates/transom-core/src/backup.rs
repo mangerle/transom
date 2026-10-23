@@ -248,6 +248,7 @@ mod tests {
                 username: "deploy".into(),
                 auth: crate::AuthMethod::PrivateKey {
                     path: std::path::PathBuf::from("/home/deploy/.ssh/id_ed25519"),
+                    cert_path: None,
                     save_passphrase: true,
                 },
                 options: Default::default(),

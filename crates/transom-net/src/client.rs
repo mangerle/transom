@@ -391,34 +391,9 @@ async fn authenticate(
             )
             .await?
         }
-        transom_core::AuthMethod::PrivateKey { path, .. } => {
-            let key = match load_secret_key(path, credential_ref(&credentials.key_passphrase)) {
-                Ok(key) => key,
-                // 未加密私钥用 None 必然加载成功，因此失败只可能是"私钥带口令而本机没存口令"
-                // 或口令本身错误。前者问一次就能继续，后者会在用户输入错口令后走同样的分支报错。
-                Err(first_error) => match &credentials.key_passphrase {
-                    Some(_) => return Err(load_key_error(path, &first_error)),
-                    None => {
-                        let passphrase =
-                            request_secret(prompter.as_ref(), PromptKind::Passphrase).await?;
-                        load_secret_key(path, Some(passphrase.as_str()))
-                            .map_err(|error| load_key_error(path, &error))?
-                    }
-                },
-            };
-            let hash_alg = session
-                .best_supported_rsa_hash()
-                .await
-                .map_err(auth_error)?
-                .flatten();
-            session
-                .authenticate_publickey(
-                    user.clone(),
-                    PrivateKeyWithHashAlg::new(Arc::new(key), hash_alg),
-                )
-                .await
-                .map_err(auth_error)?
-                .success()
+        transom_core::AuthMethod::PrivateKey { .. } => {
+            authenticate_private_key(session, connection, &mut credentials, prompter.as_ref())
+                .await?
         }
         transom_core::AuthMethod::Agent => authenticate_agent(session, &user).await?,
         _ => {
@@ -486,6 +461,89 @@ async fn password_flow(
 }
 
 /// 借用 `Option<Zeroizing<String>>` 里的字符串引用，避免为一次性参数克隆口令。
+/// 用私钥完成认证，可选附带企业 CA 签发的 OpenSSH 用户证书。
+///
+/// 从 `authenticate` 里拆出来：这条路径上有"口令索取—证书加载—回退裸公钥"三段，
+/// 塞进 match 分支既超出函数长度约束，也让人看不清回退次序。
+async fn authenticate_private_key(
+    session: &mut Handle<ClientHandler>,
+    connection: &SshConnection,
+    credentials: &mut ConnectionSecrets,
+    prompter: &dyn AuthPrompter,
+) -> Result<bool, AppError> {
+    let transom_core::AuthMethod::PrivateKey {
+        path, cert_path, ..
+    } = &connection.auth
+    else {
+        return Err(AppError::with_detail(
+            ErrorCode::Configuration,
+            "内部错误：认证方式不是私钥却进入了私钥分支",
+        ));
+    };
+    let user = connection.username.clone();
+    let key = match load_secret_key(path, credential_ref(&credentials.key_passphrase)) {
+        Ok(key) => key,
+        // 未加密私钥用 None 必然加载成功，因此失败只可能是"私钥带口令而本机没存口令"
+        // 或口令本身错误。前者问一次就能继续，后者会在用户输入错口令后走同样的分支报错。
+        Err(first_error) => match &credentials.key_passphrase {
+            Some(_) => return Err(load_key_error(path, &first_error)),
+            None => {
+                let passphrase = request_secret(prompter, PromptKind::Passphrase).await?;
+                load_secret_key(path, Some(passphrase.as_str()))
+                    .map_err(|error| load_key_error(path, &error))?
+            }
+        },
+    };
+    let hash_alg = session
+        .best_supported_rsa_hash()
+        .await
+        .map_err(auth_error)?
+        .flatten();
+    let key = Arc::new(key);
+    let Some(cert_path) = cert_path else {
+        return pubkey_auth(session, &user, key, hash_alg).await;
+    };
+    let certificate = russh::keys::load_openssh_certificate(cert_path).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::AuthFailed,
+            format!(
+                "加载 SSH 用户证书失败，路径: {}，原因: {error}",
+                cert_path.display()
+            ),
+        )
+    })?;
+    let via_certificate = session
+        .authenticate_openssh_cert(user.clone(), Arc::clone(&key), certificate)
+        .await
+        .map_err(auth_error)?;
+    if via_certificate.success() {
+        return Ok(true);
+    }
+    // 退回裸公钥认证：服务器没配 trusteduserca、证书过期或 principal 不匹配时，同一把私钥
+    // 往往仍在其 authorized_keys 里；只发证书会让这些机器直接连不上。回退不是静默掩盖问题，
+    // 证书被拒已经按 warn 记录，路径与主机都在日志里。
+    tracing::warn!(
+        "证书认证被服务器拒绝，回退到公钥认证，主机: {}，证书: {}",
+        connection.host,
+        cert_path.display()
+    );
+    pubkey_auth(session, &user, key, hash_alg).await
+}
+
+/// 裸公钥认证一步。
+async fn pubkey_auth(
+    session: &mut Handle<ClientHandler>,
+    user: &str,
+    key: Arc<russh::keys::PrivateKey>,
+    hash_alg: Option<HashAlg>,
+) -> Result<bool, AppError> {
+    session
+        .authenticate_publickey(user.to_owned(), PrivateKeyWithHashAlg::new(key, hash_alg))
+        .await
+        .map_err(auth_error)
+        .map(|result| result.success())
+}
+
 fn credential_ref(value: &Option<Zeroizing<String>>) -> Option<&str> {
     value.as_ref().map(|secret| secret.as_str())
 }

@@ -43,6 +43,7 @@ pub fn parse_ssh_config_with_home(content: &str, home: Option<&Path>) -> Vec<Ses
             let auth = if let Some(key_path) = identity.clone() {
                 AuthMethod::PrivateKey {
                     path: key_path,
+                    cert_path: None,
                     save_passphrase: false,
                 }
             } else {
@@ -163,6 +164,7 @@ Host *
                 ssh.auth,
                 AuthMethod::PrivateKey {
                     path: PathBuf::from("/custom/home/.ssh/id_ed25519"),
+                    cert_path: None,
                     save_passphrase: false,
                 }
             );

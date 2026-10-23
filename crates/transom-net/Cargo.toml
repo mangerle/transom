@@ -18,5 +18,6 @@ serialport.workspace = true
 
 [dev-dependencies]
 parking_lot.workspace = true
+ssh-key.workspace = true
 transom-store.workspace = true
 tempfile = "3"

@@ -231,6 +231,13 @@ pub enum AuthMethod {
         path: PathBuf,
         #[serde(default)]
         save_passphrase: bool,
+        /// 企业 CA 签发的 OpenSSH 用户证书（`*-cert.pub`）。
+        ///
+        /// 放在 `PrivateKey` 变体而不是连接选项上：证书只在"用这把私钥认证"时才有意义，
+        /// 让类型替我们排除"密码认证却挂着证书"这种非法组合。
+        /// 认证时优先走证书，被服务器拒绝再退回裸公钥认证（老服务器没配 CA 时不至于连不上）。
+        #[serde(default)]
+        cert_path: Option<PathBuf>,
     },
     Agent,
 }
@@ -257,6 +264,24 @@ impl Default for SessionOptions {
 mod tests {
     use super::*;
 
+    /// 证书字段是后加的：老会话文件里的私钥认证没有 `cert_path`，必须按"不带证书"降级。
+    #[test]
+    fn legacy_private_key_auth_loads_without_certificate() {
+        let legacy = r#"{
+            "kind": "private_key",
+            "path": "/home/deploy/.ssh/id_ed25519",
+            "save_passphrase": true
+        }"#;
+        let auth: AuthMethod = serde_json::from_str(legacy).unwrap();
+        assert!(matches!(
+            auth,
+            AuthMethod::PrivateKey {
+                cert_path: None,
+                ..
+            }
+        ));
+    }
+
     #[test]
     fn session_round_trips_through_json() {
         let mut session = Session::new(
@@ -267,6 +292,7 @@ mod tests {
                 username: "deploy".into(),
                 auth: AuthMethod::PrivateKey {
                     path: PathBuf::from("/home/deploy/.ssh/id_ed25519"),
+                    cert_path: None,
                     save_passphrase: true,
                 },
                 options: SessionOptions::default(),

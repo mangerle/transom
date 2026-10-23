@@ -162,6 +162,18 @@ form:
   key_path:
     en: Private key
     zh-CN: 私钥路径
+  cert_path:
+    en: User certificate (CA-signed, optional)
+    zh-CN: 用户证书（CA 签发，可留空）
+  cert_placeholder:
+    en: ~/.ssh/id_ed25519-cert.pub
+    zh-CN: ~/.ssh/id_ed25519-cert.pub
+  cert_hint:
+    en: Sent before the bare public key; if the server does not trust the CA, Transom falls back to public-key authentication and logs it. Host-certificate verification is a separate feature.
+    zh-CN: 认证时先发证书，服务器不信任该 CA 时自动回退裸公钥认证并记入日志。主机证书校验是另一条能力，这里不涉及。
+  pick_cert:
+    en: Select an OpenSSH user certificate
+    zh-CN: 选择 OpenSSH 用户证书
   passphrase:
     en: Key passphrase
     zh-CN: 私钥口令

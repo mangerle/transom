@@ -166,6 +166,9 @@ impl AppShell {
                     }
                     Some(AuthMethod::PrivateKey {
                         path: PathBuf::from(path),
+                        // 批量改认证方式不继承各自的证书路径：证书与机器成对下发，
+                        // 把某台的证书复制到一批机器上是错的，清空并让用户显式补更稳。
+                        cert_path: None,
                         save_passphrase: form.save_passphrase,
                     })
                 }

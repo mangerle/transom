@@ -31,6 +31,8 @@ pub(crate) struct SessionForm {
     pub username: Entity<InputState>,
     pub password: Entity<InputState>,
     pub key_path: Entity<InputState>,
+    /// CA 签发的用户证书路径（`*-cert.pub`），仅密钥认证有意义。
+    pub cert_path: Entity<InputState>,
     pub passphrase: Entity<InputState>,
     pub serial_port: Entity<InputState>,
     pub serial_baud: Entity<InputState>,
@@ -70,6 +72,7 @@ struct SessionFormSeed {
     save_password: bool,
     save_passphrase: bool,
     key_path: String,
+    cert_path: String,
     folder_path: String,
     startup_commands: String,
     serial_port: String,
@@ -99,22 +102,44 @@ impl SessionForm {
             Connection::Ssh(ssh) => Some(ssh),
             _ => None,
         });
-        let (auth, save_password, save_passphrase, key_path) = match ssh.map(|ssh| &ssh.auth) {
-            Some(AuthMethod::Password { save }) => {
-                (AuthChoice::Password, *save, false, String::new())
-            }
-            Some(AuthMethod::PrivateKey {
-                path,
-                save_passphrase,
-            }) => (
-                AuthChoice::PrivateKey,
-                false,
-                *save_passphrase,
-                path.display().to_string(),
-            ),
-            Some(AuthMethod::Agent) => (AuthChoice::Agent, false, false, String::new()),
-            _ => (AuthChoice::Password, true, false, String::new()),
-        };
+        let (auth, save_password, save_passphrase, key_path, cert_path) =
+            match ssh.map(|ssh| &ssh.auth) {
+                Some(AuthMethod::Password { save }) => (
+                    AuthChoice::Password,
+                    *save,
+                    false,
+                    String::new(),
+                    String::new(),
+                ),
+                Some(AuthMethod::PrivateKey {
+                    path,
+                    cert_path,
+                    save_passphrase,
+                }) => (
+                    AuthChoice::PrivateKey,
+                    false,
+                    *save_passphrase,
+                    path.display().to_string(),
+                    cert_path
+                        .as_ref()
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_default(),
+                ),
+                Some(AuthMethod::Agent) => (
+                    AuthChoice::Agent,
+                    false,
+                    false,
+                    String::new(),
+                    String::new(),
+                ),
+                _ => (
+                    AuthChoice::Password,
+                    true,
+                    false,
+                    String::new(),
+                    String::new(),
+                ),
+            };
         let startup_commands = base
             .as_ref()
             .map(|session| session.startup.to_multiline())
@@ -146,6 +171,7 @@ impl SessionForm {
                 save_password: save_password && connection == ConnectionChoice::Ssh,
                 save_passphrase,
                 key_path,
+                cert_path,
                 folder_path: folder_path.unwrap_or_default(),
                 startup_commands,
                 serial_port,
@@ -166,6 +192,7 @@ impl SessionForm {
             save_password,
             save_passphrase,
             key_path,
+            cert_path,
             folder_path,
             startup_commands,
             serial_port,
@@ -213,6 +240,12 @@ impl SessionForm {
                 cx,
                 &key_path,
                 &rust_i18n::t!("form.key_placeholder"),
+            ),
+            cert_path: text_input(
+                window,
+                cx,
+                &cert_path,
+                &rust_i18n::t!("form.cert_placeholder"),
             ),
             passphrase: password_input(window, cx, &rust_i18n::t!("form.passphrase_placeholder")),
             serial_port: text_input(
@@ -323,6 +356,13 @@ impl SessionForm {
             },
             AuthChoice::PrivateKey => AuthMethod::PrivateKey {
                 path: PathBuf::from(&key_path),
+                // 证书路径与私钥同口径展开 `~`；留空表示这台机器不带用户证书。
+                cert_path: {
+                    let raw = self.cert_path.read(cx).value().trim().to_string();
+                    (!raw.is_empty()).then(|| {
+                        PathBuf::from(crate::keys::expand_home(&raw).to_string_lossy().to_string())
+                    })
+                },
                 save_passphrase: self.save_passphrase,
             },
             AuthChoice::Agent => AuthMethod::Agent,

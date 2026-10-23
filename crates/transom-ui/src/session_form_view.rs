@@ -241,6 +241,34 @@ impl AppShell {
                                         })),
                                 ),
                         );
+                        // CA 签发的用户证书：企业里常见"同一把钥匙 + 一张短期证书"，
+                        // 留空表示这台机器仍走裸公钥认证。
+                        content = content.child(
+                            h_flex()
+                                .gap_2()
+                                .items_end()
+                                .child(div().flex_1().child(Self::form_field(
+                                    rust_i18n::t!("form.cert_path").to_string(),
+                                    form.cert_path.clone(),
+                                    p,
+                                )))
+                                .child(
+                                    Button::new("browse-cert-path")
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::FolderOpen)
+                                        .label(rust_i18n::t!("form.browse").to_string())
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.pick_certificate_path(window, cx);
+                                        })),
+                                ),
+                        );
+                        content = content.child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("form.cert_hint").to_string()),
+                        );
                         content = content.child(
                             h_flex()
                                 .justify_between()
@@ -384,6 +412,26 @@ impl AppShell {
         };
         let text = path.to_string_lossy().to_string();
         form.key_path
+            .update(cx, |state, cx| state.set_value(&text, window, cx));
+        cx.notify();
+    }
+
+    /// 选择 CA 签发的用户证书文件（OpenSSH 惯例是 `私钥名-cert.pub`）。
+    pub(crate) fn pick_certificate_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(form) = self.form.as_mut() else {
+            return;
+        };
+        let title = rust_i18n::t!("form.pick_cert").to_string();
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(&title)
+            .set_directory(crate::keys::default_ssh_dir())
+            .add_filter("OpenSSH 证书", &["pub"])
+            .pick_file()
+        else {
+            return;
+        };
+        let text = path.to_string_lossy().to_string();
+        form.cert_path
             .update(cx, |state, cx| state.set_value(&text, window, cx));
         cx.notify();
     }
