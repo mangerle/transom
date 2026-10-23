@@ -12,6 +12,8 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{Connection, SplitAxis, TabId};
 
+use super::tab_drag::attach_tab_drag;
+
 impl AppShell {
     pub(super) fn render_tab_strip(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let mut tab_strip = h_flex()
@@ -85,6 +87,14 @@ impl AppShell {
             } else {
                 title.clone()
             };
+            let tab_element = attach_tab_drag(
+                tab_element,
+                group_id,
+                title.clone(),
+                tab_icon,
+                &app_entity,
+                p,
+            );
             let mut element = tab_element
                 .tooltip(move |_window, cx| Tooltip::new(tooltip_text.clone()).build(_window, cx))
                 .on_click(cx.listener(move |this, _, window, cx| {
