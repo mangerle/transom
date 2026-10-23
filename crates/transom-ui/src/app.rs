@@ -386,19 +386,28 @@ impl Render for AppShell {
         let top_bar = (!self.immersive).then(|| self.render_top_bar(window, cx, &p));
         let activity_bar = (!self.immersive).then(|| self.render_activity_bar(window, cx, &p));
 
-        let mut resizable_group = h_resizable("workspace-panels");
-        // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
-        // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
-        // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
-        let sidebar_content_visible = self.sidebar_visible && !self.immersive;
-        let mut sidebar_panel = resizable_panel()
-            .size(px(270.0))
-            .fixed()
-            .visible(sidebar_content_visible);
-        if sidebar_content_visible {
-            sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
+        // 沉浸模式使用独立分组：侧边栏完全不参与布局，主面板成为首面板，
+        // 避免其左侧残留一条用于拖动侧边栏的 1px 分隔线；
+        // 独立 key 也保证退出沉浸后原分组的全部尺寸状态原样恢复。
+        let resizable_id = if self.immersive {
+            "workspace-panels-immersive"
+        } else {
+            "workspace-panels"
+        };
+        let mut resizable_group = h_resizable(resizable_id);
+        if !self.immersive {
+            // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
+            // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
+            // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
+            let mut sidebar_panel = resizable_panel()
+                .size(px(270.0))
+                .fixed()
+                .visible(self.sidebar_visible);
+            if self.sidebar_visible {
+                sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
+            }
+            resizable_group = resizable_group.child(sidebar_panel);
         }
-        resizable_group = resizable_group.child(sidebar_panel);
         resizable_group =
             resizable_group.child(resizable_panel().child(self.render_main(window, cx, &p)));
         let show_sftp = self
