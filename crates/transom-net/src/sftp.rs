@@ -374,9 +374,13 @@ impl SftpClient {
             .map_err(sftp_error)
     }
 
+    /// 删除远端文件或目录。
+    ///
+    /// SFTP 的 RMDIR 只能删除空目录，目录分支因此改为先收集并删除全部后代，
+    /// 再自底向上删除目录本身，语义对齐本地文件管理器的“删除目录”。
     pub async fn delete(&self, path: &str, is_dir: bool) -> Result<(), AppError> {
         if is_dir {
-            self.session.remove_dir(path).await.map_err(sftp_error)
+            self.delete_dir_recursive(path).await
         } else {
             self.session.remove_file(path).await.map_err(sftp_error)
         }

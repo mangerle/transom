@@ -26,6 +26,80 @@ impl ScanResult {
 }
 
 impl SftpClient {
+    /// 递归删除远端目录：先收集整棵子树，再逐文件、自底向上逐目录删除。
+    ///
+    /// 设计原理（Why）：
+    /// - SFTP 的 `RMDIR` 与 POSIX `rmdir` 一致，只能删除空目录；
+    ///   用户视角的“删除目录”需要自行遍历并清理后代；
+    /// - 使用显式栈迭代而非递归，避免超深目录树导致栈溢出；
+    /// - 符号链接只删除链接本身，绝不跟随链接进入目标目录，防止误删链接
+    ///   指向的其他目录；
+    /// - 收集完成后再统一删除，遍历阶段不会因边删边读导致目录项遗漏。
+    ///
+    /// # Errors
+    /// 根目录非法、读取目录、删除文件或删除目录失败时返回
+    /// `ErrorCode::SftpFailed`；已完成的部分删除不会回滚。
+    pub(crate) async fn delete_dir_recursive(&self, root: &str) -> Result<(), AppError> {
+        let canonical = self.session.canonicalize(root).await.map_err(sftp_error)?;
+        if canonical == "/" {
+            return Err(AppError::with_detail(
+                ErrorCode::SftpFailed,
+                "不允许递归删除远端根目录",
+            ));
+        }
+
+        let mut stack = vec![canonical];
+        let mut directories = Vec::new();
+        let mut files = Vec::new();
+        while let Some(directory) = stack.pop() {
+            directories.push(directory.clone());
+            let entries = self.session.read_dir(&directory).await.map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("读取待删除目录失败 {directory}: {error}"),
+                )
+            })?;
+            for entry in entries {
+                let name = entry.file_name();
+                if name == "." || name == ".." {
+                    continue;
+                }
+                if !safe_component(&name) {
+                    return Err(AppError::with_detail(
+                        ErrorCode::SftpFailed,
+                        format!("待删除目录包含非法名称: {name}"),
+                    ));
+                }
+                let path = join_remote_path(&directory, &name);
+                let metadata = entry.metadata();
+                if metadata.is_symlink() || !metadata.is_dir() {
+                    files.push(path);
+                } else {
+                    stack.push(path);
+                }
+            }
+        }
+
+        for file in files {
+            self.session.remove_file(&file).await.map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("删除远端文件失败 {file}: {error}"),
+                )
+            })?;
+        }
+        // 发现顺序保证父目录先于子目录入栈，逆序即可自底向上删除
+        for directory in directories.into_iter().rev() {
+            self.session.remove_dir(&directory).await.map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("删除远端目录失败 {directory}: {error}"),
+                )
+            })?;
+        }
+        Ok(())
+    }
+
     /// 递归上传本地目录，返回整体字节数与跳过条目数。
     ///
     /// 设计原理（Why）：

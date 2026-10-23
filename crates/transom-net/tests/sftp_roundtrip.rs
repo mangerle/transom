@@ -491,6 +491,35 @@ async fn sftp_list_upload_download_and_mutations() {
         .expect("delete file");
     client.delete("/folder", true).await.expect("delete folder");
 
+    client
+        .create_dir("/recursive")
+        .await
+        .expect("mkdir recursive");
+    client
+        .create_dir("/recursive/a")
+        .await
+        .expect("mkdir recursive/a");
+    client
+        .create_dir("/recursive/a/b")
+        .await
+        .expect("mkdir recursive/a/b");
+    std::fs::write(dir.path().join("recursive/root.txt"), b"root").unwrap();
+    std::fs::write(dir.path().join("recursive/a/one.txt"), b"one").unwrap();
+    std::fs::write(dir.path().join("recursive/a/b/two.txt"), b"two").unwrap();
+    client
+        .symlink("/seed.txt", "/recursive/seed.link")
+        .await
+        .expect("symlink inside recursive dir");
+    client
+        .delete("/recursive", true)
+        .await
+        .expect("非空目录应可递归删除");
+    assert!(!dir.path().join("recursive").exists());
+    assert!(
+        dir.path().join("seed.txt").exists(),
+        "递归删除不得跟随符号链接误删目标"
+    );
+
     let meta = client.stat("/seed.txt").await.expect("stat seed");
     assert!(!meta.is_dir);
     assert!(!meta.is_symlink);
