@@ -1,6 +1,7 @@
 use crate::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
 use crate::terminal::{TerminalInteraction, TerminalProfile};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// 终端提示音响铃模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -121,6 +122,19 @@ pub struct AppSettings {
     pub window: WindowSettings,
     #[serde(default)]
     pub sftp: SftpSettings,
+    #[serde(default)]
+    pub shortcuts: ShortcutSettings,
+}
+
+/// 用户覆盖的快捷键配置。
+///
+/// 仅保存被用户修改的动作；未出现的动作在运行时使用内置默认值。
+/// 每个动作可配置多个备选键位，空列表或全部非法时回退到默认键位，
+/// 避免手工编辑配置后出现“完全无法操作”的状态。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ShortcutSettings {
+    #[serde(default)]
+    pub bindings: BTreeMap<String, Vec<String>>,
 }
 
 /// SFTP 传输偏好：排除规则位于设置中，跨会话与重启保持生效。
@@ -162,6 +176,7 @@ impl Default for AppSettings {
             terminal_profile: TerminalProfile::default(),
             window: WindowSettings::default(),
             sftp: SftpSettings::default(),
+            shortcuts: ShortcutSettings::default(),
         }
     }
 }
@@ -179,6 +194,21 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
         assert!(settings.window.previous_tab_groups.is_empty());
         assert_eq!(settings.window.previous_tab_sessions.len(), 0);
+    }
+
+    #[test]
+    fn shortcut_overrides_round_trip() {
+        let mut settings = AppSettings::default();
+        settings
+            .shortcuts
+            .bindings
+            .insert("new_session".into(), vec!["ctrl-shift-q".into()]);
+        let json = serde_json::to_string(&settings).unwrap();
+        let decoded: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            decoded.shortcuts.bindings.get("new_session"),
+            Some(&vec!["ctrl-shift-q".to_string()])
+        );
     }
 
     #[test]

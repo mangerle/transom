@@ -15,6 +15,7 @@ mod session_form_view;
 mod session_serial;
 mod settings;
 mod sftp;
+mod shortcuts;
 mod sidebar;
 mod split;
 mod startup;

@@ -15,4 +15,5 @@ rfd.workspace = true
 directories.workspace = true
 notify-rust.workspace = true
 chrono.workspace = true
+parking_lot.workspace = true
 

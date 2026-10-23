@@ -677,8 +677,8 @@ settings:
     en: Mouse & Clipboard
     zh-CN: 鼠标与剪贴板
   tab_shortcuts:
-    en: Shortcuts Guide
-    zh-CN: 快捷键指南
+    en: Keyboard Shortcuts
+    zh-CN: 快捷键
   tab_tabs_window:
     en: Tabs & Window
     zh-CN: 标签与窗口
@@ -817,6 +817,39 @@ settings:
   shortcut_close_pane:
     en: Close Current Pane
     zh-CN: 关闭当前窗格
+  shortcut_hint:
+    en: Click Edit and press a new key combination. Changes take effect after saving; conflicting keys are rejected.
+    zh-CN: 点击“修改”后按下新的组合键。保存设置后生效；与其他动作冲突的键位会被拒绝。
+  shortcut_edit:
+    en: Edit
+    zh-CN: 修改
+  shortcut_reset:
+    en: Reset
+    zh-CN: 重置
+  shortcut_reset_all:
+    en: Reset All
+    zh-CN: 全部重置
+  shortcut_conflicts:
+    en: "Conflicting shortcuts: %{list}"
+    zh-CN: "快捷键冲突：%{list}"
+  shortcut_capture_title:
+    en: Record Shortcut
+    zh-CN: 录制快捷键
+  shortcut_capture_hint:
+    en: Press a key combination that includes Ctrl, Alt, Cmd, Fn, or a function key. Press Esc to cancel.
+    zh-CN: 请按下包含 Ctrl、Alt、Cmd、Fn 或功能键的组合键；按 Esc 取消。
+  shortcut_recorded:
+    en: Shortcut recorded. Save settings to apply it.
+    zh-CN: 快捷键已记录，保存设置后生效。
+  shortcut_modifier_only:
+    en: Press a complete key combination, not only a modifier.
+    zh-CN: 请按下完整的组合键，而不是只按修饰键。
+  shortcut_needs_modifier:
+    en: The shortcut must include Ctrl, Alt, Cmd, Fn, or be a function key.
+    zh-CN: 快捷键必须包含 Ctrl、Alt、Cmd、Fn 修饰键，或使用功能键。
+  shortcut_conflict:
+    en: "This key is already used by %{name}. Reset or change that action first."
+    zh-CN: "该键位已用于“%{name}”，请先重置或修改该动作。"
 monitor:
   cpu:
     en: CPU

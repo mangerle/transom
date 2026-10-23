@@ -16,6 +16,7 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 use transom_core::{
     AppError, AppSettings, Connection, ConnectionId, ConnectionSecrets, FolderId, ForwardId,
     ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, SavedTabGroup, Session,
@@ -94,6 +95,13 @@ pub(crate) struct FolderForm {
     pub(crate) error: Option<String>,
 }
 
+/// 快捷键录制弹窗状态。
+pub(crate) struct ShortcutCapture {
+    pub(crate) id: &'static str,
+    pub(crate) error: Option<String>,
+    pub(crate) focus: FocusHandle,
+}
+
 pub(crate) struct AuthPromptState {
     pub(crate) name: String,
     pub(crate) instructions: String,
@@ -140,6 +148,11 @@ pub struct AppShell {
     pub(crate) sidebar_visible: bool,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
     pub(crate) immersive: bool,
+    /// 当前生效的应用快捷键，终端据此截留按键而不是编码为控制字符。
+    pub(crate) shortcut_filter: Arc<parking_lot::RwLock<Vec<KeybindingKeystroke>>>,
+    /// 上次应用到键位表的有效键位，改键时用于抑制旧绑定。
+    pub(crate) applied_shortcut_keys: Vec<String>,
+    pub(crate) shortcut_capture: Option<ShortcutCapture>,
     pub(crate) _event_task: Task<()>,
 }
 
@@ -150,7 +163,11 @@ impl AppShell {
         services: UiServices,
         settings: AppSettings,
     ) -> Self {
-        cx.bind_keys(keymap::bindings());
+        cx.bind_keys(keymap::bindings(&settings.shortcuts));
+        let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
+            &settings.shortcuts,
+        )));
+        let applied_shortcut_keys = keymap::effective_key_strings(&settings.shortcuts);
         let search = cx.new(|cx| {
             InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
         });
@@ -232,6 +249,9 @@ impl AppShell {
             error,
             sidebar_visible: true,
             immersive: false,
+            shortcut_filter,
+            applied_shortcut_keys,
+            shortcut_capture: None,
             _event_task: event_task,
         };
 
@@ -421,6 +441,9 @@ impl AppShell {
         }
         if self.show_settings_modal {
             overlays.push(self.render_settings_modal(window, cx, &p));
+        }
+        if self.shortcut_capture.is_some() {
+            overlays.push(self.render_shortcut_capture(cx, &p));
         }
         if self.key_wizard.is_some() {
             overlays.push(self.render_key_wizard(window, cx, &p));

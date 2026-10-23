@@ -42,7 +42,8 @@ pub use session::{
     SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
 };
 pub use settings::{
-    AppSettings, BellStyle, SavedTabGroup, SftpSettings, SplitAxis, WindowSettings,
+    AppSettings, BellStyle, SavedTabGroup, SftpSettings, ShortcutSettings, SplitAxis,
+    WindowSettings,
 };
 pub use sftp::{
     RemoteDeleteTarget, RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferKind,

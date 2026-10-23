@@ -8037,6 +8037,7 @@ dependencies = [
  "flume",
  "gpui-kit",
  "notify-rust",
+ "parking_lot",
  "rfd",
  "rust-i18n",
  "transom-core",

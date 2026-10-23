@@ -3,6 +3,7 @@
 mod pages;
 
 use crate::app::AppShell;
+use crate::keymap;
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -10,6 +11,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Settings};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{BellStyle, TerminalCursorShape};
 
@@ -65,6 +67,7 @@ impl AppShell {
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             self.error = Some(localized_error(&error));
         } else {
+            self.apply_shortcut_settings(cx);
             self.status = Some(rust_i18n::t!("status.ready").to_string());
         }
         self.show_settings_modal = false;
@@ -396,9 +399,9 @@ impl AppShell {
     pub(crate) fn render_settings_shortcuts(
         &mut self,
         p: &Palette,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
-        let key_tag = |label: &'static str| {
+        let key_tag = |label: String| {
             div()
                 .px_2()
                 .py_0p5()
@@ -412,53 +415,114 @@ impl AppShell {
                 .child(label)
         };
 
-        let shortcut_row = |name: String, keys: Vec<&'static str>| {
-            let key_elements = h_flex().gap_1().children(keys.into_iter().map(key_tag));
-            h_flex()
-                .justify_between()
-                .items_center()
-                .py_1p5()
-                .border_b_1()
-                .border_color(p.border)
-                .child(div().text_sm().child(name))
-                .child(key_elements)
-        };
+        let rows: Vec<AnyElement> = keymap::specs()
+            .iter()
+            .map(|spec| {
+                let keys = keymap::pretty_keys(spec, &self.settings.shortcuts);
+                let customized = self.settings.shortcuts.bindings.contains_key(spec.id);
+                let id = spec.id;
+                let key_elements = h_flex()
+                    .gap_1()
+                    .children(keys.split(" / ").map(|key| key_tag(key.to_string())));
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .py_1p5()
+                    .border_b_1()
+                    .border_color(p.border)
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!(spec.label_key).to_string()),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(key_elements)
+                            .child(
+                                Button::new(ElementId::Name(format!("shortcut-edit-{id}").into()))
+                                    .ghost()
+                                    .xsmall()
+                                    .label(rust_i18n::t!("settings.shortcut_edit").to_string())
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.open_shortcut_capture(id, window, cx);
+                                    })),
+                            )
+                            .when(customized, |row| {
+                                row.child(
+                                    Button::new(ElementId::Name(
+                                        format!("shortcut-reset-{id}").into(),
+                                    ))
+                                    .ghost()
+                                    .xsmall()
+                                    .label(rust_i18n::t!("settings.shortcut_reset").to_string())
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.settings.shortcuts.bindings.remove(id);
+                                            cx.notify();
+                                        },
+                                    )),
+                                )
+                            }),
+                    )
+                    .into_any_element()
+            })
+            .collect();
 
-        let shortcuts = [
-            ("settings.shortcut_new_session", &["Ctrl", "N"][..]),
-            ("settings.shortcut_new_local", &["Ctrl", "Alt", "T"][..]),
-            ("settings.shortcut_quick_open", &["Ctrl", "P"][..]),
-            ("settings.shortcut_toggle_sidebar", &["Ctrl", "B"][..]),
-            ("settings.shortcut_toggle_sftp", &["Ctrl", "Shift", "U"][..]),
-            (
-                "settings.shortcut_toggle_forward",
-                &["Ctrl", "Shift", "F"][..],
-            ),
-            ("settings.shortcut_close_tab", &["Ctrl", "W"][..]),
-            ("settings.shortcut_next_tab", &["Ctrl", "Tab"][..]),
-            ("settings.shortcut_prev_tab", &["Ctrl", "Shift", "Tab"][..]),
-            ("settings.shortcut_reconnect", &["Ctrl", "R"][..]),
-            ("settings.shortcut_immersive", &["F11", "Alt", "Enter"][..]),
-            ("settings.shortcut_split_right", &["Ctrl", "Shift", "D"][..]),
-            ("settings.shortcut_split_down", &["Ctrl", "Shift", "E"][..]),
-            ("settings.shortcut_close_pane", &["Ctrl", "Shift", "X"][..]),
-        ];
+        let conflicts = keymap::conflict_pairs(&self.settings.shortcuts);
+        let conflict_warning = (!conflicts.is_empty()).then(|| {
+            let detail = conflicts
+                .iter()
+                .map(|(first, second)| {
+                    format!(
+                        "{} ↔ {}",
+                        rust_i18n::t!(first.label_key),
+                        rust_i18n::t!(second.label_key)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("、");
+            div()
+                .text_xs()
+                .text_color(p.danger)
+                .child(rust_i18n::t!("settings.shortcut_conflicts", list = detail).to_string())
+        });
 
+        let has_custom = !self.settings.shortcuts.bindings.is_empty();
         v_flex()
             .gap_3()
             .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("settings.tab_shortcuts").to_string()),
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::BOLD)
+                            .child(rust_i18n::t!("settings.tab_shortcuts").to_string()),
+                    )
+                    .when(has_custom, |row| {
+                        row.child(
+                            Button::new("reset-all-shortcuts")
+                                .ghost()
+                                .xsmall()
+                                .label(rust_i18n::t!("settings.shortcut_reset_all").to_string())
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.settings.shortcuts.bindings.clear();
+                                    cx.notify();
+                                })),
+                        )
+                    }),
             )
             .child(
-                v_flex()
-                    .gap_1()
-                    .children(shortcuts.into_iter().map(|(key, keys)| {
-                        shortcut_row(rust_i18n::t!(key).to_string(), keys.to_vec())
-                    })),
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.shortcut_hint").to_string()),
             )
+            .when_some(conflict_warning, |panel, warning| panel.child(warning))
+            .child(v_flex().gap_1().children(rows))
             .into_any_element()
     }
 

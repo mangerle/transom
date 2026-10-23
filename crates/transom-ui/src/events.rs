@@ -1,7 +1,6 @@
 //! 应用顶层事件分发与终端事件回调处理模块。
 
 use crate::app::{AppShell, AuthPromptState, TabStatus};
-use crate::keymap;
 use crate::palette::localized_error;
 use crate::sftp::{
     SftpEditorModalState, SftpPropertiesModalState, format_size, remote_file_properties,
@@ -44,7 +43,13 @@ impl AppShell {
                 profile.cursor_shape = self.settings.terminal_profile.cursor_shape;
                 profile.cursor_blink = self.settings.terminal_profile.cursor_blink;
                 let interaction = self.settings.terminal_interaction;
-                let key_filter: KeyFilter = Arc::new(keymap::is_app_shortcut);
+                let reserved = self.shortcut_filter.clone();
+                let key_filter: KeyFilter = Arc::new(move |keystroke| {
+                    reserved
+                        .read()
+                        .iter()
+                        .any(|binding| keystroke.should_match(binding))
+                });
                 let terminal = cx.new(|cx| {
                     TerminalView::new(window, cx, io, profile, interaction, Some(key_filter))
                 });
