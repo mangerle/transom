@@ -70,6 +70,23 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 将已打开标签的会话快照同步为目录中的最新配置。
+    ///
+    /// 批量编辑、备份导入等操作会整体替换目录记录；已连接终端不受影响，
+    /// 但分屏、重连与初始化命令应使用新配置。
+    pub(crate) fn refresh_tab_sessions(&mut self) {
+        for tab in &mut self.tabs {
+            if let Some(session) = self
+                .catalog
+                .sessions
+                .iter()
+                .find(|session| session.id == tab.session_id)
+            {
+                tab.session = session.clone();
+            }
+        }
+    }
+
     pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
         self.groups
             .iter()

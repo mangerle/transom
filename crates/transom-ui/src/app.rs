@@ -16,6 +16,7 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use transom_core::{
     AppError, AppSettings, Connection, ConnectionId, ConnectionSecrets, FolderId, ForwardId,
@@ -95,6 +96,34 @@ pub(crate) struct FolderForm {
     pub(crate) error: Option<String>,
 }
 
+/// 备份导入或导出目标。
+#[derive(Debug, Clone)]
+pub(crate) enum BackupAction {
+    Export(PathBuf),
+    Import(PathBuf),
+}
+
+impl BackupAction {
+    pub(crate) fn path(&self) -> &Path {
+        match self {
+            Self::Export(path) | Self::Import(path) => path,
+        }
+    }
+
+    pub(crate) fn is_export(&self) -> bool {
+        matches!(self, Self::Export(_))
+    }
+}
+
+/// 备份口令输入弹窗状态。
+pub(crate) struct BackupPromptState {
+    pub(crate) action: BackupAction,
+    pub(crate) passphrase: Entity<InputState>,
+    pub(crate) confirm: Option<Entity<InputState>>,
+    pub(crate) error: Option<String>,
+    pub(crate) busy: bool,
+}
+
 /// 会话批量编辑弹窗状态。
 pub(crate) struct BatchEditForm {
     pub(crate) selected_count: usize,
@@ -171,6 +200,8 @@ pub struct AppShell {
     pub(crate) selection_mode: bool,
     pub(crate) selected_sessions: HashSet<SessionId>,
     pub(crate) batch_edit: Option<BatchEditForm>,
+    pub(crate) backup_prompt: Option<BackupPromptState>,
+    pub(crate) _backup_task: Option<Task<()>>,
     pub(crate) _event_task: Task<()>,
 }
 
@@ -273,6 +304,8 @@ impl AppShell {
             selection_mode: false,
             selected_sessions: HashSet::with_capacity(8),
             batch_edit: None,
+            backup_prompt: None,
+            _backup_task: None,
             _event_task: event_task,
         };
 
@@ -468,6 +501,9 @@ impl AppShell {
         }
         if self.batch_edit.is_some() {
             overlays.push(self.render_batch_edit(window, cx, &p));
+        }
+        if self.backup_prompt.is_some() {
+            overlays.push(self.render_backup_prompt(window, cx, &p));
         }
         if self.key_wizard.is_some() {
             overlays.push(self.render_key_wizard(window, cx, &p));

@@ -2,6 +2,7 @@ use crate::catalog::SessionCatalog;
 use crate::error::AppError;
 use crate::secrets::SecretKey;
 use crate::settings::AppSettings;
+use std::path::Path;
 use zeroize::Zeroizing;
 
 /// 会话与文件夹的一次性完整读写契约。
@@ -16,6 +17,29 @@ pub trait SessionStore: Send + Sync {
 pub trait SettingsStore: Send + Sync {
     fn load(&self) -> Result<AppSettings, AppError>;
     fn save(&self, settings: &AppSettings) -> Result<(), AppError>;
+}
+
+/// 会话目录加密备份服务。
+///
+/// UI 只感知“导出/导入到某路径”，加密算法、文件格式与口令校验由实现层
+/// 负责；这样测试中可注入内存实现，也避免界面 crate 直接依赖密码学库。
+pub trait BackupService: Send + Sync {
+    /// 将目录快照加密写入指定路径。
+    ///
+    /// # Errors
+    /// 口令为空、写盘失败或加密失败时返回 `AppError`。
+    fn export(
+        &self,
+        path: &Path,
+        catalog: &SessionCatalog,
+        passphrase: &str,
+    ) -> Result<(), AppError>;
+
+    /// 从指定路径读取并解密目录快照。
+    ///
+    /// # Errors
+    /// 文件不可读、口令错误、格式不兼容或完整性校验失败时返回 `AppError`。
+    fn import(&self, path: &Path, passphrase: &str) -> Result<SessionCatalog, AppError>;
 }
 
 pub trait SecretStore: Send + Sync {

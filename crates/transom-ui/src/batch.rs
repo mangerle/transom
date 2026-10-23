@@ -184,18 +184,7 @@ impl AppShell {
         let (updated, skipped) = apply_batch_updates(&mut self.catalog, &selected, &updates);
         self.batch_edit = None;
         let saved = self.persist_catalog();
-
-        for tab in &mut self.tabs {
-            if selected.contains(&tab.session_id)
-                && let Some(session) = self
-                    .catalog
-                    .sessions
-                    .iter()
-                    .find(|session| session.id == tab.session_id)
-            {
-                tab.session = session.clone();
-            }
-        }
+        self.refresh_tab_sessions();
         self.selection_mode = false;
         self.selected_sessions.clear();
         if saved {

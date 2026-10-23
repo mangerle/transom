@@ -45,6 +45,15 @@ pub struct SessionCatalog {
     pub sessions: Vec<Session>,
 }
 
+/// 备份合并统计。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CatalogMergeSummary {
+    pub added_sessions: usize,
+    pub updated_sessions: usize,
+    pub added_folders: usize,
+    pub updated_folders: usize,
+}
+
 /// 会话树操作失败原因。
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CatalogError {
@@ -297,6 +306,47 @@ impl SessionCatalog {
         resolved
     }
 
+    /// 合并另一份目录快照，用于备份导入与多机同步。
+    ///
+    /// 同 ID 的会话视为同一逻辑会话，导入方覆盖本地配置；同 ID 文件夹更新
+    /// 名称与父级，但保留本机折叠状态（属于界面偏好）。合并后统一执行
+    /// `normalize`，修复跨机器数据可能出现的悬空父级。
+    pub fn merge(&mut self, other: SessionCatalog) -> CatalogMergeSummary {
+        let mut summary = CatalogMergeSummary::default();
+        for folder in other.folders {
+            if let Some(existing) = self
+                .folders
+                .iter_mut()
+                .find(|existing| existing.id == folder.id)
+            {
+                let collapsed = existing.collapsed;
+                *existing = SessionFolder {
+                    collapsed,
+                    ..folder
+                };
+                summary.updated_folders += 1;
+            } else {
+                self.folders.push(folder);
+                summary.added_folders += 1;
+            }
+        }
+        for session in other.sessions {
+            if let Some(existing) = self
+                .sessions
+                .iter_mut()
+                .find(|existing| existing.id == session.id)
+            {
+                *existing = session;
+                summary.updated_sessions += 1;
+            } else {
+                self.sessions.push(session);
+                summary.added_sessions += 1;
+            }
+        }
+        self.normalize();
+        summary
+    }
+
     /// 修复外部文件中的损坏树结构，保证后续 UI 与移动操作安全。
     ///
     /// 处理内容：重复文件夹 ID、缺失/自引用父节点、父子环、指向不存在文件夹的会话。
@@ -440,6 +490,34 @@ mod tests {
         assert!(catalog.folder(b).unwrap().parent.is_none());
         assert_eq!(catalog.sessions[0].id, orphan);
         assert_eq!(catalog.sessions[0].folder_id, None);
+    }
+
+    #[test]
+    fn merge_adds_new_and_updates_same_ids() {
+        let mut local = SessionCatalog::default();
+        let folder = local.add_folder("本地", None).unwrap();
+        local.set_folder_collapsed(folder, true).unwrap();
+        let local_session = session(&mut local, "same");
+
+        let mut remote = SessionCatalog::default();
+        remote.folders.push(SessionFolder {
+            id: folder,
+            name: "远端".into(),
+            parent: None,
+            collapsed: false,
+        });
+        let mut same = Session::new("same", Connection::Local(LocalConnection::default()));
+        same.id = local_session;
+        let new_session = Session::new("new", Connection::Local(LocalConnection::default()));
+        remote.sessions = vec![same, new_session];
+
+        let summary = local.merge(remote);
+        assert_eq!(summary.added_sessions, 1);
+        assert_eq!(summary.updated_sessions, 1);
+        assert_eq!(summary.updated_folders, 1);
+        assert_eq!(local.folders[0].name, "远端");
+        assert!(local.folders[0].collapsed, "折叠状态应保留本机偏好");
+        assert_eq!(local.sessions.len(), 2);
     }
 
     #[test]

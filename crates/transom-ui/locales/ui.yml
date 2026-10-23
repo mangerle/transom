@@ -909,6 +909,58 @@ monitor:
   disk:
     en: Disk
     zh-CN: 磁盘
+backup:
+  title:
+    en: Session Backup
+    zh-CN: 会话备份
+  settings_hint:
+    en: Export all sessions and folders to a passphrase-encrypted JSON/YAML file. System keychain secrets are not included.
+    zh-CN: 将全部会话与文件夹导出为口令加密的 JSON/YAML 文件；系统钥匙串中的密码不会包含在内。
+  export_title:
+    en: Export Encrypted Backup
+    zh-CN: 导出加密备份
+  import_title:
+    en: Import Encrypted Backup
+    zh-CN: 导入加密备份
+  export_action:
+    en: Export Backup
+    zh-CN: 导出加密备份
+  import_action:
+    en: Import Backup
+    zh-CN: 导入加密备份
+  dialog_hint:
+    en: Argon2id key derivation with XChaCha20-Poly1305 authenticated encryption.
+    zh-CN: 使用 Argon2id 派生密钥，并通过 XChaCha20-Poly1305 认证加密保护内容。
+  hint:
+    en: The backup contains sessions and folders only. On import, sessions with the same ID are updated and the rest are appended. Only import backups from trusted sources, as sessions may contain automatic startup commands.
+    zh-CN: 备份仅包含会话与文件夹配置；导入时同 ID 会话会被更新，其余会话追加。会话可能包含连接后自动执行的命令，请只导入可信来源的备份。
+  passphrase:
+    en: Backup passphrase
+    zh-CN: 备份口令
+  confirm:
+    en: Confirm passphrase
+    zh-CN: 确认口令
+  passphrase_hint:
+    en: At least 8 characters. If lost, the backup cannot be recovered.
+    zh-CN: 至少 8 个字符；口令遗失后备份将无法恢复。
+  error_empty:
+    en: Passphrase cannot be empty.
+    zh-CN: 备份口令不能为空。
+  error_short:
+    en: Export passphrase must be at least 8 characters.
+    zh-CN: 导出备份的口令至少需要 8 个字符。
+  error_mismatch:
+    en: The two passphrases do not match.
+    zh-CN: 两次输入的口令不一致。
+  processing:
+    en: Processing, please wait...
+    zh-CN: 正在处理，请稍候...
+  exported:
+    en: "Backup exported to %{path}"
+    zh-CN: "备份已导出到 %{path}"
+  imported:
+    en: "Import complete: %{added} sessions added, %{updated} updated, %{folders} folders added."
+    zh-CN: "导入完成：新增 %{added} 个会话、更新 %{updated} 个会话、新增 %{folders} 个文件夹。"
 keys:
   title:
     en: SSH Key Manager

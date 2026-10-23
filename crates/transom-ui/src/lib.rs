@@ -2,6 +2,7 @@
 rust_i18n::i18n!("locales", fallback = "en");
 
 mod app;
+mod backup;
 mod batch;
 mod chrome;
 mod connection;
@@ -30,8 +31,8 @@ use gpui_kit::component as gpui_component;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppEvent, KnownHostsStore, SecretStore, SerialPortProvider, SessionStore,
-    SettingsStore,
+    AppCommand, AppEvent, BackupService, KnownHostsStore, SecretStore, SerialPortProvider,
+    SessionStore, SettingsStore,
 };
 
 #[derive(Clone)]
@@ -41,6 +42,7 @@ pub struct UiServices {
     pub secret_store: Arc<dyn SecretStore>,
     pub known_hosts: Arc<dyn KnownHostsStore>,
     pub serial_ports: Arc<dyn SerialPortProvider>,
+    pub backup: Arc<dyn BackupService>,
     pub command_tx: flume::Sender<AppCommand>,
     pub event_rx: flume::Receiver<AppEvent>,
 }

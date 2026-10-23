@@ -142,8 +142,8 @@ impl AppShell {
             .group(SettingGroup::new().item(SettingItem::render({
                 let app = app_entity.clone();
                 let p = *p;
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_general(&p, cx))
+                move |_options, window, cx| {
+                    app.update(cx, |this, cx| this.render_settings_general(window, &p, cx))
                 }
             })));
 
@@ -528,7 +528,8 @@ impl AppShell {
 
     pub(crate) fn render_settings_general(
         &mut self,
-        _p: &Palette,
+        _window: &mut Window,
+        p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let current_bell = self.settings.window.bell_style;
@@ -593,6 +594,45 @@ impl AppShell {
                                     }))
                             }),
                         ),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_2()
+                    .pt_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::BOLD)
+                            .child(rust_i18n::t!("backup.title").to_string()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("backup.settings_hint").to_string()),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new("backup-export")
+                                    .small()
+                                    .icon(IconName::Download)
+                                    .label(rust_i18n::t!("backup.export_action").to_string())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_backup_export(window, cx);
+                                    })),
+                            )
+                            .child(
+                                Button::new("backup-import")
+                                    .small()
+                                    .icon(IconName::Upload)
+                                    .label(rust_i18n::t!("backup.import_action").to_string())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_backup_import(window, cx);
+                                    })),
+                            ),
                     ),
             )
             .into_any_element()
