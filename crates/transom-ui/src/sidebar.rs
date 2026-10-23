@@ -296,48 +296,36 @@ impl AppShell {
             .border_r_1()
             .border_color(p.sidebar_border)
             .child(
-                v_flex()
+                h_flex()
                     .w_full()
                     .p_3()
                     .gap_2()
+                    .items_center()
                     .border_b_1()
                     .border_color(p.sidebar_border)
+                    .child(div().flex_1().child(Input::new(&self.search).w_full()))
                     .child(
-                        h_flex()
-                            .w_full()
+                        div()
+                            .id("sidebar-new")
+                            .size(px(26.0))
+                            .flex_none()
+                            .rounded_md()
+                            .flex()
                             .items_center()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(rust_i18n::t!("app.sessions").to_string()),
-                            )
-                            .child(
-                                div()
-                                    .id("sidebar-new")
-                                    .size(px(26.0))
-                                    .rounded_md()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor_pointer()
-                                    .text_color(p.muted_foreground)
-                                    .hover(|s| {
-                                        s.bg(p.sidebar_accent).text_color(p.sidebar_foreground)
-                                    })
-                                    .active(|s| s.bg(p.border))
-                                    .tooltip(move |_window, cx| {
-                                        Tooltip::new(rust_i18n::t!("app.new_session").to_string())
-                                            .build(_window, cx)
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.open_new_session(window, cx);
-                                    }))
-                                    .child(Icon::new(IconName::Plus).xsmall()),
-                            ),
-                    )
-                    .child(Input::new(&self.search).w_full()),
+                            .justify_center()
+                            .cursor_pointer()
+                            .text_color(p.muted_foreground)
+                            .hover(|s| s.bg(p.sidebar_accent).text_color(p.sidebar_foreground))
+                            .active(|s| s.bg(p.border))
+                            .tooltip(move |_window, cx| {
+                                Tooltip::new(rust_i18n::t!("app.new_session").to_string())
+                                    .build(_window, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_new_session(window, cx);
+                            }))
+                            .child(Icon::new(IconName::Plus).xsmall()),
+                    ),
             )
             .child(
                 v_flex()
