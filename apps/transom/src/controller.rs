@@ -10,7 +10,8 @@ use transom_core::{
     TrafficCounter, TransferId,
 };
 use transom_net::{
-    AuthPrompter, ForwardTask, SftpClient, SshRemote, SshSession, connect_ssh, start_forward,
+    AuthPrompter, ForwardTask, SftpClient, SshRemote, SshSession, connect_ssh, deploy_public_key,
+    start_forward,
 };
 
 pub struct Controller {
@@ -86,6 +87,7 @@ async fn run_controller(
         HashMap::new();
     let mut forwards: HashMap<TabId, HashMap<ForwardId, ForwardTask>> = HashMap::new();
     let mut traffic_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
+    let mut key_deploy_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
 
     fn stop_forwards(
         forwards: &mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
@@ -105,6 +107,15 @@ async fn run_controller(
         tab_id: TabId,
     ) {
         if let Some(task) = traffic_tasks.remove(&tab_id) {
+            task.abort();
+        }
+    }
+
+    fn stop_key_deploy(
+        key_deploy_tasks: &mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+        tab_id: TabId,
+    ) {
+        if let Some(task) = key_deploy_tasks.remove(&tab_id) {
             task.abort();
         }
     }
@@ -367,10 +378,49 @@ async fn run_controller(
                     },
                 });
             }
+            Incoming::Command(Ok(AppCommand::DeployPublicKey {
+                tab_id,
+                connection_id,
+                key_name,
+                public_key,
+            })) => {
+                let target = remotes
+                    .get(&tab_id)
+                    .filter(|(current, _)| *current == connection_id)
+                    .map(|(_, remote)| remote.clone());
+                match target {
+                    Some(remote) => {
+                        stop_key_deploy(&mut key_deploy_tasks, tab_id);
+                        let event_tx = event_tx.clone();
+                        let handle = tokio::spawn(async move {
+                            let error = deploy_public_key(&remote, &public_key).await.err();
+                            let _ = event_tx.send(AppEvent::PublicKeyDeployed {
+                                tab_id,
+                                connection_id,
+                                key_name,
+                                error,
+                            });
+                        });
+                        key_deploy_tasks.insert(tab_id, handle);
+                    }
+                    None => {
+                        let _ = event_tx.send(AppEvent::PublicKeyDeployed {
+                            tab_id,
+                            connection_id,
+                            key_name,
+                            error: Some(AppError::with_detail(
+                                ErrorCode::ChannelFailed,
+                                "SSH 连接尚未就绪，无法部署公钥",
+                            )),
+                        });
+                    }
+                }
+            }
             Incoming::Command(Ok(AppCommand::CloseTab { tab_id })) => {
                 current_connections.remove(&tab_id);
                 stop_forwards(&mut forwards, tab_id);
                 stop_traffic(&mut traffic_tasks, tab_id);
+                stop_key_deploy(&mut key_deploy_tasks, tab_id);
                 sftp_clients.remove(&tab_id);
                 sftp_transfers.retain(|(t, _), handle| {
                     if *t == tab_id {
@@ -403,6 +453,7 @@ async fn run_controller(
                 current_connections.insert(tab_id, connection_id);
                 stop_forwards(&mut forwards, tab_id);
                 stop_traffic(&mut traffic_tasks, tab_id);
+                stop_key_deploy(&mut key_deploy_tasks, tab_id);
                 sftp_clients.remove(&tab_id);
                 let remote_clone = remote.clone();
                 if let Some((_, old_remote)) = remotes.insert(tab_id, (connection_id, remote)) {
@@ -468,6 +519,7 @@ async fn run_controller(
                 current_connections.insert(tab_id, connection_id);
                 stop_forwards(&mut forwards, tab_id);
                 stop_traffic(&mut traffic_tasks, tab_id);
+                stop_key_deploy(&mut key_deploy_tasks, tab_id);
                 sftp_clients.remove(&tab_id);
                 if let Some((_, old_remote)) = remotes.remove(&tab_id) {
                     tokio::spawn(async move {
@@ -539,6 +591,7 @@ async fn run_controller(
                     current_connections.remove(&tab_id);
                     stop_forwards(&mut forwards, tab_id);
                     stop_traffic(&mut traffic_tasks, tab_id);
+                    stop_key_deploy(&mut key_deploy_tasks, tab_id);
                     remotes.remove(&tab_id);
                     sftp_clients.remove(&tab_id);
                     sftp_transfers.retain(|(t, _), handle| {

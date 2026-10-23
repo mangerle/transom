@@ -41,6 +41,8 @@ notify-rust = "4"
 chrono = "0.4"
 globset = "0.4"
 sha2 = "0.10"
+ssh-key = { version = "=0.7.0-rc.11", features = ["ed25519", "rsa", "encryption"] }
+rand = "0.10"
 
 transom-core = { path = "crates/transom-core" }
 transom-store = { path = "crates/transom-store" }

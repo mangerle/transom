@@ -5,6 +5,7 @@ pub mod commands;
 pub mod error;
 pub mod forward;
 pub mod ids;
+pub mod keys;
 pub mod known_hosts;
 pub mod prompt;
 pub mod secrets;
@@ -28,6 +29,7 @@ pub use forward::{
     TargetAddress,
 };
 pub use ids::{ConnectionId, ForwardId, SessionId, TabId, TransferId};
+pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use prompt::PromptInfo;
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};

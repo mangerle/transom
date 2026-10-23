@@ -206,6 +206,20 @@ impl AppShell {
                     ))
                     .child(Self::render_activity_button(
                         ActivityButtonProps {
+                            id: "nav-keys",
+                            icon: IconName::KeyRound,
+                            tooltip: rust_i18n::t!("keys.title").to_string(),
+                            selected: self.key_wizard.is_some(),
+                            disabled: false,
+                        },
+                        p,
+                        |this, window, cx| {
+                            this.open_key_wizard(window, cx);
+                        },
+                        cx,
+                    ))
+                    .child(Self::render_activity_button(
+                        ActivityButtonProps {
                             id: "nav-settings",
                             icon: IconName::Settings,
                             tooltip: rust_i18n::t!("settings.title").to_string(),

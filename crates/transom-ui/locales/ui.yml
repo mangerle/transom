@@ -670,5 +670,60 @@ monitor:
   disk:
     en: Disk
     zh-CN: 磁盘
+keys:
+  title:
+    en: SSH Key Manager
+    zh-CN: 密钥生成与管理
+  hint:
+    en: Generate Ed25519 / RSA keypairs, inspect local public keys, and deploy one to an active SSH session.
+    zh-CN: 一键生成 Ed25519 / RSA 密钥对，查看本机公钥，并部署到当前已连接的 SSH 会话。
+  generate_title:
+    en: Generate New Keypair
+    zh-CN: 生成新密钥
+  algorithm:
+    en: Algorithm
+    zh-CN: 算法
+  comment:
+    en: Comment
+    zh-CN: 注释
+  path:
+    en: Private Key Path
+    zh-CN: 私钥保存路径
+  passphrase:
+    en: Passphrase (optional)
+    zh-CN: 口令（可选）
+  passphrase_hint:
+    en: The private key is written with 0600 permissions; leave the passphrase empty to skip encryption.
+    zh-CN: 私钥按 0600 权限写入；口令留空则不加密。
+  generate:
+    en: Generate Keypair
+    zh-CN: 生成密钥对
+  generating:
+    en: Generating...
+    zh-CN: 生成中...
+  existing_title:
+    en: Local Public Keys
+    zh-CN: 本机公钥
+  empty:
+    en: No public keys found in ~/.ssh
+    zh-CN: 未在 ~/.ssh 目录找到公钥
+  select_first:
+    en: Select a public key before copying, exporting, or deploying it.
+    zh-CN: 请先选择一个公钥，再进行复制、导出或部署。
+  deploy_title:
+    en: Deploy to SSH Session
+    zh-CN: 部署到 SSH 会话
+  deploy_hint:
+    en: The key is appended to the remote ~/.ssh/authorized_keys with duplicate detection.
+    zh-CN: 公钥将追加到远端 ~/.ssh/authorized_keys，并自动去重。
+  deploy_to:
+    en: Deploy to %{name}
+    zh-CN: 部署到 %{name}
+  no_connections:
+    en: No active SSH session. Connect to a host before deploying.
+    zh-CN: 当前没有已连接的 SSH 会话，请先连接主机后再部署。
+  export:
+    en: Export
+    zh-CN: 导出
 
 

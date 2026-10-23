@@ -37,6 +37,12 @@ pub enum AppCommand {
         connection_id: ConnectionId,
         rule_id: ForwardId,
     },
+    DeployPublicKey {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        key_name: String,
+        public_key: String,
+    },
     CloseTab {
         tab_id: TabId,
     },
@@ -122,6 +128,13 @@ pub enum AppEvent {
         tab_id: TabId,
         connection_id: ConnectionId,
         traffic: NetworkTraffic,
+    },
+    /// 公钥部署结果；`error` 为 `None` 表示已成功写入远端 `authorized_keys`。
+    PublicKeyDeployed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        key_name: String,
+        error: Option<AppError>,
     },
 }
 

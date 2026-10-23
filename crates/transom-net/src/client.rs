@@ -117,6 +117,14 @@ impl client::Handler for ClientHandler {
     }
 }
 
+/// 远端命令执行结果；`exit_status` 缺失表示服务端未回传退出码。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandOutput {
+    pub exit_status: Option<u32>,
+    pub stdout: String,
+    pub stderr: String,
+}
+
 #[derive(Clone)]
 pub struct SshRemote {
     inner: Arc<AsyncMutex<Handle<ClientHandler>>>,
@@ -172,24 +180,46 @@ impl SshRemote {
         }
     }
 
+    /// 执行命令并返回标准输出，忽略退出码与错误输出。
+    ///
+    /// 适用于系统状态采样这类“失败即降级”的只读命令；需要判定成败时
+    /// 应使用 [`Self::exec_command_capture`]。
     pub async fn exec_command(&self, command: &str) -> Result<String, AppError> {
+        Ok(self.exec_command_capture(command).await?.stdout)
+    }
+
+    /// 执行命令并完整捕获标准输出、错误输出与远端退出码。
+    ///
+    /// # Errors
+    /// 打开通道或发送 exec 请求失败时返回 `ChannelFailed`。
+    pub async fn exec_command_capture(&self, command: &str) -> Result<CommandOutput, AppError> {
         let mut channel = self.open_session().await?;
         channel
             .exec(true, command)
             .await
             .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
 
-        let mut output = Vec::new();
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let mut exit_status = None;
         while let Some(msg) = channel.wait().await {
             match msg {
-                ChannelMsg::Data { data } => {
-                    output.extend_from_slice(&data);
+                ChannelMsg::Data { data } => stdout.extend_from_slice(&data),
+                ChannelMsg::ExtendedData { data, ext: 1 } => {
+                    stderr.extend_from_slice(&data);
                 }
+                ChannelMsg::ExitStatus {
+                    exit_status: status,
+                } => exit_status = Some(status),
                 ChannelMsg::Eof | ChannelMsg::Close => break,
                 _ => {}
             }
         }
-        Ok(String::from_utf8_lossy(&output).to_string())
+        Ok(CommandOutput {
+            exit_status,
+            stdout: String::from_utf8_lossy(&stdout).to_string(),
+            stderr: String::from_utf8_lossy(&stderr).to_string(),
+        })
     }
 
     pub async fn disconnect(&self, description: &str) {

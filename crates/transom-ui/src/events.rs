@@ -413,6 +413,14 @@ impl AppShell {
                     tab.network_traffic = Some(traffic);
                 }
             }
+            AppEvent::PublicKeyDeployed {
+                tab_id: _,
+                connection_id: _,
+                key_name,
+                error,
+            } => {
+                self.handle_public_key_deployed(key_name, error, cx);
+            }
         }
         cx.notify();
     }

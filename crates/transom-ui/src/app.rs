@@ -3,6 +3,7 @@
 use crate::UiServices;
 use crate::forward::{ForwardPanelState, PendingForwardConfirm};
 use crate::keymap;
+use crate::keys::KeyWizardState;
 use crate::palette::{Palette, localized_error};
 use crate::session_form::SessionForm;
 use crate::sftp::{
@@ -83,6 +84,7 @@ pub struct AppShell {
     pub(crate) show_quick_open: bool,
     pub(crate) quick_open_state: Entity<CommandState>,
     pub(crate) show_settings_modal: bool,
+    pub(crate) key_wizard: Option<KeyWizardState>,
     pub(crate) settings_font_size: Entity<InputState>,
     pub(crate) settings_line_height: Entity<InputState>,
     pub(crate) settings_scrollback: Entity<InputState>,
@@ -173,6 +175,7 @@ impl AppShell {
             show_quick_open: false,
             quick_open_state,
             show_settings_modal: false,
+            key_wizard: None,
             settings_font_size,
             settings_line_height,
             settings_scrollback,
@@ -351,6 +354,9 @@ impl AppShell {
         }
         if self.show_settings_modal {
             overlays.push(self.render_settings_modal(window, cx, &p));
+        }
+        if self.key_wizard.is_some() {
+            overlays.push(self.render_key_wizard(window, cx, &p));
         }
         if self.sftp_editor_modal.is_some() {
             overlays.push(self.render_sftp_editor_modal(window, cx, &p));

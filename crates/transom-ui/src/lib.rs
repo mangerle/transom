@@ -7,6 +7,7 @@ mod connection;
 mod events;
 mod forward;
 mod keymap;
+mod keys;
 mod modals;
 mod palette;
 mod session_form;
