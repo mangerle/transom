@@ -19,7 +19,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::{Icon, VirtualListScrollHandle};
 use gpui_kit::*;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use transom_core::{
     ConnectionId, DirDiffEntry, RemoteFile, RemoteMetadata, TabId, TransferId, TransferTask,
@@ -117,6 +117,10 @@ pub(crate) struct SftpPanelState {
     pub(crate) local_filter_input: Entity<InputState>,
     pub(crate) local_entries: Vec<LocalFileEntry>,
     pub(crate) local_selected: Option<PathBuf>,
+    /// 本地栏多选集合；`local_selected` 始终指向其中最近操作的主项。
+    pub(crate) local_selection: BTreeSet<PathBuf>,
+    /// Shift 连选的锚点路径。
+    pub(crate) local_anchor: Option<PathBuf>,
     pub(crate) local_error: Option<String>,
     pub(crate) local_scroll_handle: VirtualListScrollHandle,
     pub(crate) remote_scroll_handle: VirtualListScrollHandle,
@@ -151,10 +155,84 @@ impl SftpPanelState {
         self.active_pane = SftpActivePane::Remote;
     }
 
-    /// 选中本地条目并标记本地栏为活动栏
+    /// 单选一个本地条目，同时清空多选集合并重置 Shift 锚点。
     pub(crate) fn select_local(&mut self, path: PathBuf) {
-        self.local_selected = Some(path);
+        self.local_selected = Some(path.clone());
+        self.local_anchor = Some(path.clone());
+        self.local_selection.clear();
+        self.local_selection.insert(path);
         self.active_pane = SftpActivePane::Local;
+    }
+
+    /// 设置本地主项但保留已有多选集合，供右键菜单定位单项操作。
+    pub(crate) fn set_local_primary(&mut self, path: PathBuf) {
+        self.local_selected = Some(path.clone());
+        self.local_selection.insert(path);
+        self.active_pane = SftpActivePane::Local;
+    }
+
+    /// Ctrl/Cmd 点击切换单个条目的选中状态。
+    pub(crate) fn toggle_local_selection(&mut self, path: PathBuf) {
+        if self.local_selection.remove(&path) {
+            if self.local_selected.as_ref() == Some(&path) {
+                self.local_selected = self.local_selection.iter().next_back().cloned();
+            }
+        } else {
+            self.local_selection.insert(path.clone());
+            self.local_selected = Some(path.clone());
+        }
+        self.local_anchor = Some(path);
+        self.active_pane = SftpActivePane::Local;
+    }
+
+    /// Shift 连选：用可见列表中的一段路径替换当前集合。
+    pub(crate) fn select_local_range(
+        &mut self,
+        paths: impl IntoIterator<Item = PathBuf>,
+        primary: PathBuf,
+    ) {
+        self.local_selection = paths.into_iter().collect();
+        self.local_selection.insert(primary.clone());
+        self.local_selected = Some(primary);
+        self.active_pane = SftpActivePane::Local;
+    }
+
+    /// 返回当前需要批量操作的本地路径；无多选时退化为单选主项。
+    pub(crate) fn selected_local_paths(&self) -> Vec<PathBuf> {
+        if self.local_selection.is_empty() {
+            self.local_selected.iter().cloned().collect()
+        } else {
+            self.local_selection.iter().cloned().collect()
+        }
+    }
+
+    pub(crate) fn clear_local_selection(&mut self) {
+        self.local_selected = None;
+        self.local_selection.clear();
+        self.local_anchor = None;
+    }
+
+    /// 刷新目录后剔除已不存在的选中项，并修正主项与锚点。
+    pub(crate) fn sync_local_selection(&mut self, valid: &BTreeSet<PathBuf>) {
+        self.local_selection.retain(|path| valid.contains(path));
+        if self
+            .local_selected
+            .as_ref()
+            .is_some_and(|path| !valid.contains(path))
+        {
+            self.local_selected = self.local_selection.iter().next_back().cloned();
+        }
+        if self
+            .local_anchor
+            .as_ref()
+            .is_some_and(|path| !valid.contains(path))
+        {
+            self.local_anchor = self.local_selected.clone();
+        }
+        if self.local_selection.is_empty() {
+            self.local_selected = None;
+            self.local_anchor = None;
+        }
     }
 }
 

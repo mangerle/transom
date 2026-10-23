@@ -17,47 +17,56 @@ impl AppShell {
         let Some(panel) = tab.sftp.as_mut() else {
             return;
         };
-        let Some(local_path) = panel.local_selected.clone() else {
+        let paths = panel.selected_local_paths();
+        if paths.is_empty() {
             panel.error = Some(rust_i18n::t!("sftp.upload_file").to_string());
             cx.notify();
             return;
-        };
-        let Some(file_name) = local_path.file_name().and_then(|n| n.to_str()) else {
-            panel.error = Some(rust_i18n::t!("sftp.upload_file").to_string());
-            cx.notify();
-            return;
-        };
-        let remote_path = join_remote(&panel.path, file_name);
-        let is_directory = local_path.is_dir();
-        let size = if is_directory {
-            None
-        } else {
-            std::fs::metadata(&local_path).map(|m| m.len()).ok()
-        };
+        }
         let mode = if panel.resume_enabled {
             TransferMode::Resume
         } else {
             TransferMode::Overwrite
         };
-        let mut task = if is_directory {
-            TransferTask::new_directory(
-                TransferDirection::Upload,
-                local_path,
-                remote_path,
-                size,
-                mode,
-            )
-        } else {
-            TransferTask::new(
-                TransferDirection::Upload,
-                local_path,
-                remote_path,
-                size,
-                mode,
-            )
-        };
-        task.verify = verify;
-        panel.queue.push(task);
+        let mut tasks = Vec::with_capacity(paths.len());
+        for local_path in paths {
+            let Some(file_name) = local_path.file_name().and_then(|name| name.to_str()) else {
+                panel.error = Some(rust_i18n::t!("sftp.upload_file").to_string());
+                cx.notify();
+                return;
+            };
+            let remote_path = join_remote(&panel.path, file_name);
+            let is_directory = std::fs::symlink_metadata(&local_path)
+                .map(|metadata| metadata.is_dir())
+                .unwrap_or(false);
+            let size = if is_directory {
+                None
+            } else {
+                std::fs::metadata(&local_path).map(|meta| meta.len()).ok()
+            };
+            let mut task = if is_directory {
+                TransferTask::new_directory(
+                    TransferDirection::Upload,
+                    local_path,
+                    remote_path,
+                    size,
+                    mode,
+                )
+            } else {
+                TransferTask::new(
+                    TransferDirection::Upload,
+                    local_path,
+                    remote_path,
+                    size,
+                    mode,
+                )
+            };
+            task.verify = verify;
+            tasks.push(task);
+        }
+        let count = tasks.len();
+        panel.queue.extend(tasks);
+        panel.status = Some(format!("已加入 {count} 个上传任务"));
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }

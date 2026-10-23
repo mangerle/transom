@@ -10,7 +10,7 @@ use crate::palette::sftp_text_input;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use transom_core::{AppCommand, ConnectionId, SftpOperation, TabId, TransferId};
 
@@ -111,6 +111,8 @@ impl AppShell {
             local_filter_input,
             local_entries,
             local_selected: None,
+            local_selection: BTreeSet::new(),
+            local_anchor: None,
             local_error: None,
             local_scroll_handle: VirtualListScrollHandle::new(),
             remote_scroll_handle: VirtualListScrollHandle::new(),
@@ -296,7 +298,7 @@ impl AppShell {
         };
         panel.local_path = target.clone();
         panel.local_entries = list_local_dir(&target).unwrap_or_default();
-        panel.local_selected = None;
+        panel.clear_local_selection();
         panel.local_error = None;
         let input = panel.local_path_input.clone();
         input.update(cx, |state, cx| {
@@ -370,7 +372,10 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_mut())
         {
-            panel.local_entries = list_local_dir(&panel.local_path).unwrap_or_default();
+            let entries = list_local_dir(&panel.local_path).unwrap_or_default();
+            let valid_paths = entries.iter().map(|entry| entry.path.clone()).collect();
+            panel.local_entries = entries;
+            panel.sync_local_selection(&valid_paths);
             panel.local_error = None;
             cx.notify();
         }

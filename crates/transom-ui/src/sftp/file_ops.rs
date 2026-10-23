@@ -46,32 +46,18 @@ impl AppShell {
     /// - 代价与局限：无二次确认，Delete 按下即删除；如需误删保护需在设计层面
     ///   为所有删除入口统一补确认机制。
     pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some((active_pane, local_selected)) = self
+        let Some(active_pane) = self
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_ref())
-            .map(|panel| (panel.active_pane, panel.local_selected.clone()))
+            .map(|panel| panel.active_pane)
         else {
             return;
         };
         match active_pane {
             SftpActivePane::Remote => self.sftp_delete(tab_id, cx),
-            SftpActivePane::Local => {
-                let Some(path) = local_selected else {
-                    if let Some(panel) = self
-                        .tabs
-                        .iter_mut()
-                        .find(|tab| tab.id == tab_id)
-                        .and_then(|tab| tab.sftp.as_mut())
-                    {
-                        panel.local_error = Some("请先选择一个本地项目".to_string());
-                        cx.notify();
-                    }
-                    return;
-                };
-                self.sftp_local_delete(tab_id, path, cx);
-            }
+            SftpActivePane::Local => self.sftp_local_delete_selection(tab_id, cx),
         }
     }
 
@@ -387,34 +373,44 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn sftp_local_delete(
-        &mut self,
-        tab_id: TabId,
-        path: std::path::PathBuf,
-        cx: &mut Context<Self>,
-    ) {
+    /// 批量删除本地选中项；符号链接只删除链接本身。
+    pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
             .and_then(|t| t.sftp.as_mut())
         {
-            let res = if path.is_dir() {
-                std::fs::remove_dir_all(&path)
+            let paths = panel.selected_local_paths();
+            if paths.is_empty() {
+                panel.local_error = Some("请先选择一个本地项目".to_string());
+                cx.notify();
+                return;
+            }
+            let mut deleted = 0usize;
+            let mut failed = 0usize;
+            for path in &paths {
+                let result = match std::fs::symlink_metadata(path) {
+                    Ok(metadata) if metadata.is_dir() => std::fs::remove_dir_all(path),
+                    _ => std::fs::remove_file(path),
+                };
+                match result {
+                    Ok(()) => deleted = deleted.saturating_add(1),
+                    Err(_) => failed = failed.saturating_add(1),
+                }
+            }
+            panel.local_entries = list_local_dir(&panel.local_path).unwrap_or_default();
+            let valid_paths = panel
+                .local_entries
+                .iter()
+                .map(|entry| entry.path.clone())
+                .collect();
+            panel.sync_local_selection(&valid_paths);
+            if failed > 0 {
+                panel.local_error =
+                    Some(format!("已删除 {deleted} 个本地项目，{failed} 个删除失败"));
             } else {
-                std::fs::remove_file(&path)
-            };
-            match res {
-                Ok(_) => {
-                    if panel.local_selected.as_ref() == Some(&path) {
-                        panel.local_selected = None;
-                    }
-                    panel.local_entries = list_local_dir(&panel.local_path).unwrap_or_default();
-                    panel.status = Some("已成功删除本地项目".to_string());
-                }
-                Err(err) => {
-                    panel.local_error = Some(format!("删除本地项目失败: {err}"));
-                }
+                panel.status = Some(format!("已删除 {deleted} 个本地项目"));
             }
             cx.notify();
         }
