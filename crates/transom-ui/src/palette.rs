@@ -128,7 +128,15 @@ impl AppShell {
             .justify_center()
             .bg(Hsla { a: 0.55, ..black() })
             .key_context(keymap::OVERLAY_CONTEXT)
-            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+            // 遮罩必须阻断下层命中测试，否则点击输入框会同时触发终端/文件列表
+            // 的鼠标处理并抢走焦点，表现为一输入就失焦。
+            .occlude()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            })
+            .on_mouse_down(MouseButton::Right, |_, _, cx| {
+                cx.stop_propagation();
+            })
             .child(content)
             .into_any_element()
     }
