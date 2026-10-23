@@ -549,6 +549,18 @@ settings:
   scrollback:
     en: Scrollback Buffer Lines
     zh-CN: 历史回滚行数
+  cursor_shape:
+    en: Cursor Shape
+    zh-CN: 光标形状
+  cursor_block:
+    en: Block
+    zh-CN: 方块
+  cursor_bar:
+    en: Bar
+    zh-CN: 竖线
+  cursor_underline:
+    en: Underline
+    zh-CN: 下划线
   cursor_blink:
     en: Cursor Blink
     zh-CN: 光标闪烁

@@ -123,6 +123,19 @@ impl Default for TerminalPalette {
     }
 }
 
+/// 终端默认光标形状。
+///
+/// 仅作为默认样式：终端应用仍可通过 DECSCUSR 转义序列临时覆盖，
+/// 与主流终端的“设置即默认值”行为保持一致。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalCursorShape {
+    #[default]
+    Block,
+    Bar,
+    Underline,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -139,6 +152,9 @@ pub struct TerminalProfile {
     pub line_height: f32,
     pub scrollback: usize,
     pub cursor_blink: bool,
+    /// 默认光标形状；应用可通过转义序列覆盖。
+    #[serde(default)]
+    pub cursor_shape: TerminalCursorShape,
     #[serde(default = "default_true")]
     pub bold_is_bright: bool,
     #[serde(default = "default_true")]
@@ -156,6 +172,7 @@ impl Default for TerminalProfile {
             line_height: 1.2,
             scrollback: 10_000,
             cursor_blink: true,
+            cursor_shape: TerminalCursorShape::default(),
             bold_is_bright: true,
             scroll_on_input: true,
             theme_name: default_theme_name(),
@@ -207,6 +224,7 @@ mod tests {
     fn default_profile_is_stable() {
         let profile = TerminalProfile::default();
         assert_eq!(profile.scrollback, 10_000);
+        assert_eq!(profile.cursor_shape, TerminalCursorShape::Block);
         assert_eq!(profile.palette.ansi.len(), 16);
         assert!(TerminalInteraction::default().copy_on_select);
         assert!(TerminalInteraction::default().right_click_paste);

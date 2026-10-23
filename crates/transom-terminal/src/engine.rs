@@ -4,8 +4,10 @@ use alacritty_terminal::index::{Column, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionRange, SelectionType};
 use alacritty_terminal::term::cell::Cell;
 use alacritty_terminal::term::{Config, Term, TermMode};
-use alacritty_terminal::vte::ansi::Processor;
-use transom_core::{TerminalProfile, TerminalSize};
+use alacritty_terminal::vte::ansi::{
+    CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle, Processor,
+};
+use transom_core::{TerminalCursorShape, TerminalProfile, TerminalSize};
 
 struct TermDimensions {
     cols: usize,
@@ -50,6 +52,14 @@ impl TerminalEngine {
     ) -> Self {
         let config = Config {
             scrolling_history: profile.scrollback,
+            default_cursor_style: AlacCursorStyle {
+                shape: match profile.cursor_shape {
+                    TerminalCursorShape::Block => AlacCursorShape::Block,
+                    TerminalCursorShape::Bar => AlacCursorShape::Beam,
+                    TerminalCursorShape::Underline => AlacCursorShape::Underline,
+                },
+                blinking: profile.cursor_blink,
+            },
             ..Default::default()
         };
         let dimensions = TermDimensions::new(size.cols as usize, size.rows as usize);
@@ -203,6 +213,31 @@ mod tests {
         assert!(engine.display_offset() > 0);
         engine.scroll_to_bottom();
         assert_eq!(engine.display_offset(), 0);
+    }
+
+    #[test]
+    fn default_cursor_style_follows_profile() {
+        let (tx, _rx) = flume::bounded(16);
+        let profile = TerminalProfile {
+            cursor_shape: TerminalCursorShape::Bar,
+            cursor_blink: false,
+            ..TerminalProfile::default()
+        };
+        let engine = TerminalEngine::new(TerminalSize::new(20, 4), &profile, tx);
+        let style = engine.term().cursor_style();
+        assert_eq!(style.shape, AlacCursorShape::Beam);
+        assert!(!style.blinking);
+
+        let (tx, _rx) = flume::bounded(16);
+        let profile = TerminalProfile {
+            cursor_shape: TerminalCursorShape::Underline,
+            cursor_blink: true,
+            ..TerminalProfile::default()
+        };
+        let engine = TerminalEngine::new(TerminalSize::new(20, 4), &profile, tx);
+        let style = engine.term().cursor_style();
+        assert_eq!(style.shape, AlacCursorShape::Underline);
+        assert!(style.blinking);
     }
 
     #[test]

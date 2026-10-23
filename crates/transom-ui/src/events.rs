@@ -33,12 +33,15 @@ impl AppShell {
                     return;
                 }
                 let session_id = self.tabs[index].session_id;
-                let profile = self
+                let mut profile = self
                     .sessions
                     .iter()
                     .find(|session| session.id == session_id)
                     .map(|session| session.terminal.clone())
                     .unwrap_or_else(|| self.tabs[index].session.terminal.clone());
+                // 光标外观属于全局偏好设置，覆盖会话里可能残留的旧默认值。
+                profile.cursor_shape = self.settings.terminal_profile.cursor_shape;
+                profile.cursor_blink = self.settings.terminal_profile.cursor_blink;
                 let interaction = self.settings.terminal_interaction;
                 let key_filter: KeyFilter = Arc::new(keymap::is_app_shortcut);
                 let terminal = cx.new(|cx| {

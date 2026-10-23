@@ -182,6 +182,7 @@ impl TerminalRenderer {
         window: &mut Window,
         cx: &mut App,
         ime: Option<(&str, Option<&Range<usize>>)>,
+        blink_visible: bool,
     ) {
         let grid = term.grid();
         let rows = grid.screen_lines();
@@ -204,7 +205,8 @@ impl TerminalRenderer {
         let cursor_col = cursor.column.0;
         let cursor_style = term.cursor_style();
         let cursor_color = self.resolve(Color::Named(NamedColor::Cursor), colors);
-        let cursor_visible = term.mode().contains(TermMode::SHOW_CURSOR)
+        let cursor_visible = blink_visible
+            && term.mode().contains(TermMode::SHOW_CURSOR)
             && cursor_style.shape != CursorShape::Hidden
             && (0..rows as i32).contains(&cursor_row)
             && ime.is_none();

@@ -50,8 +50,8 @@ pub use sftp_sync::{
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
 pub use storage::{SecretStore, SessionStore, SettingsStore};
 pub use terminal::{
-    TerminalControl, TerminalControlHandle, TerminalInteraction, TerminalIo, TerminalPalette,
-    TerminalProfile, TerminalSize,
+    TerminalControl, TerminalControlHandle, TerminalCursorShape, TerminalInteraction, TerminalIo,
+    TerminalPalette, TerminalProfile, TerminalSize,
 };
 pub use theme::{PresetTheme, preset_themes};
 pub use traffic::{NetworkTraffic, TrafficCounter};

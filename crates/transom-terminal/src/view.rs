@@ -7,7 +7,7 @@ use alacritty_terminal::grid::Scroll;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint, Side};
 use alacritty_terminal::selection::SelectionType;
 use alacritty_terminal::term::TermMode;
-use alacritty_terminal::vte::ansi::Rgb as AnsiRgb;
+use alacritty_terminal::vte::ansi::{CursorShape, Rgb as AnsiRgb};
 use gpui_kit::*;
 use parking_lot::Mutex;
 use std::io::{Read, Write};
@@ -53,7 +53,10 @@ pub struct TerminalView {
     dragging_selection: bool,
     mouse_pressed: bool,
     exited: bool,
+    /// 当前闪烁相位；关闭闪烁或失焦时始终保持为 `true`。
+    cursor_blink_on: bool,
     _reader_task: Task<()>,
+    _blink_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
 }
 
@@ -135,6 +138,7 @@ impl TerminalView {
             if let Some(bytes) = focus_bytes(mode, true) {
                 view.write_input(&bytes);
             }
+            view.cursor_blink_on = true;
             cx.notify();
         });
         let on_blur = cx.on_blur(&focus_handle, window, |view, _, cx| {
@@ -142,7 +146,23 @@ impl TerminalView {
             if let Some(bytes) = focus_bytes(mode, false) {
                 view.write_input(&bytes);
             }
+            view.cursor_blink_on = true;
             cx.notify();
+        });
+
+        // 闪烁只驱动光标相位，不触碰终端内容；失焦或关闭闪烁时定时器保持静默。
+        let blink_task = cx.spawn_in(window, async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(530))
+                    .await;
+                let updated = this.update_in(cx, |view, window, cx| {
+                    view.tick_cursor_blink(window, cx);
+                });
+                if updated.is_err() {
+                    break;
+                }
+            }
         });
 
         Self {
@@ -160,8 +180,27 @@ impl TerminalView {
             dragging_selection: false,
             mouse_pressed: false,
             exited: false,
+            cursor_blink_on: true,
             _reader_task: reader_task,
+            _blink_task: blink_task,
             _focus_subscriptions: vec![on_focus, on_blur],
+        }
+    }
+
+    fn tick_cursor_blink(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let blinking = self.focus_handle.is_focused(window) && self.profile.cursor_blink && {
+            let engine = self.engine.lock();
+            let style = engine.term().cursor_style();
+            style.blinking
+                && style.shape != CursorShape::Hidden
+                && engine.mode().contains(TermMode::SHOW_CURSOR)
+        };
+        if blinking {
+            self.cursor_blink_on = !self.cursor_blink_on;
+            cx.notify();
+        } else if !self.cursor_blink_on {
+            self.cursor_blink_on = true;
+            cx.notify();
         }
     }
 
@@ -169,10 +208,12 @@ impl TerminalView {
         &self.focus_handle
     }
 
-    fn write_input(&self, bytes: &[u8]) -> bool {
+    fn write_input(&mut self, bytes: &[u8]) -> bool {
         if bytes.is_empty() {
             return true;
         }
+        // 输入瞬间强制点亮光标，避免用户打字时恰好处于熄灭相位。
+        self.cursor_blink_on = true;
         self.input_tx.send(bytes.to_vec()).is_ok()
     }
 
@@ -319,7 +360,7 @@ impl TerminalView {
     }
 
     fn send_mouse_event(
-        &self,
+        &mut self,
         mode: TermMode,
         button: MouseButtonCode,
         pressed: bool,
@@ -647,6 +688,7 @@ impl Render for TerminalView {
         let entity = cx.entity();
         let ime_text = self.ime_text.clone();
         let ime_marked_range = self.ime_marked_range.clone();
+        let cursor_blink_on = self.cursor_blink_on;
 
         div()
             .size_full()
@@ -716,7 +758,7 @@ impl Render for TerminalView {
                         };
                         prepared
                             .renderer
-                            .paint(bounds, engine.term(), window, cx, ime);
+                            .paint(bounds, engine.term(), window, cx, ime, cursor_blink_on);
                     },
                 )
                 .size_full(),

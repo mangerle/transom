@@ -11,7 +11,7 @@ use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Setti
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::BellStyle;
+use transom_core::{BellStyle, TerminalCursorShape};
 
 impl AppShell {
     pub(crate) fn open_settings_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -287,6 +287,49 @@ impl AppShell {
                 self.settings_scrollback.clone(),
                 p,
             ))
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .py_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("settings.cursor_shape").to_string()),
+                    )
+                    .child(
+                        h_flex().gap_1().children(
+                            [
+                                (
+                                    "cursor-block",
+                                    "settings.cursor_block",
+                                    TerminalCursorShape::Block,
+                                ),
+                                (
+                                    "cursor-bar",
+                                    "settings.cursor_bar",
+                                    TerminalCursorShape::Bar,
+                                ),
+                                (
+                                    "cursor-underline",
+                                    "settings.cursor_underline",
+                                    TerminalCursorShape::Underline,
+                                ),
+                            ]
+                            .into_iter()
+                            .map(|(id, key, shape)| {
+                                Button::new(id)
+                                    .small()
+                                    .label(rust_i18n::t!(key).to_string())
+                                    .selected(self.settings.terminal_profile.cursor_shape == shape)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.settings.terminal_profile.cursor_shape = shape;
+                                        cx.notify();
+                                    }))
+                            }),
+                        ),
+                    ),
+            )
             .child(
                 h_flex()
                     .justify_between()
