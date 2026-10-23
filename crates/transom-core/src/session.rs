@@ -1,5 +1,5 @@
 use crate::forward::ForwardRule;
-use crate::ids::SessionId;
+use crate::ids::{FolderId, SessionId};
 use crate::terminal::TerminalProfile;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -8,7 +8,9 @@ use std::path::PathBuf;
 pub struct Session {
     pub id: SessionId,
     pub name: String,
-    pub group: Option<String>,
+    /// 所属文件夹；`None` 表示位于会话列表根层级。
+    #[serde(default)]
+    pub folder_id: Option<FolderId>,
     pub connection: Connection,
     pub terminal: TerminalProfile,
     #[serde(default)]
@@ -20,7 +22,7 @@ impl Session {
         Self {
             id: SessionId::new(),
             name: name.into(),
-            group: None,
+            folder_id: None,
             connection,
             terminal: TerminalProfile::default(),
             forwards: Vec::new(),
@@ -123,14 +125,14 @@ mod tests {
                 options: SessionOptions::default(),
             }),
         );
-        session.group = Some("Production".into());
+        session.folder_id = Some(FolderId::new());
 
         let json = serde_json::to_string(&session).unwrap();
         let decoded: Session = serde_json::from_str(&json).unwrap();
 
         assert_eq!(decoded.id, session.id);
         assert_eq!(decoded.name, "prod");
-        assert_eq!(decoded.group.as_deref(), Some("Production"));
+        assert_eq!(decoded.folder_id, session.folder_id);
         if let Connection::Ssh(ssh) = decoded.connection {
             assert_eq!(ssh.port, 2222);
             assert!(matches!(ssh.auth, AuthMethod::PrivateKey { .. }));

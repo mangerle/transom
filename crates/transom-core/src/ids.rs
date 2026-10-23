@@ -39,6 +39,7 @@ macro_rules! id_type {
 }
 
 id_type!(SessionId);
+id_type!(FolderId);
 id_type!(ForwardId);
 id_type!(TabId);
 id_type!(ConnectionId);

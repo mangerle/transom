@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+thiserror.workspace = true
 serde.workspace = true
 uuid.workspace = true
 flume.workspace = true

@@ -10,8 +10,14 @@ app:
     en: Sessions
     zh-CN: 会话
   search:
-    en: Search sessions
-    zh-CN: 搜索会话
+    en: Search sessions or folders
+    zh-CN: 搜索会话或文件夹
+  no_matches:
+    en: No matching sessions
+    zh-CN: 没有匹配的会话
+  no_matches_hint:
+    en: Try another name, host, user, or folder path.
+    zh-CN: 尝试其他名称、主机、用户名或文件夹路径。
   no_sessions:
     en: No sessions yet
     zh-CN: 还没有会话
@@ -120,6 +126,9 @@ form:
   group:
     en: Group
     zh-CN: 分组
+  folder:
+    en: Folder
+    zh-CN: 文件夹
   host:
     en: Host
     zh-CN: 主机
@@ -162,6 +171,9 @@ form:
   group_placeholder:
     en: Optional group
     zh-CN: 可选分组
+  folder_placeholder:
+    en: Optional, nested with / (e.g. Prod/Database)
+    zh-CN: 可选，用 / 分隔层级（如 生产/数据库）
   host_placeholder:
     en: example.com
     zh-CN: example.com
@@ -484,10 +496,53 @@ known_hosts:
   host_port:
     en: Host & Port
     zh-CN: 主机与端口
+folder:
+  new_title:
+    en: New Folder
+    zh-CN: 新建文件夹
+  rename_title:
+    en: Rename Folder
+    zh-CN: 重命名文件夹
+  name:
+    en: Folder name
+    zh-CN: 文件夹名称
+  name_placeholder:
+    en: Production
+    zh-CN: 生产环境
+  parent_hint:
+    en: "Create under: %{path}"
+    zh-CN: "创建位置：%{path}"
+  root_hint:
+    en: Create at the root level.
+    zh-CN: 创建在根层级。
+  created:
+    en: Folder created
+    zh-CN: 文件夹已创建
+  renamed:
+    en: Folder renamed
+    zh-CN: 文件夹已重命名
+  deleted:
+    en: "Folder %{name} deleted; its sessions were kept"
+    zh-CN: "已删除文件夹 %{name}，其中的会话已保留"
 menu:
   connect:
     en: Connect
     zh-CN: 连接
+  new_session_here:
+    en: New Session Here
+    zh-CN: 在此新建会话
+  new_folder:
+    en: New Subfolder
+    zh-CN: 新建子文件夹
+  rename:
+    en: Rename
+    zh-CN: 重命名
+  delete_folder:
+    en: Delete Folder (Keep Sessions)
+    zh-CN: 删除文件夹（保留会话）
+  move_to_root:
+    en: Move to Root
+    zh-CN: 移出文件夹
   open_new_tab:
     en: Open in New Tab
     zh-CN: 在新标签打开

@@ -103,18 +103,18 @@ impl AppShell {
             return;
         }
 
+        let folder = self.catalog.ensure_folder_path("SSH Config");
         let mut added_count = 0;
-        for session in parsed {
-            if !self.sessions.iter().any(|s| s.name == session.name) {
-                self.sessions.push(session);
+        for mut session in parsed {
+            if !self.catalog.sessions.iter().any(|s| s.name == session.name) {
+                session.folder_id = folder;
+                self.catalog.sessions.push(session);
                 added_count += 1;
             }
         }
 
         if added_count > 0 {
-            if let Err(error) = self.services.session_store.save(&self.sessions) {
-                self.error = Some(localized_error(&error));
-            } else {
+            if self.persist_catalog() {
                 self.status =
                     Some(rust_i18n::t!("app.import_success", count = added_count).to_string());
             }
@@ -140,6 +140,7 @@ impl AppShell {
             return;
         }
         let Some(session) = self
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)

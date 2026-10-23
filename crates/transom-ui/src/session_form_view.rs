@@ -97,8 +97,8 @@ impl AppShell {
                         p,
                     )))
                     .child(div().flex_1().child(Self::form_field(
-                        rust_i18n::t!("form.group").to_string(),
-                        form.group.clone(),
+                        rust_i18n::t!("form.folder").to_string(),
+                        form.folder_path.clone(),
                         p,
                     ))),
             )

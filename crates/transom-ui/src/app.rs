@@ -17,8 +17,9 @@ use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::*;
 use std::collections::HashMap;
 use transom_core::{
-    AppError, AppSettings, Connection, ConnectionId, ConnectionSecrets, ForwardId, ForwardStatus,
-    HostKeyRecord, NetworkTraffic, PromptInfo, Session, SessionId, SystemStats, TabId,
+    AppError, AppSettings, Connection, ConnectionId, ConnectionSecrets, FolderId, ForwardId,
+    ForwardStatus, HostKeyRecord, NetworkTraffic, PromptInfo, Session, SessionCatalog, SessionId,
+    SystemStats, TabId,
 };
 use transom_terminal::TerminalView;
 
@@ -58,6 +59,16 @@ pub(crate) struct PasswordPrompt {
     pub(crate) error: Option<String>,
 }
 
+/// 新建或重命名文件夹的轻量模态表单。
+pub(crate) struct FolderForm {
+    /// 存在时表示重命名该文件夹，否则为新建。
+    pub(crate) base: Option<FolderId>,
+    /// 新建时的父文件夹；`None` 表示根层级。
+    pub(crate) parent: Option<FolderId>,
+    pub(crate) name: Entity<InputState>,
+    pub(crate) error: Option<String>,
+}
+
 pub(crate) struct AuthPromptState {
     pub(crate) name: String,
     pub(crate) instructions: String,
@@ -70,11 +81,13 @@ pub(crate) struct AuthPromptState {
 pub struct AppShell {
     pub(crate) services: UiServices,
     pub(crate) settings: AppSettings,
-    pub(crate) sessions: Vec<Session>,
+    /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
+    pub(crate) catalog: SessionCatalog,
     pub(crate) tabs: Vec<TerminalTab>,
     pub(crate) active_tab: Option<TabId>,
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
+    pub(crate) folder_form: Option<FolderForm>,
     pub(crate) password_prompt: Option<PasswordPrompt>,
     pub(crate) auth_prompt: Option<AuthPromptState>,
     pub(crate) pending_connect: Option<PendingConnect>,
@@ -115,9 +128,9 @@ impl AppShell {
             InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
         });
         let quick_open_state = cx.new(|cx| CommandState::new(window, cx));
-        let (sessions, error) = match services.session_store.load() {
-            Ok(sessions) => (sessions, None),
-            Err(error) => (Vec::new(), Some(localized_error(&error))),
+        let (catalog, error) = match services.session_store.load() {
+            Ok(catalog) => (catalog, None),
+            Err(error) => (SessionCatalog::default(), Some(localized_error(&error))),
         };
 
         let event_rx = services.event_rx.clone();
@@ -161,11 +174,12 @@ impl AppShell {
         let mut this = Self {
             services,
             settings,
-            sessions,
+            catalog,
             tabs: Vec::new(),
             active_tab: None,
             search,
             form: None,
+            folder_form: None,
             password_prompt: None,
             auth_prompt: None,
             pending_connect: None,
@@ -201,6 +215,7 @@ impl AppShell {
                 if key == "local" {
                     this.open_local_terminal(window, cx);
                 } else if let Some(session) = this
+                    .catalog
                     .sessions
                     .iter()
                     .find(|s| s.id.to_string() == key)
@@ -212,6 +227,20 @@ impl AppShell {
         }
 
         this
+    }
+
+    /// 持久化会话与文件夹目录。
+    ///
+    /// 统一入口避免各操作点漏存文件夹表；返回是否成功，调用方决定是否
+    /// 继续后续动作（如选中项清理）。
+    pub(crate) fn persist_catalog(&mut self) -> bool {
+        match self.services.session_store.save(&self.catalog) {
+            Ok(()) => true,
+            Err(error) => {
+                self.error = Some(localized_error(&error));
+                false
+            }
+        }
     }
 
     /// 保存当前窗口几何尺寸、坐标以及打开的会话标签页列表
@@ -336,6 +365,9 @@ impl AppShell {
         let mut overlays = Vec::new();
         if self.form.is_some() {
             overlays.push(self.render_session_form(window, cx, &p));
+        }
+        if self.folder_form.is_some() {
+            overlays.push(self.render_folder_form(window, cx, &p));
         }
         if self.password_prompt.is_some() {
             overlays.push(self.render_password_prompt(window, cx, &p));

@@ -3,7 +3,7 @@
 use super::{ForwardKindChoice, ForwardPanelState, PendingForwardConfirm, is_public_bind_address};
 use crate::app::{AppShell, TabStatus};
 use crate::keymap;
-use crate::palette::{localized_error, sftp_text_input};
+use crate::palette::sftp_text_input;
 use gpui_kit::*;
 use transom_core::{
     AppCommand, AppError, BindAddress, ConnectionId, ForwardId, ForwardKind, ForwardRule,
@@ -49,6 +49,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let rules: Vec<ForwardRule> = self
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
@@ -210,15 +211,14 @@ impl AppShell {
         };
         let rule = ForwardRule::new(name, kind);
         if let Some(session) = self
+            .catalog
             .sessions
             .iter_mut()
             .find(|session| session.id == session_id)
         {
             session.forwards.push(rule.clone());
         }
-        if let Err(error) = self.services.session_store.save(&self.sessions) {
-            self.error = Some(localized_error(&error));
-        }
+        self.persist_catalog();
         if let Some(panel) = self.forward_panel_mut(tab_id) {
             panel.error = None;
         }
@@ -256,6 +256,7 @@ impl AppShell {
         };
         let session_id = tab.session_id;
         let Some(rule) = self
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
@@ -283,6 +284,7 @@ impl AppShell {
         }
 
         if let Some(session) = self
+            .catalog
             .sessions
             .iter_mut()
             .find(|session| session.id == session_id)
@@ -290,9 +292,7 @@ impl AppShell {
         {
             rule.enabled = true;
         }
-        if let Err(error) = self.services.session_store.save(&self.sessions) {
-            self.error = Some(localized_error(&error));
-        }
+        self.persist_catalog();
         self.set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
         let _ = self.services.command_tx.send(AppCommand::ForwardStart {
             tab_id,
@@ -317,14 +317,16 @@ impl AppShell {
             .find(|t| t.id == tab_id)
             .map(|t| t.session_id);
         if let Some(session_id) = session_id {
-            if let Some(session) = self.sessions.iter_mut().find(|s| s.id == session_id)
+            if let Some(session) = self
+                .catalog
+                .sessions
+                .iter_mut()
+                .find(|s| s.id == session_id)
                 && let Some(r) = session.forwards.iter_mut().find(|r| r.id == rule.id)
             {
                 r.enabled = true;
             }
-            if let Err(error) = self.services.session_store.save(&self.sessions) {
-                self.error = Some(localized_error(&error));
-            }
+            self.persist_catalog();
         }
         self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
         let _ = self.services.command_tx.send(AppCommand::ForwardStart {
@@ -354,6 +356,7 @@ impl AppShell {
         };
         let session_id = tab.session_id;
         if let Some(session) = self
+            .catalog
             .sessions
             .iter_mut()
             .find(|session| session.id == session_id)
@@ -361,9 +364,7 @@ impl AppShell {
         {
             rule.enabled = false;
         }
-        if let Err(error) = self.services.session_store.save(&self.sessions) {
-            self.error = Some(localized_error(&error));
-        }
+        self.persist_catalog();
         self.set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
         let _ = self.services.command_tx.send(AppCommand::ForwardStop {
             tab_id,
@@ -404,15 +405,14 @@ impl AppShell {
             tab.forward_statuses.remove(&rule_id);
         }
         if let Some(session) = self
+            .catalog
             .sessions
             .iter_mut()
             .find(|session| session.id == session_id)
         {
             session.forwards.retain(|rule| rule.id != rule_id);
         }
-        if let Err(error) = self.services.session_store.save(&self.sessions) {
-            self.error = Some(localized_error(&error));
-        }
+        self.persist_catalog();
         cx.notify();
     }
 

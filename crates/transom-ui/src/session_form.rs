@@ -14,7 +14,8 @@ pub(crate) enum AuthChoice {
 pub(crate) struct SessionForm {
     pub base: Option<Session>,
     pub name: Entity<InputState>,
-    pub group: Entity<InputState>,
+    /// 以 `/` 分隔的文件夹路径，保存时解析为稳定的文件夹节点。
+    pub folder_path: Entity<InputState>,
     pub host: Entity<InputState>,
     pub port: Entity<InputState>,
     pub username: Entity<InputState>,
@@ -30,12 +31,28 @@ pub(crate) struct SessionForm {
 
 pub(crate) struct BuiltSession {
     pub session: Session,
+    pub folder_path: Option<String>,
     pub password: Option<Zeroizing<String>>,
     pub key_passphrase: Option<Zeroizing<String>>,
 }
 
+/// 表单初始值聚合，避免构造函数平铺过多参数。
+struct SessionFormSeed {
+    base: Option<Session>,
+    auth: AuthChoice,
+    save_password: bool,
+    save_passphrase: bool,
+    key_path: String,
+    folder_path: String,
+}
+
 impl SessionForm {
-    pub fn new(window: &mut Window, cx: &mut Context<impl Sized>, base: Option<Session>) -> Self {
+    pub fn new(
+        window: &mut Window,
+        cx: &mut Context<impl Sized>,
+        base: Option<Session>,
+        folder_path: Option<String>,
+    ) -> Self {
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
             _ => None,
@@ -59,23 +76,26 @@ impl SessionForm {
         Self::build(
             window,
             cx,
+            SessionFormSeed {
+                base,
+                auth,
+                save_password,
+                save_passphrase,
+                key_path,
+                folder_path: folder_path.unwrap_or_default(),
+            },
+        )
+    }
+
+    fn build(window: &mut Window, cx: &mut Context<impl Sized>, seed: SessionFormSeed) -> Self {
+        let SessionFormSeed {
             base,
             auth,
             save_password,
             save_passphrase,
             key_path,
-        )
-    }
-
-    fn build(
-        window: &mut Window,
-        cx: &mut Context<impl Sized>,
-        base: Option<Session>,
-        auth: AuthChoice,
-        save_password: bool,
-        save_passphrase: bool,
-        key_path: String,
-    ) -> Self {
+            folder_path,
+        } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
             _ => None,
@@ -83,10 +103,6 @@ impl SessionForm {
         let name = base
             .as_ref()
             .map(|session| session.name.clone())
-            .unwrap_or_default();
-        let group = base
-            .as_ref()
-            .and_then(|session| session.group.clone())
             .unwrap_or_default();
         let host = ssh.map(|ssh| ssh.host.clone()).unwrap_or_default();
         let port = ssh.map(|ssh| ssh.port).unwrap_or(22).to_string();
@@ -97,7 +113,12 @@ impl SessionForm {
         Self {
             base,
             name: text_input(window, cx, &name, &rust_i18n::t!("form.name_placeholder")),
-            group: text_input(window, cx, &group, &rust_i18n::t!("form.group_placeholder")),
+            folder_path: text_input(
+                window,
+                cx,
+                &folder_path,
+                &rust_i18n::t!("form.folder_placeholder"),
+            ),
             host: text_input(window, cx, &host, &rust_i18n::t!("form.host_placeholder")),
             port: text_input(window, cx, &port, ""),
             username: text_input(
@@ -183,9 +204,9 @@ impl SessionForm {
             )
         });
         session.name = name;
-        session.group = {
-            let group = self.group.read(cx).value().trim().to_string();
-            (!group.is_empty()).then_some(group)
+        let folder_path = {
+            let path = self.folder_path.read(cx).value().trim().to_string();
+            (!path.is_empty()).then_some(path)
         };
         session.connection = Connection::Ssh(SshConnection {
             host,
@@ -215,6 +236,7 @@ impl SessionForm {
 
         Ok(BuiltSession {
             session,
+            folder_path,
             password,
             key_passphrase,
         })

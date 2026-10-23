@@ -1,5 +1,6 @@
 //! Domain models and application-facing contracts shared by the workspace.
 
+pub mod catalog;
 pub mod color;
 pub mod commands;
 pub mod error;
@@ -21,6 +22,7 @@ pub mod terminal;
 pub mod theme;
 pub mod traffic;
 
+pub use catalog::{CatalogError, SessionCatalog, SessionFolder};
 pub use color::Rgb;
 pub use commands::{AppCommand, AppEvent, SystemStats};
 pub use error::{AppError, ErrorCode};
@@ -28,7 +30,7 @@ pub use forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,
     TargetAddress,
 };
-pub use ids::{ConnectionId, ForwardId, SessionId, TabId, TransferId};
+pub use ids::{ConnectionId, FolderId, ForwardId, SessionId, TabId, TransferId};
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use prompt::PromptInfo;

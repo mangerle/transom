@@ -188,7 +188,7 @@ impl AppShell {
         );
 
         // 已保存会话
-        for session in &self.sessions {
+        for session in &self.catalog.sessions {
             let session_id = session.id;
             targets.push(QuickOpenTarget::Session(session_id));
 
@@ -210,8 +210,10 @@ impl AppShell {
             };
 
             let mut keywords: Vec<SharedString> = vec![session.name.clone().into(), detail.into()];
-            if let Some(group) = &session.group {
-                keywords.push(group.clone().into());
+            if let Some(folder_id) = session.folder_id
+                && let Some(path) = self.catalog.folder_path(folder_id)
+            {
+                keywords.push(path.into());
             }
 
             items.push(

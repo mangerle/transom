@@ -34,6 +34,7 @@ impl AppShell {
                 }
                 let session_id = self.tabs[index].session_id;
                 let mut profile = self
+                    .catalog
                     .sessions
                     .iter()
                     .find(|session| session.id == session_id)

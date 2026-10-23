@@ -9,7 +9,7 @@ use transom_core::{AppCommand, ErrorCode, SecretKey, SecretKind, SessionId, TabI
 
 impl AppShell {
     pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.form = Some(SessionForm::new(window, cx, None));
+        self.form = Some(SessionForm::new(window, cx, None, None));
         cx.notify();
     }
 
@@ -20,6 +20,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(session) = self
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
@@ -27,7 +28,10 @@ impl AppShell {
         else {
             return;
         };
-        self.form = Some(SessionForm::new(window, cx, Some(session)));
+        let folder_path = session
+            .folder_id
+            .and_then(|id| self.catalog.folder_path(id));
+        self.form = Some(SessionForm::new(window, cx, Some(session), folder_path));
         cx.notify();
     }
 
@@ -48,6 +52,11 @@ impl AppShell {
         };
         self.form = None;
 
+        let mut built = built;
+        built.session.folder_id = built
+            .folder_path
+            .as_deref()
+            .and_then(|path| self.catalog.ensure_folder_path(path));
         let password_key = SecretKey::new(built.session.id, SecretKind::Password);
         let passphrase_key = SecretKey::new(built.session.id, SecretKind::KeyPassphrase);
         if save_password {
@@ -82,6 +91,7 @@ impl AppShell {
         let session_id = built.session.id;
         if editing {
             if let Some(existing) = self
+                .catalog
                 .sessions
                 .iter_mut()
                 .find(|session| session.id == session_id)
@@ -89,11 +99,9 @@ impl AppShell {
                 *existing = built.session;
             }
         } else {
-            self.sessions.push(built.session);
+            self.catalog.sessions.push(built.session);
         }
-        if let Err(error) = self.services.session_store.save(&self.sessions) {
-            self.error = Some(localized_error(&error));
-        }
+        self.persist_catalog();
         if !editing {
             self.connect_session(session_id, window, cx);
         }
@@ -111,7 +119,9 @@ impl AppShell {
     }
 
     pub(crate) fn delete_session_by_id(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        self.sessions.retain(|session| session.id != session_id);
+        self.catalog
+            .sessions
+            .retain(|session| session.id != session_id);
         let removed_tabs: Vec<TabId> = self
             .tabs
             .iter()
@@ -133,20 +143,22 @@ impl AppShell {
             .services
             .secret_store
             .delete(&SecretKey::new(session_id, SecretKind::KeyPassphrase));
-        if let Err(error) = self.services.session_store.save(&self.sessions) {
-            self.error = Some(localized_error(&error));
-        }
+        self.persist_catalog();
         cx.notify();
     }
 
     pub(crate) fn duplicate_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        if let Some(mut session) = self.sessions.iter().find(|s| s.id == session_id).cloned() {
+        if let Some(mut session) = self
+            .catalog
+            .sessions
+            .iter()
+            .find(|s| s.id == session_id)
+            .cloned()
+        {
             session.id = SessionId::new();
             session.name = format!("{} (Copy)", session.name);
-            self.sessions.push(session);
-            if let Err(error) = self.services.session_store.save(&self.sessions) {
-                self.error = Some(localized_error(&error));
-            }
+            self.catalog.sessions.push(session);
+            self.persist_catalog();
             cx.notify();
         }
     }
@@ -179,6 +191,7 @@ impl AppShell {
         };
         let session_id = self.tabs[index].session_id;
         let session = self
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)

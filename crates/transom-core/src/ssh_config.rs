@@ -57,9 +57,8 @@ pub fn parse_ssh_config_with_home(content: &str, home: Option<&Path>) -> Vec<Ses
                 options: SessionOptions::default(),
             });
 
-            let mut session = Session::new(host, connection);
-            session.group = Some("SSH Config".to_string());
-            sessions.push(session);
+            // 文件夹归类由导入流程统一创建，解析器只负责连接参数。
+            sessions.push(Session::new(host, connection));
         }
         *hostname = None;
         *user = None;
@@ -155,7 +154,7 @@ Host *
 
         let dev = &sessions[0];
         assert_eq!(dev.name, "dev-box");
-        assert_eq!(dev.group.as_deref(), Some("SSH Config"));
+        assert_eq!(dev.folder_id, None);
         if let Connection::Ssh(ssh) = &dev.connection {
             assert_eq!(ssh.host, "192.168.1.50");
             assert_eq!(ssh.username, "developer");

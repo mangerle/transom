@@ -28,6 +28,7 @@ impl AppShell {
             return div().into_any_element();
         };
         let Some(session) = self
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == tab.session_id)
