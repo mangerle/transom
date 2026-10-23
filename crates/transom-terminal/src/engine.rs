@@ -177,8 +177,34 @@ impl TerminalEngine {
         self.term.selection = None;
     }
 
+    /// 选区文本。
+    ///
+    /// 块选（矩形列选）在此补齐每行到选区宽度：alacritty 会裁掉每段行尾空白，短行于是
+    /// 返回空串，抠出来的各列整体左移错位——而"按列对齐"正是列选唯一的价值所在。
+    /// 代价：宽度按字符数估算，选中区域含中文等双格字符时补齐会差半格，
+    /// 内核返回的已是裁剪过的文本，原始列数无从还原。
     pub fn selection_text(&self) -> Option<String> {
-        self.term.selection_to_string()
+        let text = self.term.selection_to_string()?;
+        let Some(range) = self.selection_range() else {
+            return Some(text);
+        };
+        if !range.is_block {
+            return Some(text);
+        }
+        let width = range.end.column.0.saturating_sub(range.start.column.0) + 1;
+        Some(
+            text.lines()
+                .map(|line| {
+                    let deficit = width.saturating_sub(line.chars().count());
+                    if deficit == 0 {
+                        line.to_string()
+                    } else {
+                        format!("{line}{}", " ".repeat(deficit))
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
     }
 
     pub fn selection_range(&self) -> Option<SelectionRange> {
@@ -354,6 +380,44 @@ mod tests {
         );
         engine.update_selection(Point::new(Line(0), Column(4)), Side::Right);
         assert_eq!(engine.selection_text().as_deref(), Some("hello"));
+    }
+
+    /// 矩形列选的价值就在于"只抠每行的同一几列"，因此选区文本必须逐行截取到列区间。
+    #[test]
+    fn block_selection_extracts_only_the_column_range() {
+        let (mut engine, _events) = engine(20, 4);
+        engine.process(b"aaaaBBBBaaaa\r\nccccBBBBdddd\r\neeeeBBBBffff");
+        engine.start_selection(
+            SelectionType::Block,
+            Point::new(Line(0), Column(4)),
+            Side::Left,
+        );
+        engine.update_selection(Point::new(Line(2), Column(7)), Side::Right);
+        let range = engine.selection_range().expect("块选应有选区");
+        assert!(range.is_block, "选区必须标记为块，渲染层据此逐行截取");
+        assert_eq!(engine.selection_text().as_deref(), Some("BBBB\nBBBB\nBBBB"));
+        // 非矩形选择完全不受补齐影响。
+        engine.start_selection(
+            SelectionType::Simple,
+            Point::new(Line(0), Column(4)),
+            Side::Left,
+        );
+        engine.update_selection(Point::new(Line(0), Column(7)), Side::Right);
+        assert_eq!(engine.selection_text().as_deref(), Some("BBBB"));
+    }
+
+    /// 短行落在列区间之外时必须补空格，否则抠出来的各列会左移错位。
+    #[test]
+    fn block_selection_pads_short_rows() {
+        let (mut engine, _events) = engine(20, 4);
+        engine.process(b"aaaaBBBBaaaa\r\ncccc\r\neeeeBBBBffff");
+        engine.start_selection(
+            SelectionType::Block,
+            Point::new(Line(0), Column(4)),
+            Side::Left,
+        );
+        engine.update_selection(Point::new(Line(2), Column(7)), Side::Right);
+        assert_eq!(engine.selection_text().as_deref(), Some("BBBB\n    \nBBBB"));
     }
 
     /// 锁定检索赖以成立的行号语义：`Line` 相对视口底部编号，新行滚入会让同一条内容

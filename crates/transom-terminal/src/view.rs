@@ -544,16 +544,26 @@ impl TerminalView {
                 }
             }
             MouseButton::Left => {
-                if mode.intersects(TermMode::MOUSE_MODE) && !event.modifiers.shift {
+                // Alt 拖拽 = 矩形列选。它和 Shift 一样压制程序自己的鼠标上报：
+                // 需要抠列的场景恰恰发生在 vim/htop 这类接管鼠标的程序里，
+                // 若让位给上报，这个功能在最需要它的界面上就是空摆设。
+                let rectangular = event.modifiers.alt;
+                if mode.intersects(TermMode::MOUSE_MODE) && !event.modifiers.shift && !rectangular {
                     self.send_mouse_event(mode, MouseButtonCode::Left, true, false, event.position);
                     self.mouse_pressed = true;
                     return;
                 }
                 if let Some(point) = self.hit_test_grid_point(event.position) {
-                    let ty = match event.click_count {
-                        2 => SelectionType::Semantic,
-                        3.. => SelectionType::Lines,
-                        _ => SelectionType::Simple,
+                    // 双击/三击的选词与选行语义只在矩形模式之外生效：Alt 按下时
+                    // 用户要的是"这一块"，不是"这个词"。
+                    let ty = if rectangular {
+                        SelectionType::Block
+                    } else {
+                        match event.click_count {
+                            2 => SelectionType::Semantic,
+                            3.. => SelectionType::Lines,
+                            _ => SelectionType::Simple,
+                        }
                     };
                     self.engine.lock().start_selection(ty, point, Side::Left);
                     self.dragging_selection = true;
