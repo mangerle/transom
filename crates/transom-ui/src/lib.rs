@@ -2,6 +2,7 @@
 rust_i18n::i18n!("locales", fallback = "en");
 
 mod app;
+mod app_render;
 mod backup;
 mod batch;
 mod chrome;
@@ -13,6 +14,7 @@ mod keys;
 mod modals;
 mod palette;
 mod session_form;
+mod session_form_serial;
 mod session_form_view;
 mod session_serial;
 mod settings;
@@ -23,6 +25,7 @@ mod split;
 mod startup;
 mod status_bar;
 mod tabs;
+mod window_state;
 mod workspace;
 
 pub use app::AppShell;
