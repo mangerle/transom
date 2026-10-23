@@ -12,7 +12,7 @@ use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
-use transom_core::{AppCommand, ConnectionId, SftpOperation, TabId, TransferId};
+use transom_core::{AppCommand, Connection, ConnectionId, SftpOperation, TabId, TransferId};
 
 impl AppShell {
     pub(crate) fn sftp_panel_mut(
@@ -47,6 +47,11 @@ impl AppShell {
         };
         if self.tabs[index].sftp.is_some() {
             self.tabs[index].sftp = None;
+            cx.notify();
+            return;
+        }
+        if !matches!(self.tabs[index].session.connection, Connection::Ssh(_)) {
+            self.error = Some(rust_i18n::t!("error.sftp_requires_ssh").to_string());
             cx.notify();
             return;
         }

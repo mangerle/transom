@@ -12,6 +12,7 @@ mod modals;
 mod palette;
 mod session_form;
 mod session_form_view;
+mod session_serial;
 mod settings;
 mod sftp;
 mod sidebar;
@@ -26,7 +27,8 @@ use gpui_kit::component as gpui_component;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppEvent, KnownHostsStore, SecretStore, SessionStore, SettingsStore,
+    AppCommand, AppEvent, KnownHostsStore, SecretStore, SerialPortProvider, SessionStore,
+    SettingsStore,
 };
 
 #[derive(Clone)]
@@ -35,6 +37,7 @@ pub struct UiServices {
     pub settings_store: Arc<dyn SettingsStore>,
     pub secret_store: Arc<dyn SecretStore>,
     pub known_hosts: Arc<dyn KnownHostsStore>,
+    pub serial_ports: Arc<dyn SerialPortProvider>,
     pub command_tx: flume::Sender<AppCommand>,
     pub event_rx: flume::Receiver<AppEvent>,
 }

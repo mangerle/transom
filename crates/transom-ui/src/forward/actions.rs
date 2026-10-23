@@ -6,8 +6,8 @@ use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, AppError, BindAddress, ConnectionId, ForwardId, ForwardKind, ForwardRule,
-    ForwardState, ForwardStatus, SessionId, SocksOptions, TabId, TargetAddress,
+    AppCommand, AppError, BindAddress, Connection, ConnectionId, ForwardId, ForwardKind,
+    ForwardRule, ForwardState, ForwardStatus, SessionId, SocksOptions, TabId, TargetAddress,
 };
 
 impl AppShell {
@@ -82,6 +82,11 @@ impl AppShell {
         };
         if self.tabs[index].forwards_panel.is_some() {
             self.tabs[index].forwards_panel = None;
+            cx.notify();
+            return;
+        }
+        if !matches!(self.tabs[index].session.connection, Connection::Ssh(_)) {
+            self.error = Some(rust_i18n::t!("error.forward_requires_ssh").to_string());
             cx.notify();
             return;
         }

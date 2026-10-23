@@ -192,21 +192,20 @@ impl AppShell {
             let session_id = session.id;
             targets.push(QuickOpenTarget::Session(session_id));
 
-            let (is_local, detail) = match &session.connection {
-                Connection::Ssh(ssh) => {
-                    (false, format!("{}@{}:{}", ssh.username, ssh.host, ssh.port))
-                }
+            let (detail, icon_name) = match &session.connection {
+                Connection::Ssh(ssh) => (
+                    format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
+                    IconName::Server,
+                ),
                 Connection::Local(l) => {
                     let shell = l.shell.as_deref().unwrap_or("sh");
-                    (true, format!("Local: {shell}"))
+                    (format!("Local: {shell}"), IconName::Terminal)
                 }
-                _ => (false, String::new()),
-            };
-
-            let icon_name = if is_local {
-                IconName::Terminal
-            } else {
-                IconName::Server
+                Connection::Serial(serial) => (
+                    format!("Serial: {} @ {}", serial.port, serial.baud_rate),
+                    IconName::Cable,
+                ),
+                _ => (String::new(), IconName::Server),
             };
 
             let mut keywords: Vec<SharedString> = vec![session.name.clone().into(), detail.into()];

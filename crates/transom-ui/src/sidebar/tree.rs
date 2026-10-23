@@ -251,6 +251,9 @@ fn session_matches(session: &Session, query: &str, folder_path: &str) -> bool {
         Connection::Local(local) => {
             format!("local {}", local.shell.as_deref().unwrap_or("sh"))
         }
+        Connection::Serial(serial) => {
+            format!("serial {} {} {}", serial.port, serial.baud_rate, "com tty")
+        }
         _ => String::new(),
     };
     let haystack = format!(
@@ -447,26 +450,21 @@ impl AppShell {
         let session_id = session.id;
         let folder_id = session.folder_id;
         let app_entity = cx.entity().clone();
-        let (is_local, detail_text) = match &session.connection {
-            Connection::Ssh(ssh) => (false, format!("{}@{}", ssh.username, ssh.host)),
+        let (icon_name, detail_text) = match &session.connection {
+            Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
             Connection::Local(local) => {
                 let shell = local.shell.as_deref().unwrap_or("sh");
-                (true, format!("Local: {shell}"))
+                (IconName::Terminal, format!("Local: {shell}"))
             }
-            _ => (false, String::new()),
+            Connection::Serial(serial) => (
+                IconName::Cable,
+                format!("Serial: {} @ {}", serial.port, serial.baud_rate),
+            ),
+            _ => (IconName::Server, String::new()),
         };
         let is_active = active_session == Some(session_id);
-        let icon_name = if is_local {
-            IconName::Terminal
-        } else {
-            IconName::Server
-        };
         let drag_label = session.name.clone();
-        let drag_icon = if is_local {
-            IconName::Terminal
-        } else {
-            IconName::Server
-        };
+        let drag_icon = icon_name;
         let mut row_element = div()
             .id(ElementId::Name(format!("session-{session_id}").into()))
             .w_full()

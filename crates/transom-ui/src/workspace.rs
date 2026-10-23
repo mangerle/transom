@@ -61,6 +61,7 @@ impl AppShell {
             }
             let tab_icon = match &tab.session.connection {
                 Connection::Local(_) => IconName::Terminal,
+                Connection::Serial(_) => IconName::Cable,
                 _ => IconName::Server,
             };
             let tab_title = tab.title.clone();

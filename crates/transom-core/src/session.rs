@@ -88,6 +88,97 @@ impl LocalConnection {
 pub enum Connection {
     Ssh(SshConnection),
     Local(LocalConnection),
+    Serial(SerialConnection),
+}
+
+/// 串口连接参数，默认 115200 8N1、无流控。
+///
+/// 数据位、校验位、停止位与流控使用枚举而非裸整数，使非法组合在反序列化
+/// 阶段即被拒绝；波特率保留为 `u32`，以支持厂商自定义的非标准速率。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SerialConnection {
+    pub port: String,
+    pub baud_rate: u32,
+    #[serde(default)]
+    pub data_bits: SerialDataBits,
+    #[serde(default)]
+    pub parity: SerialParity,
+    #[serde(default)]
+    pub stop_bits: SerialStopBits,
+    #[serde(default)]
+    pub flow_control: SerialFlowControl,
+}
+
+impl SerialConnection {
+    pub fn new(port: impl Into<String>, baud_rate: u32) -> Self {
+        Self {
+            port: port.into(),
+            baud_rate,
+            ..Self::default()
+        }
+    }
+}
+
+impl Default for SerialConnection {
+    fn default() -> Self {
+        Self {
+            port: String::new(),
+            baud_rate: 115_200,
+            data_bits: SerialDataBits::Eight,
+            parity: SerialParity::None,
+            stop_bits: SerialStopBits::One,
+            flow_control: SerialFlowControl::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SerialDataBits {
+    Five,
+    Six,
+    Seven,
+    #[default]
+    Eight,
+}
+
+impl SerialDataBits {
+    pub const ALL: [Self; 4] = [Self::Five, Self::Six, Self::Seven, Self::Eight];
+
+    pub fn bits(self) -> u8 {
+        match self {
+            Self::Five => 5,
+            Self::Six => 6,
+            Self::Seven => 7,
+            Self::Eight => 8,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SerialParity {
+    #[default]
+    None,
+    Odd,
+    Even,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SerialStopBits {
+    #[default]
+    One,
+    Two,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SerialFlowControl {
+    #[default]
+    None,
+    Software,
+    Hardware,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,6 +295,36 @@ mod tests {
         let json = serde_json::to_string(&session).unwrap();
         let decoded: Session = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.startup.commands.len(), 2);
+    }
+
+    #[test]
+    fn serial_connection_round_trips_with_defaults() {
+        let session = Session::new(
+            "console",
+            Connection::Serial(SerialConnection::new("/dev/ttyUSB0", 9600)),
+        );
+        let json = serde_json::to_string(&session).unwrap();
+        let decoded: Session = serde_json::from_str(&json).unwrap();
+        let Connection::Serial(serial) = decoded.connection else {
+            panic!("应解析为串口连接");
+        };
+        assert_eq!(serial.port, "/dev/ttyUSB0");
+        assert_eq!(serial.baud_rate, 9600);
+        assert_eq!(serial.data_bits, SerialDataBits::Eight);
+        assert_eq!(serial.parity, SerialParity::None);
+        assert_eq!(serial.stop_bits, SerialStopBits::One);
+        assert_eq!(serial.flow_control, SerialFlowControl::None);
+    }
+
+    #[test]
+    fn serial_defaults_fill_missing_optional_fields() {
+        let value = serde_json::json!({
+            "kind": "serial",
+            "port": "/dev/ttyS0",
+            "baud_rate": 115200
+        });
+        let serial: SerialConnection = serde_json::from_value(value).unwrap();
+        assert_eq!(serial.data_bits.bits(), 8);
     }
 
     #[test]

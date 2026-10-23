@@ -218,7 +218,7 @@ impl AppShell {
                 AuthMethod::Agent => {}
                 _ => {}
             },
-            Connection::Local(_) => {}
+            Connection::Local(_) | Connection::Serial(_) => {}
             _ => {
                 self.error = Some(rust_i18n::t!("error.configuration").to_string());
                 return;

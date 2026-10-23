@@ -7,6 +7,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_core::Connection;
 
 /// 活动栏（Activity Bar）导航按钮属性结构体。
 ///
@@ -70,7 +71,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let has_active_tab = self.active_tab.is_some();
+        let has_ssh_tab = self
+            .active_tab
+            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .is_some_and(|tab| matches!(tab.session.connection, Connection::Ssh(_)));
         let show_forwards = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
@@ -129,7 +133,7 @@ impl AppShell {
                             icon: IconName::ArrowLeftRight,
                             tooltip: rust_i18n::t!("forward.title").to_string(),
                             selected: show_forwards,
-                            disabled: !has_active_tab,
+                            disabled: !has_ssh_tab,
                         },
                         p,
                         |this, window, cx| {
@@ -143,7 +147,7 @@ impl AppShell {
                             icon: IconName::Folder,
                             tooltip: rust_i18n::t!("sftp.title").to_string(),
                             selected: show_sftp,
-                            disabled: !has_active_tab,
+                            disabled: !has_ssh_tab,
                         },
                         p,
                         |this, window, cx| {

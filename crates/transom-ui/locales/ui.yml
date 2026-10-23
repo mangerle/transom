@@ -162,6 +162,72 @@ form:
   startup_hint:
     en: One command per line, executed in the interactive shell after the session is ready. For example cd /srv, export PATH=..., or sudo -i.
     zh-CN: 每行一条命令，在会话就绪后写入交互式 Shell 顺序执行，例如 cd /srv、export PATH=... 或 sudo -i。
+  connection_type:
+    en: Connection Type
+    zh-CN: 连接方式
+  conn_serial:
+    en: Serial Port
+    zh-CN: 串口
+  serial_port:
+    en: Serial device
+    zh-CN: 串口设备
+  serial_port_placeholder:
+    en: /dev/ttyUSB0 or COM3
+    zh-CN: /dev/ttyUSB0 或 COM3
+  serial_baud:
+    en: Baud rate
+    zh-CN: 波特率
+  serial_data_bits:
+    en: Data bits
+    zh-CN: 数据位
+  serial_parity:
+    en: Parity
+    zh-CN: 校验位
+  serial_stop_bits:
+    en: Stop bits
+    zh-CN: 停止位
+  serial_flow_control:
+    en: Flow control
+    zh-CN: 流控
+  serial_refresh:
+    en: Refresh
+    zh-CN: 刷新
+  serial_detected:
+    en: Detected serial ports
+    zh-CN: 检测到的串口
+  serial_no_ports:
+    en: No serial ports detected; you can still type a device path manually.
+    zh-CN: 未检测到串口设备，也可以手动输入设备路径。
+  parity_none:
+    en: None
+    zh-CN: 无
+  parity_odd:
+    en: Odd
+    zh-CN: 奇校验
+  parity_even:
+    en: Even
+    zh-CN: 偶校验
+  stop_bits_one:
+    en: "1"
+    zh-CN: "1"
+  stop_bits_two:
+    en: "2"
+    zh-CN: "2"
+  flow_none:
+    en: None
+    zh-CN: 无
+  flow_software:
+    en: Software
+    zh-CN: 软件
+  flow_hardware:
+    en: Hardware
+    zh-CN: 硬件
+  error_serial_port:
+    en: Serial device path is required.
+    zh-CN: 串口设备路径不能为空。
+  error_serial_baud:
+    en: Baud rate must be a positive integer.
+    zh-CN: 波特率必须是大于 0 的整数。
   auth_password:
     en: Password
     zh-CN: 密码
@@ -303,6 +369,12 @@ error:
   forward_failed:
     en: Port forwarding error
     zh-CN: 端口转发错误
+  forward_requires_ssh:
+    en: Port forwarding is only available for SSH sessions.
+    zh-CN: 端口转发仅支持 SSH 会话。
+  sftp_requires_ssh:
+    en: SFTP is only available for SSH sessions.
+    zh-CN: SFTP 仅支持 SSH 会话。
 sftp:
   title:
     en: SFTP

@@ -10,6 +10,7 @@ pub mod keys;
 pub mod known_hosts;
 pub mod prompt;
 pub mod secrets;
+pub mod serial;
 pub mod session;
 pub mod settings;
 pub mod sftp;
@@ -35,9 +36,10 @@ pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use prompt::PromptInfo;
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
+pub use serial::{SerialPortDescriptor, SerialPortProvider};
 pub use session::{
-    AuthMethod, Connection, LocalConnection, Session, SessionOptions, SshConnection,
-    StartupCommands,
+    AuthMethod, Connection, LocalConnection, SerialConnection, SerialDataBits, SerialFlowControl,
+    SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
 };
 pub use settings::{AppSettings, BellStyle, SftpSettings, WindowSettings};
 pub use sftp::{

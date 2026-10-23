@@ -5,7 +5,7 @@ use crate::palette::localized_error;
 use crate::session_form::SessionForm;
 use gpui_kit::component::set_locale;
 use gpui_kit::*;
-use transom_core::{AppCommand, ErrorCode, SecretKey, SecretKind, SessionId, TabId};
+use transom_core::{AppCommand, Connection, ErrorCode, SecretKey, SecretKind, SessionId, TabId};
 
 impl AppShell {
     pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -31,7 +31,11 @@ impl AppShell {
         let folder_path = session
             .folder_id
             .and_then(|id| self.catalog.folder_path(id));
+        let is_serial = matches!(session.connection, Connection::Serial(_));
         self.form = Some(SessionForm::new(window, cx, Some(session), folder_path));
+        if is_serial {
+            self.refresh_serial_ports(window, cx);
+        }
         cx.notify();
     }
 

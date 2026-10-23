@@ -2,7 +2,8 @@ mod controller;
 
 use controller::Controller;
 use std::sync::Arc;
-use transom_core::{KnownHostsStore, SecretStore, SessionStore, SettingsStore};
+use transom_core::{KnownHostsStore, SecretStore, SerialPortProvider, SessionStore, SettingsStore};
+use transom_net::SystemSerialPortProvider;
 use transom_store::{
     JsonKnownHostsStore, JsonSessionStore, JsonSettingsStore, KeyringSecretStore, paths,
 };
@@ -22,6 +23,7 @@ fn main() -> anyhow::Result<()> {
     let settings_store: Arc<dyn SettingsStore> =
         Arc::new(JsonSettingsStore::new(paths::settings_path()));
     let secret_store: Arc<dyn SecretStore> = Arc::new(KeyringSecretStore::new("transom"));
+    let serial_ports: Arc<dyn SerialPortProvider> = Arc::new(SystemSerialPortProvider);
 
     let controller = Controller::start(known_hosts.clone())?;
     let services = transom_ui::UiServices {
@@ -29,6 +31,7 @@ fn main() -> anyhow::Result<()> {
         settings_store,
         secret_store,
         known_hosts,
+        serial_ports,
         command_tx: controller.command_sender(),
         event_rx: controller.event_receiver(),
     };

@@ -11,7 +11,7 @@ use transom_core::{
 };
 use transom_net::{
     AuthPrompter, ForwardTask, SftpClient, SshRemote, SshSession, connect_ssh, deploy_public_key,
-    start_forward,
+    open_serial, start_forward,
 };
 
 pub struct Controller {
@@ -62,6 +62,12 @@ enum Internal {
         session: SshSession,
     },
     LocalConnected {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        io: TerminalIo,
+        join: tokio::sync::oneshot::Receiver<()>,
+    },
+    SerialConnected {
         tab_id: TabId,
         connection_id: ConnectionId,
         io: TerminalIo,
@@ -219,6 +225,39 @@ async fn run_controller(
                                 });
                             }
                         },
+                        Connection::Serial(serial) => {
+                            let serial = serial.clone();
+                            let internal_tx = internal_tx.clone();
+                            let event_tx = event_tx.clone();
+                            // 串口打开是阻塞系统调用，禁止占用异步工作线程。
+                            match tokio::task::spawn_blocking(move || open_serial(&serial)).await {
+                                Ok(Ok(connected)) => {
+                                    let _ = internal_tx.send(Internal::SerialConnected {
+                                        tab_id,
+                                        connection_id,
+                                        io: connected.io,
+                                        join: connected.exit,
+                                    });
+                                }
+                                Ok(Err(error)) => {
+                                    let _ = event_tx.send(AppEvent::ConnectionFailed {
+                                        tab_id,
+                                        connection_id,
+                                        error,
+                                    });
+                                }
+                                Err(error) => {
+                                    let _ = event_tx.send(AppEvent::ConnectionFailed {
+                                        tab_id,
+                                        connection_id,
+                                        error: AppError::with_detail(
+                                            ErrorCode::Io,
+                                            format!("串口连接任务异常终止: {error}"),
+                                        ),
+                                    });
+                                }
+                            }
+                        }
                         _ => {
                             let _ = event_tx.send(AppEvent::ConnectionFailed {
                                 tab_id,
@@ -580,6 +619,36 @@ async fn run_controller(
                         }
                         interval.tick().await;
                     }
+                });
+            }
+            Incoming::Internal(Ok(Internal::SerialConnected {
+                tab_id,
+                connection_id,
+                io,
+                join,
+            })) => {
+                current_connections.insert(tab_id, connection_id);
+                stop_forwards(&mut forwards, tab_id);
+                stop_traffic(&mut traffic_tasks, tab_id);
+                stop_key_deploy(&mut key_deploy_tasks, tab_id);
+                sftp_clients.remove(&tab_id);
+                if let Some((_, old_remote)) = remotes.remove(&tab_id) {
+                    tokio::spawn(async move {
+                        old_remote.disconnect("reconnected to serial").await;
+                    });
+                }
+                let _ = event_tx.send(AppEvent::TerminalReady {
+                    tab_id,
+                    connection_id,
+                    io,
+                });
+                let internal_tx = internal_tx.clone();
+                tokio::spawn(async move {
+                    let _ = join.await;
+                    let _ = internal_tx.send(Internal::Disconnected {
+                        tab_id,
+                        connection_id,
+                    });
                 });
             }
             Incoming::Internal(Ok(Internal::Disconnected {
