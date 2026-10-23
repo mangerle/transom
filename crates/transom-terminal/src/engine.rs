@@ -1,5 +1,9 @@
 use crate::event::TerminalEventProxy;
+use crate::osc::{OscEvent, OscScanner};
 use crate::search::SearchState;
+
+/// 视图来不及取走时允许暂存的 OSC 事件上限。
+const MAX_PENDING_OSC_EVENTS: usize = 64;
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionRange, SelectionType};
@@ -44,6 +48,10 @@ pub struct TerminalEngine {
     pub(crate) term: Term<TerminalEventProxy>,
     parser: Processor,
     size: TerminalSize,
+    /// 旁路 OSC 扫描器，用于识别 shell 集成的命令边界（见 [`crate::osc`]）。
+    osc_scanner: OscScanner,
+    /// 扫描器产出、等待视图取走的事件。
+    osc_events: Vec<OscEvent>,
     /// 全文检索状态（查询、命中快照与游标），行为见 [`crate::search`]。
     pub(crate) search: SearchState,
     /// 最近一次收到字节流的时刻，用于把重扫推迟到输出停歇之后。
@@ -82,6 +90,8 @@ impl TerminalEngine {
             term,
             parser: Processor::new(),
             size,
+            osc_scanner: OscScanner::default(),
+            osc_events: Vec::new(),
             search: SearchState::default(),
             last_write: None,
             epoch: 0,
@@ -92,8 +102,21 @@ impl TerminalEngine {
         if !bytes.is_empty() {
             self.last_write = Some(Instant::now());
             self.epoch = self.epoch.wrapping_add(1);
+            // 先旁路扫 OSC，再把同一份字节交给内核解析器：扫描器不消费输入，
+            // 因此畸形序列也只影响通知，不影响屏幕内容。
+            self.osc_events.extend(self.osc_scanner.feed(bytes));
+            if self.osc_events.len() > MAX_PENDING_OSC_EVENTS {
+                // 视图长时间没取走（例如标签被隐藏）时丢最旧的，绝不让队列无界增长。
+                let drop = self.osc_events.len() - MAX_PENDING_OSC_EVENTS;
+                self.osc_events.drain(..drop);
+            }
         }
         self.parser.advance(&mut self.term, bytes);
+    }
+
+    /// 取走并清空待处理的 OSC 事件。
+    pub(crate) fn take_osc_events(&mut self) -> Vec<OscEvent> {
+        std::mem::take(&mut self.osc_events)
     }
 
     pub fn resize(&mut self, size: TerminalSize) {

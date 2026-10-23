@@ -3,6 +3,7 @@
 mod engine;
 mod event;
 mod input;
+mod osc;
 mod renderer;
 mod renderer_search;
 mod search;

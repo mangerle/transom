@@ -366,6 +366,23 @@ snippets:
     en: "Row %{row} is invalid: both label and command are required, label up to 40 chars, command up to 4000 chars"
     zh-CN: "第 %{row} 行不合格：名称与命令都不能为空，名称不超过 40 字，命令不超过 4000 字"
 
+notify:
+  desktop_switch:
+    en: Desktop notifications (long commands finished, OSC 777)
+    zh-CN: 桌面通知（长时间命令完成、终端程序请求）
+  threshold:
+    en: Notify when a command runs longer than (seconds)
+    zh-CN: 命令耗时超过多少秒才通知
+  threshold_note:
+    en: 1-3600. Nothing pops up while this window is focused and the command runs in the active tab; requests from programs (OSC 777) ignore the threshold. Requires shell integration that reports OSC 133.
+    zh-CN: 可填 1~3600。窗口正被系统聚焦、且命令就在当前标签里跑完时不弹；终端程序主动请求的 OSC 777 通知不受阈值约束。命令耗时判定依赖上报 OSC 133 的 shell 集成。
+  command_done_status:
+    en: Desktop notification sent for the finished command
+    zh-CN: 已为完成的命令发出桌面通知
+  desktop_sent:
+    en: Program notification forwarded to the system
+    zh-CN: 已把程序通知转发到系统通知中心
+
 search:
   terminal_unavailable:
     en: No terminal is ready in the current pane

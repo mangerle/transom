@@ -9,6 +9,17 @@ pub enum TerminalEvent {
     Bell,
     Exit,
     ClipboardStored,
+    /// Shell 集成报告一条命令跑完了：退出码可能为 `None`（老集成只发提示符标记），
+    /// 耗时由集成上报或按本地计时测得，单位毫秒。
+    CommandFinished {
+        exit_code: Option<i32>,
+        duration_ms: u64,
+    },
+    /// 终端程序通过 OSC 777 显式请求的桌面通知。
+    DesktopNotification {
+        title: String,
+        body: String,
+    },
     /// The user asked for a context menu at a window-local position.
     ContextMenuRequested {
         x: f32,

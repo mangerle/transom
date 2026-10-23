@@ -1,6 +1,7 @@
 use crate::engine::TerminalEngine;
 use crate::event::TerminalEvent;
 use crate::input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
+use crate::osc::{CommandTracker, OscEvent};
 use crate::renderer::{PaintRequest, TerminalRenderer};
 use alacritty_terminal::event::{Event, WindowSize};
 use alacritty_terminal::grid::Scroll;
@@ -15,6 +16,7 @@ use std::io::{Read, Write};
 use std::ops::Range;
 use std::sync::Arc;
 use std::thread;
+use std::time::Instant;
 use transom_core::{
     Rgb as PaletteColor, TerminalControlHandle, TerminalInteraction, TerminalIo, TerminalProfile,
     TerminalSize,
@@ -67,6 +69,8 @@ pub struct TerminalView {
     pub(crate) search_open: bool,
     /// 检索输入框状态；首次展开时创建，收起后保留上次的查询词。
     pub(crate) search_input: Option<Entity<InputState>>,
+    /// 命令生命周期归并：把 OSC 133 的零散标记算成"一条命令跑了多久"。
+    command_tracker: CommandTracker,
     /// 是否把查询词当正则表达式解析（与引擎里的快照同步）。
     pub(crate) search_regex_mode: bool,
     /// 检索输入框的事件订阅；随实体存活，收起搜索栏也不释放（下次复用同一输入框）。
@@ -197,6 +201,7 @@ impl TerminalView {
             mouse_pressed: false,
             exited: false,
             cursor_blink_on: true,
+            command_tracker: CommandTracker::default(),
             search_open: false,
             search_input: None,
             search_regex_mode: false,
@@ -298,6 +303,7 @@ impl TerminalView {
     }
 
     fn process_events(&mut self, cx: &mut Context<Self>) {
+        self.process_osc_events(cx);
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
                 Event::Title(title) => cx.emit(TerminalEvent::Title(title)),
@@ -335,6 +341,33 @@ impl TerminalView {
                 }
                 Event::Exit | Event::ChildExit(_) => self.mark_exited(cx),
                 Event::CursorBlinkingChange | Event::MouseCursorDirty | Event::Wakeup => {}
+            }
+        }
+    }
+
+    /// 把旁路扫到的 OSC 序列翻成对外的终端事件。
+    ///
+    /// 单独成函数是因为它和 alacritty 的事件通道无关：那些走 `event_rx`，这些挂在引擎里，
+    /// 两者都必须在同一渲染帧里排空，否则通知会滞后到下一次输出。
+    fn process_osc_events(&mut self, cx: &mut Context<Self>) {
+        let events = self.engine.lock().take_osc_events();
+        if events.is_empty() {
+            return;
+        }
+        let now = Instant::now();
+        for event in events {
+            match event {
+                OscEvent::Notify { title, body } => {
+                    cx.emit(TerminalEvent::DesktopNotification { title, body });
+                }
+                event => {
+                    if let Some(tracked) = self.command_tracker.on_event(&event, now) {
+                        cx.emit(TerminalEvent::CommandFinished {
+                            exit_code: tracked.exit_code,
+                            duration_ms: tracked.duration_ms,
+                        });
+                    }
+                }
             }
         }
     }

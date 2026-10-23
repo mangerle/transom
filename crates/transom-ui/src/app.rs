@@ -272,6 +272,7 @@ pub struct AppShell {
     pub(crate) settings_line_height: Entity<InputState>,
     pub(crate) settings_scrollback: Entity<InputState>,
     pub(crate) settings_word_separators: Entity<InputState>,
+    pub(crate) settings_notify_threshold: Entity<InputState>,
     pub(crate) confirm_forward_any: Option<PendingForwardConfirm>,
     pub(crate) sftp_editor_modal: Option<SftpEditorModalState>,
     pub(crate) sftp_chmod_modal: Option<SftpChmodModalState>,
@@ -385,6 +386,12 @@ impl AppShell {
                 .placeholder(rust_i18n::t!("settings.word_separators_hint").to_string())
                 .default_value(settings.terminal_profile.word_separators.clone())
         });
+        let notify_threshold_val = settings.window.notify_threshold_secs.to_string();
+        let settings_notify_threshold = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("10")
+                .default_value(notify_threshold_val)
+        });
         let scrollback_val = settings.terminal_profile.scrollback.to_string();
         let settings_scrollback = cx.new(|cx| {
             InputState::new(window, cx)
@@ -418,6 +425,7 @@ impl AppShell {
             settings_line_height,
             settings_scrollback,
             settings_word_separators,
+            settings_notify_threshold,
             confirm_forward_any: None,
             sftp_editor_modal: None,
             sftp_chmod_modal: None,

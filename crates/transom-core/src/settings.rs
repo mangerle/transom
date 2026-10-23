@@ -28,6 +28,12 @@ pub struct WindowSettings {
     /// 终端响铃模式
     #[serde(default)]
     pub bell_style: BellStyle,
+    /// 是否允许弹系统桌面通知：既管"长时间命令完成"，也管终端程序主动发的 OSC 777 通知。
+    #[serde(default = "default_true")]
+    pub desktop_notifications: bool,
+    /// 命令耗时达到多少秒才值得通知；太短的阈值会让 `ls` 也弹窗。
+    #[serde(default = "default_notify_threshold_secs")]
+    pub notify_threshold_secs: u64,
     /// 预设或记忆的窗口宽度
     #[serde(default = "default_window_width")]
     pub window_width: f32,
@@ -100,6 +106,8 @@ impl Default for WindowSettings {
             show_tab_close_button: true,
             close_window_on_all_tabs_closed: false,
             bell_style: BellStyle::default(),
+            desktop_notifications: true,
+            notify_threshold_secs: default_notify_threshold_secs(),
             window_width: default_window_width(),
             window_height: default_window_height(),
             window_x: None,
@@ -110,6 +118,10 @@ impl Default for WindowSettings {
             previous_tab_groups: Vec::new(),
         }
     }
+}
+
+fn default_notify_threshold_secs() -> u64 {
+    10
 }
 
 fn default_window_width() -> f32 {
@@ -271,6 +283,19 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
         assert!(settings.window.previous_tab_groups.is_empty());
         assert_eq!(settings.window.previous_tab_sessions.len(), 0);
+    }
+
+    /// 通知开关是后加的：老设置里没有它时按"开启 + 10 秒阈值"降级，
+    /// 而不是让整个窗口设置加载失败。
+    #[test]
+    fn notification_defaults_apply_to_legacy_settings() {
+        let mut value = serde_json::to_value(AppSettings::default()).unwrap();
+        let window = value["window"].as_object_mut().unwrap();
+        window.remove("desktop_notifications");
+        window.remove("notify_threshold_secs");
+        let settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert!(settings.window.desktop_notifications);
+        assert_eq!(settings.window.notify_threshold_secs, 10);
     }
 
     /// 快捷命令库是后加的字段：老设置文件里没有它也要能加载，并按空库降级。

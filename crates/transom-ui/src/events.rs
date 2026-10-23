@@ -63,10 +63,15 @@ impl AppShell {
                     TerminalView::new(window, cx, io, profile, interaction, Some(key_filter))
                 });
                 let focus_handle = terminal.read(cx).focus_handle().clone();
-                let subscription =
-                    cx.subscribe(&terminal, move |this, _, event: &TerminalEvent, cx| {
-                        this.handle_terminal_event(tab_id, event, cx)
-                    });
+                // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，
+                // 普通 subscribe 拿不到 Window。
+                let subscription = cx.subscribe_in(
+                    &terminal,
+                    window,
+                    move |this, _, event: &TerminalEvent, window, cx| {
+                        this.handle_terminal_event(tab_id, event, window, cx)
+                    },
+                );
                 let tab = &mut self.tabs[index];
                 tab.terminal = Some(terminal);
                 tab.status = TabStatus::Connected;
@@ -466,6 +471,7 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
         event: &TerminalEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match event {
@@ -490,6 +496,15 @@ impl AppShell {
                 }
             }
             TerminalEvent::ContextMenuRequested { .. } => {}
+            TerminalEvent::CommandFinished {
+                exit_code,
+                duration_ms,
+            } => {
+                self.on_command_finished(tab_id, *exit_code, *duration_ms, window, cx);
+            }
+            TerminalEvent::DesktopNotification { title, body } => {
+                self.on_desktop_notification(title, body, cx);
+            }
         }
         cx.notify();
     }

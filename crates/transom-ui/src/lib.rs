@@ -12,6 +12,7 @@ mod forward;
 mod keymap;
 mod keys;
 mod modals;
+mod notify;
 mod palette;
 mod pane_tree;
 mod session_form;

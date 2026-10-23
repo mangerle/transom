@@ -6,6 +6,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
+use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::BellStyle;
 
@@ -79,6 +80,36 @@ impl AppShell {
                             }),
                         ),
                     ),
+            )
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .py_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("notify.desktop_switch").to_string()),
+                    )
+                    .child(
+                        Switch::new("toggle-desktop-notifications")
+                            .checked(self.settings.window.desktop_notifications)
+                            .on_click(cx.listener(|this, &checked, _, cx| {
+                                this.settings.window.desktop_notifications = checked;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(Self::form_field(
+                rust_i18n::t!("notify.threshold").to_string(),
+                self.settings_notify_threshold.clone(),
+                p,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("notify.threshold_note").to_string()),
             )
             .child(
                 v_flex()

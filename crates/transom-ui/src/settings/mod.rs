@@ -48,6 +48,10 @@ impl AppShell {
                 cx,
             );
         });
+        let notify_threshold = self.settings.window.notify_threshold_secs.to_string();
+        self.settings_notify_threshold.update(cx, |input, cx| {
+            input.set_value(notify_threshold, window, cx);
+        });
         let scrollback = self.settings.terminal_profile.scrollback.to_string();
         self.settings_scrollback.update(cx, |input, cx| {
             input.set_value(&scrollback, window, cx);
@@ -84,6 +88,11 @@ impl AppShell {
         // 空串是有值意义的（不按任何字符断词），因此这里不 trim、也不拒绝空值。
         self.settings.terminal_profile.word_separators =
             self.settings_word_separators.read(cx).value().to_string();
+        if let Some(threshold) = crate::notify::parse_notify_threshold(
+            self.settings_notify_threshold.read(cx).value().as_ref(),
+        ) {
+            self.settings.window.notify_threshold_secs = threshold;
+        }
         if let Ok(scrollback) = self
             .settings_scrollback
             .read(cx)
