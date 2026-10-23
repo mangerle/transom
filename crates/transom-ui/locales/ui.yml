@@ -686,6 +686,9 @@ keys:
   comment:
     en: Comment
     zh-CN: 注释
+  comment_placeholder:
+    en: Optional, e.g. user@host
+    zh-CN: 可选，例如 user@host
   path:
     en: Private Key Path
     zh-CN: 私钥保存路径
@@ -711,11 +714,11 @@ keys:
     en: Select a public key before copying, exporting, or deploying it.
     zh-CN: 请先选择一个公钥，再进行复制、导出或部署。
   deploy_title:
-    en: Deploy to SSH Session
-    zh-CN: 部署到 SSH 会话
+    en: Deploy Public Key to Remote Host
+    zh-CN: 部署公钥到远程主机
   deploy_hint:
-    en: The key is appended to the remote ~/.ssh/authorized_keys with duplicate detection.
-    zh-CN: 公钥将追加到远端 ~/.ssh/authorized_keys，并自动去重。
+    en: Reuses the selected active SSH connection to append this public key to the remote user's ~/.ssh/authorized_keys (duplicates skipped), enabling passwordless login with the matching private key.
+    zh-CN: 复用选中的已连接 SSH 会话，把公钥追加到远端用户的 ~/.ssh/authorized_keys（自动去重）；之后即可用对应私钥免密登录该主机。
   deploy_to:
     en: Deploy to %{name}
     zh-CN: 部署到 %{name}

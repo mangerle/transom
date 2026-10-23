@@ -39,12 +39,9 @@ impl KeyWizardState {
     fn new(window: &mut Window, cx: &mut Context<impl Sized>, ssh_dir: PathBuf) -> Self {
         let default_path = ssh_dir.join(KeyAlgorithm::Ed25519.default_file_name());
         let default_path = default_path.display().to_string();
-        let comment = default_comment();
-        let comment_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(comment)
-                .placeholder("user@host")
-        });
+        let comment_placeholder = rust_i18n::t!("keys.comment_placeholder").to_string();
+        let comment_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(comment_placeholder));
         let path_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .default_value(default_path)
@@ -373,12 +370,4 @@ fn expand_home(input: &str) -> PathBuf {
         return dirs.home_dir().join(rest);
     }
     PathBuf::from(input)
-}
-
-fn default_comment() -> String {
-    let user = std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "user".to_string());
-    let host = std::env::var("HOSTNAME").unwrap_or_else(|_| "transom".to_string());
-    format!("{user}@{host}")
 }
