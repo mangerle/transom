@@ -734,6 +734,17 @@ impl AppShell {
             .child(queue_pane);
 
         if let Some(status_element) = status_bar_element {
+            let status_element = if queue_expanded {
+                status_element
+            } else {
+                // 队列收起时菜单与进度条之间没有列表行做分隔，补一条细线
+                div()
+                    .w_full()
+                    .border_t_1()
+                    .border_color(p.sidebar_border)
+                    .child(status_element)
+                    .into_any_element()
+            };
             panel_element = panel_element.child(status_element);
         }
 
