@@ -23,7 +23,7 @@ pub mod terminal;
 pub mod theme;
 pub mod traffic;
 
-pub use catalog::{CatalogError, CatalogMergeSummary, SessionCatalog, SessionFolder};
+pub use catalog::{CatalogError, CatalogMergeSummary, DropSide, SessionCatalog, SessionFolder};
 pub use color::Rgb;
 pub use commands::{AppCommand, AppEvent, SystemStats};
 pub use error::{AppError, ErrorCode};

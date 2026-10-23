@@ -1,4 +1,7 @@
 //! 会话树的过滤与扁平化行构建。
+//!
+//! 同级条目严格按 `SessionCatalog` 中数组的原始顺序输出，不再按名称排序：
+//! 数组顺序就是用户拖拽排定的显示顺序，一旦在这里排序，拖拽结果会被静默覆盖。
 
 use super::{FolderRow, SessionRow, SidebarRow};
 use std::collections::{HashMap, HashSet};
@@ -10,26 +13,12 @@ pub(crate) fn build_rows(catalog: &SessionCatalog, query: &str) -> Vec<SidebarRo
     for folder in &catalog.folders {
         child_folders.entry(folder.parent).or_default().push(folder);
     }
-    for folders in child_folders.values_mut() {
-        folders.sort_by(|a, b| {
-            a.name
-                .to_ascii_lowercase()
-                .cmp(&b.name.to_ascii_lowercase())
-        });
-    }
     let mut child_sessions: HashMap<Option<FolderId>, Vec<&Session>> = HashMap::new();
     for session in &catalog.sessions {
         child_sessions
             .entry(session.folder_id)
             .or_default()
             .push(session);
-    }
-    for sessions in child_sessions.values_mut() {
-        sessions.sort_by(|a, b| {
-            a.name
-                .to_ascii_lowercase()
-                .cmp(&b.name.to_ascii_lowercase())
-        });
     }
 
     let (session_counts, folder_counts) = subtree_counts(catalog);

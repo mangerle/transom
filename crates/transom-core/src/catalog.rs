@@ -6,6 +6,10 @@
 //!   后续“文件夹继承默认属性”也能直接挂到稳定节点上。
 //! - 代价是存储需要同时保存文件夹表，并在加载旧版 `group` 字符串时执行一次迁移。
 //!   迁移集中在 `transom-store`，领域层始终只看到合法的树结构。
+//! - `folders` 与 `sessions` 两个数组的**原始顺序即同层级内的显示顺序**，
+//!   所以拖拽排序只需重排数组，不引入额外序号字段：省掉一套“序号分配与压缩”逻辑，
+//!   也避免序号重复导致的排序不稳定。代价是备份合并时新条目一律追加到末尾，
+//!   以及任何写入都必须显式保持数组顺序（不能依赖按名称字典序渲染）。
 
 use crate::ids::{FolderId, SessionId};
 use crate::session::Session;
@@ -52,6 +56,16 @@ pub struct CatalogMergeSummary {
     pub updated_sessions: usize,
     pub added_folders: usize,
     pub updated_folders: usize,
+}
+
+/// 拖拽落点的侧向：插到锚点条目之前或之后。
+///
+/// 用枚举而非布尔位，是为了让“放到上/下半区”这类界面语义在调用点直接可读，
+/// 也避免调用方把 `true/false` 顺序传错。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropSide {
+    Before,
+    After,
 }
 
 /// 会话树操作失败原因。
@@ -205,7 +219,10 @@ impl SessionCatalog {
         Ok(())
     }
 
-    /// 将文件夹移动到新的父文件夹（`None` 表示移到根层级）。
+    /// 将文件夹移动到新的父文件夹（`None` 表示移到根层级），并排到该层级末尾。
+    ///
+    /// 数组顺序即显示顺序，因此“放入容器”必须同时把节点搬到数组末尾，
+    /// 否则被移动的文件夹会保留原下标，在新层级里落在意想不到的位置。
     ///
     /// # Errors
     /// 目标不存在，或目标位于自身子树中时返回错误。
@@ -225,16 +242,18 @@ impl SessionCatalog {
                 return Err(CatalogError::FolderCycle(id));
             }
         }
-        let folder = self
+        let index = self
             .folders
-            .iter_mut()
-            .find(|folder| folder.id == id)
+            .iter()
+            .position(|folder| folder.id == id)
             .ok_or(CatalogError::FolderNotFound(id))?;
+        let mut folder = self.folders.remove(index);
         folder.parent = parent;
+        self.folders.push(folder);
         Ok(())
     }
 
-    /// 将会话移动到指定文件夹（`None` 表示移到根层级）。
+    /// 将会话移动到指定文件夹（`None` 表示移到根层级），并排到该层级末尾。
     ///
     /// # Errors
     /// 会话或目标文件夹不存在时返回错误。
@@ -248,12 +267,99 @@ impl SessionCatalog {
         {
             return Err(CatalogError::FolderNotFound(folder_id));
         }
-        let session = self
+        let index = self
             .sessions
-            .iter_mut()
-            .find(|session| session.id == session_id)
+            .iter()
+            .position(|session| session.id == session_id)
             .ok_or(CatalogError::SessionNotFound(session_id))?;
+        let mut session = self.sessions.remove(index);
         session.folder_id = folder;
+        self.sessions.push(session);
+        Ok(())
+    }
+
+    /// 将会话移到锚点会话所在层级，并插到其前面或后面。
+    ///
+    /// 父级直接跟随锚点：拖到另一个分组里的会话上等于“移动 + 定位”一次完成，
+    /// 用户不必先把条目移进目标分组再调顺序。锚点就是自身时视为无操作。
+    ///
+    /// # Errors
+    /// 会话或锚点会话不存在时返回错误。
+    pub fn reorder_session(
+        &mut self,
+        session_id: SessionId,
+        anchor: SessionId,
+        side: DropSide,
+    ) -> Result<(), CatalogError> {
+        if session_id == anchor {
+            return Ok(());
+        }
+        let anchor_index = self
+            .sessions
+            .iter()
+            .position(|session| session.id == anchor)
+            .ok_or(CatalogError::SessionNotFound(anchor))?;
+        let source_index = self
+            .sessions
+            .iter()
+            .position(|session| session.id == session_id)
+            .ok_or(CatalogError::SessionNotFound(session_id))?;
+        let target_folder = self.sessions[anchor_index].folder_id;
+        let mut session = self.sessions.remove(source_index);
+        session.folder_id = target_folder;
+        // 摘走自身会把后面元素左移一位，锚点下标需同步修正。
+        let anchor_index = if source_index < anchor_index {
+            anchor_index - 1
+        } else {
+            anchor_index
+        };
+        let insert_at = match side {
+            DropSide::Before => anchor_index,
+            DropSide::After => (anchor_index + 1).min(self.sessions.len()),
+        };
+        self.sessions.insert(insert_at, session);
+        Ok(())
+    }
+
+    /// 将文件夹移到锚点文件夹所在层级，并插到其前面或后面。
+    ///
+    /// # Errors
+    /// 文件夹或锚点不存在，或锚点位于被移动文件夹的子树内（会成环）时返回错误。
+    pub fn reorder_folder(
+        &mut self,
+        folder_id: FolderId,
+        anchor: FolderId,
+        side: DropSide,
+    ) -> Result<(), CatalogError> {
+        if folder_id == anchor {
+            return Ok(());
+        }
+        let anchor_index = self
+            .folders
+            .iter()
+            .position(|folder| folder.id == anchor)
+            .ok_or(CatalogError::FolderNotFound(anchor))?;
+        let source_index = self
+            .folders
+            .iter()
+            .position(|folder| folder.id == folder_id)
+            .ok_or(CatalogError::FolderNotFound(folder_id))?;
+        if self.is_descendant_of(anchor, folder_id) {
+            return Err(CatalogError::FolderCycle(folder_id));
+        }
+        let target_parent = self.folders[anchor_index].parent;
+        let mut folder = self.folders.remove(source_index);
+        folder.parent = target_parent;
+        let anchor_index = if source_index < anchor_index {
+            anchor_index - 1
+        } else {
+            anchor_index
+        };
+        let insert_at = match side {
+            DropSide::Before => anchor_index,
+            DropSide::After => (anchor_index + 1).min(self.folders.len()),
+        };
+        self.folders.insert(insert_at, folder);
         Ok(())
     }
 
@@ -412,6 +518,14 @@ mod tests {
         id
     }
 
+    fn session_ids(catalog: &SessionCatalog) -> Vec<SessionId> {
+        catalog.sessions.iter().map(|session| session.id).collect()
+    }
+
+    fn folder_ids(catalog: &SessionCatalog) -> Vec<FolderId> {
+        catalog.folders.iter().map(|folder| folder.id).collect()
+    }
+
     #[test]
     fn ensure_path_creates_and_reuses_nested_folders() {
         let mut catalog = SessionCatalog::default();
@@ -445,6 +559,107 @@ mod tests {
             Err(CatalogError::FolderCycle(parent))
         );
         assert!(catalog.move_folder(child, Some(parent)).is_ok());
+    }
+
+    /// 数组顺序即显示顺序：向前/向后插入必须精确改变同级先后。
+    #[test]
+    fn reorder_session_places_relative_to_anchor() {
+        let mut catalog = SessionCatalog::default();
+        let folder = catalog.ensure_folder_path("A").unwrap();
+        let first = session(&mut catalog, "first");
+        let second = session(&mut catalog, "second");
+        let third = session(&mut catalog, "third");
+        for id in [first, second, third] {
+            catalog.move_session(id, Some(folder)).unwrap();
+        }
+        assert_eq!(
+            session_ids(&catalog),
+            vec![first, second, third],
+            "放入同一文件夹应按移动先后排列"
+        );
+
+        catalog
+            .reorder_session(third, first, DropSide::After)
+            .unwrap();
+        assert_eq!(session_ids(&catalog), vec![first, third, second]);
+
+        catalog
+            .reorder_session(first, second, DropSide::After)
+            .unwrap();
+        assert_eq!(session_ids(&catalog), vec![third, second, first]);
+
+        catalog
+            .reorder_session(second, third, DropSide::Before)
+            .unwrap();
+        assert_eq!(session_ids(&catalog), vec![second, third, first]);
+    }
+
+    /// 跨分组拖到某条会话上时，父级跟随锚点，一次操作完成“移动 + 定位”。
+    #[test]
+    fn reorder_session_follows_anchor_folder() {
+        let mut catalog = SessionCatalog::default();
+        let left = catalog.ensure_folder_path("A").unwrap();
+        let right = catalog.ensure_folder_path("B").unwrap();
+        let alpha = session(&mut catalog, "alpha");
+        let beta = session(&mut catalog, "beta");
+        let gamma = session(&mut catalog, "gamma");
+        catalog.move_session(alpha, Some(left)).unwrap();
+        catalog.move_session(beta, Some(left)).unwrap();
+        catalog.move_session(gamma, Some(right)).unwrap();
+
+        catalog
+            .reorder_session(gamma, beta, DropSide::After)
+            .unwrap();
+
+        assert_eq!(catalog.sessions[2].id, gamma);
+        assert_eq!(catalog.sessions[2].folder_id, Some(left));
+        assert_eq!(session_ids(&catalog), vec![alpha, beta, gamma]);
+    }
+
+    /// 锚点就是自身、或锚点不存在时，不得破坏既有顺序。
+    #[test]
+    fn reorder_session_rejects_invalid_anchor() {
+        let mut catalog = SessionCatalog::default();
+        let alpha = session(&mut catalog, "alpha");
+        let beta = session(&mut catalog, "beta");
+
+        catalog
+            .reorder_session(alpha, alpha, DropSide::Before)
+            .unwrap();
+        assert_eq!(session_ids(&catalog), vec![alpha, beta]);
+
+        let missing = SessionId::new();
+        assert_eq!(
+            catalog.reorder_session(alpha, missing, DropSide::Before),
+            Err(CatalogError::SessionNotFound(missing))
+        );
+        assert_eq!(session_ids(&catalog), vec![alpha, beta]);
+    }
+
+    /// 文件夹重排同样只改同级先后，并且禁止把父级插到自己子级之间。
+    #[test]
+    fn reorder_folder_orders_siblings_and_rejects_cycle() {
+        let mut catalog = SessionCatalog::default();
+        let a = catalog.ensure_folder_path("A").unwrap();
+        let b = catalog.ensure_folder_path("B").unwrap();
+        let c = catalog.ensure_folder_path("C").unwrap();
+        assert_eq!(folder_ids(&catalog), vec![a, b, c]);
+
+        catalog.reorder_folder(c, a, DropSide::After).unwrap();
+        assert_eq!(folder_ids(&catalog), vec![a, c, b]);
+
+        let child_of_a = catalog.ensure_folder_path("A/D").unwrap();
+        assert_eq!(
+            catalog.reorder_folder(a, child_of_a, DropSide::Before),
+            Err(CatalogError::FolderCycle(a))
+        );
+
+        // 锚点位于另一个层级时，父级跟随锚点。
+        catalog
+            .reorder_folder(b, child_of_a, DropSide::Before)
+            .unwrap();
+        assert_eq!(catalog.folder(b).unwrap().parent, Some(a));
+        assert_eq!(folder_ids(&catalog), vec![a, c, b, child_of_a]);
     }
 
     #[test]

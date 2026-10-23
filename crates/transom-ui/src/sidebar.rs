@@ -14,7 +14,7 @@ use gpui_kit::component::{Icon, Sizable, v_virtual_list};
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::SessionId;
-use tree::{SidebarDrag, SidebarRow, build_rows};
+use tree::{SidebarDrag, SidebarRow, SidebarTarget, build_rows};
 
 impl AppShell {
     pub(crate) fn active_session_id(&self) -> Option<SessionId> {
@@ -164,7 +164,7 @@ impl AppShell {
                     .on_drop(move |drag: &SidebarDrag, window, cx| {
                         let drag = *drag;
                         app_entity.update(cx, |this, cx| {
-                            this.handle_sidebar_drop(drag, None, cx);
+                            this.handle_sidebar_drop(drag, SidebarTarget::Root, cx);
                             window.refresh();
                         });
                     })

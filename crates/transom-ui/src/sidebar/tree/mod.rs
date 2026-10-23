@@ -1,18 +1,15 @@
-//! 会话树行模型、拖拽载荷与文件夹/会话行渲染。
+//! 会话树行模型、拖放落点与拖放处理。
+//!
+//! 行元素拼装见 `render` 子模块，扁平化行构建见 `rows` 子模块。
 
+mod render;
 mod rows;
 
 pub(crate) use rows::build_rows;
 
 use crate::app::AppShell;
-use crate::palette::Palette;
-use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{Connection, FolderId, Session, SessionId};
+use transom_core::{CatalogError, DropSide, FolderId, Session, SessionId};
 
 /// 行槽位高度：虚拟列表按它分配空间，渲染时必须严格一致，否则行会错位或裁切。
 const ROW_HEIGHT: Pixels = px(38.0);
@@ -25,6 +22,8 @@ const INDENT_STEP: f32 = 18.0;
 const ROW_ICON_SIZE: Pixels = px(18.0);
 /// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
 const ROW_CHEVRON_SIZE: Pixels = px(14.0);
+/// 行上下沿排序落点的高度：只占内容条的一部分，行中部仍归“放入本行容器”。
+const REORDER_ZONE: Pixels = px(12.0);
 /// 行背景深浅梯度：常态最轻，悬停加重，选中再加重，当前会话用实色最重。
 const TINT_IDLE: f32 = 0.14;
 const TINT_HOVER: f32 = 0.28;
@@ -40,43 +39,23 @@ fn indent_padding(depth: usize) -> Pixels {
     px(INDENT_BASE + depth as f32 * INDENT_STEP)
 }
 
-/// 侧边栏拖动载荷：会话与文件夹共用一条拖放通道。
+/// 侧边栏拖动载荷：会话与文件夹共用一条拖放通道，同时充当落点锚点。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SidebarDrag {
     Session(SessionId),
     Folder(FolderId),
 }
 
-/// 拖动时跟随鼠标的轻量预览卡片。
-pub(crate) struct SidebarDragPreview {
-    label: String,
-    icon: IconName,
-}
-
-impl SidebarDragPreview {
-    fn new(label: String, icon: IconName) -> Self {
-        Self { label, icon }
-    }
-}
-
-impl Render for SidebarDragPreview {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let p = Palette::from(cx);
-        h_flex()
-            .px_3()
-            .py_1p5()
-            .gap_2()
-            .items_center()
-            .rounded_md()
-            .bg(p.popover)
-            .border_1()
-            .border_color(p.border)
-            .shadow_md()
-            .text_sm()
-            .text_color(p.popover_foreground)
-            .child(Icon::new(self.icon).xsmall().text_color(p.muted_foreground))
-            .child(self.label.clone())
-    }
+/// 侧边栏拖放落点。
+///
+/// `Root`/`Folder` 表示放入容器末尾；`Relative` 表示插到某一行上/下沿定位的
+/// 相邻位置，父级跟随锚点行，因此跨分组拖一次就完成了“移动 + 排序”，
+/// 不需要用户先把条目移进目标分组再排第二次。
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SidebarTarget {
+    Root,
+    Folder(FolderId),
+    Relative { anchor: SidebarDrag, side: DropSide },
 }
 
 #[derive(Clone)]
@@ -119,30 +98,21 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 处理会话/文件夹拖放。
+    /// 处理会话/文件夹拖放：换父级或调整同级顺序。
     ///
     /// 目标文件夹被折叠时自动展开，保证拖入的条目立即可见；
     /// 非法移动（拖入自身子树）由领域层拒绝并显示中文原因。
     pub(crate) fn handle_sidebar_drop(
         &mut self,
         drag: SidebarDrag,
-        target: Option<FolderId>,
+        target: SidebarTarget,
         cx: &mut Context<Self>,
     ) {
-        let result = match drag {
-            SidebarDrag::Session(session_id) => self.catalog.move_session(session_id, target),
-            SidebarDrag::Folder(folder_id) => {
-                if target == Some(folder_id) {
-                    return;
-                }
-                self.catalog.move_folder(folder_id, target)
-            }
-        };
-        match result {
-            Ok(()) => {
-                if let Some(target_id) = target
+        match self.apply_sidebar_drop(drag, target) {
+            Ok(landed) => {
+                if let Some(folder_id) = landed
                     && let Some(folder) =
-                        self.catalog.folders.iter_mut().find(|f| f.id == target_id)
+                        self.catalog.folders.iter_mut().find(|f| f.id == folder_id)
                 {
                     folder.collapsed = false;
                 }
@@ -153,354 +123,64 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn render_folder_row(
+    /// 把落点翻译成领域操作，返回条目最终所属文件夹（`None` 表示根层级）。
+    ///
+    /// 跨类型落点按“能落进容器”解释：会话落在文件夹行上下沿即放入该文件夹，
+    /// 文件夹落在会话行上下沿即放入该会话所在文件夹；两者都不需要用户二次操作。
+    fn apply_sidebar_drop(
         &mut self,
-        row: &FolderRow,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let folder_id = row.id;
-        let app_entity = cx.entity().clone();
-        let label = row.name.clone();
-        let chevron = if row.collapsed {
-            IconName::ChevronRight
-        } else {
-            IconName::ChevronDown
-        };
-
-        let element = div()
-            .id(ElementId::Name(format!("folder-{folder_id}").into()))
-            .w_full()
-            .h(ROW_HEIGHT)
-            .pl(indent_padding(row.depth))
-            .pr(px(4.0))
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_folder_collapsed(folder_id, cx);
-            }))
-            .on_drag(SidebarDrag::Folder(folder_id), move |_, _, _, cx| {
-                cx.new(|_| SidebarDragPreview::new(label.clone(), IconName::Folder))
-            })
-            .on_drop({
-                let app = app_entity.clone();
-                move |drag: &SidebarDrag, window, cx| {
-                    let drag = *drag;
-                    app.update(cx, |this, cx| {
-                        this.handle_sidebar_drop(drag, Some(folder_id), cx);
-                        window.refresh();
-                    });
-                }
-            })
-            .context_menu({
-                let app_entity = app_entity.clone();
-                move |menu, _window, _cx| {
-                    let app = app_entity.clone();
-                    menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.new_session_here").to_string())
-                            .icon(IconName::Plus)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_new_session_in_folder(folder_id, window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.new_folder").to_string())
-                            .icon(IconName::FolderPlus)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_new_folder(Some(folder_id), window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.rename").to_string())
-                            .icon(IconName::FolderPen)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_rename_folder(folder_id, window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(PopupMenuItem::separator())
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.delete_folder").to_string())
-                            .icon(IconName::Trash)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.delete_folder(folder_id, cx);
-                                    });
-                                }
-                            }),
-                    )
-                }
-            });
-        let mut band = h_flex()
-            .w_full()
-            .h(BAND_HEIGHT)
-            .px_2()
-            .gap_1()
-            .items_center()
-            .rounded_md()
-            .bg(p.sidebar_accent.opacity(TINT_FOLDER_IDLE))
-            .border_b_1()
-            .border_color(p.sidebar_border.opacity(0.55))
-            .text_color(p.sidebar_foreground)
-            .hover(|style| style.bg(p.sidebar_accent.opacity(TINT_FOLDER_HOVER)))
-            .child(Icon::new(chevron).with_size(ROW_CHEVRON_SIZE))
-            .child(
-                Icon::new(if row.collapsed {
-                    IconName::Folder
-                } else {
-                    IconName::FolderOpen
-                })
-                .with_size(ROW_ICON_SIZE),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .overflow_hidden()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .truncate()
-                    .child(row.name.clone()),
-            )
-            .child(div().text_xs().child(row.session_count.to_string()));
-
-        if row.folder_count > 0 {
-            band = band.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.7))
-                    .child(format!("({})", row.folder_count)),
-            );
-        }
-        element.child(band).into_any_element()
-    }
-
-    pub(crate) fn render_session_row(
-        &mut self,
-        row: &SessionRow,
-        active_session: Option<SessionId>,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let session = &row.session;
-        let session_id = session.id;
-        let folder_id = session.folder_id;
-        let app_entity = cx.entity().clone();
-        let (icon_name, detail_text) = match &session.connection {
-            Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
-            Connection::Local(local) => {
-                let shell = local.shell.as_deref().unwrap_or("sh");
-                (IconName::Terminal, format!("Local: {shell}"))
+        drag: SidebarDrag,
+        target: SidebarTarget,
+    ) -> Result<Option<FolderId>, CatalogError> {
+        match (drag, target) {
+            (SidebarDrag::Session(session_id), SidebarTarget::Root) => {
+                self.catalog.move_session(session_id, None)?;
+                Ok(None)
             }
-            Connection::Serial(serial) => (
-                IconName::Cable,
-                format!("Serial: {} @ {}", serial.port, serial.baud_rate),
-            ),
-            _ => (IconName::Server, String::new()),
-        };
-        let is_active = active_session == Some(session_id);
-        let selection_mode = self.selection_mode;
-        let is_selected = self.selected_sessions.contains(&session_id);
-        let drag_label = session.name.clone();
-        let drag_icon = icon_name;
-        let element = div()
-            .id(ElementId::Name(format!("session-{session_id}").into()))
-            .w_full()
-            .h(ROW_HEIGHT)
-            .pl(indent_padding(row.depth))
-            .pr(px(4.0))
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, window, cx| {
-                if this.selection_mode {
-                    let selected = this.selected_sessions.contains(&session_id);
-                    this.toggle_session_selection(session_id, !selected, cx);
-                } else {
-                    this.connect_session(session_id, window, cx);
+            (SidebarDrag::Folder(folder_id), SidebarTarget::Root) => {
+                self.catalog.move_folder(folder_id, None)?;
+                Ok(None)
+            }
+            (SidebarDrag::Session(session_id), SidebarTarget::Folder(folder_id)) => {
+                self.catalog.move_session(session_id, Some(folder_id))?;
+                Ok(Some(folder_id))
+            }
+            (SidebarDrag::Folder(moved_id), SidebarTarget::Folder(parent_id)) => {
+                if moved_id == parent_id {
+                    return Ok(Some(parent_id));
                 }
-            }))
-            .on_drag(SidebarDrag::Session(session_id), move |_, _, _, cx| {
-                cx.new(|_| SidebarDragPreview::new(drag_label.clone(), drag_icon))
-            })
-            .on_drop({
-                let app = app_entity.clone();
-                move |drag: &SidebarDrag, window, cx| {
-                    let drag = *drag;
-                    app.update(cx, |this, cx| {
-                        this.handle_sidebar_drop(drag, folder_id, cx);
-                        window.refresh();
-                    });
+                self.catalog.move_folder(moved_id, Some(parent_id))?;
+                Ok(Some(parent_id))
+            }
+            (drag, SidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
+                (SidebarDrag::Session(session_id), SidebarDrag::Session(anchor_id)) => {
+                    self.catalog.reorder_session(session_id, anchor_id, side)?;
+                    Ok(self
+                        .catalog
+                        .folder_of_session(anchor_id)
+                        .map(|folder| folder.id))
                 }
-            })
-            .context_menu({
-                let app_entity = app_entity.clone();
-                move |menu, _window, _cx| {
-                    let app = app_entity.clone();
-                    let mut menu = menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.connect").to_string())
-                            .icon(IconName::Terminal)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.connect_session(session_id, window, cx);
-                                    });
-                                }
-                            }),
-                    );
-                    if folder_id.is_some() {
-                        menu = menu.item(
-                            PopupMenuItem::new(rust_i18n::t!("menu.move_to_root").to_string())
-                                .icon(IconName::FolderTree)
-                                .on_click({
-                                    let app = app.clone();
-                                    move |_, _, cx| {
-                                        app.update(cx, |this, cx| {
-                                            this.handle_sidebar_drop(
-                                                SidebarDrag::Session(session_id),
-                                                None,
-                                                cx,
-                                            );
-                                        });
-                                    }
-                                }),
-                        );
-                    }
-                    menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.duplicate").to_string())
-                            .icon(IconName::Plus)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.duplicate_session(session_id, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.edit").to_string())
-                            .icon(IconName::Settings)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_edit_session(session_id, window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(PopupMenuItem::separator())
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.delete").to_string())
-                            .icon(IconName::Trash)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.delete_session_by_id(session_id, cx);
-                                    });
-                                }
-                            }),
-                    )
+                (SidebarDrag::Folder(folder_id), SidebarDrag::Folder(anchor_id)) => {
+                    self.catalog.reorder_folder(folder_id, anchor_id, side)?;
+                    Ok(self
+                        .catalog
+                        .folder(folder_id)
+                        .and_then(|folder| folder.parent))
                 }
-            });
-        // 高亮与悬停只作用于内层内容条，缩进区保持透明，层级靠左偏移表达。
-        let is_selected_row = selection_mode && is_selected;
-        let tint = if is_active {
-            1.0
-        } else if is_selected_row {
-            TINT_SELECTED
-        } else {
-            TINT_IDLE
-        };
-        let hover_tint = if is_selected_row {
-            TINT_SELECTED_HOVER
-        } else {
-            TINT_HOVER
-        };
-        let mut inner = h_flex()
-            .w_full()
-            .h(BAND_HEIGHT)
-            .px_2()
-            .gap_2()
-            .items_center()
-            .rounded_md()
-            .bg(p.sidebar_accent.opacity(tint))
-            .text_color(if is_active {
-                p.sidebar_accent_foreground
-            } else {
-                p.sidebar_foreground
-            });
-        if !is_active {
-            inner = inner.hover(|style| style.bg(p.sidebar_accent.opacity(hover_tint)));
+                (SidebarDrag::Session(session_id), SidebarDrag::Folder(anchor_id)) => {
+                    self.catalog.move_session(session_id, Some(anchor_id))?;
+                    Ok(Some(anchor_id))
+                }
+                (SidebarDrag::Folder(folder_id), SidebarDrag::Session(anchor_id)) => {
+                    let parent = self
+                        .catalog
+                        .folder_of_session(anchor_id)
+                        .map(|folder| folder.id);
+                    self.catalog.move_folder(folder_id, parent)?;
+                    Ok(parent)
+                }
+            },
         }
-        if selection_mode {
-            inner = inner.child(
-                Checkbox::new(ElementId::Name(
-                    format!("session-select-{session_id}").into(),
-                ))
-                .small()
-                .checked(is_selected)
-                .on_click(cx.listener(move |this, &checked, _, cx| {
-                    cx.stop_propagation();
-                    this.toggle_session_selection(session_id, checked, cx);
-                })),
-            );
-        }
-        let inner = inner
-            .child(
-                Icon::new(icon_name)
-                    .with_size(ROW_ICON_SIZE)
-                    .text_color(if is_active {
-                        p.sidebar_accent_foreground
-                    } else {
-                        p.muted_foreground
-                    }),
-            )
-            .child(
-                v_flex()
-                    .flex_1()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .text_sm()
-                            .line_height(px(17.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .truncate()
-                            .child(session.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .line_height(px(14.0))
-                            .truncate()
-                            .text_color(if is_active {
-                                p.sidebar_accent_foreground
-                            } else {
-                                p.muted_foreground
-                            })
-                            .child(detail_text),
-                    ),
-            );
-        element.child(inner).into_any_element()
     }
 }
 
@@ -523,6 +203,28 @@ mod tests {
                 SidebarRow::Session(row) => format!("session:{}", row.session.name),
             })
             .collect()
+    }
+
+    /// 同级条目严格按目录数组顺序输出：一旦改回字典序，拖拽排序的结果会被静默覆盖。
+    #[test]
+    fn rows_follow_catalog_order_not_name_collation() {
+        let mut catalog = SessionCatalog::default();
+        let prod = catalog.ensure_folder_path("生产").unwrap();
+        catalog.add_folder("Beta", None).unwrap();
+        catalog.add_folder("Alpha", None).unwrap();
+        catalog.sessions.push(local_session("zeta", Some(prod)));
+        catalog.sessions.push(local_session("alpha", Some(prod)));
+
+        assert_eq!(
+            row_names(&catalog, ""),
+            vec![
+                "folder:生产",
+                "session:zeta",
+                "session:alpha",
+                "folder:Beta",
+                "folder:Alpha",
+            ]
+        );
     }
 
     #[test]
