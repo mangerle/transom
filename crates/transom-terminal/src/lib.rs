@@ -8,7 +8,9 @@ mod renderer;
 mod renderer_search;
 mod search;
 mod search_bar;
+mod search_ticks;
 mod view;
+mod view_ime;
 
 pub use engine::TerminalEngine;
 pub use event::{TerminalEvent, TerminalEventProxy};

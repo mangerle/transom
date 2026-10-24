@@ -343,7 +343,7 @@ impl SearchState {
             }
         }
 
-        let ticks = build_ticks(&self.hits, top, bottom, tick_rows);
+        let ticks = crate::search_ticks::build_ticks(&self.hits, top, bottom, tick_rows);
         SearchPaint {
             rows: row_paints,
             ticks,
@@ -357,33 +357,9 @@ fn clamp_span(start: usize, end: usize, cols: usize) -> Option<usize> {
     (start < cols && start < end).then_some(end)
 }
 
-/// 把命中映射到刻度带：按像素桶去重，避免上千个命中画出上千个矩形。
-fn build_ticks(hits: &[Hit], top: Line, bottom: Line, tick_rows: usize) -> Vec<f32> {
-    // 少于 2 个桶时无法给出可用的比例分母（窗格被压到 2px 以下的极端情况），直接不画。
-    if tick_rows < 2 || bottom.0 <= top.0 {
-        return Vec::new();
-    }
-    let span = (bottom.0 - top.0) as f32;
-    let mut buckets = vec![false; tick_rows];
-    for hit in hits {
-        let fraction = (hit.start.line.0 - top.0) as f32 / span;
-        let bucket = (fraction.clamp(0.0, 1.0) * (tick_rows - 1) as f32).round() as usize;
-        buckets[bucket.min(tick_rows - 1)] = true;
-    }
-    buckets
-        .iter()
-        .enumerate()
-        .filter(|(_, occupied)| **occupied)
-        .map(|(bucket, _)| bucket as f32 / (tick_rows - 1) as f32)
-        .collect()
-}
-
 /// 用编译好的自动机把整个缓冲区扫一遍。
 ///
 /// 逐次调用 `Term::search_next` 而不是自己拼行文本再匹配：前者已正确处理宽字符、
-/// 自动换行（`WRAPLINE`）与行尾空白语义，自己重写容易在中文与折行上出错。
-/// `search_next` 在找不到"更靠后的命中"时会回绕返回区间内第一个命中，
-/// 因此用"命中起点不再前进"作为终止条件，而不是依赖返回值是否为空。
 pub(crate) fn scan(
     term: &Term<TerminalEventProxy>,
     regex: &mut RegexSearch,
@@ -589,9 +565,9 @@ mod tests {
             },
         ];
         // 10 行缓冲、2 个命中落在同一像素桶时只保留一条刻度。
-        let ticks = build_ticks(&hits, Line(-9), Line(0), 4);
+        let ticks = crate::search_ticks::build_ticks(&hits, Line(-9), Line(0), 4);
         assert_eq!(ticks.len(), 1);
-        let many = build_ticks(&hits, Line(-9), Line(0), 100);
+        let many = crate::search_ticks::build_ticks(&hits, Line(-9), Line(0), 100);
         assert_eq!(many.len(), 2);
     }
 
@@ -601,8 +577,8 @@ mod tests {
             start: Point::new(Line(0), Column(0)),
             end: Point::new(Line(0), Column(1)),
         }];
-        assert!(build_ticks(&hits, Line(-1), Line(0), 0).is_empty());
-        assert!(build_ticks(&hits, Line(0), Line(0), 10).is_empty());
+        assert!(crate::search_ticks::build_ticks(&hits, Line(-1), Line(0), 0).is_empty());
+        assert!(crate::search_ticks::build_ticks(&hits, Line(0), Line(0), 10).is_empty());
     }
 
     #[test]
