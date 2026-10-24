@@ -185,7 +185,7 @@ impl AppShell {
             .id(id)
             .size(px(26.0))
             .flex_none()
-            .rounded_md()
+            .rounded(p.radius.md)
             .flex()
             .items_center()
             .justify_center()

@@ -3,7 +3,7 @@
 use crate::app::AppShell;
 use crate::keymap;
 use crate::theme::tokens::size;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{RadiusTokens, h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::prelude::FluentBuilder;
@@ -54,6 +54,9 @@ pub(crate) struct Palette {
     pub(crate) mono_font_family: SharedString,
     /// 界面等宽字号，随密度档位缩放。
     pub(crate) mono_font_size: Pixels,
+    /// 圆角档位（由主题的 radius/radius_lg 派生），容器级圆角统一从这里取值，
+    /// 主题即可控制全局圆角；装饰性圆点仍用 rounded_full。
+    pub(crate) radius: RadiusTokens,
 }
 
 impl Palette {
@@ -90,6 +93,7 @@ impl Palette {
             popover_foreground: theme.popover_foreground,
             mono_font_family: theme.mono_font_family.clone(),
             mono_font_size: theme.mono_font_size,
+            radius: theme.radius_tokens(),
         }
     }
 }
@@ -101,10 +105,12 @@ impl AppShell {
         description: Option<String>,
         content: impl IntoElement,
         footer: Option<impl IntoElement>,
-        max_w: Pixels,
+        max_w: impl Into<Length>,
         p: &Palette,
     ) -> AnyElement {
         let title_str = title.into();
+        // 先固化为 Copy 的 Length，避免 impl Trait 参数在链式调用里要求 Clone。
+        let max_w = max_w.into();
         v_flex()
             .id(id.into())
             .w(max_w)
@@ -112,7 +118,7 @@ impl AppShell {
             .max_h(rems(size::DIALOG_MAX_HEIGHT))
             .gap_4()
             .p_6()
-            .rounded_xl()
+            .rounded(p.radius.xl)
             .bg(p.popover)
             .text_color(p.popover_foreground)
             .border_1()

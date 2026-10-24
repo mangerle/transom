@@ -116,7 +116,7 @@ impl AppShell {
                 h_flex()
                     .py_2()
                     .px_3()
-                    .rounded_md()
+                    .rounded(p.radius.md)
                     .border_1()
                     .border_color(p.border)
                     .bg(p.muted.opacity(0.4))
@@ -208,7 +208,7 @@ impl AppShell {
                                     .text_xs()
                                     .px_2()
                                     .py_1()
-                                    .rounded_sm()
+                                    .rounded(p.radius.sm)
                                     .bg(p.muted)
                                     .text_color(p.muted_foreground)
                                     .child(rwx_str),
@@ -396,7 +396,7 @@ fn property_row(label: &str, value: String, p: &Palette) -> AnyElement {
         .gap_3()
         .py_1p5()
         .px_3()
-        .rounded_md()
+        .rounded(p.radius.md)
         .bg(p.muted.opacity(0.3))
         .items_start()
         .child(

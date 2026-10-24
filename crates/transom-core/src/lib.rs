@@ -11,6 +11,7 @@ pub mod ids;
 pub mod keys;
 pub mod known_hosts;
 pub mod layout;
+pub mod paths;
 pub mod prompt;
 pub mod secrets;
 pub mod serial;

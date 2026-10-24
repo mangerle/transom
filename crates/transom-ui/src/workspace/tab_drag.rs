@@ -35,7 +35,7 @@ impl Render for TabDragPreview {
             .py_1p5()
             .gap_2()
             .items_center()
-            .rounded_md()
+            .rounded(p.radius.md)
             .bg(p.popover)
             .border_1()
             .border_color(p.border)

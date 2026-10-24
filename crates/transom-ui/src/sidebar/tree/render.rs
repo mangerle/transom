@@ -37,7 +37,7 @@ impl Render for SidebarDragPreview {
             .py_1p5()
             .gap_2()
             .items_center()
-            .rounded_md()
+            .rounded(p.radius.md)
             .bg(p.popover)
             .border_1()
             .border_color(p.border)
@@ -219,7 +219,7 @@ impl AppShell {
             .px_2()
             .gap_1()
             .items_center()
-            .rounded_md()
+            .rounded(p.radius.md)
             .bg(p.sidebar_accent.opacity(TINT_FOLDER_IDLE))
             .border_b_1()
             .border_color(p.sidebar_border.opacity(0.55))
@@ -423,7 +423,7 @@ impl AppShell {
             .px_2()
             .gap_2()
             .items_center()
-            .rounded_md()
+            .rounded(p.radius.md)
             .bg(p.sidebar_accent.opacity(tint))
             .text_color(if is_active {
                 p.sidebar_accent_foreground

@@ -340,7 +340,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
         .gap_2()
         .px_2()
         .items_center()
-        .rounded_md()
+        .rounded(p.radius.md)
         .bg(p.muted)
         .cursor_pointer()
         .hover(|style| style.bg(p.foreground.opacity(0.10)))

@@ -54,7 +54,7 @@ fn render_editor_panel(
         .absolute()
         .flex_col()
         .overflow_hidden()
-        .rounded_lg()
+        .rounded(p.radius.lg)
         .border_1()
         .border_color(p.border)
         .bg(p.popover)

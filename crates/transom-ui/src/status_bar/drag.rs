@@ -37,7 +37,7 @@ impl Render for StatusDragPreview {
             .flex()
             .items_center()
             .justify_center()
-            .rounded_md()
+            .rounded(p.radius.md)
             .bg(p.popover)
             .border_1()
             .border_color(p.border)

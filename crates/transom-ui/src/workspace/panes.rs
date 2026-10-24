@@ -241,7 +241,7 @@ impl AppShell {
                 div()
                     .id(ElementId::Name(format!("close-pane-{tab_id}").into()))
                     .size(px(18.0))
-                    .rounded_sm()
+                    .rounded(p.radius.sm)
                     .flex()
                     .items_center()
                     .justify_center()

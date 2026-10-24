@@ -104,14 +104,38 @@ pub(crate) fn apply_appearance(appearance: &AppearanceSettings, cx: &mut App) {
 /// 启动时注册内置主题。
 ///
 /// 注册表对重复名静默跳过（`load_themes_from_str` 的 contains_key 行为），因此
-/// 内置主题命名必须避开 gpui-kit 自带的 "Default"；P3 接入用户主题目录时该
-/// 规则同样适用。
+/// 内置主题命名必须避开 gpui-kit 自带的 "Default"；用户主题目录中的同名文件
+/// 同样不会生效（见 [`watch_user_dir`]）。
 pub(crate) fn register_builtin(cx: &mut App) {
     if let Err(error) = ThemeRegistry::global_mut(cx).load_themes_from_str(builtin::BUILTIN_THEMES)
     {
         // 内置主题注册失败只损失"出厂深色"这一个选项：注册表仍保有 gpui-kit
         // 默认主题，解析回退路径不受影响，记录后继续启动。
         tracing::error!("注册内置 UI 主题失败，已退回 gpui-kit 默认主题，原因: {error}");
+    }
+}
+
+/// 监听用户主题目录（`config_dir/transom/themes/*.json`，gpui-kit ThemeConfig
+/// 格式），文件新增或修改时热重载进注册表，设置页即可选用，无需重启。
+///
+/// 已知局限：注册表对重名静默跳过，用户主题与内置主题同名不会生效，该约束
+/// 已写进 `transom_core::paths::themes_dir` 的文档。目录不存在时先创建再监听，
+/// 创建失败只损失自定义主题能力，按降级记录、不阻断启动。
+pub(crate) fn watch_user_dir(cx: &mut App) {
+    let dir = transom_core::paths::themes_dir();
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        tracing::warn!(
+            "创建用户主题目录失败，自定义主题不可用，目录: {}，原因: {error}",
+            dir.display()
+        );
+        return;
+    }
+    if let Err(error) = ThemeRegistry::watch_dir(dir, cx, |_| {
+        // 注册表变动由 gpui-kit 的 observe_global 自动换装当前槽位并重绘；
+        // 新增主题仍需用户在设置页选择后才生效。
+        tracing::info!("用户主题目录已重载");
+    }) {
+        tracing::warn!("监听用户主题目录失败，自定义主题不可用，原因: {error}");
     }
 }
 

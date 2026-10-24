@@ -3,6 +3,7 @@
 use super::{format_size, format_unix_time};
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -199,7 +200,7 @@ impl AppShell {
                         .overflow_hidden()
                         .border_1()
                         .border_color(p.border)
-                        .rounded_md()
+                        .rounded(p.radius.md)
                         .child(list),
                 )
                 .child(
@@ -261,7 +262,7 @@ impl AppShell {
             Some(format!("本地: {local_root}  |  远端: {remote_root}")),
             content,
             Some(footer),
-            px(760.0),
+            rems(size::DIALOG_MAX_WIDTH),
             p,
         );
 

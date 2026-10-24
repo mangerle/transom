@@ -104,7 +104,7 @@ fn render_editor_list_card(
                 .gap_2()
                 .px_2()
                 .items_center()
-                .rounded_md()
+                .rounded(p.radius.md)
                 .cursor_pointer()
                 .hover(|style| style.bg(p.foreground.opacity(0.10)))
                 .on_click(move |_, window, cx| {

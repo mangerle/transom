@@ -44,7 +44,7 @@ impl AppShell {
                     .id(ElementId::NamedInteger("theme-card".into(), idx as u64))
                     .w_full()
                     .p_3()
-                    .rounded_lg()
+                    .rounded(p.radius.lg)
                     .border_1()
                     .border_color(if is_selected {
                         p.sidebar_accent_foreground
@@ -108,7 +108,7 @@ impl AppShell {
                         v_flex()
                             .w_full()
                             .p_2p5()
-                            .rounded_md()
+                            .rounded(p.radius.md)
                             .bg(Hsla::from(rgb(theme.palette.background.to_hex())))
                             .text_xs()
                             .gap_1()
@@ -308,7 +308,7 @@ impl AppShell {
                     .py_2()
                     .gap_3()
                     .items_center()
-                    .rounded_md()
+                    .rounded(p.radius.md)
                     .border_1()
                     .border_color(if is_active { p.primary } else { p.border })
                     .bg(if is_active { p.muted } else { p.popover })

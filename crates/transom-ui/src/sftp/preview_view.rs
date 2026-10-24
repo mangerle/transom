@@ -53,7 +53,7 @@ impl AppShell {
             .w(px(PREVIEW_CARD_WIDTH))
             .gap_2()
             .p_3()
-            .rounded_lg()
+            .rounded(p.radius.lg)
             .border_1()
             .border_color(p.border)
             .bg(p.popover)
@@ -213,7 +213,7 @@ fn render_image_preview(thumbnail: &Arc<RenderImage>, p: &Palette) -> AnyElement
             div()
                 .w_full()
                 .h(px(PREVIEW_IMAGE_HEIGHT))
-                .rounded_md()
+                .rounded(p.radius.md)
                 .overflow_hidden()
                 .bg(p.muted)
                 .child(

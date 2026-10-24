@@ -185,7 +185,7 @@ impl AppShell {
                                 .py_1()
                                 .gap_2()
                                 .items_center()
-                                .rounded_sm()
+                                .rounded(p.radius.sm)
                                 .cursor_pointer();
                             let row = if is_selected {
                                 row.bg(p.sidebar_accent)
@@ -332,7 +332,7 @@ impl AppShell {
                                         div()
                                             .text_xs()
                                             .px_1()
-                                            .rounded_sm()
+                                            .rounded(p.radius.sm)
                                             .bg(p.muted)
                                             .text_color(p.muted_foreground)
                                             .child(format_octal_permissions(perms)),

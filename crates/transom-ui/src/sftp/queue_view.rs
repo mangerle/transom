@@ -240,7 +240,7 @@ impl AppShell {
                             this.child(
                                 div()
                                     .px_1()
-                                    .rounded_sm()
+                                    .rounded(p.radius.sm)
                                     .bg(p.muted)
                                     .text_color(p.muted_foreground)
                                     .child(rust_i18n::t!("sftp.folder_tag").to_string()),
@@ -250,7 +250,7 @@ impl AppShell {
                             this.child(
                                 div()
                                     .px_1()
-                                    .rounded_sm()
+                                    .rounded(p.radius.sm)
                                     .bg(p.muted)
                                     .text_color(p.muted_foreground)
                                     .child("SHA256"),

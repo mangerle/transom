@@ -67,6 +67,7 @@ pub fn run(services: UiServices) {
         // 主题注入必须晚于 init（注册表/全局 Theme 由它建立）、早于 open_window
         // （首帧即用目标主题渲染，避免启动闪一次默认浅色）。
         theme::register_builtin(cx);
+        theme::watch_user_dir(cx);
         theme::apply_appearance(&settings.appearance, cx);
 
         let window_bounds = {

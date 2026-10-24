@@ -30,7 +30,7 @@ pub(crate) fn render_conflict_banner(
         .gap_2()
         .px_2()
         .py_1()
-        .rounded_md()
+        .rounded(p.radius.md)
         .bg(p.muted)
         .child(
             div()
@@ -99,7 +99,7 @@ pub(crate) fn render_confirm_banner(
         .gap_2()
         .px_2()
         .py_1()
-        .rounded_md()
+        .rounded(p.radius.md)
         .bg(p.muted)
         .child(div().flex_1().text_xs().text_color(p.danger).child(message))
         .child(

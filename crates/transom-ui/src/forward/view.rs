@@ -107,7 +107,7 @@ impl AppShell {
             let mut row = v_flex()
                 .gap_1()
                 .p_2()
-                .rounded_sm()
+                .rounded(p.radius.sm)
                 .border_1()
                 .border_color(p.sidebar_border)
                 .child(
@@ -339,7 +339,7 @@ impl AppShell {
                 .text_xs()
                 .px_2()
                 .py_1()
-                .rounded_sm()
+                .rounded(p.radius.sm)
                 .bg(p.muted)
                 .text_color(p.muted_foreground)
                 .child(format!("Rule: {rule_name}")),

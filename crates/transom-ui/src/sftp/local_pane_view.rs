@@ -85,7 +85,7 @@ impl AppShell {
                                 .py_1()
                                 .gap_2()
                                 .items_center()
-                                .rounded_sm()
+                                .rounded(p.radius.sm)
                                 .cursor_pointer();
                             let row = if is_selected {
                                 row.bg(p.sidebar_accent)

@@ -95,7 +95,7 @@ impl AppShell {
                                         div()
                                             .text_xs()
                                             .px_1()
-                                            .rounded_sm()
+                                            .rounded(p.radius.sm)
                                             .bg(p.muted)
                                             .text_color(p.muted_foreground)
                                             .child(record.algorithm),
@@ -265,7 +265,7 @@ impl AppShell {
         let panel = v_flex()
             .id(ElementId::Name("quick-open-modal".into()))
             .w(px(580.0))
-            .rounded_lg()
+            .rounded(p.radius.lg)
             .bg(p.popover)
             .text_color(p.popover_foreground)
             .border_1()

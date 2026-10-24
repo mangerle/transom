@@ -2,6 +2,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -49,7 +50,7 @@ impl AppShell {
                         .items_center()
                         .px_3()
                         .py_2()
-                        .rounded_md()
+                        .rounded(p.radius.md)
                         .bg(p.muted)
                         .child(Icon::new(IconName::Check).small().text_color(p.success))
                         .child(div().text_xs().text_color(p.foreground).child(message)),
@@ -60,7 +61,7 @@ impl AppShell {
                     div()
                         .px_3()
                         .py_2()
-                        .rounded_md()
+                        .rounded(p.radius.md)
                         .bg(p.danger)
                         .text_xs()
                         .text_color(p.danger_foreground)
@@ -79,7 +80,7 @@ impl AppShell {
             Some(rust_i18n::t!("keys.hint").to_string()),
             content,
             Some(footer),
-            px(760.0),
+            rems(size::DIALOG_MAX_WIDTH),
             p,
         );
         Self::overlay(dialog, p)
@@ -199,7 +200,7 @@ impl AppShell {
                             .py_2()
                             .gap_3()
                             .items_center()
-                            .rounded_md()
+                            .rounded(p.radius.md)
                             .border_1()
                             .cursor_pointer()
                             .border_color(if is_selected {
@@ -249,7 +250,7 @@ impl AppShell {
                                                     .text_xs()
                                                     .px_1p5()
                                                     .py_0p5()
-                                                    .rounded_sm()
+                                                    .rounded(p.radius.sm)
                                                     .bg(p.background)
                                                     .text_color(p.muted_foreground)
                                                     .child(key.algorithm),

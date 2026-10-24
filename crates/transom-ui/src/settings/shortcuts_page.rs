@@ -19,7 +19,7 @@ impl AppShell {
             div()
                 .px_2()
                 .py_0p5()
-                .rounded_md()
+                .rounded(p.radius.md)
                 .border_1()
                 .border_color(p.border)
                 .bg(p.muted)

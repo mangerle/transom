@@ -1,20 +1,3 @@
-use directories::BaseDirs;
-use std::path::PathBuf;
-
-pub fn config_dir() -> PathBuf {
-    BaseDirs::new()
-        .map(|dirs| dirs.config_dir().join("transom"))
-        .unwrap_or_else(|| PathBuf::from(".transom"))
-}
-
-pub fn known_hosts_path() -> PathBuf {
-    config_dir().join("known_hosts.json")
-}
-
-pub fn sessions_path() -> PathBuf {
-    config_dir().join("sessions.json")
-}
-
-pub fn settings_path() -> PathBuf {
-    config_dir().join("settings.json")
-}
+//! 路径约定已下沉至 `transom-core::paths`（跨 crate 契约归 core），此处
+//! re-export 保持既有导入路径（`transom_store::paths`）不变。
+pub use transom_core::paths::{config_dir, known_hosts_path, sessions_path, settings_path};
