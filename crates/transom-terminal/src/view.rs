@@ -702,13 +702,46 @@ impl TerminalView {
             }
             return;
         }
-        if self.dragging_selection
-            && event.dragging()
-            && let Some(point) = self.hit_test_grid_point(event.position)
-        {
-            self.engine.lock().update_selection(point, Side::Right);
+        if self.dragging_selection && event.dragging() {
+            // 指针在视口外（上方历史区）时 hit_test 落空，选区更新交给
+            // 边缘自动滚动后的重映射完成
+            if let Some(point) = self.hit_test_grid_point(event.position) {
+                self.engine.lock().update_selection(point, Side::Right);
+            }
+            self.edge_scroll_during_drag(event.position, cx);
             cx.notify();
         }
+    }
+
+    /// 选区拖拽到视口上下边缘时的自动滚动。
+    ///
+    /// 设计原理（Why）：拖拽选择跨屏内容时指针停在边缘即应滚动，否则选区
+    /// 被视口截断。边缘带约 1.5 行，每个指针事件滚 1 行（与指针采样同频，
+    /// 无需独立定时器）；滚动后把指针位置重新映射进网格继续扩展选区，
+    /// 否则选区停在滚动前的边界上不再生长。
+    /// 代价与局限：速率与指针事件频率挂钩，极快甩动边缘时滚动偏快。
+    fn edge_scroll_during_drag(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let metrics = *self.metrics.lock();
+        let cell_height = f32::from(metrics.cell_height);
+        if cell_height <= 0.0 {
+            return;
+        }
+        let y = f32::from(position.y);
+        let top = f32::from(metrics.origin.y);
+        let edge = cell_height * 1.5;
+        // 视口符号约定与滚轮一致：正数向上翻历史，负数向下回底部
+        let delta = if y < top + edge {
+            1
+        } else if y > top + cell_height * metrics.rows as f32 - edge {
+            -1
+        } else {
+            return;
+        };
+        self.engine.lock().scroll_display(Scroll::Delta(delta));
+        if let Some(point) = self.hit_test_grid_point(position) {
+            self.engine.lock().update_selection(point, Side::Right);
+        }
+        cx.notify();
     }
 
     fn on_scroll(&mut self, event: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
