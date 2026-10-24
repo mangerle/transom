@@ -23,9 +23,14 @@ pub struct Controller {
 
 impl Controller {
     pub fn start(known_hosts: Arc<dyn KnownHostsStore>) -> Result<Self, AppError> {
-        let (command_tx, command_rx) = flume::unbounded();
-        let (event_tx, event_rx) = flume::unbounded();
-        let (internal_tx, internal_rx) = flume::unbounded();
+        // 三条通道的容量与背压策略（全工程禁止无界通道）：
+        // - 命令 256：用户命令低频，UI 侧 try_send 快速失败并提示；
+        // - 事件 1024：进度节流后 10Hz/任务，controller 侧 send_async 反压——
+        //   UI 事件循环停滞时拖慢传输而非内存无限积压；
+        // - 内部 64：连接完成/断开通知，低频。
+        let (command_tx, command_rx) = flume::bounded::<AppCommand>(256);
+        let (event_tx, event_rx) = flume::bounded::<AppEvent>(1024);
+        let (internal_tx, internal_rx) = flume::bounded::<Internal>(64);
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -137,11 +142,12 @@ async fn run_controller(
             // 先交一个零样本，让网络徽标在连接建立后立刻出现；首个真实速率
             // 仍从完整的一秒窗口开始计算，避免瞬时大数字。
             if event_tx
-                .send(AppEvent::NetworkTrafficUpdated {
+                .send_async(AppEvent::NetworkTrafficUpdated {
                     tab_id,
                     connection_id,
                     traffic: NetworkTraffic::default(),
                 })
+                .await
                 .is_err()
             {
                 return;
@@ -161,11 +167,12 @@ async fn run_controller(
                 let sample = NetworkTraffic::from_delta(previous, current, elapsed);
                 previous = current;
                 if event_tx
-                    .send(AppEvent::NetworkTrafficUpdated {
+                    .send_async(AppEvent::NetworkTrafficUpdated {
                         tab_id,
                         connection_id,
                         traffic: sample,
                     })
+                    .await
                     .is_err()
                 {
                     break;
@@ -191,11 +198,12 @@ async fn run_controller(
 
         tokio::spawn(async move {
             if event_tx
-                .send(AppEvent::NetworkTrafficUpdated {
+                .send_async(AppEvent::NetworkTrafficUpdated {
                     tab_id,
                     connection_id,
                     traffic: NetworkTraffic::default(),
                 })
+                .await
                 .is_err()
             {
                 return;
@@ -218,11 +226,12 @@ async fn run_controller(
                 };
                 let sample = NetworkTraffic::from_delta(previous_totals, current, elapsed);
                 if event_tx
-                    .send(AppEvent::NetworkTrafficUpdated {
+                    .send_async(AppEvent::NetworkTrafficUpdated {
                         tab_id,
                         connection_id,
                         traffic: sample,
                     })
+                    .await
                     .is_err()
                 {
                     break;
@@ -263,36 +272,44 @@ async fn run_controller(
                             });
                             match connect_ssh(ssh, size, secrets, prompter, known_hosts).await {
                                 Ok(session) => {
-                                    let _ = internal_tx.send(Internal::Connected {
-                                        tab_id,
-                                        connection_id,
-                                        session,
-                                    });
+                                    let _ = internal_tx
+                                        .send_async(Internal::Connected {
+                                            tab_id,
+                                            connection_id,
+                                            session,
+                                        })
+                                        .await;
                                 }
                                 Err(error) => {
-                                    let _ = event_tx.send(AppEvent::ConnectionFailed {
-                                        tab_id,
-                                        connection_id,
-                                        error,
-                                    });
+                                    let _ = event_tx
+                                        .send_async(AppEvent::ConnectionFailed {
+                                            tab_id,
+                                            connection_id,
+                                            error,
+                                        })
+                                        .await;
                                 }
                             }
                         }
                         Connection::Local(local) => match open_local_pty(local, size) {
                             Ok((io, join)) => {
-                                let _ = internal_tx.send(Internal::LocalConnected {
-                                    tab_id,
-                                    connection_id,
-                                    io,
-                                    join,
-                                });
+                                let _ = internal_tx
+                                    .send_async(Internal::LocalConnected {
+                                        tab_id,
+                                        connection_id,
+                                        io,
+                                        join,
+                                    })
+                                    .await;
                             }
                             Err(error) => {
-                                let _ = event_tx.send(AppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error,
-                                });
+                                let _ = event_tx
+                                    .send_async(AppEvent::ConnectionFailed {
+                                        tab_id,
+                                        connection_id,
+                                        error,
+                                    })
+                                    .await;
                             }
                         },
                         Connection::Serial(serial) => {
@@ -302,41 +319,49 @@ async fn run_controller(
                             // 串口打开是阻塞系统调用，禁止占用异步工作线程。
                             match tokio::task::spawn_blocking(move || open_serial(&serial)).await {
                                 Ok(Ok(connected)) => {
-                                    let _ = internal_tx.send(Internal::SerialConnected {
-                                        tab_id,
-                                        connection_id,
-                                        io: connected.io,
-                                        join: connected.exit,
-                                    });
+                                    let _ = internal_tx
+                                        .send_async(Internal::SerialConnected {
+                                            tab_id,
+                                            connection_id,
+                                            io: connected.io,
+                                            join: connected.exit,
+                                        })
+                                        .await;
                                 }
                                 Ok(Err(error)) => {
-                                    let _ = event_tx.send(AppEvent::ConnectionFailed {
-                                        tab_id,
-                                        connection_id,
-                                        error,
-                                    });
+                                    let _ = event_tx
+                                        .send_async(AppEvent::ConnectionFailed {
+                                            tab_id,
+                                            connection_id,
+                                            error,
+                                        })
+                                        .await;
                                 }
                                 Err(error) => {
-                                    let _ = event_tx.send(AppEvent::ConnectionFailed {
-                                        tab_id,
-                                        connection_id,
-                                        error: AppError::with_detail(
-                                            ErrorCode::Io,
-                                            format!("串口连接任务异常终止: {error}"),
-                                        ),
-                                    });
+                                    let _ = event_tx
+                                        .send_async(AppEvent::ConnectionFailed {
+                                            tab_id,
+                                            connection_id,
+                                            error: AppError::with_detail(
+                                                ErrorCode::Io,
+                                                format!("串口连接任务异常终止: {error}"),
+                                            ),
+                                        })
+                                        .await;
                                 }
                             }
                         }
                         _ => {
-                            let _ = event_tx.send(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error: AppError::with_detail(
-                                    ErrorCode::Configuration,
-                                    "不支持的连接类型",
-                                ),
-                            });
+                            let _ = event_tx
+                                .send_async(AppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error: AppError::with_detail(
+                                        ErrorCode::Configuration,
+                                        "不支持的连接类型",
+                                    ),
+                                })
+                                .await;
                         }
                     }
                 });
@@ -348,27 +373,31 @@ async fn run_controller(
                 op,
             })) => {
                 let Some((current_connection, remote)) = remotes.get(&tab_id).cloned() else {
-                    let _ = event_tx.send(AppEvent::SftpFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error: AppError::with_detail(
-                            ErrorCode::ChannelFailed,
-                            "SSH connection is not ready",
-                        ),
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error: AppError::with_detail(
+                                ErrorCode::ChannelFailed,
+                                "SSH connection is not ready",
+                            ),
+                        })
+                        .await;
                     continue;
                 };
                 if current_connection != connection_id {
-                    let _ = event_tx.send(AppEvent::SftpFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error: AppError::with_detail(
-                            ErrorCode::ChannelFailed,
-                            "SSH connection changed",
-                        ),
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error: AppError::with_detail(
+                                ErrorCode::ChannelFailed,
+                                "SSH connection changed",
+                            ),
+                        })
+                        .await;
                     continue;
                 }
 
@@ -381,12 +410,14 @@ async fn run_controller(
                             client
                         }
                         Err(error) => {
-                            let _ = event_tx.send(AppEvent::SftpFailed {
-                                tab_id,
-                                connection_id,
-                                op_id,
-                                error,
-                            });
+                            let _ = event_tx
+                                .send_async(AppEvent::SftpFailed {
+                                    tab_id,
+                                    connection_id,
+                                    op_id,
+                                    error,
+                                })
+                                .await;
                             continue;
                         }
                     }
@@ -420,18 +451,20 @@ async fn run_controller(
                 rule,
             })) => {
                 let Some((current_connection, remote)) = remotes.get(&tab_id).cloned() else {
-                    let _ = event_tx.send(AppEvent::ForwardChanged {
-                        tab_id,
-                        connection_id,
-                        status: ForwardStatus {
-                            rule_id: rule.id,
-                            state: ForwardState::Failed,
-                            error: Some(AppError::with_detail(
-                                ErrorCode::ForwardFailed,
-                                "SSH connection is not ready",
-                            )),
-                        },
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::ForwardChanged {
+                            tab_id,
+                            connection_id,
+                            status: ForwardStatus {
+                                rule_id: rule.id,
+                                state: ForwardState::Failed,
+                                error: Some(AppError::with_detail(
+                                    ErrorCode::ForwardFailed,
+                                    "SSH connection is not ready",
+                                )),
+                            },
+                        })
+                        .await;
                     continue;
                 };
                 if current_connection != connection_id {
@@ -453,11 +486,13 @@ async fn run_controller(
                         error: Some(error),
                     },
                 };
-                let _ = event_tx.send(AppEvent::ForwardChanged {
-                    tab_id,
-                    connection_id,
-                    status,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::ForwardChanged {
+                        tab_id,
+                        connection_id,
+                        status,
+                    })
+                    .await;
             }
             Incoming::Command(Ok(AppCommand::ForwardStop {
                 tab_id,
@@ -477,15 +512,17 @@ async fn run_controller(
                         task.stop().await;
                     });
                 }
-                let _ = event_tx.send(AppEvent::ForwardChanged {
-                    tab_id,
-                    connection_id,
-                    status: ForwardStatus {
-                        rule_id,
-                        state: ForwardState::Stopped,
-                        error: None,
-                    },
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::ForwardChanged {
+                        tab_id,
+                        connection_id,
+                        status: ForwardStatus {
+                            rule_id,
+                            state: ForwardState::Stopped,
+                            error: None,
+                        },
+                    })
+                    .await;
             }
             Incoming::Command(Ok(AppCommand::DeployPublicKey {
                 tab_id,
@@ -503,25 +540,29 @@ async fn run_controller(
                         let event_tx = event_tx.clone();
                         let handle = tokio::spawn(async move {
                             let error = deploy_public_key(&remote, &public_key).await.err();
-                            let _ = event_tx.send(AppEvent::PublicKeyDeployed {
-                                tab_id,
-                                connection_id,
-                                key_name,
-                                error,
-                            });
+                            let _ = event_tx
+                                .send_async(AppEvent::PublicKeyDeployed {
+                                    tab_id,
+                                    connection_id,
+                                    key_name,
+                                    error,
+                                })
+                                .await;
                         });
                         key_deploy_tasks.insert(tab_id, handle);
                     }
                     None => {
-                        let _ = event_tx.send(AppEvent::PublicKeyDeployed {
-                            tab_id,
-                            connection_id,
-                            key_name,
-                            error: Some(AppError::with_detail(
-                                ErrorCode::ChannelFailed,
-                                "SSH 连接尚未就绪，无法部署公钥",
-                            )),
-                        });
+                        let _ = event_tx
+                            .send_async(AppEvent::PublicKeyDeployed {
+                                tab_id,
+                                connection_id,
+                                key_name,
+                                error: Some(AppError::with_detail(
+                                    ErrorCode::ChannelFailed,
+                                    "SSH 连接尚未就绪，无法部署公钥",
+                                )),
+                            })
+                            .await;
                     }
                 }
             }
@@ -570,18 +611,22 @@ async fn run_controller(
                         old_remote.disconnect("reconnected").await;
                     });
                 }
-                let _ = event_tx.send(AppEvent::TerminalReady {
-                    tab_id,
-                    connection_id,
-                    io,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::TerminalReady {
+                        tab_id,
+                        connection_id,
+                        io,
+                    })
+                    .await;
                 let internal_tx = internal_tx.clone();
                 tokio::spawn(async move {
                     let _ = join.await;
-                    let _ = internal_tx.send(Internal::Disconnected {
-                        tab_id,
-                        connection_id,
-                    });
+                    let _ = internal_tx
+                        .send_async(Internal::Disconnected {
+                            tab_id,
+                            connection_id,
+                        })
+                        .await;
                 });
 
                 let traffic_task =
@@ -606,11 +651,12 @@ async fn run_controller(
                                     );
                                 prev_cpu = curr_cpu;
                                 if event_tx_stats
-                                    .send(AppEvent::SystemStatsUpdated {
+                                    .send_async(AppEvent::SystemStatsUpdated {
                                         tab_id,
                                         connection_id,
                                         stats,
                                     })
+                                    .await
                                     .is_err()
                                 {
                                     break;
@@ -638,18 +684,22 @@ async fn run_controller(
                         old_remote.disconnect("reconnected to local").await;
                     });
                 }
-                let _ = event_tx.send(AppEvent::TerminalReady {
-                    tab_id,
-                    connection_id,
-                    io,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::TerminalReady {
+                        tab_id,
+                        connection_id,
+                        io,
+                    })
+                    .await;
                 let internal_tx = internal_tx.clone();
                 tokio::spawn(async move {
                     let _ = join.await;
-                    let _ = internal_tx.send(Internal::Disconnected {
-                        tab_id,
-                        connection_id,
-                    });
+                    let _ = internal_tx
+                        .send_async(Internal::Disconnected {
+                            tab_id,
+                            connection_id,
+                        })
+                        .await;
                 });
 
                 let traffic_task =
@@ -687,11 +737,12 @@ async fn run_controller(
                             transom_core::system_stats::parse_combined_stats(&output, prev_cpu);
                         prev_cpu = curr_cpu;
                         if event_tx_stats
-                            .send(AppEvent::SystemStatsUpdated {
+                            .send_async(AppEvent::SystemStatsUpdated {
                                 tab_id,
                                 connection_id,
                                 stats,
                             })
+                            .await
                             .is_err()
                         {
                             break;
@@ -716,18 +767,22 @@ async fn run_controller(
                         old_remote.disconnect("reconnected to serial").await;
                     });
                 }
-                let _ = event_tx.send(AppEvent::TerminalReady {
-                    tab_id,
-                    connection_id,
-                    io,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::TerminalReady {
+                        tab_id,
+                        connection_id,
+                        io,
+                    })
+                    .await;
                 let internal_tx = internal_tx.clone();
                 tokio::spawn(async move {
                     let _ = join.await;
-                    let _ = internal_tx.send(Internal::Disconnected {
-                        tab_id,
-                        connection_id,
-                    });
+                    let _ = internal_tx
+                        .send_async(Internal::Disconnected {
+                            tab_id,
+                            connection_id,
+                        })
+                        .await;
                 });
             }
             Incoming::Internal(Ok(Internal::Disconnected {
@@ -750,10 +805,12 @@ async fn run_controller(
                             true
                         }
                     });
-                    let _ = event_tx.send(AppEvent::Disconnected {
-                        tab_id,
-                        connection_id,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::Disconnected {
+                            tab_id,
+                            connection_id,
+                        })
+                        .await;
                 }
             }
         }
@@ -786,7 +843,9 @@ fn throttled_progress(
         let now = std::time::Instant::now();
         if last_sent.is_none_or(|at| now.duration_since(at) >= PROGRESS_EVENT_INTERVAL) {
             last_sent = Some(now);
-            let _ = progress_tx.send(AppEvent::SftpProgress {
+            // 回调运行在非 async 上下文：队列满时快速失败丢弃本条样本。
+            // 这是显式背压——UI 消费停滞时宁可进度刷新变慢，也不阻塞传输线程。
+            let _ = progress_tx.try_send(AppEvent::SftpProgress {
                 tab_id,
                 connection_id,
                 op_id,
@@ -819,20 +878,24 @@ async fn execute_sftp_op(
     match op {
         SftpOperation::List { path } => match client.list(&path).await {
             Ok((path, entries)) => {
-                let _ = event_tx.send(AppEvent::SftpListing {
-                    tab_id,
-                    connection_id,
-                    path,
-                    entries,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::SftpListing {
+                        tab_id,
+                        connection_id,
+                        path,
+                        entries,
+                    })
+                    .await;
             }
             Err(error) => {
-                let _ = event_tx.send(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    })
+                    .await;
             }
         },
         SftpOperation::Download {
@@ -851,7 +914,7 @@ async fn execute_sftp_op(
                 .await;
             let result =
                 verify_transfer_result(&client, result, verify, &local_path, &remote_path).await;
-            finish_sftp(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::Upload {
             local_path,
@@ -869,7 +932,7 @@ async fn execute_sftp_op(
                 .await;
             let result =
                 verify_transfer_result(&client, result, verify, &local_path, &remote_path).await;
-            finish_sftp(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::UploadDir {
             local_path,
@@ -888,7 +951,7 @@ async fn execute_sftp_op(
                     throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
-            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::DownloadDir {
             remote_path,
@@ -907,19 +970,19 @@ async fn execute_sftp_op(
                     throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
-            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::Mkdir { path } => {
             let result = client.create_dir(&path).await;
-            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::Rename { from, to } => {
             let result = client.rename(&from, &to).await;
-            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::Delete { path, is_dir } => {
             let result = client.delete(&path, is_dir).await;
-            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::DeleteMany { targets } => {
             let mut result = Ok(());
@@ -929,28 +992,32 @@ async fn execute_sftp_op(
                     break;
                 }
             }
-            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::Chmod { path, permissions } => {
             let result = client.chmod(&path, permissions).await;
-            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::Stat { path } => match client.stat(&path).await {
             Ok(metadata) => {
-                let _ = event_tx.send(AppEvent::SftpMetadata {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    metadata,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::SftpMetadata {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        metadata,
+                    })
+                    .await;
             }
             Err(error) => {
-                let _ = event_tx.send(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    })
+                    .await;
             }
         },
         SftpOperation::Preview {
@@ -965,32 +1032,38 @@ async fn execute_sftp_op(
                     .await;
             match result {
                 Ok(Ok((bytes, truncated))) => {
-                    let _ = event_tx.send(AppEvent::SftpPreview {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        bytes,
-                        truncated,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpPreview {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            bytes,
+                            truncated,
+                        })
+                        .await;
                 }
                 Ok(Err(error)) => {
-                    let _ = event_tx.send(AppEvent::SftpPreviewFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpPreviewFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error,
+                        })
+                        .await;
                 }
                 Err(_) => {
-                    let _ = event_tx.send(AppEvent::SftpPreviewFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error: AppError::with_detail(
-                            ErrorCode::SftpFailed,
-                            "读取远端预览超时（10 秒）",
-                        ),
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpPreviewFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error: AppError::with_detail(
+                                ErrorCode::SftpFailed,
+                                "读取远端预览超时（10 秒）",
+                            ),
+                        })
+                        .await;
                 }
             }
         }
@@ -1002,32 +1075,38 @@ async fn execute_sftp_op(
                 tokio::time::timeout(TEXT_READ_TIMEOUT, client.read_text(&path, max_bytes)).await;
             match result {
                 Ok(Ok((content, meta))) => {
-                    let _ = event_tx.send(AppEvent::SftpTextRead {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        content,
-                        meta,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpTextRead {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            content,
+                            meta,
+                        })
+                        .await;
                 }
                 Ok(Err(error)) => {
-                    let _ = event_tx.send(AppEvent::SftpTextFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpTextFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error,
+                        })
+                        .await;
                 }
                 Err(_) => {
-                    let _ = event_tx.send(AppEvent::SftpTextFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error: AppError::with_detail(
-                            ErrorCode::SftpFailed,
-                            format!("读取远端文本超时（{} 秒）", TEXT_READ_TIMEOUT.as_secs()),
-                        ),
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpTextFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error: AppError::with_detail(
+                                ErrorCode::SftpFailed,
+                                format!("读取远端文本超时（{} 秒）", TEXT_READ_TIMEOUT.as_secs()),
+                            ),
+                        })
+                        .await;
                 }
             }
         }
@@ -1046,45 +1125,53 @@ async fn execute_sftp_op(
             .await;
             match result {
                 Ok(Ok(meta)) => {
-                    let _ = event_tx.send(AppEvent::SftpTextWritten {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        meta,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpTextWritten {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            meta,
+                        })
+                        .await;
                 }
                 Ok(Err(error)) if error.code == ErrorCode::SftpTextConflict => {
-                    let _ = event_tx.send(AppEvent::SftpTextConflict {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpTextConflict {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error,
+                        })
+                        .await;
                 }
                 Ok(Err(error)) => {
-                    let _ = event_tx.send(AppEvent::SftpTextFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error,
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpTextFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error,
+                        })
+                        .await;
                 }
                 Err(_) => {
-                    let _ = event_tx.send(AppEvent::SftpTextFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error: AppError::with_detail(
-                            ErrorCode::SftpFailed,
-                            format!("回传远端文本超时（{} 秒）", TEXT_WRITE_TIMEOUT.as_secs()),
-                        ),
-                    });
+                    let _ = event_tx
+                        .send_async(AppEvent::SftpTextFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error: AppError::with_detail(
+                                ErrorCode::SftpFailed,
+                                format!("回传远端文本超时（{} 秒）", TEXT_WRITE_TIMEOUT.as_secs()),
+                            ),
+                        })
+                        .await;
                 }
             }
         }
         SftpOperation::Symlink { target, link_path } => {
             let result = client.symlink(&target, &link_path).await;
-            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_none(event_tx, tab_id, connection_id, op_id, result).await;
         }
         SftpOperation::CompareDirs {
             local_path,
@@ -1095,20 +1182,24 @@ async fn execute_sftp_op(
             .await
         {
             Ok(comparison) => {
-                let _ = event_tx.send(AppEvent::SftpDirCompared {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    comparison,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::SftpDirCompared {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        comparison,
+                    })
+                    .await;
             }
             Err(error) => {
-                let _ = event_tx.send(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                });
+                let _ = event_tx
+                    .send_async(AppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    })
+                    .await;
             }
         },
         SftpOperation::SyncDirs {
@@ -1126,7 +1217,7 @@ async fn execute_sftp_op(
                     throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
-            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
+            finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result).await;
         }
     }
 }
@@ -1145,7 +1236,7 @@ async fn verify_transfer_result(
     Ok((transferred, verify))
 }
 
-fn finish_sftp(
+async fn finish_sftp(
     event_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
     connection_id: ConnectionId,
@@ -1154,27 +1245,31 @@ fn finish_sftp(
 ) {
     match result {
         Ok((transferred, verified)) => {
-            let _ = event_tx.send(AppEvent::SftpFinished {
-                tab_id,
-                connection_id,
-                op_id,
-                transferred: Some(transferred),
-                skipped: 0,
-                verified,
-            });
+            let _ = event_tx
+                .send_async(AppEvent::SftpFinished {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    transferred: Some(transferred),
+                    skipped: 0,
+                    verified,
+                })
+                .await;
         }
         Err(error) => {
-            let _ = event_tx.send(AppEvent::SftpFailed {
-                tab_id,
-                connection_id,
-                op_id,
-                error,
-            });
+            let _ = event_tx
+                .send_async(AppEvent::SftpFailed {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    error,
+                })
+                .await;
         }
     }
 }
 
-fn finish_sftp_summary(
+async fn finish_sftp_summary(
     event_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
     connection_id: ConnectionId,
@@ -1183,27 +1278,31 @@ fn finish_sftp_summary(
 ) {
     match result {
         Ok(summary) => {
-            let _ = event_tx.send(AppEvent::SftpFinished {
-                tab_id,
-                connection_id,
-                op_id,
-                transferred: Some(summary.transferred),
-                skipped: summary.skipped,
-                verified: summary.verified,
-            });
+            let _ = event_tx
+                .send_async(AppEvent::SftpFinished {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    transferred: Some(summary.transferred),
+                    skipped: summary.skipped,
+                    verified: summary.verified,
+                })
+                .await;
         }
         Err(error) => {
-            let _ = event_tx.send(AppEvent::SftpFailed {
-                tab_id,
-                connection_id,
-                op_id,
-                error,
-            });
+            let _ = event_tx
+                .send_async(AppEvent::SftpFailed {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    error,
+                })
+                .await;
         }
     }
 }
 
-fn finish_sftp_none(
+async fn finish_sftp_none(
     event_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
     connection_id: ConnectionId,
@@ -1212,22 +1311,26 @@ fn finish_sftp_none(
 ) {
     match result {
         Ok(()) => {
-            let _ = event_tx.send(AppEvent::SftpFinished {
-                tab_id,
-                connection_id,
-                op_id,
-                transferred: None,
-                skipped: 0,
-                verified: false,
-            });
+            let _ = event_tx
+                .send_async(AppEvent::SftpFinished {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    transferred: None,
+                    skipped: 0,
+                    verified: false,
+                })
+                .await;
         }
         Err(error) => {
-            let _ = event_tx.send(AppEvent::SftpFailed {
-                tab_id,
-                connection_id,
-                op_id,
-                error,
-            });
+            let _ = event_tx
+                .send_async(AppEvent::SftpFailed {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    error,
+                })
+                .await;
         }
     }
 }
@@ -1247,8 +1350,10 @@ impl AuthPrompter for UiPrompter {
         prompts: &[PromptInfo],
     ) -> Result<Vec<String>, AppError> {
         let (responder, answers) = flume::bounded(1);
+        // AuthPrompt 是用户必须看到并作答的关键事件，队列满时等待 UI 消费
+        // 而不是丢弃（认证本来就阻塞在此，等待即天然反压）。
         self.event_tx
-            .send(AppEvent::AuthPrompt {
+            .send_async(AppEvent::AuthPrompt {
                 tab_id: self.tab_id,
                 connection_id: self.connection_id,
                 name: name.to_string(),
@@ -1256,6 +1361,7 @@ impl AuthPrompter for UiPrompter {
                 prompts: prompts.to_vec(),
                 responder,
             })
+            .await
             .map_err(|_| {
                 AppError::with_detail(ErrorCode::Cancelled, "application window is closed")
             })?;
