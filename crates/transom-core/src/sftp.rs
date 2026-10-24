@@ -253,6 +253,26 @@ pub enum SftpOperation {
         mode: PreviewMode,
         max_bytes: u64,
     },
+    /// 读取远端文本文件全文，供内置编辑器打开。
+    ///
+    /// 设计原理（Why）：与 `Preview` 一样走独立只读通道，**不进入传输队列**。
+    /// 编辑取文件是应用内部行为，若混进用户队列会带来三类问题：占掉
+    /// `max_concurrent_transfers` 的并发槽拖慢用户真正的批量传输、用户能取消或
+    /// 清空掉在途的编辑下载（表现为编辑器莫名打不开）、以及完成统计把编辑算进
+    /// "传输完成"。`max_bytes` 在读取循环内硬截断，防止目录列表尺寸过期时把
+    /// 超限文件整份拉进内存。
+    ReadText {
+        path: String,
+        max_bytes: u64,
+    },
+    /// 将编辑器缓冲区全文写回远端覆盖，走与 `ReadText` 对称的独立通道。
+    ///
+    /// `content` 为 UTF-8 字节；用 `Vec<u8>` 而非 `String` 是把编码决策留在
+    /// 边界上，命令在通道里只被移动不被复制。
+    WriteText {
+        path: String,
+        content: Vec<u8>,
+    },
     /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径
     Symlink {
         target: String,

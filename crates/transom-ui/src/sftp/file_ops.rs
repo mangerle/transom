@@ -7,9 +7,7 @@ use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
 use std::path::Path;
-use transom_core::{
-    RemoteDeleteTarget, SftpOperation, TabId, TransferDirection, TransferMode, TransferTask,
-};
+use transom_core::{RemoteDeleteTarget, SftpOperation, TabId};
 
 impl AppShell {
     /// 批量删除远端选中项；目录按递归语义删除。
@@ -436,90 +434,6 @@ impl AppShell {
             }
             cx.notify();
         }
-    }
-
-    pub(crate) fn sftp_edit_remote_file(
-        &mut self,
-        tab_id: TabId,
-        remote_path: String,
-        cx: &mut Context<Self>,
-    ) {
-        let verify = self.settings.sftp.verify_after_transfer;
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
-            return;
-        };
-        let Some(panel) = tab.sftp.as_mut() else {
-            return;
-        };
-        let Some(entry) = panel.entries.iter().find(|e| e.path == remote_path) else {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        };
-        if entry.is_dir {
-            return;
-        }
-        let edit_dir = std::env::temp_dir()
-            .join("transom-sftp-edit")
-            .join(tab_id.to_string());
-        if let Err(err) = std::fs::create_dir_all(&edit_dir) {
-            panel.error = Some(format!("创建临时编辑目录失败: {err}"));
-            cx.notify();
-            return;
-        }
-        let sanitized_name = entry.path.trim_start_matches('/').replace('/', "__");
-        let local_path = edit_dir.join(sanitized_name);
-        let mut task = TransferTask::new(
-            TransferDirection::Download,
-            local_path.clone(),
-            entry.path.clone(),
-            Some(entry.size),
-            TransferMode::Overwrite,
-        );
-        task.verify = verify;
-        panel.pending_edit_ops.insert(
-            task.id,
-            (local_path, entry.path.clone(), entry.name.clone()),
-        );
-        panel.queue.push(task);
-        panel.status = Some(format!("正在拉取文件以供编辑: {}", entry.name));
-        cx.notify();
-        self.process_sftp_queue(tab_id, cx);
-    }
-
-    pub(crate) fn save_sftp_editor_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let verify = self.settings.sftp.verify_after_transfer;
-        let Some(modal) = self.sftp_editor_modal.take() else {
-            return;
-        };
-        let content = modal.textarea.read(cx).value().to_string();
-        if let Err(err) = std::fs::write(&modal.local_path, content.as_bytes()) {
-            let mut modal = modal;
-            modal.error = Some(format!("写入临时缓存文件失败: {err}"));
-            let textarea = modal.textarea.clone();
-            self.sftp_editor_modal = Some(modal);
-            textarea.update(cx, |state, cx| state.focus(window, cx));
-            cx.notify();
-            return;
-        }
-        let tab_id = modal.tab_id;
-        if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id)
-            && let Some(panel) = tab.sftp.as_mut()
-        {
-            let mut task = TransferTask::new(
-                TransferDirection::Upload,
-                modal.local_path,
-                modal.remote_path,
-                Some(content.len() as u64),
-                TransferMode::Overwrite,
-            );
-            task.verify = verify;
-            panel.queue.push(task);
-            panel.status = Some(format!("已保存并回传远端文件: {}", modal.file_name));
-        }
-        self.focus_active_sftp_panel(window, cx);
-        cx.notify();
-        self.process_sftp_queue(tab_id, cx);
     }
 }
 

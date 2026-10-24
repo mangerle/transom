@@ -351,6 +351,7 @@ impl AppShell {
                 .send(AppCommand::CloseTab { tab_id: *tab_id });
         }
         self.tabs.retain(|tab| tab.session_id != session_id);
+        self.prune_editor_panels();
         let mut replacement = None;
         for tab_id in removed_tabs {
             if let Some(next) = self.detach_pane_from_group(tab_id) {
@@ -546,6 +547,7 @@ impl AppShell {
         }
         self.tabs.retain(|tab| !panes.contains(&tab.id));
         self.prune_pane_split_states();
+        self.prune_editor_panels();
 
         let active_removed = self.active_tab.is_some_and(|id| panes.contains(&id));
         if active_removed {
@@ -586,6 +588,7 @@ impl AppShell {
             .command_tx
             .send(AppCommand::CloseTab { tab_id });
         self.tabs.retain(|tab| tab.id != tab_id);
+        self.prune_editor_panels();
         let replacement = self.detach_pane_from_group(tab_id);
         if let Some(next) = replacement {
             self.activate_tab(next, window, cx);
@@ -597,6 +600,7 @@ impl AppShell {
     pub(crate) fn remove_tab(&mut self, tab_id: TabId) {
         let was_active = self.active_tab == Some(tab_id);
         self.tabs.retain(|tab| tab.id != tab_id);
+        self.prune_editor_panels();
         let replacement = self.detach_pane_from_group(tab_id);
         if was_active {
             self.active_tab = replacement.or_else(|| self.groups.first().map(|g| g.active_pane));

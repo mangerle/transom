@@ -687,6 +687,17 @@ async fn run_controller(
 /// 否则一次卡顿会让预览通道长期占用内存并阻塞同一会话上的后续预览。
 const PREVIEW_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// 编辑器读取远端文本的最长等待时间。
+///
+/// 与预览不同，编辑是用户主动发起且界面正在等的操作，超时过短会把慢链路上一次
+/// 正常读取误判为失败。按内置编辑器的 8 MiB 上限与约 1 Mbps 的慢链路估算需要
+/// 60 秒以上，留一倍余量取 2 分钟：仍能兜住"对端挂起导致协程永久泄漏"，
+/// 又不至于让用户对着读取中无限等待。
+const TEXT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// 编辑器回传文本的最长等待时间。写入需要远端落盘并回读确认，比读取更慢，取 5 分钟。
+const TEXT_WRITE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
 async fn execute_sftp_op(
     event_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
@@ -904,6 +915,77 @@ async fn execute_sftp_op(
                         error: AppError::with_detail(
                             ErrorCode::SftpFailed,
                             "读取远端预览超时（10 秒）",
+                        ),
+                    });
+                }
+            }
+        }
+        SftpOperation::ReadText { path, max_bytes } => {
+            // 编辑器取全文：与预览同为独立通道，不产生进度事件、不进传输队列。
+            // 超时按"上限字节数 + 慢链路"放宽，既要能兜住永久挂起的任务，
+            // 也不能让一次正常的慢速读取被误判失败。
+            let result =
+                tokio::time::timeout(TEXT_READ_TIMEOUT, client.read_text(&path, max_bytes)).await;
+            match result {
+                Ok(Ok(content)) => {
+                    let _ = event_tx.send(AppEvent::SftpTextRead {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        content,
+                    });
+                }
+                Ok(Err(error)) => {
+                    let _ = event_tx.send(AppEvent::SftpTextFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    });
+                }
+                Err(_) => {
+                    let _ = event_tx.send(AppEvent::SftpTextFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error: AppError::with_detail(
+                            ErrorCode::SftpFailed,
+                            format!("读取远端文本超时（{} 秒）", TEXT_READ_TIMEOUT.as_secs()),
+                        ),
+                    });
+                }
+            }
+        }
+        SftpOperation::WriteText { path, content } => {
+            // 回传比读取更慢（写要落盘并等待远端确认），给更宽的超时；
+            // 失败与超时统一回抛给编辑面板就地显示，不影响队列与状态栏。
+            let result =
+                tokio::time::timeout(TEXT_WRITE_TIMEOUT, client.write_text(&path, &content)).await;
+            match result {
+                Ok(Ok(size)) => {
+                    let _ = event_tx.send(AppEvent::SftpTextWritten {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        size,
+                    });
+                }
+                Ok(Err(error)) => {
+                    let _ = event_tx.send(AppEvent::SftpTextFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    });
+                }
+                Err(_) => {
+                    let _ = event_tx.send(AppEvent::SftpTextFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error: AppError::with_detail(
+                            ErrorCode::SftpFailed,
+                            format!("回传远端文本超时（{} 秒）", TEXT_WRITE_TIMEOUT.as_secs()),
                         ),
                     });
                 }

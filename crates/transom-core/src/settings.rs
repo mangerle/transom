@@ -236,6 +236,15 @@ pub struct SftpSettings {
     /// 同时执行的传输任务数上限，默认 3。
     #[serde(default = "default_max_concurrent_transfers")]
     pub max_concurrent_transfers: usize,
+    /// 内置编辑器可打开的单文件字节上限，默认 8 MiB。
+    ///
+    /// 设计原理（Why）：编辑远程文本走「全量下载到临时文件 → 读入缓冲区 →
+    /// 全量回传覆盖」，文件大小直接决定下载耗时、Rope 常驻内存与高亮重绘开销；
+    /// 双击一个几百 MB 的日志会把整份内容拉进界面，因此在打开前按目录列表已知
+    /// 的尺寸拦截，并提示改用远端编辑器。超限属于误操作而非故障，故不进设置页，
+    /// 由 config.toml 单点承载，需要放宽时改一处即可。
+    #[serde(default = "default_edit_max_bytes")]
+    pub edit_max_bytes: u64,
 }
 
 impl Default for SftpSettings {
@@ -244,12 +253,17 @@ impl Default for SftpSettings {
             transfer_filter: default_transfer_filter(),
             verify_after_transfer: false,
             max_concurrent_transfers: default_max_concurrent_transfers(),
+            edit_max_bytes: default_edit_max_bytes(),
         }
     }
 }
 
 fn default_max_concurrent_transfers() -> usize {
     3
+}
+
+fn default_edit_max_bytes() -> u64 {
+    8 * 1024 * 1024
 }
 
 fn default_transfer_filter() -> String {

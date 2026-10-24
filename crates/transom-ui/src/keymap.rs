@@ -35,13 +35,16 @@ actions!(
         FocusPaneDown,
         FocusSftpFilter,
         ToggleSftpHidden,
-        DeleteSftpSelection
+        DeleteSftpSelection,
+        SaveEditorFile
     ]
 );
 
 pub const WORKSPACE_CONTEXT: &str = "Workspace";
 pub const OVERLAY_CONTEXT: &str = "Overlay";
 pub const SFTP_CONTEXT: &str = "SftpPanel";
+/// 内置编辑器悬浮面板的按键上下文。
+pub const EDITOR_PANEL_CONTEXT: &str = "EditorPanel";
 const WORKSPACE_ONLY: &str = "Workspace && !Overlay";
 /// SFTP 面板内需要独占按键的场景：排除文本输入框（`Input`），
 /// 保证在路径/过滤框中按 Delete 时正常编辑文本而不是触发删除文件。
@@ -242,6 +245,11 @@ pub(crate) fn bindings(custom: &ShortcutSettings) -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
         KeyBinding::new("secondary-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
         KeyBinding::new("delete", DeleteSftpSelection, Some(SFTP_ACTION_CONTEXT)),
+        // 保存限定在编辑面板上下文内：应用整体刻意不占用 Ctrl+字母，
+        // 那些控制码属于终端；只有焦点在编辑器面板里时这条键位才生效。
+        // 用 secondary 而非 $app，后者在非 macOS 展开成 Ctrl+Shift，与
+        // 面板外已占用的 `$app-s`（显示/隐藏 SFTP 面板）撞车。
+        KeyBinding::new("secondary-s", SaveEditorFile, Some(EDITOR_PANEL_CONTEXT)),
     ]);
     bindings
 }

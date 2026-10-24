@@ -1,6 +1,9 @@
-//! SFTP 双栏文件管理器、传输队列与权限/编辑模态弹窗模块。
+//! SFTP 双栏文件管理器、传输队列、内置编辑器悬浮面板与权限/属性模态弹窗模块。
 
 mod chmod;
+mod editor_ops;
+mod editor_panel;
+mod editor_view;
 mod file_ops;
 mod filter;
 mod local_pane_view;
@@ -17,6 +20,7 @@ mod status;
 mod sync_actions;
 mod sync_modal;
 
+pub(crate) use self::editor_panel::EditorPanelState;
 pub(crate) use self::preview::SftpPreviewResponse;
 use self::preview::SftpPreviewState;
 use crate::palette::Palette;
@@ -25,7 +29,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::{Icon, VirtualListScrollHandle};
 use gpui_kit::*;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use transom_core::{
     ConnectionId, DirDiffEntry, RemoteFile, RemoteMetadata, TabId, TransferId, TransferTask,
@@ -37,15 +41,6 @@ pub(crate) struct LocalFileEntry {
     pub(crate) path: PathBuf,
     pub(crate) is_dir: bool,
     pub(crate) size: u64,
-}
-
-pub(crate) struct SftpEditorModalState {
-    pub(crate) tab_id: TabId,
-    pub(crate) local_path: PathBuf,
-    pub(crate) remote_path: String,
-    pub(crate) file_name: String,
-    pub(crate) textarea: Entity<TextareaState>,
-    pub(crate) error: Option<String>,
 }
 
 pub(crate) struct SftpChmodModalState {
@@ -152,7 +147,6 @@ pub(crate) struct SftpPanelState {
     pub(crate) status: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) loading: bool,
-    pub(crate) pending_edit_ops: HashMap<TransferId, (PathBuf, String, String)>,
     /// 瞬时状态消息的过期任务；替换消息时旧任务被取消。
     pub(super) status_task: Option<Task<()>>,
     /// 当前悬停预览；同一时刻只保留一个目标，切换目标或离开行时整体释放。

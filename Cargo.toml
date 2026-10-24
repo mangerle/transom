@@ -15,7 +15,9 @@ edition = "2024"
 rust-version = "1.92"
 
 [workspace.dependencies]
-gpui-kit = "0.8.0"
+# syntect 特性带来 gpui-component 的语法高亮后端（语法集由 two_face 随编译内置，
+# 无需注册资产）；编辑远程配置文件需要它，未开启时 EditorState 只会退化为纯文本着色。
+gpui-kit = { version = "0.8.0", features = ["syntect"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }

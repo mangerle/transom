@@ -74,62 +74,6 @@ impl AppShell {
         Self::overlay(dialog, p)
     }
 
-    pub(crate) fn render_sftp_editor_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.sftp_editor_modal.as_ref() else {
-            return div().into_any_element();
-        };
-        let file_name = modal.file_name.clone();
-        let remote_path = modal.remote_path.clone();
-        let textarea = modal.textarea.clone();
-        let error = modal.error.clone();
-
-        let content = v_flex()
-            .gap_3()
-            .child(Textarea::new(&textarea).h(px(380.0)).w_full())
-            .when_some(error, |this, err| {
-                this.child(div().text_xs().text_color(p.danger).child(err))
-            });
-
-        let footer = h_flex()
-            .gap_2()
-            .child(
-                Button::new("cancel-sftp-editor")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_editor_modal = None;
-                        this.focus_active_sftp_panel(window, cx);
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("save-sftp-editor")
-                    .primary()
-                    .icon(IconName::Check)
-                    .label("保存并上传")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.save_sftp_editor_modal(window, cx);
-                    })),
-            );
-
-        let dialog = Self::dialog_frame(
-            "sftp-editor-modal",
-            format!("编辑远程文件: {file_name}"),
-            Some(format!("远端路径: {remote_path}（保存后自动回传覆盖）")),
-            content,
-            Some(footer),
-            px(720.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
-    }
-
     pub(crate) fn render_sftp_chmod_modal(
         &mut self,
         _window: &mut Window,

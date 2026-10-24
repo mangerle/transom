@@ -237,6 +237,7 @@ impl AppShell {
                                                 this.sftp_edit_remote_file(
                                                     tab_id,
                                                     entry_path.clone(),
+                                                    window,
                                                     cx,
                                                 );
                                             }
@@ -382,11 +383,12 @@ impl AppShell {
                                                 .icon(IconName::FilePen)
                                                 .on_click({
                                                     let app = app.clone();
-                                                    move |_, _, cx| {
+                                                    move |_, window, cx| {
                                                         app.update(cx, |this, cx| {
                                                             this.sftp_edit_remote_file(
                                                                 tab_id,
                                                                 p_edit.clone(),
+                                                                window,
                                                                 cx,
                                                             );
                                                         });
@@ -658,7 +660,7 @@ impl AppShell {
                                     .xsmall()
                                     .icon(IconName::FilePen)
                                     .tooltip("编辑")
-                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                    .on_click(cx.listener(move |this, _, window, cx| {
                                         let selected = this
                                             .tabs
                                             .iter()
@@ -666,7 +668,12 @@ impl AppShell {
                                             .and_then(|t| t.sftp.as_ref())
                                             .and_then(|p| p.selected.clone());
                                         if let Some(remote_path) = selected {
-                                            this.sftp_edit_remote_file(tab_id, remote_path, cx);
+                                            this.sftp_edit_remote_file(
+                                                tab_id,
+                                                remote_path,
+                                                window,
+                                                cx,
+                                            );
                                         }
                                     })),
                             )

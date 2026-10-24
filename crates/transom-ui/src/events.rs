@@ -3,10 +3,10 @@
 use crate::app::{AppShell, AuthPromptState, TabStatus};
 use crate::palette::localized_error;
 use crate::sftp::{
-    SftpEditorModalState, SftpPreviewResponse, SftpPropertiesModalState, format_size,
-    remote_file_properties, send_desktop_notification,
+    SftpPreviewResponse, SftpPropertiesModalState, format_size, remote_file_properties,
+    send_desktop_notification,
 };
-use gpui_kit::component::input::{InputState, TextareaState};
+use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::{AppEvent, PromptKind, SecretKind, TabId, TransferDirection, TransferStatus};
@@ -219,12 +219,8 @@ impl AppShell {
             } => {
                 let mut refresh = None;
                 let mut refresh_local = false;
-                let mut open_editor_info = None;
                 let mut notify_info: Option<(TransferDirection, String, u64)> = None;
                 if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
-                    if let Some(info) = panel.pending_edit_ops.remove(&op_id) {
-                        open_editor_info = Some(info);
-                    }
                     let mut completed_transfer = false;
                     if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
                         completed_transfer = true;
@@ -237,14 +233,12 @@ impl AppShell {
                         {
                             refresh_local = true;
                         }
-                        if open_editor_info.is_none() {
-                            let file_name = task
-                                .local_path
-                                .file_name()
-                                .map(|n| n.to_string_lossy().to_string())
-                                .unwrap_or_else(|| task.remote_path.clone());
-                            notify_info = Some((task.direction, file_name, task.transferred));
-                        }
+                        let file_name = task
+                            .local_path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| task.remote_path.clone());
+                        notify_info = Some((task.direction, file_name, task.transferred));
                     }
                     if completed_transfer {
                         panel.active_transfers.remove(&op_id);
@@ -299,30 +293,6 @@ impl AppShell {
                         &format!("Transom SFTP {action}"),
                         &format!("{file_name} ({})", format_size(bytes)),
                     );
-                }
-                if let Some((local_path, remote_path, file_name)) = open_editor_info {
-                    match std::fs::read_to_string(&local_path) {
-                        Ok(content) => {
-                            let textarea =
-                                cx.new(|cx| TextareaState::new(window, cx).default_value(content));
-                            textarea.update(cx, |state, cx| state.focus(window, cx));
-                            self.sftp_editor_modal = Some(SftpEditorModalState {
-                                tab_id,
-                                local_path,
-                                remote_path,
-                                file_name,
-                                textarea,
-                                error: None,
-                            });
-                        }
-                        Err(err) => {
-                            if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
-                                panel.error = Some(format!(
-                                    "读取文本内容失败（可能非 UTF-8 文本文件）: {err}"
-                                ));
-                            }
-                        }
-                    }
                 }
                 if refresh_local {
                     self.sftp_local_refresh(tab_id, cx);
@@ -384,6 +354,16 @@ impl AppShell {
                     cx,
                 );
             }
+            AppEvent::SftpTextRead { op_id, content, .. } => {
+                self.apply_editor_text(op_id, content, window, cx);
+            }
+            AppEvent::SftpTextWritten { op_id, size, .. } => {
+                self.note_editor_text_written(op_id, size, cx);
+            }
+            AppEvent::SftpTextFailed { op_id, error, .. } => {
+                // 编辑读写失败只回到面板内显示，不写远端栏错误、不进传输队列统计。
+                self.note_editor_text_failed(op_id, localized_error(&error), cx);
+            }
             AppEvent::SftpDirCompared {
                 tab_id: _,
                 connection_id,
@@ -422,7 +402,6 @@ impl AppShell {
                 }
                 let mut failed_notify: Option<(String, String)> = None;
                 if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
-                    panel.pending_edit_ops.remove(&op_id);
                     let err_msg = localized_error(&error);
                     let mut failed_transfer = false;
                     if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {

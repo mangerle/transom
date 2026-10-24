@@ -178,6 +178,117 @@ impl SftpClient {
         Ok((buffer, truncated))
     }
 
+    /// 读取远端文本文件全文，供内置编辑器打开。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：编辑器要拿到整份内容才能就地修改并整体写回。走传输队列会让一次
+    ///   应用内部的取文件动作占掉用户的并发传输槽、暴露给队列的取消与清空，因此与
+    ///   `read_preview` 同形，做成独立只读通道。
+    /// - 核心优势：`max_bytes` 在读取循环内二次设限。进入前虽然已按目录列表的尺寸
+    ///   拦过一次，但列表可能过期（文件在列出后变大），循环内设限才真正保证超限内容
+    ///   不会被整份吸进内存；UTF-8 校验在边界完成，返回给 UI 的已是合法 `String`，
+    ///   上层不必再反复判编码。
+    /// - 代价与局限：无进度回调、无校验和，适合上限内的配置与日志片段；更大的文件
+    ///   应当走传输队列或在远端编辑。
+    ///
+    /// # Errors
+    /// 路径不存在、权限不足、会话中断、超过 `max_bytes`，或内容不是 UTF-8 时
+    /// 返回 `ErrorCode::SftpFailed`。
+    pub async fn read_text(&self, path: &str, max_bytes: u64) -> Result<String, AppError> {
+        let limit = usize::try_from(max_bytes).unwrap_or(usize::MAX);
+        let mut remote = self.session.open(path).await.map_err(sftp_error)?;
+        let total = remote
+            .metadata()
+            .await
+            .ok()
+            .and_then(|metadata| metadata.size);
+        if let Some(total) = total
+            && total > max_bytes
+        {
+            let _ = remote.close().await;
+            return Err(AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("文件 {path} 大小 {total} 字节，超过编辑器上限 {max_bytes} 字节"),
+            ));
+        }
+
+        let capacity = total
+            .map(|size| size.min(max_bytes))
+            .and_then(|size| usize::try_from(size).ok())
+            .unwrap_or(0);
+        let mut buffer = Vec::with_capacity(capacity);
+        let mut chunk = vec![0u8; TRANSFER_CHUNK];
+        loop {
+            let count = remote.read(&mut chunk).await.map_err(sftp_io_error)?;
+            if count == 0 {
+                break;
+            }
+            if buffer.len().saturating_add(count) > limit {
+                let _ = remote.close().await;
+                return Err(AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("文件 {path} 实际大小超过编辑器上限 {max_bytes} 字节，已放弃读取"),
+                ));
+            }
+            buffer.extend_from_slice(&chunk[..count]);
+        }
+        let _ = remote.close().await;
+
+        String::from_utf8(buffer).map_err(|_| {
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("文件 {path} 不是 UTF-8 文本（可能是二进制或 GBK 等编码），内置编辑器无法安全回写"),
+            )
+        })
+    }
+
+    /// 将整份文本内容写回远端覆盖，供内置编辑器保存使用；返回远端确认后的字节数。
+    ///
+    /// 设计原理（Why）：
+    /// - 必须带 TRUNCATE 打开：SFTP 的写入只覆盖前 N 字节，若编辑后内容比原文件短，
+    ///   不截断就会在远端留下旧文件的尾巴，得到一个"新内容 + 残留旧尾巴"的脏文件，
+    ///   而这恰好是改配置最常见的操作（删掉几行再保存）。
+    /// - 写完后重新 stat 比对字节数：截断与部分写是唯一能被廉价发现的失败形态；
+    ///   校验和要把整份内容重读一遍，对几百 KB 的配置编辑不划算。
+    /// - 代价与局限：非原子操作，写入过程中断会在远端留下半份文件。要做原子替换需
+    ///   先写临时名再 rename，而 rename 会改变 inode 并可能破坏正在被进程读取的配置
+    ///   文件，属于需要单独权衡的后续改动。
+    ///
+    /// # Errors
+    /// 打开、写入、刷新失败，或写回后远端大小与提交字节数不一致时返回
+    /// `ErrorCode::SftpFailed`。
+    pub async fn write_text(&self, path: &str, content: &[u8]) -> Result<u64, AppError> {
+        let mut remote = self
+            .session
+            .open_with_flags(
+                path,
+                russh_sftp::protocol::OpenFlags::WRITE
+                    | russh_sftp::protocol::OpenFlags::CREATE
+                    | russh_sftp::protocol::OpenFlags::TRUNCATE,
+            )
+            .await
+            .map_err(sftp_error)?;
+        remote.write_all(content).await.map_err(sftp_io_error)?;
+        remote.flush().await.map_err(sftp_io_error)?;
+        let expected = content.len() as u64;
+        let _ = remote.close().await;
+
+        let metadata = self.session.metadata(path).await.map_err(sftp_error)?;
+        let written = metadata.size.ok_or_else(|| {
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("写回后无法读取远端文件 {path} 的大小，无法确认写入结果"),
+            )
+        })?;
+        if written != expected {
+            return Err(AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("远端确认 {written} 字节，提交内容 {expected} 字节，写入可能被中断"),
+            ));
+        }
+        Ok(written)
+    }
+
     pub async fn download<F>(
         &self,
         remote_path: &str,

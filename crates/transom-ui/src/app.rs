@@ -8,7 +8,7 @@ use crate::palette::{Palette, localized_error};
 use crate::pane_tree::LayoutNode;
 use crate::session_form::{AuthChoice, SessionForm};
 use crate::sftp::{
-    SftpChmodModalState, SftpEditorModalState, SftpFilterModalState, SftpInputModalState,
+    EditorPanelState, SftpChmodModalState, SftpFilterModalState, SftpInputModalState,
     SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
 };
 use crate::snippets::SnippetEditor;
@@ -282,7 +282,8 @@ pub struct AppShell {
     pub(crate) settings_notify_threshold: Entity<InputState>,
     pub(crate) settings_highlight_keywords: Entity<InputState>,
     pub(crate) confirm_forward_any: Option<PendingForwardConfirm>,
-    pub(crate) sftp_editor_modal: Option<SftpEditorModalState>,
+    /// 已打开的远端文本编辑面板，Vec 顺序即叠放次序，末尾为最上层。
+    pub(crate) editor_panels: Vec<EditorPanelState>,
     pub(crate) sftp_chmod_modal: Option<SftpChmodModalState>,
     pub(crate) sftp_input_modal: Option<SftpInputModalState>,
     pub(crate) sftp_properties_modal: Option<SftpPropertiesModalState>,
@@ -441,7 +442,7 @@ impl AppShell {
             settings_notify_threshold,
             settings_highlight_keywords,
             confirm_forward_any: None,
-            sftp_editor_modal: None,
+            editor_panels: Vec::new(),
             sftp_chmod_modal: None,
             sftp_input_modal: None,
             sftp_properties_modal: None,
@@ -632,9 +633,6 @@ impl AppShell {
         }
         if self.key_wizard.is_some() {
             overlays.push(self.render_key_wizard(window, cx, &p));
-        }
-        if self.sftp_editor_modal.is_some() {
-            overlays.push(self.render_sftp_editor_modal(window, cx, &p));
         }
         if self.sftp_chmod_modal.is_some() {
             overlays.push(self.render_sftp_chmod_modal(window, cx, &p));

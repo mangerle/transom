@@ -85,6 +85,9 @@ impl Render for AppShell {
             .as_ref()
             .map(|_| self.render_error_banner(&p, cx));
         let status_bar = (!self.immersive).then(|| self.render_status_bar(&p));
+        // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现
+        // 弹窗在面板下面、用户点不到确认按钮的层序错误。
+        let editor_layers = self.render_editor_panels(window, &p, cx);
         let overlays = self.render_overlays(window, cx);
 
         let mut root = div()
@@ -111,6 +114,16 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_focus_pane_right))
             .on_action(cx.listener(Self::on_focus_pane_up))
             .on_action(cx.listener(Self::on_focus_pane_down))
+            // 拖拽悬浮面板时指针会移出面板，位移与收尾由根元素的监听接管。
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, cx| {
+                this.drag_editor_panels(event.position, window.viewport_size(), cx);
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.end_editor_panel_drag(cx);
+                }),
+            )
             .relative()
             .size_full()
             .flex()
@@ -130,6 +143,7 @@ impl Render for AppShell {
         if let Some(status_bar) = status_bar {
             root = root.child(status_bar);
         }
+        root = root.children(editor_layers);
         root.children(overlays)
     }
 }

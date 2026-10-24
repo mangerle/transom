@@ -117,6 +117,27 @@ pub enum AppEvent {
         op_id: TransferId,
         error: AppError,
     },
+    /// 编辑器读取远端文本完成。
+    SftpTextRead {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        content: String,
+    },
+    /// 编辑器回传远端文本完成；`size` 为写完后重新 stat 到的远端字节数。
+    SftpTextWritten {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        size: u64,
+    },
+    /// 编辑器读写失败；与 `SftpFailed` 分开，编辑面板的错误不进传输队列与状态栏。
+    SftpTextFailed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        error: AppError,
+    },
     SftpDirCompared {
         tab_id: TabId,
         connection_id: ConnectionId,

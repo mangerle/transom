@@ -10,7 +10,7 @@ use crate::palette::sftp_text_input;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 use transom_core::{AppCommand, Connection, ConnectionId, SftpOperation, TabId, TransferId};
 
@@ -140,7 +140,6 @@ impl AppShell {
             status: None,
             error: None,
             loading: true,
-            pending_edit_ops: HashMap::new(),
             status_task: None,
             hover_preview: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
