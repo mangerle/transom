@@ -266,6 +266,53 @@ pub(crate) struct HostKeyConfirmState {
     pub(crate) responder: flume::Sender<bool>,
 }
 
+/// known_hosts 管理弹窗的聚合状态（开关、记录与搜索框）。
+///
+/// 设计原理（Why）：AppShell 此前把十余种模态的开关与状态平铺成 50+ 字段，
+/// 每加一个功能就加几个 Option；按域聚合成子结构后，字段数与心智负担
+/// 随域隔离，模态之间互不可见彼此内部状态。
+pub(crate) struct KnownHostsModalState {
+    pub(crate) open: bool,
+    pub(crate) records: Vec<HostKeyRecord>,
+    pub(crate) search: Entity<InputState>,
+}
+
+/// 设置弹窗的聚合状态：开关、密钥向导与全部输入框实体。
+pub(crate) struct SettingsModalState {
+    pub(crate) open: bool,
+    pub(crate) key_wizard: Option<KeyWizardState>,
+    pub(crate) font_family: Entity<InputState>,
+    pub(crate) cjk_font: Entity<InputState>,
+    pub(crate) font_size: Entity<InputState>,
+    pub(crate) line_height: Entity<InputState>,
+    pub(crate) scrollback: Entity<InputState>,
+    pub(crate) word_separators: Entity<InputState>,
+    pub(crate) notify_threshold: Entity<InputState>,
+    pub(crate) highlight_keywords: Entity<InputState>,
+}
+
+/// SFTP 五类弹窗（权限、输入、属性、过滤、同步）的聚合状态。
+pub(crate) struct SftpModals {
+    pub(crate) chmod: Option<SftpChmodModalState>,
+    pub(crate) input: Option<SftpInputModalState>,
+    pub(crate) properties: Option<SftpPropertiesModalState>,
+    pub(crate) filter: Option<SftpFilterModalState>,
+    pub(crate) sync: Option<SftpSyncModalState>,
+}
+
+/// 快捷命令面板的聚合状态：卡片展开开关与新增/编辑小弹窗。
+pub(crate) struct SnippetPanelState {
+    pub(crate) open: bool,
+    pub(crate) form: Option<SnippetFormState>,
+}
+
+/// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
+pub(crate) struct ShortcutRecordingState {
+    pub(crate) filter: Arc<parking_lot::RwLock<Vec<KeybindingKeystroke>>>,
+    pub(crate) applied_keys: Vec<String>,
+    pub(crate) capture: Option<ShortcutCapture>,
+}
+
 pub struct AppShell {
     pub(crate) services: UiServices,
     pub(crate) settings: AppSettings,
@@ -294,35 +341,21 @@ pub struct AppShell {
     pub(crate) host_key_confirm: Option<HostKeyConfirmState>,
     /// 认证成功后才落盘的凭据，见 [`PendingCredential`]。
     pub(crate) pending_credential: Option<PendingCredential>,
-    pub(crate) show_known_hosts_modal: bool,
-    pub(crate) known_hosts_records: Vec<HostKeyRecord>,
-    pub(crate) known_hosts_search: Entity<InputState>,
+    /// known_hosts 管理弹窗的聚合状态（开关、记录与搜索框）。
+    pub(crate) known_hosts_modal: KnownHostsModalState,
     pub(crate) show_quick_open: bool,
     pub(crate) quick_open_state: Entity<CommandState>,
-    pub(crate) show_settings_modal: bool,
-    pub(crate) key_wizard: Option<KeyWizardState>,
-    pub(crate) settings_font_family: Entity<InputState>,
-    pub(crate) settings_cjk_font: Entity<InputState>,
-    pub(crate) settings_font_size: Entity<InputState>,
-    pub(crate) settings_line_height: Entity<InputState>,
-    pub(crate) settings_scrollback: Entity<InputState>,
-    pub(crate) settings_word_separators: Entity<InputState>,
-    pub(crate) settings_notify_threshold: Entity<InputState>,
-    pub(crate) settings_highlight_keywords: Entity<InputState>,
+    /// 设置弹窗的聚合状态：开关、密钥向导与全部输入框实体。
+    pub(crate) settings_modal: SettingsModalState,
     pub(crate) confirm_forward_any: Option<PendingForwardConfirm>,
     /// 已打开的远端文本编辑面板，Vec 顺序即叠放次序，末尾为最上层。
     pub(crate) editor_panels: Vec<EditorPanelState>,
     /// 被脏编辑面板拦下的标签/会话关闭意图；面板全部处理完毕后续行执行。
     pub(crate) pending_editor_close: Option<PendingEditorClose>,
-    pub(crate) sftp_chmod_modal: Option<SftpChmodModalState>,
-    pub(crate) sftp_input_modal: Option<SftpInputModalState>,
-    pub(crate) sftp_properties_modal: Option<SftpPropertiesModalState>,
-    pub(crate) sftp_filter_modal: Option<SftpFilterModalState>,
-    pub(crate) sftp_sync_modal: Option<SftpSyncModalState>,
-    /// 快捷命令卡片是否展开（运行期状态，与侧边栏、沉浸模式同口径）。
-    pub(crate) snippets_open: bool,
-    /// 快捷命令新增/编辑小弹窗。
-    pub(crate) snippet_form: Option<SnippetFormState>,
+    /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
+    pub(crate) sftp_modals: SftpModals,
+    /// 快捷命令面板的聚合状态：卡片展开开关与新增/编辑小弹窗。
+    pub(crate) snippet_panel: SnippetPanelState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
     pub(crate) status: Option<String>,
     /// 全局错误缓冲：渲染时取走并转成应用内通知，界面不再有独立错误横幅。
@@ -330,11 +363,8 @@ pub struct AppShell {
     pub(crate) sidebar_visible: bool,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
     pub(crate) immersive: bool,
-    /// 当前生效的应用快捷键，终端据此截留按键而不是编码为控制字符。
-    pub(crate) shortcut_filter: Arc<parking_lot::RwLock<Vec<KeybindingKeystroke>>>,
-    /// 上次应用到键位表的有效键位，改键时用于抑制旧绑定。
-    pub(crate) applied_shortcut_keys: Vec<String>,
-    pub(crate) shortcut_capture: Option<ShortcutCapture>,
+    /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
+    pub(crate) shortcut_recording: ShortcutRecordingState,
     /// 侧边栏多选模式与已选会话。
     pub(crate) selection_mode: bool,
     pub(crate) selected_sessions: HashSet<SessionId>,
@@ -467,38 +497,48 @@ impl AppShell {
             auth_prompt: None,
             host_key_confirm: None,
             pending_credential: None,
-            show_known_hosts_modal: false,
-            known_hosts_records,
-            known_hosts_search,
+            known_hosts_modal: KnownHostsModalState {
+                open: false,
+                records: known_hosts_records,
+                search: known_hosts_search,
+            },
             show_quick_open: false,
             quick_open_state,
-            show_settings_modal: false,
-            key_wizard: None,
-            settings_font_family,
-            settings_cjk_font,
-            settings_font_size,
-            settings_line_height,
-            settings_scrollback,
-            settings_word_separators,
-            settings_notify_threshold,
-            settings_highlight_keywords,
+            settings_modal: SettingsModalState {
+                open: false,
+                key_wizard: None,
+                font_family: settings_font_family,
+                cjk_font: settings_cjk_font,
+                font_size: settings_font_size,
+                line_height: settings_line_height,
+                scrollback: settings_scrollback,
+                word_separators: settings_word_separators,
+                notify_threshold: settings_notify_threshold,
+                highlight_keywords: settings_highlight_keywords,
+            },
             confirm_forward_any: None,
             editor_panels: Vec::new(),
             pending_editor_close: None,
-            sftp_chmod_modal: None,
-            sftp_input_modal: None,
-            sftp_properties_modal: None,
-            sftp_filter_modal: None,
-            sftp_sync_modal: None,
-            snippets_open: false,
-            snippet_form: None,
+            sftp_modals: SftpModals {
+                chmod: None,
+                input: None,
+                properties: None,
+                filter: None,
+                sync: None,
+            },
+            snippet_panel: SnippetPanelState {
+                open: false,
+                form: None,
+            },
             status: None,
             error,
             sidebar_visible: true,
             immersive: false,
-            shortcut_filter,
-            applied_shortcut_keys,
-            shortcut_capture: None,
+            shortcut_recording: ShortcutRecordingState {
+                filter: shortcut_filter,
+                applied_keys: applied_shortcut_keys,
+                capture: None,
+            },
             selection_mode: false,
             tree_selection: None,
             selected_sessions: HashSet::with_capacity(8),
@@ -622,7 +662,7 @@ impl AppShell {
         window.toggle_fullscreen();
         if self.immersive {
             // 沉浸模式没有底栏，快捷命令卡片失去锚点，先收起再进入。
-            self.snippets_open = false;
+            self.snippet_panel.open = false;
         }
         if self.immersive
             && let Some(focus_handle) = self
@@ -659,7 +699,7 @@ impl AppShell {
         if self.host_key_confirm.is_some() {
             overlays.push(self.render_host_key_confirm(window, cx, &p));
         }
-        if self.show_known_hosts_modal {
+        if self.known_hosts_modal.open {
             overlays.push(self.render_known_hosts_modal(window, cx, &p));
         }
         if self.confirm_forward_any.is_some() {
@@ -668,10 +708,10 @@ impl AppShell {
         if self.show_quick_open {
             overlays.push(self.render_quick_open_modal(window, cx, &p));
         }
-        if self.show_settings_modal {
+        if self.settings_modal.open {
             overlays.push(self.render_settings_modal(window, cx, &p));
         }
-        if self.shortcut_capture.is_some() {
+        if self.shortcut_recording.capture.is_some() {
             overlays.push(self.render_shortcut_capture(cx, &p));
         }
         if self.batch_edit.is_some() {
@@ -680,25 +720,25 @@ impl AppShell {
         if self.backup_prompt.is_some() {
             overlays.push(self.render_backup_prompt(window, cx, &p));
         }
-        if self.key_wizard.is_some() {
+        if self.settings_modal.key_wizard.is_some() {
             overlays.push(self.render_key_wizard(window, cx, &p));
         }
-        if self.sftp_chmod_modal.is_some() {
+        if self.sftp_modals.chmod.is_some() {
             overlays.push(self.render_sftp_chmod_modal(window, cx, &p));
         }
-        if self.sftp_input_modal.is_some() {
+        if self.sftp_modals.input.is_some() {
             overlays.push(self.render_sftp_input_modal(window, cx, &p));
         }
-        if self.sftp_properties_modal.is_some() {
+        if self.sftp_modals.properties.is_some() {
             overlays.push(self.render_sftp_properties_modal(window, cx, &p));
         }
-        if self.sftp_filter_modal.is_some() {
+        if self.sftp_modals.filter.is_some() {
             overlays.push(self.render_sftp_filter_modal(window, cx, &p));
         }
-        if self.sftp_sync_modal.is_some() {
+        if self.sftp_modals.sync.is_some() {
             overlays.push(self.render_sftp_sync_modal(window, cx, &p));
         }
-        if self.snippet_form.is_some() {
+        if self.snippet_panel.form.is_some() {
             overlays.push(self.render_snippet_form(&p, cx));
         }
         overlays

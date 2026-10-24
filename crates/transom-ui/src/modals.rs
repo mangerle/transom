@@ -13,7 +13,7 @@ use transom_core::{Connection, SessionId};
 
 impl AppShell {
     pub(crate) fn refresh_known_hosts(&mut self) {
-        self.known_hosts_records = self.services.known_hosts.list().unwrap_or_default();
+        self.known_hosts_modal.records = self.services.known_hosts.list().unwrap_or_default();
     }
 
     pub(crate) fn remove_known_host(&mut self, host: &str, port: u16, cx: &mut Context<Self>) {
@@ -32,9 +32,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let records = self.known_hosts_records.clone();
+        let records = self.known_hosts_modal.records.clone();
         let search_query = self
-            .known_hosts_search
+            .known_hosts_modal
+            .search
             .read(cx)
             .value()
             .trim()
@@ -124,7 +125,7 @@ impl AppShell {
 
         let content = v_flex()
             .gap_3()
-            .child(Input::new(&self.known_hosts_search).w_full())
+            .child(Input::new(&self.known_hosts_modal.search).w_full())
             .child(
                 v_flex()
                     .id(ElementId::Name("known-hosts-list".into()))
@@ -137,7 +138,7 @@ impl AppShell {
             .ghost()
             .label(rust_i18n::t!("app.close").to_string())
             .on_click(cx.listener(|this, _, _, cx| {
-                this.show_known_hosts_modal = false;
+                this.known_hosts_modal.open = false;
                 cx.notify();
             }));
 

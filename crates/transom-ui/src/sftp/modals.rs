@@ -20,7 +20,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_filter_modal.as_ref() else {
+        let Some(modal) = self.sftp_modals.filter.as_ref() else {
             return div().into_any_element();
         };
         let textarea = modal.textarea.clone();
@@ -46,7 +46,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_filter_modal = None;
+                        this.sftp_modals.filter = None;
                         this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
@@ -80,7 +80,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_chmod_modal.as_ref() else {
+        let Some(modal) = self.sftp_modals.chmod.as_ref() else {
             return div().into_any_element();
         };
         let file_name = modal.file_name.clone();
@@ -227,7 +227,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_chmod_modal = None;
+                        this.sftp_modals.chmod = None;
                         this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
@@ -261,7 +261,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_input_modal.as_ref() else {
+        let Some(modal) = self.sftp_modals.input.as_ref() else {
             return div().into_any_element();
         };
         let title = modal.title.clone();
@@ -283,7 +283,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_input_modal = None;
+                        this.sftp_modals.input = None;
                         this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),
@@ -317,7 +317,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_properties_modal.as_ref() else {
+        let Some(modal) = self.sftp_modals.properties.as_ref() else {
             return div().into_any_element();
         };
         let scope = modal.scope.clone();
@@ -370,7 +370,7 @@ impl AppShell {
                 .icon(IconName::Close)
                 .label("关闭")
                 .on_click(cx.listener(|this, _, window, cx| {
-                    this.sftp_properties_modal = None;
+                    this.sftp_modals.properties = None;
                     this.focus_active_sftp_panel(window, cx);
                     cx.notify();
                 })),

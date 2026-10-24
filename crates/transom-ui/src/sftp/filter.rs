@@ -12,7 +12,7 @@ impl AppShell {
         let text = self.settings.sftp.transfer_filter.clone();
         let textarea = cx.new(|cx| TextareaState::new(window, cx).default_value(text));
         textarea.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_filter_modal = Some(SftpFilterModalState {
+        self.sftp_modals.filter = Some(SftpFilterModalState {
             textarea,
             error: None,
         });
@@ -21,7 +21,7 @@ impl AppShell {
 
     /// 校验并保存排除规则；非法规则保留弹窗并就地提示，不中断已有传输。
     pub(crate) fn save_sftp_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(mut modal) = self.sftp_filter_modal.take() else {
+        let Some(mut modal) = self.sftp_modals.filter.take() else {
             return;
         };
         let text = modal.textarea.read(cx).value().to_string();
@@ -32,7 +32,7 @@ impl AppShell {
                     .unwrap_or_else(|| "传输过滤规则无效".to_string()),
             );
             let textarea = modal.textarea.clone();
-            self.sftp_filter_modal = Some(modal);
+            self.sftp_modals.filter = Some(modal);
             textarea.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;

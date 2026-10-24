@@ -222,12 +222,12 @@ impl AppShell {
                 .active_tab
                 .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| tab.forwards_panel.is_some()),
-            ActivityItemId::Snippets => self.snippets_open,
+            ActivityItemId::Snippets => self.snippet_panel.open,
             ActivityItemId::Sftp => self
                 .active_tab
                 .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| tab.sftp.is_some()),
-            ActivityItemId::Keys => self.key_wizard.is_some(),
+            ActivityItemId::Keys => self.settings_modal.key_wizard.is_some(),
             _ => false,
         }
     }
@@ -270,7 +270,7 @@ impl AppShell {
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
             ActivityItemId::KnownHosts => {
-                self.show_known_hosts_modal = true;
+                self.known_hosts_modal.open = true;
                 self.refresh_known_hosts();
                 cx.notify();
             }

@@ -28,7 +28,7 @@ impl AppShell {
     ) {
         match local_file_properties(&path) {
             Ok(properties) => {
-                self.sftp_properties_modal = Some(SftpPropertiesModalState {
+                self.sftp_modals.properties = Some(SftpPropertiesModalState {
                     scope: "本地".to_string(),
                     properties,
                 });

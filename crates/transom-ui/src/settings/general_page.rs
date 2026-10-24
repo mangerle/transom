@@ -102,7 +102,7 @@ impl AppShell {
             )
             .child(Self::form_field(
                 rust_i18n::t!("notify.threshold").to_string(),
-                self.settings_notify_threshold.clone(),
+                self.settings_modal.notify_threshold.clone(),
                 p,
             ))
             .child(

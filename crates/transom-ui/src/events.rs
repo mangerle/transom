@@ -53,7 +53,7 @@ impl AppShell {
                 profile.word_separators = self.settings.terminal_profile.word_separators.clone();
                 profile.highlight = self.settings.terminal_profile.highlight.clone();
                 let interaction = self.settings.terminal_interaction;
-                let reserved = self.shortcut_filter.clone();
+                let reserved = self.shortcut_recording.filter.clone();
                 let key_filter: KeyFilter = Arc::new(move |keystroke| {
                     reserved
                         .read()
@@ -350,7 +350,7 @@ impl AppShell {
                 if panel.active_op == Some(op_id) {
                     panel.active_op = None;
                 }
-                self.sftp_properties_modal = Some(SftpPropertiesModalState {
+                self.sftp_modals.properties = Some(SftpPropertiesModalState {
                     scope: "远端".to_string(),
                     properties: remote_file_properties(&metadata),
                 });
@@ -414,7 +414,7 @@ impl AppShell {
                 op_id,
                 comparison,
             } => {
-                if let Some(modal) = self.sftp_sync_modal.as_mut()
+                if let Some(modal) = self.sftp_modals.sync.as_mut()
                     && modal.op_id == op_id
                     && modal.connection_id == connection_id
                 {
@@ -435,7 +435,7 @@ impl AppShell {
                 op_id,
                 error,
             } => {
-                if let Some(modal) = self.sftp_sync_modal.as_mut()
+                if let Some(modal) = self.sftp_modals.sync.as_mut()
                     && modal.op_id == op_id
                     && modal.connection_id == connection_id
                 {

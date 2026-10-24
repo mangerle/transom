@@ -110,7 +110,7 @@ impl AppShell {
         };
         let input = sftp_text_input(window, cx, "", "文件夹名称");
         input.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_input_modal = Some(SftpInputModalState {
+        self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
             title,
             prompt,
@@ -166,7 +166,7 @@ impl AppShell {
         };
         let input = sftp_text_input(window, cx, &initial_value, "新名称");
         input.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_input_modal = Some(SftpInputModalState {
+        self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
             title,
             prompt,
@@ -232,7 +232,7 @@ impl AppShell {
         };
         let input = sftp_text_input(window, cx, &initial_value, "软链接名称");
         input.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_input_modal = Some(SftpInputModalState {
+        self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
             title,
             prompt,
@@ -244,7 +244,7 @@ impl AppShell {
     }
 
     pub(crate) fn commit_sftp_input_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(modal) = self.sftp_input_modal.take() else {
+        let Some(modal) = self.sftp_modals.input.take() else {
             return;
         };
         let tab_id = modal.tab_id;
@@ -253,7 +253,7 @@ impl AppShell {
             let mut modal = modal;
             modal.error = Some("名称不能为空".to_string());
             let input = modal.input.clone();
-            self.sftp_input_modal = Some(modal);
+            self.sftp_modals.input = Some(modal);
             input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
@@ -262,7 +262,7 @@ impl AppShell {
             let mut modal = modal;
             modal.error = Some(message);
             let input = modal.input.clone();
-            self.sftp_input_modal = Some(modal);
+            self.sftp_modals.input = Some(modal);
             input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;

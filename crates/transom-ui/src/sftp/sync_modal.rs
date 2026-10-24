@@ -21,7 +21,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_sync_modal.as_ref() else {
+        let Some(modal) = self.sftp_modals.sync.as_ref() else {
             return div().into_any_element();
         };
         let tab_id = modal.tab_id;
@@ -219,7 +219,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_sync_modal = None;
+                        this.sftp_modals.sync = None;
                         this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     })),

@@ -17,17 +17,19 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        if self.key_wizard.is_none() {
+        if self.settings_modal.key_wizard.is_none() {
             return div().into_any_element();
         }
         let generate = self.render_key_generate_section(p, cx);
         let list = self.render_key_list_section(p, cx);
         let deploy = self.render_key_deploy_section(p, cx);
         let message = self
+            .settings_modal
             .key_wizard
             .as_ref()
             .and_then(|state| state.message.clone());
         let error = self
+            .settings_modal
             .key_wizard
             .as_ref()
             .and_then(|state| state.error.clone());
@@ -84,7 +86,7 @@ impl AppShell {
     }
 
     fn render_key_generate_section(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let Some(state) = self.key_wizard.as_ref() else {
+        let Some(state) = self.settings_modal.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let current_algorithm = state.algorithm;
@@ -174,7 +176,7 @@ impl AppShell {
     }
 
     fn render_key_list_section(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let Some(state) = self.key_wizard.as_ref() else {
+        let Some(state) = self.settings_modal.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let keys = state.keys.clone();
@@ -302,7 +304,7 @@ impl AppShell {
     }
 
     fn render_key_deploy_section(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let Some(state) = self.key_wizard.as_ref() else {
+        let Some(state) = self.settings_modal.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let selected_key = state

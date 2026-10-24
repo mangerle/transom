@@ -38,59 +38,68 @@ impl AppShell {
 
     pub(crate) fn open_settings_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let profile = self.settings.terminal_profile.clone();
-        self.settings_font_family.update(cx, |input, cx| {
+        self.settings_modal.font_family.update(cx, |input, cx| {
             input.set_value(profile.font_family.unwrap_or_default(), window, cx);
         });
-        self.settings_cjk_font.update(cx, |input, cx| {
+        self.settings_modal.cjk_font.update(cx, |input, cx| {
             input.set_value(profile.cjk_font_family.unwrap_or_default(), window, cx);
         });
         let font_size = self.settings.terminal_profile.font_size.to_string();
-        self.settings_font_size.update(cx, |input, cx| {
+        self.settings_modal.font_size.update(cx, |input, cx| {
             input.set_value(&font_size, window, cx);
         });
         let line_height = self.settings.terminal_profile.line_height.to_string();
-        self.settings_line_height.update(cx, |input, cx| {
+        self.settings_modal.line_height.update(cx, |input, cx| {
             input.set_value(&line_height, window, cx);
         });
-        self.settings_word_separators.update(cx, |input, cx| {
+        self.settings_modal.word_separators.update(cx, |input, cx| {
             input.set_value(
                 self.settings.terminal_profile.word_separators.clone(),
                 window,
                 cx,
             );
         });
-        self.settings_highlight_keywords.update(cx, |input, cx| {
-            input.set_value(profile.highlight.keywords_joined(), window, cx);
-        });
+        self.settings_modal
+            .highlight_keywords
+            .update(cx, |input, cx| {
+                input.set_value(profile.highlight.keywords_joined(), window, cx);
+            });
         let notify_threshold = self.settings.window.notify_threshold_secs.to_string();
-        self.settings_notify_threshold.update(cx, |input, cx| {
-            input.set_value(notify_threshold, window, cx);
-        });
+        self.settings_modal
+            .notify_threshold
+            .update(cx, |input, cx| {
+                input.set_value(notify_threshold, window, cx);
+            });
         let scrollback = self.settings.terminal_profile.scrollback.to_string();
-        self.settings_scrollback.update(cx, |input, cx| {
+        self.settings_modal.scrollback.update(cx, |input, cx| {
             input.set_value(&scrollback, window, cx);
         });
-        self.show_settings_modal = true;
+        self.settings_modal.open = true;
         cx.notify();
     }
 
     pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>) {
         self.settings.terminal_profile.font_family =
-            read_font_family(&self.settings_font_family, cx);
+            read_font_family(&self.settings_modal.font_family, cx);
         self.settings.terminal_profile.cjk_font_family =
-            read_font_family(&self.settings_cjk_font, cx);
+            read_font_family(&self.settings_modal.cjk_font, cx);
         // 关键词列表先解析再清洗（去空、不分大小写去重、限长限条数），
         // 让"界面上看到的"与"存进文件的"是同一份。
         self.settings.terminal_profile.highlight.keywords = TerminalHighlight {
             enabled: self.settings.terminal_profile.highlight.enabled,
             keywords: TerminalHighlight::parse_keywords(
-                self.settings_highlight_keywords.read(cx).value().as_ref(),
+                self.settings_modal
+                    .highlight_keywords
+                    .read(cx)
+                    .value()
+                    .as_ref(),
             ),
         }
         .sanitized()
         .keywords;
         if let Ok(font_size) = self
-            .settings_font_size
+            .settings_modal
+            .font_size
             .read(cx)
             .value()
             .trim()
@@ -100,7 +109,8 @@ impl AppShell {
             self.settings.terminal_profile.font_size = font_size;
         }
         if let Ok(line_height) = self
-            .settings_line_height
+            .settings_modal
+            .line_height
             .read(cx)
             .value()
             .trim()
@@ -110,15 +120,24 @@ impl AppShell {
             self.settings.terminal_profile.line_height = line_height;
         }
         // 空串是有值意义的（不按任何字符断词），因此这里不 trim、也不拒绝空值。
-        self.settings.terminal_profile.word_separators =
-            self.settings_word_separators.read(cx).value().to_string();
+        self.settings.terminal_profile.word_separators = self
+            .settings_modal
+            .word_separators
+            .read(cx)
+            .value()
+            .to_string();
         if let Some(threshold) = crate::notify::parse_notify_threshold(
-            self.settings_notify_threshold.read(cx).value().as_ref(),
+            self.settings_modal
+                .notify_threshold
+                .read(cx)
+                .value()
+                .as_ref(),
         ) {
             self.settings.window.notify_threshold_secs = threshold;
         }
         if let Ok(scrollback) = self
-            .settings_scrollback
+            .settings_modal
+            .scrollback
             .read(cx)
             .value()
             .trim()
@@ -134,7 +153,7 @@ impl AppShell {
             self.apply_shortcut_settings(cx);
             self.status = Some(rust_i18n::t!("status.ready").to_string());
         }
-        self.show_settings_modal = false;
+        self.settings_modal.open = false;
         cx.notify();
     }
 
@@ -171,12 +190,12 @@ impl AppShell {
             )
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_family").to_string(),
-                self.settings_font_family.clone(),
+                self.settings_modal.font_family.clone(),
                 p,
             ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.cjk_font").to_string(),
-                self.settings_cjk_font.clone(),
+                self.settings_modal.cjk_font.clone(),
                 p,
             ))
             .child(
@@ -206,7 +225,7 @@ impl AppShell {
             )
             .child(Self::form_field(
                 rust_i18n::t!("settings.highlight_keywords").to_string(),
-                self.settings_highlight_keywords.clone(),
+                self.settings_modal.highlight_keywords.clone(),
                 p,
             ))
             .child(
@@ -217,17 +236,17 @@ impl AppShell {
             )
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_size").to_string(),
-                self.settings_font_size.clone(),
+                self.settings_modal.font_size.clone(),
                 p,
             ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.line_height").to_string(),
-                self.settings_line_height.clone(),
+                self.settings_modal.line_height.clone(),
                 p,
             ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.scrollback").to_string(),
-                self.settings_scrollback.clone(),
+                self.settings_modal.scrollback.clone(),
                 p,
             ))
             .child(

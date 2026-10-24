@@ -34,7 +34,7 @@ impl AppShell {
                 filter: TransferFilter::from_text(&filter_text),
             },
         });
-        self.sftp_sync_modal = Some(SftpSyncModalState {
+        self.sftp_modals.sync = Some(SftpSyncModalState {
             tab_id,
             connection_id,
             op_id,
@@ -56,7 +56,7 @@ impl AppShell {
         checked: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(modal) = self.sftp_sync_modal.as_mut() else {
+        let Some(modal) = self.sftp_modals.sync.as_mut() else {
             return;
         };
         let Some(entry) = modal.entries.get(index) else {
@@ -73,7 +73,7 @@ impl AppShell {
 
     /// 全选/全不选可同步项；类型冲突始终保持不可选。
     pub(crate) fn sftp_select_all_sync(&mut self, selected: bool, cx: &mut Context<Self>) {
-        let Some(modal) = self.sftp_sync_modal.as_mut() else {
+        let Some(modal) = self.sftp_modals.sync.as_mut() else {
             return;
         };
         for (index, entry) in modal.entries.iter().enumerate() {
@@ -87,11 +87,11 @@ impl AppShell {
     /// 将勾选的差异项打包成一个同步任务入队并启动队列。
     pub(crate) fn start_sftp_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let verify = self.settings.sftp.verify_after_transfer;
-        let Some(mut modal) = self.sftp_sync_modal.take() else {
+        let Some(mut modal) = self.sftp_modals.sync.take() else {
             return;
         };
         if modal.scanning || modal.error.is_some() {
-            self.sftp_sync_modal = Some(modal);
+            self.sftp_modals.sync = Some(modal);
             return;
         }
         let tab_id = modal.tab_id;
@@ -120,7 +120,7 @@ impl AppShell {
 
         if items.is_empty() {
             modal.error = Some("请至少勾选一个可同步项".to_string());
-            self.sftp_sync_modal = Some(modal);
+            self.sftp_modals.sync = Some(modal);
             cx.notify();
             return;
         }

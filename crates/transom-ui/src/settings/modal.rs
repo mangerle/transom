@@ -141,7 +141,7 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::X)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.show_settings_modal = false;
+                                this.settings_modal.open = false;
                                 cx.notify();
                             })),
                     ),
@@ -184,7 +184,7 @@ impl AppShell {
                                     .small()
                                     .label(rust_i18n::t!("common.cancel").to_string())
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.show_settings_modal = false;
+                                        this.settings_modal.open = false;
                                         cx.notify();
                                     })),
                             )

@@ -291,7 +291,7 @@ impl AppShell {
             )
             .child(Self::form_field(
                 rust_i18n::t!("settings.word_separators").to_string(),
-                self.settings_word_separators.clone(),
+                self.settings_modal.word_separators.clone(),
                 p,
             ))
             .child(
