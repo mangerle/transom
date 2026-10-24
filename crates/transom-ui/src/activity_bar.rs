@@ -10,6 +10,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
@@ -21,9 +22,10 @@ use transom_core::{ActivityItemId, Connection};
 /// 活动栏的布局度量统一从这里取值。
 ///
 /// 为什么不做成设置项：按钮尺寸与间距同时决定条宽、命中区和插入线位置，
-/// 单独暴露两个像素输入框会制造一组需要互相校验的状态；当前需求是定制顺序
-/// 与显隐，不是界面密度。将来若确实需要放大点击目标，应作为整体密度预设接
-/// 入，而不是让用户逐项调像素。
+/// 单独暴露两个像素输入框会制造一组需要互相校验的状态。宽度、按钮与图标
+/// 以 rem 表达（值源在 `theme::tokens::size`），随密度档位整体缩放，这正是
+/// "放大点击目标走整体密度预设"的落地形式；间距（gap/padding）是像素语义
+/// 的微度量，保留 px 不随密度变化。
 ///
 /// 图标尺寸与会话树行图标（`sidebar::tree` 的 `ROW_ICON_SIZE`，18px）保持
 /// 一致，让左侧两条竖栏的视觉分量对齐；该处常量是模块私有，这里只能以注释
@@ -37,13 +39,10 @@ struct ActivityBarMetrics {
     padding_y: f32,
 }
 
-/// 活动栏宽度。状态栏按列分段时要用它加上侧栏宽度定位分界线。
-pub(crate) const ACTIVITY_BAR_WIDTH: f32 = 48.0;
-
 const METRICS: ActivityBarMetrics = ActivityBarMetrics {
-    width: ACTIVITY_BAR_WIDTH,
-    button: 34.0,
-    icon: 18.0,
+    width: size::ACTIVITY_BAR_WIDTH,
+    button: size::ACTIVITY_BUTTON_SIZE,
+    icon: size::ACTIVITY_ICON_SIZE,
     gap: 4.0,
     padding_y: 4.0,
 };
@@ -67,10 +66,10 @@ impl ActivityDragPreview {
 }
 
 impl Render for ActivityDragPreview {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
         div()
-            .size(px(METRICS.button))
+            .size(rems(METRICS.button))
             .flex()
             .items_center()
             .justify_center()
@@ -81,7 +80,10 @@ impl Render for ActivityDragPreview {
             .shadow_md()
             .child(
                 Icon::new(self.icon)
-                    .with_size(px(METRICS.icon))
+                    .with_size(crate::theme::tokens::rem_px(
+                        METRICS.icon,
+                        window.rem_size(),
+                    ))
                     .text_color(p.popover_foreground),
             )
     }
@@ -90,7 +92,7 @@ impl Render for ActivityDragPreview {
 impl AppShell {
     pub(crate) fn render_activity_bar(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
@@ -98,18 +100,18 @@ impl AppShell {
         let bottom: Vec<ActivityItemId> = self.settings.activity_bar.bottom_items().collect();
         let mut top_children = Vec::with_capacity(top.len());
         for id in top {
-            top_children.push(self.render_activity_item(id, p, cx));
+            top_children.push(self.render_activity_item(window, id, p, cx));
         }
         let mut bottom_children = Vec::with_capacity(bottom.len());
         for id in bottom {
-            bottom_children.push(self.render_activity_item(id, p, cx));
+            bottom_children.push(self.render_activity_item(window, id, p, cx));
         }
 
         let app = cx.entity().clone();
         let menu_app = app.clone();
         v_flex()
             .id("activity-bar")
-            .w(px(METRICS.width))
+            .w(rems(METRICS.width))
             .flex_none()
             .h_full()
             .items_center()
@@ -143,6 +145,7 @@ impl AppShell {
 
     fn render_activity_item(
         &mut self,
+        window: &Window,
         id: ActivityItemId,
         p: &Palette,
         cx: &mut Context<Self>,
@@ -157,13 +160,16 @@ impl AppShell {
         let mut button = div()
             .id(ElementId::Name(format!("activity-{}", id.key()).into()))
             .relative()
-            .size(px(METRICS.button))
+            .size(rems(METRICS.button))
             .rounded_md()
             .flex()
             .items_center()
             .justify_center()
             .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
-            .child(Icon::new(icon).with_size(px(METRICS.icon)))
+            .child(Icon::new(icon).with_size(crate::theme::tokens::rem_px(
+                METRICS.icon,
+                window.rem_size(),
+            )))
             .child(Self::render_activity_reorder_overlay(&app, id, p));
 
         if selected {

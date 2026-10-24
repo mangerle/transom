@@ -2,6 +2,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::tooltip::Tooltip;
@@ -29,7 +30,7 @@ impl AppShell {
 
         let min_button = div()
             .id("window-control-minimize")
-            .size(px(30.0))
+            .size(rems(size::WINDOW_BUTTON_SIZE))
             .rounded_md()
             .flex()
             .items_center()
@@ -53,7 +54,7 @@ impl AppShell {
 
         let max_button = div()
             .id("window-control-maximize")
-            .size(px(30.0))
+            .size(rems(size::WINDOW_BUTTON_SIZE))
             .rounded_md()
             .flex()
             .items_center()
@@ -75,7 +76,7 @@ impl AppShell {
 
         let close_button = div()
             .id("window-control-close")
-            .size(px(30.0))
+            .size(rems(size::WINDOW_BUTTON_SIZE))
             .rounded_md()
             .flex()
             .items_center()
@@ -99,7 +100,7 @@ impl AppShell {
 
         h_flex()
             .w_full()
-            .h(px(36.0))
+            .h(rems(size::TOP_BAR_HEIGHT))
             .items_center()
             .justify_between()
             .px_3()

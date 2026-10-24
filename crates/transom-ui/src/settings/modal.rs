@@ -2,6 +2,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
@@ -115,9 +116,13 @@ impl AppShell {
                 page_general,
             ]);
 
+        // 尺寸随密度档位缩放；max_w/max_h 以 overlay 全屏为上限，宽松档下小
+        // 窗口弹窗贴边而不被裁切，内容区自身可滚动。
         let panel = v_flex()
-            .w(px(880.0))
-            .h(px(640.0))
+            .w(rems(size::SETTINGS_DIALOG_WIDTH))
+            .max_w_full()
+            .h(rems(size::SETTINGS_DIALOG_HEIGHT))
+            .max_h_full()
             .bg(p.popover)
             .border_1()
             .border_color(p.border)

@@ -1,10 +1,10 @@
 //! AppShell 顶层布局渲染。
 
-use crate::activity_bar::ACTIVITY_BAR_WIDTH;
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::Palette;
 use crate::sftp::EditorDragTracker;
+use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
@@ -14,6 +14,9 @@ use gpui_kit::*;
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
+        // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
+        // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
+        let rem = window.rem_size();
         let top_bar = (!self.immersive).then(|| self.render_top_bar(window, cx, &p));
         let activity_bar = (!self.immersive).then(|| self.render_activity_bar(window, cx, &p));
 
@@ -33,7 +36,7 @@ impl Render for AppShell {
             // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
             // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
             let mut sidebar_panel = resizable_panel()
-                .size(px(270.0))
+                .size(rem_px(size::SIDEBAR_WIDTH, rem))
                 .fixed()
                 .visible(self.sidebar_visible);
             if self.sidebar_visible {
@@ -56,8 +59,16 @@ impl Render for AppShell {
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.forwards_panel.is_some());
-        let sftp_width: f32 = if sftp_local_only { 480.0 } else { 760.0 };
-        let sftp_min_width: f32 = if sftp_local_only { 320.0 } else { 360.0 };
+        let sftp_width = if sftp_local_only {
+            rem_px(size::SFTP_LOCAL_PANEL_WIDTH, rem).as_f32()
+        } else {
+            rem_px(size::SFTP_PANEL_WIDTH, rem).as_f32()
+        };
+        let sftp_min_width = if sftp_local_only {
+            rem_px(size::SFTP_LOCAL_MIN_WIDTH, rem).as_f32()
+        } else {
+            rem_px(size::SFTP_MIN_WIDTH, rem).as_f32()
+        };
         // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
         // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
         let sidebar_width = if self.sidebar_visible {
@@ -67,14 +78,18 @@ impl Render for AppShell {
                 .first()
                 .copied()
                 .filter(|width| *width >= px(100.0))
-                .unwrap_or(px(270.0))
+                .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
                 .as_f32()
         } else {
             0.0
         };
-        let forward_width = if show_forwards { 340.0 } else { 0.0 };
+        let forward_width = if show_forwards {
+            rem_px(size::FORWARD_PANEL_WIDTH, rem).as_f32()
+        } else {
+            0.0
+        };
         let available_width = window.viewport_size().width.as_f32()
-            - ACTIVITY_BAR_WIDTH
+            - rem_px(size::ACTIVITY_BAR_WIDTH, rem).as_f32()
             - sidebar_width
             - forward_width
             - 100.0
@@ -92,7 +107,7 @@ impl Render for AppShell {
         if show_forwards && !self.immersive {
             resizable_group = resizable_group.child(
                 resizable_panel()
-                    .size(px(340.0))
+                    .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
                     .fixed()
                     .child(self.render_forward_panel(window, cx, &p)),
             );
@@ -126,8 +141,9 @@ impl Render for AppShell {
                     .first()
                     .copied()
                     .filter(|width| *width >= px(100.0))
-                    .unwrap_or(px(270.0));
-                px(ACTIVITY_BAR_WIDTH) + sidebar_width
+                    .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
+                    .as_f32();
+                rem_px(size::ACTIVITY_BAR_WIDTH, rem) + px(sidebar_width)
             } else {
                 px(0.0)
             };

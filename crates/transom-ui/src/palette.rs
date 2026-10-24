@@ -2,6 +2,7 @@
 
 use crate::app::AppShell;
 use crate::keymap;
+use crate::theme::tokens::size;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::{Input, InputState};
@@ -107,8 +108,8 @@ impl AppShell {
         v_flex()
             .id(id.into())
             .w(max_w)
-            .max_w(px(760.0))
-            .max_h(px(640.0))
+            .max_w(rems(size::DIALOG_MAX_WIDTH))
+            .max_h(rems(size::DIALOG_MAX_HEIGHT))
             .gap_4()
             .p_6()
             .rounded_xl()

@@ -13,6 +13,7 @@ mod drag;
 
 use crate::app::{AppShell, TabStatus, TerminalTab};
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -21,17 +22,17 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{Connection, NetworkTraffic, StatusItemId, SystemStats};
 
-/// 底栏高度。快捷命令卡片的锚点高度与它保持一致，卡片才能贴住底栏上缘。
-pub(crate) const STATUS_BAR_HEIGHT: f32 = 28.0;
+// 数值槽与徽标度量以 rem 表达（标准档 16px 基准），密度切换时随字号等比放大，
+// 大字号下数字不会挤爆固定槽；底栏高度在 theme::tokens::size 集中定义。
 
-const RATE_WIDTH: f32 = 40.0;
+const RATE_WIDTH: f32 = 2.5;
 /// CPU 数值槽按最宽的 `100%` 预留，取值跨到三位数时不会把百分号截掉。
-const CPU_VALUE_WIDTH: f32 = 36.0;
-const MEMORY_VALUE_WIDTH: f32 = 84.0;
-const DISK_VALUE_WIDTH: f32 = 96.0;
-const OS_VALUE_WIDTH: f32 = 104.0;
-const UPTIME_VALUE_WIDTH: f32 = 48.0;
-const BADGE_HEIGHT: f32 = 20.0;
+const CPU_VALUE_WIDTH: f32 = 2.25;
+const MEMORY_VALUE_WIDTH: f32 = 5.25;
+const DISK_VALUE_WIDTH: f32 = 6.0;
+const OS_VALUE_WIDTH: f32 = 6.5;
+const UPTIME_VALUE_WIDTH: f32 = 3.0;
+const BADGE_HEIGHT: f32 = 1.25;
 
 /// 将字节/秒格式化为紧凑单位，状态栏只保留数字与单字母单位。
 ///
@@ -147,7 +148,7 @@ impl AppShell {
             .min_w_0()
             .gap_2()
             .items_center()
-            .h(px(BADGE_HEIGHT))
+            .h(rems(BADGE_HEIGHT))
             .px_2()
             .rounded_md()
             .bg(p.muted)
@@ -184,7 +185,7 @@ impl AppShell {
 
         let mut bar = h_flex()
             .id("status-bar")
-            .h(px(STATUS_BAR_HEIGHT))
+            .h(rems(size::STATUS_BAR_HEIGHT))
             .items_center()
             .bg(p.status_bar)
             .border_t_1()
@@ -384,7 +385,7 @@ impl AppShell {
         let badge = div()
             .id(ElementId::Name(format!("status-{}", id.key()).into()))
             .relative()
-            .h(px(BADGE_HEIGHT))
+            .h(rems(BADGE_HEIGHT))
             .flex()
             .items_center()
             .gap_1()
@@ -411,7 +412,7 @@ impl AppShell {
             .items_center()
             .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
             .child(
-                div().w(px(RATE_WIDTH)).flex().child(
+                div().w(rems(RATE_WIDTH)).flex().child(
                     div()
                         .overflow_hidden()
                         .whitespace_nowrap()
@@ -441,7 +442,7 @@ impl AppShell {
             .items_center()
             .child(Icon::new(icon).xsmall().text_color(icon_color))
             .child(
-                div().w(px(width)).flex().child(
+                div().w(rems(width)).flex().child(
                     div()
                         .overflow_hidden()
                         .whitespace_nowrap()

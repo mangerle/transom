@@ -3,6 +3,7 @@
 use crate::app::{AppShell, TabStatus};
 use crate::palette::Palette;
 use crate::pane_tree::MAX_PANES;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -17,7 +18,7 @@ use super::tab_drag::attach_tab_drag;
 impl AppShell {
     pub(super) fn render_tab_strip(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let mut tab_strip = h_flex()
-            .h(px(32.0))
+            .h(rems(size::TAB_BAR_HEIGHT))
             .items_center()
             .bg(p.tab_bar)
             .border_b_1()
@@ -71,8 +72,8 @@ impl AppShell {
                 .px_2p5()
                 .gap_1p5()
                 .items_center()
-                .max_w(px(220.0))
-                .min_w(px(100.0))
+                .max_w(rems(size::TAB_MAX_WIDTH))
+                .min_w(rems(size::TAB_MIN_WIDTH))
                 .overflow_hidden()
                 .border_r_1()
                 .border_color(p.border)

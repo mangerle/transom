@@ -3,6 +3,7 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::pane_tree::LayoutNode;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
@@ -145,7 +146,7 @@ impl AppShell {
 
         let header = h_flex()
             .id(ElementId::Name(format!("pane-header-{tab_id}").into()))
-            .h(px(28.0))
+            .h(rems(size::PANE_HEADER_HEIGHT))
             .flex_none()
             .px_2()
             .gap_2()

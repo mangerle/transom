@@ -92,12 +92,16 @@ pub fn run(services: UiServices) {
             }))
         };
 
+        // 密度缩放系数：标准档 16px 为 1.0，紧凑档 <1、宽松档 >1。
+        let density_scale = settings.appearance.density.font_size() / 16.0;
         let options = WindowOptions {
             window_bounds,
             // 右侧 SFTP/文件面板是固定宽度列，窗口窄到小于各固定列与主面板
             // 最小宽度之和时，面板右边缘（含关闭按钮）会被窗口裁掉。
-            // 900px 留出默认侧栏 + 主面板最小宽度 + 双栏 SFTP 最小宽度的余量。
-            window_min_size: Some(size(px(900.0), px(560.0))),
+            // 900x560（标准档）留出默认侧栏 + 主面板最小宽度 + 双栏 SFTP 最小
+            // 宽度的余量。布局结构件全部以 rem 表达，最小窗口按密度基准等比
+            // 缩放，宽松档下固定 900px 会把这些列挤出窗口。
+            window_min_size: Some(size(px(900.0 * density_scale), px(560.0 * density_scale))),
             titlebar: Some(TitlebarOptions {
                 title: Some("Transom".into()),
                 ..Default::default()

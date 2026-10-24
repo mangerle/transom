@@ -8,7 +8,7 @@
 
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
-use crate::status_bar::STATUS_BAR_HEIGHT;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Selectable;
@@ -222,7 +222,7 @@ impl AppShell {
         // 居中的按钮留出一条缝。左内边距让图标离分界线有一点呼吸，但触发器
         // 容器本身仍从分界线起算，卡片左缘才能贴住会话列表与终端的分界。
         let trigger_style = StyleRefinement::default()
-            .h(px(STATUS_BAR_HEIGHT))
+            .h(rems(size::STATUS_BAR_HEIGHT))
             .flex()
             .flex_none()
             .items_center()

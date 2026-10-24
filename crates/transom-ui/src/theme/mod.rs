@@ -19,6 +19,7 @@
 //! `apply_config` 之后于同一闭包内写入。
 
 mod builtin;
+pub(crate) mod tokens;
 
 use gpui_kit::component::theme::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::*;
