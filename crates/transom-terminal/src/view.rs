@@ -65,6 +65,9 @@ pub struct TerminalView {
     pub(crate) exited: bool,
     /// 当前闪烁相位；关闭闪烁或失焦时始终保持为 `true`。
     cursor_blink_on: bool,
+    /// 像素滚动的未凑整余数（单位：行）。触摸板逐事件位移常小于一行，
+    /// 不累积的话 round 会把小于半行的事件全部舍成 0，平滑滚动失效。
+    scroll_pixel_remainder: f32,
     /// 悬浮检索栏是否展开。
     pub(crate) search_open: bool,
     /// 检索输入框状态；首次展开时创建，收起后保留上次的查询词。
@@ -217,6 +220,7 @@ impl TerminalView {
             mouse_pressed: false,
             exited: false,
             cursor_blink_on: true,
+            scroll_pixel_remainder: 0.0,
             command_tracker: CommandTracker::default(),
             search_open: false,
             search_input: None,
@@ -648,7 +652,10 @@ impl TerminalView {
                 if height <= 0.0 {
                     0
                 } else {
-                    (f32::from(delta.y) / height).round() as i32
+                    self.scroll_pixel_remainder += f32::from(delta.y) / height;
+                    let lines = self.scroll_pixel_remainder.round() as i32;
+                    self.scroll_pixel_remainder -= lines as f32;
+                    lines
                 }
             }
         };
