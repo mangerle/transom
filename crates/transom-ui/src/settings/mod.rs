@@ -294,19 +294,36 @@ impl AppShell {
         }
     }
 
-    /// 字体组：界面字体、终端字体族、CJK 字体、字号与行高。
-    pub(crate) fn render_settings_font(
+    /// 界面字体组：界面字体族覆盖；字号由配色方案页的密度档驱动。
+    pub(crate) fn render_settings_ui_font(
         &mut self,
         p: &Palette,
         _cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
-            .gap_3()
+            .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.ui_font_family").to_string(),
                 self.settings_modal.ui_font_family.clone(),
                 p,
             ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.ui_font_note").to_string()),
+            )
+            .into_any_element()
+    }
+
+    /// 终端字体组：终端字体族、CJK 字体、字号与行高。
+    pub(crate) fn render_settings_terminal_font(
+        &mut self,
+        p: &Palette,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_family").to_string(),
                 self.settings_modal.font_family.clone(),

@@ -206,6 +206,18 @@ impl AppShell {
                                 })),
                         ),
                 );
+                // 连接保活参数：keepalive 0 表示禁用；越界值保存时回退存量。
+                content = content
+                    .child(Self::form_field(
+                        rust_i18n::t!("form.connect_timeout").to_string(),
+                        form.connect_timeout.clone(),
+                        p,
+                    ))
+                    .child(Self::form_field(
+                        rust_i18n::t!("form.keepalive").to_string(),
+                        form.keepalive.clone(),
+                        p,
+                    ));
                 match form.auth {
                     AuthChoice::Password => {
                         content = content.child(

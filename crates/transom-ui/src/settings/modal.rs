@@ -11,8 +11,6 @@ use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Setti
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 
-use super::layout_page;
-
 /// 组装配 helper：把 AppShell 的组渲染函数包装成带标题的 `SettingGroup`。
 fn setting_group(
     app: &Entity<AppShell>,
@@ -37,14 +35,31 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let app_entity = cx.entity().clone();
-        // 每页多个带标题的组：侧栏自动出现 Zed 式折叠子项，点击滚动到对应组。
-        let page_rendering = SettingPage::new(rust_i18n::t!("settings.tab_rendering").to_string())
+        // 页面结构对齐 Zed：外观（界面皮肤）与终端（终端一切）分立，
+        // 窗口与布局合并为一页。
+        let page_appearance =
+            SettingPage::new(rust_i18n::t!("settings.tab_appearance").to_string())
+                .icon(IconName::Palette)
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.ui_theme_group",
+                    AppShell::render_settings_ui_theme,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.ui_font_group",
+                    AppShell::render_settings_ui_font,
+                ));
+
+        let page_terminal = SettingPage::new(rust_i18n::t!("settings.tab_terminal").to_string())
             .icon(IconName::Terminal)
             .group(setting_group(
                 &app_entity,
                 p,
-                "settings.font_group",
-                AppShell::render_settings_font,
+                "settings.terminal_font_group",
+                AppShell::render_settings_terminal_font,
             ))
             .group(setting_group(
                 &app_entity,
@@ -55,23 +70,14 @@ impl AppShell {
             .group(setting_group(
                 &app_entity,
                 p,
-                "settings.highlight_group",
-                AppShell::render_settings_highlight,
-            ));
-
-        let page_themes = SettingPage::new(rust_i18n::t!("settings.tab_themes").to_string())
-            .icon(IconName::Server)
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.ui_theme_group",
-                AppShell::render_settings_ui_theme,
+                "settings.terminal_theme_group",
+                AppShell::render_settings_themes,
             ))
             .group(setting_group(
                 &app_entity,
                 p,
-                "settings.terminal_theme_group",
-                AppShell::render_settings_themes,
+                "settings.highlight_group",
+                AppShell::render_settings_highlight,
             ));
 
         let page_files = SettingPage::new(rust_i18n::t!("settings.tab_files").to_string())
@@ -127,22 +133,34 @@ impl AppShell {
                 }
             })));
 
-        let page_tabs = SettingPage::new(rust_i18n::t!("settings.tab_tabs_window").to_string())
-            .icon(IconName::PanelLeft)
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.tabs_group",
-                AppShell::render_settings_tabs,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.window_group",
-                AppShell::render_settings_window,
-            ));
-
-        let page_layout = layout_page::layout_settings_page(app_entity.clone(), p.clone());
+        // 窗口与布局合并：标签页、窗口与会话、活动栏、状态栏四组。
+        let page_window_layout =
+            SettingPage::new(rust_i18n::t!("settings.tab_window_layout").to_string())
+                .icon(IconName::PanelLeft)
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.tabs_group",
+                    AppShell::render_settings_tabs,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.window_group",
+                    AppShell::render_settings_window,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.activity_bar",
+                    AppShell::render_settings_activity_bar,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.status_bar",
+                    AppShell::render_settings_status_bar,
+                ));
 
         let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
             .icon(IconName::Globe)
@@ -168,13 +186,12 @@ impl AppShell {
         let settings_component = Settings::new("app-settings")
             .sidebar_width(px(220.0))
             .pages(vec![
-                page_rendering,
-                page_themes,
+                page_appearance,
+                page_terminal,
                 page_files,
                 page_mouse,
                 page_shortcuts,
-                page_tabs,
-                page_layout,
+                page_window_layout,
                 page_general,
             ]);
 

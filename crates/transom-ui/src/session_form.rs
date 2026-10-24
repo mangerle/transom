@@ -43,6 +43,10 @@ pub(crate) struct SessionForm {
     pub serial_ports: Vec<SerialPortDescriptor>,
     pub serial_ports_error: Option<String>,
     pub startup_commands: Entity<TextareaState>,
+    /// SSH 连接超时（秒）；留空或非法值回退会话存量/默认。
+    pub connect_timeout: Entity<InputState>,
+    /// SSH keepalive 间隔（秒），0 表示禁用。
+    pub keepalive: Entity<InputState>,
     pub auth: AuthChoice,
     pub save_password: bool,
     pub save_passphrase: bool,
@@ -77,6 +81,8 @@ struct SessionFormSeed {
     cert_path: String,
     folder_path: String,
     startup_commands: String,
+    connect_timeout: String,
+    keepalive: String,
     serial_port: String,
     serial_baud: String,
     serial_data_bits: SerialDataBits,
@@ -146,6 +152,19 @@ impl SessionForm {
             .as_ref()
             .map(|session| session.startup.to_multiline())
             .unwrap_or_default();
+        let (connect_timeout, keepalive) = base
+            .as_ref()
+            .and_then(|session| match &session.connection {
+                Connection::Ssh(ssh) => Some(ssh),
+                _ => None,
+            })
+            .map(|ssh| {
+                (
+                    ssh.options.connect_timeout_secs.to_string(),
+                    ssh.options.keepalive_secs.to_string(),
+                )
+            })
+            .unwrap_or_else(|| ("15".to_string(), "30".to_string()));
         let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
         let serial_baud = serial
             .map(|serial| serial.baud_rate)
@@ -176,6 +195,8 @@ impl SessionForm {
                 cert_path,
                 folder_path: folder_path.unwrap_or_default(),
                 startup_commands,
+                connect_timeout,
+                keepalive,
                 serial_port,
                 serial_baud,
                 serial_data_bits,
@@ -197,6 +218,8 @@ impl SessionForm {
             cert_path,
             folder_path,
             startup_commands,
+            connect_timeout,
+            keepalive,
             serial_port,
             serial_baud,
             serial_data_bits,
@@ -266,6 +289,8 @@ impl SessionForm {
             serial_ports_error: None,
             startup_commands: cx
                 .new(|cx| TextareaState::new(window, cx).default_value(startup_commands)),
+            connect_timeout: text_input(window, cx, &connect_timeout, "15"),
+            keepalive: text_input(window, cx, &keepalive, "30"),
             auth,
             save_password,
             save_passphrase,
@@ -355,6 +380,18 @@ impl SessionForm {
             .map(|ssh| ssh.options.clone())
             .unwrap_or_default();
         options.auto_reconnect = self.auto_reconnect;
+        // 连接参数与键位一样属于"填错就填不进"的数值：越界一律回退存量，
+        // 不用报错打断保存流程。
+        if let Ok(timeout) = self.connect_timeout.read(cx).value().trim().parse::<u64>()
+            && (1..=120).contains(&timeout)
+        {
+            options.connect_timeout_secs = timeout;
+        }
+        if let Ok(keepalive) = self.keepalive.read(cx).value().trim().parse::<u64>()
+            && keepalive <= 3600
+        {
+            options.keepalive_secs = keepalive;
+        }
         let auth = match self.auth {
             AuthChoice::Password => AuthMethod::Password {
                 save: self.save_password,

@@ -912,24 +912,12 @@ settings:
   title:
     en: Preferences & Settings
     zh-CN: 偏好设置
-  tab_rendering:
-    en: Rendering & Font
-    zh-CN: 外观与渲染
-  tab_themes:
-    en: Color Schemes
-    zh-CN: 配色方案
   tab_mouse_clipboard:
     en: Mouse & Clipboard
     zh-CN: 鼠标与剪贴板
   tab_shortcuts:
     en: Keyboard Shortcuts
     zh-CN: 快捷键
-  tab_tabs_window:
-    en: Tabs & Window
-    zh-CN: 标签与窗口
-  tab_layout:
-    en: Layout
-    zh-CN: 布局
   activity_bar:
     en: Activity Bar
     zh-CN: 活动栏
@@ -1239,6 +1227,30 @@ settings:
   panel_side_right:
     en: Right
     zh-CN: 右侧
+  connect_timeout:
+    en: Connect Timeout (seconds)
+    zh-CN: 连接超时（秒）
+  keepalive:
+    en: Keepalive Interval (seconds, 0 disables)
+    zh-CN: 保活间隔（秒，0 为禁用）
+  tab_appearance:
+    en: Appearance
+    zh-CN: 外观
+  tab_terminal:
+    en: Terminal
+    zh-CN: 终端
+  tab_window_layout:
+    en: Window & Layout
+    zh-CN: 窗口与布局
+  ui_font_group:
+    en: Interface Font
+    zh-CN: 界面字体
+  terminal_font_group:
+    en: Terminal Font
+    zh-CN: 终端字体
+  ui_font_note:
+    en: Font size follows the density setting on the theme tab.
+    zh-CN: 界面字号跟随"配色方案"页的密度档位，这里只换字体族。
   theme_preview:
     en: Terminal Preview
     zh-CN: 终端色彩效果预览

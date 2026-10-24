@@ -8,36 +8,10 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{ActivityItemId, StatusItemId};
-
-/// 构造“布局”设置页：活动栏与状态栏各一个分组。
-pub(super) fn layout_settings_page(app: Entity<AppShell>, p: Palette) -> SettingPage {
-    let activity_app = app.clone();
-    let activity_palette = p.clone();
-    let status_app = app;
-    SettingPage::new(rust_i18n::t!("settings.tab_layout").to_string())
-        .icon(IconName::LayoutDashboard)
-        .group(
-            SettingGroup::new()
-                .title(rust_i18n::t!("settings.activity_bar").to_string())
-                .item(SettingItem::render(move |_options, _window, cx| {
-                    activity_app.update(cx, |this, cx| {
-                        this.render_settings_activity_bar(&activity_palette, cx)
-                    })
-                })),
-        )
-        .group(
-            SettingGroup::new()
-                .title(rust_i18n::t!("settings.status_bar").to_string())
-                .item(SettingItem::render(move |_options, _window, cx| {
-                    status_app.update(cx, |this, cx| this.render_settings_status_bar(&p, cx))
-                })),
-        )
-}
 
 /// 单个布局条目的显隐行参数。
 struct VisibilityRowOptions {

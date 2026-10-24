@@ -92,7 +92,11 @@ impl AppShell {
         let tab_id = TabId::new();
         let session = Session::new(
             rust_i18n::t!("app.new_local").to_string(),
-            Connection::Local(LocalConnection::default()),
+            Connection::Local(LocalConnection {
+                // 本地 shell 是全局偏好：一键创建的本地终端没有表单可填。
+                shell: self.settings.local_shell.clone(),
+                working_dir: None,
+            }),
         );
         self.create_group(tab_id, session.id);
         self.tabs

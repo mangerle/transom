@@ -310,6 +310,12 @@ pub struct AppSettings {
     /// 界面外观（明暗、主题、密度）；旧配置缺少该字段时使用内置默认。
     #[serde(default)]
     pub appearance: AppearanceSettings,
+    /// 本地终端启动的 shell；`None` 时跟随系统默认。
+    ///
+    /// 为什么是全局而不是会话级：本地终端从侧栏一键创建、没有会话表单，
+    /// shell 是这台机器的属性而非某个会话的属性。
+    #[serde(default)]
+    pub local_shell: Option<String>,
     #[serde(default)]
     pub terminal_interaction: TerminalInteraction,
     #[serde(default)]
@@ -481,6 +487,7 @@ impl Default for AppSettings {
         Self {
             language: default_language(),
             appearance: AppearanceSettings::default(),
+            local_shell: None,
             terminal_interaction: TerminalInteraction::default(),
             terminal_profile: TerminalProfile::default(),
             window: WindowSettings::default(),
