@@ -4,6 +4,7 @@ use crate::app::{AppShell, TabGroup, TabStatus, TerminalTab};
 use crate::palette::localized_error;
 use crate::pane_tree::{LayoutNode, RemoveOutcome};
 use crate::session_form::SessionForm;
+use crate::sftp::PendingEditorClose;
 use gpui_kit::component::set_locale;
 use gpui_kit::*;
 use transom_core::{
@@ -334,16 +335,25 @@ impl AppShell {
     }
 
     pub(crate) fn delete_session_by_id(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        self.catalog
-            .sessions
-            .retain(|session| session.id != session_id);
-        self.selected_sessions.remove(&session_id);
+        // 会话下任一标签存在未保存的编辑面板时，删除会被闸门挂起，
+        // 待用户处理完毕后续行（同关闭标签组的保护水位）。
         let removed_tabs: Vec<TabId> = self
             .tabs
             .iter()
             .filter(|tab| tab.session_id == session_id)
             .map(|tab| tab.id)
             .collect();
+        if self.block_close_for_dirty_editors(
+            &removed_tabs,
+            PendingEditorClose::Session(session_id),
+            cx,
+        ) {
+            return;
+        }
+        self.catalog
+            .sessions
+            .retain(|session| session.id != session_id);
+        self.selected_sessions.remove(&session_id);
         for tab_id in &removed_tabs {
             let _ = self
                 .services
@@ -528,6 +538,9 @@ impl AppShell {
     }
 
     /// 关闭标签组，并回收其中全部窗格的连接。
+    ///
+    /// 组内任一窗格存在未保存的编辑面板时，关闭会被闸门挂起：先弹出各面板的
+    /// 丢弃确认横幅，用户全部处理完毕后自动续行本次关闭。
     pub(crate) fn close_group(
         &mut self,
         group_id: GroupId,
@@ -537,8 +550,11 @@ impl AppShell {
         let Some(index) = self.groups.iter().position(|group| group.id == group_id) else {
             return;
         };
-        let group = self.groups.remove(index);
-        let panes = group.pane_ids();
+        let panes = self.groups[index].pane_ids();
+        if self.block_close_for_dirty_editors(&panes, PendingEditorClose::Group(group_id), cx) {
+            return;
+        }
+        self.groups.remove(index);
         for tab_id in &panes {
             let _ = self
                 .services
@@ -568,6 +584,8 @@ impl AppShell {
     }
 
     /// 关闭单个窗格；组内最后一个窗格关闭时等价于关闭整个标签。
+    ///
+    /// 窗格存在未保存的编辑面板时，关闭会被闸门挂起（同 `close_group`）。
     pub(crate) fn close_pane(
         &mut self,
         tab_id: TabId,
@@ -580,6 +598,13 @@ impl AppShell {
         if self.groups[group_index].pane_count() == 1 {
             let group_id = self.groups[group_index].id;
             self.close_group(group_id, window, cx);
+            return;
+        }
+        if self.block_close_for_dirty_editors(
+            std::slice::from_ref(&tab_id),
+            PendingEditorClose::Pane(tab_id),
+            cx,
+        ) {
             return;
         }
 

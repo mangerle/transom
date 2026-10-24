@@ -16,6 +16,8 @@ pub enum ErrorCode {
     HostKeyMismatch,
     ChannelFailed,
     SftpFailed,
+    /// 编辑回传前发现远端文件已被修改（版本指纹不一致），拒绝覆盖。
+    SftpTextConflict,
     ForwardFailed,
     Io,
     SecretStoreUnavailable,

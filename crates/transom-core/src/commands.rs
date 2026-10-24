@@ -4,7 +4,7 @@ use crate::ids::{ConnectionId, ForwardId, TabId, TransferId};
 use crate::prompt::PromptInfo;
 use crate::secrets::ConnectionSecrets;
 use crate::session::Session;
-use crate::sftp::{RemoteFile, RemoteMetadata, SftpOperation};
+use crate::sftp::{RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation};
 use crate::sftp_sync::DirComparison;
 use crate::terminal::{TerminalIo, TerminalSize};
 use crate::traffic::NetworkTraffic;
@@ -117,22 +117,33 @@ pub enum AppEvent {
         op_id: TransferId,
         error: AppError,
     },
-    /// 编辑器读取远端文本完成。
+    /// 编辑器读取远端文本完成；`meta` 为读取时刻的版本指纹，随内容一并缓存
+    /// 到编辑面板，供保存前的并发冲突比对。
     SftpTextRead {
         tab_id: TabId,
         connection_id: ConnectionId,
         op_id: TransferId,
         content: String,
+        meta: RemoteTextMeta,
     },
-    /// 编辑器回传远端文本完成；`size` 为写完后重新 stat 到的远端字节数。
+    /// 编辑器回传远端文本完成；`meta` 为写完后重新 stat 到的版本指纹与字节数，
+    /// 作为新的比对基准回填面板。
     SftpTextWritten {
         tab_id: TabId,
         connection_id: ConnectionId,
         op_id: TransferId,
-        size: u64,
+        meta: RemoteTextMeta,
     },
     /// 编辑器读写失败；与 `SftpFailed` 分开，编辑面板的错误不进传输队列与状态栏。
     SftpTextFailed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        error: AppError,
+    },
+    /// 回传前的版本指纹比对发现远端已被修改，写入被拒绝；编辑面板据此弹出
+    /// 冲突横幅（重新载入 / 强制覆盖 / 继续编辑），而非按普通失败处理。
+    SftpTextConflict {
         tab_id: TabId,
         connection_id: ConnectionId,
         op_id: TransferId,

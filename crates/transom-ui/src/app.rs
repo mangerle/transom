@@ -8,8 +8,8 @@ use crate::palette::{Palette, localized_error};
 use crate::pane_tree::LayoutNode;
 use crate::session_form::{AuthChoice, SessionForm};
 use crate::sftp::{
-    EditorPanelState, SftpChmodModalState, SftpFilterModalState, SftpInputModalState,
-    SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
+    EditorPanelState, PendingEditorClose, SftpChmodModalState, SftpFilterModalState,
+    SftpInputModalState, SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
 };
 use crate::snippets::SnippetFormState;
 use gpui_kit::component::command::CommandState;
@@ -290,6 +290,8 @@ pub struct AppShell {
     pub(crate) confirm_forward_any: Option<PendingForwardConfirm>,
     /// 已打开的远端文本编辑面板，Vec 顺序即叠放次序，末尾为最上层。
     pub(crate) editor_panels: Vec<EditorPanelState>,
+    /// 被脏编辑面板拦下的标签/会话关闭意图；面板全部处理完毕后续行执行。
+    pub(crate) pending_editor_close: Option<PendingEditorClose>,
     pub(crate) sftp_chmod_modal: Option<SftpChmodModalState>,
     pub(crate) sftp_input_modal: Option<SftpInputModalState>,
     pub(crate) sftp_properties_modal: Option<SftpPropertiesModalState>,
@@ -459,6 +461,7 @@ impl AppShell {
             settings_highlight_keywords,
             confirm_forward_any: None,
             editor_panels: Vec::new(),
+            pending_editor_close: None,
             sftp_chmod_modal: None,
             sftp_input_modal: None,
             sftp_properties_modal: None,

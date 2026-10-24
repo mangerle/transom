@@ -1,6 +1,7 @@
 //! SFTP 内置编辑器的面板状态、窗体动作与几何/语言换算。
 //!
-//! 生命周期（拉取、保存、回传结果）在 `editor_ops.rs`，渲染在 `editor_view.rs`。
+//! 打开与读取在 `editor_open.rs`，保存回传在 `editor_ops.rs`，
+//! 关闭保护在 `editor_close.rs`，渲染在 `editor_view.rs`。
 //!
 //! 设计原理（Why）：
 //! - 容器是可拖拽、可折叠、可最大化的非阻塞面板，而不是模态弹窗。编辑远程配置的
@@ -16,7 +17,7 @@
 use crate::app::AppShell;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
-use transom_core::{TabId, TransferId};
+use transom_core::{RemoteTextMeta, TabId, TransferId};
 
 /// 面板默认尺寸：足够容纳一个两百行的配置文件，又不至于盖住整个工作区。
 pub(crate) const PANEL_WIDTH: f32 = 880.0;
@@ -45,6 +46,20 @@ pub(crate) enum EditorPhase {
     Failed,
 }
 
+/// 面板内等待二次确认的破坏性操作；同一时刻至多一个，渲染据此选择横幅。
+///
+/// 用枚举而非两个布尔位表达，杜绝"同时在确认关闭又在确认恢复"的非法组合。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PanelConfirm {
+    /// 关闭面板并丢弃未保存修改。
+    DiscardClose,
+    /// 放弃全部未保存修改，恢复到最近一次与远端一致的内容。
+    ///
+    /// 恢复走 `set_value`，库内会重置撤销栈，无法用 Ctrl+Z 找回，
+    /// 因此与关闭丢弃一样必须先经确认。
+    Revert,
+}
+
 /// 一个已打开的远端文本文件对应的悬浮面板状态。
 pub(crate) struct EditorPanelState {
     /// 面板所属标签页；关闭标签时用于连带回收面板。
@@ -54,8 +69,11 @@ pub(crate) struct EditorPanelState {
     /// 传给编辑器的高亮 token（扩展名或语法名），未识别时为 `text`。
     pub(crate) language: String,
     pub(crate) editor: Entity<EditorState>,
-    /// 最近一次与远端一致的内容，用于脏检查；回传成功后整体替换。
+    /// 最近一次与远端一致的内容，用于脏检查与恢复；回传成功后整体替换。
     pub(crate) baseline: SharedString,
+    /// 远端文本版本指纹：读取装载与回传成功时刷新，保存请求携带它做并发
+    /// 冲突比对；`None` 只存在于读取完成前的窗口期。
+    pub(crate) remote_meta: Option<RemoteTextMeta>,
     /// 由编辑器 `Change` 事件置位，避免每帧比较整份文本。
     pub(crate) dirty: bool,
     /// 是否已成功装载过远端内容。
@@ -80,8 +98,12 @@ pub(crate) struct EditorPanelState {
     /// 在途上传任务 ID；传输完成/失败事件按它回填结果。
     pub(crate) pending_op: Option<TransferId>,
     pub(crate) error: Option<String>,
-    /// 关闭时存在未保存修改，等待用户在面板内二次确认。
-    pub(crate) confirm_discard: bool,
+    /// 回传前的版本指纹比对发现远端已被修改：横幅提供重新载入/强制覆盖/继续
+    /// 编辑三个出口。与 `error` 分开表达——普通失败只需就地显示文本，冲突需要
+    /// 动作按钮，且"内容被他人改写"与"读写出错"是两类不同事件。
+    pub(crate) conflict: bool,
+    /// 关闭或恢复前等待用户在面板内二次确认的破坏性操作。
+    pub(crate) confirm: Option<PanelConfirm>,
     /// 折叠为仅标题栏：保留面板但让出画面，对应"最小化"的诉求。
     pub(crate) collapsed: bool,
     pub(crate) maximized: bool,
@@ -238,7 +260,7 @@ impl AppShell {
             .is_some_and(|item| item.dirty);
         if dirty {
             if let Some(item) = self.editor_panel_mut(editor) {
-                item.confirm_discard = true;
+                item.confirm = Some(PanelConfirm::DiscardClose);
             }
             cx.notify();
             return;
@@ -246,7 +268,8 @@ impl AppShell {
         self.drop_editor_panel(editor, window, cx);
     }
 
-    /// 确认丢弃：放弃未保存改动并关闭面板。
+    /// 确认丢弃：放弃未保存改动并关闭面板；若关闭是被标签关闭闸门拦下的，
+    /// 还要继续推进那次挂起的关闭。
     pub(crate) fn discard_editor_panel(
         &mut self,
         editor: &Entity<EditorState>,
@@ -254,13 +277,17 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(item) = self.editor_panel_mut(editor) {
-            item.confirm_discard = false;
+            item.confirm = None;
             item.dirty = false;
         }
         self.drop_editor_panel(editor, window, cx);
+        self.resume_pending_editor_close(window, cx);
     }
 
     /// 留在面板：撤销二次确认并把焦点交还编辑器。
+    ///
+    /// 用户明确选择继续编辑，连带取消挂起的标签关闭意图：否则其余面板处理完
+    /// 后自动续行关闭，会把用户刚说要留下的窗格整个关掉。
     pub(crate) fn keep_editor_panel(
         &mut self,
         editor: &Entity<EditorState>,
@@ -268,7 +295,62 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(item) = self.editor_panel_mut(editor) {
-            item.confirm_discard = false;
+            item.confirm = None;
+        }
+        self.pending_editor_close = None;
+        editor.update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
+    /// 发起恢复确认：只置确认横幅，真正的恢复在 `confirm_revert_editor_panel`。
+    pub(crate) fn ask_revert_editor_panel(
+        &mut self,
+        editor: &Entity<EditorState>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(item) = self.editor_panel_mut(editor) {
+            item.confirm = Some(PanelConfirm::Revert);
+        }
+        cx.notify();
+    }
+
+    /// 确认放弃修改：把缓冲区整体恢复到最近一次与远端一致的内容。
+    ///
+    /// `set_value` 在库内会重置撤销栈，恢复结果无法用 Ctrl+Z 找回，
+    /// 因此必须经由 `PanelConfirm::Revert` 二次确认后才执行到这里。
+    pub(crate) fn confirm_revert_editor_panel(
+        &mut self,
+        editor: &Entity<EditorState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let baseline = if let Some(item) = self.editor_panel_mut(editor) {
+            item.confirm = None;
+            item.baseline.clone()
+        } else {
+            return;
+        };
+        editor.update(cx, |state, cx| state.set_value(baseline, window, cx));
+        if let Some(item) = self.editor_panel_mut(editor) {
+            item.dirty = false;
+            item.phase = EditorPhase::Idle;
+            item.written_size = None;
+            item.error = None;
+        }
+        self.resume_pending_editor_close(window, cx);
+        cx.notify();
+    }
+
+    /// 收起冲突横幅但保留冲突事实：用户想先继续编辑，缓冲区内容不动，
+    /// 下次保存仍会携带旧指纹比对并再次提醒。
+    pub(crate) fn dismiss_editor_conflict(
+        &mut self,
+        editor: &Entity<EditorState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(item) = self.editor_panel_mut(editor) {
+            item.conflict = false;
         }
         editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();

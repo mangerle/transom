@@ -1,6 +1,8 @@
 //! SFTP 双栏文件管理器、传输队列、内置编辑器悬浮面板与权限/属性模态弹窗模块。
 
 mod chmod;
+mod editor_close;
+mod editor_open;
 mod editor_ops;
 mod editor_panel;
 mod editor_view;
@@ -22,6 +24,7 @@ mod status;
 mod sync_actions;
 mod sync_modal;
 
+pub(crate) use self::editor_close::PendingEditorClose;
 pub(crate) use self::editor_panel::EditorPanelState;
 pub(crate) use self::preview::SftpPreviewResponse;
 use self::preview::SftpPreviewState;

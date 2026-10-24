@@ -1006,12 +1006,13 @@ async fn execute_sftp_op(
             let result =
                 tokio::time::timeout(TEXT_READ_TIMEOUT, client.read_text(&path, max_bytes)).await;
             match result {
-                Ok(Ok(content)) => {
+                Ok(Ok((content, meta))) => {
                     let _ = event_tx.send(AppEvent::SftpTextRead {
                         tab_id,
                         connection_id,
                         op_id,
                         content,
+                        meta,
                     });
                 }
                 Ok(Err(error)) => {
@@ -1035,18 +1036,34 @@ async fn execute_sftp_op(
                 }
             }
         }
-        SftpOperation::WriteText { path, content } => {
+        SftpOperation::WriteText {
+            path,
+            content,
+            expected,
+        } => {
             // 回传比读取更慢（写要落盘并等待远端确认），给更宽的超时；
             // 失败与超时统一回抛给编辑面板就地显示，不影响队列与状态栏。
-            let result =
-                tokio::time::timeout(TEXT_WRITE_TIMEOUT, client.write_text(&path, &content)).await;
+            // 版本指纹冲突走独立事件：面板要弹出三选一横幅，不能按普通失败处理。
+            let result = tokio::time::timeout(
+                TEXT_WRITE_TIMEOUT,
+                client.write_text(&path, &content, expected),
+            )
+            .await;
             match result {
-                Ok(Ok(size)) => {
+                Ok(Ok(meta)) => {
                     let _ = event_tx.send(AppEvent::SftpTextWritten {
                         tab_id,
                         connection_id,
                         op_id,
-                        size,
+                        meta,
+                    });
+                }
+                Ok(Err(error)) if error.code == ErrorCode::SftpTextConflict => {
+                    let _ = event_tx.send(AppEvent::SftpTextConflict {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
                     });
                 }
                 Ok(Err(error)) => {

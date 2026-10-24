@@ -354,15 +354,24 @@ impl AppShell {
                     cx,
                 );
             }
-            AppEvent::SftpTextRead { op_id, content, .. } => {
-                self.apply_editor_text(op_id, content, window, cx);
+            AppEvent::SftpTextRead {
+                op_id,
+                content,
+                meta,
+                ..
+            } => {
+                self.apply_editor_text(op_id, content, meta, window, cx);
             }
-            AppEvent::SftpTextWritten { op_id, size, .. } => {
-                self.note_editor_text_written(op_id, size, cx);
+            AppEvent::SftpTextWritten { op_id, meta, .. } => {
+                self.note_editor_text_written(op_id, meta, window, cx);
             }
             AppEvent::SftpTextFailed { op_id, error, .. } => {
                 // 编辑读写失败只回到面板内显示，不写远端栏错误、不进传输队列统计。
                 self.note_editor_text_failed(op_id, localized_error(&error), cx);
+            }
+            AppEvent::SftpTextConflict { op_id, error, .. } => {
+                // 版本指纹拦截不是普通失败：面板要弹出三选一冲突横幅。
+                self.note_editor_text_conflict(op_id, localized_error(&error), cx);
             }
             AppEvent::SftpDirCompared {
                 tab_id: _,

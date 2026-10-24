@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use transom_core::{AppError, ErrorCode, PreviewMode, RemoteFile, RemoteMetadata};
+use transom_core::{AppError, ErrorCode, PreviewMode, RemoteFile, RemoteMetadata, RemoteTextMeta};
 
 const TRANSFER_CHUNK: usize = 64 * 1024;
 
@@ -194,14 +194,21 @@ impl SftpClient {
     /// # Errors
     /// 路径不存在、权限不足、会话中断、超过 `max_bytes`，或内容不是 UTF-8 时
     /// 返回 `ErrorCode::SftpFailed`。
-    pub async fn read_text(&self, path: &str, max_bytes: u64) -> Result<String, AppError> {
+    ///
+    /// 返回值附带读取时刻的版本指纹（实际读到的字节数与读取前 stat 的 mtime），
+    /// 供编辑面板保存前做并发冲突比对。
+    pub async fn read_text(
+        &self,
+        path: &str,
+        max_bytes: u64,
+    ) -> Result<(String, RemoteTextMeta), AppError> {
         let limit = usize::try_from(max_bytes).unwrap_or(usize::MAX);
         let mut remote = self.session.open(path).await.map_err(sftp_error)?;
-        let total = remote
-            .metadata()
-            .await
-            .ok()
-            .and_then(|metadata| metadata.size);
+        let opened = remote.metadata().await.ok();
+        let total = opened.as_ref().and_then(|metadata| metadata.size);
+        // mtime 取读取前的 stat：若文件在读取过程中被改写，随后保存前的比对
+        // 会因 mtime 不一致命中冲突，恰好覆盖这个竞态窗口。
+        let mtime = opened.as_ref().and_then(|metadata| metadata.mtime);
         if let Some(total) = total
             && total > max_bytes
         {
@@ -233,21 +240,34 @@ impl SftpClient {
             buffer.extend_from_slice(&chunk[..count]);
         }
         let _ = remote.close().await;
+        // 指纹的字节数取实际读到的长度而非 stat 值：面板持有的是这份内容，
+        // 后续比对必须以它为基准才与回传内容一致。
+        let meta = RemoteTextMeta {
+            size: buffer.len() as u64,
+            mtime,
+        };
 
-        String::from_utf8(buffer).map_err(|_| {
+        let content = String::from_utf8(buffer).map_err(|_| {
             AppError::with_detail(
                 ErrorCode::SftpFailed,
                 format!("文件 {path} 不是 UTF-8 文本（可能是二进制或 GBK 等编码），内置编辑器无法安全回写"),
             )
-        })
+        })?;
+        Ok((content, meta))
     }
 
-    /// 将整份文本内容写回远端覆盖，供内置编辑器保存使用；返回远端确认后的字节数。
+    /// 将整份文本内容写回远端覆盖，供内置编辑器保存使用；返回远端确认后的
+    /// 版本指纹（字节数与 mtime），作为面板下一次比对的基准。
     ///
     /// 设计原理（Why）：
     /// - 必须带 TRUNCATE 打开：SFTP 的写入只覆盖前 N 字节，若编辑后内容比原文件短，
     ///   不截断就会在远端留下旧文件的尾巴，得到一个"新内容 + 残留旧尾巴"的脏文件，
     ///   而这恰好是改配置最常见的操作（删掉几行再保存）。
+    /// - `expected` 携带打开时的版本指纹做乐观锁：写前先 stat 比对，远端已被
+    ///   他人修改则拒绝覆盖并返回 `ErrorCode::SftpTextConflict`，由面板弹出
+    ///   冲突横幅交给用户决策，杜绝静默丢失他人改动。`None` 表示用户已明确
+    ///   选择强制覆盖，跳过比对。stat-then-write 非原子，比对与写入之间的窗口
+    ///   是该方案的固有限制。
     /// - 写完后重新 stat 比对字节数：截断与部分写是唯一能被廉价发现的失败形态；
     ///   校验和要把整份内容重读一遍，对几百 KB 的配置编辑不划算。
     /// - 代价与局限：非原子操作，写入过程中断会在远端留下半份文件。要做原子替换需
@@ -255,9 +275,28 @@ impl SftpClient {
     ///   文件，属于需要单独权衡的后续改动。
     ///
     /// # Errors
-    /// 打开、写入、刷新失败，或写回后远端大小与提交字节数不一致时返回
-    /// `ErrorCode::SftpFailed`。
-    pub async fn write_text(&self, path: &str, content: &[u8]) -> Result<u64, AppError> {
+    /// 版本指纹不一致返回 `ErrorCode::SftpTextConflict`；打开、写入、刷新失败，
+    /// 或写回后远端大小与提交字节数不一致时返回 `ErrorCode::SftpFailed`。
+    pub async fn write_text(
+        &self,
+        path: &str,
+        content: &[u8],
+        expected: Option<RemoteTextMeta>,
+    ) -> Result<RemoteTextMeta, AppError> {
+        if let Some(expected) = expected {
+            let metadata = self.session.metadata(path).await.map_err(sftp_error)?;
+            if let Some(current) = remote_text_meta_of(metadata.size, metadata.mtime)
+                && expected.conflicts_with(&current)
+            {
+                return Err(AppError::with_detail(
+                    ErrorCode::SftpTextConflict,
+                    format!(
+                        "文件 {path} 自打开后已被修改：当前 {} 字节（mtime {:?}），打开时 {} 字节（mtime {:?}）",
+                        current.size, current.mtime, expected.size, expected.mtime
+                    ),
+                ));
+            }
+        }
         let mut remote = self
             .session
             .open_with_flags(
@@ -286,7 +325,10 @@ impl SftpClient {
                 format!("远端确认 {written} 字节，提交内容 {expected} 字节，写入可能被中断"),
             ));
         }
-        Ok(written)
+        Ok(RemoteTextMeta {
+            size: written,
+            mtime: metadata.mtime,
+        })
     }
 
     pub async fn download<F>(
@@ -653,4 +695,11 @@ pub(crate) fn sftp_error(error: russh_sftp::client::error::Error) -> AppError {
 
 pub(crate) fn sftp_io_error(error: std::io::Error) -> AppError {
     AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
+}
+
+/// 把远端 stat 结果折算成版本指纹；缺少字节数时返回 `None`，调用方据此跳过
+/// 比对而不是误判冲突（无法验证不等于发生了冲突）。只取两个所需字段而非
+/// 整个 stat 对象，避免为一次折算引入协议层类型依赖。
+fn remote_text_meta_of(size: Option<u64>, mtime: Option<u32>) -> Option<RemoteTextMeta> {
+    Some(RemoteTextMeta { size: size?, mtime })
 }

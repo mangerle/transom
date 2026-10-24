@@ -1,12 +1,15 @@
 //! SFTP 编辑面板的视图：外壳定位、标题栏、编辑器主体与行列状态栏。
 //!
-//! 面板状态与窗体动作在 `editor_panel.rs`，生命周期在 `editor_ops.rs`。
+//! 面板状态与窗体动作在 `editor_panel.rs`，打开与读取在 `editor_open.rs`，
+//! 回传在 `editor_ops.rs`，关闭保护在 `editor_close.rs`。
 //!
 //! 渲染入口之外全部是接收 `&EditorPanelState` 的自由函数：面板状态存在 `self` 里，
 //! 若渲染方法按 `&mut self` 取面板再挂 `cx.listener`，同一帧内会对 `self`
 //! 既读又写而被借用检查拒绝。图标一律取组件库资产，不用字符拟态。
 
-use super::editor_panel::{EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, clamp_axis};
+use super::editor_panel::{
+    EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, PanelConfirm, clamp_axis,
+};
 use super::format_size;
 use crate::app::AppShell;
 use crate::keymap;
@@ -213,24 +216,40 @@ fn render_panel_body(
     // 未成功装载远端内容时不铺空编辑器：空缓冲区会被误认为"远端文件是空的"，
     // 用户可能就地打字，随后要么被回来的内容整体覆盖，要么反手把远端覆盖成这几个字。
     let content: AnyElement = if item.phase == EditorPhase::Reading || !item.loaded {
-        let (icon, label) = if item.phase == EditorPhase::Reading {
-            (IconName::Loader, format!("正在读取 {}", item.remote_path))
+        if item.phase == EditorPhase::Reading {
+            v_flex()
+                .flex_1()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .text_sm()
+                .text_color(p.muted_foreground)
+                .child(Icon::new(IconName::Loader).xsmall())
+                .child(format!("正在读取 {}", item.remote_path))
+                .into_any_element()
         } else {
-            (
-                IconName::CircleAlert,
-                "远端内容未载入，无法编辑；关闭面板后重新打开该文件".to_string(),
-            )
-        };
-        v_flex()
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .gap_2()
-            .text_sm()
-            .text_color(p.muted_foreground)
-            .child(Icon::new(icon).xsmall())
-            .child(label)
-            .into_any_element()
+            // 读取失败：占位之外给一条重试出口，瞬时网络抖动不必关面板重开。
+            let retry_editor = editor.clone();
+            v_flex()
+                .flex_1()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .text_sm()
+                .text_color(p.muted_foreground)
+                .child(Icon::new(IconName::CircleAlert).xsmall())
+                .child("远端内容未载入，无法编辑")
+                .child(
+                    Button::new("editor-retry-read")
+                        .compact()
+                        .icon(IconName::RefreshCw)
+                        .label("重试读取")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.redrive_editor_read(&retry_editor, cx);
+                        })),
+                )
+                .into_any_element()
+        }
     } else {
         Editor::new(editor).w_full().flex_1().into_any_element()
     };
@@ -246,46 +265,128 @@ fn render_panel_body(
                 .child(err),
         )
     });
-    if !item.confirm_discard {
+    let body = body.when(item.conflict, |this| {
+        this.child(render_conflict_banner(editor, p, cx))
+    });
+    let Some(kind) = item.confirm else {
         return body.into_any_element();
-    }
+    };
+    body.child(render_confirm_banner(kind, editor, p, cx))
+        .into_any_element()
+}
+
+/// 冲突横幅：远端已被修改时提供重新载入、强制覆盖、继续编辑三个出口。
+///
+/// 重新载入会丢弃本地改动（按钮文案明示），强制覆盖跳过指纹比对，两者都是
+/// 不可逆动作，因此各自放在明确的按钮上而不是合并成"确定"。
+fn render_conflict_banner(
+    editor: &Entity<EditorState>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let reload_editor = editor.clone();
+    let force_editor = editor.clone();
+    let dismiss_editor = editor.clone();
+    h_flex()
+        .items_center()
+        .gap_2()
+        .px_2()
+        .py_1()
+        .rounded_md()
+        .bg(p.muted)
+        .child(
+            div()
+                .flex_1()
+                .text_xs()
+                .text_color(p.danger)
+                .child("远端文件在打开后已被修改，直接回传会覆盖这些改动"),
+        )
+        .child(
+            Button::new("editor-conflict-reload")
+                .ghost()
+                .compact()
+                .icon(IconName::RefreshCw)
+                .label("放弃本地并重新载入")
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.redrive_editor_read(&reload_editor, cx);
+                })),
+        )
+        .child(
+            Button::new("editor-conflict-overwrite")
+                .danger()
+                .compact()
+                .label("强制覆盖远端")
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.overwrite_editor_panel_after_conflict(&force_editor, window, cx);
+                })),
+        )
+        .child(
+            Button::new("editor-conflict-dismiss")
+                .ghost()
+                .compact()
+                .label("继续编辑")
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.dismiss_editor_conflict(&dismiss_editor, window, cx);
+                })),
+        )
+        .into_any_element()
+}
+
+/// 二次确认横幅：关闭丢弃与恢复远端共用容器，按操作种类渲染文案与出口。
+fn render_confirm_banner(
+    kind: PanelConfirm,
+    editor: &Entity<EditorState>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
     let keep_editor = editor.clone();
-    let discard_editor = editor.clone();
-    body.child(
-        h_flex()
-            .items_center()
-            .gap_2()
-            .px_2()
-            .py_1()
-            .rounded_md()
-            .bg(p.muted)
-            .child(
-                div()
-                    .flex_1()
-                    .text_xs()
-                    .text_color(p.danger)
-                    .child("有未保存的修改，确定关闭并丢弃吗？"),
-            )
-            .child(
-                Button::new("editor-keep-editing")
-                    .ghost()
-                    .compact()
-                    .label("留下继续编辑")
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.keep_editor_panel(&keep_editor, window, cx);
-                    })),
-            )
-            .child(
-                Button::new("editor-discard-close")
-                    .danger()
-                    .compact()
-                    .label("丢弃修改并关闭")
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.discard_editor_panel(&discard_editor, window, cx);
-                    })),
-            ),
-    )
-    .into_any_element()
+    let confirm_editor = editor.clone();
+    let (message, cancel_label, confirm_label, confirm_id) = match kind {
+        PanelConfirm::DiscardClose => (
+            "有未保存的修改，确定关闭并丢弃吗？",
+            "留下继续编辑",
+            "丢弃修改并关闭",
+            "editor-discard-close",
+        ),
+        PanelConfirm::Revert => (
+            "确定放弃全部未保存修改，恢复到最近回传的远端内容吗？该操作无法撤销。",
+            "取消",
+            "放弃修改",
+            "editor-revert-confirm",
+        ),
+    };
+    h_flex()
+        .items_center()
+        .gap_2()
+        .px_2()
+        .py_1()
+        .rounded_md()
+        .bg(p.muted)
+        .child(div().flex_1().text_xs().text_color(p.danger).child(message))
+        .child(
+            Button::new("editor-keep-editing")
+                .ghost()
+                .compact()
+                .label(cancel_label)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.keep_editor_panel(&keep_editor, window, cx);
+                })),
+        )
+        .child(
+            Button::new(confirm_id)
+                .danger()
+                .compact()
+                .label(confirm_label)
+                .on_click(cx.listener(move |this, _, window, cx| match kind {
+                    PanelConfirm::DiscardClose => {
+                        this.discard_editor_panel(&confirm_editor, window, cx)
+                    }
+                    PanelConfirm::Revert => {
+                        this.confirm_revert_editor_panel(&confirm_editor, window, cx)
+                    }
+                })),
+        )
+        .into_any_element()
 }
 
 /// 状态栏：行列、语言、回传阶段与保存按钮。
@@ -313,7 +414,9 @@ fn render_panel_status(
             Some(bytes) => format!("已回传远端（{}）", format_size(bytes)),
             None => "已回传远端".to_string(),
         },
-        EditorPhase::Failed => if item.dirty {
+        EditorPhase::Failed => if item.conflict {
+            "远端已修改"
+        } else if item.dirty {
             "回传失败"
         } else {
             "读取失败"
@@ -321,6 +424,7 @@ fn render_panel_status(
         .to_string(),
     };
     let save_editor = editor.clone();
+    let revert_editor = editor.clone();
 
     h_flex()
         .items_center()
@@ -344,6 +448,20 @@ fn render_panel_status(
                 .child(div().child(phase_label)),
         )
         .child(div().flex_1())
+        // 冲突期间恢复到的是过期基线（远端已是新内容），横幅上的"重新载入"才是
+        // 正确出口，因此此处不提供"放弃修改"以免误导。
+        .when(item.dirty && !busy && !item.conflict, |this| {
+            this.child(
+                Button::new("editor-revert")
+                    .ghost()
+                    .compact()
+                    .icon(IconName::RotateCcw)
+                    .label("放弃修改")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.ask_revert_editor_panel(&revert_editor, cx);
+                    })),
+            )
+        })
         .child(
             Button::new("editor-save-upload")
                 .primary()

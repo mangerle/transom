@@ -47,6 +47,38 @@ pub struct RemoteDeleteTarget {
     pub is_dir: bool,
 }
 
+/// 远端文本的版本指纹：编辑面板打开或上次回传成功时记录，保存前与远端当前
+/// 指纹比对，检测"打开后文件被他人修改"的并发冲突（丢失更新）。
+///
+/// 设计原理（Why）：stat-then-write 是乐观锁而非原子操作，比对与写入之间存在
+/// 窗口；但它是 SFTP 协议下无需服务端配合的唯一可行方案，能拦住绝大多数
+/// "打开到保存间隔数分钟"的真实冲突。代价与局限：mtime 精度为秒，同秒内同尺寸
+/// 的修改无法识别；个别服务器不回传 mtime 时退化为仅按字节数比对。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteTextMeta {
+    /// 打开时或上次回传成功后的远端字节数。
+    pub size: u64,
+    /// 远端 mtime（秒）。`None` 表示服务器未回传，该维度视为通配不做比对，
+    /// 避免偶发缺字段把合法保存误判成冲突。
+    pub mtime: Option<u32>,
+}
+
+impl RemoteTextMeta {
+    /// 与远端当前指纹不一致即视为冲突。
+    ///
+    /// 任一侧 mtime 缺失时跳过该维度，仅按字节数判定；两侧字节数都来自
+    /// stat，缺失会直接跳过整个比对（见 net 层 `write_text`）。
+    pub fn conflicts_with(&self, current: &RemoteTextMeta) -> bool {
+        if self.size != current.size {
+            return true;
+        }
+        matches!(
+            (self.mtime, current.mtime),
+            (Some(known), Some(now)) if known != now
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransferDirection {
     Download,
@@ -269,9 +301,14 @@ pub enum SftpOperation {
     ///
     /// `content` 为 UTF-8 字节；用 `Vec<u8>` 而非 `String` 是把编码决策留在
     /// 边界上，命令在通道里只被移动不被复制。
+    ///
+    /// `expected` 为打开或上次回传成功时的远端版本指纹（乐观锁）：写前先 stat
+    /// 比对，不一致说明远端已被他人修改，拒绝覆盖并回报冲突。`None` 表示跳过
+    /// 比对强制覆盖（用户在冲突横幅上明确选择"强制覆盖远端"时使用）。
     WriteText {
         path: String,
         content: Vec<u8>,
+        expected: Option<RemoteTextMeta>,
     },
     /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径
     Symlink {
@@ -345,5 +382,51 @@ mod tests {
         assert_eq!(parse_octal_permissions("0644"), Some(0o644));
         assert_eq!(parse_octal_permissions("999"), None);
         assert_eq!(parse_octal_permissions("1777"), None);
+    }
+
+    #[test]
+    fn test_remote_text_meta_conflict_detection() {
+        let opened = RemoteTextMeta {
+            size: 100,
+            mtime: Some(1000),
+        };
+        // 远端与打开时完全一致：不冲突。
+        assert!(!opened.conflicts_with(&RemoteTextMeta {
+            size: 100,
+            mtime: Some(1000),
+        }));
+        // 大小变化（含保存后内容变短/变长）：冲突。
+        assert!(opened.conflicts_with(&RemoteTextMeta {
+            size: 90,
+            mtime: Some(1000),
+        }));
+        // 大小相同但 mtime 变化（同尺寸被改写）：冲突。
+        assert!(opened.conflicts_with(&RemoteTextMeta {
+            size: 100,
+            mtime: Some(2000),
+        }));
+    }
+
+    #[test]
+    fn test_remote_text_meta_treats_missing_mtime_as_wildcard() {
+        // 打开时服务器未回传 mtime：只按大小比对，当前 mtime 出现不视为冲突，
+        // 避免偶发缺字段把合法保存误判成冲突。
+        let opened = RemoteTextMeta {
+            size: 100,
+            mtime: None,
+        };
+        assert!(!opened.conflicts_with(&RemoteTextMeta {
+            size: 100,
+            mtime: Some(2000),
+        }));
+        assert!(opened.conflicts_with(&RemoteTextMeta {
+            size: 120,
+            mtime: Some(2000),
+        }));
+        // 两侧 mtime 均缺失：退化为纯大小比对。
+        assert!(!opened.conflicts_with(&RemoteTextMeta {
+            size: 100,
+            mtime: None,
+        }));
     }
 }
