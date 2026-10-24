@@ -8203,6 +8203,7 @@ dependencies = [
  "parking_lot",
  "rfd",
  "rust-i18n",
+ "serde_json",
  "similar",
  "tokio",
  "tracing",

@@ -31,3 +31,6 @@ tracing.workspace = true
 # 用于生成统一 diff 文本交给 DiffState 渲染，不引入新的传递依赖树。
 similar = "2.7"
 
+
+[dev-dependencies]
+serde_json.workspace = true
