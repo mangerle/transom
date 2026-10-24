@@ -209,7 +209,46 @@ pub(crate) fn sync_with_system(window: &mut Window, cx: &mut App) {
 mod tests {
     use super::*;
     use gpui_kit::component::theme::ThemeSet;
+    use regex::Regex;
     use serde_json::Value;
+    use std::sync::LazyLock;
+
+    /// 静态 t! 键提取：取宏调用里的引号字面量作为键。
+    static KEY_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"\bt!\("([^"]+)"\)"#).expect("正则合法"));
+
+    /// 收集 transom-ui 全部 Rust 源码（含子模块）。
+    fn source_files() -> Vec<(String, String)> {
+        let mut files = Vec::new();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        for entry in walkdir_like(&root) {
+            if entry.extension().and_then(|e| e.to_str()) == Some("rs")
+                && let Ok(content) = std::fs::read_to_string(&entry)
+            {
+                files.push((entry.display().to_string(), content));
+            }
+        }
+        files
+    }
+
+    /// 简易目录递归（避免为此引入 walkdir 依赖）。
+    fn walkdir_like(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let mut out = Vec::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            if let Ok(entries) = std::fs::read_dir(&current) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else {
+                        out.push(path);
+                    }
+                }
+            }
+        }
+        out
+    }
 
     /// 解析内置主题 JSON 并做结构断言。
     ///
@@ -342,6 +381,26 @@ mod tests {
         );
     }
 
+    /// 静态 i18n 键完整性：扫描 transom-ui 源码里全部 t! 宏调用的字面量键，
+    /// 断言每种语言都有定义。`t!` 缺键时静默返回键名本身（界面上直接显示
+    /// "settings.xxx"），编译器拦不住，只能在这里挡。
+    #[test]
+    fn all_static_translation_keys_are_defined() {
+        let mut missing: Vec<String> = Vec::new();
+        for locale in ["zh-CN", "en"] {
+            for (path, content) in source_files() {
+                for caps in KEY_RE.captures_iter(&content) {
+                    let key = caps.get(1).unwrap().as_str();
+                    // rust_i18n 的缺键行为是返回键名字符串，借此判定缺失。
+                    let translated = rust_i18n::t!(key, locale = locale).to_string();
+                    if translated == key {
+                        missing.push(format!("{locale}: {key} ({path})"));
+                    }
+                }
+            }
+        }
+        assert!(missing.is_empty(), "缺失翻译键: {missing:#?}");
+    }
     /// 主题族配对约定：带 " Dark"/" Light" 后缀的名字能找到伴侣名，其余名字
     /// 没有配对语义。
     #[test]

@@ -288,6 +288,11 @@ impl TerminalView {
         self.profile.font_size = profile.font_size;
         self.profile.line_height = profile.line_height;
         self.profile.highlight = profile.highlight.clone();
+        // 终端配色同样全局生效：界面上没有会话级配色入口，保存设置后活窗格
+        // 立即换色；运行期程序经 OSC 4/10/11 的动态改色走另一条运行时表，
+        // 不受此静态基线覆盖影响。
+        self.profile.theme_name = profile.theme_name.clone();
+        self.profile.palette = profile.palette.clone();
         self.renderer_dirty.store(true, Ordering::Release);
         cx.notify();
     }

@@ -52,6 +52,11 @@ impl AppShell {
                 // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
                 profile.word_separators = self.settings.terminal_profile.word_separators.clone();
                 profile.highlight = self.settings.terminal_profile.highlight.clone();
+                // 终端配色同理：会话文件里残留的旧调色板会压掉全局选择，
+                // 表现为"改了终端配色但重开会话不生效"。运行期程序仍可通过
+                // OSC 4/10/11 动态改色，不受此静态基线影响。
+                profile.theme_name = self.settings.terminal_profile.theme_name.clone();
+                profile.palette = self.settings.terminal_profile.palette.clone();
                 let interaction = self.settings.terminal_interaction;
                 let reserved = self.shortcut_recording.filter.clone();
                 let key_filter: KeyFilter = Arc::new(move |keystroke| {

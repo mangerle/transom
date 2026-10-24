@@ -34,4 +34,5 @@ similar = "2.7"
 
 
 [dev-dependencies]
+regex = "1"
 tempfile.workspace = true

@@ -1146,6 +1146,12 @@ settings:
   close_window_on_all_tabs_closed_desc:
     en: Quit the app when the last tab is closed.
     zh-CN: 关闭最后一个标签页时退出应用，而不是留一个空窗口。
+  remember_window_bounds:
+    en: Remember Window Size & Position
+    zh-CN: 记忆窗口大小与位置
+  restore_previous_tabs:
+    en: Restore Previous Session Tabs
+    zh-CN: 启动时恢复上次会话标签页
   remember_window_bounds_desc:
     en: Restore window size and position from the last session.
     zh-CN: 重新打开时恢复上次关闭时的窗口尺寸和屏幕坐标。
