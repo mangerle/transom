@@ -137,10 +137,148 @@ fn default_true() -> bool {
     true
 }
 
+/// 界面外观的明暗模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UiThemeMode {
+    /// 跟随系统明暗设置；依赖桌面 portal 上报，极简窗口管理器下可能恒为浅色。
+    #[default]
+    System,
+    /// 固定浅色。
+    Light,
+    /// 固定深色。
+    Dark,
+    /// 反序列化兜底：设置文件属外部输入，未知值按跟随系统处理，避免一个非法
+    /// 字段让整份设置回退默认。
+    #[serde(other)]
+    Unknown,
+}
+
+impl UiThemeMode {
+    /// 归一化兜底值：写盘前洗成合法状态，保证持久化文件永远可回读。
+    pub(crate) fn normalized(self) -> Self {
+        match self {
+            UiThemeMode::Unknown => UiThemeMode::System,
+            mode => mode,
+        }
+    }
+}
+
+/// 界面密度档位。
+///
+/// 为什么只有两个数值：gpui-kit 的根插件每帧把窗口 rem 基准设为全局主题字号，
+/// 间距、文字与图标全部随动，因此密度只需定 sans 与 mono 两个字号。mono 与
+/// sans 的差距随档位保持在 2 至 3px，标准档即 gpui 默认值（16/13）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UiDensity {
+    /// 紧凑：全局 13px、等宽 11px。
+    Compact,
+    /// 偏紧：全局 14px、等宽 12px。
+    Snug,
+    /// 适中：全局 15px、等宽 12px。
+    Medium,
+    /// 标准：全局 16px、等宽 13px，与 gpui 默认一致。
+    #[default]
+    Standard,
+    /// 宽松：全局 18px、等宽 15px。
+    Roomy,
+    /// 反序列化兜底：未知值按标准档处理。
+    #[serde(other)]
+    Unknown,
+}
+
+impl UiDensity {
+    /// 全部可选档位，供设置页按固定顺序枚举。
+    pub const ALL: [UiDensity; 5] = [
+        UiDensity::Compact,
+        UiDensity::Snug,
+        UiDensity::Medium,
+        UiDensity::Standard,
+        UiDensity::Roomy,
+    ];
+
+    /// 界面全局字号（rem 基准），单位 px。
+    pub fn font_size(self) -> f32 {
+        match self {
+            UiDensity::Compact => 13.0,
+            UiDensity::Snug => 14.0,
+            UiDensity::Medium => 15.0,
+            UiDensity::Standard | UiDensity::Unknown => 16.0,
+            UiDensity::Roomy => 18.0,
+        }
+    }
+
+    /// 界面等宽字号（SFTP 预览、指纹展示等场景），单位 px。
+    pub fn mono_font_size(self) -> f32 {
+        match self {
+            UiDensity::Compact => 11.0,
+            UiDensity::Snug | UiDensity::Medium => 12.0,
+            UiDensity::Standard | UiDensity::Unknown => 13.0,
+            UiDensity::Roomy => 15.0,
+        }
+    }
+
+    /// 设置页展示用的本地化键。
+    pub fn label_key(self) -> &'static str {
+        match self {
+            UiDensity::Compact => "settings.density_compact",
+            UiDensity::Snug => "settings.density_snug",
+            UiDensity::Medium => "settings.density_medium",
+            UiDensity::Standard | UiDensity::Unknown => "settings.density_standard",
+            UiDensity::Roomy => "settings.density_roomy",
+        }
+    }
+
+    /// 归一化兜底值：写盘前洗成合法状态，保证持久化文件永远可回读。
+    pub(crate) fn normalized(self) -> Self {
+        match self {
+            UiDensity::Unknown => UiDensity::Standard,
+            density => density,
+        }
+    }
+}
+
+/// 界面外观偏好：只描述外壳皮肤（明暗、主题、密度），不触碰终端 ANSI 配色
+/// 与会话渲染 profile——那两部分由 `TerminalProfile` 承担，两套体系互不覆盖。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppearanceSettings {
+    /// 明暗模式；`System` 跟随操作系统。
+    pub mode: UiThemeMode,
+    /// 用户选择的 UI 主题名；空串表示用内置默认。明暗切换时若该主题的明暗
+    /// 属性与生效模式不符，运行期回退到对应明暗的默认主题，但选择值保留，
+    /// 切回匹配的明暗后自动恢复用户所选主题。
+    pub ui_theme: String,
+    /// 界面密度档位（驱动全局字号与 rem 基准）。
+    pub density: UiDensity,
+}
+
+impl Default for AppearanceSettings {
+    fn default() -> Self {
+        Self {
+            mode: UiThemeMode::System,
+            ui_theme: String::new(),
+            density: UiDensity::Standard,
+        }
+    }
+}
+
+impl AppearanceSettings {
+    /// 写盘前归一化兜底值，保证持久化状态合法。
+    pub fn normalize(&mut self) {
+        self.mode = self.mode.normalized();
+        self.density = self.density.normalized();
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     #[serde(default = "default_language")]
     pub language: String,
+    /// 界面外观（明暗、主题、密度）；旧配置缺少该字段时使用内置默认。
+    #[serde(default)]
+    pub appearance: AppearanceSettings,
     #[serde(default)]
     pub terminal_interaction: TerminalInteraction,
     #[serde(default)]
@@ -297,6 +435,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             language: default_language(),
+            appearance: AppearanceSettings::default(),
             terminal_interaction: TerminalInteraction::default(),
             terminal_profile: TerminalProfile::default(),
             window: WindowSettings::default(),
@@ -473,5 +612,57 @@ mod tests {
     fn saved_group_without_layout_degrades_to_single_pane() {
         let decoded: SavedTabGroup = serde_json::from_str(r#"{"session":"local"}"#).unwrap();
         assert_eq!(decoded.layout, SavedLayout::Pane);
+    }
+
+    /// 界面外观是后加的字段：老设置里没有它时按内置默认降级，而不是加载失败。
+    #[test]
+    fn settings_without_appearance_still_load() {
+        let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
+        assert_eq!(settings.appearance.mode, UiThemeMode::System);
+        assert!(settings.appearance.ui_theme.is_empty());
+        assert_eq!(settings.appearance.density, UiDensity::Standard);
+    }
+
+    /// 明暗与密度是外部输入：未知值必须落进兜底变体而不是让整份设置加载失败。
+    #[test]
+    fn appearance_unknown_values_fall_back_to_defaults() {
+        let decoded: AppearanceSettings =
+            serde_json::from_str(r#"{"mode":"neon","ui_theme":"Transom Dark","density":"huge"}"#)
+                .unwrap();
+        assert_eq!(decoded.mode, UiThemeMode::Unknown);
+        assert_eq!(decoded.density, UiDensity::Unknown);
+        // 兜底值的行为与默认一致，但写盘前必须洗成合法状态。
+        assert_eq!(decoded.density.font_size(), UiDensity::Standard.font_size());
+        let mut normalized = decoded.clone();
+        normalized.normalize();
+        assert_eq!(normalized.mode, UiThemeMode::System);
+        assert_eq!(normalized.density, UiDensity::Standard);
+        assert_eq!(normalized.ui_theme, "Transom Dark");
+    }
+
+    /// 外观偏好必须原样往返：主题选择保留在设置里，与运行期回退解耦。
+    #[test]
+    fn appearance_round_trips() {
+        let settings = AppearanceSettings {
+            mode: UiThemeMode::Dark,
+            ui_theme: "Transom Dark".into(),
+            density: UiDensity::Roomy,
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let decoded: AppearanceSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, settings);
+    }
+
+    /// 密度档位是全局字号契约：mono 与 sans 的差距必须始终落在 2 至 3px，
+    /// 否则等宽区域（SFTP 预览、指纹）与周边文字的比例会随档位失调。
+    #[test]
+    fn density_sans_mono_gap_stays_within_bounds() {
+        for density in UiDensity::ALL {
+            let gap = density.font_size() - density.mono_font_size();
+            assert!(
+                (2.0..=3.0).contains(&gap),
+                "{density:?} 的字号差距 {gap} 越界"
+            );
+        }
     }
 }

@@ -53,8 +53,8 @@ pub use session::{
     SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
 };
 pub use settings::{
-    AppSettings, BellStyle, SavedLayout, SavedTabGroup, SftpSettings, ShortcutSettings, Snippet,
-    SnippetSettings, SplitAxis, WindowSettings,
+    AppSettings, AppearanceSettings, BellStyle, SavedLayout, SavedTabGroup, SftpSettings,
+    ShortcutSettings, Snippet, SnippetSettings, SplitAxis, UiDensity, UiThemeMode, WindowSettings,
 };
 pub use sftp::{
     PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation,
@@ -74,5 +74,5 @@ pub use terminal::{
     TerminalControl, TerminalControlHandle, TerminalCursorShape, TerminalInteraction, TerminalIo,
     TerminalPalette, TerminalProfile, TerminalSize,
 };
-pub use theme::{PresetTheme, preset_themes};
+pub use theme::{PaletteMode, PresetTheme, preset_themes};
 pub use traffic::{NetworkTraffic, TrafficCounter};

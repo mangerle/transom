@@ -2,11 +2,28 @@ use crate::color::Rgb;
 use crate::terminal::TerminalPalette;
 use serde::{Deserialize, Serialize};
 
+/// 调色板明暗属性。
+///
+/// 为什么放在 core 而不是 UI 层：设置页要判断"界面主题与终端配色的明暗反差"
+/// 并给出提示，而 core 不允许引入 gpui 依赖，因此用自定义二值枚举表达。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PaletteMode {
+    /// 浅色终端配色。
+    Light,
+    /// 深色终端配色；现有全部内置预设都是深色。
+    #[default]
+    Dark,
+}
+
 /// 预设配色方案
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PresetTheme {
     /// 配色方案唯一名称
     pub name: String,
+    /// 配色明暗属性；旧版本序列化数据缺少该字段时按深色处理。
+    #[serde(default)]
+    pub mode: PaletteMode,
     /// 调色板
     pub palette: TerminalPalette,
 }
@@ -15,8 +32,15 @@ impl PresetTheme {
     pub fn new(name: impl Into<String>, palette: TerminalPalette) -> Self {
         Self {
             name: name.into(),
+            mode: PaletteMode::Dark,
             palette,
         }
+    }
+
+    /// 指定明暗属性的链式构造；内置预设目前全为深色，供将来新增浅色预设使用。
+    pub fn with_mode(mut self, mode: PaletteMode) -> Self {
+        self.mode = mode;
+        self
     }
 }
 
@@ -179,6 +203,19 @@ mod tests {
         for theme in themes {
             assert!(!theme.name.is_empty());
             assert_eq!(theme.palette.ansi.len(), 16);
+            // 现有内置预设全部是深色配色，mode 缺省即为深色。
+            assert_eq!(theme.mode, PaletteMode::Dark);
         }
+    }
+
+    /// 旧版本序列化数据没有 mode 字段：反序列化必须按深色降级而不是失败。
+    #[test]
+    fn preset_theme_without_mode_defaults_to_dark() {
+        // 调色板字段是必填的，先构造一份合法值再去掉 mode 模拟旧数据。
+        let legacy = PresetTheme::new("旧数据", TerminalPalette::default());
+        let mut value = serde_json::to_value(&legacy).unwrap();
+        value.as_object_mut().unwrap().remove("mode");
+        let theme: PresetTheme = serde_json::from_value(value).unwrap();
+        assert_eq!(theme.mode, PaletteMode::Dark);
     }
 }
