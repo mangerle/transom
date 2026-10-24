@@ -13,9 +13,9 @@ mod sftp_exec;
 mod sftp_finish;
 
 use lifecycle::{
-    AdoptConnection, KeyDeployParams, ShutdownTables, TabCleanupTables, adopt_connection,
-    deploy_key, drop_local_stats, shutdown_all, stop_forwards, stop_key_deploy, stop_stats,
-    stop_traffic,
+    Admission, AdoptConnection, ConnectingTab, KeyDeployParams, ShutdownTables, TabCleanupTables,
+    admit_connection, adopt_connection, deploy_key, drop_local_stats, shutdown_all, stop_forwards,
+    stop_key_deploy, stop_stats, stop_traffic,
 };
 use pty::ConnectDispatch;
 use samplers::{
@@ -121,6 +121,9 @@ async fn run_controller(
     // 收尾任务集合（断开远端、转发优雅停止）：集中纳管 JoinHandle，
     // 停机时统一限时等待，任务不再脱缰。
     let mut cleanup_set: JoinSet<()> = JoinSet::new();
+    // 待连接意图表：发起连接即登记，完成事件必须匹配当前意图才接入；
+    // 同标签的新连接会顶掉并取消旧建连任务，迟到的旧结果被拒收。
+    let mut connecting: HashMap<TabId, ConnectingTab> = HashMap::new();
     // 本地终端共享一份系统统计采集：/proc 读取与 df 子进程按机器计一次，
     // 而不是每个标签各一份；采样器在首个本地连接时拉起、标签清空后退出。
     let local_stats_tabs: Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>> =
@@ -141,7 +144,12 @@ async fn run_controller(
                 size,
                 secrets,
             })) => {
-                pty::dispatch_connect(ConnectDispatch {
+                // 发起连接即登记最新意图：同标签的旧建连任务作废并取消，
+                // 它迟到的完成结果会被接入裁决拒收，不再覆盖新连接。
+                if let Some(previous) = connecting.remove(&tab_id) {
+                    previous.task.abort();
+                }
+                let task = pty::dispatch_connect(ConnectDispatch {
                     known_hosts: known_hosts.clone(),
                     event_tx: event_tx.clone(),
                     internal_tx: internal_tx.clone(),
@@ -151,6 +159,13 @@ async fn run_controller(
                     size,
                     secrets,
                 });
+                connecting.insert(
+                    tab_id,
+                    ConnectingTab {
+                        connection_id,
+                        task,
+                    },
+                );
             }
             Incoming::Command(Ok(AppCommand::Sftp {
                 tab_id,
@@ -320,6 +335,19 @@ async fn run_controller(
                     remote,
                     traffic,
                 } = session;
+                if matches!(
+                    admit_connection(&connecting, tab_id, connection_id),
+                    Admission::Reject
+                ) {
+                    // 迟到或已作废的连接结果：主动断开释放，不触碰任何状态表，
+                    // 避免踢掉已接入的新连接
+                    tracing::debug!(?tab_id, ?connection_id, "拒收过期的 SSH 连接完成结果并断开");
+                    cleanup_set.spawn(async move {
+                        remote.disconnect("superseded by newer connection").await;
+                    });
+                    continue;
+                }
+                connecting.remove(&tab_id);
                 let remote_clone = remote.clone();
                 adopt_connection(
                     TabCleanupTables {
@@ -365,6 +393,20 @@ async fn run_controller(
                 io,
                 join,
             })) => {
+                if matches!(
+                    admit_connection(&connecting, tab_id, connection_id),
+                    Admission::Reject
+                ) {
+                    // 迟到或已作废的连接：丢弃 IO 即关闭 PTY 主端/串口句柄，
+                    // 子进程随之退出，退出通知因连接不再现任而被忽略
+                    tracing::debug!(
+                        ?tab_id,
+                        ?connection_id,
+                        "拒收过期的LocalConnected连接完成结果"
+                    );
+                    continue;
+                }
+                connecting.remove(&tab_id);
                 adopt_connection(
                     TabCleanupTables {
                         current_connections: &mut current_connections,
@@ -418,6 +460,20 @@ async fn run_controller(
                 io,
                 join,
             })) => {
+                if matches!(
+                    admit_connection(&connecting, tab_id, connection_id),
+                    Admission::Reject
+                ) {
+                    // 迟到或已作废的连接：丢弃 IO 即关闭 PTY 主端/串口句柄，
+                    // 子进程随之退出，退出通知因连接不再现任而被忽略
+                    tracing::debug!(
+                        ?tab_id,
+                        ?connection_id,
+                        "拒收过期的SerialConnected连接完成结果"
+                    );
+                    continue;
+                }
+                connecting.remove(&tab_id);
                 adopt_connection(
                     TabCleanupTables {
                         current_connections: &mut current_connections,

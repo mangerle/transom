@@ -265,3 +265,107 @@ pub(super) async fn deploy_key(params: KeyDeployParams<'_>) {
         }
     }
 }
+
+/// 待连接登记：同一标签的最新连接意图与建连任务句柄。
+///
+/// 设计原理（Why）：连接完成是异步事件，同一标签可以先后发起多次连接
+/// （重连入口不受"连接中"禁用），后完成的旧连接不得覆盖已接入的新连接。
+/// 以"发起时登记的最新意图"为唯一裁决依据：完成结果只有匹配当前意图
+/// 才允许接入，否则主动释放。
+pub(super) struct ConnectingTab {
+    pub(super) connection_id: ConnectionId,
+    pub(super) task: tokio::task::JoinHandle<()>,
+}
+
+/// 连接完成事件的接入裁决结论。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Admission {
+    /// 完成结果与当前意图匹配，允许接入。
+    Adopt,
+    /// 意图不存在（标签已关闭）或已被更新的连接取代，必须拒收。
+    Reject,
+}
+
+/// 连接完成事件是否对应当前连接意图。
+///
+/// 设计原理（Why）：裁决必须是纯查表而非"接入时顺手覆盖"——覆盖式接入
+/// 正是迟到连接踢掉新连接的根因；意图缺失与意图不符都按拒收处理，
+/// 调用方据此释放资源而不触碰任何后台状态表。
+pub(super) fn admit_connection(
+    connecting: &HashMap<TabId, ConnectingTab>,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+) -> Admission {
+    match connecting.get(&tab_id) {
+        Some(entry) if entry.connection_id == connection_id => Admission::Adopt,
+        _ => Admission::Reject,
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::{Admission, ConnectingTab, admit_connection};
+    use std::collections::HashMap;
+    use transom_core::{ConnectionId, TabId};
+
+    fn entry() -> ConnectingTab {
+        ConnectingTab {
+            connection_id: ConnectionId::new(),
+            // 测试不需要真实任务；句柄只用于生命周期管理
+            task: tokio::spawn(async {}),
+        }
+    }
+
+    #[tokio::test]
+    async fn matching_intent_is_adopted() {
+        let mut connecting = HashMap::new();
+        let tab = TabId::new();
+        let e = entry();
+        let id = e.connection_id;
+        connecting.insert(tab, e);
+        assert_eq!(
+            admit_connection(&connecting, tab, id),
+            Admission::Adopt,
+            "意图匹配的完成结果必须放行"
+        );
+    }
+
+    #[tokio::test]
+    async fn late_connection_of_superseded_intent_is_rejected() {
+        let mut connecting = HashMap::new();
+        let tab = TabId::new();
+        // 发起 A：登记意图 A
+        let a = entry();
+        let a_id = a.connection_id;
+        connecting.insert(tab, a);
+        // 发起 B：顶掉 A，登记意图 B（生产代码同时 abort A 的任务）
+        let b = entry();
+        let b_id = b.connection_id;
+        connecting.insert(tab, b);
+        // B 先完成：接入
+        assert_eq!(admit_connection(&connecting, tab, b_id), Admission::Adopt);
+        connecting.remove(&tab);
+        // A 迟到完成：必须拒收，不得覆盖也不得断开 B
+        assert_eq!(
+            admit_connection(&connecting, tab, a_id),
+            Admission::Reject,
+            "被取代的迟到连接必须拒收"
+        );
+    }
+
+    #[tokio::test]
+    async fn completion_after_tab_closed_is_rejected() {
+        let mut connecting = HashMap::new();
+        let tab = TabId::new();
+        let e = entry();
+        let id = e.connection_id;
+        connecting.insert(tab, e);
+        // 关闭标签：意图注销（生产代码同时 abort 建连任务）
+        connecting.remove(&tab);
+        assert_eq!(
+            admit_connection(&connecting, tab, id),
+            Admission::Reject,
+            "标签关闭后的迟到完成必须拒收"
+        );
+    }
+}

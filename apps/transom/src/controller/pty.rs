@@ -172,7 +172,8 @@ pub(super) struct ConnectDispatch {
 
 /// 按连接类型派发建连：SSH 走认证握手，本地开 PTY，串口走阻塞线程池打开。
 /// 结果以 Internal::*Connected 回流主循环，失败直接广播 ConnectionFailed。
-pub(super) fn dispatch_connect(dispatch: ConnectDispatch) {
+/// 返回任务句柄供调用方登记意图、被取代时取消。
+pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHandle<()> {
     let ConnectDispatch {
         known_hosts,
         event_tx,
@@ -282,5 +283,5 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) {
                     .await;
             }
         }
-    });
+    })
 }
