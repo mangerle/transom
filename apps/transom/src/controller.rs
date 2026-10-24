@@ -147,6 +147,84 @@ async fn run_controller(
         }
     }
 
+    /// 连接接入时需要清理的各状态表借用集合，收敛参数个数（规范：超过
+    /// 5 个参数必须参数对象化）。
+    struct TabCleanupTables<'a> {
+        current_connections: &'a mut HashMap<TabId, ConnectionId>,
+        forwards: &'a mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
+        traffic_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+        key_deploy_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+        sftp_clients: &'a mut HashMap<TabId, SftpClient>,
+        remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
+    }
+
+    /// 新连接接入的登记参数。
+    ///
+    /// `join` 是连接生命周期的终结信号：SSH 连接是任务 JoinHandle，本地/
+    /// 串口是 PTY 线程的 oneshot 接收端；统一擦除为 `Output = ()` 的 Future，
+    /// 出口监听只关心"何时结束"，不关心结束方式。
+    struct AdoptConnection<J> {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        io: TerminalIo,
+        join: J,
+        /// SSH 连接的新远端句柄；本地/串口连接为 None，只清理旧远端。
+        remote: Option<SshRemote>,
+        /// 顶掉旧连接时的断开说明，用于区分"SSH 重连"与"切回本地/串口"。
+        disconnect_reason: &'static str,
+    }
+
+    /// 三类连接（SSH/本地/串口）接入的公共路径：登记当前连接、停掉旧连接的
+    /// 全部后台任务、断开被顶掉的旧远端、广播 TerminalReady 并挂接退出监听。
+    ///
+    /// 设计原理（Why）：三个分支此前各自复制这段清理逻辑，新增连接种类或
+    /// 清理项时极易漏改其中一处；分支里只保留各自的差异化收尾（流量采样、
+    /// 系统统计）。
+    async fn adopt_connection<J>(
+        tables: TabCleanupTables<'_>,
+        setup: AdoptConnection<J>,
+        event_tx: &flume::Sender<AppEvent>,
+        internal_tx: &flume::Sender<Internal>,
+    ) where
+        J: std::future::Future<Output = ()> + Send + 'static,
+    {
+        let tab_id = setup.tab_id;
+        let connection_id = setup.connection_id;
+        tables.current_connections.insert(tab_id, connection_id);
+        stop_forwards(tables.forwards, tab_id);
+        stop_traffic(tables.traffic_tasks, tab_id);
+        stop_key_deploy(tables.key_deploy_tasks, tab_id);
+        tables.sftp_clients.remove(&tab_id);
+        // SSH 重连用 insert 顶掉旧远端；切回本地/串口则移除旧远端并断开
+        let old = match setup.remote {
+            Some(remote) => tables.remotes.insert(tab_id, (connection_id, remote)),
+            None => tables.remotes.remove(&tab_id),
+        };
+        if let Some((_, old_remote)) = old {
+            let reason = setup.disconnect_reason.to_string();
+            tokio::spawn(async move {
+                old_remote.disconnect(&reason).await;
+            });
+        }
+        let _ = event_tx
+            .send_async(AppEvent::TerminalReady {
+                tab_id,
+                connection_id,
+                io: setup.io,
+            })
+            .await;
+        let internal_tx = internal_tx.clone();
+        tokio::spawn(async move {
+            let _ = setup.join.await;
+            let _ = internal_tx
+                .send_async(Internal::Disconnected {
+                    tab_id,
+                    connection_id,
+                })
+                .await;
+        });
+    }
+
     fn spawn_traffic_sampler(
         traffic: Arc<TrafficCounter>,
         tab_id: TabId,
@@ -694,34 +772,30 @@ async fn run_controller(
                     remote,
                     traffic,
                 } = session;
-                current_connections.insert(tab_id, connection_id);
-                stop_forwards(&mut forwards, tab_id);
-                stop_traffic(&mut traffic_tasks, tab_id);
-                stop_key_deploy(&mut key_deploy_tasks, tab_id);
-                sftp_clients.remove(&tab_id);
                 let remote_clone = remote.clone();
-                if let Some((_, old_remote)) = remotes.insert(tab_id, (connection_id, remote)) {
-                    tokio::spawn(async move {
-                        old_remote.disconnect("reconnected").await;
-                    });
-                }
-                let _ = event_tx
-                    .send_async(AppEvent::TerminalReady {
+                adopt_connection(
+                    TabCleanupTables {
+                        current_connections: &mut current_connections,
+                        forwards: &mut forwards,
+                        traffic_tasks: &mut traffic_tasks,
+                        key_deploy_tasks: &mut key_deploy_tasks,
+                        sftp_clients: &mut sftp_clients,
+                        remotes: &mut remotes,
+                    },
+                    AdoptConnection {
                         tab_id,
                         connection_id,
                         io,
-                    })
-                    .await;
-                let internal_tx = internal_tx.clone();
-                tokio::spawn(async move {
-                    let _ = join.await;
-                    let _ = internal_tx
-                        .send_async(Internal::Disconnected {
-                            tab_id,
-                            connection_id,
-                        })
-                        .await;
-                });
+                        join: async move {
+                            let _ = join.await;
+                        },
+                        remote: Some(remote),
+                        disconnect_reason: "reconnected",
+                    },
+                    &event_tx,
+                    &internal_tx,
+                )
+                .await;
 
                 let traffic_task =
                     spawn_traffic_sampler(traffic, tab_id, connection_id, event_tx.clone());
@@ -779,33 +853,29 @@ async fn run_controller(
                 io,
                 join,
             })) => {
-                current_connections.insert(tab_id, connection_id);
-                stop_forwards(&mut forwards, tab_id);
-                stop_traffic(&mut traffic_tasks, tab_id);
-                stop_key_deploy(&mut key_deploy_tasks, tab_id);
-                sftp_clients.remove(&tab_id);
-                if let Some((_, old_remote)) = remotes.remove(&tab_id) {
-                    tokio::spawn(async move {
-                        old_remote.disconnect("reconnected to local").await;
-                    });
-                }
-                let _ = event_tx
-                    .send_async(AppEvent::TerminalReady {
+                adopt_connection(
+                    TabCleanupTables {
+                        current_connections: &mut current_connections,
+                        forwards: &mut forwards,
+                        traffic_tasks: &mut traffic_tasks,
+                        key_deploy_tasks: &mut key_deploy_tasks,
+                        sftp_clients: &mut sftp_clients,
+                        remotes: &mut remotes,
+                    },
+                    AdoptConnection {
                         tab_id,
                         connection_id,
                         io,
-                    })
-                    .await;
-                let internal_tx = internal_tx.clone();
-                tokio::spawn(async move {
-                    let _ = join.await;
-                    let _ = internal_tx
-                        .send_async(Internal::Disconnected {
-                            tab_id,
-                            connection_id,
-                        })
-                        .await;
-                });
+                        join: async move {
+                            let _ = join.await;
+                        },
+                        remote: None,
+                        disconnect_reason: "reconnected to local",
+                    },
+                    &event_tx,
+                    &internal_tx,
+                )
+                .await;
 
                 let traffic_task =
                     spawn_local_traffic_sampler(tab_id, connection_id, event_tx.clone());
@@ -834,33 +904,29 @@ async fn run_controller(
                 io,
                 join,
             })) => {
-                current_connections.insert(tab_id, connection_id);
-                stop_forwards(&mut forwards, tab_id);
-                stop_traffic(&mut traffic_tasks, tab_id);
-                stop_key_deploy(&mut key_deploy_tasks, tab_id);
-                sftp_clients.remove(&tab_id);
-                if let Some((_, old_remote)) = remotes.remove(&tab_id) {
-                    tokio::spawn(async move {
-                        old_remote.disconnect("reconnected to serial").await;
-                    });
-                }
-                let _ = event_tx
-                    .send_async(AppEvent::TerminalReady {
+                adopt_connection(
+                    TabCleanupTables {
+                        current_connections: &mut current_connections,
+                        forwards: &mut forwards,
+                        traffic_tasks: &mut traffic_tasks,
+                        key_deploy_tasks: &mut key_deploy_tasks,
+                        sftp_clients: &mut sftp_clients,
+                        remotes: &mut remotes,
+                    },
+                    AdoptConnection {
                         tab_id,
                         connection_id,
                         io,
-                    })
-                    .await;
-                let internal_tx = internal_tx.clone();
-                tokio::spawn(async move {
-                    let _ = join.await;
-                    let _ = internal_tx
-                        .send_async(Internal::Disconnected {
-                            tab_id,
-                            connection_id,
-                        })
-                        .await;
-                });
+                        join: async move {
+                            let _ = join.await;
+                        },
+                        remote: None,
+                        disconnect_reason: "reconnected to serial",
+                    },
+                    &event_tx,
+                    &internal_tx,
+                )
+                .await;
             }
             Incoming::Internal(Ok(Internal::Disconnected {
                 tab_id,
