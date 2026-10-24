@@ -100,6 +100,21 @@ async fn run_controller(
     let mut forwards: HashMap<TabId, HashMap<ForwardId, ForwardTask>> = HashMap::new();
     let mut traffic_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
     let mut key_deploy_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
+    // 本地终端共享一份系统统计采集：/proc 读取与 df 子进程按机器计一次，
+    // 而不是每个标签各一份；采样器在首个本地连接时拉起、标签清空后退出。
+    let local_stats_tabs: Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>> =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut local_stats_task: Option<tokio::task::JoinHandle<()>> = None;
+
+    /// 注销一个标签的本地统计订阅；订阅清空后采样器自行退出。
+    fn drop_local_stats(
+        local_stats_tabs: &Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>,
+        tab_id: TabId,
+    ) {
+        if let Ok(mut tabs) = local_stats_tabs.lock() {
+            tabs.retain(|(tab, _)| *tab != tab_id);
+        }
+    }
 
     fn stop_forwards(
         forwards: &mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
@@ -243,6 +258,77 @@ async fn run_controller(
     enum Incoming {
         Command(Result<AppCommand, flume::RecvError>),
         Internal(Result<Internal, flume::RecvError>),
+    }
+
+    /// 本地终端共享的系统统计采样器。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：统计口径是"整台机器"（CPU/内存/磁盘），多个本地标签
+    ///   各自采集只会得到 N 份相同数据，却付出 N 倍 /proc 读取与 df 子进程；
+    /// - 核心优势：采集按机器计一次，结果广播给全部订阅标签；OS 标识是
+    ///   静态信息，首轮读取后缓存，后续轮次不再碰 /etc/os-release；
+    /// - 代价与局限：采样周期内新登记的标签要等下一轮才收到数据（3 秒），
+    ///   对状态栏指标无感知影响。
+    async fn run_local_stats_sampler(
+        event_tx: flume::Sender<AppEvent>,
+        local_tabs: Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>,
+    ) {
+        let mut prev_cpu = None;
+        let mut cached_os: Option<String> = None;
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        // 跳过首个瞬时 tick，保证首个采样窗口是完整的 3 秒。
+        interval.tick().await;
+        loop {
+            // 持锁只做纯内存克隆，不跨 await；订阅清空即退出，
+            // 下一个本地连接会重新拉起本采样器。
+            let tabs = match local_tabs.lock() {
+                Ok(tabs) if tabs.is_empty() => break,
+                Ok(tabs) => tabs.clone(),
+                Err(_) => break,
+            };
+            let stat = tokio::fs::read_to_string("/proc/stat")
+                .await
+                .unwrap_or_default();
+            let mem = tokio::fs::read_to_string("/proc/meminfo")
+                .await
+                .unwrap_or_default();
+            let uptime = tokio::fs::read_to_string("/proc/uptime")
+                .await
+                .unwrap_or_default();
+            let os = match &cached_os {
+                Some(_) => String::new(),
+                None => tokio::fs::read_to_string("/etc/os-release")
+                    .await
+                    .unwrap_or_default(),
+            };
+            let df = match Command::new("df").args(["-P", "-k", "/"]).output().await {
+                Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
+                Err(_) => String::new(),
+            };
+            let output = format!("{stat}\n{mem}\n__UPTIME__\n{uptime}\n__DF__\n{df}\n__OS__\n{os}");
+            let (mut stats, curr_cpu) =
+                transom_core::system_stats::parse_combined_stats(&output, prev_cpu);
+            prev_cpu = curr_cpu;
+            match &cached_os {
+                Some(cached) => stats.os_name = cached.clone(),
+                None => cached_os = Some(stats.os_name.clone()),
+            }
+            for (tab_id, connection_id) in tabs {
+                if event_tx
+                    .send_async(AppEvent::SystemStatsUpdated {
+                        tab_id,
+                        connection_id,
+                        stats: stats.clone(),
+                    })
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            interval.tick().await;
+        }
     }
 
     loop {
@@ -571,6 +657,7 @@ async fn run_controller(
                 stop_forwards(&mut forwards, tab_id);
                 stop_traffic(&mut traffic_tasks, tab_id);
                 stop_key_deploy(&mut key_deploy_tasks, tab_id);
+                drop_local_stats(&local_stats_tabs, tab_id);
                 sftp_clients.remove(&tab_id);
                 sftp_transfers.retain(|(t, _), handle| {
                     if *t == tab_id {
@@ -641,15 +728,26 @@ async fn run_controller(
                     // 跳过 interval 的第一个瞬时 tick，保证首个采样窗口是完整的
                     // 3 秒；否则首个 tick 立即完成，前两次采样背靠背，CPU 占比失真。
                     interval.tick().await;
+                    // OS 标识是静态信息：仅首轮附带 os-release，之后缓存复用，
+                    // 省掉每 3 秒一次重复读取静态文件的开销。
+                    let mut cached_os: Option<String> = None;
                     loop {
-                        let cmd = "cat /proc/stat /proc/meminfo 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime 2>/dev/null; echo \"__DF__\"; df -P -k / 2>/dev/null; echo \"__OS__\"; cat /etc/os-release 2>/dev/null";
+                        let cmd = if cached_os.is_none() {
+                            "cat /proc/stat /proc/meminfo 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime 2>/dev/null; echo \"__DF__\"; df -P -k / 2>/dev/null; echo \"__OS__\"; cat /etc/os-release 2>/dev/null"
+                        } else {
+                            "cat /proc/stat /proc/meminfo 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime 2>/dev/null; echo \"__DF__\"; df -P -k / 2>/dev/null"
+                        };
                         match remote_clone.exec_command(cmd).await {
                             Ok(output) if !output.is_empty() => {
-                                let (stats, curr_cpu) =
+                                let (mut stats, curr_cpu) =
                                     transom_core::system_stats::parse_combined_stats(
                                         &output, prev_cpu,
                                     );
                                 prev_cpu = curr_cpu;
+                                match &cached_os {
+                                    Some(cached) => stats.os_name = cached.clone(),
+                                    None => cached_os = Some(stats.os_name.clone()),
+                                }
                                 if event_tx_stats
                                     .send_async(AppEvent::SystemStatsUpdated {
                                         tab_id,
@@ -706,50 +804,22 @@ async fn run_controller(
                     spawn_local_traffic_sampler(tab_id, connection_id, event_tx.clone());
                 traffic_tasks.insert(tab_id, traffic_task);
 
-                let event_tx_stats = event_tx.clone();
-                tokio::spawn(async move {
-                    let mut prev_cpu = None;
-                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    // 与远端采样同口径：跳过首个瞬时 tick，保证完整的 3 秒采样窗口。
-                    interval.tick().await;
-                    loop {
-                        let stat = tokio::fs::read_to_string("/proc/stat")
-                            .await
-                            .unwrap_or_default();
-                        let mem = tokio::fs::read_to_string("/proc/meminfo")
-                            .await
-                            .unwrap_or_default();
-                        let uptime = tokio::fs::read_to_string("/proc/uptime")
-                            .await
-                            .unwrap_or_default();
-                        let os = tokio::fs::read_to_string("/etc/os-release")
-                            .await
-                            .unwrap_or_default();
-                        let df = match Command::new("df").args(["-P", "-k", "/"]).output().await {
-                            Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
-                            Err(_) => String::new(),
-                        };
-                        let output = format!(
-                            "{stat}\n{mem}\n__UPTIME__\n{uptime}\n__DF__\n{df}\n__OS__\n{os}"
-                        );
-                        let (stats, curr_cpu) =
-                            transom_core::system_stats::parse_combined_stats(&output, prev_cpu);
-                        prev_cpu = curr_cpu;
-                        if event_tx_stats
-                            .send_async(AppEvent::SystemStatsUpdated {
-                                tab_id,
-                                connection_id,
-                                stats,
-                            })
-                            .await
-                            .is_err()
-                        {
-                            break;
-                        }
-                        interval.tick().await;
-                    }
-                });
+                // 登记共享统计订阅：采集本体见 run_local_stats_sampler，
+                // 每台机器只跑一份（多标签各自 spawn df 会在本地终端一多时
+                // 变成每 3 秒 N 个子进程）。
+                if let Ok(mut tabs) = local_stats_tabs.lock() {
+                    tabs.retain(|(tab, _)| *tab != tab_id);
+                    tabs.push((tab_id, connection_id));
+                }
+                if local_stats_task
+                    .as_ref()
+                    .is_none_or(|task| task.is_finished())
+                {
+                    local_stats_task = Some(tokio::spawn(run_local_stats_sampler(
+                        event_tx.clone(),
+                        local_stats_tabs.clone(),
+                    )));
+                }
             }
             Incoming::Internal(Ok(Internal::SerialConnected {
                 tab_id,
@@ -795,6 +865,7 @@ async fn run_controller(
                     stop_forwards(&mut forwards, tab_id);
                     stop_traffic(&mut traffic_tasks, tab_id);
                     stop_key_deploy(&mut key_deploy_tasks, tab_id);
+                    drop_local_stats(&local_stats_tabs, tab_id);
                     remotes.remove(&tab_id);
                     sftp_clients.remove(&tab_id);
                     sftp_transfers.retain(|(t, _), handle| {
