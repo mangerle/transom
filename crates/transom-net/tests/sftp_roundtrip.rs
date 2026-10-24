@@ -509,6 +509,30 @@ async fn sftp_list_upload_download_and_mutations() {
         "上传续传不能保留远端文件多余的尾部"
     );
 
+    // 9 MiB 往返覆盖深预取（单次 READ 约 255 KiB）与跨多个预取窗口的 EOF
+    // 边界；旧实现的 8 MiB 分块分支已移除，这里确认大文件仍能完整往返。
+    let large_local = dir.path().join("large-local.bin");
+    let large_bytes: Vec<u8> = (0..9 * 1024 * 1024)
+        .map(|index| (index % 251) as u8)
+        .collect();
+    tokio::fs::write(&large_local, &large_bytes).await.unwrap();
+    let transferred = client
+        .upload(&large_local, "/large.bin", |_, _| {})
+        .await
+        .expect("上传大文件");
+    assert_eq!(transferred, large_bytes.len() as u64);
+    let large_downloaded = dir.path().join("large-downloaded.bin");
+    let transferred = client
+        .download("/large.bin", &large_downloaded, |_, _| {})
+        .await
+        .expect("下载大文件");
+    assert_eq!(transferred, large_bytes.len() as u64);
+    assert_eq!(
+        tokio::fs::read(&large_downloaded).await.unwrap(),
+        large_bytes,
+        "大文件往返内容必须一致"
+    );
+
     let concurrency_dir = dir.path().join("concurrency-src");
     std::fs::create_dir_all(&concurrency_dir).unwrap();
     let concurrent_one = concurrency_dir.join("one.txt");
