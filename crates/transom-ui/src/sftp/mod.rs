@@ -13,6 +13,7 @@ mod preview_view;
 mod properties;
 mod queue_actions;
 mod queue_view;
+mod status;
 mod sync_actions;
 mod sync_modal;
 
@@ -152,6 +153,8 @@ pub(crate) struct SftpPanelState {
     pub(crate) error: Option<String>,
     pub(crate) loading: bool,
     pub(crate) pending_edit_ops: HashMap<TransferId, (PathBuf, String, String)>,
+    /// 瞬时状态消息的过期任务；替换消息时旧任务被取消。
+    pub(super) status_task: Option<Task<()>>,
     /// 当前悬停预览；同一时刻只保留一个目标，切换目标或离开行时整体释放。
     pub(crate) hover_preview: Option<SftpPreviewState>,
     pub(crate) _subscriptions: Vec<Subscription>,

@@ -271,7 +271,7 @@ impl AppShell {
                                     rust_i18n::t!("sftp.sha256_verified")
                                 ));
                             }
-                            panel.status = Some(message);
+                            Self::set_sftp_transient_status(panel, tab_id, message, cx);
                             panel.error = None;
                             refresh = Some(panel.path.clone());
                         }
@@ -285,7 +285,7 @@ impl AppShell {
                             ),
                             None => rust_i18n::t!("sftp.operation_done").to_string(),
                         };
-                        panel.status = Some(base);
+                        Self::set_sftp_transient_status(panel, tab_id, base, cx);
                         refresh = Some(panel.path.clone());
                     }
                 }

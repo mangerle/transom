@@ -141,6 +141,7 @@ impl AppShell {
             error: None,
             loading: true,
             pending_edit_ops: HashMap::new(),
+            status_task: None,
             hover_preview: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         });
