@@ -422,87 +422,67 @@ fn theme_color_dots(config: &ThemeConfig) -> AnyElement {
 }
 
 impl AppShell {
-    pub(crate) fn render_settings_mouse_clipboard(
+    /// 鼠标组：右键动作与中键粘贴。
+    pub(crate) fn render_settings_mouse(
         &mut self,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let is_paste_mode = self.settings.terminal_interaction.right_click_paste;
-
         v_flex()
-            .gap_4()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("settings.interaction").to_string()),
-            )
-            .child(
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.right_click_action",
+                Some("settings.right_click_action_desc"),
                 h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
+                    .gap_1()
                     .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.right_click_action").to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .child(
-                                Button::new("rc-menu")
-                                    .small()
-                                    .label(rust_i18n::t!("settings.right_click_menu").to_string())
-                                    .selected(!is_paste_mode)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.settings.terminal_interaction.right_click_paste =
-                                            false;
-                                        cx.notify();
-                                    })),
-                            )
-                            .child(
-                                Button::new("rc-paste")
-                                    .small()
-                                    .label(
-                                        rust_i18n::t!("settings.right_click_paste_action")
-                                            .to_string(),
-                                    )
-                                    .selected(is_paste_mode)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.settings.terminal_interaction.right_click_paste = true;
-                                        cx.notify();
-                                    })),
-                            ),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.middle_click_paste").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-middle-click-paste")
+                        Button::new("rc-menu")
                             .small()
-                            .checked(self.settings.terminal_interaction.middle_click_paste)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_interaction.middle_click_paste = checked;
+                            .label(rust_i18n::t!("settings.right_click_menu").to_string())
+                            .selected(!is_paste_mode)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.settings.terminal_interaction.right_click_paste = false;
                                 cx.notify();
                             })),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .pt_2()
-                    .child(rust_i18n::t!("settings.selection").to_string()),
-            )
+                    )
+                    .child(
+                        Button::new("rc-paste")
+                            .small()
+                            .label(rust_i18n::t!("settings.right_click_paste_action").to_string())
+                            .selected(is_paste_mode)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.settings.terminal_interaction.right_click_paste = true;
+                                cx.notify();
+                            })),
+                    )
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.middle_click_paste",
+                Some("settings.middle_click_paste_desc"),
+                Switch::new("toggle-middle-click-paste")
+                    .small()
+                    .checked(self.settings.terminal_interaction.middle_click_paste)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_interaction.middle_click_paste = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
+    /// 选择组：双击分词边界。
+    pub(crate) fn render_settings_selection(
+        &mut self,
+        p: &Palette,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.word_separators").to_string(),
                 self.settings_modal.word_separators.clone(),
@@ -514,181 +494,130 @@ impl AppShell {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("settings.word_separators_note").to_string()),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .pt_2()
-                    .child(rust_i18n::t!("settings.clipboard").to_string()),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.copy_on_select").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-copy-on-select")
-                            .small()
-                            .checked(self.settings.terminal_interaction.copy_on_select)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_interaction.copy_on_select = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.multiline_paste").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-multiline-paste")
-                            .small()
-                            .checked(self.settings.terminal_interaction.multiline_paste_confirm)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_interaction.multiline_paste_confirm =
-                                    checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.trim_trailing_whitespace").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-trim-whitespace")
-                            .small()
-                            .checked(self.settings.terminal_interaction.trim_trailing_whitespace)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_interaction.trim_trailing_whitespace =
-                                    checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
             .into_any_element()
     }
 
-    pub(crate) fn render_settings_tabs_window(
+    /// 剪贴板组：选中复制、多行粘贴确认与尾随空白清理。
+    pub(crate) fn render_settings_clipboard(
         &mut self,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
-            .gap_4()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("settings.tab_tabs_window").to_string()),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.show_tab_close_button").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-tab-close-btn")
-                            .small()
-                            .checked(self.settings.window.show_tab_close_button)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.window.show_tab_close_button = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(div().text_sm().child(
-                        rust_i18n::t!("settings.close_window_on_all_tabs_closed").to_string(),
-                    ))
-                    .child(
-                        Switch::new("toggle-close-on-last-tab")
-                            .small()
-                            .checked(self.settings.window.close_window_on_all_tabs_closed)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.window.close_window_on_all_tabs_closed = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(div().text_sm().child("记忆窗口大小与屏幕位置"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child("重新打开 Transom 时恢复上次关闭时的窗口尺寸和屏幕坐标"),
-                            ),
-                    )
-                    .child(
-                        Switch::new("toggle-remember-bounds")
-                            .small()
-                            .checked(self.settings.window.remember_window_bounds)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.window.remember_window_bounds = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(div().text_sm().child("启动时恢复上次会话标签页"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child("启动时自动重新连接并打开上次退出时未关闭的终端会话"),
-                            ),
-                    )
-                    .child(
-                        Switch::new("toggle-restore-tabs")
-                            .small()
-                            .checked(self.settings.window.restore_previous_tabs)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.window.restore_previous_tabs = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.copy_on_select",
+                Some("settings.copy_on_select_desc"),
+                Switch::new("toggle-copy-on-select")
+                    .small()
+                    .checked(self.settings.terminal_interaction.copy_on_select)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_interaction.copy_on_select = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.multiline_paste",
+                Some("settings.multiline_paste_desc"),
+                Switch::new("toggle-multiline-paste")
+                    .small()
+                    .checked(self.settings.terminal_interaction.multiline_paste_confirm)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_interaction.multiline_paste_confirm = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.trim_trailing_whitespace",
+                Some("settings.trim_trailing_whitespace_desc"),
+                Switch::new("toggle-trim-whitespace")
+                    .small()
+                    .checked(self.settings.terminal_interaction.trim_trailing_whitespace)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_interaction.trim_trailing_whitespace = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
+    /// 标签页组：关闭按钮与最后标签退出行为。
+    pub(crate) fn render_settings_tabs(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.show_tab_close_button",
+                Some("settings.show_tab_close_button_desc"),
+                Switch::new("toggle-tab-close-btn")
+                    .small()
+                    .checked(self.settings.window.show_tab_close_button)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.window.show_tab_close_button = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.close_window_on_all_tabs_closed",
+                Some("settings.close_window_on_all_tabs_closed_desc"),
+                Switch::new("toggle-close-on-last-tab")
+                    .small()
+                    .checked(self.settings.window.close_window_on_all_tabs_closed)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.window.close_window_on_all_tabs_closed = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
+    /// 窗口组：窗口记忆与会话恢复。
+    pub(crate) fn render_settings_window(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.remember_window_bounds",
+                Some("settings.remember_window_bounds_desc"),
+                Switch::new("toggle-remember-bounds")
+                    .small()
+                    .checked(self.settings.window.remember_window_bounds)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.window.remember_window_bounds = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.restore_previous_tabs",
+                Some("settings.restore_previous_tabs_desc"),
+                Switch::new("toggle-restore-tabs")
+                    .small()
+                    .checked(self.settings.window.restore_previous_tabs)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.window.restore_previous_tabs = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
             .into_any_element()
     }
 }

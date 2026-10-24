@@ -13,6 +13,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{AppearanceSettings, TerminalCursorShape, TerminalHighlight};
 use transom_terminal::TerminalView;
@@ -25,6 +26,40 @@ fn read_font_family(input: &Entity<InputState>, cx: &App) -> Option<String> {
 }
 
 impl AppShell {
+    /// Zed 风格设置行：左侧标题与说明、右侧控件。
+    ///
+    /// 全设置页的开关/按钮行共用这一构造，行高与对齐才一致；说明文字用弱色
+    /// 小字，缺省时标题与控件垂直居中。输入类行仍用 `form_field` 纵排（输入框
+    /// 需要完整宽度，且多带独立说明）。
+    pub(crate) fn setting_row(
+        title_key: &'static str,
+        description_key: Option<&'static str>,
+        control: AnyElement,
+        p: &Palette,
+    ) -> AnyElement {
+        h_flex()
+            .w_full()
+            .py_1()
+            .justify_between()
+            .items_center()
+            .gap_4()
+            .child(
+                v_flex()
+                    .gap_0p5()
+                    .child(div().text_sm().child(rust_i18n::t!(title_key).to_string()))
+                    .when_some(description_key, |this, key| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!(key).to_string()),
+                        )
+                    }),
+            )
+            .child(control)
+            .into_any_element()
+    }
+
     /// 直接操作型设置（活动栏、状态栏、快捷命令执行模式）的即时落盘入口。
     ///
     /// 拖拽或显隐发生在设置弹窗之外，不能等待弹窗的保存按钮；这里只做保存与
@@ -208,19 +243,14 @@ impl AppShell {
         }
     }
 
-    pub(crate) fn render_settings_rendering(
+    /// 字体组：字体族、CJK 字体、字号与行高。
+    pub(crate) fn render_settings_font(
         &mut self,
         p: &Palette,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
-            .gap_4()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("settings.appearance").to_string()),
-            )
+            .gap_3()
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_family").to_string(),
                 self.settings_modal.font_family.clone(),
@@ -237,36 +267,6 @@ impl AppShell {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("settings.cjk_font_note").to_string()),
             )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.keyword_highlight").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-keyword-highlight")
-                            .checked(self.settings.terminal_profile.highlight.enabled)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_profile.highlight.enabled = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(Self::form_field(
-                rust_i18n::t!("settings.highlight_keywords").to_string(),
-                self.settings_modal.highlight_keywords.clone(),
-                p,
-            ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("settings.highlight_keywords_note").to_string()),
-            )
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_size").to_string(),
                 self.settings_modal.font_size.clone(),
@@ -277,113 +277,132 @@ impl AppShell {
                 self.settings_modal.line_height.clone(),
                 p,
             ))
+            .into_any_element()
+    }
+
+    /// 光标与滚动组：光标形态、闪烁、粗体亮色、输入滚动与回滚行数。
+    pub(crate) fn render_settings_cursor(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.cursor_shape",
+                Some("settings.cursor_shape_desc"),
+                h_flex()
+                    .gap_1()
+                    .children(
+                        [
+                            (
+                                "cursor-block",
+                                "settings.cursor_block",
+                                TerminalCursorShape::Block,
+                            ),
+                            (
+                                "cursor-bar",
+                                "settings.cursor_bar",
+                                TerminalCursorShape::Bar,
+                            ),
+                            (
+                                "cursor-underline",
+                                "settings.cursor_underline",
+                                TerminalCursorShape::Underline,
+                            ),
+                        ]
+                        .into_iter()
+                        .map(|(id, key, shape)| {
+                            Button::new(id)
+                                .small()
+                                .label(rust_i18n::t!(key).to_string())
+                                .selected(self.settings.terminal_profile.cursor_shape == shape)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.settings.terminal_profile.cursor_shape = shape;
+                                    cx.notify();
+                                }))
+                        }),
+                    )
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.cursor_blink",
+                Some("settings.cursor_blink_desc"),
+                Switch::new("toggle-cursor-blink")
+                    .small()
+                    .checked(self.settings.terminal_profile.cursor_blink)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_profile.cursor_blink = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.bold_is_bright",
+                Some("settings.bold_is_bright_desc"),
+                Switch::new("toggle-bold-is-bright")
+                    .small()
+                    .checked(self.settings.terminal_profile.bold_is_bright)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_profile.bold_is_bright = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.scroll_on_input",
+                Some("settings.scroll_on_input_desc"),
+                Switch::new("toggle-scroll-on-input")
+                    .small()
+                    .checked(self.settings.terminal_profile.scroll_on_input)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_profile.scroll_on_input = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.scrollback").to_string(),
                 self.settings_modal.scrollback.clone(),
                 p,
             ))
+            .into_any_element()
+    }
+
+    /// 关键词高亮组：命中高亮开关与关键词列表。
+    pub(crate) fn render_settings_highlight(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_3()
+            .child(Self::setting_row(
+                "settings.keyword_highlight",
+                Some("settings.keyword_highlight_desc"),
+                Switch::new("toggle-keyword-highlight")
+                    .checked(self.settings.terminal_profile.highlight.enabled)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_profile.highlight.enabled = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::form_field(
+                rust_i18n::t!("settings.highlight_keywords").to_string(),
+                self.settings_modal.highlight_keywords.clone(),
+                p,
+            ))
             .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.cursor_shape").to_string()),
-                    )
-                    .child(
-                        h_flex().gap_1().children(
-                            [
-                                (
-                                    "cursor-block",
-                                    "settings.cursor_block",
-                                    TerminalCursorShape::Block,
-                                ),
-                                (
-                                    "cursor-bar",
-                                    "settings.cursor_bar",
-                                    TerminalCursorShape::Bar,
-                                ),
-                                (
-                                    "cursor-underline",
-                                    "settings.cursor_underline",
-                                    TerminalCursorShape::Underline,
-                                ),
-                            ]
-                            .into_iter()
-                            .map(|(id, key, shape)| {
-                                Button::new(id)
-                                    .small()
-                                    .label(rust_i18n::t!(key).to_string())
-                                    .selected(self.settings.terminal_profile.cursor_shape == shape)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.settings.terminal_profile.cursor_shape = shape;
-                                        cx.notify();
-                                    }))
-                            }),
-                        ),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.cursor_blink").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-cursor-blink")
-                            .small()
-                            .checked(self.settings.terminal_profile.cursor_blink)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_profile.cursor_blink = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.bold_is_bright").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-bold-is-bright")
-                            .small()
-                            .checked(self.settings.terminal_profile.bold_is_bright)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_profile.bold_is_bright = checked;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("settings.scroll_on_input").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-scroll-on-input")
-                            .small()
-                            .checked(self.settings.terminal_profile.scroll_on_input)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                this.settings.terminal_profile.scroll_on_input = checked;
-                                cx.notify();
-                            })),
-                    ),
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.highlight_keywords_note").to_string()),
             )
             .into_any_element()
     }

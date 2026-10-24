@@ -13,6 +13,22 @@ use gpui_kit::*;
 
 use super::layout_page;
 
+/// 组装配 helper：把 AppShell 的组渲染函数包装成带标题的 `SettingGroup`。
+fn setting_group(
+    app: &Entity<AppShell>,
+    p: &Palette,
+    title: &'static str,
+    render: fn(&mut AppShell, &Palette, &mut Context<AppShell>) -> AnyElement,
+) -> SettingGroup {
+    let app = app.clone();
+    let p = p.clone();
+    SettingGroup::new()
+        .title(rust_i18n::t!(title).to_string())
+        .item(SettingItem::render(move |_options, _window, cx| {
+            app.update(cx, |this, cx| render(this, &p, cx))
+        }))
+}
+
 impl AppShell {
     pub(crate) fn render_settings_modal(
         &mut self,
@@ -21,56 +37,64 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let app_entity = cx.entity().clone();
-
+        // 每页多个带标题的组：侧栏自动出现 Zed 式折叠子项，点击滚动到对应组。
         let page_rendering = SettingPage::new(rust_i18n::t!("settings.tab_rendering").to_string())
             .icon(IconName::Terminal)
-            .group(
-                SettingGroup::new()
-                    .title(rust_i18n::t!("settings.appearance").to_string())
-                    .item(SettingItem::render({
-                        let app = app_entity.clone();
-                        let p = p.clone();
-                        move |_options, _window, cx| {
-                            app.update(cx, |this, cx| this.render_settings_rendering(&p, cx))
-                        }
-                    })),
-            );
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.font_group",
+                AppShell::render_settings_font,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.cursor_group",
+                AppShell::render_settings_cursor,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.highlight_group",
+                AppShell::render_settings_highlight,
+            ));
 
         let page_themes = SettingPage::new(rust_i18n::t!("settings.tab_themes").to_string())
             .icon(IconName::Server)
-            .group(
-                SettingGroup::new()
-                    .title(rust_i18n::t!("settings.ui_theme_group").to_string())
-                    .item(SettingItem::render({
-                        let app = app_entity.clone();
-                        let p = p.clone();
-                        move |_options, _window, cx| {
-                            app.update(cx, |this, cx| this.render_settings_ui_theme(&p, cx))
-                        }
-                    })),
-            )
-            .group(
-                SettingGroup::new()
-                    .title(rust_i18n::t!("settings.terminal_theme_group").to_string())
-                    .item(SettingItem::render({
-                        let app = app_entity.clone();
-                        let p = p.clone();
-                        move |_options, _window, cx| {
-                            app.update(cx, |this, cx| this.render_settings_themes(&p, cx))
-                        }
-                    })),
-            );
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.ui_theme_group",
+                AppShell::render_settings_ui_theme,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.terminal_theme_group",
+                AppShell::render_settings_themes,
+            ));
 
         let page_mouse =
             SettingPage::new(rust_i18n::t!("settings.tab_mouse_clipboard").to_string())
                 .icon(IconName::ArrowLeftRight)
-                .group(SettingGroup::new().item(SettingItem::render({
-                    let app = app_entity.clone();
-                    let p = p.clone();
-                    move |_options, _window, cx| {
-                        app.update(cx, |this, cx| this.render_settings_mouse_clipboard(&p, cx))
-                    }
-                })));
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.mouse_group",
+                    AppShell::render_settings_mouse,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.selection_group",
+                    AppShell::render_settings_selection,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.clipboard_group",
+                    AppShell::render_settings_clipboard,
+                ));
 
         let page_shortcuts = SettingPage::new(rust_i18n::t!("settings.tab_shortcuts").to_string())
             .icon(IconName::Search)
@@ -84,25 +108,41 @@ impl AppShell {
 
         let page_tabs = SettingPage::new(rust_i18n::t!("settings.tab_tabs_window").to_string())
             .icon(IconName::PanelLeft)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = p.clone();
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_tabs_window(&p, cx))
-                }
-            })));
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.tabs_group",
+                AppShell::render_settings_tabs,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.window_group",
+                AppShell::render_settings_window,
+            ));
 
         let page_layout = layout_page::layout_settings_page(app_entity.clone(), p.clone());
 
         let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
             .icon(IconName::Globe)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = p.clone();
-                move |_options, window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_general(window, &p, cx))
-                }
-            })));
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.language_group",
+                AppShell::render_settings_language,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.notify_group",
+                AppShell::render_settings_notify,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.backup_group",
+                AppShell::render_settings_backup,
+            ));
 
         let settings_component = Settings::new("app-settings")
             .sidebar_width(px(220.0))

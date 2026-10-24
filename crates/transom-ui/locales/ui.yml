@@ -1074,6 +1074,90 @@ settings:
   appearance_contrast:
     en: The interface theme and the terminal color scheme have opposite light/dark modes, which may look jarring. Pick a matching terminal color scheme below.
     zh-CN: 界面主题与终端配色的明暗模式相反，观感可能突兀，可在下方"终端配色"中选一套明暗一致的主题。
+  font_group:
+    en: Font
+    zh-CN: 字体
+  cursor_group:
+    en: Cursor & Scrolling
+    zh-CN: 光标与滚动
+  highlight_group:
+    en: Keyword Highlight
+    zh-CN: 关键词高亮
+  mouse_group:
+    en: Mouse
+    zh-CN: 鼠标
+  selection_group:
+    en: Selection
+    zh-CN: 选中与分词
+  clipboard_group:
+    en: Clipboard
+    zh-CN: 剪贴板
+  tabs_group:
+    en: Tabs
+    zh-CN: 标签页
+  window_group:
+    en: Window & Sessions
+    zh-CN: 窗口与会话
+  language_group:
+    en: Language
+    zh-CN: 语言
+  notify_group:
+    en: Notification & Sound
+    zh-CN: 通知与声音
+  backup_group:
+    en: Data Backup
+    zh-CN: 数据备份
+  language_desc:
+    en: Click to switch the interface language.
+    zh-CN: 点击在中英文之间切换界面语言。
+  keyword_highlight_desc:
+    en: Highlight lines containing matched keywords in the terminal.
+    zh-CN: 终端输出命中关键词时整行高亮，便于扫读日志。
+  cursor_shape_desc:
+    en: Shape of the block cursor in the terminal.
+    zh-CN: 终端光标的形状：方块、竖线或下划线。
+  cursor_blink_desc:
+    en: Blink the cursor when the terminal is idle.
+    zh-CN: 终端空闲时光标按节奏闪烁。
+  bold_is_bright_desc:
+    en: Render bold text with the bright color variant.
+    zh-CN: 粗体文字用亮色变体渲染，兼容老式终端程序的配色假设。
+  scroll_on_input_desc:
+    en: Scroll back to the bottom automatically when you type.
+    zh-CN: 输入时自动滚回底部，避免被历史输出留在上面。
+  right_click_action_desc:
+    en: Right-click opens the context menu or pastes directly.
+    zh-CN: 右键打开上下文菜单，或直接粘贴剪贴板内容。
+  middle_click_paste_desc:
+    en: Paste the primary selection with the middle mouse button.
+    zh-CN: 用鼠标中键粘贴主选区（Linux 惯例）。
+  copy_on_select_desc:
+    en: Copy selected text to the clipboard immediately upon selection.
+    zh-CN: 选中文字立即复制到剪贴板，无需再按快捷键。
+  multiline_paste_desc:
+    en: Ask for confirmation before pasting multi-line text.
+    zh-CN: 粘贴多行文本前弹出确认，防止误粘贴整段命令。
+  trim_trailing_whitespace_desc:
+    en: Trim trailing whitespace from each line when pasting.
+    zh-CN: 粘贴时去除每行末尾的空白字符。
+  show_tab_close_button_desc:
+    en: Show the close button on each tab.
+    zh-CN: 在每个标签页上显示关闭按钮。
+  close_window_on_all_tabs_closed_desc:
+    en: Quit the app when the last tab is closed.
+    zh-CN: 关闭最后一个标签页时退出应用，而不是留一个空窗口。
+  remember_window_bounds_desc:
+    en: Restore window size and position from the last session.
+    zh-CN: 重新打开时恢复上次关闭时的窗口尺寸和屏幕坐标。
+  restore_previous_tabs_desc:
+    en: Reconnect and reopen the tabs from the last session on startup.
+    zh-CN: 启动时自动重连并打开上次退出时的终端会话。
+  bell_style_desc:
+    en: How the terminal rings when a bell event occurs.
+    zh-CN: 终端响铃事件的提示方式：静默、屏幕闪烁或系统提示音。
+  desktop_notifications_desc:
+    en: Send desktop notifications for finished commands and OSC 777.
+    zh-CN: 长命令完成与终端程序主动请求时发送系统桌面通知。
   theme_preview:
     en: Terminal Preview
     zh-CN: 终端色彩效果预览
