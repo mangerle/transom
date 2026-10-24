@@ -402,7 +402,11 @@ impl TerminalView {
             let channel = |value: u8| if value == 0 { 0 } else { value * 40 + 55 };
             PaletteColor::new(channel(r), channel(g), channel(b))
         } else {
-            let level = 8 + (index.saturating_sub(232) as u8) * 10;
+            // 灰度坡道只有 24 级（232..=255）。index 来自 OSC 序列的外部输入，
+            // 可能超过合法区间：先钳制到最亮一级再乘加，杜绝 u8 截断回绕与溢出。
+            // min 保证 shade ≤ 23，故 as u8 与 8 + shade * 10（≤ 238）都不会溢出。
+            let shade = index.saturating_sub(232).min(23) as u8;
+            let level = 8 + shade * 10;
             PaletteColor::new(level, level, level)
         };
         AnsiRgb {
