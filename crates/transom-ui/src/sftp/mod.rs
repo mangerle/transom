@@ -5,6 +5,7 @@ mod editor_actions;
 mod editor_banner;
 mod editor_close;
 mod editor_diff;
+mod editor_drag_tracker;
 mod editor_list;
 mod editor_navigate;
 mod editor_open;
@@ -31,6 +32,7 @@ mod sync_actions;
 mod sync_modal;
 
 pub(crate) use self::editor_close::PendingEditorClose;
+pub(crate) use self::editor_drag_tracker::EditorDragTracker;
 pub(crate) use self::editor_panel::EditorPanelState;
 pub(crate) use self::preview::SftpPreviewResponse;
 use self::preview::SftpPreviewState;

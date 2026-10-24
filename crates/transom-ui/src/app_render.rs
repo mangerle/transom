@@ -4,6 +4,7 @@ use crate::activity_bar::ACTIVITY_BAR_WIDTH;
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::Palette;
+use crate::sftp::EditorDragTracker;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
@@ -168,24 +169,10 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_focus_pane_right))
             .on_action(cx.listener(Self::on_focus_pane_up))
             .on_action(cx.listener(Self::on_focus_pane_down))
-            // 拖拽悬浮面板时指针会移出面板，位移与收尾由根元素的监听接管。
-            // mouse_up 可能丢失：元素级监听只投递给命中元素，指针移出窗口
-            // 松开、或抬起落在根元素树之外的浮层（弹出菜单、补全菜单）上时，
-            // 收不到抬起事件，拖拽位残留会让面板此后一直跟随鼠标。移动事件
-            // 自带按键状态，未按键时先收尾再返回，从根上杜绝卡拖拽。
-            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, cx| {
-                if event.pressed_button.is_none() {
-                    this.end_editor_panel_drag(cx);
-                    return;
-                }
-                this.drag_editor_panels(event.position, window.viewport_size(), cx);
-            }))
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    this.end_editor_panel_drag(cx);
-                }),
-            )
+            // 拖拽悬浮面板的位移与收尾由 EditorDragTracker 的窗口级监听接管：
+            // 普通元素监听带"指针命中"门槛，拖拽中指针会移出面板乃至窗口，
+            // 元素级监听收不到这些事件。追踪器以无视觉元素的形式挂在本容器
+            // 末尾，paint 阶段注册的窗口级监听对所有鼠标事件可见。
             .relative()
             .size_full()
             .flex()
@@ -200,6 +187,9 @@ impl Render for AppShell {
             root = root.child(status_bar);
         }
         root = root.children(editor_layers);
-        root.children(overlays)
+        // 追踪器必须最后挂载：bubble 阶段按注册序的逆序派发，最后注册的
+        // 监听最先执行，拖拽位移与收尾不会被其他监听的 stop_propagation 挡掉。
+        root.child(EditorDragTracker::new(cx.entity()))
+            .children(overlays)
     }
 }

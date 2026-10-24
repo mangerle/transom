@@ -59,7 +59,8 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 标题栏按下：记录抓取偏移并置顶，真正的位移由视口级 mouse_move 驱动。
+    /// 标题栏按下：记录抓取偏移并置顶，真正的位移由窗口级监听驱动
+    /// （见 `EditorDragTracker`）。
     pub(crate) fn begin_editor_panel_drag(
         &mut self,
         editor: &Entity<EditorState>,
@@ -67,6 +68,13 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.raise_editor_panel(editor, cx);
+        // 同一时刻至多一个面板在拖：清掉其他面板可能残留的拖拽位，
+        // 防御任何未来遗漏收尾的路径导致双面板同时跟随鼠标。
+        for other in self.editor_panels.iter_mut() {
+            if other.editor != *editor {
+                other.drag_grab = None;
+            }
+        }
         let Some(item) = self.editor_panel_mut(editor) else {
             return;
         };
