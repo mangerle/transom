@@ -8122,7 +8122,6 @@ dependencies = [
 name = "transom-core"
 version = "0.1.0"
 dependencies = [
- "flume",
  "globset",
  "rand 0.10.3",
  "serde",
@@ -8130,6 +8129,7 @@ dependencies = [
  "ssh-key",
  "tempfile",
  "thiserror 2.0.21",
+ "tokio",
  "uuid",
  "zeroize",
 ]
@@ -8202,6 +8202,7 @@ dependencies = [
  "parking_lot",
  "rfd",
  "rust-i18n",
+ "tokio",
  "transom-core",
  "transom-terminal",
  "zeroize",

@@ -70,7 +70,7 @@ pub enum AppEvent {
         name: String,
         instructions: String,
         prompts: Vec<PromptInfo>,
-        responder: flume::Sender<Vec<String>>,
+        responder: tokio::sync::mpsc::Sender<Vec<String>>,
     },
     /// 首次连接遇到未知主机密钥，请求用户确认是否信任该指纹（TOFU）。
     /// `responder` 回传用户决定；弹窗被关闭时响应通道析构，认证方按取消处理。
@@ -81,7 +81,7 @@ pub enum AppEvent {
         port: u16,
         key_type: String,
         fingerprint: String,
-        responder: flume::Sender<bool>,
+        responder: tokio::sync::mpsc::Sender<bool>,
     },
     SftpListing {
         tab_id: TabId,

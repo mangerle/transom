@@ -41,12 +41,12 @@ impl Demo {
             .master
             .take_writer()
             .expect("failed to take pty writer");
-        let (control, control_rx) = TerminalControlHandle::channel(16);
+        let (control, mut control_rx) = TerminalControlHandle::channel(16);
         let master = pair.master;
         thread::Builder::new()
             .name("transom-pty-control".into())
             .spawn(move || {
-                while let Ok(message) = control_rx.recv() {
+                while let Some(message) = control_rx.blocking_recv() {
                     match message {
                         TerminalControl::Resize(size) => {
                             let _ = master.resize(PtySize {

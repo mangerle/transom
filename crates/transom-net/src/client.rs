@@ -293,8 +293,14 @@ pub async fn connect_ssh(
         ));
     }
 
+    // 下载方向的吞吐上限约为「通道窗口 / RTT」。russh 默认 2 MiB 与 OpenSSH
+    // 一致，在百毫秒级链路上会把单通道压到约 20 MB/s；提高到 16 MiB 后，
+    // 与 SFTP 侧单句柄 64 个约 255 KiB 的预取请求正好匹配。窗口是通道级配置，
+    // 终端、SFTP 与端口转发共用同一个值；它只是流控额度，不会按窗口大小
+    // 预分配内存。
     let config = client::Config {
         nodelay: true,
+        window_size: 16 * 1024 * 1024,
         keepalive_interval: keepalive_interval(&connection.options),
         keepalive_max: 3,
         ..Default::default()
@@ -715,20 +721,20 @@ async fn run_terminal_actor(
     remote: SshRemote,
     mut channel: Channel<Msg>,
     input_rx: flume::Receiver<Vec<u8>>,
-    control_rx: flume::Receiver<TerminalControl>,
+    mut control_rx: tokio::sync::mpsc::Receiver<TerminalControl>,
     output_tx: flume::Sender<Vec<u8>>,
 ) {
     enum Activity {
         Channel(Option<ChannelMsg>),
         Input(Result<Vec<u8>, flume::RecvError>),
-        Control(Result<TerminalControl, flume::RecvError>),
+        Control(Option<TerminalControl>),
     }
 
     loop {
         let activity = tokio::select! {
             message = channel.wait() => Activity::Channel(message),
             input = input_rx.recv_async() => Activity::Input(input),
-            control = control_rx.recv_async() => Activity::Control(control),
+            control = control_rx.recv() => Activity::Control(control),
         };
 
         match activity {
@@ -756,7 +762,7 @@ async fn run_terminal_actor(
                 }
             }
             Activity::Input(Err(_)) => break,
-            Activity::Control(Ok(TerminalControl::Resize(size))) => {
+            Activity::Control(Some(TerminalControl::Resize(size))) => {
                 if let Err(error) = channel
                     .window_change(size.cols as u32, size.rows as u32, 0, 0)
                     .await
@@ -769,12 +775,12 @@ async fn run_terminal_actor(
                     );
                 }
             }
-            Activity::Control(Ok(TerminalControl::Close)) => {
+            Activity::Control(Some(TerminalControl::Close)) => {
                 let _ = channel.eof().await;
                 let _ = channel.close().await;
                 break;
             }
-            Activity::Control(Err(_)) => break,
+            Activity::Control(None) => break,
         }
     }
 

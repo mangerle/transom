@@ -336,7 +336,7 @@ impl AppShell {
                 value: Zeroizing::new(value.clone()),
             });
         }
-        let _ = state.responder.send(answers);
+        let _ = state.responder.try_send(answers);
         cx.notify();
     }
 
@@ -427,7 +427,7 @@ impl AppShell {
     /// 用户信任首连主机指纹：回传确认，known_hosts 记录由认证方完成后继续握手。
     pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
         if let Some(state) = self.host_key_confirm.take() {
-            let _ = state.responder.send(true);
+            let _ = state.responder.try_send(true);
             cx.notify();
         }
     }
@@ -435,7 +435,7 @@ impl AppShell {
     /// 用户拒绝首连主机指纹：连接将以此失败，known_hosts 不落任何记录。
     pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
         if let Some(state) = self.host_key_confirm.take() {
-            let _ = state.responder.send(false);
+            let _ = state.responder.try_send(false);
             cx.notify();
         }
     }

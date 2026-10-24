@@ -1,9 +1,9 @@
 use crate::color::Rgb;
 use crate::highlight::TerminalHighlight;
-use flume::{Receiver, Sender};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::{Read, Write};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalSize {
@@ -30,12 +30,21 @@ pub struct TerminalControlHandle {
 
 impl TerminalControlHandle {
     pub fn channel(capacity: usize) -> (Self, Receiver<TerminalControl>) {
-        let (sender, receiver) = flume::bounded(capacity.max(1));
+        let (sender, receiver) = tokio::sync::mpsc::channel(capacity.max(1));
         (Self { sender }, receiver)
     }
 
+    /// 同步投递控制消息：快路径无锁 try_send，缓冲满（连续拖拽改尺寸）
+    /// 时退化为阻塞反压，与此前 flume 的语义一致。调用方均在 UI 或专用
+    /// 线程上下文，不会进入异步运行时，blocking_send 的运行时限制不触发。
     pub fn send(&self, control: TerminalControl) -> bool {
-        self.sender.send(control).is_ok()
+        match self.sender.try_send(control) {
+            Ok(()) => true,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(control)) => {
+                self.sender.blocking_send(control).is_ok()
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => false,
+        }
     }
 
     pub fn resize(&self, size: TerminalSize) -> bool {
@@ -236,7 +245,7 @@ mod tests {
 
     #[test]
     fn control_handle_delivers_messages() {
-        let (handle, receiver) = TerminalControlHandle::channel(4);
+        let (handle, mut receiver) = TerminalControlHandle::channel(4);
         assert!(handle.resize(TerminalSize::new(120, 40)));
         assert!(handle.close());
         assert_eq!(

@@ -70,13 +70,13 @@ pub fn open_serial(connection: &SerialConnection) -> Result<SerialSession, AppEr
     })?;
 
     let closed = Arc::new(AtomicBool::new(false));
-    let (control, control_rx) = TerminalControlHandle::channel(16);
+    let (control, mut control_rx) = TerminalControlHandle::channel(16);
     let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
     let control_closed = closed.clone();
     std::thread::Builder::new()
         .name("transom-serial-control".into())
         .spawn(move || {
-            while let Ok(message) = control_rx.recv() {
+            while let Some(message) = control_rx.blocking_recv() {
                 if matches!(message, TerminalControl::Close) {
                     break;
                 }

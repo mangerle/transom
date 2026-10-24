@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+tokio = { workspace = true, features = ["sync"] }
 transom-core.workspace = true
 transom-terminal.workspace = true
 gpui-kit.workspace = true

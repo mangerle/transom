@@ -241,7 +241,7 @@ pub(crate) struct AuthPromptState {
     pub(crate) instructions: String,
     pub(crate) prompts: Vec<PromptInfo>,
     pub(crate) inputs: Vec<Entity<InputState>>,
-    pub(crate) responder: flume::Sender<Vec<String>>,
+    pub(crate) responder: tokio::sync::mpsc::Sender<Vec<String>>,
     pub(crate) error: Option<String>,
     /// 待回答凭据属于哪个会话，保存时需要它作为钥匙串条目的键。
     pub(crate) session_id: SessionId,
@@ -263,7 +263,7 @@ pub(crate) struct HostKeyConfirmState {
     pub(crate) port: u16,
     pub(crate) key_type: String,
     pub(crate) fingerprint: String,
-    pub(crate) responder: flume::Sender<bool>,
+    pub(crate) responder: tokio::sync::mpsc::Sender<bool>,
 }
 
 /// known_hosts 管理弹窗的聚合状态（开关、记录与搜索框）。

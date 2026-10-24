@@ -27,7 +27,7 @@ impl AuthPrompter for UiPrompter {
         key_type: &str,
         fingerprint: &str,
     ) -> Result<bool, AppError> {
-        let (responder, answer) = flume::bounded(1);
+        let (responder, answer) = tokio::sync::mpsc::channel(1);
         self.event_tx
             .send_async(AppEvent::HostKeyConfirm {
                 tab_id: self.tab_id,
@@ -43,9 +43,9 @@ impl AuthPrompter for UiPrompter {
                 AppError::with_detail(ErrorCode::Cancelled, "应用窗口已关闭，无法确认主机指纹")
             })?;
         answer
-            .recv_async()
+            .recv()
             .await
-            .map_err(|_| AppError::with_detail(ErrorCode::Cancelled, "主机指纹确认已被取消"))
+            .ok_or_else(|| AppError::with_detail(ErrorCode::Cancelled, "主机指纹确认已被取消"))
     }
 
     async fn keyboard_interactive(
@@ -54,7 +54,7 @@ impl AuthPrompter for UiPrompter {
         instructions: &str,
         prompts: &[PromptInfo],
     ) -> Result<Vec<String>, AppError> {
-        let (responder, answers) = flume::bounded(1);
+        let (responder, answers) = tokio::sync::mpsc::channel(1);
         // AuthPrompt 是用户必须看到并作答的关键事件，队列满时等待 UI 消费
         // 而不是丢弃（认证本来就阻塞在此，等待即天然反压）。
         self.event_tx
@@ -69,9 +69,9 @@ impl AuthPrompter for UiPrompter {
             .await
             .map_err(|_| AppError::with_detail(ErrorCode::Cancelled, "应用窗口已关闭"))?;
         answers
-            .recv_async()
+            .recv()
             .await
-            .map_err(|_| AppError::with_detail(ErrorCode::Cancelled, "认证提示已被取消"))
+            .ok_or_else(|| AppError::with_detail(ErrorCode::Cancelled, "认证提示已被取消"))
     }
 }
 
@@ -124,12 +124,12 @@ pub(super) fn open_local_pty(
         .take_writer()
         .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
 
-    let (control, control_rx) = TerminalControlHandle::channel(16);
+    let (control, mut control_rx) = TerminalControlHandle::channel(16);
     let master = pair.master;
     std::thread::Builder::new()
         .name("transom-pty-control".into())
         .spawn(move || {
-            while let Ok(message) = control_rx.recv() {
+            while let Some(message) = control_rx.blocking_recv() {
                 match message {
                     TerminalControl::Resize(size) => {
                         let _ = master.resize(PtySize {
