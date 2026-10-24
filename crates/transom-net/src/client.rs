@@ -12,7 +12,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore,
@@ -164,14 +163,16 @@ pub struct CommandOutput {
 
 #[derive(Clone)]
 pub struct SshRemote {
-    inner: Arc<AsyncMutex<Handle<ClientHandler>>>,
+    /// russh 的 Handle 方法全部取 &self 且内部自带并发安全（消息发送端 +
+    /// 回复分发器），包一层全局互斥只会把所有通道打开、exec、转发操作
+    /// 无谓串行化，因此直接共享 Arc<Handle>。
+    inner: Arc<Handle<ClientHandler>>,
     remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
 }
 
 impl SshRemote {
     pub(crate) async fn open_session(&self) -> Result<Channel<Msg>, AppError> {
-        let session = self.inner.lock().await;
-        session
+        self.inner
             .channel_open_session()
             .await
             .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))
@@ -182,24 +183,21 @@ impl SshRemote {
         host: &str,
         port: u16,
     ) -> Result<Channel<Msg>, AppError> {
-        let session = self.inner.lock().await;
-        session
+        self.inner
             .channel_open_direct_tcpip(host.to_string(), port as u32, "127.0.0.1", 0)
             .await
             .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
     }
 
     pub(crate) async fn tcpip_forward(&self, host: &str, port: u16) -> Result<u32, AppError> {
-        let session = self.inner.lock().await;
-        session
+        self.inner
             .tcpip_forward(host.to_string(), port as u32)
             .await
             .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
     }
 
     pub(crate) async fn cancel_tcpip_forward(&self, host: &str, port: u16) -> Result<(), AppError> {
-        let session = self.inner.lock().await;
-        session
+        self.inner
             .cancel_tcpip_forward(host.to_string(), port as u32)
             .await
             .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
@@ -260,8 +258,8 @@ impl SshRemote {
     }
 
     pub async fn disconnect(&self, description: &str) {
-        let session = self.inner.lock().await;
-        let _ = session
+        let _ = self
+            .inner
             .disconnect(Disconnect::ByApplication, description, "en")
             .await;
     }
@@ -377,7 +375,7 @@ pub async fn connect_ssh(
     let (output_tx, output_rx) = flume::bounded::<Vec<u8>>(128);
     let (control, control_rx) = TerminalControlHandle::channel(16);
     let remote = SshRemote {
-        inner: Arc::new(AsyncMutex::new(session)),
+        inner: Arc::new(session),
         remote_forwards,
     };
 
