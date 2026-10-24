@@ -154,7 +154,7 @@ impl AppShell {
         } else {
             let remote_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); remote_entries.len()]);
             let remote_entries_rc = std::rc::Rc::new(remote_entries);
-            let p = *p;
+            let p = p.clone();
             let app_entity = cx.entity().clone();
             v_virtual_list(
                 cx.entity().clone(),

@@ -1023,6 +1023,57 @@ settings:
   current_theme:
     en: Current Color Scheme
     zh-CN: 当前配色方案
+  current_ui_theme:
+    en: Interface Theme
+    zh-CN: 当前界面主题
+  ui_theme_group:
+    en: Interface Theme
+    zh-CN: 界面主题
+  terminal_theme_group:
+    en: Terminal Color Schemes
+    zh-CN: 终端配色
+  ui_mode:
+    en: Appearance Mode
+    zh-CN: 明暗模式
+  ui_mode_system:
+    en: Follow System
+    zh-CN: 跟随系统
+  ui_mode_light:
+    en: Light
+    zh-CN: 浅色
+  ui_mode_dark:
+    en: Dark
+    zh-CN: 深色
+  theme_mode_light:
+    en: Light
+    zh-CN: 浅色
+  theme_mode_dark:
+    en: Dark
+    zh-CN: 深色
+  density:
+    en: Interface Density
+    zh-CN: 界面密度
+  density_compact:
+    en: Compact
+    zh-CN: 紧凑
+  density_snug:
+    en: Snug
+    zh-CN: 偏紧
+  density_medium:
+    en: Medium
+    zh-CN: 适中
+  density_standard:
+    en: Standard
+    zh-CN: 标准
+  density_roomy:
+    en: Roomy
+    zh-CN: 宽松
+  ui_theme_note:
+    en: Selecting a theme also switches the appearance mode to match. Changes preview immediately; they persist on Save and revert on Cancel.
+    zh-CN: 选择主题会同步切换明暗模式；改动立即预览，保存后生效持久化，取消则恢复原状。
+  appearance_contrast:
+    en: The interface theme and the terminal color scheme have opposite light/dark modes, which may look jarring. Pick a matching terminal color scheme below.
+    zh-CN: 界面主题与终端配色的明暗模式相反，观感可能突兀，可在下方"终端配色"中选一套明暗一致的主题。
   theme_preview:
     en: Terminal Preview
     zh-CN: 终端色彩效果预览

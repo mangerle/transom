@@ -43,7 +43,7 @@ impl AppShell {
                     .collect::<Vec<_>>(),
             );
             let rows = Rc::new(rows);
-            let p = *p;
+            let p = p.clone();
             v_virtual_list(
                 cx.entity().clone(),
                 "sidebar-sessions-virtual-list",

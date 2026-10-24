@@ -17,7 +17,7 @@ use transom_core::{ActivityItemId, StatusItemId};
 /// 构造“布局”设置页：活动栏与状态栏各一个分组。
 pub(super) fn layout_settings_page(app: Entity<AppShell>, p: Palette) -> SettingPage {
     let activity_app = app.clone();
-    let activity_palette = p;
+    let activity_palette = p.clone();
     let status_app = app;
     SettingPage::new(rust_i18n::t!("settings.tab_layout").to_string())
         .icon(IconName::LayoutDashboard)

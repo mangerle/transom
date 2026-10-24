@@ -109,7 +109,8 @@ impl AppShell {
             let row_sizes = Rc::new(vec![size(px(0.0), px(32.0)); entries.len()]);
             let entries_rc = Rc::new(entries);
             let selected_rc = Rc::new(selected);
-            let p = *p;
+            // 虚拟列表闭包单独持有一份调色板：外层渲染继续用原值，互不移动。
+            let list_palette = p.clone();
             let list = v_virtual_list(
                 cx.entity().clone(),
                 format!("sftp-sync-virtual-list-{tab_id}"),
@@ -121,7 +122,7 @@ impl AppShell {
                             let checked = selected_rc.get(index).copied().unwrap_or(false);
                             let selectable = entry.status != DirDiffStatus::TypeMismatch;
                             let (status_label, status_color) =
-                                status_presentation(entry.status, &p);
+                                status_presentation(entry.status, &list_palette);
                             let local_text = side_text(entry.local.as_ref());
                             let remote_text = side_text(entry.remote.as_ref());
                             let mut row = h_flex()
@@ -132,7 +133,7 @@ impl AppShell {
                                 .items_center()
                                 .text_xs()
                                 .border_b_1()
-                                .border_color(p.sidebar_border);
+                                .border_color(list_palette.sidebar_border);
                             if selectable {
                                 row = row.child(
                                     Checkbox::new(format!("sftp-sync-check-{index}"))
@@ -160,13 +161,13 @@ impl AppShell {
                                 .child(
                                     div()
                                         .w(px(132.0))
-                                        .text_color(p.muted_foreground)
+                                        .text_color(list_palette.muted_foreground)
                                         .child(local_text),
                                 )
                                 .child(
                                     div()
                                         .w(px(132.0))
-                                        .text_color(p.muted_foreground)
+                                        .text_color(list_palette.muted_foreground)
                                         .child(remote_text),
                                 )
                                 .into_any_element(),

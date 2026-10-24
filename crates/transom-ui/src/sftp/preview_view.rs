@@ -158,11 +158,13 @@ fn preview_card_body(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
 }
 
 fn render_text_preview(lines: &[String], truncated: bool, p: &Palette) -> AnyElement {
+    // 字体与字号走主题等宽槽位，密度档位变化时预览文字随全局等宽字号缩放；
+    // 行高按原 11/15 比例由字号派生，保持视觉密度不变。
     let mut column = v_flex()
         .gap(px(1.0))
-        .font_family("monospace")
-        .text_size(px(11.0))
-        .line_height(px(15.0));
+        .font_family(p.mono_font_family.clone())
+        .text_size(p.mono_font_size)
+        .line_height(p.mono_font_size * 1.36);
     if lines.is_empty() {
         column = column.child(
             div()

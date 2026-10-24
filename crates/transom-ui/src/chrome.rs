@@ -82,8 +82,8 @@ impl AppShell {
             .justify_center()
             .cursor_pointer()
             .text_color(p.muted_foreground)
-            .hover(|s| s.bg(rgb(0xef4444)).text_color(white()))
-            .active(|s| s.bg(rgb(0xdc2626)))
+            .hover(|s| s.bg(p.danger_hover).text_color(p.danger_foreground))
+            .active(|s| s.bg(p.danger_active))
             .tooltip(move |_window, cx| {
                 Tooltip::new(rust_i18n::t!("app.close").to_string()).build(_window, cx)
             })

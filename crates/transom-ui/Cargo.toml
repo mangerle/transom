@@ -26,6 +26,7 @@ notify-rust.workspace = true
 chrono.workspace = true
 image.workspace = true
 parking_lot.workspace = true
+tracing.workspace = true
 # 保存前差异预览：与 gpui-component 的 diff 组件同源依赖（锁内已有 2.7.0），
 # 用于生成统一 diff 文本交给 DiffState 渲染，不引入新的传递依赖树。
 similar = "2.7"

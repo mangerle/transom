@@ -56,7 +56,7 @@ impl AppShell {
         } else {
             let local_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); local_entries.len()]);
             let local_entries_rc = std::rc::Rc::new(local_entries);
-            let p = *p;
+            let p = p.clone();
             let app_entity = cx.entity().clone();
             v_virtual_list(
                 cx.entity().clone(),

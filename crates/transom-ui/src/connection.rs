@@ -586,11 +586,11 @@ impl AppShell {
                             .text_color(p.muted_foreground)
                             .child(format!("{}: {}", state.key_type, state.host)),
                     )
-                    // 指纹需要逐字符核对，用等宽字体避免视觉混淆
+                    // 指纹需要逐字符核对，用主题等宽字体避免视觉混淆
                     .child(
                         div()
                             .text_sm()
-                            .font_family("monospace")
+                            .font_family(p.mono_font_family.clone())
                             .child(state.fingerprint.clone()),
                     ),
             )

@@ -10,7 +10,12 @@ use gpui_kit::*;
 use transom_core::{AppError, ErrorCode};
 
 /// 全局 UI 调色板快照，用于各子视图渲染统一配色。
-#[derive(Clone, Copy)]
+///
+/// 为什么是值快照而不是直接读 `cx.theme()`：渲染函数签名只依赖 `&Palette`，
+/// 不与 `cx` 借用纠缠；同时每帧从全局主题重建，主题热切换后下一帧自动生效。
+/// 含 `SharedString` 字段因此只能 Clone，各渲染闭包持有 `Palette` 值时用
+/// `p.clone()` 传递。
+#[derive(Clone)]
 pub(crate) struct Palette {
     pub(crate) background: Hsla,
     pub(crate) foreground: Hsla,
@@ -31,11 +36,23 @@ pub(crate) struct Palette {
     pub(crate) title_bar: Hsla,
     pub(crate) title_bar_border: Hsla,
     pub(crate) status_bar: Hsla,
+    /// 主题强调色（设置页主题卡预览色点等场景）。
+    pub(crate) primary: Hsla,
+    /// 警示语义色（设置页明暗反差提示等场景）。
+    pub(crate) warning: Hsla,
     pub(crate) danger: Hsla,
     pub(crate) danger_foreground: Hsla,
+    pub(crate) danger_hover: Hsla,
+    pub(crate) danger_active: Hsla,
     pub(crate) success: Hsla,
+    /// 模态遮罩底色：自带透明度，随主题明暗变化。
+    pub(crate) overlay: Hsla,
     pub(crate) popover: Hsla,
     pub(crate) popover_foreground: Hsla,
+    /// 界面等宽字体族（SFTP 预览、指纹展示等逐字符对齐场景）。
+    pub(crate) mono_font_family: SharedString,
+    /// 界面等宽字号，随密度档位缩放。
+    pub(crate) mono_font_size: Pixels,
 }
 
 impl Palette {
@@ -60,11 +77,18 @@ impl Palette {
             title_bar: theme.title_bar,
             title_bar_border: theme.title_bar_border,
             status_bar: theme.status_bar,
+            primary: theme.primary,
+            warning: theme.warning,
             danger: theme.danger,
             danger_foreground: theme.danger_foreground,
+            danger_hover: theme.danger_hover,
+            danger_active: theme.danger_active,
             success: theme.success,
+            overlay: theme.overlay,
             popover: theme.popover,
             popover_foreground: theme.popover_foreground,
+            mono_font_family: theme.mono_font_family.clone(),
+            mono_font_size: theme.mono_font_size,
         }
     }
 }
@@ -120,7 +144,7 @@ impl AppShell {
             .into_any_element()
     }
 
-    pub(crate) fn overlay(content: impl IntoElement, _p: &Palette) -> AnyElement {
+    pub(crate) fn overlay(content: impl IntoElement, p: &Palette) -> AnyElement {
         div()
             .absolute()
             .top_0()
@@ -129,7 +153,7 @@ impl AppShell {
             .flex()
             .items_center()
             .justify_center()
-            .bg(Hsla { a: 0.55, ..black() })
+            .bg(p.overlay)
             .key_context(keymap::OVERLAY_CONTEXT)
             // 遮罩必须阻断下层命中测试，否则点击输入框会同时触发终端/文件列表
             // 的鼠标处理并抢走焦点，表现为一输入就失焦。

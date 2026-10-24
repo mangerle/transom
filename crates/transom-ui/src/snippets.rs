@@ -217,7 +217,7 @@ impl AppShell {
         let app_open = app.clone();
         let card_app = app;
         let card_items = items;
-        let card_palette = *p;
+        let card_palette = p.clone();
         // 锚点直接用底栏高度而不是百分比：卡片底边与底栏上缘对齐，不跟着
         // 居中的按钮留出一条缝。左内边距让图标离分界线有一点呼吸，但触发器
         // 容器本身仍从分界线起算，卡片左缘才能贴住会话列表与终端的分界。

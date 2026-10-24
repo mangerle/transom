@@ -4,6 +4,7 @@ use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Settings};
 use gpui_kit::component::{Icon, Sizable};
@@ -27,7 +28,7 @@ impl AppShell {
                     .title(rust_i18n::t!("settings.appearance").to_string())
                     .item(SettingItem::render({
                         let app = app_entity.clone();
-                        let p = *p;
+                        let p = p.clone();
                         move |_options, _window, cx| {
                             app.update(cx, |this, cx| this.render_settings_rendering(&p, cx))
                         }
@@ -36,20 +37,35 @@ impl AppShell {
 
         let page_themes = SettingPage::new(rust_i18n::t!("settings.tab_themes").to_string())
             .icon(IconName::Server)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = *p;
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_themes(&p, cx))
-                }
-            })));
+            .group(
+                SettingGroup::new()
+                    .title(rust_i18n::t!("settings.ui_theme_group").to_string())
+                    .item(SettingItem::render({
+                        let app = app_entity.clone();
+                        let p = p.clone();
+                        move |_options, _window, cx| {
+                            app.update(cx, |this, cx| this.render_settings_ui_theme(&p, cx))
+                        }
+                    })),
+            )
+            .group(
+                SettingGroup::new()
+                    .title(rust_i18n::t!("settings.terminal_theme_group").to_string())
+                    .item(SettingItem::render({
+                        let app = app_entity.clone();
+                        let p = p.clone();
+                        move |_options, _window, cx| {
+                            app.update(cx, |this, cx| this.render_settings_themes(&p, cx))
+                        }
+                    })),
+            );
 
         let page_mouse =
             SettingPage::new(rust_i18n::t!("settings.tab_mouse_clipboard").to_string())
                 .icon(IconName::ArrowLeftRight)
                 .group(SettingGroup::new().item(SettingItem::render({
                     let app = app_entity.clone();
-                    let p = *p;
+                    let p = p.clone();
                     move |_options, _window, cx| {
                         app.update(cx, |this, cx| this.render_settings_mouse_clipboard(&p, cx))
                     }
@@ -59,7 +75,7 @@ impl AppShell {
             .icon(IconName::Search)
             .group(SettingGroup::new().item(SettingItem::render({
                 let app = app_entity.clone();
-                let p = *p;
+                let p = p.clone();
                 move |_options, _window, cx| {
                     app.update(cx, |this, cx| this.render_settings_shortcuts(&p, cx))
                 }
@@ -69,19 +85,19 @@ impl AppShell {
             .icon(IconName::PanelLeft)
             .group(SettingGroup::new().item(SettingItem::render({
                 let app = app_entity.clone();
-                let p = *p;
+                let p = p.clone();
                 move |_options, _window, cx| {
                     app.update(cx, |this, cx| this.render_settings_tabs_window(&p, cx))
                 }
             })));
 
-        let page_layout = layout_page::layout_settings_page(app_entity.clone(), *p);
+        let page_layout = layout_page::layout_settings_page(app_entity.clone(), p.clone());
 
         let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
             .icon(IconName::Globe)
             .group(SettingGroup::new().item(SettingItem::render({
                 let app = app_entity.clone();
-                let p = *p;
+                let p = p.clone();
                 move |_options, window, cx| {
                     app.update(cx, |this, cx| this.render_settings_general(window, &p, cx))
                 }
@@ -169,7 +185,9 @@ impl AppShell {
                                 .text_xs()
                                 .text_color(p.muted_foreground)
                                 .child(format!(
-                                    "{}: {}",
+                                    "{}: {}　{}: {}",
+                                    rust_i18n::t!("settings.current_ui_theme"),
+                                    cx.theme().theme_name(),
                                     rust_i18n::t!("settings.current_theme"),
                                     self.settings.terminal_profile.theme_name
                                 )),
@@ -184,8 +202,7 @@ impl AppShell {
                                     .small()
                                     .label(rust_i18n::t!("common.cancel").to_string())
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.settings_modal.open = false;
-                                        cx.notify();
+                                        this.cancel_settings(cx);
                                     })),
                             )
                             .child(

@@ -20,9 +20,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppError, AppSettings, Connection, ConnectionId, FolderId, ForwardId,
-    ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, SecretKind, Session,
-    SessionCatalog, SessionId, SplitId, SystemStats, TabId,
+    AppCommand, AppError, AppSettings, AppearanceSettings, Connection, ConnectionId, FolderId,
+    ForwardId, ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, SecretKind,
+    Session, SessionCatalog, SessionId, SplitId, SystemStats, TabId, UiThemeMode,
 };
 use transom_terminal::TerminalView;
 use zeroize::Zeroizing;
@@ -289,6 +289,11 @@ pub(crate) struct SettingsModalState {
     pub(crate) word_separators: Entity<InputState>,
     pub(crate) notify_threshold: Entity<InputState>,
     pub(crate) highlight_keywords: Entity<InputState>,
+    /// 打开弹窗瞬间的外观偏好快照。
+    ///
+    /// 界面主题与密度在弹窗内即时预览（改一档立刻全局生效），取消时凭它恢复，
+    /// 与"保存才落盘"的单点纪律对齐；其余设置项维持原有不回滚行为。
+    pub(crate) appearance_snapshot: Option<AppearanceSettings>,
 }
 
 /// SFTP 五类弹窗（权限、输入、属性、过滤、同步）与编辑器跳转行的聚合状态。
@@ -400,6 +405,8 @@ pub struct AppShell {
     pub(crate) batch_edit: Option<BatchEditForm>,
     pub(crate) backup_prompt: Option<BackupPromptState>,
     pub(crate) _backup_task: Option<Task<()>>,
+    /// 系统明暗变化订阅；随 AppShell 存活，drop 即退订。
+    pub(crate) _appearance_subscription: Subscription,
     pub(crate) _event_task: Task<()>,
 }
 
@@ -429,6 +436,7 @@ impl AppShell {
         // 设置文件是外部输入：未知条目、重复项、越界分区都在进入运行期前清洗。
         settings.activity_bar.normalize();
         settings.status_bar.normalize();
+        settings.appearance.normalize();
         cx.bind_keys(keymap::bindings(&settings.shortcuts));
         let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
             &settings.shortcuts,
@@ -458,6 +466,17 @@ impl AppShell {
                 {
                     break;
                 }
+            }
+        });
+
+        // 系统明暗变化跟随：仅在"跟随系统"档响应，手动选择的明暗不被系统切换
+        // 覆盖。读取走实体而不是闭包快照，设置页改动后无需重新挂订阅。
+        let app_entity = cx.entity();
+        let appearance_subscription = window.observe_window_appearance(move |window, cx| {
+            let follows_system =
+                app_entity.read(cx).settings.appearance.mode == UiThemeMode::System;
+            if follows_system {
+                crate::theme::sync_with_system(window, cx);
             }
         });
 
@@ -555,6 +574,7 @@ impl AppShell {
                 word_separators: settings_word_separators,
                 notify_threshold: settings_notify_threshold,
                 highlight_keywords: settings_highlight_keywords,
+                appearance_snapshot: None,
             },
             confirm_forward_any: None,
             editor_panels: Vec::new(),
@@ -587,8 +607,16 @@ impl AppShell {
             batch_edit: None,
             backup_prompt: None,
             _backup_task: None,
+            _appearance_subscription: appearance_subscription,
             _event_task: event_task,
         };
+
+        // Linux 上窗口级外观上报比应用级可靠（gpui-kit issue #104）；开窗前
+        // lib.rs 的首次注入读的是应用级外观，这里在首帧前用窗口读数再校准一次，
+        // "跟随系统"档的用户才不会在启动瞬间看到错误的明暗。
+        if this.settings.appearance.mode == UiThemeMode::System {
+            crate::theme::sync_with_system(window, cx);
+        }
 
         if this.settings.window.restore_previous_tabs {
             let saved_groups = this.settings.window.previous_tab_groups.clone();

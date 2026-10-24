@@ -14,7 +14,7 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
-use transom_core::{TerminalCursorShape, TerminalHighlight};
+use transom_core::{AppearanceSettings, TerminalCursorShape, TerminalHighlight};
 use transom_terminal::TerminalView;
 
 /// 读取字体族输入框：留空表示"不指定"，交给默认字体或系统回退。
@@ -38,6 +38,8 @@ impl AppShell {
 
     pub(crate) fn open_settings_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let profile = self.settings.terminal_profile.clone();
+        // 界面主题与密度在弹窗内即时预览，取消时凭这份快照恢复。
+        self.settings_modal.appearance_snapshot = Some(self.settings.appearance.clone());
         self.settings_modal.font_family.update(cx, |input, cx| {
             input.set_value(profile.font_family.unwrap_or_default(), window, cx);
         });
@@ -78,7 +80,38 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 更新界面外观偏好并即时应用：弹窗内改一档立刻全局预览。
+    ///
+    /// 落盘仍由 `save_settings` 单点负责；取消走 `cancel_settings` 凭快照回滚。
+    /// 预览与回滚共用 [`crate::theme::apply_appearance`] 这一条写路径，保证
+    /// "看到的效果"与"保存后的效果"出自同一逻辑。
+    pub(crate) fn update_appearance(
+        &mut self,
+        change: impl FnOnce(&mut AppearanceSettings),
+        cx: &mut Context<Self>,
+    ) {
+        change(&mut self.settings.appearance);
+        crate::theme::apply_appearance(&self.settings.appearance, cx);
+        cx.notify();
+    }
+
+    /// 取消设置：外观部分恢复到打开弹窗前的偏好并回滚预览效果。
+    ///
+    /// 为什么只有外观回滚：它引入了"未保存也生效"的即时预览，取消语义必须
+    /// 成对闭环，否则点取消会留下改了一半的界面；其余设置项维持既有的内存态
+    /// 修改保留、等待下次保存覆盖的行为。
+    pub(crate) fn cancel_settings(&mut self, cx: &mut Context<Self>) {
+        if let Some(snapshot) = self.settings_modal.appearance_snapshot.take() {
+            self.settings.appearance = snapshot;
+            crate::theme::apply_appearance(&self.settings.appearance, cx);
+        }
+        self.settings_modal.open = false;
+        cx.notify();
+    }
+
     pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>) {
+        // 外观偏好在弹窗内已即时写入，落盘前归一化兜底值，保证文件可回读。
+        self.settings.appearance.normalize();
         self.settings.terminal_profile.font_family =
             read_font_family(&self.settings_modal.font_family, cx);
         self.settings.terminal_profile.cjk_font_family =

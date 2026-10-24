@@ -41,7 +41,7 @@ pub(crate) fn render_editor_list_popover(
         .collect();
     let app = cx.entity().clone();
     let count = panels.len();
-    let card_palette = *p;
+    let card_palette = p.clone();
     let trigger = Button::new("sftp-open-editors")
         .ghost()
         .xsmall()

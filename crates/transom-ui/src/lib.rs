@@ -30,6 +30,7 @@ mod startup;
 mod status_bar;
 mod tabs;
 mod terminal_search;
+mod theme;
 mod window_state;
 mod workspace;
 
@@ -63,6 +64,10 @@ pub fn run(services: UiServices) {
         rust_i18n::extend!(gpui_component);
         init(cx);
         gpui_component::set_locale(&language);
+        // 主题注入必须晚于 init（注册表/全局 Theme 由它建立）、早于 open_window
+        // （首帧即用目标主题渲染，避免启动闪一次默认浅色）。
+        theme::register_builtin(cx);
+        theme::apply_appearance(&settings.appearance, cx);
 
         let window_bounds = {
             let width = if settings.window.window_width > 400.0 {
