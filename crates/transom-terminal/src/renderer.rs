@@ -63,6 +63,8 @@ pub(crate) struct RowVisual {
 pub(crate) struct TextVisual {
     text: SharedString,
     start_col: usize,
+    /// run 覆盖到的列（不含），自绘下划线按列几何取宽度。
+    end_col: usize,
     style: RunStyle,
 }
 
@@ -591,6 +593,7 @@ impl TerminalRenderer {
                 text_runs.push(TextVisual {
                     text: SharedString::from(builder.text),
                     start_col: builder.start_col,
+                    end_col: builder.end_col,
                     style: builder.style,
                 });
             }
@@ -621,7 +624,7 @@ impl TerminalRenderer {
                     && text_run.style.fg == fg
                     && text_run.style.bold == cell.flags.contains(Flags::BOLD)
                     && text_run.style.italic == cell.flags.contains(Flags::ITALIC)
-                    && text_run.style.underline == cell_underlined(cell)
+                    && text_run.style.underline == cell_underline_kind(cell)
                     && text_run.style.wide == cell.flags.contains(Flags::WIDE_CHAR)
                 {
                     text_run.text.push(' ');
@@ -653,7 +656,7 @@ impl TerminalRenderer {
                 fg,
                 bold: cell.flags.contains(Flags::BOLD),
                 italic: cell.flags.contains(Flags::ITALIC),
-                underline: cell_underlined(cell),
+                underline: cell_underline_kind(cell),
                 // 网格已经用 WIDE_CHAR 标记替我们判过宽度（含 wcwidth 的全部边界），
                 // 直接采信标记，比在渲染侧再维护一份宽度表更可靠。
                 wide: cell.flags.contains(Flags::WIDE_CHAR),
@@ -669,6 +672,13 @@ impl TerminalRenderer {
                 text_runs.push(TextVisual {
                     text: SharedString::from(text.as_str()),
                     start_col: col,
+                    // 双格字符独占两列（含尾随衬格）
+                    end_col: col
+                        + if cell.flags.contains(Flags::WIDE_CHAR) {
+                            2
+                        } else {
+                            1
+                        },
                     style,
                 });
                 continue;
@@ -709,6 +719,7 @@ impl TerminalRenderer {
         let TextVisual {
             text,
             start_col,
+            end_col,
             style,
         } = visual;
         let font = self.font_for(
@@ -729,11 +740,16 @@ impl TerminalRenderer {
             font,
             color: style.fg,
             background_color: None,
-            underline: style.underline.then_some(UnderlineStyle {
-                thickness: px(1.0),
-                color: Some(style.fg),
-                wavy: false,
-            }),
+            underline: match style.underline {
+                UnderlineKind::Single | UnderlineKind::Curl => Some(UnderlineStyle {
+                    thickness: px(1.0),
+                    color: Some(style.fg),
+                    wavy: style.underline == UnderlineKind::Curl,
+                }),
+                // 双线/点线/虚线文本系统不直接支持，走 paint_run_custom_underline
+                UnderlineKind::Double | UnderlineKind::Dotted | UnderlineKind::Dashed => None,
+                UnderlineKind::None => None,
+            },
             strikethrough: None,
         };
         let shaped = window.text_system().shape_line(
@@ -753,6 +769,82 @@ impl TerminalRenderer {
             window,
             cx,
         );
+        if matches!(
+            style.underline,
+            UnderlineKind::Double | UnderlineKind::Dotted | UnderlineKind::Dashed
+        ) {
+            self.paint_run_custom_underline(
+                &CustomUnderline {
+                    kind: style.underline,
+                    start_col: *start_col,
+                    end_col: *end_col,
+                    origin,
+                    row,
+                    color: style.fg,
+                },
+                window,
+            );
+        }
+    }
+
+    /// 自绘文本系统不支持下划线的种类（双线/点线/虚线），按单元格几何绘制。
+    ///
+    /// 设计原理（Why）：gpui 的 UnderlineStyle 只有实线与波浪线两种；图案以
+    /// 格为周期与终端网格对齐，不随字体度量漂移；颜色跟随 run 前景色，
+    /// 与实线下划线的取色一致。
+    fn paint_run_custom_underline(&self, spec: &CustomUnderline, window: &mut Window) {
+        let CustomUnderline {
+            kind,
+            start_col,
+            end_col,
+            origin,
+            row,
+            color,
+        } = *spec;
+        let cell_width = f32::from(self.cell_width);
+        let cell_height = f32::from(self.cell_height);
+        let base_x = f32::from(origin.x) + cell_width * start_col as f32;
+        let base_y = f32::from(origin.y) + cell_height * row as f32;
+        let run_width = cell_width * (end_col.saturating_sub(start_col)) as f32;
+        let paint_segment = |x: f32, y: f32, w: f32, window: &mut Window| {
+            if w > 0.0 {
+                window.paint_quad(fill(
+                    Bounds {
+                        origin: Point { x: px(x), y: px(y) },
+                        size: Size {
+                            width: px(w),
+                            height: px(1.0),
+                        },
+                    },
+                    color,
+                ));
+            }
+        };
+        match kind {
+            UnderlineKind::Double => {
+                let y1 = base_y + cell_height * 0.84;
+                let y2 = base_y + cell_height * 0.92;
+                paint_segment(base_x, y1, run_width, window);
+                paint_segment(base_x, y2, run_width, window);
+            }
+            UnderlineKind::Dotted => {
+                let y = base_y + cell_height * 0.88;
+                let dot = (cell_width * 0.22).max(1.0);
+                for offset in 0..end_col.saturating_sub(start_col) {
+                    let x = base_x + cell_width * offset as f32 + cell_width * 0.1;
+                    paint_segment(x, y, dot, window);
+                }
+            }
+            UnderlineKind::Dashed => {
+                let y = base_y + cell_height * 0.88;
+                for offset in 0..end_col.saturating_sub(start_col) {
+                    let x = base_x + cell_width * offset as f32;
+                    paint_segment(x + cell_width * 0.05, y, cell_width * 0.35, window);
+                    paint_segment(x + cell_width * 0.6, y, cell_width * 0.35, window);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn paint_cursor(
@@ -994,10 +1086,48 @@ impl RowScratch {
     }
 }
 
-/// 单元格是否按下划线渲染：显式下划线样式，或 OSC 8 超链接单元格。
-/// 超链接恒定加下划线（与 kitty/Alacritty 的默认表现一致），让链接可被发现。
-fn cell_underlined(cell: &Cell) -> bool {
-    cell.flags.intersects(Flags::ALL_UNDERLINES) || cell.hyperlink().is_some()
+/// 终端下划线的渲染种类；`None` 表示无下划线。
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UnderlineKind {
+    None,
+    Single,
+    /// 波浪线（SGR 4:3），gpui 文本系统原生支持。
+    Curl,
+    /// 双下划线（SGR 4:2），按格自绘两条。
+    Double,
+    /// 点线（SGR 4:4），按格自绘点。
+    Dotted,
+    /// 虚线（SGR 4:5），按格自绘两段。
+    Dashed,
+}
+
+/// 自绘下划线的定位参数（run 的线型、列区间与颜色）。
+struct CustomUnderline {
+    kind: UnderlineKind,
+    start_col: usize,
+    end_col: usize,
+    origin: Point<Pixels>,
+    row: usize,
+    color: Hsla,
+}
+
+/// 单元格的下划线样式：显式 SGR 下划线优先，OSC 8 超链接单元格恒定单下划线
+/// （与 kitty/Alacritty 的默认表现一致），让链接可被发现。
+fn cell_underline_kind(cell: &Cell) -> UnderlineKind {
+    let flags = cell.flags;
+    if flags.contains(Flags::UNDERCURL) {
+        UnderlineKind::Curl
+    } else if flags.contains(Flags::DOTTED_UNDERLINE) {
+        UnderlineKind::Dotted
+    } else if flags.contains(Flags::DASHED_UNDERLINE) {
+        UnderlineKind::Dashed
+    } else if flags.contains(Flags::DOUBLE_UNDERLINE) {
+        UnderlineKind::Double
+    } else if flags.contains(Flags::UNDERLINE) || cell.hyperlink().is_some() {
+        UnderlineKind::Single
+    } else {
+        UnderlineKind::None
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1005,7 +1135,7 @@ struct RunStyle {
     fg: Hsla,
     bold: bool,
     italic: bool,
-    underline: bool,
+    underline: UnderlineKind,
     /// 是否属于双格字符：决定取主字体还是中文专用字体，必须参与 run 合并判定，
     /// 否则两种字体的字符会被拼进同一次 `shape_line`。
     wide: bool,
