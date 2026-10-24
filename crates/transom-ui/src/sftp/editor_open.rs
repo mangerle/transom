@@ -41,7 +41,18 @@ enum EditGate {
     Allowed {
         connection_id: Option<ConnectionId>,
         name: String,
+        /// 目录项快照的权限位；`None` 表示服务器未回传，视为可写。
+        permissions: Option<u32>,
     },
+}
+
+/// 按权限位推定文件可写：所有写位皆无（如 444）时不可写。
+///
+/// 只看权限位、不做属主比对（SFTP 拿不到本端连接用户的 uid 与文件属主的
+/// 对应关系）：属主文件仍可正常编辑，root 属主但 644 的文件会放行到保存时
+/// 由远端报权限错误兜底，属于已知的推定局限。
+fn permissions_writable(permissions: Option<u32>) -> bool {
+    permissions.is_none_or(|p| p & 0o222 != 0)
 }
 
 impl AppShell {
@@ -73,11 +84,12 @@ impl AppShell {
                 Some(EditGate::Allowed {
                     connection_id: tab.connection_id,
                     name: entry.name.clone(),
+                    permissions: entry.permissions,
                 })
             })
             .unwrap_or(EditGate::Missing);
 
-        let (connection_id, file_name) = match gate {
+        let (connection_id, file_name, permissions) = match gate {
             EditGate::Missing => {
                 self.editor_reject(tab_id, rust_i18n::t!("sftp.select_file").to_string(), cx);
                 return;
@@ -98,7 +110,8 @@ impl AppShell {
             EditGate::Allowed {
                 connection_id,
                 name,
-            } => (connection_id, name),
+                permissions,
+            } => (connection_id, name, permissions),
         };
         let Some(connection_id) = connection_id else {
             self.editor_reject(tab_id, "SSH 连接尚未就绪，无法编辑远端文件".to_string(), cx);
@@ -122,7 +135,15 @@ impl AppShell {
         // 这里的尺寸闸门只是第一道：目录列表的尺寸可能过期，net 层还会在读取循环内
         // 按同一上限二次设限，两道一起才挡得住"列出之后文件变大"的情况。
         let op_id = TransferId::new();
-        self.spawn_editor_panel(tab_id, remote_path.clone(), file_name, op_id, window, cx);
+        self.spawn_editor_panel(
+            tab_id,
+            remote_path.clone(),
+            file_name,
+            permissions,
+            op_id,
+            window,
+            cx,
+        );
         if !self.send_command(AppCommand::Sftp {
             tab_id,
             connection_id,
@@ -137,11 +158,13 @@ impl AppShell {
     }
 
     /// 建立一个处于读取态的面板：空缓冲区、订阅就位、按已开面板数量级联落位。
+    #[allow(clippy::too_many_arguments)]
     fn spawn_editor_panel(
         &mut self,
         tab_id: TabId,
         remote_path: String,
         file_name: String,
+        permissions: Option<u32>,
         op_id: TransferId,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -155,6 +178,12 @@ impl AppShell {
                 .searchable(true)
                 .soft_wrap(true)
         });
+        // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
+        // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。
+        let writable = permissions_writable(permissions);
+        if !writable {
+            editor.update(cx, |state, cx| state.set_readonly(true, cx));
+        }
         editor.update(cx, |state, cx| state.focus(window, cx));
         let caret = caret_of(&editor, cx);
         let cascade = self.editor_panels.len();
@@ -216,6 +245,11 @@ impl AppShell {
             written_size: None,
             pending_op: Some(op_id),
             error: None,
+            permissions,
+            writable,
+            close_after_write: false,
+            diff: None,
+            showing_diff: false,
             conflict: false,
             confirm: None,
             collapsed: false,
@@ -262,6 +296,8 @@ impl AppShell {
         item.pending_op = None;
         item.error = None;
         item.conflict = false;
+        item.showing_diff = false;
+        item.diff = None;
         item.editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
     }
@@ -309,6 +345,9 @@ impl AppShell {
             item.pending_op = Some(op_id);
             item.error = None;
             item.conflict = false;
+            // 重新载入会整体替换缓冲区，差异预览展示的旧基线随之失效。
+            item.showing_diff = false;
+            item.diff = None;
         }
         let max_bytes = self.settings.sftp.edit_max_bytes;
         if !self.send_command(AppCommand::Sftp {

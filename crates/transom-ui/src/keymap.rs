@@ -36,7 +36,8 @@ actions!(
         FocusSftpFilter,
         ToggleSftpHidden,
         DeleteSftpSelection,
-        SaveEditorFile
+        SaveEditorFile,
+        GoToEditorLine
     ]
 );
 
@@ -250,6 +251,9 @@ pub(crate) fn bindings(custom: &ShortcutSettings) -> Vec<KeyBinding> {
         // 用 secondary 而非 $app，后者在非 macOS 展开成 Ctrl+Shift，与
         // 面板外已占用的 `$app-s`（显示/隐藏 SFTP 面板）撞车。
         KeyBinding::new("secondary-s", SaveEditorFile, Some(EDITOR_PANEL_CONTEXT)),
+        // 跳转到行与保存同理，仅在编辑面板内生效；secondary-g 与既有
+        // secondary-f/h/s 无冲突，与主流编辑器的 Ctrl+G 习惯一致。
+        KeyBinding::new("secondary-g", GoToEditorLine, Some(EDITOR_PANEL_CONTEXT)),
     ]);
     bindings
 }

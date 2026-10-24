@@ -1,7 +1,11 @@
 //! SFTP 双栏文件管理器、传输队列、内置编辑器悬浮面板与权限/属性模态弹窗模块。
 
 mod chmod;
+mod editor_actions;
+mod editor_banner;
 mod editor_close;
+mod editor_diff;
+mod editor_navigate;
 mod editor_open;
 mod editor_ops;
 mod editor_panel;

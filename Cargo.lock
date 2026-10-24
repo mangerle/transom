@@ -8202,6 +8202,7 @@ dependencies = [
  "parking_lot",
  "rfd",
  "rust-i18n",
+ "similar",
  "tokio",
  "transom-core",
  "transom-terminal",

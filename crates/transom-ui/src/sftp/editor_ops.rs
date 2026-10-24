@@ -41,6 +41,23 @@ impl AppShell {
         self.submit_editor_write(editor, true, window, cx);
     }
 
+    /// 关闭确认横幅上的"保存并关闭"：先回传，成功即关闭面板。
+    ///
+    /// 失败路径（连接丢失、投递失败、回传失败、冲突）都会清掉
+    /// `close_after_write`，面板留在原地显示错误，不会静默关闭。
+    pub(crate) fn save_and_close_editor_panel(
+        &mut self,
+        editor: &Entity<EditorState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(item) = self.editor_panel_mut(editor) {
+            item.close_after_write = true;
+            item.confirm = None;
+        }
+        self.submit_editor_write(editor, false, window, cx);
+    }
+
     /// 回传提交的共用路径：`force` 为 true 时跳过版本指纹比对（强制覆盖）。
     fn submit_editor_write(
         &mut self,
@@ -73,6 +90,7 @@ impl AppShell {
         else {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
+                item.close_after_write = false;
                 item.error =
                     Some("所属标签的连接已断开，无法回传，请复制内容后重新打开".to_string());
             }
@@ -82,7 +100,7 @@ impl AppShell {
         };
 
         let op_id = TransferId::new();
-        if !self.send_command(AppCommand::Sftp {
+        if let Err(err) = self.services.command_tx.send(AppCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -94,7 +112,8 @@ impl AppShell {
         }) {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
-                item.error = Some("回传命令投递失败".to_string());
+                item.close_after_write = false;
+                item.error = Some(format!("回传命令投递失败: {err}"));
             }
             self.focus_active_sftp_panel(window, cx);
             cx.notify();
@@ -113,7 +132,8 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 回传成功：脏基准与版本指纹都换成远端确认后的新值。
+    /// 回传成功：脏基准与版本指纹都换成远端确认后的新值，目录列表条目就地
+    /// 补丁；请求过"保存并关闭"时在此关闭面板。
     ///
     /// 保存成功即脏面板清零，可能因此满足挂起的标签关闭，续行检查。
     pub(crate) fn note_editor_text_written(
@@ -123,21 +143,52 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self
+        let Some(index) = self
             .editor_panels
-            .iter_mut()
-            .find(|item| item.pending_op == Some(op_id))
+            .iter()
+            .position(|item| item.pending_op == Some(op_id))
         else {
             return;
         };
-        item.pending_op = None;
-        item.baseline = item.editor.read(cx).value();
-        item.remote_meta = Some(meta);
-        item.dirty = false;
-        item.phase = EditorPhase::Written;
-        item.written_size = Some(meta.size);
-        item.error = None;
-        item.conflict = false;
+        let (editor, close_after, tab_id, remote_path) = {
+            let item = &mut self.editor_panels[index];
+            item.pending_op = None;
+            item.baseline = item.editor.read(cx).value();
+            item.remote_meta = Some(meta);
+            item.dirty = false;
+            item.phase = EditorPhase::Written;
+            item.written_size = Some(meta.size);
+            item.error = None;
+            item.conflict = false;
+            // 差异预览展示的"待回传变更"已经落盘，回编辑视图展示新基线内容。
+            item.showing_diff = false;
+            item.diff = None;
+            let close_after = item.close_after_write;
+            item.close_after_write = false;
+            (
+                item.editor.clone(),
+                close_after,
+                item.tab_id,
+                item.remote_path.clone(),
+            )
+        };
+        // 目录列表条目就地补丁：size/mtime 都来自写后 stat，与远端一致，
+        // 无需为刷新列表再发一次目录请求。
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
+            && let Some(panel) = tab.sftp.as_mut()
+            && let Some(entry) = panel
+                .entries
+                .iter_mut()
+                .find(|entry| entry.path == remote_path)
+        {
+            entry.size = meta.size;
+            entry.modified = meta.mtime;
+        }
+        if close_after {
+            self.drop_editor_panel(&editor, window, cx);
+            self.resume_pending_editor_close(window, cx);
+            return;
+        }
         cx.notify();
         self.resume_pending_editor_close(window, cx);
     }
@@ -145,6 +196,7 @@ impl AppShell {
     /// 回传被版本指纹拦截：远端已被修改，置冲突横幅交用户决策，内容原样保留。
     ///
     /// `dirty` 不动：用户继续点保存会再次命中冲突，出口只有横幅上的三个动作。
+    /// "保存并关闭"意图一并取消——关闭动作必须等用户在冲突横幅上做出选择。
     pub(crate) fn note_editor_text_conflict(
         &mut self,
         op_id: TransferId,
@@ -163,6 +215,7 @@ impl AppShell {
         item.written_size = None;
         item.conflict = true;
         item.confirm = None;
+        item.close_after_write = false;
         item.error = Some(format!("远端已被修改: {message}"));
         cx.notify();
     }
@@ -189,6 +242,7 @@ impl AppShell {
         item.pending_op = None;
         item.phase = EditorPhase::Failed;
         item.written_size = None;
+        item.close_after_write = false;
         item.error = Some(format!("{action}: {detail}"));
         cx.notify();
     }

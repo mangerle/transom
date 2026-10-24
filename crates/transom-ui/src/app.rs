@@ -13,7 +13,7 @@ use crate::sftp::{
 };
 use crate::snippets::SnippetFormState;
 use gpui_kit::component::command::CommandState;
-use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::{EditorState, InputState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
@@ -291,13 +291,25 @@ pub(crate) struct SettingsModalState {
     pub(crate) highlight_keywords: Entity<InputState>,
 }
 
-/// SFTP 五类弹窗（权限、输入、属性、过滤、同步）的聚合状态。
+/// SFTP 五类弹窗（权限、输入、属性、过滤、同步）与编辑器跳转行的聚合状态。
 pub(crate) struct SftpModals {
     pub(crate) chmod: Option<SftpChmodModalState>,
     pub(crate) input: Option<SftpInputModalState>,
     pub(crate) properties: Option<SftpPropertiesModalState>,
     pub(crate) filter: Option<SftpFilterModalState>,
     pub(crate) sync: Option<SftpSyncModalState>,
+    pub(crate) goto_line: Option<EditorGotoLineModalState>,
+}
+
+/// 编辑器"跳转到行"输入模态。
+///
+/// `editor` 在打开瞬间捕获：模态输入框会抢走焦点，确认时再按焦点找面板
+/// 会命中错误的编辑器；订阅句柄随模态存亡，关闭即退订回车事件。
+pub(crate) struct EditorGotoLineModalState {
+    pub(crate) editor: Entity<EditorState>,
+    pub(crate) input: Entity<InputState>,
+    pub(crate) error: Option<String>,
+    pub(crate) _enter_sub: Subscription,
 }
 
 /// 快捷命令面板的聚合状态：卡片展开开关与新增/编辑小弹窗。
@@ -551,6 +563,7 @@ impl AppShell {
                 properties: None,
                 filter: None,
                 sync: None,
+                goto_line: None,
             },
             snippet_panel: SnippetPanelState {
                 open: false,
@@ -763,6 +776,9 @@ impl AppShell {
         }
         if self.sftp_modals.sync.is_some() {
             overlays.push(self.render_sftp_sync_modal(window, cx, &p));
+        }
+        if self.sftp_modals.goto_line.is_some() {
+            overlays.push(self.render_editor_goto_line_modal(window, cx, &p));
         }
         if self.snippet_panel.form.is_some() {
             overlays.push(self.render_snippet_form(&p, cx));
