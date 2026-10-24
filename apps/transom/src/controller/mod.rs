@@ -4,7 +4,7 @@ use tokio::runtime::Runtime;
 use tokio::task::JoinSet;
 use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, ForwardState,
-    ForwardStatus, KnownHostsStore, TabId, TerminalIo, TransferId,
+    ForwardStatus, KnownHostsStore, SftpOperation, TabId, TerminalIo, TransferId,
 };
 mod lifecycle;
 mod pty;
@@ -94,6 +94,23 @@ enum Internal {
         tab_id: TabId,
         connection_id: ConnectionId,
     },
+    /// SFTP 客户端在任务内完成初始化后的提交：主循环校验连接归属后
+    /// 才写入客户端缓存并派发操作，分发循环本身不为打开客户端等待。
+    SftpReady {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        op: SftpOperation,
+        result: Result<SftpClient, AppError>,
+    },
+    /// 端口转发在任务内建立后的提交：主循环校验连接归属后登记任务
+    /// 并向界面回报状态。
+    ForwardReady {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        rule_id: ForwardId,
+        result: Result<ForwardTask, AppError>,
+    },
 }
 
 enum Incoming {
@@ -173,17 +190,19 @@ async fn run_controller(
                 op_id,
                 op,
             })) => {
+                // 分发循环只做快查与派发：客户端初始化在任务内进行，
+                // 结果经 SftpReady 回流提交，慢打开不再阻塞其他标签
                 sftp_exec::dispatch_sftp_op(SftpDispatch {
-                    remotes: &mut remotes,
+                    remotes: &remotes,
                     sftp_clients: &mut sftp_clients,
                     sftp_transfers: &mut sftp_transfers,
                     event_tx: event_tx.clone(),
+                    internal_tx: internal_tx.clone(),
                     tab_id,
                     connection_id,
                     op_id,
                     op,
-                })
-                .await;
+                });
             }
             Incoming::Command(Ok(AppCommand::SftpCancel { tab_id, op_id })) => {
                 if let Some(handle) = sftp_transfers.remove(&(tab_id, op_id)) {
@@ -215,29 +234,21 @@ async fn run_controller(
                 if current_connection != connection_id {
                     continue;
                 }
-                let status = match start_forward(&remote, &rule).await {
-                    Ok(task) => {
-                        let bound_port = task.bound_port;
-                        forwards.entry(tab_id).or_default().insert(rule.id, task);
-                        ForwardStatus {
+                // 建立转发有多次网络往返，移入任务执行；结果经
+                // ForwardReady 回流提交，分发循环不再等待远端应答
+                let remote = remote.clone();
+                let internal_tx = internal_tx.clone();
+                cleanup_set.spawn(async move {
+                    let result = start_forward(&remote, &rule).await;
+                    let _ = internal_tx
+                        .send_async(Internal::ForwardReady {
+                            tab_id,
+                            connection_id,
                             rule_id: rule.id,
-                            state: ForwardState::Active { bound_port },
-                            error: None,
-                        }
-                    }
-                    Err(error) => ForwardStatus {
-                        rule_id: rule.id,
-                        state: ForwardState::Failed,
-                        error: Some(error),
-                    },
-                };
-                let _ = event_tx
-                    .send_async(AppEvent::ForwardChanged {
-                        tab_id,
-                        connection_id,
-                        status,
-                    })
-                    .await;
+                            result,
+                        })
+                        .await;
+                });
             }
             Incoming::Command(Ok(AppCommand::ForwardStop {
                 tab_id,
@@ -505,6 +516,89 @@ async fn run_controller(
                     &internal_tx,
                 )
                 .await;
+            }
+            Incoming::Internal(Ok(Internal::SftpReady {
+                tab_id,
+                connection_id,
+                op_id,
+                op,
+                result,
+            })) => {
+                // 提交前校验归属：标签关闭或连接已被替换时丢弃客户端，
+                // 迟到的初始化结果不得重新登记资源
+                if current_connections.get(&tab_id) != Some(&connection_id) {
+                    drop(result);
+                    continue;
+                }
+                match result {
+                    Ok(client) => {
+                        sftp_clients.insert(tab_id, client.clone());
+                        sftp_exec::spawn_sftp_op(
+                            &mut sftp_transfers,
+                            event_tx.clone(),
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            client,
+                            op,
+                        );
+                    }
+                    Err(error) => {
+                        let _ = event_tx
+                            .send_async(AppEvent::SftpFailed {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                error,
+                            })
+                            .await;
+                    }
+                }
+            }
+            Incoming::Internal(Ok(Internal::ForwardReady {
+                tab_id,
+                connection_id,
+                rule_id,
+                result,
+            })) => {
+                let is_current = remotes
+                    .get(&tab_id)
+                    .is_some_and(|(current, _)| *current == connection_id);
+                let status = match (is_current, result) {
+                    (false, Ok(task)) => {
+                        // 连接已失效：立即停止刚建立的转发并释放
+                        cleanup_set.spawn(async move {
+                            task.stop().await;
+                        });
+                        ForwardStatus {
+                            rule_id,
+                            state: ForwardState::Stopped,
+                            error: None,
+                        }
+                    }
+                    (false, Err(_)) => continue,
+                    (true, Ok(task)) => {
+                        let bound_port = task.bound_port;
+                        forwards.entry(tab_id).or_default().insert(rule_id, task);
+                        ForwardStatus {
+                            rule_id,
+                            state: ForwardState::Active { bound_port },
+                            error: None,
+                        }
+                    }
+                    (true, Err(error)) => ForwardStatus {
+                        rule_id,
+                        state: ForwardState::Failed,
+                        error: Some(error),
+                    },
+                };
+                let _ = event_tx
+                    .send_async(AppEvent::ForwardChanged {
+                        tab_id,
+                        connection_id,
+                        status,
+                    })
+                    .await;
             }
             Incoming::Internal(Ok(Internal::Disconnected {
                 tab_id,

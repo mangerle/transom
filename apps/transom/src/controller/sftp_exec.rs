@@ -1,5 +1,6 @@
 //! SFTP 操作的调度入口、任务执行体与结果回传助手。
 
+use super::Internal;
 use super::sftp_finish::{
     PreviewRequest, finish_sftp, finish_sftp_none, finish_sftp_summary, read_preview,
     verify_transfer_result,
@@ -379,74 +380,104 @@ pub(super) async fn execute_sftp_op(
 
 /// SFTP 命令的调度参数：主循环状态表的借用与命令载荷。
 pub(super) struct SftpDispatch<'a> {
-    pub(super) remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
+    pub(super) remotes: &'a HashMap<TabId, (ConnectionId, SshRemote)>,
     pub(super) sftp_clients: &'a mut HashMap<TabId, SftpClient>,
     pub(super) sftp_transfers: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
     pub(super) event_tx: flume::Sender<AppEvent>,
+    pub(super) internal_tx: flume::Sender<Internal>,
     pub(super) tab_id: TabId,
     pub(super) connection_id: ConnectionId,
     pub(super) op_id: TransferId,
     pub(super) op: SftpOperation,
 }
 
-/// SFTP 命令调度：校验连接归属，复用或新建 SFTP 客户端后派发执行。
-/// 非就绪或连接已切换直接回失败事件；传输类操作纳入任务表跟踪以便取消。
-pub(super) async fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
+/// SFTP 命令调度（即时返回）：校验连接归属与客户端缓存后派发执行；
+/// 客户端未初始化时把打开动作交给任务、结果经 [`Internal::SftpReady`]
+/// 回流提交，分发循环不为网络往返等待。
+pub(super) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
     let SftpDispatch {
         remotes,
         sftp_clients,
         sftp_transfers,
         event_tx,
+        internal_tx,
         tab_id,
         connection_id,
         op_id,
         op,
     } = dispatch;
-    let Some((current_connection, remote)) = remotes.get(&tab_id).cloned() else {
-        let _ = event_tx
-            .send_async(AppEvent::SftpFailed {
-                tab_id,
-                connection_id,
-                op_id,
-                error: AppError::with_detail(ErrorCode::ChannelFailed, "SSH 连接尚未就绪"),
-            })
-            .await;
+    let Some((current_connection, remote)) = remotes.get(&tab_id) else {
+        send_sftp_not_ready(&event_tx, tab_id, connection_id, op_id, "SSH 连接尚未就绪");
         return;
     };
-    if current_connection != connection_id {
-        let _ = event_tx
-            .send_async(AppEvent::SftpFailed {
-                tab_id,
-                connection_id,
-                op_id,
-                error: AppError::with_detail(ErrorCode::ChannelFailed, "SSH 连接已被新连接替换"),
-            })
-            .await;
+    if *current_connection != connection_id {
+        send_sftp_not_ready(
+            &event_tx,
+            tab_id,
+            connection_id,
+            op_id,
+            "SSH 连接已被新连接替换",
+        );
         return;
     }
 
-    let client = if let Some(client) = sftp_clients.get(&tab_id) {
-        client.clone()
-    } else {
-        match SftpClient::open(&remote).await {
-            Ok(client) => {
-                sftp_clients.insert(tab_id, client.clone());
-                client
-            }
-            Err(error) => {
-                let _ = event_tx
-                    .send_async(AppEvent::SftpFailed {
+    let cached = sftp_clients.get(&tab_id).cloned();
+    match cached {
+        Some(client) => spawn_sftp_op(
+            sftp_transfers,
+            event_tx,
+            tab_id,
+            connection_id,
+            op_id,
+            client,
+            op,
+        ),
+        None => {
+            let remote = remote.clone();
+            tokio::spawn(async move {
+                let result = SftpClient::open(&remote).await;
+                let _ = internal_tx
+                    .send_async(Internal::SftpReady {
                         tab_id,
                         connection_id,
                         op_id,
-                        error,
+                        op,
+                        result,
                     })
                     .await;
-                return;
-            }
+            });
         }
-    };
+    }
+}
 
+/// 客户端未就绪时向界面回失败事件的统一出口。
+fn send_sftp_not_ready(
+    event_tx: &flume::Sender<AppEvent>,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op_id: TransferId,
+    reason: &'static str,
+) {
+    let _ = event_tx.try_send(AppEvent::SftpFailed {
+        tab_id,
+        connection_id,
+        op_id,
+        error: AppError::with_detail(ErrorCode::ChannelFailed, reason),
+    });
+}
+
+/// 派发单个 SFTP 操作执行：传输类操作纳入任务表跟踪以便取消。
+/// 直接 spawn 具名 async 函数返回的 future：经由 async 块包装会触发
+/// rustc 对泛型闭包的 HRTT 推断限制（FnOnce is not general enough）。
+pub(super) fn spawn_sftp_op(
+    sftp_transfers: &mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
+    event_tx: flume::Sender<AppEvent>,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op_id: TransferId,
+    client: SftpClient,
+    op: SftpOperation,
+) {
     let is_transfer = matches!(
         op,
         SftpOperation::Download { .. }
@@ -455,8 +486,6 @@ pub(super) async fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
             | SftpOperation::UploadDir { .. }
             | SftpOperation::SyncDirs { .. }
     );
-    // 直接 spawn 具名 async 函数返回的 future：经由 async 块包装会触发
-    // rustc 对泛型闭包的 HRTT 推断限制（FnOnce is not general enough）
     let handle = tokio::spawn(execute_sftp_op(
         event_tx,
         tab_id,
