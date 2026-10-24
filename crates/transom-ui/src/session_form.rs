@@ -46,6 +46,8 @@ pub(crate) struct SessionForm {
     pub auth: AuthChoice,
     pub save_password: bool,
     pub save_passphrase: bool,
+    /// 意外断线后自动重连（见 AppShell::schedule_auto_reconnect）。
+    pub auto_reconnect: bool,
     pub confirm_delete: bool,
     pub error: Option<String>,
 }
@@ -215,6 +217,7 @@ impl SessionForm {
         let username = ssh
             .map(|ssh| ssh.username.clone())
             .unwrap_or_else(default_username);
+        let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect);
 
         Self {
             base,
@@ -266,6 +269,7 @@ impl SessionForm {
             auth,
             save_password,
             save_passphrase,
+            auto_reconnect,
             confirm_delete: false,
             error: None,
         }
@@ -341,7 +345,7 @@ impl SessionForm {
         let key_path = crate::keys::expand_home(&key_path)
             .to_string_lossy()
             .to_string();
-        let options = self
+        let mut options = self
             .base
             .as_ref()
             .and_then(|session| match &session.connection {
@@ -350,6 +354,7 @@ impl SessionForm {
             })
             .map(|ssh| ssh.options.clone())
             .unwrap_or_default();
+        options.auto_reconnect = self.auto_reconnect;
         let auth = match self.auth {
             AuthChoice::Password => AuthMethod::Password {
                 save: self.save_password,

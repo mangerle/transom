@@ -102,6 +102,11 @@ pub(crate) struct TerminalTab {
     /// 初始化命令的后台调度任务；重连或关标签时丢弃以取消。
     pub(crate) _startup_task: Option<Task<()>>,
     pub(crate) _subscription: Option<Subscription>,
+    /// 自动重连已尝试次数；连接成功后清零，上限与退避间隔见
+    /// `schedule_auto_reconnect`。
+    pub(crate) reconnect_attempts: u32,
+    /// 待执行的自动重连任务；用户手动重连或关标签时随任务丢弃而取消。
+    pub(crate) reconnect_task: Option<Task<()>>,
 }
 
 impl TerminalTab {
@@ -146,6 +151,8 @@ impl TerminalTab {
             network_traffic: None,
             _startup_task: None,
             _subscription: None,
+            reconnect_attempts: 0,
+            reconnect_task: None,
         }
     }
 }

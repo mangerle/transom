@@ -196,6 +196,9 @@ form:
   passphrase:
     en: Key passphrase
     zh-CN: 私钥口令
+  auto_reconnect:
+    en: Auto reconnect on unexpected drop
+    zh-CN: 断线后自动重连
   save_password:
     en: Save password
     zh-CN: 保存密码

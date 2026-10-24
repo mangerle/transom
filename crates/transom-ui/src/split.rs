@@ -14,7 +14,7 @@ impl AppShell {
     pub(crate) fn split_active_pane(
         &mut self,
         axis: SplitAxis,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(active_id) = self.active_tab else {
@@ -51,7 +51,7 @@ impl AppShell {
         self.tabs
             .push(TerminalTab::pending(pane_id, session.clone()));
         self.active_tab = Some(pane_id);
-        self.start_connection(pane_id, session, window, cx);
+        self.start_connection(pane_id, session, cx);
         cx.notify();
     }
 

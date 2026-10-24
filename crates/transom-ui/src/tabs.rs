@@ -85,7 +85,7 @@ impl AppShell {
         for pane_id in extra {
             self.tabs
                 .push(TerminalTab::pending(pane_id, session.clone()));
-            self.start_connection(pane_id, session.clone(), window, cx);
+            self.start_connection(pane_id, session.clone(), cx);
         }
         cx.notify();
     }
@@ -491,7 +491,7 @@ impl AppShell {
     pub(crate) fn reconnect_tab(
         &mut self,
         tab_id: TabId,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
@@ -513,7 +513,7 @@ impl AppShell {
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
             self.groups[group_index].active_pane = tab_id;
         }
-        self.start_connection(tab_id, session, window, cx);
+        self.start_connection(tab_id, session, cx);
     }
 
     pub(crate) fn activate_tab(

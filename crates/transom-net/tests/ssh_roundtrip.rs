@@ -98,6 +98,8 @@ async fn password_auth_pty_and_tofu_roundtrip() {
             connect_timeout_secs: 5,
             keepalive_secs: 0,
             allow_keyboard_interactive: true,
+
+            auto_reconnect: false,
         },
     };
 

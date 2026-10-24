@@ -76,6 +76,8 @@ impl AppShell {
                 let tab = &mut self.tabs[index];
                 tab.terminal = Some(terminal);
                 tab.status = TabStatus::Connected;
+                // 连接成功后自动重连计数清零，下次断线重新享有完整退避序列。
+                tab.reconnect_attempts = 0;
                 tab.network_traffic = None;
                 tab._subscription = Some(subscription);
                 self.active_tab = Some(tab_id);
@@ -102,6 +104,7 @@ impl AppShell {
                 }
                 self.discard_pending_credential(connection_id);
                 self.mark_forwards_stopped(tab_id);
+                self.schedule_auto_reconnect(tab_id, connection_id, cx);
             }
             AppEvent::Disconnected {
                 tab_id,
@@ -115,6 +118,7 @@ impl AppShell {
                     tab.network_traffic = None;
                 }
                 self.mark_forwards_stopped(tab_id);
+                self.schedule_auto_reconnect(tab_id, connection_id, cx);
             }
             AppEvent::AuthPrompt {
                 tab_id,

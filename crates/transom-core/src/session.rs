@@ -248,6 +248,10 @@ pub struct SessionOptions {
     /// `0` disables keepalive messages.
     pub keepalive_secs: u64,
     pub allow_keyboard_interactive: bool,
+    /// 意外断线后自动重连（退避 2s/5s/10s，上限 3 次）。
+    /// 老会话文件没有该字段，按关闭降级。
+    #[serde(default)]
+    pub auto_reconnect: bool,
 }
 
 impl Default for SessionOptions {
@@ -256,6 +260,7 @@ impl Default for SessionOptions {
             connect_timeout_secs: 15,
             keepalive_secs: 30,
             allow_keyboard_interactive: true,
+            auto_reconnect: false,
         }
     }
 }
@@ -263,6 +268,15 @@ impl Default for SessionOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 自动重连是后加的：老会话文件的 options 缺该字段，必须按关闭降级。
+    #[test]
+    fn legacy_options_default_auto_reconnect_off() {
+        let legacy =
+            r#"{"connect_timeout_secs":15,"keepalive_secs":30,"allow_keyboard_interactive":true}"#;
+        let options: SessionOptions = serde_json::from_str(legacy).unwrap();
+        assert!(!options.auto_reconnect);
+    }
 
     /// 证书字段是后加的：老会话文件里的私钥认证没有 `cert_path`，必须按"不带证书"降级。
     #[test]

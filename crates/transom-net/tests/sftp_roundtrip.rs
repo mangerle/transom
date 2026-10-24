@@ -405,6 +405,8 @@ async fn sftp_list_upload_download_and_mutations() {
             connect_timeout_secs: 5,
             keepalive_secs: 0,
             allow_keyboard_interactive: false,
+
+            auto_reconnect: false,
         },
     };
 

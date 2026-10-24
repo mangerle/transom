@@ -1,6 +1,6 @@
 //! 会话连接建立、SSH 配置导入与密码/多因子认证交互模块。
 
-use crate::app::{AppShell, PendingCredential, TerminalTab};
+use crate::app::{AppShell, PendingCredential, TabStatus, TerminalTab};
 use crate::keymap;
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
@@ -10,7 +10,7 @@ use gpui_kit::component::input::Enter;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, AuthMethod, Connection, ConnectionId, ConnectionSecrets, ErrorCode,
+    AppCommand, AppError, AuthMethod, Connection, ConnectionId, ConnectionSecrets, ErrorCode,
     LocalConnection, PromptKind, SecretKey, SecretKind, SecretStore, Session, SessionId, TabId,
     TerminalSize, parse_ssh_config,
 };
@@ -88,7 +88,7 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn open_local_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_local_terminal(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let tab_id = TabId::new();
         let session = Session::new(
             rust_i18n::t!("app.new_local").to_string(),
@@ -98,7 +98,7 @@ impl AppShell {
         self.tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
-        self.start_connection(tab_id, session, window, cx);
+        self.start_connection(tab_id, session, cx);
     }
 
     pub(crate) fn import_ssh_config(&mut self, cx: &mut Context<Self>) {
@@ -162,7 +162,7 @@ impl AppShell {
     pub(crate) fn connect_session(
         &mut self,
         session_id: SessionId,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(session) = self
@@ -180,14 +180,77 @@ impl AppShell {
         self.tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
-        self.start_connection(tab_id, session, window, cx);
+        self.start_connection(tab_id, session, cx);
+    }
+
+    /// 意外断线或连接失败后的自动重连调度。
+    ///
+    /// 设计原理（Why）：
+    /// - 触发条件是"会话显式开启 auto_reconnect 且尝试次数未超上限"，串口与
+    ///   本地终端不存在断线重连语义，直接跳过；
+    /// - 重试前再次校验标签仍持有失败时的 connection_id：用户手动重连、切换
+    ///   会话或关闭标签都会改变它，自动重试随之自然取消，无需独立状态机；
+    /// - 退避 2s/5s/10s、上限 3 次：服务器宕机时快速放弃而不是无限打扰；
+    ///   连接成功（TerminalReady）后计数清零，再次断线重新完整退避。
+    pub(crate) fn schedule_auto_reconnect(
+        &mut self,
+        tab_id: TabId,
+        failed_connection: ConnectionId,
+        cx: &mut Context<Self>,
+    ) {
+        const BACKOFF_SECS: [u64; 3] = [2, 5, 10];
+        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+            return;
+        };
+        if tab.connection_id != Some(failed_connection) {
+            return;
+        }
+        let Connection::Ssh(ssh) = &tab.session.connection else {
+            return;
+        };
+        if !ssh.options.auto_reconnect {
+            return;
+        }
+        let attempt = tab.reconnect_attempts as usize;
+        let Some(delay_secs) = BACKOFF_SECS.get(attempt).copied() else {
+            return;
+        };
+        tab.reconnect_attempts += 1;
+        let (code, reason) = match &tab.status {
+            TabStatus::Failed(error) => (error.code, error.to_string()),
+            _ => (ErrorCode::ConnectionFailed, "连接已断开".to_string()),
+        };
+        tab.status = TabStatus::Failed(AppError::with_detail(
+            code,
+            format!(
+                "{reason}，{delay_secs} 秒后自动重连（第 {}/3 次）",
+                attempt + 1
+            ),
+        ));
+        let session = tab.session.clone();
+        let session_id = tab.session_id;
+        let executor = cx.background_executor().clone();
+        tab.reconnect_task = Some(cx.spawn(async move |this, cx| {
+            executor
+                .timer(std::time::Duration::from_secs(delay_secs))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let Some(tab) = this.tabs.iter().find(|tab| tab.id == tab_id) else {
+                    return;
+                };
+                if tab.connection_id != Some(failed_connection) || tab.session_id != session_id {
+                    return;
+                }
+                this.start_connection(tab_id, session, cx);
+            });
+        }));
+        cx.notify();
     }
 
     pub(crate) fn start_connection(
         &mut self,
         tab_id: TabId,
         session: Session,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let connection_id = ConnectionId::new();

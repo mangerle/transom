@@ -184,6 +184,28 @@ impl AppShell {
                                     .child(auth_agent),
                             ),
                     );
+                content = content.child(
+                    h_flex()
+                        .justify_between()
+                        .items_center()
+                        .py_1()
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(rust_i18n::t!("form.auto_reconnect").to_string()),
+                        )
+                        .child(
+                            Switch::new("toggle-auto-reconnect")
+                                .small()
+                                .checked(form.auto_reconnect)
+                                .on_click(cx.listener(|this, &checked, _, cx| {
+                                    if let Some(form) = this.form.as_mut() {
+                                        form.auto_reconnect = checked;
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                );
                 match form.auth {
                     AuthChoice::Password => {
                         content = content.child(
