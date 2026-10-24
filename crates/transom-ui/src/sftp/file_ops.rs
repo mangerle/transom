@@ -396,6 +396,7 @@ impl AppShell {
 
     /// 批量删除本地选中项；符号链接只删除链接本身。
     pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
         if let Some(panel) = self
             .tabs
             .iter_mut()

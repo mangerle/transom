@@ -141,6 +141,7 @@ impl AppShell {
             error: None,
             loading: true,
             pending_edit_ops: HashMap::new(),
+            hover_preview: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         });
         self.request_sftp_list(tab_id, initial_remote_path, cx);
@@ -152,6 +153,7 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -300,6 +302,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -376,6 +379,7 @@ impl AppShell {
     }
 
     pub(crate) fn sftp_local_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
         if let Some(panel) = self
             .tabs
             .iter_mut()

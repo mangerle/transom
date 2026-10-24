@@ -7,12 +7,17 @@ mod local_pane_view;
 mod modals;
 mod nav_actions;
 mod panel_view;
+mod preview;
+mod preview_actions;
+mod preview_view;
 mod properties;
 mod queue_actions;
 mod queue_view;
 mod sync_actions;
 mod sync_modal;
 
+pub(crate) use self::preview::SftpPreviewResponse;
+use self::preview::SftpPreviewState;
 use crate::palette::Palette;
 use chrono::{Local, TimeZone};
 use gpui_kit::assets::IconName;
@@ -147,7 +152,21 @@ pub(crate) struct SftpPanelState {
     pub(crate) error: Option<String>,
     pub(crate) loading: bool,
     pub(crate) pending_edit_ops: HashMap<TransferId, (PathBuf, String, String)>,
+    /// 当前悬停预览；同一时刻只保留一个目标，切换目标或离开行时整体释放。
+    pub(crate) hover_preview: Option<SftpPreviewState>,
     pub(crate) _subscriptions: Vec<Subscription>,
+}
+
+/// 面板销毁时清理远端图片预览产生的临时缓存。
+///
+/// 预览字节必须先落到本地文件才能交给 gpui 的图片加载器解码，
+/// 这些文件只在面板生命周期内有意义，随面板一起删除可避免临时目录堆积。
+impl Drop for SftpPanelState {
+    fn drop(&mut self) {
+        if let Some(preview) = self.hover_preview.take() {
+            preview.discard_cache_file_if_any();
+        }
+    }
 }
 
 impl SftpPanelState {

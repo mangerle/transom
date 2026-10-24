@@ -55,9 +55,9 @@ pub use settings::{
     SnippetSettings, SplitAxis, WindowSettings,
 };
 pub use sftp::{
-    RemoteDeleteTarget, RemoteFile, RemoteMetadata, SftpOperation, TransferDirection, TransferKind,
-    TransferMode, TransferStatus, TransferSummary, TransferTask, format_octal_permissions,
-    format_rwx_permissions, parse_octal_permissions,
+    PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, SftpOperation, TransferDirection,
+    TransferKind, TransferMode, TransferStatus, TransferSummary, TransferTask,
+    format_octal_permissions, format_rwx_permissions, parse_octal_permissions,
 };
 pub use sftp_filter::{
     DEFAULT_TRANSFER_EXCLUDES, TransferFilter, TransferMatcher, validate_transfer_filter,

@@ -681,6 +681,12 @@ async fn run_controller(
     }
 }
 
+/// 悬停预览读取的最长等待时间。
+///
+/// 预览属于可随时放弃的低优先级只读请求；远端套接字挂起时必须尽快收尾，
+/// 否则一次卡顿会让预览通道长期占用内存并阻塞同一会话上的后续预览。
+const PREVIEW_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 async fn execute_sftp_op(
     event_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
@@ -862,6 +868,47 @@ async fn execute_sftp_op(
                 });
             }
         },
+        SftpOperation::Preview {
+            path,
+            mode,
+            max_bytes,
+        } => {
+            // 预览是低优先级只读请求：远端卡住时超时放弃，避免长时间占用
+            // 会话与内存；失败走独立事件，不污染传输队列和状态栏。
+            let result =
+                tokio::time::timeout(PREVIEW_TIMEOUT, client.read_preview(&path, mode, max_bytes))
+                    .await;
+            match result {
+                Ok(Ok((bytes, truncated))) => {
+                    let _ = event_tx.send(AppEvent::SftpPreview {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        bytes,
+                        truncated,
+                    });
+                }
+                Ok(Err(error)) => {
+                    let _ = event_tx.send(AppEvent::SftpPreviewFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    });
+                }
+                Err(_) => {
+                    let _ = event_tx.send(AppEvent::SftpPreviewFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error: AppError::with_detail(
+                            ErrorCode::SftpFailed,
+                            "读取远端预览超时（10 秒）",
+                        ),
+                    });
+                }
+            }
+        }
         SftpOperation::Symlink { target, link_path } => {
             let result = client.symlink(&target, &link_path).await;
             finish_sftp_none(event_tx, tab_id, connection_id, op_id, result);

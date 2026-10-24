@@ -101,6 +101,22 @@ pub enum AppEvent {
         op_id: TransferId,
         metadata: RemoteMetadata,
     },
+    /// 悬停预览读取完成：`bytes` 为文本文件头部或完整图片内容。
+    SftpPreview {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        bytes: Vec<u8>,
+        /// 是否因达到读取上限而截断（仅文本头部读取可能出现）。
+        truncated: bool,
+    },
+    /// 悬停预览读取失败；与传输失败分开，避免把轻量预览错误写进面板错误栏。
+    SftpPreviewFailed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        error: AppError,
+    },
     SftpDirCompared {
         tab_id: TabId,
         connection_id: ConnectionId,

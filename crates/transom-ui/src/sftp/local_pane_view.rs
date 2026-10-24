@@ -1,5 +1,6 @@
 //! SFTP 本地文件浏览器左栏视图渲染。
 
+use super::preview::{PreviewKey, SftpHoverTarget};
 use super::{LocalFileEntry, format_size, sftp_file_icon};
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -92,10 +93,29 @@ impl AppShell {
                             let entry_path_right = entry.path.clone();
                             let app_cm = app_entity.clone();
                             let click_entries = local_entries_rc.clone();
+                            let hover_target = SftpHoverTarget {
+                                tab_id,
+                                key: PreviewKey {
+                                    is_remote: false,
+                                    path: entry.path.to_string_lossy().to_string(),
+                                },
+                                name: entry.name.clone(),
+                                is_dir,
+                                size: entry.size,
+                            };
                             let row = row
+                                .on_hover(cx.listener(move |this, hovered, window, cx| {
+                                    this.sftp_hover_preview(
+                                        hover_target.clone(),
+                                        *hovered,
+                                        window,
+                                        cx,
+                                    );
+                                }))
                                 .on_mouse_down(
                                     MouseButton::Left,
                                     cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                                        this.dismiss_sftp_hover_preview(tab_id, cx);
                                         if let Some(panel) = this
                                             .tabs
                                             .iter()
@@ -164,6 +184,7 @@ impl AppShell {
                                 .on_mouse_down(
                                     MouseButton::Right,
                                     cx.listener(move |this, _, window, cx| {
+                                        this.dismiss_sftp_hover_preview(tab_id, cx);
                                         if let Some(panel) = this
                                             .tabs
                                             .iter_mut()

@@ -492,6 +492,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // 键盘/标签栏切换不一定会让鼠标离开原文件行，主动收起旧标签的悬停
+        // 预览，避免切回该标签时浮层凭空重现。
+        if let Some(previous) = self.active_tab
+            && previous != tab_id
+        {
+            self.dismiss_sftp_hover_preview(previous, cx);
+        }
         self.active_tab = Some(tab_id);
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
             self.groups[group_index].active_pane = tab_id;

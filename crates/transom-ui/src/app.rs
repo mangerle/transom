@@ -596,6 +596,10 @@ impl AppShell {
     ) -> Vec<AnyElement> {
         let p = Palette::from(cx);
         let mut overlays = Vec::new();
+        // 悬停预览先绘制，保证任何模态框都压在它上面。
+        if let Some(preview) = self.render_sftp_hover_preview(window, &p) {
+            overlays.push(preview);
+        }
         if self.form.is_some() {
             overlays.push(self.render_session_form(window, cx, &p));
         }

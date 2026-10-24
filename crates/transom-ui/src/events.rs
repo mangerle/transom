@@ -3,8 +3,8 @@
 use crate::app::{AppShell, AuthPromptState, TabStatus};
 use crate::palette::localized_error;
 use crate::sftp::{
-    SftpEditorModalState, SftpPropertiesModalState, format_size, remote_file_properties,
-    send_desktop_notification,
+    SftpEditorModalState, SftpPreviewResponse, SftpPropertiesModalState, format_size,
+    remote_file_properties, send_desktop_notification,
 };
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
@@ -350,6 +350,41 @@ impl AppShell {
                     properties: remote_file_properties(&metadata),
                 });
                 self.process_sftp_queue(tab_id, cx);
+            }
+            AppEvent::SftpPreview {
+                tab_id,
+                connection_id,
+                op_id,
+                bytes,
+                truncated,
+            } => {
+                self.handle_sftp_preview(
+                    SftpPreviewResponse {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        result: Ok((bytes, truncated)),
+                    },
+                    window,
+                    cx,
+                );
+            }
+            AppEvent::SftpPreviewFailed {
+                tab_id,
+                connection_id,
+                op_id,
+                error,
+            } => {
+                self.handle_sftp_preview(
+                    SftpPreviewResponse {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        result: Err(error),
+                    },
+                    window,
+                    cx,
+                );
             }
             AppEvent::SftpDirCompared {
                 tab_id: _,

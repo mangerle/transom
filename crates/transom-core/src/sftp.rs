@@ -173,6 +173,20 @@ impl TransferTask {
     }
 }
 
+/// 悬停预览的读取语义。
+///
+/// 设计原理（Why）：文本预览只需要文件头部若干字节即可立即出结果，
+/// 图片预览必须拿到完整文件才能解码；用枚举区分两种读取边界，
+/// 避免在调用点用布尔标志表达，防止调用方误把图片按头部截断读取后得到
+/// 无法解码的字节。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewMode {
+    /// 最多读取指定字节数，超出部分截断（文本预览）。
+    Head,
+    /// 必须完整读取；远端文件大于上限时直接返回错误（图片缩略图）。
+    Full,
+}
+
 #[derive(Debug, Clone)]
 pub enum SftpOperation {
     List {
@@ -228,6 +242,16 @@ pub enum SftpOperation {
     /// 读取远端路径的详细属性（lstat 语义，不跟随符号链接）
     Stat {
         path: String,
+    },
+    /// 读取文件内容用于悬停轻量预览；只读、不进入传输队列。
+    ///
+    /// `max_bytes` 由调用方按预览类型给出上限：文本只读文件头，
+    /// 图片要求完整读取并在超限时失败，避免为了一张缩略图把超大文件
+    /// 全部拉入内存。
+    Preview {
+        path: String,
+        mode: PreviewMode,
+        max_bytes: u64,
     },
     /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径
     Symlink {
