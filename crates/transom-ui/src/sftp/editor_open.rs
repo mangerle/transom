@@ -193,7 +193,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.spawn_editor_panel(tab_id, remote_path, file_name, PanelSeed::NewFile, window, cx);
+        self.spawn_editor_panel(
+            tab_id,
+            remote_path,
+            file_name,
+            PanelSeed::NewFile,
+            window,
+            cx,
+        );
     }
 
     /// 建立编辑面板：空缓冲区、订阅就位、按已开面板数量级联落位。
@@ -276,7 +283,9 @@ impl AppShell {
             }
         });
         let (loaded, phase, pending_op, remote_meta, new_file) = match seed {
-            PanelSeed::Reading { op_id, .. } => (false, EditorPhase::Reading, Some(op_id), None, false),
+            PanelSeed::Reading { op_id, .. } => {
+                (false, EditorPhase::Reading, Some(op_id), None, false)
+            }
             // 新建面板：可编辑即可打字；零尺寸指纹让首次保存具备同名覆盖保护。
             PanelSeed::NewFile => (
                 true,

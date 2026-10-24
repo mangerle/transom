@@ -24,10 +24,15 @@ use transom_core::{ActivityItemId, Connection};
 /// 单独暴露两个像素输入框会制造一组需要互相校验的状态；当前需求是定制顺序
 /// 与显隐，不是界面密度。将来若确实需要放大点击目标，应作为整体密度预设接
 /// 入，而不是让用户逐项调像素。
+///
+/// 图标尺寸与会话树行图标（`sidebar::tree` 的 `ROW_ICON_SIZE`，18px）保持
+/// 一致，让左侧两条竖栏的视觉分量对齐；该处常量是模块私有，这里只能以注释
+/// 锚定数值，调整时两处必须同步。
 #[derive(Clone, Copy)]
 struct ActivityBarMetrics {
     width: f32,
     button: f32,
+    icon: f32,
     gap: f32,
     padding_y: f32,
 }
@@ -38,8 +43,9 @@ pub(crate) const ACTIVITY_BAR_WIDTH: f32 = 48.0;
 const METRICS: ActivityBarMetrics = ActivityBarMetrics {
     width: ACTIVITY_BAR_WIDTH,
     button: 34.0,
-    gap: 12.0,
-    padding_y: 12.0,
+    icon: 18.0,
+    gap: 4.0,
+    padding_y: 4.0,
 };
 
 /// 活动栏拖拽载荷：只携带被拖动的条目标识，落点由当前布局解析。
@@ -75,7 +81,7 @@ impl Render for ActivityDragPreview {
             .shadow_md()
             .child(
                 Icon::new(self.icon)
-                    .small()
+                    .with_size(px(METRICS.icon))
                     .text_color(p.popover_foreground),
             )
     }
@@ -157,7 +163,7 @@ impl AppShell {
             .items_center()
             .justify_center()
             .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
-            .child(Icon::new(icon).small())
+            .child(Icon::new(icon).with_size(px(METRICS.icon)))
             .child(Self::render_activity_reorder_overlay(&app, id, p));
 
         if selected {
