@@ -213,27 +213,44 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                     }
                 }
             }
-            Connection::Local(local) => match open_local_pty(local, size) {
-                Ok((io, join)) => {
-                    let _ = internal_tx
-                        .send_async(Internal::LocalConnected {
-                            tab_id,
-                            connection_id,
-                            io,
-                            join,
-                        })
-                        .await;
+            Connection::Local(local) => {
+                let local = local.clone();
+                // PTY 创建与 Shell 启动是阻塞系统调用（与串口打开同口径），
+                // 禁止占用异步工作线程：多标签同时启动时会挤占网络任务调度。
+                match tokio::task::spawn_blocking(move || open_local_pty(&local, size)).await {
+                    Ok(Ok((io, join))) => {
+                        let _ = internal_tx
+                            .send_async(Internal::LocalConnected {
+                                tab_id,
+                                connection_id,
+                                io,
+                                join,
+                            })
+                            .await;
+                    }
+                    Ok(Err(error)) => {
+                        let _ = event_tx
+                            .send_async(AppEvent::ConnectionFailed {
+                                tab_id,
+                                connection_id,
+                                error,
+                            })
+                            .await;
+                    }
+                    Err(error) => {
+                        let _ = event_tx
+                            .send_async(AppEvent::ConnectionFailed {
+                                tab_id,
+                                connection_id,
+                                error: AppError::with_detail(
+                                    ErrorCode::Io,
+                                    format!("本地伪终端创建任务异常终止: {error}"),
+                                ),
+                            })
+                            .await;
+                    }
                 }
-                Err(error) => {
-                    let _ = event_tx
-                        .send_async(AppEvent::ConnectionFailed {
-                            tab_id,
-                            connection_id,
-                            error,
-                        })
-                        .await;
-                }
-            },
+            }
             Connection::Serial(serial) => {
                 let serial = serial.clone();
                 let internal_tx = internal_tx.clone();
