@@ -97,6 +97,7 @@ impl TerminalView {
         let focus_handle = cx.focus_handle().tab_stop(false);
         let (event_tx, event_rx) = flume::bounded(256);
         let writer_exit_tx = event_tx.clone();
+        let exit_tx = event_tx.clone();
         let engine = Arc::new(Mutex::new(TerminalEngine::new(
             TerminalSize::new(80, 24),
             &profile,
@@ -106,7 +107,9 @@ impl TerminalView {
 
         let (bytes_tx, bytes_rx) = flume::bounded::<Vec<u8>>(128);
         let mut reader = io.reader;
-        thread::Builder::new()
+        // 线程 spawn 失败属资源耗尽类可恢复异常：不 panic 整个应用，按"终端已
+        // 退出"降级，用户仍能关闭标签页或重连。
+        let reader_spawn = thread::Builder::new()
             .name("transom-terminal-reader".into())
             .spawn(move || {
                 let mut buffer = [0u8; 8192];
@@ -118,26 +121,39 @@ impl TerminalView {
                                 break;
                             }
                         }
-                        Err(_) => break,
+                        // EINTR 是被信号打断的可重试错误：误判为退出会让终端凭空断开。
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(error) => {
+                            tracing::warn!("读取终端输出失败，按已退出处理，原因: {error}");
+                            break;
+                        }
                     }
                 }
-            })
-            .expect("failed to spawn terminal reader");
+            });
+        if reader_spawn.is_err() {
+            tracing::error!("创建终端读取线程失败，该窗格按已退出降级处理");
+            let _ = exit_tx.try_send(Event::Exit);
+        }
 
         let (input_tx, input_rx) = flume::unbounded::<Vec<u8>>();
         let mut writer = io.writer;
-        thread::Builder::new()
+        let writer_spawn = thread::Builder::new()
             .name("transom-terminal-writer".into())
             .spawn(move || {
                 while let Ok(bytes) = input_rx.recv() {
-                    if writer.write_all(&bytes).is_err() {
+                    // write_all 内部已对 Interrupted 自动重试，这里只需兜底真实故障。
+                    if let Err(error) = writer.write_all(&bytes) {
+                        tracing::warn!("写入终端输入失败，按已退出处理，原因: {error}");
                         let _ = writer_exit_tx.try_send(Event::Exit);
                         break;
                     }
                     let _ = writer.flush();
                 }
-            })
-            .expect("failed to spawn terminal writer");
+            });
+        if writer_spawn.is_err() {
+            tracing::error!("创建终端写入线程失败，该窗格按已退出降级处理");
+            let _ = exit_tx.try_send(Event::Exit);
+        }
 
         let control = io.control;
         let reader_task = cx.spawn(async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
