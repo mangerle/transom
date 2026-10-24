@@ -169,7 +169,15 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_focus_pane_up))
             .on_action(cx.listener(Self::on_focus_pane_down))
             // 拖拽悬浮面板时指针会移出面板，位移与收尾由根元素的监听接管。
+            // mouse_up 可能丢失：元素级监听只投递给命中元素，指针移出窗口
+            // 松开、或抬起落在根元素树之外的浮层（弹出菜单、补全菜单）上时，
+            // 收不到抬起事件，拖拽位残留会让面板此后一直跟随鼠标。移动事件
+            // 自带按键状态，未按键时先收尾再返回，从根上杜绝卡拖拽。
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, cx| {
+                if event.pressed_button.is_none() {
+                    this.end_editor_panel_drag(cx);
+                    return;
+                }
                 this.drag_editor_panels(event.position, window.viewport_size(), cx);
             }))
             .on_mouse_up(
