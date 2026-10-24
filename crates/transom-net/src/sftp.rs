@@ -2,11 +2,58 @@ use crate::client::SshRemote;
 use russh_sftp::client::SftpSession;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use transom_core::{AppError, ErrorCode, PreviewMode, RemoteFile, RemoteMetadata, RemoteTextMeta};
 
 const TRANSFER_CHUNK: usize = 64 * 1024;
+
+/// 触发分块并发的最小文件大小：小于它的文件并发收益抵不过多路
+/// open/seek 的往返开销，顺序传输即可。
+const PARALLEL_THRESHOLD: u64 = 8 * 1024 * 1024;
+
+/// 大文件分块并发的最大块数。
+///
+/// 单路顺序传输的吞吐被 RTT 锁死（每 64KB 一个同步往返）；并发 4 路
+/// 各自独立 handle 与区间，把 RTT 摊平。不再调高：russh 单连接内所有
+/// 请求仍共用同一条 TCP 流与加密管线，块数过多只会放大服务器端
+/// 并发压力而不继续提升吞吐。
+const MAX_PARALLEL_CHUNKS: u64 = 4;
+
+/// 把总字节数均分为不超过 [`MAX_PARALLEL_CHUNKS`] 块，返回 (每块大小, 块数)。
+fn chunk_plan(total: u64) -> (u64, usize) {
+    let chunk = total.div_ceil(MAX_PARALLEL_CHUNKS).max(1);
+    let count = total.div_ceil(chunk).max(1) as usize;
+    (chunk, count)
+}
+
+/// 单个并发分块的上下文：区间、总量与跨块共享的进度状态。
+struct ChunkSpec<'a, F>
+where
+    F: FnMut(u64, Option<u64>) + Send,
+{
+    start: u64,
+    len: u64,
+    total: u64,
+    transferred: Arc<AtomicU64>,
+    progress: &'a Arc<std::sync::Mutex<F>>,
+}
+
+/// 跨并发块共享的进度通知：任一块推进都汇报当前全局累计字节。
+fn notify_shared_progress<F>(
+    progress: &Arc<std::sync::Mutex<F>>,
+    transferred: u64,
+    total: Option<u64>,
+) where
+    F: FnMut(u64, Option<u64>) + Send,
+{
+    // 回调内部只做同步 try_send，持锁不跨 await；锁中毒（回调 panic）
+    // 时放弃该次通知即可，传输本身不受影响。
+    if let Ok(mut callback) = progress.lock() {
+        callback(transferred, total);
+    }
+}
 
 #[derive(Clone)]
 pub struct SftpClient {
@@ -390,6 +437,24 @@ impl SftpClient {
             open_options.truncate(true);
         }
 
+        // 全新的大文件下载走分块并发：单路顺序传输的吞吐被 RTT 锁死
+        // （50ms 链路约 1.3MB/s），多路独立 handle 各传一段把往返摊平。
+        // 续传（offset > 0）与未知大小的文件保持顺序路径。
+        if total.is_some_and(|size| size >= PARALLEL_THRESHOLD) && offset == 0 {
+            let total = total.unwrap_or_default();
+            // 开头为取元数据打开的 handle 在并行路径里不再使用，先归还。
+            let _ = remote.close().await;
+            let result = self
+                .download_parallel(remote_path, local_path, total, progress)
+                .await;
+            if result.is_ok()
+                && let Some(mtime) = mtime
+            {
+                let _ = set_local_mtime(local_path, mtime).await;
+            }
+            return result.map(|_| total);
+        }
+
         if offset > 0 {
             remote
                 .seek(std::io::SeekFrom::Start(offset))
@@ -467,6 +532,21 @@ impl SftpClient {
         let total = local_metadata.as_ref().map(|metadata| metadata.len());
         let local_mtime =
             unix_seconds(local_metadata.and_then(|metadata| metadata.modified().ok()));
+
+        // 全新的大文件上传同样走分块并发（与下载同因：RTT 摊平）。
+        // 续传路径保持顺序。
+        if !resume && total.is_some_and(|size| size >= PARALLEL_THRESHOLD) {
+            let total = total.unwrap_or_default();
+            let result = self
+                .upload_parallel(local_path, remote_path, total, progress)
+                .await;
+            if result.is_ok()
+                && let Some(mtime) = local_mtime
+            {
+                let _ = self.set_mtime(remote_path, mtime).await;
+            }
+            return result.map(|_| total);
+        }
 
         let mut offset = 0u64;
         let mut remote_file = if resume {
@@ -652,6 +732,223 @@ impl SftpClient {
             .map_err(sftp_error)
     }
 
+    /// 分块并发下载：每块独立远端 handle 与本地写入区间，进度按全局累计汇报。
+    ///
+    /// 任一块失败即整体失败（`try_join_all` 取消其余块），本地留下半成品，
+    /// 与顺序路径的失败语义一致，可由续传机制接续。
+    async fn download_parallel<F>(
+        &self,
+        remote_path: &str,
+        local_path: &Path,
+        total: u64,
+        progress: F,
+    ) -> Result<(), AppError>
+    where
+        F: FnMut(u64, Option<u64>) + Send,
+    {
+        let (chunk, count) = chunk_plan(total);
+        let transferred = Arc::new(AtomicU64::new(0));
+        let progress = Arc::new(std::sync::Mutex::new(progress));
+        // 先以截断方式创建一次干净目标，各块随后只写自己的区间。
+        let file = tokio::fs::File::create(local_path).await.map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("打开本地文件失败 {}: {error}", local_path.display()),
+            )
+        })?;
+        drop(file);
+
+        let mut chunks = Vec::with_capacity(count);
+        for index in 0..count {
+            let start = index as u64 * chunk;
+            let len = chunk.min(total - start);
+            chunks.push(self.download_chunk(
+                remote_path,
+                local_path,
+                ChunkSpec {
+                    start,
+                    len,
+                    total,
+                    transferred: transferred.clone(),
+                    progress: &progress,
+                },
+            ));
+        }
+        futures::future::try_join_all(chunks)
+            .await
+            .map_err(|error: AppError| error)?;
+        Ok(())
+    }
+
+    /// 下载单个分块：独立 handle 顺序读取区间并写入本地对应偏移。
+    async fn download_chunk(
+        &self,
+        remote_path: &str,
+        local_path: &Path,
+        spec: ChunkSpec<'_, impl FnMut(u64, Option<u64>) + Send>,
+    ) -> Result<(), AppError> {
+        let ChunkSpec {
+            start,
+            len,
+            total,
+            transferred,
+            progress,
+        } = spec;
+        let mut remote = self.session.open(remote_path).await.map_err(sftp_error)?;
+        let mut local = tokio::fs::OpenOptions::new()
+            .write(true)
+            .open(local_path)
+            .await
+            .map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("打开本地文件失败 {}: {error}", local_path.display()),
+                )
+            })?;
+        if start > 0 {
+            remote
+                .seek(std::io::SeekFrom::Start(start))
+                .await
+                .map_err(sftp_io_error)?;
+            local
+                .seek(std::io::SeekFrom::Start(start))
+                .await
+                .map_err(sftp_io_error)?;
+        }
+
+        let mut buffer = vec![0u8; TRANSFER_CHUNK];
+        let mut done = 0u64;
+        while done < len {
+            let want = (len - done).min(TRANSFER_CHUNK as u64) as usize;
+            let count = remote
+                .read(&mut buffer[..want])
+                .await
+                .map_err(sftp_io_error)?;
+            if count == 0 {
+                return Err(AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("远端在 {start}+{done} 处提前结束，文件 {remote_path} 可能正被改写"),
+                ));
+            }
+            local
+                .write_all(&buffer[..count])
+                .await
+                .map_err(sftp_io_error)?;
+            done += count as u64;
+            let current = transferred.fetch_add(count as u64, Ordering::Relaxed) + count as u64;
+            notify_shared_progress(progress, current, Some(total));
+        }
+        let _ = remote.close().await;
+        Ok(())
+    }
+
+    /// 分块并发上传：先截断清空远端目标，再各块独立 handle 写各自区间。
+    async fn upload_parallel<F>(
+        &self,
+        local_path: &Path,
+        remote_path: &str,
+        total: u64,
+        progress: F,
+    ) -> Result<(), AppError>
+    where
+        F: FnMut(u64, Option<u64>) + Send,
+    {
+        let (chunk, count) = chunk_plan(total);
+        let transferred = Arc::new(AtomicU64::new(0));
+        let progress = Arc::new(std::sync::Mutex::new(progress));
+        // 并发块不能各自带 TRUNCATE（会互相清掉已写数据）：
+        // 先 create 一次完成截断，各块以 WRITE|CREATE 追加语义写区间。
+        let truncate = self.session.create(remote_path).await.map_err(sftp_error)?;
+        let _ = truncate.close().await;
+
+        let mut chunks = Vec::with_capacity(count);
+        for index in 0..count {
+            let start = index as u64 * chunk;
+            let len = chunk.min(total - start);
+            chunks.push(self.upload_chunk(
+                local_path,
+                remote_path,
+                ChunkSpec {
+                    start,
+                    len,
+                    total,
+                    transferred: transferred.clone(),
+                    progress: &progress,
+                },
+            ));
+        }
+        futures::future::try_join_all(chunks)
+            .await
+            .map_err(|error: AppError| error)?;
+        Ok(())
+    }
+
+    /// 上传单个分块：读本地区间偏移写入远端对应区间。
+    async fn upload_chunk(
+        &self,
+        local_path: &Path,
+        remote_path: &str,
+        spec: ChunkSpec<'_, impl FnMut(u64, Option<u64>) + Send>,
+    ) -> Result<(), AppError> {
+        let ChunkSpec {
+            start,
+            len,
+            total,
+            transferred,
+            progress,
+        } = spec;
+        let mut local = tokio::fs::File::open(local_path).await.map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("打开本地文件失败 {}: {error}", local_path.display()),
+            )
+        })?;
+        let mut remote = self
+            .session
+            .open_with_flags(
+                remote_path,
+                russh_sftp::protocol::OpenFlags::WRITE | russh_sftp::protocol::OpenFlags::CREATE,
+            )
+            .await
+            .map_err(sftp_error)?;
+        if start > 0 {
+            local
+                .seek(std::io::SeekFrom::Start(start))
+                .await
+                .map_err(sftp_io_error)?;
+            remote
+                .seek(std::io::SeekFrom::Start(start))
+                .await
+                .map_err(sftp_io_error)?;
+        }
+
+        let mut buffer = vec![0u8; TRANSFER_CHUNK];
+        let mut done = 0u64;
+        while done < len {
+            let want = (len - done).min(TRANSFER_CHUNK as u64) as usize;
+            let count = local
+                .read(&mut buffer[..want])
+                .await
+                .map_err(sftp_io_error)?;
+            if count == 0 {
+                return Err(AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("本地文件 {remote_path} 在读取途中变短，无法继续上传"),
+                ));
+            }
+            remote
+                .write_all(&buffer[..count])
+                .await
+                .map_err(sftp_io_error)?;
+            done += count as u64;
+            let current = transferred.fetch_add(count as u64, Ordering::Relaxed) + count as u64;
+            notify_shared_progress(progress, current, Some(total));
+        }
+        remote.shutdown().await.map_err(sftp_io_error)?;
+        let _ = remote.close().await;
+        Ok(())
+    }
+
     pub async fn close(&self) {
         let _ = self.session.close().await;
     }
@@ -702,4 +999,40 @@ pub(crate) fn sftp_io_error(error: std::io::Error) -> AppError {
 /// 整个 stat 对象，避免为一次折算引入协议层类型依赖。
 fn remote_text_meta_of(size: Option<u64>, mtime: Option<u32>) -> Option<RemoteTextMeta> {
     Some(RemoteTextMeta { size: size?, mtime })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_PARALLEL_CHUNKS, chunk_plan};
+
+    /// 分块必须完整覆盖文件且块数受上限约束：漏区间会静默丢数据，
+    /// 块数越界则放大服务器并发压力。
+    #[test]
+    fn chunk_plan_covers_exactly_within_bounds() {
+        for total in [
+            1u64,
+            1024,
+            8 * 1024 * 1024,
+            8 * 1024 * 1024 + 1,
+            100 * 1024 * 1024,
+            u32::MAX as u64,
+        ] {
+            let (chunk, count) = chunk_plan(total);
+            assert!(count >= 1, "至少一块: total={total}");
+            assert!(
+                count as u64 <= MAX_PARALLEL_CHUNKS,
+                "块数受上限: total={total}"
+            );
+            let covered = chunk * count as u64;
+            assert!(
+                covered >= total,
+                "完整覆盖: total={total}, covered={covered}"
+            );
+            // 每块都不空（最后一块可能较短）
+            assert!(
+                chunk >= total.div_ceil(MAX_PARALLEL_CHUNKS),
+                "块大小不小于均分值"
+            );
+        }
+    }
 }

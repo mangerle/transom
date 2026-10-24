@@ -8140,6 +8140,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "flume",
+ "futures",
  "parking_lot",
  "russh",
  "russh-sftp",
