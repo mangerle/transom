@@ -451,15 +451,22 @@ impl TerminalRenderer {
                 &self.highlight_rules,
                 &self.palette,
             );
-            row_cache[row] = self.build_row_visual(RowScanInput {
-                grid,
-                line,
-                row,
-                cols,
-                colors,
-                cursor_cell,
-                highlights: &scratch.colors,
-            });
+            // 就地重写而不是整行替换：滚动/刷屏时多数行都在重建，
+            // 保留上次的 Vec 容量可避免高吞吐输出下的持续重新分配。
+            let mut recycled = std::mem::take(&mut row_cache[row]);
+            self.refill_row_visual(
+                RowScanInput {
+                    grid,
+                    line,
+                    row,
+                    cols,
+                    colors,
+                    cursor_cell,
+                    highlights: &scratch.colors,
+                },
+                &mut recycled,
+            );
+            row_cache[row] = recycled;
         }
 
         for (row, visual) in row_cache.iter().enumerate() {
@@ -560,7 +567,9 @@ impl TerminalRenderer {
     ///
     /// 相比改造前"背景一遍、高亮一遍、文本一遍"的三趟扫描，这里每列只解析
     /// 一次颜色；空格并入相邻同风格 run 的规则与旧实现保持一致。
-    fn build_row_visual(&self, input: RowScanInput<'_>) -> RowVisual {
+    /// 就地重写调用方传入的 [`RowVisual`]：`clear` 保留两个 Vec 的容量，
+    /// 刷屏时（多数行每帧重建）避免持续重新分配。
+    fn refill_row_visual(&self, input: RowScanInput<'_>, visual: &mut RowVisual) {
         let RowScanInput {
             grid,
             line,
@@ -570,8 +579,10 @@ impl TerminalRenderer {
             cursor_cell,
             highlights,
         } = input;
-        let mut background_runs: Vec<(usize, usize, Hsla)> = Vec::new();
-        let mut text_runs: Vec<TextVisual> = Vec::new();
+        visual.background_runs.clear();
+        visual.text_runs.clear();
+        let background_runs = &mut visual.background_runs;
+        let text_runs = &mut visual.text_runs;
         let mut bg_current: Option<(usize, usize, Hsla)> = None;
         let mut run: Option<TextRunBuilder> = None;
 
@@ -616,7 +627,7 @@ impl TerminalRenderer {
                     text_run.text.push(' ');
                     text_run.end_col = col + 1;
                 } else {
-                    flush_text(&mut run, &mut text_runs);
+                    flush_text(&mut run, text_runs);
                 }
                 continue;
             }
@@ -654,7 +665,7 @@ impl TerminalRenderer {
                 || !cell.c.is_ascii();
 
             if single_cell {
-                flush_text(&mut run, &mut text_runs);
+                flush_text(&mut run, text_runs);
                 text_runs.push(TextVisual {
                     text: SharedString::from(text.as_str()),
                     start_col: col,
@@ -669,7 +680,7 @@ impl TerminalRenderer {
                     text_run.end_col = col + 1;
                 }
                 _ => {
-                    flush_text(&mut run, &mut text_runs);
+                    flush_text(&mut run, text_runs);
                     run = Some(TextRunBuilder {
                         text: cell.c.to_string(),
                         start_col: col,
@@ -679,13 +690,9 @@ impl TerminalRenderer {
                 }
             }
         }
-        flush_text(&mut run, &mut text_runs);
+        flush_text(&mut run, text_runs);
         if let Some((start, end, color)) = bg_current {
             background_runs.push((start, end, color));
-        }
-        RowVisual {
-            background_runs,
-            text_runs,
         }
     }
 
