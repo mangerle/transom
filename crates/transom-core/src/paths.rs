@@ -26,8 +26,9 @@ pub fn settings_path() -> PathBuf {
 }
 
 /// 用户自定义 UI 主题目录；放入 gpui-kit ThemeConfig 格式的 JSON 即可在设置
-/// 页选用。已知局限：主题注册表对重复名静默跳过，与内置主题（如 "Transom
-/// Dark"）同名的用户主题不会生效，自定义主题请使用不同名称。
+/// 页选用。内置主题也以此目录下的受管文件形式存在（应用启动时维护，顶层
+/// author 为 "transom"），热重载时与用户主题走同一套目录重建语义；自定义
+/// 主题请使用不同文件名，避免被应用维护的内置文件覆盖。
 pub fn themes_dir() -> PathBuf {
     config_dir().join("themes")
 }

@@ -1,6 +1,6 @@
 {
   "name": "jetbrains-islands",
-  "author": "Ported from artemevsevev/zed-theme-jetbrains (Apache-2.0)",
+  "author": "transom",
   "themes": [
     {
       "is_default": false,

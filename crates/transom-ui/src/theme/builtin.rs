@@ -19,5 +19,15 @@ pub(crate) const TRANSMOM_DARK: &str = include_str!("themes/transom_dark.json");
 /// 以 " Dark"/" Light" 结尾构成一族，明暗切换时 [`super::resolve`] 自动联动。
 pub(crate) const JETBRAINS_ISLANDS: &str = include_str!("themes/jetbrains_islands.json");
 
-/// 全部内置主题集合，启动时按顺序注册。
+/// 全部内置主题集合，启动时按顺序注册（内存注入，消除热重载前的首帧竞态）。
 pub(crate) const ALL: &[&str] = &[TRANSMOM_DARK, JETBRAINS_ISLANDS];
+
+/// 内置主题的受管落盘清单：(目录内文件名, 内容)。
+///
+/// 主题注册表的热重载以"目录全量重建"为语义（reload 清空注册表后只装回
+/// gpui-kit 内置 Default 与目录文件），纯内存注册的内置主题会在目录变动后
+/// 被清掉，因此内置主题同时以受管文件形式落盘，与用户主题在同一语义下共存。
+pub(crate) const MANAGED_FILES: &[(&str, &str)] = &[
+    ("transom-dark.json", TRANSMOM_DARK),
+    ("jetbrains-islands.json", JETBRAINS_ISLANDS),
+];
