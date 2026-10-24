@@ -123,7 +123,7 @@ impl AppShell {
         // 按同一上限二次设限，两道一起才挡得住"列出之后文件变大"的情况。
         let op_id = TransferId::new();
         self.spawn_editor_panel(tab_id, remote_path.clone(), file_name, op_id, window, cx);
-        if let Err(err) = self.services.command_tx.send(AppCommand::Sftp {
+        if !self.send_command(AppCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -132,7 +132,7 @@ impl AppShell {
                 max_bytes,
             },
         }) {
-            self.fail_editor_panel_by_op(op_id, format!("读取命令投递失败: {err}"), cx);
+            self.fail_editor_panel_by_op(op_id, "读取命令投递失败".to_string(), cx);
         }
     }
 
@@ -311,7 +311,7 @@ impl AppShell {
             item.conflict = false;
         }
         let max_bytes = self.settings.sftp.edit_max_bytes;
-        if let Err(err) = self.services.command_tx.send(AppCommand::Sftp {
+        if !self.send_command(AppCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -320,7 +320,7 @@ impl AppShell {
                 max_bytes,
             },
         }) {
-            self.fail_editor_panel_by_op(op_id, format!("读取命令投递失败: {err}"), cx);
+            self.fail_editor_panel_by_op(op_id, "读取命令投递失败".to_string(), cx);
             return;
         }
         cx.notify();

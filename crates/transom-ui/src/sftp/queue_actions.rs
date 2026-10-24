@@ -171,7 +171,7 @@ impl AppShell {
         panel.error = None;
         panel.recompute_progress();
         for (op_id, op) in commands {
-            let _ = self.services.command_tx.send(AppCommand::Sftp {
+            self.send_command(AppCommand::Sftp {
                 tab_id,
                 connection_id,
                 op_id,
@@ -253,6 +253,7 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
+        let mut needs_cancel = false;
         if let Some(panel) = self
             .tabs
             .iter_mut()
@@ -262,11 +263,8 @@ impl AppShell {
             if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
                 && task.status == TransferStatus::Transferring
             {
-                let _ = self
-                    .services
-                    .command_tx
-                    .send(AppCommand::SftpCancel { tab_id, op_id });
                 task.status = TransferStatus::Paused;
+                needs_cancel = true;
             }
             panel.active_transfers.remove(&op_id);
             panel.recompute_progress();
@@ -274,6 +272,10 @@ impl AppShell {
                 panel.status = Some("传输已暂停".to_string());
             }
             cx.notify();
+        }
+        // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
+        if needs_cancel {
+            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }
@@ -308,24 +310,18 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
+        let mut should_cancel = false;
         if let Some(panel) = self
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_mut())
         {
-            let mut should_cancel = false;
             if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
                 if task.status == TransferStatus::Transferring {
                     should_cancel = true;
                 }
                 task.status = TransferStatus::Cancelled;
-            }
-            if should_cancel {
-                let _ = self
-                    .services
-                    .command_tx
-                    .send(AppCommand::SftpCancel { tab_id, op_id });
             }
             panel.active_transfers.remove(&op_id);
             panel.recompute_progress();
@@ -333,6 +329,10 @@ impl AppShell {
                 panel.status = Some("已取消传输".to_string());
             }
             cx.notify();
+        }
+        // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
+        if should_cancel {
+            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }
@@ -362,6 +362,7 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
+        let mut needs_cancel = false;
         if let Some(panel) = self
             .tabs
             .iter_mut()
@@ -372,10 +373,7 @@ impl AppShell {
                 && let Some(active_task) = panel.queue.iter_mut().find(|t| t.id == op_id)
                 && active_task.status == TransferStatus::Transferring
             {
-                let _ = self
-                    .services
-                    .command_tx
-                    .send(AppCommand::SftpCancel { tab_id, op_id });
+                needs_cancel = true;
                 active_task.status = TransferStatus::Pending;
                 active_task.mode = TransferMode::Resume;
                 panel.active_transfers.remove(&op_id);
@@ -393,18 +391,24 @@ impl AppShell {
             panel.recompute_progress();
             cx.notify();
         }
+        // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
+        if needs_cancel {
+            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
+        }
         self.process_sftp_queue(tab_id, cx);
     }
 
     /// 暂停全部活动与排队任务；队列收起时由状态栏调用。
     pub(crate) fn sftp_pause_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        // 借用 panel 前先收集活动任务 id：发送取消命令需要整体可变借用 self
+        let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_mut())
         {
-            let active_ids = panel.active_transfers.iter().copied().collect::<Vec<_>>();
+            active_ids = panel.active_transfers.iter().copied().collect();
             let mut paused = 0u32;
             for task in &mut panel.queue {
                 match task.status {
@@ -415,18 +419,16 @@ impl AppShell {
                     _ => {}
                 }
             }
-            for op_id in active_ids {
-                let _ = self
-                    .services
-                    .command_tx
-                    .send(AppCommand::SftpCancel { tab_id, op_id });
-            }
             panel.active_transfers.clear();
             panel.recompute_progress();
             if paused > 0 {
                 panel.status = Some(format!("已暂停 {paused} 个传输任务"));
             }
             cx.notify();
+        }
+        // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
+        for op_id in active_ids {
+            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
         }
     }
 
@@ -458,13 +460,15 @@ impl AppShell {
 
     /// 取消全部活动、排队与暂停任务。
     pub(crate) fn sftp_cancel_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        // 借用 panel 前先收集活动任务 id：发送取消命令需要整体可变借用 self
+        let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_mut())
         {
-            let active_ids = panel.active_transfers.iter().copied().collect::<Vec<_>>();
+            active_ids = panel.active_transfers.iter().copied().collect();
             let mut cancelled = 0u32;
             for task in &mut panel.queue {
                 if matches!(
@@ -475,18 +479,16 @@ impl AppShell {
                     cancelled = cancelled.saturating_add(1);
                 }
             }
-            for op_id in active_ids {
-                let _ = self
-                    .services
-                    .command_tx
-                    .send(AppCommand::SftpCancel { tab_id, op_id });
-            }
             panel.active_transfers.clear();
             panel.recompute_progress();
             if cancelled > 0 {
                 panel.status = Some(format!("已取消 {cancelled} 个传输任务"));
             }
             cx.notify();
+        }
+        // 发送在 panel 借用结束后
+        for op_id in active_ids {
+            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
         }
     }
 }

@@ -172,7 +172,7 @@ impl AppShell {
             panel.loading = true;
             panel.error = None;
         }
-        let _ = self.services.command_tx.send(AppCommand::Sftp {
+        self.send_command(AppCommand::Sftp {
             tab_id,
             connection_id,
             op_id: TransferId::new(),
@@ -202,7 +202,7 @@ impl AppShell {
             panel.status = None;
             panel.error = None;
         }
-        let _ = self.services.command_tx.send(AppCommand::Sftp {
+        self.send_command(AppCommand::Sftp {
             tab_id,
             connection_id,
             op_id,

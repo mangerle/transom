@@ -57,7 +57,7 @@ impl AppShell {
             .unwrap_or_default();
         for rule in rules.into_iter().filter(|rule| rule.enabled) {
             self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-            let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+            self.send_command(AppCommand::ForwardStart {
                 tab_id,
                 connection_id,
                 rule,
@@ -239,7 +239,7 @@ impl AppShell {
         }
 
         self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-        let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+        self.send_command(AppCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -299,7 +299,7 @@ impl AppShell {
         }
         self.persist_catalog();
         self.set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
-        let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+        self.send_command(AppCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -334,7 +334,7 @@ impl AppShell {
             self.persist_catalog();
         }
         self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-        let _ = self.services.command_tx.send(AppCommand::ForwardStart {
+        self.send_command(AppCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -371,7 +371,7 @@ impl AppShell {
         }
         self.persist_catalog();
         self.set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
-        let _ = self.services.command_tx.send(AppCommand::ForwardStop {
+        self.send_command(AppCommand::ForwardStop {
             tab_id,
             connection_id,
             rule_id,
@@ -400,7 +400,7 @@ impl AppShell {
             status.state,
             ForwardState::Active { .. } | ForwardState::Starting
         ) {
-            let _ = self.services.command_tx.send(AppCommand::ForwardStop {
+            self.send_command(AppCommand::ForwardStop {
                 tab_id,
                 connection_id,
                 rule_id,

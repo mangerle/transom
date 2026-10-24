@@ -82,7 +82,7 @@ impl AppShell {
         };
 
         let op_id = TransferId::new();
-        if let Err(err) = self.services.command_tx.send(AppCommand::Sftp {
+        if !self.send_command(AppCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -94,7 +94,7 @@ impl AppShell {
         }) {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
-                item.error = Some(format!("回传命令投递失败: {err}"));
+                item.error = Some("回传命令投递失败".to_string());
             }
             self.focus_active_sftp_panel(window, cx);
             cx.notify();

@@ -307,8 +307,7 @@ impl AppShell {
             secrets,
             size,
         };
-        if let Err(error) = self.services.command_tx.send(command) {
-            self.error = Some(error.to_string());
+        if !self.send_command(command) {
             self.remove_tab(tab_id);
         }
         cx.notify();

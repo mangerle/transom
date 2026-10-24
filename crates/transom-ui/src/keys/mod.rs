@@ -271,15 +271,16 @@ impl AppShell {
             key_name: key_name.clone(),
             public_key: key.openssh,
         };
+        // 先提交命令再借用向导状态：send_command 需要可变借用 self
+        let sent = self.send_command(command);
         let Some(state) = self.settings_modal.key_wizard.as_mut() else {
             return;
         };
-        match self.services.command_tx.send(command) {
-            Ok(()) => {
-                state.message = Some(format!("正在部署 {key_name} 到 {} ...", target.title));
-                state.error = None;
-            }
-            Err(_) => state.error = Some("发送部署请求失败，应用可能已退出".to_string()),
+        if sent {
+            state.message = Some(format!("正在部署 {key_name} 到 {} ...", target.title));
+            state.error = None;
+        } else {
+            state.error = Some("发送部署请求失败，应用可能已退出".to_string());
         }
         cx.notify();
     }

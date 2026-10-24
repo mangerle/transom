@@ -24,7 +24,7 @@ impl AppShell {
         let local_root = panel.local_path.clone();
         let remote_root = panel.path.clone();
         let op_id = TransferId::new();
-        let _ = self.services.command_tx.send(AppCommand::Sftp {
+        self.send_command(AppCommand::Sftp {
             tab_id,
             connection_id,
             op_id,

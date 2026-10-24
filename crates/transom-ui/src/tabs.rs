@@ -374,10 +374,7 @@ impl AppShell {
             .retain(|session| session.id != session_id);
         self.selected_sessions.remove(&session_id);
         for tab_id in &removed_tabs {
-            let _ = self
-                .services
-                .command_tx
-                .send(AppCommand::CloseTab { tab_id: *tab_id });
+            self.send_command(AppCommand::CloseTab { tab_id: *tab_id });
         }
         self.tabs.retain(|tab| tab.session_id != session_id);
         self.prune_editor_panels();
@@ -575,10 +572,7 @@ impl AppShell {
         }
         self.groups.remove(index);
         for tab_id in &panes {
-            let _ = self
-                .services
-                .command_tx
-                .send(AppCommand::CloseTab { tab_id: *tab_id });
+            self.send_command(AppCommand::CloseTab { tab_id: *tab_id });
         }
         self.tabs.retain(|tab| !panes.contains(&tab.id));
         self.prune_pane_split_states();
@@ -627,10 +621,7 @@ impl AppShell {
             return;
         }
 
-        let _ = self
-            .services
-            .command_tx
-            .send(AppCommand::CloseTab { tab_id });
+        self.send_command(AppCommand::CloseTab { tab_id });
         self.tabs.retain(|tab| tab.id != tab_id);
         self.prune_editor_panels();
         let replacement = self.detach_pane_from_group(tab_id);

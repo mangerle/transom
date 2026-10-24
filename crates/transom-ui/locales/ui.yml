@@ -505,6 +505,12 @@ error:
   keyboard_interactive_failed:
     en: Interactive authentication failed
     zh-CN: 交互式认证失败
+  command_queue_full:
+    en: Command queue is full, the action was dropped. Try again shortly.
+    zh-CN: 命令队列已满，本次操作被丢弃，请稍后重试。
+  controller_stopped:
+    en: The controller has stopped running. Please restart the app.
+    zh-CN: 应用控制器已停止运行，请重启应用。
   host_key_unknown:
     en: Unknown host key
     zh-CN: 未知的主机密钥

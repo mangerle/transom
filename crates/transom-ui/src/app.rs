@@ -20,9 +20,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use transom_core::{
-    AppError, AppSettings, Connection, ConnectionId, FolderId, ForwardId, ForwardStatus, GroupId,
-    HostKeyRecord, NetworkTraffic, PromptInfo, SecretKind, Session, SessionCatalog, SessionId,
-    SplitId, SystemStats, TabId,
+    AppCommand, AppError, AppSettings, Connection, ConnectionId, FolderId, ForwardId,
+    ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, SecretKind, Session,
+    SessionCatalog, SessionId, SplitId, SystemStats, TabId,
 };
 use transom_terminal::TerminalView;
 use zeroize::Zeroizing;
@@ -313,6 +313,16 @@ pub(crate) struct ShortcutRecordingState {
     pub(crate) capture: Option<ShortcutCapture>,
 }
 
+/// 命令发送失败的界面文案：队列满提示稍后重试，控制器退出提示重启应用。
+pub(crate) fn command_send_error_text(error: flume::TrySendError<AppCommand>) -> String {
+    match error {
+        flume::TrySendError::Full(_) => rust_i18n::t!("error.command_queue_full").to_string(),
+        flume::TrySendError::Disconnected(_) => {
+            rust_i18n::t!("error.controller_stopped").to_string()
+        }
+    }
+}
+
 pub struct AppShell {
     pub(crate) services: UiServices,
     pub(crate) settings: AppSettings,
@@ -380,6 +390,22 @@ pub struct AppShell {
 }
 
 impl AppShell {
+    /// 向控制器提交命令的统一入口：非阻塞 try_send，队列满时快速失败。
+    ///
+    /// 设计原理（Why）：命令通道有界（256），控制器侧以 send_async 反压；
+    /// UI 侧若用阻塞 send，控制器因事件队列满而等待 UI 消费时会形成互等，
+    /// 界面线程被冻结。失败不静默：错误进入全局错误栏提示用户。
+    /// 返回 `false` 表示命令未入队，调用方可据此做回滚（如撤销标签删除）。
+    pub(crate) fn send_command(&mut self, command: AppCommand) -> bool {
+        match self.services.command_tx.try_send(command) {
+            Ok(()) => true,
+            Err(error) => {
+                self.error = Some(command_send_error_text(error));
+                false
+            }
+        }
+    }
+
     pub fn new(
         window: &mut Window,
         cx: &mut Context<Self>,

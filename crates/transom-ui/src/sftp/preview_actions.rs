@@ -10,7 +10,7 @@ use super::preview::{
     decode_preview_thumbnail, preview_kind, read_local_text_head, text_preview_lines,
 };
 use super::{SftpPanelState, format_size};
-use crate::app::AppShell;
+use crate::app::{AppShell, command_send_error_text};
 use crate::palette::localized_error;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
@@ -187,7 +187,9 @@ impl AppShell {
             };
             let op_id = TransferId::new();
             preview.op_id = Some(op_id);
-            let _ = command_tx.send(AppCommand::Sftp {
+            // panel/preview 借用活跃，无法走 self.send_command：用预克隆的
+            // 发送端 try_send，失败把原因写进预览气泡而不是静默丢弃
+            if let Err(error) = command_tx.try_send(AppCommand::Sftp {
                 tab_id: target.tab_id,
                 connection_id,
                 op_id,
@@ -196,7 +198,10 @@ impl AppShell {
                     mode,
                     max_bytes,
                 },
-            });
+            }) {
+                preview.content = PreviewContent::Error(command_send_error_text(error));
+                preview.op_id = None;
+            }
         } else {
             match kind {
                 PreviewKind::Image => {
