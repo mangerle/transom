@@ -145,6 +145,7 @@ pub(super) async fn adopt_connection<J>(
 
 /// 优雅停机的状态表借用集合。
 pub(super) struct ShutdownTables<'a> {
+    pub(super) connecting: &'a mut HashMap<TabId, ConnectingTab>,
     pub(super) forwards: &'a mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
     pub(super) traffic_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
     pub(super) key_deploy_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
@@ -162,6 +163,7 @@ pub(super) struct ShutdownTables<'a> {
 /// 停止），退出前统一限时等待；个别通道关闭挂起不应拖死整个退出。
 pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
     let ShutdownTables {
+        connecting,
         forwards,
         traffic_tasks,
         key_deploy_tasks,
@@ -171,6 +173,10 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
         cleanup,
         local_stats_task,
     } = tables;
+    // 待连接任务：建连中的握手与认证随停机中止
+    for (_, entry) in connecting.drain() {
+        entry.task.abort();
+    }
     for (_, handle) in sftp_transfers.drain() {
         handle.abort();
     }

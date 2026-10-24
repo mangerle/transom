@@ -288,6 +288,11 @@ async fn run_controller(
             }
             Incoming::Command(Ok(AppCommand::CloseTab { tab_id })) => {
                 current_connections.remove(&tab_id);
+                // 关闭即注销连接意图并取消建连任务：DNS/握手/认证等待中的
+                // 连接随任务中止，迟到的完成结果被接入裁决拒收
+                if let Some(entry) = connecting.remove(&tab_id) {
+                    entry.task.abort();
+                }
                 stop_forwards(&mut forwards, &mut cleanup_set, tab_id);
                 stop_traffic(&mut traffic_tasks, tab_id);
                 stop_key_deploy(&mut key_deploy_tasks, tab_id);
@@ -312,6 +317,7 @@ async fn run_controller(
             | Incoming::Command(Err(_))
             | Incoming::Internal(Err(_)) => {
                 shutdown_all(ShutdownTables {
+                    connecting: &mut connecting,
                     forwards: &mut forwards,
                     traffic_tasks: &mut traffic_tasks,
                     key_deploy_tasks: &mut key_deploy_tasks,
