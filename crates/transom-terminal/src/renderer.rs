@@ -491,8 +491,11 @@ impl TerminalRenderer {
             {
                 fg = override_fg;
             }
+            // cursor_cell 携带的是屏幕行坐标（cursor.line.0 + display_offset），
+            // 必须与同为屏幕坐标的 row 比较；误用网格坐标 line.0 会在上滚查看
+            // 历史时把反色字符画到错误行，与光标块分离。
             if let Some((cursor_row, cursor_col)) = cursor_cell
-                && cursor_row == line.0
+                && cursor_row == row as i32
                 && cursor_col == col
             {
                 fg = bg;
