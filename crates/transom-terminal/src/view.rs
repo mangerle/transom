@@ -15,6 +15,7 @@ use parking_lot::Mutex;
 use std::io::{Read, Write};
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
 use transom_core::{
@@ -43,7 +44,6 @@ pub(crate) struct LayoutMetrics {
 }
 
 struct PreparedTerminal {
-    renderer: TerminalRenderer,
     /// 本帧可用的检索绘制数据；`None` 表示无检索或快照已失效。
     search: Option<crate::search::SearchPaint>,
 }
@@ -51,6 +51,10 @@ struct PreparedTerminal {
 pub struct TerminalView {
     pub(crate) engine: Arc<Mutex<TerminalEngine>>,
     pub(crate) metrics: Arc<Mutex<LayoutMetrics>>,
+    /// 长生命周期渲染器：字体度量、调色板预计算表与编译后的高亮规则都缓存于此。
+    renderer: Arc<parking_lot::RwLock<TerminalRenderer>>,
+    /// 外观变更脏标记：置位后由下一帧 prepaint 持窗口文本系统重建渲染器。
+    renderer_dirty: Arc<AtomicBool>,
     profile: TerminalProfile,
     interaction: TerminalInteraction,
     focus_handle: FocusHandle,
@@ -204,9 +208,19 @@ impl TerminalView {
             }
         });
 
+        // 渲染器为长生命周期缓存：字体度量、预计算调色板与编译后的高亮规则
+        // 只依赖 profile，不随帧内容变化。外观变更经脏标记在下一帧 prepaint
+        // （持有窗口文本系统）重建，避免把文本整形探测与规则编译放进每帧热路径。
+        let renderer = Arc::new(parking_lot::RwLock::new(TerminalRenderer::new(
+            &profile, window, cx,
+        )));
+        let renderer_dirty = Arc::new(AtomicBool::new(false));
+
         Self {
             engine,
             metrics,
+            renderer,
+            renderer_dirty,
             profile,
             interaction,
             focus_handle,
@@ -255,9 +269,10 @@ impl TerminalView {
 
     /// 热应用全局外观偏好：字体族、中文字体族、字号、行高与关键词高亮规则。
     ///
-    /// 为什么需要这个入口：渲染器每帧都从 `self.profile` 重建，只改设置里的字体而已经
-    /// 打开的窗格毫无反应，等于"设置不生效"。调色板、scrollback 与光标外观不在这里覆盖，
-    /// 那些仍归会话自己的 profile，避免全局偏好悄悄吃掉会话级配置。
+    /// 渲染器是长生命周期缓存，改设置必须显式失效：这里置脏标记，下一帧
+    /// prepaint（持有窗口文本系统）按新 profile 重建度量与编译规则。调色板、
+    /// scrollback 与光标外观不在这里覆盖，那些仍归会话自己的 profile，
+    /// 避免全局偏好悄悄吃掉会话级配置。
     /// 网格列数会随字号变化，由下一帧 prepaint 统一走既有的 resize + PTY 同步通路。
     pub fn apply_appearance(&mut self, profile: &TerminalProfile, cx: &mut Context<Self>) {
         self.profile.font_family = profile.font_family.clone();
@@ -265,6 +280,7 @@ impl TerminalView {
         self.profile.font_size = profile.font_size;
         self.profile.line_height = profile.line_height;
         self.profile.highlight = profile.highlight.clone();
+        self.renderer_dirty.store(true, Ordering::Release);
         cx.notify();
     }
 
@@ -804,6 +820,9 @@ impl Render for TerminalView {
         let engine_prepaint = self.engine.clone();
         let engine_paint = self.engine.clone();
         let metrics_prepaint = self.metrics.clone();
+        let renderer_prepaint = self.renderer.clone();
+        let renderer_paint = self.renderer.clone();
+        let renderer_dirty = self.renderer_dirty.clone();
         let control = self.control.clone();
         let profile = self.profile.clone();
         let focus_handle = self.focus_handle.clone();
@@ -830,7 +849,13 @@ impl Render for TerminalView {
             .child(
                 canvas(
                     move |bounds, window, cx| {
-                        let renderer = TerminalRenderer::new(&profile, window, cx);
+                        // 外观变更（脏标记）在此重建：只有 prepaint 阶段持有
+                        // 窗口文本系统，度量（"M"/"中" 整形探测）必须在这里做。
+                        if renderer_dirty.swap(false, Ordering::AcqRel) {
+                            *renderer_prepaint.write() =
+                                TerminalRenderer::new(&profile, window, cx);
+                        }
+                        let renderer = renderer_prepaint.read();
                         let (cols, rows) = renderer.grid_size(bounds);
                         let size = TerminalSize::new(cols, rows);
                         let mut engine = engine_prepaint.lock();
@@ -880,7 +905,7 @@ impl Render for TerminalView {
                             search_strip: strip,
                         };
                         *metrics_prepaint.lock() = metrics;
-                        PreparedTerminal { renderer, search }
+                        PreparedTerminal { search }
                     },
                     move |bounds, prepared, window, cx| {
                         window.handle_input(
@@ -889,12 +914,13 @@ impl Render for TerminalView {
                             cx,
                         );
                         let engine = engine_paint.lock();
+                        let renderer = renderer_paint.read();
                         let ime = if ime_text.is_empty() {
                             None
                         } else {
                             Some((ime_text.as_str(), ime_marked_range.as_ref()))
                         };
-                        prepared.renderer.paint(
+                        renderer.paint(
                             PaintRequest {
                                 bounds,
                                 term: engine.term(),

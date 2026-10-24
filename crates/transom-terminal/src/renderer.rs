@@ -41,11 +41,84 @@ pub(crate) struct TerminalRenderer {
     pub cell_width: Pixels,
     pub cell_height: Pixels,
     pub(crate) palette: TerminalPalette,
+    /// 静态调色板的 Hsla 预计算表：命名色、前 16 色与 256 色回退值构建时一次算好，
+    /// 渲染热路径查表取回，避免同一颜色在每个 cell 上重复做 RGB→HSL 浮点换算。
+    pub(crate) palette_colors: PaletteColors,
     /// 关键词自动高亮配置。
     pub(crate) highlight: TerminalHighlight,
-    /// 每帧编译一次规则集：扫描路径里不再逐行预处理关键词。
+    /// 编译后的规则集。渲染器改为长生命周期后只在构建/外观变更时编译一次，
+    /// 不再随帧重编译（原先每帧重建时每个关键词都要一次小堆分配）。
     pub(crate) highlight_rules: CompiledHighlight,
     line_height: f32,
+}
+
+/// 静态调色板的预计算 Hsla 集合。
+///
+/// 只覆盖不随运行期变化的部分：命名色、终端 16 色、256 色立方与灰度回退。
+/// 程序经 OSC 4/10/11 动态改写的调色板与 24 位 Spec 色仍是即时换算，
+/// 换来的确定性失效复杂度远超其命中占比。
+pub(crate) struct PaletteColors {
+    foreground: Hsla,
+    background: Hsla,
+    cursor: Hsla,
+    selection: Hsla,
+    ansi: [Hsla; 16],
+    ansi_dim: [Hsla; 16],
+    dim_foreground: Hsla,
+    /// 256 色中 16..=255 的标准回退值（立方 + 灰度），下标为 index - 16。
+    indexed_fallback: [Hsla; 240],
+}
+
+impl PaletteColors {
+    fn build(palette: &TerminalPalette) -> Self {
+        let mut ansi = [Hsla::default(); 16];
+        let mut ansi_dim = [Hsla::default(); 16];
+        for slot in 0..16 {
+            let base = palette_rgb(palette.ansi[slot]);
+            ansi[slot] = base;
+            let mut dimmed = base;
+            dimmed.a *= 0.7;
+            ansi_dim[slot] = dimmed;
+        }
+        let mut dim_foreground = palette_rgb(palette.foreground);
+        dim_foreground.a *= 0.7;
+        let mut indexed_fallback = [Hsla::default(); 240];
+        for (slot, target) in indexed_fallback.iter_mut().enumerate() {
+            let index = slot + 16;
+            *target = if index < 232 {
+                let cube = index - 16;
+                let r = (cube / 36) as u8;
+                let g = ((cube % 36) / 6) as u8;
+                let b = (cube % 6) as u8;
+                let channel = |value: u8| if value == 0 { 0 } else { value * 40 + 55 };
+                palette_rgb(PaletteColor::new(channel(r), channel(g), channel(b)))
+            } else {
+                let level = 8 + (index - 232) as u8 * 10;
+                palette_rgb(PaletteColor::new(level, level, level))
+            };
+        }
+        Self {
+            foreground: palette_rgb(palette.foreground),
+            background: palette_rgb(palette.background),
+            cursor: palette_rgb(palette.cursor),
+            selection: palette_rgb(palette.selection),
+            ansi,
+            ansi_dim,
+            dim_foreground,
+            indexed_fallback,
+        }
+    }
+}
+
+/// RGB 分量直转 Hsla：与 `Hsla::from(rgb(to_hex()))` 数值完全一致，
+/// 但省去 u32 打包/解包往返，供预计算与动态 Spec 色共用。
+fn palette_rgb(color: PaletteColor) -> Hsla {
+    Hsla::from(Rgba {
+        r: f32::from(color.r) / 255.0,
+        g: f32::from(color.g) / 255.0,
+        b: f32::from(color.b) / 255.0,
+        a: 1.0,
+    })
 }
 
 impl TerminalRenderer {
@@ -64,6 +137,7 @@ impl TerminalRenderer {
             cell_width: px(8.0),
             cell_height: px(16.0),
             palette: profile.palette.clone(),
+            palette_colors: PaletteColors::build(&profile.palette),
             highlight: profile.highlight.clone(),
             highlight_rules: CompiledHighlight::compile(&profile.highlight),
             line_height: profile.line_height.max(1.0),
@@ -160,7 +234,7 @@ impl TerminalRenderer {
     }
 
     pub(crate) fn color(&self, color: PaletteColor) -> Hsla {
-        Hsla::from(rgb(color.to_hex()))
+        palette_rgb(color)
     }
 
     fn resolve(&self, color: Color, colors: &Colors) -> Hsla {
@@ -175,6 +249,7 @@ impl TerminalRenderer {
         if let Some(rgb) = colors[named] {
             return self.color(PaletteColor::new(rgb.r, rgb.g, rgb.b));
         }
+        let cached = &self.palette_colors;
         match named {
             NamedColor::Black
             | NamedColor::Red
@@ -191,12 +266,10 @@ impl TerminalRenderer {
             | NamedColor::BrightBlue
             | NamedColor::BrightMagenta
             | NamedColor::BrightCyan
-            | NamedColor::BrightWhite => self.color(self.palette.ansi[named as usize]),
-            NamedColor::Foreground | NamedColor::BrightForeground => {
-                self.color(self.palette.foreground)
-            }
-            NamedColor::Background => self.color(self.palette.background),
-            NamedColor::Cursor => self.color(self.palette.cursor),
+            | NamedColor::BrightWhite => cached.ansi[named as usize],
+            NamedColor::Foreground | NamedColor::BrightForeground => cached.foreground,
+            NamedColor::Background => cached.background,
+            NamedColor::Cursor => cached.cursor,
             NamedColor::DimBlack
             | NamedColor::DimRed
             | NamedColor::DimGreen
@@ -205,16 +278,9 @@ impl TerminalRenderer {
             | NamedColor::DimMagenta
             | NamedColor::DimCyan
             | NamedColor::DimWhite => {
-                let index = named as usize - NamedColor::DimBlack as usize;
-                let mut color = self.color(self.palette.ansi[index]);
-                color.a *= 0.7;
-                color
+                cached.ansi_dim[named as usize - NamedColor::DimBlack as usize]
             }
-            NamedColor::DimForeground => {
-                let mut color = self.color(self.palette.foreground);
-                color.a *= 0.7;
-                color
-            }
+            NamedColor::DimForeground => cached.dim_foreground,
         }
     }
 
@@ -223,18 +289,14 @@ impl TerminalRenderer {
             return self.color(PaletteColor::new(rgb.r, rgb.g, rgb.b));
         }
         if index < 16 {
-            return self.color(self.palette.ansi[index]);
+            return self.palette_colors.ansi[index];
         }
-        if index < 232 {
-            let index = index - 16;
-            let r = (index / 36) as u8;
-            let g = ((index % 36) / 6) as u8;
-            let b = (index % 6) as u8;
-            let channel = |value: u8| if value == 0 { 0 } else { value * 40 + 55 };
-            return self.color(PaletteColor::new(channel(r), channel(g), channel(b)));
-        }
-        let level = 8 + (index - 232) as u8 * 10;
-        self.color(PaletteColor::new(level, level, level))
+        // 256 色的立方与灰度回退不依赖运行期状态，直接查预计算表。
+        self.palette_colors
+            .indexed_fallback
+            .get(index - 16)
+            .copied()
+            .unwrap_or_else(|| self.palette_colors.indexed_fallback[240 - 1])
     }
 
     fn cell_colors(&self, cell: &Cell, colors: &Colors) -> (Hsla, Hsla) {
@@ -331,7 +393,7 @@ impl TerminalRenderer {
                         height: self.cell_height,
                     },
                 };
-                let mut color = self.color(self.palette.selection);
+                let mut color = self.palette_colors.selection;
                 color.a = SELECTION_ALPHA;
                 window.paint_quad(fill(rect, color));
             }
@@ -711,7 +773,7 @@ impl TerminalRenderer {
             return;
         }
         let y = origin.y + self.cell_height * cursor_row as f32;
-        let mut highlight = self.color(self.palette.selection);
+        let mut highlight = self.palette_colors.selection;
         highlight.a = SELECTION_ALPHA;
         let marked_chars = marked_range.and_then(|range| utf16_range_to_char_range(text, range));
 
@@ -735,11 +797,11 @@ impl TerminalRenderer {
             let run = TextRun {
                 len: ch.len_utf8(),
                 font: self.font_for(wide, FontWeight::NORMAL, FontStyle::Normal),
-                color: self.color(self.palette.foreground),
+                color: self.palette_colors.foreground,
                 background_color: None,
                 underline: underline.then_some(UnderlineStyle {
                     thickness: px(1.0),
-                    color: Some(self.color(self.palette.foreground)),
+                    color: Some(self.palette_colors.foreground),
                     wavy: false,
                 }),
                 strikethrough: None,
@@ -990,13 +1052,58 @@ fn utf16_range_to_char_range(text: &str, range: &Range<usize>) -> Option<Range<u
 
 #[cfg(test)]
 mod tests {
-    use super::{CJK_PROBE_CHAR, RowScratch, fit_cjk_size, is_cjk_char};
+    use super::{
+        CJK_PROBE_CHAR, PaletteColors, RowScratch, fit_cjk_size, is_cjk_char, palette_rgb,
+    };
     use crate::engine::TerminalEngine;
     use alacritty_terminal::index::Line;
     use gpui_kit::{Hsla, px, rgb};
     use transom_core::{
         CompiledHighlight, TerminalHighlight, TerminalPalette, TerminalProfile, TerminalSize,
     };
+
+    /// 预计算表与即时换算必须逐位一致：查表是渲染热路径的取色来源，
+    /// 任何偏差都会在升级后被当成"配色变了"的回归。
+    #[test]
+    fn palette_colors_match_immediate_conversion() {
+        let palette = TerminalPalette::default();
+        let cached = PaletteColors::build(&palette);
+        let immediate = |color: transom_core::Rgb| Hsla::from(rgb(color.to_hex()));
+
+        assert_eq!(
+            palette_rgb(palette.foreground),
+            immediate(palette.foreground)
+        );
+        assert_eq!(
+            palette_rgb(palette.background),
+            immediate(palette.background)
+        );
+        assert_eq!(palette_rgb(palette.cursor), immediate(palette.cursor));
+        assert_eq!(palette_rgb(palette.selection), immediate(palette.selection));
+        assert_eq!(cached.foreground, immediate(palette.foreground));
+        assert_eq!(cached.background, immediate(palette.background));
+        for slot in 0..16 {
+            assert_eq!(cached.ansi[slot], immediate(palette.ansi[slot]));
+        }
+        // 256 色回退表覆盖立方与灰度两端各抽样。
+        for index in [16usize, 100, 231, 232, 255] {
+            let expected = if index < 232 {
+                let cube = index - 16;
+                let r = (cube / 36) as u8;
+                let g = ((cube % 36) / 6) as u8;
+                let b = (cube % 6) as u8;
+                let channel = |value: u8| if value == 0 { 0 } else { value * 40 + 55 };
+                immediate(transom_core::Rgb::new(channel(r), channel(g), channel(b)))
+            } else {
+                let level = 8 + (index - 232) as u8 * 10;
+                immediate(transom_core::Rgb::new(level, level, level))
+            };
+            assert_eq!(cached.indexed_fallback[index - 16], expected);
+        }
+        // Dim 变体只压 alpha，色相分量保持原值。
+        assert!((cached.ansi_dim[0].a - cached.ansi[0].a * 0.7).abs() < 1e-6);
+        assert!((cached.dim_foreground.a - cached.foreground.a * 0.7).abs() < 1e-6);
+    }
 
     /// 双字体路由的判定边界：走错一侧就会让 Latin 字符被中文字体接管，
     /// 或让全角字符继续用等宽字体而错位。
