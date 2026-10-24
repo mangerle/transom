@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Transom 舷窗图标，品牌青满铺底">
+  <defs>
+    <linearGradient id="b-bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#0E7490"/>
+    </linearGradient>
+    <linearGradient id="b-ring" x1="80" y1="80" x2="432" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#CCFBF1"/>
+      <stop offset="1" stop-color="#BAE6FD"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#b-bg)"/>
+  <circle cx="256" cy="256" r="176" fill="none" stroke="url(#b-ring)" stroke-width="30"/>
+  <circle cx="256" cy="256" r="161" fill="#0A3F3C"/>
+  <path d="M184 192 L270 256 L184 320" fill="none" stroke="#F8FAFC" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="288" y="296" width="48" height="26" rx="13" fill="#FBBF24"/>
+</svg>
