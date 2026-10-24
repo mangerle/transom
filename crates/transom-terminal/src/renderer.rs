@@ -31,6 +31,64 @@ pub(crate) struct PaintRequest<'a> {
     pub(crate) search: Option<&'a SearchPaint>,
 }
 
+/// 本帧需要重建绘制缓存的行集合。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DamageInfo {
+    /// 全量重建：resize 折行、滚动、INSERT 模式或外观变更导致行号/度量整体失效。
+    Full,
+    /// 仅重建给出的视口行号（已含 display_offset 换算）。
+    Rows(Vec<usize>),
+}
+
+/// 一行文本的绘制产物：由 [`TerminalRenderer`] 在脏行上重建，帧间按行复用。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：GPUI 是即时模式绘制，每帧都要完整提交绘制指令；但"从网格扫描
+///   出背景区段与文本 run"这一步只依赖行内容，内容不变时重复计算纯属浪费。
+///   把扫描产物缓存下来，每帧只做脏行重建与绘制提交；
+/// - 核心优势：静止画面（光标闪烁、鼠标移动触发的重绘）不再伴随整屏三遍
+///   逐列扫描与 run 重建，文本内容以 SharedString 持有，提交时克隆零分配；
+/// - 代价与局限：选区、搜索高亮、IME 与光标绘制走独立覆盖层、不进缓存，
+///   因此不受损伤跟踪影响；prepaint 与 paint 之间新到的一帧数据可能以旧
+///   内容提交一次（下一帧损伤立即补正），与改造前的错帧窗口同级。
+#[derive(Default)]
+pub(crate) struct RowVisual {
+    /// 非默认背景的区段：(起始列, 结束列, 颜色)。
+    background_runs: Vec<(usize, usize, Hsla)>,
+    /// 文本 run，按起始列升序。
+    text_runs: Vec<TextVisual>,
+}
+
+/// 单个文本 run 的缓存形态。
+pub(crate) struct TextVisual {
+    text: SharedString,
+    start_col: usize,
+    style: RunStyle,
+}
+
+/// 一行扫描的全部输入：参数收敛为结构体，见 `build_row_visual`。
+struct RowScanInput<'a> {
+    grid: &'a alacritty_terminal::grid::Grid<Cell>,
+    line: Line,
+    /// 该行的屏幕行号（含 display_offset），块光标反色按它定位。
+    row: usize,
+    cols: usize,
+    colors: &'a Colors,
+    cursor_cell: Option<(i32, usize)>,
+    /// 每列的关键词高亮覆盖色；`None` 表示该列不上色。
+    highlights: &'a [Option<Hsla>],
+}
+
+/// IME 预编辑绘制输入：位置与网格规模随组字状态成组传递。
+struct ImePaintInput<'a> {
+    cursor_row: i32,
+    cursor_col: usize,
+    rows: usize,
+    cols: usize,
+    text: &'a str,
+    marked_range: Option<&'a Range<usize>>,
+}
+
 pub(crate) struct TerminalRenderer {
     pub font_family: SharedString,
     /// 双格字符（中日韩）的专用字体族；`None` 表示不做双字体路由。
@@ -311,7 +369,14 @@ impl TerminalRenderer {
         (fg, bg)
     }
 
-    pub fn paint(&self, request: PaintRequest<'_>, window: &mut Window, cx: &mut App) {
+    pub fn paint(
+        &self,
+        request: PaintRequest<'_>,
+        row_cache: &mut Vec<RowVisual>,
+        damage: &DamageInfo,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
         let PaintRequest {
             bounds,
             term,
@@ -346,13 +411,38 @@ impl TerminalRenderer {
             && (0..rows as i32).contains(&cursor_row)
             && ime.is_none();
         let block_cursor = cursor_visible && cursor_style.shape == CursorShape::Block;
-        // 逐行扫描的缓冲在整帧里复用，避免每行都重新分配字符串与列映射。
+
+        // 行缓存与网格行数对齐：resize 后长度不符即整体失效（内核 resize 也会
+        // 报告 Full 损伤，两道保险互为冗余）。
+        if row_cache.len() != rows {
+            row_cache.clear();
+            row_cache.resize_with(rows, RowVisual::default);
+        }
+
+        // 需要重建的行：内核损伤集合之外，强制加入光标行——闪烁相位翻转
+        // 不产生网格损伤，但块光标的字符反色随相位变化。
+        let mut damaged_rows: Vec<usize> = match damage {
+            DamageInfo::Full => (0..rows).collect(),
+            DamageInfo::Rows(list) => {
+                let mut rows_set = Vec::with_capacity(list.len() + 1);
+                rows_set.extend_from_slice(list);
+                if cursor_visible && (0..rows).contains(&(cursor_row.max(0) as usize)) {
+                    rows_set.push(cursor_row as usize);
+                }
+                rows_set
+            }
+        };
+        damaged_rows.sort_unstable();
+        damaged_rows.dedup();
+
+        // 逐行扫描的缓冲在整批重建间复用，避免每行都重新分配字符串与列映射。
         let mut scratch = RowScratch::default();
-
-        for row in 0..rows {
+        let cursor_cell = block_cursor.then_some((cursor_row, cursor_col));
+        for row in damaged_rows {
+            if row >= rows {
+                continue;
+            }
             let line = Line(row as i32 - display_offset);
-            let y = origin.y + self.cell_height * row as f32;
-
             scratch.fill(
                 grid,
                 line,
@@ -361,20 +451,37 @@ impl TerminalRenderer {
                 &self.highlight_rules,
                 &self.palette,
             );
-            self.paint_backgrounds(
-                origin,
-                y,
-                RowInput {
-                    line,
-                    cols,
-                    grid,
-                    colors,
-                    cursor_cell: None,
-                    highlights: &scratch.colors,
-                },
-                default_bg,
-                window,
-            );
+            row_cache[row] = self.build_row_visual(RowScanInput {
+                grid,
+                line,
+                row,
+                cols,
+                colors,
+                cursor_cell,
+                highlights: &scratch.colors,
+            });
+        }
+
+        for (row, visual) in row_cache.iter().enumerate() {
+            let y = origin.y + self.cell_height * row as f32;
+            let line = Line(row as i32 - display_offset);
+
+            for (start, end, color) in &visual.background_runs {
+                if *color == default_bg {
+                    continue;
+                }
+                let rect = Bounds {
+                    origin: Point {
+                        x: origin.x + self.cell_width * *start as f32,
+                        y,
+                    },
+                    size: Size {
+                        width: self.cell_width * (end - start) as f32,
+                        height: self.cell_height,
+                    },
+                };
+                window.paint_quad(fill(rect, *color));
+            }
 
             if let Some(paint) = search {
                 self.paint_row_hits(paint.rows.get(row), y, origin, window);
@@ -412,20 +519,9 @@ impl TerminalRenderer {
                 window.paint_quad(fill(rect, cursor_color));
             }
 
-            self.paint_text_row(
-                origin,
-                row,
-                RowInput {
-                    line,
-                    cols,
-                    grid,
-                    colors,
-                    cursor_cell: block_cursor.then_some((cursor_row, cursor_col)),
-                    highlights: &scratch.colors,
-                },
-                window,
-                cx,
-            );
+            for run in &visual.text_runs {
+                self.paint_run_text(run, origin, row, window, cx);
+            }
 
             if cursor_visible && cursor_row == row as i32 && cursor_col < cols {
                 self.paint_cursor(
@@ -445,89 +541,65 @@ impl TerminalRenderer {
 
         if let Some((text, marked_range)) = ime.filter(|(text, _)| !text.is_empty()) {
             self.paint_ime(
+                ImePaintInput {
+                    cursor_row,
+                    cursor_col,
+                    rows,
+                    cols,
+                    text,
+                    marked_range,
+                },
                 origin,
-                cursor_row,
-                cursor_col,
-                rows,
-                cols,
-                text,
-                marked_range,
                 window,
                 cx,
             );
         }
     }
 
-    fn paint_backgrounds(
-        &self,
-        origin: Point<Pixels>,
-        y: Pixels,
-        row: RowInput<'_>,
-        default_bg: Hsla,
-        window: &mut Window,
-    ) {
-        let RowInput {
-            line,
-            cols,
+    /// 把一行网格扫描成绘制产物：单趟列扫描同时聚合背景区段与文本 run。
+    ///
+    /// 相比改造前"背景一遍、高亮一遍、文本一遍"的三趟扫描，这里每列只解析
+    /// 一次颜色；空格并入相邻同风格 run 的规则与旧实现保持一致。
+    fn build_row_visual(&self, input: RowScanInput<'_>) -> RowVisual {
+        let RowScanInput {
             grid,
-            colors,
-            ..
-        } = row;
-        let mut current: Option<(usize, usize, Hsla)> = None;
-        let mut runs = Vec::new();
-        for col in 0..cols {
-            let cell = &grid[AlacPoint::new(line, Column(col))];
-            let (_, bg) = self.cell_colors(cell, colors);
-            if let Some((start, end, color)) = &mut current {
-                if *color == bg && *end == col {
-                    *end = col + 1;
-                    continue;
-                }
-                runs.push((*start, *end, *color));
-            }
-            current = Some((col, col + 1, bg));
-        }
-        if let Some(run) = current {
-            runs.push(run);
-        }
-
-        for (start, end, color) in runs {
-            if color == default_bg {
-                continue;
-            }
-            let rect = Bounds {
-                origin: Point {
-                    x: origin.x + self.cell_width * start as f32,
-                    y,
-                },
-                size: Size {
-                    width: self.cell_width * (end - start) as f32,
-                    height: self.cell_height,
-                },
-            };
-            window.paint_quad(fill(rect, color));
-        }
-    }
-
-    fn paint_text_row(
-        &self,
-        origin: Point<Pixels>,
-        row: usize,
-        input: RowInput<'_>,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        let RowInput {
             line,
+            row,
             cols,
-            grid,
             colors,
             cursor_cell,
             highlights,
         } = input;
+        let mut background_runs: Vec<(usize, usize, Hsla)> = Vec::new();
+        let mut text_runs: Vec<TextVisual> = Vec::new();
+        let mut bg_current: Option<(usize, usize, Hsla)> = None;
         let mut run: Option<TextRunBuilder> = None;
+
+        let flush_text = |run: &mut Option<TextRunBuilder>, text_runs: &mut Vec<TextVisual>| {
+            if let Some(builder) = run.take() {
+                text_runs.push(TextVisual {
+                    text: SharedString::from(builder.text),
+                    start_col: builder.start_col,
+                    style: builder.style,
+                });
+            }
+        };
+
         for col in 0..cols {
             let cell = &grid[AlacPoint::new(line, Column(col))];
+            let (fg, bg) = self.cell_colors(cell, colors);
+
+            if let Some((start, end, color)) = bg_current.as_mut() {
+                if *color == bg && *end == col {
+                    *end = col + 1;
+                } else {
+                    background_runs.push((*start, *end, *color));
+                    bg_current = Some((col, col + 1, bg));
+                }
+            } else {
+                bg_current = Some((col, col + 1, bg));
+            }
+
             if cell.flags.contains(Flags::WIDE_CHAR_SPACER)
                 || cell.flags.contains(Flags::LEADING_WIDE_CHAR_SPACER)
             {
@@ -535,17 +607,21 @@ impl TerminalRenderer {
             }
             if cell.c == ' ' || cell.c == '\0' {
                 if let Some(text_run) = run.as_mut()
-                    && text_run.style_matches(cell, self, colors)
+                    && text_run.style.fg == fg
+                    && text_run.style.bold == cell.flags.contains(Flags::BOLD)
+                    && text_run.style.italic == cell.flags.contains(Flags::ITALIC)
+                    && text_run.style.underline == cell.flags.intersects(Flags::ALL_UNDERLINES)
+                    && text_run.style.wide == cell.flags.contains(Flags::WIDE_CHAR)
                 {
                     text_run.text.push(' ');
                     text_run.end_col = col + 1;
-                    continue;
+                } else {
+                    flush_text(&mut run, &mut text_runs);
                 }
-                self.flush_run(run.take(), origin, row, window, cx);
                 continue;
             }
 
-            let (mut fg, bg) = self.cell_colors(cell, colors);
+            let mut fg = fg;
             // 关键词上色只覆盖"程序自己没着色"的字符：已经是红字的 ERROR 再压一层
             // 我们的红只是白做功，还会抢掉程序刻意表达的语义。
             if let Some(override_fg) = highlights.get(col).copied().flatten()
@@ -562,14 +638,11 @@ impl TerminalRenderer {
             {
                 fg = bg;
             }
-            let bold = cell.flags.contains(Flags::BOLD);
-            let italic = cell.flags.contains(Flags::ITALIC);
-            let underline = cell.flags.intersects(Flags::ALL_UNDERLINES);
             let style = RunStyle {
                 fg,
-                bold,
-                italic,
-                underline,
+                bold: cell.flags.contains(Flags::BOLD),
+                italic: cell.flags.contains(Flags::ITALIC),
+                underline: cell.flags.intersects(Flags::ALL_UNDERLINES),
                 // 网格已经用 WIDE_CHAR 标记替我们判过宽度（含 wcwidth 的全部边界），
                 // 直接采信标记，比在渲染侧再维护一份宽度表更可靠。
                 wide: cell.flags.contains(Flags::WIDE_CHAR),
@@ -581,8 +654,12 @@ impl TerminalRenderer {
                 || !cell.c.is_ascii();
 
             if single_cell {
-                self.flush_run(run.take(), origin, row, window, cx);
-                self.paint_run_text(&text, col, style, origin, row, window, cx);
+                flush_text(&mut run, &mut text_runs);
+                text_runs.push(TextVisual {
+                    text: SharedString::from(text.as_str()),
+                    start_col: col,
+                    style,
+                });
                 continue;
             }
 
@@ -592,7 +669,7 @@ impl TerminalRenderer {
                     text_run.end_col = col + 1;
                 }
                 _ => {
-                    self.flush_run(run.take(), origin, row, window, cx);
+                    flush_text(&mut run, &mut text_runs);
                     run = Some(TextRunBuilder {
                         text: cell.c.to_string(),
                         start_col: col,
@@ -602,33 +679,31 @@ impl TerminalRenderer {
                 }
             }
         }
-        self.flush_run(run, origin, row, window, cx);
-    }
-
-    fn flush_run(
-        &self,
-        run: Option<TextRunBuilder>,
-        origin: Point<Pixels>,
-        row: usize,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        if let Some(run) = run {
-            self.paint_run_text(&run.text, run.start_col, run.style, origin, row, window, cx);
+        flush_text(&mut run, &mut text_runs);
+        if let Some((start, end, color)) = bg_current {
+            background_runs.push((start, end, color));
+        }
+        RowVisual {
+            background_runs,
+            text_runs,
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// 提交单个文本 run：文本来自行缓存（SharedString 克隆零分配），
+    /// 字形整形依赖 gpui 文本系统的内部缓存按内容命中。
     fn paint_run_text(
         &self,
-        text: &str,
-        start_col: usize,
-        style: RunStyle,
+        visual: &TextVisual,
         origin: Point<Pixels>,
         row: usize,
         window: &mut Window,
         cx: &mut App,
     ) {
+        let TextVisual {
+            text,
+            start_col,
+            style,
+        } = visual;
         let font = self.font_for(
             style.wide,
             if style.bold {
@@ -655,14 +730,14 @@ impl TerminalRenderer {
             strikethrough: None,
         };
         let shaped = window.text_system().shape_line(
-            SharedString::from(text.to_owned()),
+            text.clone(),
             self.font_size_for(style.wide),
             &[text_run],
             None,
         );
         let _ = shaped.paint(
             Point {
-                x: origin.x + self.cell_width * start_col as f32,
+                x: origin.x + self.cell_width * *start_col as f32,
                 y: origin.y + self.cell_height * row as f32,
             },
             self.cell_height,
@@ -756,19 +831,21 @@ impl TerminalRenderer {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn paint_ime(
         &self,
+        input: ImePaintInput<'_>,
         origin: Point<Pixels>,
-        cursor_row: i32,
-        cursor_col: usize,
-        rows: usize,
-        cols: usize,
-        text: &str,
-        marked_range: Option<&Range<usize>>,
         window: &mut Window,
         cx: &mut App,
     ) {
+        let ImePaintInput {
+            cursor_row,
+            cursor_col,
+            rows,
+            cols,
+            text,
+            marked_range,
+        } = input;
         if cursor_row < 0 || cursor_row as usize >= rows || cursor_col >= cols {
             return;
         }
@@ -828,16 +905,6 @@ impl TerminalRenderer {
 ///
 /// 打包成结构体而不是继续平铺：原先网格、列数、颜色表、光标格已经排到 9 个参数，
 /// 再加一份逐列高亮色就会更多，参数顺序也更容易传错。
-struct RowInput<'a> {
-    line: Line,
-    cols: usize,
-    grid: &'a alacritty_terminal::grid::Grid<Cell>,
-    colors: &'a Colors,
-    cursor_cell: Option<(i32, usize)>,
-    /// 每个列上该覆盖的前景色；`None` 表示该列不上色。
-    highlights: &'a [Option<Hsla>],
-}
-
 /// 一行关键词扫描的复用缓冲。
 #[derive(Default)]
 struct RowScratch {
@@ -936,17 +1003,6 @@ struct TextRunBuilder {
     start_col: usize,
     end_col: usize,
     style: RunStyle,
-}
-
-impl TextRunBuilder {
-    fn style_matches(&self, cell: &Cell, renderer: &TerminalRenderer, colors: &Colors) -> bool {
-        let (fg, _) = renderer.cell_colors(cell, colors);
-        self.style.fg == fg
-            && self.style.bold == cell.flags.contains(Flags::BOLD)
-            && self.style.italic == cell.flags.contains(Flags::ITALIC)
-            && self.style.underline == cell.flags.intersects(Flags::ALL_UNDERLINES)
-            && self.style.wide == cell.flags.contains(Flags::WIDE_CHAR)
-    }
 }
 
 /// 双格字号探针用的字符：`中` 在 CJK 字体里是最稳定的全宽字形。

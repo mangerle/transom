@@ -46,6 +46,8 @@ pub(crate) struct LayoutMetrics {
 struct PreparedTerminal {
     /// 本帧可用的检索绘制数据；`None` 表示无检索或快照已失效。
     search: Option<crate::search::SearchPaint>,
+    /// 本帧需要重建行缓存的损伤集合。
+    damage: crate::renderer::DamageInfo,
 }
 
 pub struct TerminalView {
@@ -55,6 +57,8 @@ pub struct TerminalView {
     renderer: Arc<parking_lot::RwLock<TerminalRenderer>>,
     /// 外观变更脏标记：置位后由下一帧 prepaint 持窗口文本系统重建渲染器。
     renderer_dirty: Arc<AtomicBool>,
+    /// 每行绘制产物缓存：脏行重建、帧间复用，见 `renderer::RowVisual`。
+    row_cache: Arc<Mutex<Vec<crate::renderer::RowVisual>>>,
     profile: TerminalProfile,
     interaction: TerminalInteraction,
     focus_handle: FocusHandle,
@@ -215,12 +219,14 @@ impl TerminalView {
             &profile, window, cx,
         )));
         let renderer_dirty = Arc::new(AtomicBool::new(false));
+        let row_cache = Arc::new(Mutex::new(Vec::new()));
 
         Self {
             engine,
             metrics,
             renderer,
             renderer_dirty,
+            row_cache,
             profile,
             interaction,
             focus_handle,
@@ -822,6 +828,7 @@ impl Render for TerminalView {
         let metrics_prepaint = self.metrics.clone();
         let renderer_prepaint = self.renderer.clone();
         let renderer_paint = self.renderer.clone();
+        let row_cache_paint = self.row_cache.clone();
         let renderer_dirty = self.renderer_dirty.clone();
         let control = self.control.clone();
         let profile = self.profile.clone();
@@ -851,16 +858,20 @@ impl Render for TerminalView {
                     move |bounds, window, cx| {
                         // 外观变更（脏标记）在此重建：只有 prepaint 阶段持有
                         // 窗口文本系统，度量（"M"/"中" 整形探测）必须在这里做。
+                        let mut renderer_rebuilt = false;
                         if renderer_dirty.swap(false, Ordering::AcqRel) {
                             *renderer_prepaint.write() =
                                 TerminalRenderer::new(&profile, window, cx);
+                            renderer_rebuilt = true;
                         }
                         let renderer = renderer_prepaint.read();
                         let (cols, rows) = renderer.grid_size(bounds);
                         let size = TerminalSize::new(cols, rows);
                         let mut engine = engine_prepaint.lock();
+                        let mut resized = false;
                         if engine.size() != size {
                             engine.resize(size);
+                            resized = true;
                             // 尺寸同步失败会直接导致网格与 PTY 失配（提示符错位），
                             // 因此不再静默忽略，按警告记录并给出排查方向
                             if control.resize(size) {
@@ -888,6 +899,13 @@ impl Render for TerminalView {
                         } else {
                             None
                         };
+                        // 损伤集合必须在持锁的准备阶段取走并重置：它是"上次取走
+                        // 之后全部变化"的完整窗口。折行重排与外观重建让行号、字体
+                        // 度量整体失效，无论内核报了什么都提升为全量。
+                        let mut damage = engine.take_damage();
+                        if renderer_rebuilt || resized {
+                            damage = crate::renderer::DamageInfo::Full;
+                        }
                         // 刻度带只有在真的画了刻度时才登记靶区，否则会白白吃掉一列点击。
                         let strip = search
                             .as_ref()
@@ -905,7 +923,7 @@ impl Render for TerminalView {
                             search_strip: strip,
                         };
                         *metrics_prepaint.lock() = metrics;
-                        PreparedTerminal { search }
+                        PreparedTerminal { search, damage }
                     },
                     move |bounds, prepared, window, cx| {
                         window.handle_input(
@@ -915,6 +933,7 @@ impl Render for TerminalView {
                         );
                         let engine = engine_paint.lock();
                         let renderer = renderer_paint.read();
+                        let mut row_cache = row_cache_paint.lock();
                         let ime = if ime_text.is_empty() {
                             None
                         } else {
@@ -928,6 +947,8 @@ impl Render for TerminalView {
                                 blink_visible: cursor_blink_on,
                                 search: prepared.search.as_ref(),
                             },
+                            &mut row_cache,
+                            &prepared.damage,
                             window,
                             cx,
                         );

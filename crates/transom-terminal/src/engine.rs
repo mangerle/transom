@@ -1,5 +1,6 @@
 use crate::event::TerminalEventProxy;
 use crate::osc::{OscEvent, OscScanner};
+use crate::renderer::DamageInfo;
 use crate::search::SearchState;
 
 /// 视图来不及取走时允许暂存的 OSC 事件上限。
@@ -8,7 +9,7 @@ use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionRange, SelectionType};
 use alacritty_terminal::term::cell::Cell;
-use alacritty_terminal::term::{Config, Term, TermMode};
+use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{
     CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle, Processor,
 };
@@ -143,6 +144,24 @@ impl TerminalEngine {
         &mut self.term
     }
 
+    /// 取走自上次调用以来的脏行集合，并立即重置内核的损伤记录。
+    ///
+    /// 设计原理（Why）：内核的 damage 跟踪天然覆盖折行重排、滚动（display_offset
+    /// 变化自动全量）、INSERT 模式与光标新旧位置；选区等用户态不包含在内，
+    /// 而本渲染器把选区画成独立覆盖层、不进行缓存，因此恰好不需要它参与。
+    /// 必须在持有引擎锁的渲染准备阶段调用，保证"上次取走之后"的窗口完整。
+    pub(crate) fn take_damage(&mut self) -> DamageInfo {
+        let damage = match self.term.damage() {
+            TermDamage::Full => DamageInfo::Full,
+            // 迭代器只产出已损伤行，且行号已换算为视口坐标（含 display_offset）。
+            TermDamage::Partial(iter) => DamageInfo::Rows(iter.map(|line| line.line).collect()),
+        };
+        // damage() 只报告不清零：Full 标志与行级损伤都会粘滞，
+        // 不立即重置的话脏行跟踪退化为每帧全量，缓存形同虚设。
+        self.term.reset_damage();
+        damage
+    }
+
     pub fn mode(&self) -> TermMode {
         *self.term.mode()
     }
@@ -253,6 +272,31 @@ mod tests {
             TerminalEngine::new(TerminalSize::new(cols, rows), &profile, tx),
             rx,
         )
+    }
+
+    /// 损伤跟踪的取走-重置契约：脏行渲染依赖"取走即重置、新输入必损伤"。
+    #[test]
+    fn take_damage_reports_changes_and_resets() {
+        let (mut engine, _rx) = engine(20, 4);
+        // 初始状态必然全量损伤：首帧必须完整绘制。
+        assert!(matches!(engine.take_damage(), DamageInfo::Full));
+        // 无新输入时只剩光标行损伤（内核恒定标记当前光标）。
+        match engine.take_damage() {
+            DamageInfo::Rows(rows) => {
+                assert!(!rows.is_empty(), "光标行应保持损伤");
+                assert!(rows.len() <= 4, "视口外行号不应出现");
+            }
+            other => panic!("静止网格不应报全量损伤: {other:?}"),
+        }
+        // 新输入必须重新损伤其所在行。
+        engine.process(b"hi");
+        match engine.take_damage() {
+            DamageInfo::Rows(rows) => assert!(rows.contains(&0), "新输入行应损伤: {rows:?}"),
+            DamageInfo::Full => {}
+        }
+        // resize 折行重排后必须回到全量。
+        engine.resize(TerminalSize::new(10, 4));
+        assert!(matches!(engine.take_damage(), DamageInfo::Full));
     }
 
     /// 分隔符设置必须真的改变双击选词边界。
