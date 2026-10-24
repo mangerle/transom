@@ -13,6 +13,9 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
+license = "Apache-2.0"
+authors = ["wangle"]
+repository = "https://github.com/mangerle/transom"
 
 [workspace.dependencies]
 # syntect 特性带来 gpui-component 的语法高亮后端（语法集由 two_face 随编译内置，
@@ -78,3 +81,7 @@ gpui-pre-platform = { opt-level = 3 }
 rustybuzz = { opt-level = 3 }
 taffy = { opt-level = 3 }
 ttf-parser = { opt-level = 3 }
+
+[profile.release]
+strip = "symbols"
+lto = "thin"
