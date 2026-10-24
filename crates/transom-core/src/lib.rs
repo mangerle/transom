@@ -54,8 +54,9 @@ pub use session::{
     SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
 };
 pub use settings::{
-    AppSettings, AppearanceSettings, BellStyle, SavedLayout, SavedTabGroup, SftpSettings,
-    ShortcutSettings, Snippet, SnippetSettings, SplitAxis, UiDensity, UiThemeMode, WindowSettings,
+    AppSettings, AppearanceSettings, BellStyle, PanelSide, SavedLayout, SavedTabGroup,
+    SftpSettings, ShortcutSettings, Snippet, SnippetSettings, SplitAxis, UiDensity, UiThemeMode,
+    WindowSettings,
 };
 pub use sftp::{
     PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation,

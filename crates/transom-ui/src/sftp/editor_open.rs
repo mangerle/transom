@@ -217,13 +217,15 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let language = editor_language_token(&remote_path);
+        // 软换行与行号跟随设置页选择：日志类内容常关行号开换行，
+        // 配置文件则相反，属于高频个性化项。
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
                 .language(language.clone())
-                .line_number(true)
+                .line_number(self.settings.sftp.editor_line_numbers)
                 .folding(true)
                 .searchable(true)
-                .soft_wrap(true)
+                .soft_wrap(self.settings.sftp.editor_soft_wrap)
         });
         // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
         // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。

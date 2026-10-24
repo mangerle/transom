@@ -74,6 +74,27 @@ impl AppShell {
                 AppShell::render_settings_themes,
             ));
 
+        let page_files = SettingPage::new(rust_i18n::t!("settings.tab_files").to_string())
+            .icon(IconName::Folder)
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.editor_group",
+                AppShell::render_settings_editor,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.file_panel_group",
+                AppShell::render_settings_file_panel,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.transfer_group",
+                AppShell::render_settings_transfer,
+            ));
+
         let page_mouse =
             SettingPage::new(rust_i18n::t!("settings.tab_mouse_clipboard").to_string())
                 .icon(IconName::ArrowLeftRight)
@@ -149,6 +170,7 @@ impl AppShell {
             .pages(vec![
                 page_rendering,
                 page_themes,
+                page_files,
                 page_mouse,
                 page_shortcuts,
                 page_tabs,

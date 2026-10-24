@@ -18,6 +18,27 @@ pub enum BellStyle {
 }
 
 /// 窗口与标签页设置
+/// 工具面板（SFTP/转发）停靠在主面板的哪一侧。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PanelSide {
+    /// 主面板右侧（默认）。
+    #[default]
+    Right,
+    /// 主面板左侧，介于侧栏与主面板之间。
+    Left,
+    /// 反序列化兜底：未知值按右侧处理。
+    #[serde(other)]
+    Unknown,
+}
+
+impl PanelSide {
+    /// 是否停靠左侧；兜底值视同右侧。
+    pub fn is_left(self) -> bool {
+        matches!(self, PanelSide::Left)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowSettings {
     /// 是否在标签页上显示关闭按钮
@@ -59,6 +80,9 @@ pub struct WindowSettings {
     /// 上次打开的标签组与分屏布局；优先于扁平的会话列表。
     #[serde(default)]
     pub previous_tab_groups: Vec<SavedTabGroup>,
+    /// 工具面板（SFTP/转发）停靠方向；旧配置缺省按右侧。
+    #[serde(default)]
+    pub sftp_panel_side: PanelSide,
 }
 
 /// 分屏方向，同时用于运行期布局与窗口恢复。
@@ -117,6 +141,7 @@ impl Default for WindowSettings {
             restore_previous_tabs: true,
             previous_tab_sessions: Vec::new(),
             previous_tab_groups: Vec::new(),
+            sftp_panel_side: PanelSide::Right,
         }
     }
 }
@@ -252,6 +277,11 @@ pub struct AppearanceSettings {
     pub ui_theme: String,
     /// 界面密度档位（驱动全局字号与 rem 基准）。
     pub density: UiDensity,
+    /// 界面字体族覆盖；`None` 时跟随主题自带或系统默认字体。
+    ///
+    /// 与字号的分工：字号归密度档（整体缩放），字体族是个体偏好——中文用户
+    /// 换更纱黑体/思源黑体的诉求只有这一条入口能表达。
+    pub ui_font_family: Option<String>,
 }
 
 impl Default for AppearanceSettings {
@@ -260,6 +290,7 @@ impl Default for AppearanceSettings {
             mode: UiThemeMode::System,
             ui_theme: String::new(),
             density: UiDensity::Standard,
+            ui_font_family: None,
         }
     }
 }
@@ -387,6 +418,17 @@ pub struct SftpSettings {
     /// 同时执行的传输任务数上限，默认 3。
     #[serde(default = "default_max_concurrent_transfers")]
     pub max_concurrent_transfers: usize,
+    /// 内置编辑器是否软换行：长行折行显示而不出横向滚动条。
+    #[serde(default = "default_true")]
+    pub editor_soft_wrap: bool,
+    /// 内置编辑器是否显示行号。
+    #[serde(default = "default_true")]
+    pub editor_line_numbers: bool,
+    /// 文件面板的显示排除规则（glob 文本，逐条匹配文件名）。
+    ///
+    /// 与传输过滤共用语法但语义不同：这里只影响面板可见性，不拦截传输。
+    #[serde(default)]
+    pub panel_hidden_patterns: String,
     /// 内置编辑器可打开的单文件字节上限，默认 8 MiB。
     ///
     /// 设计原理（Why）：编辑远程文本走「全量下载到临时文件 → 读入缓冲区 →
@@ -415,6 +457,9 @@ impl Default for SftpSettings {
             max_concurrent_transfers: default_max_concurrent_transfers(),
             edit_max_bytes: default_edit_max_bytes(),
             editor_write_backup: false,
+            editor_soft_wrap: true,
+            editor_line_numbers: true,
+            panel_hidden_patterns: String::new(),
         }
     }
 }
@@ -647,10 +692,12 @@ mod tests {
             mode: UiThemeMode::Dark,
             ui_theme: "Transom Dark".into(),
             density: UiDensity::Roomy,
+            ui_font_family: Some("Sarasa Mono SC".into()),
         };
         let json = serde_json::to_string(&settings).unwrap();
         let decoded: AppearanceSettings = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, settings);
+        assert_eq!(decoded.ui_font_family.as_deref(), Some("Sarasa Mono SC"));
     }
 
     /// 密度档位是全局字号契约：mono 与 sans 的差距必须始终落在 2 至 3px，

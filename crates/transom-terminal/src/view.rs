@@ -288,6 +288,7 @@ impl TerminalView {
         self.profile.font_size = profile.font_size;
         self.profile.line_height = profile.line_height;
         self.profile.highlight = profile.highlight.clone();
+        self.profile.alternate_scroll = profile.alternate_scroll;
         // 终端配色同样全局生效：界面上没有会话级配色入口，保存设置后活窗格
         // 立即换色；运行期程序经 OSC 4/10/11 的动态改色走另一条运行时表，
         // 不受此静态基线覆盖影响。
@@ -778,6 +779,13 @@ impl TerminalView {
             };
             for _ in 0..lines.abs().min(5) {
                 self.send_mouse_event(mode, button, true, false, event.position);
+            }
+        } else if mode.contains(TermMode::ALT_SCREEN) && self.profile.alternate_scroll {
+            // 备屏没有可滚动的历史缓冲（scroll_display 是空操作），滚轮
+            // 转换为方向键发给全屏程序，与主流终端的 alternate scroll 语义一致。
+            let sequence: &[u8] = if lines > 0 { b"\x1b[A" } else { b"\x1b[B" };
+            for _ in 0..lines.abs().min(5) {
+                self.write_input(sequence);
             }
         } else {
             self.engine.lock().scroll_display(Scroll::Delta(lines));

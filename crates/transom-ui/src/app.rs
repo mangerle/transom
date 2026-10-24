@@ -21,8 +21,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use transom_core::{
     AppCommand, AppError, AppSettings, AppearanceSettings, Connection, ConnectionId, FolderId,
-    ForwardId, ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PromptInfo, SecretKind,
-    Session, SessionCatalog, SessionId, SplitId, SystemStats, TabId, UiThemeMode,
+    ForwardId, ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PanelSide, PromptInfo,
+    SecretKind, Session, SessionCatalog, SessionId, SplitId, SystemStats, TabId, UiThemeMode,
 };
 use transom_terminal::TerminalView;
 use zeroize::Zeroizing;
@@ -281,7 +281,14 @@ pub(crate) struct KnownHostsModalState {
 pub(crate) struct SettingsModalState {
     pub(crate) open: bool,
     pub(crate) key_wizard: Option<KeyWizardState>,
+    /// 终端字体族输入框。
     pub(crate) font_family: Entity<InputState>,
+    /// 界面字体族输入框（外观覆盖，留空跟随主题）。
+    pub(crate) ui_font_family: Entity<InputState>,
+    /// 文件面板显示排除规则的输入框。
+    pub(crate) panel_hidden_patterns: Entity<InputState>,
+    /// 并发传输上限的输入框。
+    pub(crate) max_concurrent_transfers: Entity<InputState>,
     pub(crate) cjk_font: Entity<InputState>,
     pub(crate) font_size: Entity<InputState>,
     pub(crate) line_height: Entity<InputState>,
@@ -358,6 +365,9 @@ pub struct AppShell {
     /// 由外壳持有而不是交给 gpui 的 keyed state：状态栏分界线要读同一份侧栏
     /// 宽度，而 keyed state 在沉浸模式切换后可能被回收，侧栏会回到初始宽度。
     pub(crate) workspace_panels: Entity<ResizableState>,
+    /// 停靠左/右各自独立的列宽状态：面板顺序随停靠方向变化，共用一份状态
+    /// 会把按索引记录的尺寸错位到别的面板上，因此两个方向各留一份。
+    pub(crate) workspace_panels_left: Entity<ResizableState>,
     pub(crate) active_tab: Option<TabId>,
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
@@ -417,6 +427,17 @@ impl AppShell {
     /// UI 侧若用阻塞 send，控制器因事件队列满而等待 UI 消费时会形成互等，
     /// 界面线程被冻结。失败不静默：错误进入全局错误栏提示用户。
     /// 返回 `false` 表示命令未入队，调用方可据此做回滚（如撤销标签删除）。
+    /// 设置工具面板（SFTP/转发）停靠方向：切换到对应方向的列宽状态，
+    /// 尺寸互相独立、互不错位。方向变化即时预览，落盘仍由保存承担。
+    pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<Self>) {
+        if self.settings.window.sftp_panel_side == side {
+            return;
+        }
+        self.settings.window.sftp_panel_side = side;
+        std::mem::swap(&mut self.workspace_panels, &mut self.workspace_panels_left);
+        self.persist_layout_settings(cx);
+    }
+
     pub(crate) fn send_command(&mut self, command: AppCommand) -> bool {
         match self.services.command_tx.try_send(command) {
             Ok(()) => true,
@@ -447,8 +468,12 @@ impl AppShell {
         });
         let quick_open_state = cx.new(|cx| CommandState::new(window, cx));
         let workspace_panels = cx.new(|_| ResizableState::default());
+        let workspace_panels_left = cx.new(|_| ResizableState::default());
         // 侧栏拖动与状态栏分界线共享尺寸：状态一通知就重绘外壳，分界线实时跟随。
+        // 两个方向的分组状态各自订阅（未激活方向不会产生通知）。
         cx.observe(&workspace_panels, |_, _, cx| cx.notify())
+            .detach();
+        cx.observe(&workspace_panels_left, |_, _, cx| cx.notify())
             .detach();
         let (catalog, error) = match services.session_store.load() {
             Ok(catalog) => (catalog, None),
@@ -494,6 +519,26 @@ impl AppShell {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("settings.font_family_hint").to_string())
                 .default_value(settings_font_family_val)
+        });
+        let settings_ui_font_val = settings
+            .appearance
+            .ui_font_family
+            .clone()
+            .unwrap_or_default();
+        let settings_ui_font_family = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.ui_font_family_hint").to_string())
+                .default_value(settings_ui_font_val)
+        });
+        let settings_panel_hidden = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.panel_hidden_hint").to_string())
+                .default_value(settings.sftp.panel_hidden_patterns.clone())
+        });
+        let settings_max_concurrent = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("3")
+                .default_value(settings.sftp.max_concurrent_transfers.to_string())
         });
         let settings_cjk_font_val = settings
             .terminal_profile
@@ -549,6 +594,7 @@ impl AppShell {
             groups: Vec::new(),
             pane_split_states: HashMap::new(),
             workspace_panels,
+            workspace_panels_left,
             active_tab: None,
             search,
             form: None,
@@ -567,6 +613,9 @@ impl AppShell {
                 open: false,
                 key_wizard: None,
                 font_family: settings_font_family,
+                ui_font_family: settings_ui_font_family,
+                panel_hidden_patterns: settings_panel_hidden,
+                max_concurrent_transfers: settings_max_concurrent,
                 cjk_font: settings_cjk_font,
                 font_size: settings_font_size,
                 line_height: settings_line_height,

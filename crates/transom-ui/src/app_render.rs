@@ -28,24 +28,16 @@ impl Render for AppShell {
         } else {
             "workspace-panels"
         };
-        let mut resizable_group = h_resizable(resizable_id);
-        if !self.immersive {
-            // 非沉浸分组由外壳持有列宽状态，状态栏才能读到与侧栏一致的分界位置。
-            resizable_group = resizable_group.with_state(&self.workspace_panels);
-            // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
-            // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
-            // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
-            let mut sidebar_panel = resizable_panel()
-                .size(rem_px(size::SIDEBAR_WIDTH, rem))
-                .fixed()
-                .visible(self.sidebar_visible);
-            if self.sidebar_visible {
-                sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
-            }
-            resizable_group = resizable_group.child(sidebar_panel);
+        // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
+        // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
+        // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
+        let mut sidebar_panel = resizable_panel()
+            .size(rem_px(size::SIDEBAR_WIDTH, rem))
+            .fixed()
+            .visible(self.sidebar_visible);
+        if self.sidebar_visible {
+            sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
         }
-        resizable_group =
-            resizable_group.child(resizable_panel().child(self.render_main(window, cx, &p)));
         let show_sftp = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
@@ -95,28 +87,68 @@ impl Render for AppShell {
             - 100.0
             - 8.0;
         let sftp_max_width = available_width.max(sftp_min_width);
-        if show_sftp && !self.immersive {
-            resizable_group = resizable_group.child(
-                resizable_panel()
-                    .size(px(sftp_width.min(sftp_max_width)))
-                    .size_range(px(sftp_min_width)..px(sftp_max_width))
-                    .fixed()
-                    .child(self.render_sftp_panel(window, cx, &p)),
-            );
+        // 两个方向各自持有列宽状态：面板顺序随停靠方向变化，共用一份按索引
+        // 记录的尺寸会把宽度错位到别的面板上。
+        let (side_left, panels_state) = if self.settings.window.sftp_panel_side.is_left() {
+            (true, &self.workspace_panels_left)
+        } else {
+            (false, &self.workspace_panels)
+        };
+        let mut resizable_group = h_resizable(resizable_id).with_state(panels_state);
+        if !self.immersive {
+            resizable_group = resizable_group.child(sidebar_panel);
         }
-        if show_forwards && !self.immersive {
-            resizable_group = resizable_group.child(
-                resizable_panel()
-                    .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
-                    .fixed()
-                    .child(self.render_forward_panel(window, cx, &p)),
-            );
+        if !self.immersive && side_left {
+            // 停靠左：SFTP 与转发整体挪到主面板之前，贴着侧栏。
+            if show_sftp {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(px(sftp_width.min(sftp_max_width)))
+                        .size_range(px(sftp_min_width)..px(sftp_max_width))
+                        .fixed()
+                        .child(self.render_sftp_panel(window, cx, &p)),
+                );
+            }
+            if show_forwards {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
+                        .fixed()
+                        .child(self.render_forward_panel(window, cx, &p)),
+                );
+            }
+        }
+        resizable_group =
+            resizable_group.child(resizable_panel().child(self.render_main(window, cx, &p)));
+        if !self.immersive && !side_left {
+            if show_sftp {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(px(sftp_width.min(sftp_max_width)))
+                        .size_range(px(sftp_min_width)..px(sftp_max_width))
+                        .fixed()
+                        .child(self.render_sftp_panel(window, cx, &p)),
+                );
+            }
+            if show_forwards {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
+                        .fixed()
+                        .child(self.render_forward_panel(window, cx, &p)),
+                );
+            }
         }
 
         let mut main_row = h_flex().flex_1().overflow_hidden();
         if !self.immersive {
-            // 与顶栏、状态栏、活动栏的边框一起围合主内容区，补齐右侧轮廓。
-            main_row = main_row.border_r_1().border_color(p.border);
+            // 与顶栏、状态栏、活动栏的边框一起围合主内容区，补齐右侧轮廓；
+            // 停靠左侧时工具面板贴侧栏，主面板成为最右段，轮廓补在左缘。
+            if self.settings.window.sftp_panel_side.is_left() {
+                main_row = main_row.border_l_1().border_color(p.border);
+            } else {
+                main_row = main_row.border_r_1().border_color(p.border);
+            }
         }
         if let Some(activity_bar) = activity_bar {
             main_row = main_row.child(activity_bar);

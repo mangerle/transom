@@ -79,6 +79,17 @@ impl AppShell {
         self.settings_modal.font_family.update(cx, |input, cx| {
             input.set_value(profile.font_family.unwrap_or_default(), window, cx);
         });
+        self.settings_modal.ui_font_family.update(cx, |input, cx| {
+            input.set_value(
+                self.settings
+                    .appearance
+                    .ui_font_family
+                    .clone()
+                    .unwrap_or_default(),
+                window,
+                cx,
+            );
+        });
         self.settings_modal.cjk_font.update(cx, |input, cx| {
             input.set_value(profile.cjk_font_family.unwrap_or_default(), window, cx);
         });
@@ -162,6 +173,28 @@ impl AppShell {
     }
 
     pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>) {
+        // 界面字体族：留空表示跟随主题。
+        self.settings.appearance.ui_font_family =
+            read_font_family(&self.settings_modal.ui_font_family, cx);
+        // 文件面板显示排除：原样保存（glob 语法与传输过滤一致，非法规则在
+        // 匹配时被静默跳过，不阻断保存）。
+        self.settings.sftp.panel_hidden_patterns = self
+            .settings_modal
+            .panel_hidden_patterns
+            .read(cx)
+            .value()
+            .to_string();
+        if let Ok(max) = self
+            .settings_modal
+            .max_concurrent_transfers
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<usize>()
+            && (1..=16).contains(&max)
+        {
+            self.settings.sftp.max_concurrent_transfers = max;
+        }
         // 外观偏好在弹窗内已即时写入，落盘前归一化兜底值，保证文件可回读。
         self.settings.appearance.normalize();
         self.settings.terminal_profile.font_family =
@@ -261,7 +294,7 @@ impl AppShell {
         }
     }
 
-    /// 字体组：字体族、CJK 字体、字号与行高。
+    /// 字体组：界面字体、终端字体族、CJK 字体、字号与行高。
     pub(crate) fn render_settings_font(
         &mut self,
         p: &Palette,
@@ -269,6 +302,11 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_3()
+            .child(Self::form_field(
+                rust_i18n::t!("settings.ui_font_family").to_string(),
+                self.settings_modal.ui_font_family.clone(),
+                p,
+            ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_family").to_string(),
                 self.settings_modal.font_family.clone(),
@@ -365,6 +403,19 @@ impl AppShell {
                     .checked(self.settings.terminal_profile.bold_is_bright)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.terminal_profile.bold_is_bright = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.alternate_scroll",
+                Some("settings.alternate_scroll_desc"),
+                Switch::new("toggle-alternate-scroll")
+                    .small()
+                    .checked(self.settings.terminal_profile.alternate_scroll)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_profile.alternate_scroll = checked;
                         cx.notify();
                     }))
                     .into_any_element(),

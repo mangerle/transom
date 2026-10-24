@@ -18,7 +18,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Sizable, v_virtual_list};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{RemoteFile, TransferStatus, format_octal_permissions};
+use transom_core::{RemoteFile, TransferFilter, TransferStatus, format_octal_permissions};
 
 impl AppShell {
     pub(crate) fn render_sftp_panel(
@@ -60,11 +60,23 @@ impl AppShell {
             .trim()
             .to_ascii_lowercase();
 
+        // 显示排除：与传输过滤共用 glob 语法，只影响可见性不拦截传输；
+        // 规则非法时静默跳过（与传输过滤的宽容语义一致）。
+        let hidden_matcher =
+            TransferFilter::from_text(&self.settings.sftp.panel_hidden_patterns.clone())
+                .matcher()
+                .ok();
+        let is_hidden = |name: &str| {
+            hidden_matcher
+                .as_ref()
+                .is_some_and(|matcher| matcher.matches(name, false))
+        };
         let remote_entries: Vec<RemoteFile> = panel
             .entries
             .iter()
             .filter(|entry| {
                 (show_hidden || !entry.name.starts_with('.'))
+                    && !is_hidden(&entry.name)
                     && (remote_filter_query.is_empty()
                         || fuzzy_match_name(&entry.name, &remote_filter_query))
             })

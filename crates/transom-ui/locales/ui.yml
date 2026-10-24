@@ -1173,6 +1173,72 @@ settings:
   terminal_theme_note:
     en: Presets below override the theme-following palette; the choice applies to new sessions and, after saving, live panes.
     zh-CN: 下方预设会覆盖"跟随界面主题"的配色；选择应用于新会话，保存后立即作用于已打开的窗格。
+  ui_font_family:
+    en: Interface Font
+    zh-CN: 界面字体
+  ui_font_family_hint:
+    en: Follow theme
+    zh-CN: 跟随主题
+  tab_files:
+    en: Files & Editor
+    zh-CN: 文件与编辑器
+  editor_group:
+    en: Built-in Editor
+    zh-CN: 内置编辑器
+  file_panel_group:
+    en: File Panel
+    zh-CN: 文件面板
+  transfer_group:
+    en: Transfer
+    zh-CN: 传输
+  editor_soft_wrap:
+    en: Soft Wrap
+    zh-CN: 软换行
+  editor_soft_wrap_desc:
+    en: Wrap long lines instead of scrolling horizontally.
+    zh-CN: 长行折行显示，不出横向滚动条；查看日志时更友好。
+  editor_line_numbers:
+    en: Show Line Numbers
+    zh-CN: 显示行号
+  editor_line_numbers_desc:
+    en: Show the line-number gutter in the built-in editor.
+    zh-CN: 内置编辑器左侧显示行号栏。
+  panel_hidden:
+    en: Hidden Patterns
+    zh-CN: 显示排除规则
+  panel_hidden_hint:
+    en: e.g. node_modules, *.log
+    zh-CN: 例如 node_modules、*.log
+  panel_hidden_note:
+    en: One glob per line, matched against file names; only affects panel visibility, never transfers.
+    zh-CN: 每行一条 glob 规则，按文件名匹配；只影响面板可见性，不会拦截传输任务。
+  max_concurrent_transfers:
+    en: Concurrent Transfers
+    zh-CN: 并发传输上限
+  verify_after_transfer:
+    en: Verify After Transfer
+    zh-CN: 传输后校验
+  verify_after_transfer_desc:
+    en: Compare SHA256 checksums on both ends after each transfer.
+    zh-CN: 每次传输完成后比对两端 SHA256，代价是额外的读盘耗时。
+  alternate_scroll:
+    en: Alternate Screen Scrolling
+    zh-CN: 备屏滚轮翻页
+  alternate_scroll_desc:
+    en: In full-screen programs (vim, htop), translate the wheel into arrow keys.
+    zh-CN: 在 vim、htop 等全屏程序里把滚轮转换为方向键发送给程序。
+  sftp_panel_side:
+    en: Panel Dock Side
+    zh-CN: 工具面板停靠方向
+  sftp_panel_side_desc:
+    en: Where the SFTP and forwarding panels dock relative to the main pane.
+    zh-CN: SFTP 与转发面板停靠在主面板的左侧或右侧；两个方向的列宽各自记忆。
+  panel_side_left:
+    en: Left
+    zh-CN: 左侧
+  panel_side_right:
+    en: Right
+    zh-CN: 右侧
   theme_preview:
     en: Terminal Preview
     zh-CN: 终端色彩效果预览

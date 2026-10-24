@@ -122,6 +122,11 @@ pub(crate) fn apply_appearance(appearance: &AppearanceSettings, cx: &mut App) {
         theme.dark_theme = resolved.dark;
         theme.font_size = px(density.font_size());
         theme.mono_font_size = px(density.mono_font_size());
+        // 字体族个体偏好覆盖主题自带字体；None 恢复主题值。族变化会触发
+        // edit() 内部的系统字体重解析（edit 检测 font_family 变化）。
+        if let Some(family) = appearance.ui_font_family.as_deref() {
+            theme.font_family = family.into();
+        }
     });
 }
 

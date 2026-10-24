@@ -12,7 +12,9 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
-use transom_core::{FOLLOW_UI_THEME, PaletteMode, UiDensity, UiThemeMode, preset_themes};
+use transom_core::{
+    FOLLOW_UI_THEME, PaletteMode, PanelSide, UiDensity, UiThemeMode, preset_themes,
+};
 
 impl AppShell {
     pub(crate) fn render_settings_themes(
@@ -486,6 +488,94 @@ fn theme_color_dots(config: &ThemeConfig) -> AnyElement {
 }
 
 impl AppShell {
+    /// 内置编辑器组：软换行与行号显示。
+    pub(crate) fn render_settings_editor(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.editor_soft_wrap",
+                Some("settings.editor_soft_wrap_desc"),
+                Switch::new("toggle-editor-soft-wrap")
+                    .small()
+                    .checked(self.settings.sftp.editor_soft_wrap)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.sftp.editor_soft_wrap = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.editor_line_numbers",
+                Some("settings.editor_line_numbers_desc"),
+                Switch::new("toggle-editor-line-numbers")
+                    .small()
+                    .checked(self.settings.sftp.editor_line_numbers)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.sftp.editor_line_numbers = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
+    /// 文件面板组：显示排除规则（只影响可见性，不拦截传输）。
+    pub(crate) fn render_settings_file_panel(
+        &mut self,
+        p: &Palette,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::form_field(
+                rust_i18n::t!("settings.panel_hidden").to_string(),
+                self.settings_modal.panel_hidden_patterns.clone(),
+                p,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.panel_hidden_note").to_string()),
+            )
+            .into_any_element()
+    }
+
+    /// 传输组：并发上限与完成后校验。
+    pub(crate) fn render_settings_transfer(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::form_field(
+                rust_i18n::t!("settings.max_concurrent_transfers").to_string(),
+                self.settings_modal.max_concurrent_transfers.clone(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.verify_after_transfer",
+                Some("settings.verify_after_transfer_desc"),
+                Switch::new("toggle-verify-after-transfer")
+                    .small()
+                    .checked(self.settings.sftp.verify_after_transfer)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.sftp.verify_after_transfer = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
     /// 鼠标组：右键动作与中键粘贴。
     pub(crate) fn render_settings_mouse(
         &mut self,
@@ -648,7 +738,7 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 窗口组：窗口记忆与会话恢复。
+    /// 窗口组：停靠方向、窗口记忆与会话恢复。
     pub(crate) fn render_settings_window(
         &mut self,
         p: &Palette,
@@ -656,6 +746,38 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
+            .child(Self::setting_row(
+                "settings.sftp_panel_side",
+                Some("settings.sftp_panel_side_desc"),
+                h_flex()
+                    .gap_1()
+                    .children(
+                        [
+                            (
+                                "panel-side-left",
+                                "settings.panel_side_left",
+                                PanelSide::Left,
+                            ),
+                            (
+                                "panel-side-right",
+                                "settings.panel_side_right",
+                                PanelSide::Right,
+                            ),
+                        ]
+                        .into_iter()
+                        .map(|(id, key, side)| {
+                            Button::new(id)
+                                .small()
+                                .label(rust_i18n::t!(key).to_string())
+                                .selected(self.settings.window.sftp_panel_side == side)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.set_sftp_panel_side(side, cx);
+                                }))
+                        }),
+                    )
+                    .into_any_element(),
+                p,
+            ))
             .child(Self::setting_row(
                 "settings.remember_window_bounds",
                 Some("settings.remember_window_bounds_desc"),

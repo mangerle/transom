@@ -194,6 +194,11 @@ pub struct TerminalProfile {
     pub bold_is_bright: bool,
     #[serde(default = "default_true")]
     pub scroll_on_input: bool,
+    /// 备屏（vim/htop 等）下的滚轮语义：开启时滚轮转换为方向键发送给程序
+    /// （Zed 的 alternate_scroll 语义）；关闭时滚轮在备屏下不起作用。
+    /// 鼠标上报模式（MOUSE_MODE）不受此设置影响——那时滚轮本身就是事件。
+    #[serde(default = "default_true")]
+    pub alternate_scroll: bool,
     /// 关键词规则集自动高亮。
     #[serde(default)]
     pub highlight: TerminalHighlight,
@@ -215,6 +220,7 @@ impl Default for TerminalProfile {
             word_separators: default_word_separators(),
             bold_is_bright: true,
             scroll_on_input: true,
+            alternate_scroll: true,
             theme_name: default_theme_name(),
             highlight: TerminalHighlight::default(),
             palette: TerminalPalette::default(),
