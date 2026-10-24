@@ -8,9 +8,10 @@ use crate::sftp::PendingEditorClose;
 use gpui_kit::component::set_locale;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, Connection, ErrorCode, GroupId, SavedTabGroup, SecretKey, SecretKind, Session,
-    SessionId, TabId,
+    AppCommand, AppError, Connection, ErrorCode, GroupId, SavedTabGroup, SecretKey, SecretKind,
+    SecretStore, Session, SessionId, TabId,
 };
+use zeroize::Zeroizing;
 
 impl AppShell {
     /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
@@ -213,25 +214,47 @@ impl AppShell {
             return;
         };
         let session_id = base.id;
-        let password_field = form.password.clone();
-        let passphrase_field = form.passphrase.clone();
-        for (kind, field, shown) in [
-            (SecretKind::Password, password_field, form.save_password),
-            (
-                SecretKind::KeyPassphrase,
-                passphrase_field,
-                form.save_passphrase,
-            ),
-        ] {
-            if !shown {
-                continue;
-            }
-            let key = SecretKey::new(session_id, kind);
-            if let Ok(Some(secret)) = self.services.secret_store.get(&key) {
-                field.update(cx, |state, cx| state.set_value(secret.as_str(), window, cx));
-            }
+        // 只回填勾选了保存的凭据类型；输入框先按空值打开，读到后异步回填
+        let mut fields = Vec::new();
+        if form.save_password {
+            fields.push((SecretKind::Password, form.password.clone()));
         }
-        cx.notify();
+        if form.save_passphrase {
+            fields.push((SecretKind::KeyPassphrase, form.passphrase.clone()));
+        }
+        if fields.is_empty() {
+            return;
+        }
+        // 钥匙串走 D-Bus 可能挂起秒级：后台读取，完成后经窗口上下文回填输入框
+        let secret_store = self.services.secret_store.clone();
+        let executor = cx.background_executor().clone();
+        let read_fields = fields.clone();
+        window
+            .spawn(cx, async move |cx| {
+                let secrets = executor
+                    .spawn(async move {
+                        read_fields
+                            .iter()
+                            .map(|(kind, _)| {
+                                secret_store
+                                    .get(&SecretKey::new(session_id, *kind))
+                                    .ok()
+                                    .flatten()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .await;
+                let _ = cx.update(|window, cx| {
+                    for ((_, field), secret) in fields.into_iter().zip(secrets) {
+                        if let Some(secret) = secret {
+                            field.update(cx, |state, cx| {
+                                state.set_value(secret.as_str(), window, cx);
+                            });
+                        }
+                    }
+                });
+            })
+            .detach();
     }
 
     /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
@@ -265,47 +288,43 @@ impl AppShell {
         let passphrase_key = SecretKey::new(built.session.id, SecretKind::KeyPassphrase);
         // 勾选保存但把内容清空，语义就是"删掉这条凭据"：输入框现在是已存口令的
         // 编辑视图，清空必须能生效，否则用户的删除意图会被无声忽略。
+        // 与登录密码同规则：清空已回填的口令即表示删除。
+        let mut secret_writes = Vec::new();
         if save_password {
-            if let Some(password) = &built.password
-                && let Err(error) = self
-                    .services
-                    .secret_store
-                    .set(&password_key, password.as_str())
-            {
-                self.error = Some(localized_error(&error));
+            match &built.password {
+                Some(password) => {
+                    secret_writes.push(SecretWrite::Set(password_key, password.clone()))
+                }
+                None => secret_writes.push(SecretWrite::Delete(password_key)),
             }
-            if built.password.is_none()
-                && let Err(error) = self.services.secret_store.delete(&password_key)
-                && error.code != ErrorCode::SecretStoreUnavailable
-            {
-                self.error = Some(localized_error(&error));
-            }
-        } else if let Err(error) = self.services.secret_store.delete(&password_key)
-            && error.code != ErrorCode::SecretStoreUnavailable
-        {
-            self.error = Some(localized_error(&error));
+        } else {
+            secret_writes.push(SecretWrite::Delete(password_key));
         }
         if save_passphrase {
-            if let Some(passphrase) = &built.key_passphrase
-                && let Err(error) = self
-                    .services
-                    .secret_store
-                    .set(&passphrase_key, passphrase.as_str())
-            {
-                self.error = Some(localized_error(&error));
+            match &built.key_passphrase {
+                Some(passphrase) => {
+                    secret_writes.push(SecretWrite::Set(passphrase_key, passphrase.clone()))
+                }
+                None => secret_writes.push(SecretWrite::Delete(passphrase_key)),
             }
-            // 与登录密码同规则：清空已回填的口令即表示删除。
-            if built.key_passphrase.is_none()
-                && let Err(error) = self.services.secret_store.delete(&passphrase_key)
-                && error.code != ErrorCode::SecretStoreUnavailable
-            {
-                self.error = Some(localized_error(&error));
-            }
-        } else if let Err(error) = self.services.secret_store.delete(&passphrase_key)
-            && error.code != ErrorCode::SecretStoreUnavailable
-        {
-            self.error = Some(localized_error(&error));
+        } else {
+            secret_writes.push(SecretWrite::Delete(passphrase_key));
         }
+        // 钥匙串写入/删除走 D-Bus 可能挂起秒级：放后台执行，失败结果异步回填错误栏
+        let secret_store = self.services.secret_store.clone();
+        cx.spawn(async move |this, cx| {
+            let error = cx
+                .background_executor()
+                .spawn(async move { apply_secret_writes(secret_store.as_ref(), &secret_writes) })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if let Some(error) = error {
+                    this.error = Some(localized_error(&error));
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
 
         let session_id = built.session.id;
         if editing {
@@ -681,6 +700,32 @@ fn duplicate_base(name: &str) -> String {
 /// 去掉本地化的"副本"后缀；不是我们生成的后缀就返回 None，不猜测用户命名。
 fn strip_copy_suffix<'a>(text: &'a str, suffix: &str) -> Option<&'a str> {
     text.strip_suffix(suffix).map(str::trim_end)
+}
+
+/// 会话表单保存时需要执行的钥匙串写操作。
+enum SecretWrite {
+    Set(SecretKey, Zeroizing<String>),
+    Delete(SecretKey),
+}
+
+/// 顺序执行钥匙串写操作，返回最后一个错误（与此前同步逐个覆盖错误栏的次序一致）。
+/// 删除操作的"钥匙串不可用"按既有约定视为成功，不产生错误。
+/// 阻塞函数（走 D-Bus），仅允许在后台执行器线程池上调用。
+fn apply_secret_writes(secret_store: &dyn SecretStore, writes: &[SecretWrite]) -> Option<AppError> {
+    let mut last_error = None;
+    for write in writes {
+        let result = match write {
+            SecretWrite::Set(key, value) => secret_store.set(key, value.as_str()),
+            SecretWrite::Delete(key) => match secret_store.delete(key) {
+                Err(error) if error.code == ErrorCode::SecretStoreUnavailable => Ok(()),
+                other => other,
+            },
+        };
+        if let Err(error) = result {
+            last_error = Some(error);
+        }
+    }
+    last_error
 }
 
 #[cfg(test)]

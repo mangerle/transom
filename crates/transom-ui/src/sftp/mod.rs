@@ -8,6 +8,7 @@ mod editor_panel;
 mod editor_view;
 mod file_ops;
 mod filter;
+mod local_async;
 mod local_only;
 mod local_pane_view;
 mod modals;

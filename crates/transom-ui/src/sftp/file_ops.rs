@@ -1,7 +1,4 @@
-use super::{
-    SftpActivePane, SftpInputModalState, SftpInputTarget, join_remote, list_local_dir,
-    parent_remote,
-};
+use super::{SftpActivePane, SftpInputModalState, SftpInputTarget, join_remote, parent_remote};
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::sftp_text_input;
@@ -315,8 +312,8 @@ impl AppShell {
                     if let Err(err) = std::fs::create_dir_all(&new_dir) {
                         panel.local_error = Some(format!("新建本地文件夹失败: {err}"));
                     } else {
-                        panel.local_entries = list_local_dir(&panel.local_path).unwrap_or_default();
                         panel.status = Some(format!("已成功创建本地文件夹: {name}"));
+                        self.spawn_local_dir_refresh(tab_id, None, cx);
                     }
                     cx.notify();
                 }
@@ -333,10 +330,8 @@ impl AppShell {
                         if let Err(err) = std::fs::rename(&old_path, &new_path) {
                             panel.local_error = Some(format!("重命名本地文件失败: {err}"));
                         } else {
-                            panel.local_entries =
-                                list_local_dir(&panel.local_path).unwrap_or_default();
-                            panel.select_local(new_path);
                             panel.status = Some(format!("已重命名为: {name}"));
+                            self.spawn_local_dir_refresh(tab_id, Some(new_path), cx);
                         }
                     }
                     cx.notify();
@@ -381,59 +376,14 @@ impl AppShell {
         let result = Err("当前平台暂不支持创建本地软链接".to_string());
         match result {
             Ok(()) => {
-                panel.local_entries = list_local_dir(&panel.local_path).unwrap_or_default();
-                panel.select_local(link_path);
                 panel.status = Some(format!("已创建本地软链接: {name}"));
+                self.spawn_local_dir_refresh(tab_id, Some(link_path), cx);
             }
             Err(err) => {
                 panel.local_error = Some(format!("创建本地软链接失败: {err}"));
             }
         }
         cx.notify();
-    }
-
-    /// 批量删除本地选中项；符号链接只删除链接本身。
-    pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.dismiss_sftp_hover_preview(tab_id, cx);
-        if let Some(panel) = self
-            .tabs
-            .iter_mut()
-            .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_mut())
-        {
-            let paths = panel.selected_local_paths();
-            if paths.is_empty() {
-                panel.local_error = Some("请先选择一个本地项目".to_string());
-                cx.notify();
-                return;
-            }
-            let mut deleted = 0usize;
-            let mut failed = 0usize;
-            for path in &paths {
-                let result = match std::fs::symlink_metadata(path) {
-                    Ok(metadata) if metadata.is_dir() => std::fs::remove_dir_all(path),
-                    _ => std::fs::remove_file(path),
-                };
-                match result {
-                    Ok(()) => deleted = deleted.saturating_add(1),
-                    Err(_) => failed = failed.saturating_add(1),
-                }
-            }
-            panel.local_entries = list_local_dir(&panel.local_path).unwrap_or_default();
-            let valid_paths = panel
-                .local_entries
-                .iter()
-                .map(|entry| entry.path.clone())
-                .collect();
-            panel.sync_local_selection(&valid_paths);
-            if failed > 0 {
-                panel.local_error =
-                    Some(format!("已删除 {deleted} 个本地项目，{failed} 个删除失败"));
-            } else {
-                panel.status = Some(format!("已删除 {deleted} 个本地项目"));
-            }
-            cx.notify();
-        }
     }
 }
 

@@ -5,7 +5,7 @@
 //! 过滤和快捷键仍走现有本地实现，行为与 SFTP 左栏一致。
 
 use super::local_pane_view::SftpLocalPaneProps;
-use super::{LocalQuickPaths, SftpActivePane, SftpPanelState, fuzzy_match_name, list_local_dir};
+use super::{LocalQuickPaths, SftpActivePane, SftpPanelState, fuzzy_match_name};
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::{Palette, sftp_text_input};
@@ -34,10 +34,8 @@ impl AppShell {
             .clone()
             .or_else(|| quick_paths.home.clone())
             .unwrap_or_else(|| PathBuf::from("."));
-        let (local_entries, local_error) = match list_local_dir(&local_path) {
-            Ok(entries) => (entries, None),
-            Err(error) => (Vec::new(), Some(format!("读取本地目录失败: {error}"))),
-        };
+        let local_entries = Vec::new();
+        let local_error = None;
 
         let path_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.path").as_ref());
         let name_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref());
@@ -101,6 +99,8 @@ impl AppShell {
             hover_preview: None,
             _subscriptions: vec![local_enter_sub],
         });
+        // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
+        self.spawn_local_dir_refresh(tab_id, None, cx);
         cx.notify();
     }
 

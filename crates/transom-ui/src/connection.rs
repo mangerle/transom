@@ -11,10 +11,52 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{
     AppCommand, AuthMethod, Connection, ConnectionId, ConnectionSecrets, ErrorCode,
-    LocalConnection, PromptKind, SecretKey, SecretKind, Session, SessionId, TabId, TerminalSize,
-    parse_ssh_config,
+    LocalConnection, PromptKind, SecretKey, SecretKind, SecretStore, Session, SessionId, TabId,
+    TerminalSize, parse_ssh_config,
 };
 use zeroize::Zeroizing;
+
+/// 按认证方式收集钥匙串中已保存的连接凭据。
+///
+/// 阻塞函数（走 D-Bus Secret Service，可能挂起秒级），仅允许在后台执行器
+/// 线程池上调用。读取失败不阻断连接：返回错误文本交给界面提示，凭据缺失
+/// 时认证阶段会改为向用户索取。
+fn collect_connection_secrets(
+    secret_store: &dyn SecretStore,
+    session: &Session,
+) -> (ConnectionSecrets, Option<String>) {
+    let mut secrets = ConnectionSecrets::default();
+    let mut error = None;
+    let Connection::Ssh(ssh) = &session.connection else {
+        return (secrets, error);
+    };
+    match &ssh.auth {
+        AuthMethod::Password { .. } => {
+            let key = SecretKey::new(session.id, SecretKind::Password);
+            match secret_store.get(&key) {
+                Ok(Some(secret)) => secrets.password = Some(secret),
+                Ok(None) => {}
+                // 钥匙串不可用属于可恢复异常：照常发起连接，改为在认证阶段询问用户。
+                Err(err) => error = Some(localized_error(&err)),
+            }
+        }
+        AuthMethod::PrivateKey {
+            save_passphrase, ..
+        } => {
+            if *save_passphrase {
+                let key = SecretKey::new(session.id, SecretKind::KeyPassphrase);
+                match secret_store.get(&key) {
+                    Ok(Some(secret)) => secrets.key_passphrase = Some(secret),
+                    Ok(None) => {}
+                    Err(err) => error = Some(localized_error(&err)),
+                }
+            }
+        }
+        AuthMethod::Agent => {}
+        _ => {}
+    }
+    (secrets, error)
+}
 
 impl AppShell {
     pub(crate) fn on_new_local_terminal(
@@ -157,44 +199,33 @@ impl AppShell {
             // 旧连接的初始化命令队列随重连一并取消。
             tab._startup_task = None;
         }
-        // 凭据只负责"有就带上"：缺失不在这里拦截，认证阶段由 net 层按需向界面索取。
-        let mut secrets = ConnectionSecrets::default();
-
-        match &session.connection {
-            Connection::Ssh(ssh) => match &ssh.auth {
-                AuthMethod::Password { .. } => {
-                    let key = SecretKey::new(session.id, SecretKind::Password);
-                    match self.services.secret_store.get(&key) {
-                        Ok(Some(secret)) => secrets.password = Some(secret),
-                        Ok(None) => {}
-                        // 钥匙串不可用属于可恢复异常：照常发起连接，改为在认证阶段询问用户。
-                        Err(error) => self.error = Some(localized_error(&error)),
-                    }
-                }
-                AuthMethod::PrivateKey {
-                    save_passphrase, ..
-                } => {
-                    if *save_passphrase {
-                        let key = SecretKey::new(session.id, SecretKind::KeyPassphrase);
-                        match self.services.secret_store.get(&key) {
-                            Ok(Some(secret)) => secrets.key_passphrase = Some(secret),
-                            Ok(None) => {}
-                            Err(error) => self.error = Some(localized_error(&error)),
-                        }
-                    }
-                }
-                AuthMethod::Agent => {}
-                _ => {}
-            },
-            Connection::Local(_) | Connection::Serial(_) => {}
-            _ => {
-                self.error = Some(rust_i18n::t!("error.configuration").to_string());
-                return;
-            }
+        if !matches!(
+            session.connection,
+            Connection::Ssh(_) | Connection::Local(_) | Connection::Serial(_)
+        ) {
+            self.error = Some(rust_i18n::t!("error.configuration").to_string());
+            return;
         }
 
-        self.send_connect(tab_id, connection_id, session, secrets, cx);
-        cx.notify();
+        // 凭据只负责"有就带上"：缺失不在这里拦截，认证阶段由 net 层按需向界面索取。
+        // 钥匙串走 D-Bus 可能挂起秒级：放到后台线程读取，避免冻结 UI。
+        let secret_store = self.services.secret_store.clone();
+        let load_session = session.clone();
+        cx.spawn(async move |this, cx| {
+            let (secrets, error) = cx
+                .background_executor()
+                .spawn(
+                    async move { collect_connection_secrets(secret_store.as_ref(), &load_session) },
+                )
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if let Some(error) = error {
+                    this.error = Some(error);
+                }
+                this.send_connect(tab_id, connection_id, session, secrets, cx);
+            });
+        })
+        .detach();
     }
 
     pub(crate) fn send_connect(
@@ -254,6 +285,7 @@ impl AppShell {
         &mut self,
         session_id: SessionId,
         connection_id: ConnectionId,
+        cx: &mut Context<Self>,
     ) {
         let matched = self.pending_credential.as_ref().is_some_and(|pending| {
             pending.session_id == session_id && pending.connection_id == connection_id
@@ -265,12 +297,28 @@ impl AppShell {
             return;
         };
         let key = SecretKey::new(pending.session_id, pending.kind);
-        if let Err(error) = self.services.secret_store.set(&key, &pending.value)
-            && error.code != ErrorCode::SecretStoreUnavailable
-        {
-            self.error = Some(localized_error(&error));
-        }
+        // 目录上的保存标记是纯内存更新，立即生效；钥匙串写入走 D-Bus 可能挂起
+        // 秒级，放后台执行，避免连接成功的瞬间冻结界面。
         self.mark_credential_saved(pending.session_id);
+        let secret_store = self.services.secret_store.clone();
+        cx.spawn(async move |this, cx| {
+            let error = cx
+                .background_executor()
+                .spawn(async move {
+                    secret_store
+                        .set(&key, pending.value.as_str())
+                        .err()
+                        .filter(|error| error.code != ErrorCode::SecretStoreUnavailable)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if let Some(error) = error {
+                    this.error = Some(localized_error(&error));
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// 连接失败时丢弃待保存凭据，避免这次没通过的口令被下一条连接写入。

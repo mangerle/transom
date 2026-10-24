@@ -83,7 +83,7 @@ impl AppShell {
                     self.groups[group_index].active_pane = tab_id;
                 }
                 // 认证已确定通过，此刻才允许把用户勾选保存的凭据写入钥匙串。
-                self.flush_pending_credential(session_id, connection_id);
+                self.flush_pending_credential(session_id, connection_id, cx);
                 window.focus(&focus_handle, cx);
                 self.schedule_startup_commands(tab_id, connection_id, window, cx);
                 self.auto_start_forwards(tab_id, connection_id, session_id, cx);

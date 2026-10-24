@@ -1,8 +1,7 @@
 //! SFTP 双栏目录导航、路径跳转、终端联动与过滤控制方法。
 
 use super::{
-    LocalQuickPaths, SftpActivePane, SftpPanelState, extract_candidate_path, list_local_dir,
-    parent_remote,
+    LocalQuickPaths, SftpActivePane, SftpPanelState, extract_candidate_path, parent_remote,
 };
 use crate::app::{AppShell, TabStatus};
 use crate::keymap;
@@ -73,7 +72,6 @@ impl AppShell {
             .clone()
             .or_else(|| quick_paths.home.clone())
             .unwrap_or_else(|| PathBuf::from("."));
-        let local_entries = list_local_dir(&local_path).unwrap_or_default();
         let initial_remote_path =
             extract_candidate_path(&self.tabs[index].title).unwrap_or_else(|| ".".to_string());
         let path_input = sftp_text_input(
@@ -122,7 +120,7 @@ impl AppShell {
             local_path,
             local_path_input,
             local_filter_input,
-            local_entries,
+            local_entries: Vec::new(),
             local_quick_paths: quick_paths,
             local_only: false,
             local_selected: None,
@@ -152,6 +150,8 @@ impl AppShell {
             hover_preview: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         });
+        // 本地栏初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
+        self.spawn_local_dir_refresh(tab_id, None, cx);
         self.request_sftp_list(tab_id, initial_remote_path, cx);
     }
 
@@ -328,7 +328,8 @@ impl AppShell {
             return;
         };
         panel.local_path = target.clone();
-        panel.local_entries = list_local_dir(&target).unwrap_or_default();
+        // 先清空旧目录内容给出即时反馈，实际条目由后台刷新回填
+        panel.local_entries = Vec::new();
         panel.clear_local_selection();
         panel.local_error = None;
         let input = panel.local_path_input.clone();
@@ -336,6 +337,7 @@ impl AppShell {
             state.set_value(target.display().to_string(), window, cx);
         });
         cx.notify();
+        self.spawn_local_dir_refresh(tab_id, None, cx);
     }
 
     pub(crate) fn sftp_local_navigate(
@@ -398,19 +400,7 @@ impl AppShell {
 
     pub(crate) fn sftp_local_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        if let Some(panel) = self
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
-        {
-            let entries = list_local_dir(&panel.local_path).unwrap_or_default();
-            let valid_paths = entries.iter().map(|entry| entry.path.clone()).collect();
-            panel.local_entries = entries;
-            panel.sync_local_selection(&valid_paths);
-            panel.local_error = None;
-            cx.notify();
-        }
+        self.spawn_local_dir_refresh(tab_id, None, cx);
     }
 
     pub(crate) fn sftp_local_enter_path(
