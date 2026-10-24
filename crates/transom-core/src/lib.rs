@@ -10,6 +10,7 @@ mod highlight;
 pub mod ids;
 pub mod keys;
 pub mod known_hosts;
+pub mod layout;
 pub mod prompt;
 pub mod secrets;
 pub mod serial;
@@ -43,6 +44,7 @@ pub use ids::{
 };
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
+pub use layout::{ActivityBarLayout, ActivityItemId};
 pub use prompt::{PromptInfo, PromptKind};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
 pub use serial::{SerialPortDescriptor, SerialPortProvider};

@@ -1,18 +1,18 @@
-//! 偏好设置中心弹窗与通用/渲染/快捷键配置页模块。
+//! 偏好设置中心的动作入口与通用/渲染/快捷键配置页模块。
 
 mod general_page;
+mod layout_page;
+mod modal;
 mod pages;
 mod shortcuts_page;
 
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
-use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Settings};
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{TerminalCursorShape, TerminalHighlight};
 use transom_terminal::TerminalView;
@@ -143,194 +143,6 @@ impl AppShell {
         for terminal in terminals {
             terminal.update(cx, |view, cx| view.apply_appearance(&profile, cx));
         }
-    }
-
-    pub(crate) fn render_settings_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let app_entity = cx.entity().clone();
-
-        let page_rendering = SettingPage::new(rust_i18n::t!("settings.tab_rendering").to_string())
-            .icon(IconName::Terminal)
-            .group(
-                SettingGroup::new()
-                    .title(rust_i18n::t!("settings.appearance").to_string())
-                    .item(SettingItem::render({
-                        let app = app_entity.clone();
-                        let p = *p;
-                        move |_options, _window, cx| {
-                            app.update(cx, |this, cx| this.render_settings_rendering(&p, cx))
-                        }
-                    })),
-            );
-
-        let page_themes = SettingPage::new(rust_i18n::t!("settings.tab_themes").to_string())
-            .icon(IconName::Server)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = *p;
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_themes(&p, cx))
-                }
-            })));
-
-        let page_mouse =
-            SettingPage::new(rust_i18n::t!("settings.tab_mouse_clipboard").to_string())
-                .icon(IconName::ArrowLeftRight)
-                .group(SettingGroup::new().item(SettingItem::render({
-                    let app = app_entity.clone();
-                    let p = *p;
-                    move |_options, _window, cx| {
-                        app.update(cx, |this, cx| this.render_settings_mouse_clipboard(&p, cx))
-                    }
-                })));
-
-        let page_shortcuts = SettingPage::new(rust_i18n::t!("settings.tab_shortcuts").to_string())
-            .icon(IconName::Search)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = *p;
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_shortcuts(&p, cx))
-                }
-            })));
-
-        let page_tabs = SettingPage::new(rust_i18n::t!("settings.tab_tabs_window").to_string())
-            .icon(IconName::PanelLeft)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = *p;
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_tabs_window(&p, cx))
-                }
-            })));
-
-        let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
-            .icon(IconName::Globe)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = *p;
-                move |_options, window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_general(window, &p, cx))
-                }
-            })));
-
-        let settings_component = Settings::new("app-settings")
-            .sidebar_width(px(220.0))
-            .pages(vec![
-                page_rendering,
-                page_themes,
-                page_mouse,
-                page_shortcuts,
-                page_tabs,
-                page_general,
-            ]);
-
-        let panel = v_flex()
-            .w(px(880.0))
-            .h(px(640.0))
-            .bg(p.popover)
-            .border_1()
-            .border_color(p.border)
-            .rounded_lg()
-            .shadow_lg()
-            .overflow_hidden()
-            .on_mouse_down(MouseButton::Left, |_, _, _| {})
-            .child(
-                h_flex()
-                    .w_full()
-                    .px_5()
-                    .py_3()
-                    .justify_between()
-                    .items_center()
-                    .border_b_1()
-                    .border_color(p.border)
-                    .bg(p.title_bar)
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(
-                                Icon::new(IconName::Settings)
-                                    .size_4()
-                                    .text_color(p.sidebar_accent_foreground),
-                            )
-                            .child(
-                                div()
-                                    .text_base()
-                                    .font_weight(FontWeight::BOLD)
-                                    .child(rust_i18n::t!("settings.title").to_string()),
-                            ),
-                    )
-                    .child(
-                        Button::new("close-settings")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::X)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.show_settings_modal = false;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .overflow_hidden()
-                    .child(settings_component),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .px_5()
-                    .py_3()
-                    .justify_between()
-                    .items_center()
-                    .border_t_1()
-                    .border_color(p.border)
-                    .bg(p.status_bar)
-                    .child(
-                        h_flex().gap_2().items_center().child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(format!(
-                                    "{}: {}",
-                                    rust_i18n::t!("settings.current_theme"),
-                                    self.settings.terminal_profile.theme_name
-                                )),
-                        ),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("cancel-settings")
-                                    .ghost()
-                                    .small()
-                                    .label(rust_i18n::t!("common.cancel").to_string())
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.show_settings_modal = false;
-                                        cx.notify();
-                                    })),
-                            )
-                            .child(
-                                Button::new("save-settings")
-                                    .primary()
-                                    .small()
-                                    .label(rust_i18n::t!("common.save").to_string())
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.save_settings(cx);
-                                    })),
-                            ),
-                    ),
-            );
-
-        Self::overlay(panel, p)
     }
 
     pub(crate) fn render_settings_rendering(

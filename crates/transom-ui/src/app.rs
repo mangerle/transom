@@ -322,8 +322,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
         services: UiServices,
-        settings: AppSettings,
+        mut settings: AppSettings,
     ) -> Self {
+        // 设置文件是外部输入：未知条目、重复项、越界分区都在进入运行期前清洗。
+        settings.activity_bar.normalize();
         cx.bind_keys(keymap::bindings(&settings.shortcuts));
         let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
             &settings.shortcuts,

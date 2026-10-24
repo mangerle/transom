@@ -69,6 +69,22 @@ app:
   restore:
     en: Restore
     zh-CN: 还原
+activity:
+  language:
+    en: Language
+    zh-CN: 语言
+  hide_item:
+    en: Hide This Icon
+    zh-CN: 隐藏此图标
+  restore_default:
+    en: Restore Default Layout
+    zh-CN: 恢复默认布局
+  pinned:
+    en: Settings entry is always shown
+    zh-CN: 设置入口固定显示
+  unknown:
+    en: Unknown Item
+    zh-CN: 未知条目
 common:
   save:
     en: Save
@@ -845,6 +861,15 @@ settings:
   tab_tabs_window:
     en: Tabs & Window
     zh-CN: 标签与窗口
+  tab_layout:
+    en: Layout
+    zh-CN: 布局
+  activity_bar:
+    en: Activity Bar
+    zh-CN: 活动栏
+  activity_bar_note:
+    en: Drag icons in the activity bar to reorder them. Visibility and order changes are saved immediately; the settings entry cannot be hidden. In the blank area between the two groups, the upper half appends to the top group and the lower half prepends to the bottom group.
+    zh-CN: 可直接在活动栏中拖动图标调整顺序；显隐与顺序改动会立即保存，设置入口不可隐藏。拖到两组之间的空白区时，上半区追加到顶组末尾，下半区插到底组开头。
   tab_general:
     en: General & Sound
     zh-CN: 通用与声音

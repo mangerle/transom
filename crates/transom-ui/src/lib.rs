@@ -1,6 +1,7 @@
 //! GPUI application shell, views, localization, and key bindings.
 rust_i18n::i18n!("locales", fallback = "en");
 
+mod activity_bar;
 mod app;
 mod app_render;
 mod backup;
