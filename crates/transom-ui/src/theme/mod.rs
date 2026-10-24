@@ -22,9 +22,10 @@ mod builtin;
 pub(crate) mod tokens;
 
 use gpui_kit::component::theme::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
-use gpui_kit::{App, Window, px};
+use gpui_kit::{App, Global, Window, px};
+use std::collections::HashMap;
 use std::rc::Rc;
-use transom_core::{AppearanceSettings, UiThemeMode};
+use transom_core::{AppearanceSettings, FOLLOW_UI_THEME, Rgb, TerminalPalette, UiThemeMode};
 
 /// 解析结果：当前生效主题与浅/深两槽位的兜底配置。
 struct ResolvedThemes {
@@ -142,6 +143,102 @@ pub(crate) fn register_builtin(cx: &mut App) {
     }
 }
 
+/// 从主题 JSON 提取伴生的终端调色板（自定义 `terminal` 节）。
+///
+/// gpui-kit 的 `ThemeSet` 契约没有终端概念，未知字段会被 serde 静默忽略，
+/// 因此终端配色作为旁路字段与 UI 主题共存于同一文件；解析层自行读取，
+/// 键缺失或字段非法时返回空——主题可以不带终端配色。
+fn extract_terminal_palettes(content: &str) -> Vec<(String, TerminalPalette)> {
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(content) else {
+        return Vec::new();
+    };
+    let Some(themes) = doc["themes"].as_array() else {
+        return Vec::new();
+    };
+    let parse_rgb =
+        |value: &serde_json::Value| -> Option<Rgb> { value.as_str().and_then(Rgb::parse_hex) };
+    themes
+        .iter()
+        .filter_map(|theme| {
+            let name = theme["name"].as_str()?.to_string();
+            let terminal = &theme["terminal"];
+            let background = parse_rgb(&terminal["background"])?;
+            let foreground = parse_rgb(&terminal["foreground"])?;
+            let cursor = parse_rgb(&terminal["cursor"])?;
+            let selection = parse_rgb(&terminal["selection"])?;
+            let ansi_values = terminal["ansi"].as_array()?;
+            if ansi_values.len() != 16 {
+                return None;
+            }
+            let mut ansi = [Rgb::new(0, 0, 0); 16];
+            for (slot, value) in ansi_values.iter().enumerate() {
+                ansi[slot] = parse_rgb(value)?;
+            }
+            Some((
+                name,
+                TerminalPalette {
+                    background,
+                    foreground,
+                    cursor,
+                    selection,
+                    ansi,
+                },
+            ))
+        })
+        .collect()
+}
+
+/// 主题名到伴生终端调色板的绑定表：启动与热重载时从内置与用户目录主题
+/// 重建。热重载后新增的伴生主题要重启才会进入绑定表（目录变动只触发
+/// 注册表 reload，无回调），属已知局限。
+pub(crate) fn rebuild_terminal_bindings(cx: &mut App) {
+    let mut bindings: HashMap<String, TerminalPalette> = HashMap::new();
+    for content in builtin::ALL {
+        for (name, palette) in extract_terminal_palettes(content) {
+            bindings.insert(name, palette);
+        }
+    }
+    let dir = transom_core::paths::themes_dir();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json")
+                && let Ok(content) = std::fs::read_to_string(&path)
+            {
+                for (name, palette) in extract_terminal_palettes(&content) {
+                    bindings.insert(name, palette);
+                }
+            }
+        }
+    }
+    cx.set_global(TerminalPaletteBindings(bindings));
+}
+
+/// 主题名 → 伴生终端调色板。
+#[derive(Default)]
+struct TerminalPaletteBindings(HashMap<String, TerminalPalette>);
+
+impl Global for TerminalPaletteBindings {}
+
+/// 终端配色的最终裁决：显式预设（`theme_name` 为具体名字且 palette 已具体化）
+/// 直接沿用；跟随模式（哨兵值）解析当前 UI 主题的伴生调色板，主题未携带时
+/// 回退内置默认（One Dark）。
+pub(crate) fn resolve_terminal_palette(
+    profile_theme_name: &str,
+    active_ui_theme_name: &str,
+    cx: &App,
+) -> Option<TerminalPalette> {
+    if profile_theme_name != FOLLOW_UI_THEME {
+        return None;
+    }
+    let bindings = cx.try_global::<TerminalPaletteBindings>()?;
+    bindings
+        .0
+        .get(active_ui_theme_name)
+        .cloned()
+        .or_else(|| Some(TerminalPalette::default()))
+}
+
 /// 把内置主题落盘为用户主题目录内的受管文件。
 ///
 /// 为什么文件化：主题注册表的热重载以"目录全量重建"为语义——`reload` 会
@@ -189,9 +286,12 @@ pub(crate) fn watch_user_dir(cx: &mut App) {
     }
     ensure_builtin_theme_files(&dir);
     register_builtin(cx);
-    if let Err(error) = ThemeRegistry::watch_dir(dir, cx, |_| {
+    rebuild_terminal_bindings(cx);
+    if let Err(error) = ThemeRegistry::watch_dir(dir, cx, |cx| {
         // 注册表变动由 gpui-kit 的 observe_global 自动换装当前槽位并重绘；
-        // 新增主题仍需用户在设置页选择后才生效。
+        // 新增主题仍需用户在设置页选择后才生效。伴生终端调色板一并重建
+        // （仅启动与本次回调；后续文件变动需重启刷新绑定，见绑定表文档）。
+        rebuild_terminal_bindings(cx);
         tracing::info!("用户主题目录已重载");
     }) {
         tracing::warn!("监听用户主题目录失败，自定义主题不可用，原因: {error}");

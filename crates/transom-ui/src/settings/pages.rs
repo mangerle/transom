@@ -12,7 +12,7 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
-use transom_core::{PaletteMode, UiDensity, UiThemeMode, preset_themes};
+use transom_core::{FOLLOW_UI_THEME, PaletteMode, UiDensity, UiThemeMode, preset_themes};
 
 impl AppShell {
     pub(crate) fn render_settings_themes(
@@ -22,6 +22,59 @@ impl AppShell {
     ) -> AnyElement {
         let themes = preset_themes();
         let current_theme_name = self.settings.terminal_profile.theme_name.clone();
+
+        // "跟随界面主题"卡：终端配色默认随 UI 主题明暗联动（Islands Dark 配
+        // Islands 终端色），显式选预设即覆盖。置于列表首位。
+        let follow_selected = current_theme_name == FOLLOW_UI_THEME;
+        let follow_card = v_flex()
+            .id(ElementId::Name("terminal-follow-card".into()))
+            .w_full()
+            .p_3()
+            .rounded_lg()
+            .border_1()
+            .border_color(if follow_selected {
+                p.sidebar_accent_foreground
+            } else {
+                p.border
+            })
+            .bg(if follow_selected {
+                p.sidebar_accent
+            } else {
+                p.popover
+            })
+            .gap_2p5()
+            .cursor_pointer()
+            .hover(|s| {
+                if follow_selected {
+                    s
+                } else {
+                    s.border_color(p.muted_foreground)
+                }
+            })
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.settings.terminal_profile.theme_name = FOLLOW_UI_THEME.to_string();
+                this.sync_terminal_palette(cx);
+                cx.notify();
+            }))
+            .child(
+                h_flex().w_full().justify_between().items_center().child(
+                    div()
+                        .text_sm()
+                        .font_weight(if follow_selected {
+                            FontWeight::BOLD
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .child(rust_i18n::t!("settings.terminal_follow_ui").to_string()),
+                ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.terminal_follow_ui_note").to_string()),
+            )
+            .into_any_element();
 
         let theme_cards: Vec<AnyElement> = themes
             .into_iter()
@@ -203,7 +256,18 @@ impl AppShell {
         // 组标题由 SettingGroup 提供（"终端配色"），页内不再重复标题行。
         v_flex()
             .gap_3()
-            .child(v_flex().gap_2p5().children(theme_cards))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.terminal_theme_note").to_string()),
+            )
+            .child(
+                v_flex()
+                    .gap_2p5()
+                    .children([follow_card])
+                    .children(theme_cards),
+            )
             .into_any_element()
     }
 

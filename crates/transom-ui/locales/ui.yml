@@ -1164,6 +1164,15 @@ settings:
   desktop_notifications_desc:
     en: Send desktop notifications for finished commands and OSC 777.
     zh-CN: 长命令完成与终端程序主动请求时发送系统桌面通知。
+  terminal_follow_ui:
+    en: Follow Interface Theme
+    zh-CN: 跟随界面主题
+  terminal_follow_ui_note:
+    en: Terminal palette switches with the active interface theme; pick a preset below to override.
+    zh-CN: 终端配色随当前界面主题联动（如 Islands Dark 配 Islands 终端色）；在下方选择预设即可覆盖。
+  terminal_theme_note:
+    en: Presets below override the theme-following palette; the choice applies to new sessions and, after saving, live panes.
+    zh-CN: 下方预设会覆盖"跟随界面主题"的配色；选择应用于新会话，保存后立即作用于已打开的窗格。
   theme_preview:
     en: Terminal Preview
     zh-CN: 终端色彩效果预览

@@ -72,8 +72,8 @@ pub use sftp_sync::{
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
 pub use storage::{BackupService, SecretStore, SessionStore, SettingsStore};
 pub use terminal::{
-    TerminalControl, TerminalControlHandle, TerminalCursorShape, TerminalInteraction, TerminalIo,
-    TerminalPalette, TerminalProfile, TerminalSize,
+    FOLLOW_UI_THEME, TerminalControl, TerminalControlHandle, TerminalCursorShape,
+    TerminalInteraction, TerminalIo, TerminalPalette, TerminalProfile, TerminalSize,
 };
 pub use theme::{PaletteMode, PresetTheme, preset_themes};
 pub use traffic::{NetworkTraffic, TrafficCounter};

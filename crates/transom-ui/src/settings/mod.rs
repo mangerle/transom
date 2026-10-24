@@ -9,13 +9,14 @@ mod shortcuts_page;
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{AppearanceSettings, TerminalCursorShape, TerminalHighlight};
+use transom_core::{AppearanceSettings, FOLLOW_UI_THEME, TerminalCursorShape, TerminalHighlight};
 use transom_terminal::TerminalView;
 
 /// 读取字体族输入框：留空表示"不指定"，交给默认字体或系统回退。
@@ -127,7 +128,23 @@ impl AppShell {
     ) {
         change(&mut self.settings.appearance);
         crate::theme::apply_appearance(&self.settings.appearance, cx);
+        self.sync_terminal_palette(cx);
         cx.notify();
+    }
+
+    /// 终端配色跟随界面主题：`theme_name` 为哨兵值时，把当前生效 UI 主题的
+    /// 伴生终端调色板写入终端 profile 并热应用到活窗格。显式选了预设的用户
+    /// 不受影响。设置页外观变化、保存落盘、系统明暗切换三个触发点共用。
+    pub(crate) fn sync_terminal_palette(&mut self, cx: &mut Context<Self>) {
+        if self.settings.terminal_profile.theme_name != FOLLOW_UI_THEME {
+            return;
+        }
+        let active = cx.theme().theme_name().to_string();
+        if let Some(palette) = crate::theme::resolve_terminal_palette(FOLLOW_UI_THEME, &active, cx)
+        {
+            self.settings.terminal_profile.palette = palette;
+            self.apply_appearance_to_live_panes(cx);
+        }
     }
 
     /// 取消设置：外观部分恢复到打开弹窗前的偏好并回滚预览效果。
@@ -214,6 +231,7 @@ impl AppShell {
         {
             self.settings.terminal_profile.scrollback = scrollback;
         }
+        self.sync_terminal_palette(cx);
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             self.error = Some(localized_error(&error));
         } else {

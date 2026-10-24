@@ -23,6 +23,19 @@ impl Rgb {
     pub const fn to_hex(self) -> u32 {
         ((self.r as u32) << 16) | ((self.g as u32) << 8) | self.b as u32
     }
+
+    /// 解析 `#RRGGBB` 或 `RRGGBB` 形式的十六进制颜色字面量。
+    ///
+    /// 主题 JSON 里的终端配色用 hex 字符串表达（人可读、与外部主题格式一致），
+    /// `Rgb` 自身的 serde 是数值对象形式，字符串解析走这里。
+    pub fn parse_hex(text: &str) -> Option<Self> {
+        let digits = text.strip_prefix('#').unwrap_or(text);
+        if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let value = u32::from_str_radix(digits, 16).ok()?;
+        Some(Self::from_hex(value))
+    }
 }
 
 #[cfg(test)]

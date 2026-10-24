@@ -156,8 +156,14 @@ fn default_word_separators() -> String {
     ",│`|:\"' ()[]{}<>\t".to_string()
 }
 
+/// 终端配色跟随界面主题的哨兵值。
+///
+/// 主题 JSON 可携带伴生的终端调色板（`terminal` 节），终端配色默认随 UI 主题
+/// 明暗联动；设置里显式选了预设（"One Dark" 等）即覆盖跟随。
+pub const FOLLOW_UI_THEME: &str = "follow-ui";
+
 fn default_theme_name() -> String {
-    "One Dark".to_string()
+    FOLLOW_UI_THEME.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

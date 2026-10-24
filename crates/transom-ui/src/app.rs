@@ -617,6 +617,9 @@ impl AppShell {
         if this.settings.appearance.mode == UiThemeMode::System {
             crate::theme::sync_with_system(window, cx);
         }
+        // 终端配色跟随模式：按启动时生效的 UI 主题解析一次调色板，
+        // settings.json 里的落盘值只是上次解析的缓存。
+        this.sync_terminal_palette(cx);
 
         if this.settings.window.restore_previous_tabs {
             let saved_groups = this.settings.window.previous_tab_groups.clone();
