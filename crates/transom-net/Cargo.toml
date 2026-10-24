@@ -1,11 +1,16 @@
 [package]
 name = "transom-net"
+description = "russh SSH2 client, SFTP transfer, local/remote/SOCKS5 port forwarding, serial console and PTY plumbing for Transom."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish.workspace = true
 
 [dependencies]
 thiserror.workspace = true
@@ -27,4 +32,4 @@ encoding_rs = "0.8"
 parking_lot.workspace = true
 ssh-key.workspace = true
 transom-store.workspace = true
-tempfile = "3"
+tempfile.workspace = true

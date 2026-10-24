@@ -16,6 +16,12 @@ rust-version = "1.92"
 license = "Apache-2.0"
 authors = ["wangle"]
 repository = "https://github.com/mangerle/transom"
+homepage = "https://github.com/mangerle/transom"
+documentation = "https://github.com/mangerle/transom/tree/main/docs"
+readme = "README.md"
+# 桌面应用经 GitHub Release 分发，内部 crate 不单独发布；
+# 置 false 后 cargo publish 直接拒绝，杜绝误把 workspace 成员推上 crates.io。
+publish = false
 
 [workspace.dependencies]
 # syntect 特性带来 gpui-component 的语法高亮后端（语法集由 two_face 随编译内置，
@@ -65,6 +71,9 @@ getrandom = "0.3"
 serde_yaml_ng = "0.10"
 ssh-key = { version = "=0.7.0-rc.11", features = ["ed25519", "rsa", "encryption"] }
 rand = "0.10"
+# 单元测试写临时目录用的共享 dev-dependency：core/store/net 三处约束一致，
+# 收敛到 workspace 段后升级只改一行，避免逐个清单漏改导致测试版本分叉。
+tempfile = "3"
 
 transom-core = { path = "crates/transom-core" }
 transom-store = { path = "crates/transom-store" }

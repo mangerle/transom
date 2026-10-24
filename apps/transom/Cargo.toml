@@ -1,11 +1,16 @@
 [package]
 name = "transom"
+description = "Native SSH, serial console and terminal workspace with integrated SFTP, written in Rust on GPUI."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish.workspace = true
 
 [dependencies]
 transom-core.workspace = true
