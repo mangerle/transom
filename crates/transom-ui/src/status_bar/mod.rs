@@ -25,7 +25,8 @@ use transom_core::{Connection, NetworkTraffic, StatusItemId, SystemStats};
 pub(crate) const STATUS_BAR_HEIGHT: f32 = 28.0;
 
 const RATE_WIDTH: f32 = 40.0;
-const CPU_VALUE_WIDTH: f32 = 28.0;
+/// CPU 数值槽按最宽的 `100%` 预留，取值跨到三位数时不会把百分号截掉。
+const CPU_VALUE_WIDTH: f32 = 36.0;
 const MEMORY_VALUE_WIDTH: f32 = 84.0;
 const DISK_VALUE_WIDTH: f32 = 96.0;
 const OS_VALUE_WIDTH: f32 = 104.0;
@@ -280,13 +281,13 @@ impl AppShell {
                     cpu_color,
                     cpu_color,
                 );
-                Some(Self::status_badge(
-                    id,
-                    rust_i18n::t!("monitor.cpu").to_string(),
-                    content,
-                    app,
-                    p,
-                ))
+                // 槽位只为稳定宽度服务；tooltip 始终给出精确百分比，避免极端值被裁掉后读不到。
+                let tooltip = format!(
+                    "{}: {:.0}%",
+                    rust_i18n::t!("monitor.cpu"),
+                    stats.cpu_percent
+                );
+                Some(Self::status_badge(id, tooltip, content, app, p))
             }
             StatusItemId::Memory => {
                 let stats = data.stats.filter(|stats| stats.mem_total_bytes > 0)?;
