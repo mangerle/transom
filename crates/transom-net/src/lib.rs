@@ -9,6 +9,7 @@ mod serial;
 mod sftp;
 mod sftp_dir;
 mod sftp_hash;
+mod sftp_scan;
 mod sftp_sync;
 mod traffic;
 

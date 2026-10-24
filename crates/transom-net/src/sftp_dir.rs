@@ -1,29 +1,29 @@
-//! SFTP 目录递归传输：本地/远端目录树扫描、排除规则剪枝与逐文件传输。
+//! SFTP 目录递归传输：目录树扫描结果（见 `sftp_scan`）之上的建目录与逐文件传输。
+//!
+//! 传输阶段的三处并行化：
+//! - 远端/本地目录树扫描在 `sftp_scan` 中按批次并发读取；
+//! - 上传建目录按层级分层，层内并发 `ensure_dir`；
+//! - 文件传输以固定并发度并行，进度经原子计数聚合后统一汇报。
 
-use crate::sftp::{SftpClient, sftp_error};
+use crate::sftp::{SftpClient, notify_shared_progress, sftp_error};
+use crate::sftp_scan::{layered_directories, scan_local_snapshot, sorted_files};
+use futures::stream::{self, StreamExt, TryStreamExt};
 use std::path::{Path, PathBuf};
-use transom_core::{
-    AppError, DirEntryMeta, DirSnapshotEntry, ErrorCode, TransferFilter, TransferMatcher,
-    TransferSummary,
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use transom_core::{AppError, ErrorCode, TransferFilter, TransferSummary};
 
-/// 单侧目录扫描结果。
-pub(crate) struct ScanResult {
-    pub entries: Vec<DirSnapshotEntry>,
-    pub skipped: u64,
-}
+/// 并发目录传输的聚合进度回调：装箱为具体类型，供嵌套闭包安全捕获。
+type SharedProgress = Arc<std::sync::Mutex<Box<dyn FnMut(u64, Option<u64>) + Send>>>;
 
-impl ScanResult {
-    pub(crate) fn total_bytes(&self) -> u64 {
-        self.entries.iter().fold(0u64, |total, entry| {
-            if entry.meta.is_dir {
-                total
-            } else {
-                total.saturating_add(entry.meta.size)
-            }
-        })
-    }
-}
+/// 建目录阶段每层内的并发 ensure_dir 数。
+const DIR_MKDIR_CONCURRENCY: usize = 8;
+
+/// 文件传输阶段的单文件并发数。
+/// 海量小文件场景下单文件串行每次至少 3 个往返（打开、读写、关闭），
+/// 并发 8 可把总时间压到约 1/8；与单大文件的分块并发（见 `sftp` 模块）
+/// 叠加后单连接整体保持适中压力，不触发服务器过载保护。
+const DIR_FILE_CONCURRENCY: usize = 8;
 
 impl SftpClient {
     /// 递归删除远端目录：先收集整棵子树，再逐文件、自底向上逐目录删除。
@@ -107,8 +107,11 @@ impl SftpClient {
     ///   开始传输前完成一次只读扫描；
     /// - 核心优势：排除规则在扫描阶段对目录直接剪枝，`.git` 等大目录不会被
     ///   逐文件遍历；扫描结果同时用于预创建空目录，保证空目录也能同步；
+    ///   建目录按层级分层、层内并发，文件按固定并发度并行传输，海量小文件
+    ///   目录的总耗时不再与"文件数 × 单文件往返数"成正比；
     /// - 代价与局限：扫描与传输之间如果文件被外部修改，总进度可能略有偏差，
-    ///   因此进度计算全部使用饱和算术，不追求严格字节守恒。
+    ///   因此进度计算全部使用饱和算术，不追求严格字节守恒；任一文件失败即
+    ///   停止调度后续文件（与串行实现的首错即断一致），已完成的文件不回滚。
     ///
     /// # Errors
     /// 排除规则非法、本地目录不可读、远端建目录或文件上传失败时返回
@@ -120,40 +123,58 @@ impl SftpClient {
         resume: bool,
         filter: &TransferFilter,
         verify: bool,
-        mut progress: F,
+        progress: F,
     ) -> Result<TransferSummary, AppError>
     where
-        F: FnMut(u64, Option<u64>) + Send,
+        F: FnMut(u64, Option<u64>) + Send + 'static,
     {
         let matcher = filter.matcher()?;
         let scan = scan_local_snapshot(local_root, &matcher).await?;
         let total = scan.total_bytes();
-        progress(0, Some(total));
+        let transferred = Arc::new(AtomicU64::new(0));
+        // 回调装箱为具体类型，避免泛型闭包深入并发任务（理由见 DirFileTask 文档）
+        let progress: SharedProgress = Arc::new(std::sync::Mutex::new(Box::new(progress)));
+        notify_shared_progress(&progress, 0, Some(total));
 
         self.create_dir_all(remote_root).await?;
-        for relative in sorted_directories(&scan.entries) {
-            let remote_path = join_remote_path(remote_root, relative);
-            self.ensure_dir(&remote_path).await?;
+        // 目录按深度分层：层内互不为父子可并发 ensure_dir，层间保证父目录先就绪
+        for layer in layered_directories(&scan.entries) {
+            let paths: Vec<String> = layer
+                .iter()
+                .map(|relative| join_remote_path(remote_root, relative))
+                .collect();
+            let ensures: Vec<_> = paths.iter().map(|path| self.ensure_dir(path)).collect();
+            let results = stream::iter(ensures)
+                .buffer_unordered(DIR_MKDIR_CONCURRENCY)
+                .collect::<Vec<_>>()
+                .await;
+            for result in results {
+                result?;
+            }
         }
 
-        let mut completed = 0u64;
-        for file in sorted_files(&scan.entries) {
-            let local_path = local_path_for(local_root, &file.relative_path)?;
-            let remote_path = join_remote_path(remote_root, &file.relative_path);
-            let base = completed;
-            let transferred = self
-                .upload_resumable(&local_path, &remote_path, resume, |transferred, _| {
-                    progress(base.saturating_add(transferred), Some(total));
-                })
-                .await?;
-            if verify {
-                self.verify_file(&local_path, &remote_path).await?;
-            }
-            completed = completed.saturating_add(transferred);
+        let files = sorted_files(&scan.entries);
+        let mut tasks = Vec::with_capacity(files.len());
+        for file in files {
+            tasks.push(DirFileTask {
+                client: self.clone(),
+                local_path: local_path_for(local_root, &file.relative_path)?,
+                remote_path: join_remote_path(remote_root, &file.relative_path),
+                resume,
+                verify,
+                total,
+                transferred: transferred.clone(),
+                progress: progress.clone(),
+            });
         }
+        stream::iter(tasks)
+            .map(|task| task.run_upload())
+            .buffer_unordered(DIR_FILE_CONCURRENCY)
+            .try_collect::<Vec<()>>()
+            .await?;
 
         Ok(TransferSummary {
-            transferred: completed,
+            transferred: transferred.load(Ordering::Relaxed),
             skipped: scan.skipped,
             verified: verify,
         })
@@ -163,6 +184,7 @@ impl SftpClient {
     ///
     /// 安全约束：远端返回的文件名会参与本地路径拼接，任何空片段、`.`、`..`
     /// 或路径分隔符都会被拒绝，防止恶意服务端把文件写到目标目录之外。
+    /// 文件按固定并发度并行下载（与上传同构），进度经原子计数聚合。
     ///
     /// # Errors
     /// 排除规则非法、远端目录不可读、本地建目录或文件写入失败时返回
@@ -174,217 +196,148 @@ impl SftpClient {
         resume: bool,
         filter: &TransferFilter,
         verify: bool,
-        mut progress: F,
+        progress: F,
     ) -> Result<TransferSummary, AppError>
     where
-        F: FnMut(u64, Option<u64>) + Send,
+        F: FnMut(u64, Option<u64>) + Send + 'static,
     {
         let matcher = filter.matcher()?;
         let scan = self.scan_remote_snapshot(remote_root, &matcher).await?;
         let total = scan.total_bytes();
-        progress(0, Some(total));
+        let transferred = Arc::new(AtomicU64::new(0));
+        // 回调装箱为具体类型，避免泛型闭包深入并发任务（理由见 DirFileTask 文档）
+        let progress: SharedProgress = Arc::new(std::sync::Mutex::new(Box::new(progress)));
+        notify_shared_progress(&progress, 0, Some(total));
 
+        // 本地 create_dir_all 自带父目录创建且无网络往返，顺序执行即可
         tokio::fs::create_dir_all(local_root)
             .await
             .map_err(|error| local_io_error("创建本地目录失败", local_root, error))?;
-        for relative in sorted_directories(&scan.entries) {
-            let local_path = local_path_for(local_root, relative)?;
+        for entry in scan.entries.iter().filter(|entry| entry.meta.is_dir) {
+            let local_path = local_path_for(local_root, &entry.relative_path)?;
             tokio::fs::create_dir_all(&local_path)
                 .await
                 .map_err(|error| local_io_error("创建本地目录失败", &local_path, error))?;
         }
 
-        let mut completed = 0u64;
-        for file in sorted_files(&scan.entries) {
-            let remote_path = join_remote_path(remote_root, &file.relative_path);
-            let local_path = local_path_for(local_root, &file.relative_path)?;
-            if let Some(parent) = local_path.parent() {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .map_err(|error| local_io_error("创建本地父目录失败", parent, error))?;
-            }
-            let base = completed;
-            let transferred = self
-                .download_resumable(&remote_path, &local_path, resume, |transferred, _| {
-                    progress(base.saturating_add(transferred), Some(total));
-                })
-                .await?;
-            if verify {
-                self.verify_file(&local_path, &remote_path).await?;
-            }
-            completed = completed.saturating_add(transferred);
+        let files = sorted_files(&scan.entries);
+        let mut tasks = Vec::with_capacity(files.len());
+        for file in files {
+            tasks.push(DirFileTask {
+                client: self.clone(),
+                local_path: local_path_for(local_root, &file.relative_path)?,
+                remote_path: join_remote_path(remote_root, &file.relative_path),
+                resume,
+                verify,
+                total,
+                transferred: transferred.clone(),
+                progress: progress.clone(),
+            });
         }
+        stream::iter(tasks)
+            .map(|task| task.run_download())
+            .buffer_unordered(DIR_FILE_CONCURRENCY)
+            .try_collect::<Vec<()>>()
+            .await?;
 
         Ok(TransferSummary {
-            transferred: completed,
+            transferred: transferred.load(Ordering::Relaxed),
             skipped: scan.skipped,
             verified: verify,
         })
     }
-
-    /// 递归扫描远端目录，供目录对比与同步使用。
-    pub(crate) async fn scan_remote_snapshot(
-        &self,
-        root: &str,
-        matcher: &TransferMatcher,
-    ) -> Result<ScanResult, AppError> {
-        let canonical = self.session.canonicalize(root).await.map_err(sftp_error)?;
-        let mut entries = Vec::new();
-        let mut skipped = 0u64;
-        let mut stack: Vec<(String, String)> = vec![(canonical, String::new())];
-        while let Some((directory, relative_prefix)) = stack.pop() {
-            let children = self
-                .session
-                .read_dir(&directory)
-                .await
-                .map_err(sftp_error)?;
-            let mut batch = Vec::new();
-            for entry in children {
-                let name = entry.file_name();
-                let metadata = entry.metadata();
-                batch.push((
-                    name,
-                    metadata.is_dir(),
-                    metadata.is_symlink(),
-                    metadata.size.unwrap_or(0),
-                    metadata.mtime,
-                ));
-            }
-            batch.sort_by(|left, right| left.0.cmp(&right.0));
-
-            for (name, is_dir, is_symlink, size, mtime) in batch {
-                if !safe_component(&name) || is_symlink {
-                    skipped = skipped.saturating_add(1);
-                    continue;
-                }
-                let relative = join_relative(&relative_prefix, &name);
-                if matcher.matches(&relative, is_dir) {
-                    skipped = skipped.saturating_add(1);
-                    continue;
-                }
-                entries.push(DirSnapshotEntry {
-                    relative_path: relative.clone(),
-                    meta: DirEntryMeta {
-                        is_dir,
-                        size,
-                        mtime,
-                    },
-                });
-                if is_dir {
-                    stack.push((join_remote_path(&directory, &name), relative));
-                }
-            }
-        }
-        entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-        Ok(ScanResult { entries, skipped })
-    }
 }
 
-/// 递归扫描本地目录，供目录传输、对比与同步使用。
-pub(crate) async fn scan_local_snapshot(
-    root: &Path,
-    matcher: &TransferMatcher,
-) -> Result<ScanResult, AppError> {
-    let metadata = tokio::fs::symlink_metadata(root)
-        .await
-        .map_err(|error| local_io_error("读取本地目录失败", root, error))?;
-    if !metadata.is_dir() {
-        return Err(AppError::with_detail(
-            ErrorCode::SftpFailed,
-            format!("本地路径不是目录: {}", root.display()),
-        ));
-    }
+/// 目录传输单个文件的并发任务上下文。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：目录传输的回调是调用方的泛型闭包，若让它经"外层闭包包
+///   async 块"多级嵌套再被 `tokio::spawn` 要求 `'static`，会触发 rustc
+///   的 HRTT 推断限制（FnOnce is not general enough）；
+/// - 核心优势：入口处把回调装箱为具体类型并连同参数收进本结构，任务体是
+///   具名 async 函数，结构体内不再出现闭包嵌套闭包，完全绕开该限制；
+/// - 代价与局限：一次堆装箱（整个目录传输仅一次），换取可编译且清晰的
+///   任务边界。
+struct DirFileTask {
+    client: SftpClient,
+    local_path: PathBuf,
+    remote_path: String,
+    resume: bool,
+    verify: bool,
+    total: u64,
+    transferred: Arc<AtomicU64>,
+    progress: SharedProgress,
+}
 
-    let mut entries = Vec::new();
-    let mut skipped = 0u64;
-    let mut stack: Vec<(PathBuf, String)> = vec![(root.to_path_buf(), String::new())];
-    while let Some((directory, relative_prefix)) = stack.pop() {
-        let mut read_dir = tokio::fs::read_dir(&directory)
-            .await
-            .map_err(|error| local_io_error("读取本地目录失败", &directory, error))?;
-        let mut children = Vec::new();
-        while let Some(entry) = read_dir
-            .next_entry()
-            .await
-            .map_err(|error| local_io_error("读取本地目录项失败", &directory, error))?
-        {
-            children.push(entry);
-        }
-        children.sort_by_key(|entry| entry.file_name());
-
-        for entry in children {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !safe_component(&name) {
-                skipped = skipped.saturating_add(1);
-                continue;
-            }
-            let file_type = match entry.file_type().await {
-                Ok(file_type) => file_type,
-                Err(_) => {
-                    skipped = skipped.saturating_add(1);
-                    continue;
-                }
-            };
-            if file_type.is_symlink() {
-                skipped = skipped.saturating_add(1);
-                continue;
-            }
-            let relative = join_relative(&relative_prefix, &name);
-            let is_dir = file_type.is_dir();
-            if matcher.matches(&relative, is_dir) {
-                skipped = skipped.saturating_add(1);
-                continue;
-            }
-            let metadata = entry.metadata().await.ok();
-            let size = metadata.as_ref().map(|meta| meta.len()).unwrap_or(0);
-            let mtime = unix_seconds(metadata.and_then(|meta| meta.modified().ok()));
-            entries.push(DirSnapshotEntry {
-                relative_path: relative.clone(),
-                meta: DirEntryMeta {
-                    is_dir,
-                    size,
-                    mtime,
+impl DirFileTask {
+    /// 上传单个文件：字节增量聚合进共享计数，完成后按需校验并补齐尾部进度。
+    async fn run_upload(self) -> Result<(), AppError> {
+        let mut last_reported = 0u64;
+        let bytes = self
+            .client
+            .upload_resumable(
+                &self.local_path,
+                &self.remote_path,
+                self.resume,
+                |current, _| {
+                    let delta = current.saturating_sub(last_reported);
+                    last_reported = current;
+                    if delta > 0 {
+                        let done = self.transferred.fetch_add(delta, Ordering::Relaxed) + delta;
+                        notify_shared_progress(&self.progress, done, Some(self.total));
+                    }
                 },
-            });
-            if is_dir {
-                stack.push((entry.path(), relative));
-            }
+            )
+            .await?;
+        if self.verify {
+            self.client
+                .verify_file(&self.local_path, &self.remote_path)
+                .await?;
         }
+        // 进度回调只覆盖到最近的块边界，剩余字节在完成后补齐
+        let tail = bytes.saturating_sub(last_reported);
+        if tail > 0 {
+            let done = self.transferred.fetch_add(tail, Ordering::Relaxed) + tail;
+            notify_shared_progress(&self.progress, done, Some(self.total));
+        }
+        Ok(())
     }
-    entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    Ok(ScanResult { entries, skipped })
-}
 
-/// 目录按层级深度排序，保证父目录先于子目录创建。
-pub(crate) fn sorted_directories(entries: &[DirSnapshotEntry]) -> Vec<&str> {
-    let mut directories = entries
-        .iter()
-        .filter(|entry| entry.meta.is_dir)
-        .map(|entry| entry.relative_path.as_str())
-        .collect::<Vec<_>>();
-    directories.sort_by(|left, right| {
-        left.matches('/')
-            .count()
-            .cmp(&right.matches('/').count())
-            .then_with(|| left.cmp(right))
-    });
-    directories
-}
-
-pub(crate) fn sorted_files(entries: &[DirSnapshotEntry]) -> Vec<&DirSnapshotEntry> {
-    let mut files = entries
-        .iter()
-        .filter(|entry| !entry.meta.is_dir)
-        .collect::<Vec<_>>();
-    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    files
-}
-
-fn join_relative(prefix: &str, name: &str) -> String {
-    if prefix.is_empty() {
-        name.to_string()
-    } else {
-        format!("{prefix}/{name}")
+    /// 下载单个文件：确保本地父目录存在后拉取，进度聚合与上传同构。
+    async fn run_download(self) -> Result<(), AppError> {
+        if let Some(parent) = self.local_path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|error| local_io_error("创建本地父目录失败", parent, error))?;
+        }
+        let mut last_reported = 0u64;
+        let bytes = self
+            .client
+            .download_resumable(
+                &self.remote_path,
+                &self.local_path,
+                self.resume,
+                |current, _| {
+                    let delta = current.saturating_sub(last_reported);
+                    last_reported = current;
+                    if delta > 0 {
+                        let done = self.transferred.fetch_add(delta, Ordering::Relaxed) + delta;
+                        notify_shared_progress(&self.progress, done, Some(self.total));
+                    }
+                },
+            )
+            .await?;
+        if self.verify {
+            self.client
+                .verify_file(&self.local_path, &self.remote_path)
+                .await?;
+        }
+        let tail = bytes.saturating_sub(last_reported);
+        if tail > 0 {
+            let done = self.transferred.fetch_add(tail, Ordering::Relaxed) + tail;
+            notify_shared_progress(&self.progress, done, Some(self.total));
+        }
+        Ok(())
     }
 }
 
@@ -420,11 +373,6 @@ pub(crate) fn local_io_error(context: &str, path: &Path, error: std::io::Error) 
         ErrorCode::SftpFailed,
         format!("{context} {}: {error}", path.display()),
     )
-}
-
-fn unix_seconds(time: Option<std::time::SystemTime>) -> Option<u32> {
-    let seconds = time?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
-    Some(seconds.min(u64::from(u32::MAX)) as u32)
 }
 
 #[cfg(test)]

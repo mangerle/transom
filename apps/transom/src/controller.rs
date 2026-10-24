@@ -518,9 +518,16 @@ async fn run_controller(
                         | SftpOperation::SyncDirs { .. }
                 );
                 let event_tx = event_tx.clone();
-                let handle = tokio::spawn(async move {
-                    execute_sftp_op(event_tx, tab_id, connection_id, op_id, client, op).await;
-                });
+                // 直接 spawn 具名 async 函数返回的 future：经由 async 块包装会触发
+                // rustc 对泛型闭包的 HRTT 推断限制（FnOnce is not general enough）
+                let handle = tokio::spawn(execute_sftp_op(
+                    event_tx,
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    client,
+                    op,
+                ));
                 if is_transfer {
                     sftp_transfers.retain(|_, h| !h.is_finished());
                     sftp_transfers.insert((tab_id, op_id), handle);

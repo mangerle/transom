@@ -41,7 +41,7 @@ where
 }
 
 /// 跨并发块共享的进度通知：任一块推进都汇报当前全局累计字节。
-fn notify_shared_progress<F>(
+pub(crate) fn notify_shared_progress<F>(
     progress: &Arc<std::sync::Mutex<F>>,
     transferred: u64,
     total: Option<u64>,
