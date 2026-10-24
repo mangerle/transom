@@ -1,5 +1,6 @@
 use crate::auth::AuthPrompter;
 use crate::bridge::{ChannelReader, ChannelWriter};
+use crate::error::NetError;
 use crate::traffic::CountingStream;
 use russh::client::{self, Handle, Msg};
 use russh::keys::agent::client::AgentClient;
@@ -102,13 +103,16 @@ impl client::Handler for ClientHandler {
             }
             HostKeyStatus::Mismatch {
                 previous_fingerprint,
-            } => Err(ClientError(AppError::with_detail(
-                ErrorCode::HostKeyMismatch,
-                format!(
-                    "host key mismatch for {}:{}: previous {previous_fingerprint}, current {fingerprint}",
-                    self.host, self.port
-                ),
-            ))),
+            } => Err(ClientError(
+                NetError::HostKey {
+                    host: self.host.clone(),
+                    port: self.port,
+                    reason: format!(
+                        "主机密钥与已记录指纹不一致，原指纹: {previous_fingerprint}，当前指纹: {fingerprint}"
+                    ),
+                }
+                .into(),
+            )),
         }
     }
 
@@ -281,13 +285,13 @@ pub async fn connect_ssh(
     if connection.host.trim().is_empty() {
         return Err(AppError::with_detail(
             ErrorCode::Configuration,
-            "host is empty",
+            "主机地址为空",
         ));
     }
     if connection.username.trim().is_empty() {
         return Err(AppError::with_detail(
             ErrorCode::Configuration,
-            "username is empty",
+            "用户名为空",
         ));
     }
 
@@ -313,11 +317,10 @@ pub async fn connect_ssh(
     let connect = async move {
         let socket = TcpStream::connect((host.as_str(), port))
             .await
-            .map_err(|error| {
-                AppError::with_detail(
-                    ErrorCode::ConnectionFailed,
-                    format!("连接远端节点失败，主机: {host}，端口: {port}，原因: {error}"),
-                )
+            .map_err(|error| NetError::Connect {
+                host: host.clone(),
+                port,
+                source: error,
             })?;
         if let Err(error) = socket.set_nodelay(true) {
             tracing::debug!(%error, "设置 TCP_NODELAY 失败，将继续使用默认行为");
@@ -331,7 +334,14 @@ pub async fn connect_ssh(
     };
     let (mut session, traffic) = tokio::time::timeout(connect_timeout, connect)
         .await
-        .map_err(|_| AppError::new(ErrorCode::Timeout))??;
+        .map_err(|_| NetError::Handshake {
+            host: connection.host.clone(),
+            port: connection.port,
+            reason: format!(
+                "连接超时，已等待 {} 秒",
+                connection.options.connect_timeout_secs.max(1)
+            ),
+        })??;
 
     if let Err(error) = authenticate(&mut session, connection, credentials, prompter).await {
         let _ = session
@@ -431,10 +441,10 @@ async fn authenticate(
         }
         transom_core::AuthMethod::Agent => authenticate_agent(session, &user).await?,
         _ => {
-            return Err(AppError::with_detail(
-                ErrorCode::Configuration,
-                "unsupported authentication method",
-            ));
+            return Err(NetError::Auth {
+                reason: "不支持的认证方式".to_string(),
+            }
+            .into());
         }
     };
 
@@ -448,10 +458,10 @@ async fn authenticate(
         return Ok(());
     }
 
-    Err(AppError::with_detail(
-        ErrorCode::AuthFailed,
-        "authentication failed",
-    ))
+    Err(NetError::Auth {
+        reason: "服务器拒绝了全部认证方式".to_string(),
+    }
+    .into())
 }
 
 /// 密码认证的尝试上限，对齐 OpenSSH 给用户的三次机会。
@@ -584,10 +594,10 @@ fn credential_ref(value: &Option<Zeroizing<String>>) -> Option<&str> {
 
 /// 私钥加载失败的统一错误描述。
 fn load_key_error(path: &std::path::Path, error: &russh::keys::Error) -> AppError {
-    AppError::with_detail(
-        ErrorCode::AuthFailed,
-        format!("failed to load private key {}: {error}", path.display()),
-    )
+    NetError::Auth {
+        reason: format!("加载私钥失败 {}: {error}", path.display()),
+    }
+    .into()
 }
 
 /// 认证过程中向调用方索取一个机密输入（登录密码或私钥口令）。
@@ -604,12 +614,21 @@ async fn request_secret(
     let answer = answers
         .first()
         .filter(|answer| !answer.is_empty())
-        .ok_or_else(|| AppError::with_detail(ErrorCode::Cancelled, "credential input was empty"))?;
+        .ok_or_else(|| NetError::Cancelled {
+            reason: "凭据输入为空".to_string(),
+        })?;
     Ok(Zeroizing::new(answer.clone()))
 }
 
 fn auth_error(error: russh::Error) -> AppError {
     AppError::with_detail(ErrorCode::AuthFailed, error.to_string())
+}
+
+/// ssh-agent 环节错误统一描述：连接、列举身份与逐把签名三类失败共用。
+fn agent_error(error: impl std::fmt::Display) -> NetError {
+    NetError::Auth {
+        reason: format!("SSH 代理（ssh-agent）认证失败: {error}"),
+    }
 }
 
 async fn authenticate_agent(
@@ -618,20 +637,14 @@ async fn authenticate_agent(
 ) -> Result<bool, AppError> {
     #[cfg(unix)]
     {
-        let mut agent = AgentClient::connect_env().await.map_err(|error| {
-            AppError::with_detail(ErrorCode::AuthFailed, format!("ssh-agent: {error}"))
-        })?;
-        let identities = agent.request_identities().await.map_err(|error| {
-            AppError::with_detail(ErrorCode::AuthFailed, format!("ssh-agent: {error}"))
-        })?;
+        let mut agent = AgentClient::connect_env().await.map_err(agent_error)?;
+        let identities = agent.request_identities().await.map_err(agent_error)?;
         for identity in identities {
             let public_key = identity.public_key().into_owned();
             let result = session
                 .authenticate_publickey_with(user.to_owned(), public_key, None, &mut agent)
                 .await
-                .map_err(|error| {
-                    AppError::with_detail(ErrorCode::AuthFailed, format!("ssh-agent: {error}"))
-                })?;
+                .map_err(agent_error)?;
             if result.success() {
                 return Ok(true);
             }
@@ -641,10 +654,10 @@ async fn authenticate_agent(
     #[cfg(not(unix))]
     {
         let _ = (session, user);
-        Err(AppError::with_detail(
-            ErrorCode::AuthFailed,
-            "ssh-agent authentication is not implemented on this platform yet",
-        ))
+        Err(NetError::Auth {
+            reason: "当前平台暂不支持 ssh-agent 认证".to_string(),
+        }
+        .into())
     }
 }
 

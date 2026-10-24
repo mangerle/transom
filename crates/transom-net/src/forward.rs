@@ -326,9 +326,8 @@ async fn read_socks5_address_and_port(
                 .read_exact(&mut domain)
                 .await
                 .map_err(forward_error)?;
-            String::from_utf8(domain).map_err(|_| {
-                AppError::with_detail(ErrorCode::ForwardFailed, "invalid SOCKS domain")
-            })?
+            String::from_utf8(domain)
+                .map_err(|_| AppError::with_detail(ErrorCode::ForwardFailed, "SOCKS 域名非法"))?
         }
         4 => {
             let mut address = [0u8; 16];

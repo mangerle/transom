@@ -1536,12 +1536,11 @@ impl AuthPrompter for UiPrompter {
                 responder,
             })
             .await
-            .map_err(|_| {
-                AppError::with_detail(ErrorCode::Cancelled, "application window is closed")
-            })?;
-        answers.recv_async().await.map_err(|_| {
-            AppError::with_detail(ErrorCode::Cancelled, "authentication prompt was cancelled")
-        })
+            .map_err(|_| AppError::with_detail(ErrorCode::Cancelled, "应用窗口已关闭"))?;
+        answers
+            .recv_async()
+            .await
+            .map_err(|_| AppError::with_detail(ErrorCode::Cancelled, "认证提示已被取消"))
     }
 }
 

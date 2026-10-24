@@ -54,7 +54,7 @@ impl Write for ChannelWriter {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.sender
             .send(bytes.to_vec())
-            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "terminal channel closed"))?;
+            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "终端通道已关闭"))?;
         Ok(bytes.len())
     }
 

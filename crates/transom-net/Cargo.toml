@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+thiserror.workspace = true
 transom-core.workspace = true
 tokio.workspace = true
 russh.workspace = true

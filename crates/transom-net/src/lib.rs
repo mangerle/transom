@@ -3,6 +3,7 @@
 mod auth;
 mod bridge;
 mod client;
+mod error;
 mod forward;
 mod keys;
 mod serial;
@@ -15,6 +16,7 @@ mod traffic;
 
 pub use auth::{AuthPrompter, PasswordPrompter};
 pub use client::{SshRemote, SshSession, connect_ssh};
+pub use error::NetError;
 pub use forward::{ForwardTask, start_forward};
 pub use keys::deploy_public_key;
 pub use serial::{SerialSession, SystemSerialPortProvider, open_serial};
