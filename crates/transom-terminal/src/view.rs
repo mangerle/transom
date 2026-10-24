@@ -602,6 +602,11 @@ impl TerminalView {
                 }
             }
             MouseButton::Left => {
+                // Ctrl+点击优先尝试打开 OSC 8 超链接：命中即消费本次点击，
+                // 未命中回落到既有的选择/上报行为，不改变其他修饰键语义。
+                if event.modifiers.control && self.open_hyperlink_at(event.position) {
+                    return;
+                }
                 // Alt 拖拽 = 矩形列选。它和 Shift 一样压制程序自己的鼠标上报：
                 // 需要抠列的场景恰恰发生在 vim/htop 这类接管鼠标的程序里，
                 // 若让位给上报，这个功能在最需要它的界面上就是空摆设。
@@ -633,6 +638,36 @@ impl TerminalView {
             }
             _ => {}
         }
+    }
+
+    /// Ctrl+点击打开终端里的 OSC 8 超链接，返回点击是否命中链接。
+    ///
+    /// 安全约束：只放行 http/https/mailto/ftp 白名单协议，防止终端输出内容
+    /// 借 xdg-open 触发任意协议处理器；命中但协议被拒同样视为已消费，
+    /// 避免 Ctrl+点击误启选择拖拽。
+    fn open_hyperlink_at(&mut self, position: Point<Pixels>) -> bool {
+        let Some(point) = self.hit_test_grid_point(position) else {
+            return false;
+        };
+        let Some(uri) = self.engine.lock().hyperlink_at(point) else {
+            return false;
+        };
+        const ALLOWED_PREFIXES: [&str; 4] = ["http://", "https://", "mailto:", "ftp://"];
+        if !ALLOWED_PREFIXES
+            .iter()
+            .any(|prefix| uri.starts_with(prefix))
+        {
+            tracing::warn!("超链接协议不在白名单内，已拒绝打开: {uri}");
+            return true;
+        }
+        tracing::info!("打开终端超链接: {uri}");
+        #[cfg(unix)]
+        if let Err(error) = std::process::Command::new("xdg-open").arg(&uri).spawn() {
+            tracing::warn!("打开超链接失败: {error}");
+        }
+        #[cfg(not(unix))]
+        tracing::warn!("当前平台暂不支持打开终端超链接");
+        true
     }
 
     fn on_mouse_up(&mut self, event: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {

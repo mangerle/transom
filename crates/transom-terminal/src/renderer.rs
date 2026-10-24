@@ -621,7 +621,7 @@ impl TerminalRenderer {
                     && text_run.style.fg == fg
                     && text_run.style.bold == cell.flags.contains(Flags::BOLD)
                     && text_run.style.italic == cell.flags.contains(Flags::ITALIC)
-                    && text_run.style.underline == cell.flags.intersects(Flags::ALL_UNDERLINES)
+                    && text_run.style.underline == cell_underlined(cell)
                     && text_run.style.wide == cell.flags.contains(Flags::WIDE_CHAR)
                 {
                     text_run.text.push(' ');
@@ -653,7 +653,7 @@ impl TerminalRenderer {
                 fg,
                 bold: cell.flags.contains(Flags::BOLD),
                 italic: cell.flags.contains(Flags::ITALIC),
-                underline: cell.flags.intersects(Flags::ALL_UNDERLINES),
+                underline: cell_underlined(cell),
                 // 网格已经用 WIDE_CHAR 标记替我们判过宽度（含 wcwidth 的全部边界），
                 // 直接采信标记，比在渲染侧再维护一份宽度表更可靠。
                 wide: cell.flags.contains(Flags::WIDE_CHAR),
@@ -992,6 +992,12 @@ impl RowScratch {
             }
         }
     }
+}
+
+/// 单元格是否按下划线渲染：显式下划线样式，或 OSC 8 超链接单元格。
+/// 超链接恒定加下划线（与 kitty/Alacritty 的默认表现一致），让链接可被发现。
+fn cell_underlined(cell: &Cell) -> bool {
+    cell.flags.intersects(Flags::ALL_UNDERLINES) || cell.hyperlink().is_some()
 }
 
 #[derive(Clone, Copy, PartialEq)]

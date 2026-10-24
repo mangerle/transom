@@ -236,6 +236,16 @@ impl TerminalEngine {
     pub fn cursor_point(&self) -> Point {
         self.term.grid().cursor.point
     }
+
+    /// 返回网格坐标处单元格的 OSC 8 超链接 URI；无链接返回 None。
+    ///
+    /// 设计原理（Why）：URI 查询收敛在引擎侧，调用方只管把屏幕坐标换算成
+    /// 网格坐标；返回拥有的 String，避免把网格借用泄漏到锁外。
+    pub fn hyperlink_at(&self, point: Point) -> Option<String> {
+        self.term.grid()[point.line][point.column]
+            .hyperlink()
+            .map(|link| link.uri().to_string())
+    }
 }
 
 #[cfg(test)]
@@ -297,6 +307,23 @@ mod tests {
         // resize 折行重排后必须回到全量。
         engine.resize(TerminalSize::new(10, 4));
         assert!(matches!(engine.take_damage(), DamageInfo::Full));
+    }
+
+    /// OSC 8：链接元数据进入单元格，渲染与点击打开都以此为准。
+    #[test]
+    fn hyperlink_at_returns_osc8_uri() {
+        let (mut engine, _rx) = engine(20, 4);
+        engine.process(b"\x1b]8;;https://example.com\x1b\\home\x1b]8;;\x1b\\plain");
+        let uri = engine
+            .hyperlink_at(Point::new(Line(0), Column(0)))
+            .expect("链接文本的首格应携带 URI");
+        assert_eq!(uri, "https://example.com");
+        assert!(
+            engine
+                .hyperlink_at(Point::new(Line(0), Column(6)))
+                .is_none(),
+            "链接关闭后的文本不应携带 URI"
+        );
     }
 
     /// 分隔符设置必须真的改变双击选词边界。
