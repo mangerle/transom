@@ -154,6 +154,7 @@ pub(super) struct ShutdownTables<'a> {
     pub(super) remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
     pub(super) cleanup: &'a mut JoinSet<()>,
     pub(super) local_stats_task: &'a mut Option<tokio::task::JoinHandle<()>>,
+    pub(super) local_traffic_task: &'a mut Option<tokio::task::JoinHandle<()>>,
 }
 
 /// 优雅停机：停掉全部后台任务、断开全部远端并限时等待收尾，不再让任务
@@ -172,6 +173,7 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
         remotes,
         cleanup,
         local_stats_task,
+        local_traffic_task,
     } = tables;
     // 待连接任务：建连中的握手与认证随停机中止
     for (_, entry) in connecting.drain() {
@@ -202,6 +204,9 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
         });
     }
     if let Some(task) = local_stats_task.take() {
+        task.abort();
+    }
+    if let Some(task) = local_traffic_task.take() {
         task.abort();
     }
     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {

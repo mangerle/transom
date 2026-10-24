@@ -19,7 +19,7 @@ use lifecycle::{
 };
 use pty::ConnectDispatch;
 use samplers::{
-    run_local_stats_sampler, spawn_local_traffic_sampler, spawn_remote_stats_sampler,
+    run_local_stats_sampler, run_local_traffic_sampler, spawn_remote_stats_sampler,
     spawn_traffic_sampler,
 };
 use sftp_exec::SftpDispatch;
@@ -156,6 +156,10 @@ async fn run_controller(
     let local_stats_tabs: Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>> =
         Arc::new(std::sync::Mutex::new(Vec::new()));
     let mut local_stats_task: Option<tokio::task::JoinHandle<()>> = None;
+    // 本地网络流量同样是机器级属性：共享采样按机器计一份读取，逐标签广播。
+    let local_traffic_tabs: samplers::LocalTrafficTabs =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut local_traffic_task: Option<tokio::task::JoinHandle<()>> = None;
 
     loop {
         let incoming = tokio::select! {
@@ -314,6 +318,7 @@ async fn run_controller(
                 if let Some(entry) = connecting.remove(&tab_id) {
                     entry.task.abort();
                 }
+                drop_local_stats(&local_traffic_tabs, tab_id);
                 stop_forwards(&mut forwards, &mut cleanup_set, tab_id);
                 stop_traffic(&mut traffic_tasks, tab_id);
                 stop_key_deploy(&mut key_deploy_tasks, tab_id);
@@ -347,6 +352,7 @@ async fn run_controller(
                     remotes: &mut remotes,
                     cleanup: &mut cleanup_set,
                     local_stats_task: &mut local_stats_task,
+                    local_traffic_task: &mut local_traffic_task,
                 })
                 .await;
                 break;
@@ -460,13 +466,9 @@ async fn run_controller(
                 )
                 .await;
 
-                let traffic_task =
-                    spawn_local_traffic_sampler(tab_id, connection_id, event_tx.clone());
-                traffic_tasks.insert(tab_id, traffic_task);
-
-                // 登记共享统计订阅：采集本体见 run_local_stats_sampler，
-                // 每台机器只跑一份（多标签各自 spawn df 会在本地终端一多时
-                // 变成每 3 秒 N 个子进程）。
+                // 登记共享订阅：系统统计与网络流量都是机器级属性，各跑一份
+                // 采集（多标签各自采样会在本地终端一多时变成每秒 N 份
+                // /proc 读取与 N 个 df 子进程）。
                 if let Ok(mut tabs) = local_stats_tabs.lock() {
                     tabs.retain(|(tab, _)| *tab != tab_id);
                     tabs.push((tab_id, connection_id));
@@ -478,6 +480,19 @@ async fn run_controller(
                     local_stats_task = Some(tokio::spawn(run_local_stats_sampler(
                         event_tx.clone(),
                         local_stats_tabs.clone(),
+                    )));
+                }
+                if let Ok(mut tabs) = local_traffic_tabs.lock() {
+                    tabs.retain(|(tab, _)| *tab != tab_id);
+                    tabs.push((tab_id, connection_id));
+                }
+                if local_traffic_task
+                    .as_ref()
+                    .is_none_or(|task| task.is_finished())
+                {
+                    local_traffic_task = Some(tokio::spawn(run_local_traffic_sampler(
+                        event_tx.clone(),
+                        local_traffic_tabs.clone(),
                     )));
                 }
             }
@@ -622,6 +637,7 @@ async fn run_controller(
                     stop_key_deploy(&mut key_deploy_tasks, tab_id);
                     stop_stats(&mut stats_tasks, tab_id);
                     drop_local_stats(&local_stats_tabs, tab_id);
+                    drop_local_stats(&local_traffic_tabs, tab_id);
                     // 优雅断开远端：直接丢弃 Handle 会跳过 disconnect 通知，
                     // 服务器侧要等 keepalive 超时才回收会话。
                     if let Some((_, remote)) = remotes.remove(&tab_id) {

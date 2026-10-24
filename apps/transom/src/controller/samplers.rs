@@ -55,50 +55,52 @@ pub(super) fn spawn_traffic_sampler(
     })
 }
 
-/// 本地终端的网络采样：读取本机 `/proc/net/dev` 的非回环网卡累计字节。
+/// 本地终端的网络采样订阅表：与共享系统统计同一模式，按机器计一份。
+pub(super) type LocalTrafficTabs = Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>;
+
+/// 本地终端的网络采样（机器级共享）：读取本机 `/proc/net/dev` 的非回环
+/// 网卡累计字节，广播给全部已登记标签。
 ///
-/// 与 SSH 传输层计数不同，这里得到的是整台机器所有非回环接口的合计吞吐，
-/// 因此界面上要按会话类型区分提示文案。读取失败时跳过本轮并保留上一次
-/// 有效样本，避免把一次文件读取抖动显示成断网。
-pub(super) fn spawn_local_traffic_sampler(
-    tab_id: TabId,
-    connection_id: ConnectionId,
+/// 设计原理（Why）：本地网络流量是整台机器的属性（与 SSH 传输层计数不同），
+/// 多个本地标签各自读取同一份 /proc/net/dev 只会得到 N 份相同数据；共享
+/// 采样按机器计一次读取，结果逐标签广播。
+/// 界面上按会话类型区分提示文案由渲染层负责。读取失败时本轮跳过并保留
+/// 上一次有效样本，避免把一次文件读取抖动显示成断网。
+pub(super) async fn run_local_traffic_sampler(
     event_tx: flume::Sender<AppEvent>,
-) -> tokio::task::JoinHandle<()> {
+    tabs: LocalTrafficTabs,
+) {
     async fn read_totals() -> Option<(u64, u64)> {
         let content = tokio::fs::read_to_string("/proc/net/dev").await.ok()?;
         parse_net_dev_totals(&content)
     }
 
-    tokio::spawn(async move {
-        if event_tx
-            .send_async(AppEvent::NetworkTrafficUpdated {
-                tab_id,
-                connection_id,
-                traffic: NetworkTraffic::default(),
-            })
-            .await
-            .is_err()
-        {
-            return;
-        }
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        interval.tick().await;
-        let mut previous = read_totals().await;
-        let mut previous_at = std::time::Instant::now();
-        loop {
-            interval.tick().await;
-            let Some(current) = read_totals().await else {
-                continue;
-            };
-            let now = std::time::Instant::now();
-            let elapsed = now.saturating_duration_since(previous_at);
-            previous_at = now;
-            let Some(previous_totals) = previous.replace(current) else {
-                continue;
-            };
-            let sample = NetworkTraffic::from_delta(previous_totals, current, elapsed);
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // 与其他采样器同口径：跳过首个瞬时 tick，保证首个速率窗口完整 1 秒。
+    interval.tick().await;
+    let mut previous: Option<(u64, u64)> = read_totals().await;
+    let mut previous_at = std::time::Instant::now();
+    loop {
+        // 持锁只做纯内存克隆，不跨 await；订阅清空即退出，
+        // 下一个本地连接会重新拉起本采样器。
+        let subscribers = match tabs.lock() {
+            Ok(tabs) if tabs.is_empty() => break,
+            Ok(tabs) => tabs.clone(),
+            Err(_) => break,
+        };
+        let Some(current) = read_totals().await else {
+            continue;
+        };
+        let now = std::time::Instant::now();
+        let elapsed = now.saturating_duration_since(previous_at);
+        previous_at = now;
+        let Some(previous_totals) = previous.replace(current) else {
+            continue;
+        };
+        let sample = NetworkTraffic::from_delta(previous_totals, current, elapsed);
+        let mut channel_closed = false;
+        for (tab_id, connection_id) in subscribers {
             if event_tx
                 .send_async(AppEvent::NetworkTrafficUpdated {
                     tab_id,
@@ -108,10 +110,14 @@ pub(super) fn spawn_local_traffic_sampler(
                 .await
                 .is_err()
             {
+                channel_closed = true;
                 break;
             }
         }
-    })
+        if channel_closed {
+            break;
+        }
+    }
 }
 
 /// 远端系统统计采样：每 3 秒 exec 一组只读命令，OS 标识首轮后缓存复用。
@@ -125,6 +131,8 @@ pub(super) fn spawn_remote_stats_sampler(
     tokio::spawn(async move {
         let mut prev_cpu = None;
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
+        // exec 耗时超过周期时不得连发补采：丢弃错过的 tick，保持完整采样窗口。
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         // 跳过 interval 的第一个瞬时 tick，保证首个采样窗口是完整的
         // 3 秒；否则首个 tick 立即完成，前两次采样背靠背，CPU 占比失真。
@@ -182,6 +190,8 @@ pub(super) async fn run_local_stats_sampler(
     let mut prev_cpu = None;
     let mut cached_os: Option<String> = None;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
+    // 采样耗时超过周期时不得连发补采：丢弃错过的 tick，保持完整采样窗口。
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     // 跳过首个瞬时 tick，保证首个采样窗口是完整的 3 秒。
     interval.tick().await;
@@ -208,9 +218,15 @@ pub(super) async fn run_local_stats_sampler(
                 .await
                 .unwrap_or_default(),
         };
-        let df = match Command::new("df").args(["-P", "-k", "/"]).output().await {
-            Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
-            Err(_) => String::new(),
+        // df 是外部子进程：必须限时并保证退出收割，防止异常环境下
+        // 子进程假死拖住整轮采样
+        let mut df_command = Command::new("df");
+        df_command.args(["-P", "-k", "/"]).kill_on_drop(true);
+        let df = match tokio::time::timeout(std::time::Duration::from_secs(5), df_command.output())
+            .await
+        {
+            Ok(Ok(out)) => String::from_utf8_lossy(&out.stdout).to_string(),
+            Ok(Err(_)) | Err(_) => String::new(),
         };
         let output = format!("{stat}\n{mem}\n__UPTIME__\n{uptime}\n__DF__\n{df}\n__OS__\n{os}");
         let (mut stats, curr_cpu) =
