@@ -27,7 +27,7 @@ impl AuthPrompter for UiPrompter {
         key_type: &str,
         fingerprint: &str,
     ) -> Result<bool, AppError> {
-        let (responder, answer) = tokio::sync::mpsc::channel(1);
+        let (responder, mut answer) = tokio::sync::mpsc::channel(1);
         self.event_tx
             .send_async(AppEvent::HostKeyConfirm {
                 tab_id: self.tab_id,
@@ -54,7 +54,7 @@ impl AuthPrompter for UiPrompter {
         instructions: &str,
         prompts: &[PromptInfo],
     ) -> Result<Vec<String>, AppError> {
-        let (responder, answers) = tokio::sync::mpsc::channel(1);
+        let (responder, mut answers) = tokio::sync::mpsc::channel(1);
         // AuthPrompt 是用户必须看到并作答的关键事件，队列满时等待 UI 消费
         // 而不是丢弃（认证本来就阻塞在此，等待即天然反压）。
         self.event_tx
