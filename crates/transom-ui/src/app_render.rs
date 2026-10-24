@@ -1,9 +1,12 @@
 //! AppShell 顶层布局渲染。
 
+use crate::activity_bar::ACTIVITY_BAR_WIDTH;
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::WindowExt;
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::*;
 
@@ -23,6 +26,8 @@ impl Render for AppShell {
         };
         let mut resizable_group = h_resizable(resizable_id);
         if !self.immersive {
+            // 非沉浸分组由外壳持有列宽状态，状态栏才能读到与侧栏一致的分界位置。
+            resizable_group = resizable_group.with_state(&self.workspace_panels);
             // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
             // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
             // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
@@ -77,14 +82,33 @@ impl Render for AppShell {
                 .overflow_hidden()
                 .child(resizable_group),
         );
-        // 快捷命令条贴在状态栏上方：底栏属于工作区全局，不随窗格分屏重复出现。
-        let snippets_bar =
-            (!self.immersive && self.snippets_expanded).then(|| self.render_snippets_bar(&p, cx));
-        let error_banner = self
-            .error
-            .as_ref()
-            .map(|_| self.render_error_banner(&p, cx));
-        let status_bar = (!self.immersive).then(|| self.render_status_bar(&p, cx));
+        // 状态栏按活动栏加侧栏的实测宽度切分。尺寸取自工作区分组的上一帧布局，
+        // 拖动侧栏时由 ResizableState 的通知驱动整帧重绘，分界线落后一帧。
+        let status_bar = (!self.immersive).then(|| {
+            let divider_x = if self.sidebar_visible {
+                // 侧栏折叠期间仍以空面板参与分组，拖动其他分隔线可能把它的记录
+                // 宽度同步成 0；小于最小宽度的值一律视为无效，回退到默认宽度。
+                let sidebar_width = self
+                    .workspace_panels
+                    .read(cx)
+                    .sizes()
+                    .first()
+                    .copied()
+                    .filter(|width| *width >= px(100.0))
+                    .unwrap_or(px(270.0));
+                px(ACTIVITY_BAR_WIDTH) + sidebar_width
+            } else {
+                px(0.0)
+            };
+            self.render_status_bar(&p, cx, divider_x)
+        });
+        // 错误横幅已移除：统一转成应用内通知。设置与触发点仍写 self.error，
+        // 这里取走并延迟到绘制结束后推送，避免在渲染期间修改通知层。
+        if let Some(message) = self.error.take() {
+            cx.defer_in(window, move |_, window, cx| {
+                window.push_notification(Notification::error(message).autohide(false), cx);
+            });
+        }
         // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现
         // 弹窗在面板下面、用户点不到确认按钮的层序错误。
         let editor_layers = self.render_editor_panels(window, &p, cx);
@@ -134,12 +158,6 @@ impl Render for AppShell {
             root = root.child(top_bar);
         }
         root = root.child(main_row);
-        if let Some(snippets_bar) = snippets_bar {
-            root = root.child(snippets_bar);
-        }
-        if let Some(error_banner) = error_banner {
-            root = root.child(error_banner);
-        }
         if let Some(status_bar) = status_bar {
             root = root.child(status_bar);
         }

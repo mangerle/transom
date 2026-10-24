@@ -1,8 +1,9 @@
-//! 底部状态栏（系统资源与网络指标）与顶部错误横幅渲染模块。
+//! 底部状态栏：左侧连接状态、右侧快捷命令入口与系统资源/网络指标。
 //!
-//! 右侧徽标按用户布局动态排序，隐藏状态持久化；在场性由实时数据决定：没有
-//! 网络采样、没有系统指标时对应条目直接不渲染，但顺序仍按全集保存，数据恢复
-//! 后不会跳到别的位置。左侧连接状态固定，不参与排序。
+//! 状态栏按活动栏加侧栏的实测宽度切成两段；侧栏隐藏时不做切分。右侧徽标按
+//! 用户布局动态排序，隐藏状态持久化；在场性由实时数据决定：没有网络采样、
+//! 没有系统指标时对应条目直接不渲染，但顺序仍按全集保存，数据恢复后不会跳到
+//! 别的位置。左侧连接状态固定，不参与排序。
 //!
 //! 所有数值徽标都给固定宽度的数值槽：网络速率会在 B/KB/MB/GB 与不同位数之间
 //! 频繁变化，若宽度跟着内容走，整条状态栏会每秒抖动；固定槽让位置稳定，变化
@@ -14,12 +15,14 @@ use crate::app::{AppShell, TabStatus, TerminalTab};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{Connection, NetworkTraffic, StatusItemId, SystemStats};
+
+/// 底栏高度。快捷命令卡片的锚点高度与它保持一致，卡片才能贴住底栏上缘。
+pub(crate) const STATUS_BAR_HEIGHT: f32 = 28.0;
 
 const RATE_WIDTH: f32 = 40.0;
 const CPU_VALUE_WIDTH: f32 = 28.0;
@@ -82,7 +85,13 @@ impl<'a> StatusData<'a> {
 }
 
 impl AppShell {
-    pub(crate) fn render_status_bar(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    /// 渲染底栏。`divider_x` 为分界线横坐标，`0` 表示侧栏已隐藏、整条不分段。
+    pub(crate) fn render_status_bar(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+        divider_x: Pixels,
+    ) -> AnyElement {
         let active_tab_info = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id));
@@ -131,9 +140,10 @@ impl AppShell {
             );
         }
 
+        let pill_tooltip = status_text.clone();
         let connection_pill = h_flex()
             .id("status-connection")
-            .flex_none()
+            .min_w_0()
             .gap_2()
             .items_center()
             .h(px(BADGE_HEIGHT))
@@ -144,31 +154,83 @@ impl AppShell {
             .border_color(p.foreground.opacity(0.08))
             .cursor_default()
             .hover(|style| style.bg(p.foreground.opacity(0.06)))
-            .child(div().size(px(8.0)).rounded_full().bg(status_dot_color))
-            .child(div().text_xs().text_color(p.foreground).child(status_text));
+            .tooltip(move |_window, cx| Tooltip::new(pill_tooltip.clone()).build(_window, cx))
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(8.0))
+                    .rounded_full()
+                    .bg(status_dot_color),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_xs()
+                    .text_color(p.foreground)
+                    .child(status_text),
+            );
 
+        let snippets_entry = self.render_snippets_popover(p, cx);
+        let front_zone = drag::status_front_drop_zone(&app, p);
         let menu_app = app.clone();
-        h_flex()
+        let badges = h_flex()
+            .flex_none()
+            .gap_2()
+            .items_center()
+            .children(right_elements);
+
+        let mut bar = h_flex()
             .id("status-bar")
-            .h(px(28.0))
-            .px_3()
+            .h(px(STATUS_BAR_HEIGHT))
             .items_center()
             .bg(p.status_bar)
             .border_t_1()
-            .border_color(p.border)
-            .child(connection_pill)
-            // 右侧徽标簇靠右对齐，簇左侧的空白直接作为"移到最前"的落点。
-            .child(drag::status_front_drop_zone(&app, p))
-            .child(
-                h_flex()
-                    .flex_none()
-                    .gap_2()
-                    .items_center()
-                    .children(right_elements),
-            )
-            // 空白区与左侧固定状态都落到整条状态栏的兜底菜单；徽标自己的菜单
-            // 先命中并阻止冒泡，因此不会出现两层菜单同时打开。
-            .context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app))
+            .border_color(p.border);
+
+        if divider_x > px(0.0) {
+            // 左段宽到侧栏右缘，连接状态过长时在段内截断；右段的左边框续上
+            // 侧栏右边框，形成一条贯穿到窗口底边的分界线。
+            bar = bar
+                .child(
+                    h_flex()
+                        .w(divider_x)
+                        .flex_none()
+                        .h_full()
+                        .items_center()
+                        .pl_3()
+                        .pr_2()
+                        .child(h_flex().flex_1().min_w_0().child(connection_pill)),
+                )
+                .child(
+                    h_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .items_center()
+                        .gap_2()
+                        .pr_3()
+                        .border_l_1()
+                        .border_color(p.sidebar_border)
+                        .child(snippets_entry)
+                        .child(front_zone)
+                        .child(badges),
+                );
+        } else {
+            bar = bar
+                .pl_3()
+                .pr_3()
+                .gap_2()
+                .child(connection_pill)
+                .child(snippets_entry)
+                .child(front_zone)
+                .child(badges);
+        }
+
+        // 空白区与左侧固定状态都落到整条状态栏的兜底菜单；徽标自己的菜单
+        // 先命中并阻止冒泡，因此不会出现两层菜单同时打开。
+        bar.context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app))
             .into_any_element()
     }
 
@@ -388,33 +450,6 @@ impl AppShell {
                         .text_color(value_color)
                         .child(value),
                 ),
-            )
-            .into_any_element()
-    }
-
-    pub(crate) fn render_error_banner(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        h_flex()
-            .px_3()
-            .py_2()
-            .gap_3()
-            .items_center()
-            .justify_between()
-            .bg(p.danger)
-            .text_color(p.danger_foreground)
-            .child(
-                div()
-                    .text_sm()
-                    .child(self.error.clone().unwrap_or_default()),
-            )
-            .child(
-                Button::new("dismiss-error")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::X)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.error = None;
-                        cx.notify();
-                    })),
             )
             .into_any_element()
     }

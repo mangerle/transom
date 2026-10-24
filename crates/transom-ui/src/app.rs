@@ -11,7 +11,7 @@ use crate::sftp::{
     EditorPanelState, SftpChmodModalState, SftpFilterModalState, SftpInputModalState,
     SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
 };
-use crate::snippets::SnippetEditor;
+use crate::snippets::SnippetFormState;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
@@ -259,6 +259,11 @@ pub struct AppShell {
     /// 交给 gpui 的 keyed state 会在元素缺席一帧后被回收，切标签或窗格最大化
     /// 再回来时用户拖出的比例就归零；见 `AppShell::pane_split_state`。
     pub(crate) pane_split_states: HashMap<SplitId, Entity<ResizableState>>,
+    /// 工作区分组（侧栏、主区、SFTP、转发）的列宽状态。
+    ///
+    /// 由外壳持有而不是交给 gpui 的 keyed state：状态栏分界线要读同一份侧栏
+    /// 宽度，而 keyed state 在沉浸模式切换后可能被回收，侧栏会回到初始宽度。
+    pub(crate) workspace_panels: Entity<ResizableState>,
     pub(crate) active_tab: Option<TabId>,
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
@@ -290,11 +295,13 @@ pub struct AppShell {
     pub(crate) sftp_properties_modal: Option<SftpPropertiesModalState>,
     pub(crate) sftp_filter_modal: Option<SftpFilterModalState>,
     pub(crate) sftp_sync_modal: Option<SftpSyncModalState>,
-    /// 底部快捷命令条是否展开（运行期状态，与侧边栏、沉浸模式同口径）。
-    pub(crate) snippets_expanded: bool,
-    /// 快捷命令库编辑弹窗。
-    pub(crate) snippet_editor: Option<SnippetEditor>,
+    /// 快捷命令卡片是否展开（运行期状态，与侧边栏、沉浸模式同口径）。
+    pub(crate) snippets_open: bool,
+    /// 快捷命令新增/编辑小弹窗。
+    pub(crate) snippet_form: Option<SnippetFormState>,
+    /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
     pub(crate) status: Option<String>,
+    /// 全局错误缓冲：渲染时取走并转成应用内通知，界面不再有独立错误横幅。
     pub(crate) error: Option<String>,
     pub(crate) sidebar_visible: bool,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
@@ -337,6 +344,10 @@ impl AppShell {
             InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
         });
         let quick_open_state = cx.new(|cx| CommandState::new(window, cx));
+        let workspace_panels = cx.new(|_| ResizableState::default());
+        // 侧栏拖动与状态栏分界线共享尺寸：状态一通知就重绘外壳，分界线实时跟随。
+        cx.observe(&workspace_panels, |_, _, cx| cx.notify())
+            .detach();
         let (catalog, error) = match services.session_store.load() {
             Ok(catalog) => (catalog, None),
             Err(error) => (SessionCatalog::default(), Some(localized_error(&error))),
@@ -424,6 +435,7 @@ impl AppShell {
             tabs: Vec::new(),
             groups: Vec::new(),
             pane_split_states: HashMap::new(),
+            workspace_panels,
             active_tab: None,
             search,
             form: None,
@@ -452,8 +464,8 @@ impl AppShell {
             sftp_properties_modal: None,
             sftp_filter_modal: None,
             sftp_sync_modal: None,
-            snippets_expanded: false,
-            snippet_editor: None,
+            snippets_open: false,
+            snippet_form: None,
             status: None,
             error,
             sidebar_visible: true,
@@ -582,6 +594,10 @@ impl AppShell {
     ) {
         self.immersive = !self.immersive;
         window.toggle_fullscreen();
+        if self.immersive {
+            // 沉浸模式没有底栏，快捷命令卡片失去锚点，先收起再进入。
+            self.snippets_open = false;
+        }
         if self.immersive
             && let Some(focus_handle) = self
                 .active_tab
@@ -653,8 +669,8 @@ impl AppShell {
         if self.sftp_sync_modal.is_some() {
             overlays.push(self.render_sftp_sync_modal(window, cx, &p));
         }
-        if self.snippet_editor.is_some() {
-            overlays.push(self.render_snippet_editor(&p, cx));
+        if self.snippet_form.is_some() {
+            overlays.push(self.render_snippet_form(&p, cx));
         }
         overlays
     }

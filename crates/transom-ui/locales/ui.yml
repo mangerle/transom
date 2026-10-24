@@ -98,6 +98,9 @@ common:
   delete:
     en: Delete
     zh-CN: 删除
+  edit:
+    en: Edit
+    zh-CN: 编辑
   confirm_delete:
     en: Confirm delete
     zh-CN: 确认删除
@@ -351,24 +354,30 @@ snippets:
   add:
     en: Add
     zh-CN: 新增
-  manage:
-    en: Manage
-    zh-CN: 管理
-  collapse:
-    en: Collapse snippets bar
-    zh-CN: 收起快捷命令条
-  editor_title:
-    en: Quick Command Library
-    zh-CN: 快捷命令库
-  editor_note:
-    en: Click a button to fill the focused pane; Shift+Click sends and executes. Commands are shared by all sessions.
-    zh-CN: 点击按钮填充当前窗格；按住 Shift 点击则直接发送执行。命令库全局共用，不区分会话。
+  execute_directly:
+    en: Direct Execute
+    zh-CN: 直接执行
+  execute_directly_off_hint:
+    en: Clicking a command fills it into the focused pane without running it.
+    zh-CN: 点击命令只填入当前窗格，不自动回车执行。
+  execute_directly_on_hint:
+    en: Clicking a command sends it and presses Enter immediately.
+    zh-CN: 点击命令会立即发送并回车执行。
+  form_add_title:
+    en: New Quick Command
+    zh-CN: 新增快捷命令
+  form_edit_title:
+    en: Edit Quick Command
+    zh-CN: 编辑快捷命令
+  form_invalid:
+    en: "Both name and command are required; name up to 40 characters, command up to 4000."
+    zh-CN: "名称与命令都不能为空；名称不超过 40 字，命令不超过 4000 字。"
   name_column:
-    en: Button label
-    zh-CN: 按钮名称
+    en: Name
+    zh-CN: 名称
   command_column:
     en: Command
-    zh-CN: 命令内容
+    zh-CN: 命令
   name_hint:
     en: e.g. Disk usage
     zh-CN: 例如：看磁盘占用
@@ -390,9 +399,6 @@ snippets:
   too_many:
     en: Too many snippets (max 40)
     zh-CN: 快捷命令数量已达上限（40 条）
-  row_invalid:
-    en: "Row %{row} is invalid: both label and command are required, label up to 40 chars, command up to 4000 chars"
-    zh-CN: "第 %{row} 行不合格：名称与命令都不能为空，名称不超过 40 字，命令不超过 4000 字"
 
 notify:
   desktop_switch:
@@ -1072,8 +1078,8 @@ settings:
     en: Toggle Split Direction of Focused Pane
     zh-CN: 翻转当前窗格的切分方向
   shortcut_toggle_snippets:
-    en: Toggle Snippets Bar
-    zh-CN: 显示/隐藏快捷命令条
+    en: Toggle Quick Commands
+    zh-CN: 显示/隐藏快捷命令面板
   shortcut_terminal_search:
     en: Search Terminal Buffer
     zh-CN: 搜索终端缓冲区

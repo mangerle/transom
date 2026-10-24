@@ -32,8 +32,11 @@ struct ActivityBarMetrics {
     padding_y: f32,
 }
 
+/// 活动栏宽度。状态栏按列分段时要用它加上侧栏宽度定位分界线。
+pub(crate) const ACTIVITY_BAR_WIDTH: f32 = 48.0;
+
 const METRICS: ActivityBarMetrics = ActivityBarMetrics {
-    width: 48.0,
+    width: ACTIVITY_BAR_WIDTH,
     button: 34.0,
     gap: 12.0,
     padding_y: 12.0,
@@ -212,7 +215,7 @@ impl AppShell {
                 .active_tab
                 .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| tab.forwards_panel.is_some()),
-            ActivityItemId::Snippets => self.snippets_expanded,
+            ActivityItemId::Snippets => self.snippets_open,
             ActivityItemId::Sftp => self
                 .active_tab
                 .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
@@ -245,7 +248,7 @@ impl AppShell {
             }
             ActivityItemId::QuickOpen => self.toggle_quick_open(window, cx),
             ActivityItemId::Forwards => self.toggle_forward_panel(window, cx),
-            ActivityItemId::Snippets => self.toggle_snippets_bar(cx),
+            ActivityItemId::Snippets => self.toggle_snippets_panel(cx),
             ActivityItemId::Sftp => self.toggle_sftp(window, cx),
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),

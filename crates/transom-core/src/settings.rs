@@ -194,11 +194,17 @@ impl Snippet {
     }
 }
 
-/// 快捷命令库。命令内容跨重启保持，展开状态属运行期不在此列。
+/// 快捷命令库。命令内容与“直接执行”开关跨重启保持，面板显隐属运行期不在此列。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SnippetSettings {
     #[serde(default)]
     pub items: Vec<Snippet>,
+    /// 点击命令后是否直接发送并回车。
+    ///
+    /// 默认关闭：终端里误执行一条危险命令的代价远高于多点一次回车，
+    /// 因此开启后由界面明确提示当前处于“点击即执行”状态。
+    #[serde(default)]
+    pub execute_directly: bool,
 }
 
 impl SnippetSettings {
@@ -326,11 +332,28 @@ mod tests {
     fn settings_without_snippets_still_load() {
         let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
         assert!(settings.snippets.items.is_empty());
+        assert!(!settings.snippets.execute_directly);
+    }
+
+    /// 直接执行默认关闭；显式开启后必须原样往返，避免被清洗逻辑吞掉。
+    #[test]
+    fn snippet_execute_mode_defaults_off_and_round_trips() {
+        let decoded: SnippetSettings = serde_json::from_str(r#"{"items":[]}"#).unwrap();
+        assert!(!decoded.execute_directly);
+
+        let settings = SnippetSettings {
+            execute_directly: true,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let decoded: SnippetSettings = serde_json::from_str(&json).unwrap();
+        assert!(decoded.execute_directly);
     }
 
     #[test]
     fn snippets_round_trip_and_reject_invalid_entries() {
         let settings = SnippetSettings {
+            execute_directly: false,
             items: vec![
                 Snippet {
                     id: SnippetId::new(),
@@ -360,6 +383,7 @@ mod tests {
     #[test]
     fn snippets_deduplicate_by_name() {
         let settings = SnippetSettings {
+            execute_directly: false,
             items: vec![
                 Snippet {
                     id: SnippetId::new(),
