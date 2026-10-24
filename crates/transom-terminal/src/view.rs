@@ -855,12 +855,52 @@ impl EntityInputHandler for TerminalView {
 
     fn character_index_for_point(
         &mut self,
-        _point: Point<Pixels>,
+        point: Point<Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
-        Some(0)
+        // 输入法组合文本不属于网格，以光标单元格为起点单独渲染；把点击位置
+        // 折算成组合文本内的 UTF-16 下标：命中光标行带后按列偏移换算，
+        // 两侧越界收敛到端点，组合为空时恒为 0。
+        let utf16_len = self.ime_text.encode_utf16().count();
+        if utf16_len == 0 {
+            return Some(0);
+        }
+        let metrics = *self.metrics.lock();
+        if metrics.cell_width <= px(0.0) || metrics.cell_height <= px(0.0) {
+            return Some(0);
+        }
+        let engine = self.engine.lock();
+        let cursor = engine.cursor_point();
+        let row = cursor.line.0 + engine.display_offset() as i32;
+        let row_y = f32::from(metrics.origin.y + metrics.cell_height * row.max(0) as f32);
+        let start_x = f32::from(metrics.origin.x + metrics.cell_width * cursor.column.0 as f32);
+        drop(engine);
+
+        if f32::from(point.y) < row_y {
+            return Some(0);
+        }
+        if f32::from(point.y) > row_y + f32::from(metrics.cell_height) {
+            return Some(utf16_len);
+        }
+        let col_cells =
+            ((f32::from(point.x) - start_x) / f32::from(metrics.cell_width)).floor() as usize;
+        Some(ime_column_to_utf16_index(&self.ime_text, col_cells))
     }
+}
+
+/// 把组合文本内按格数计的列偏移折算成 UTF-16 下标。
+/// 非 ASCII 字符按双格近似（与终端网格的 CJK 宽度一致），折算只服务输入法
+/// 候选窗定位，不追求逐像素精确。
+fn ime_column_to_utf16_index(text: &str, col_cells: usize) -> usize {
+    let mut cells = 0usize;
+    for (index, ch) in text.char_indices() {
+        if cells >= col_cells {
+            return text[..index].encode_utf16().count();
+        }
+        cells += if ch.is_ascii() { 1 } else { 2 };
+    }
+    text.encode_utf16().count()
 }
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
@@ -1053,4 +1093,22 @@ fn is_control_or_function_key(key: &str) -> bool {
             | "f11"
             | "f12"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ime_column_to_utf16_index;
+
+    /// IME 定位折算：ASCII 单格、非 ASCII 双格近似，越界收敛到端点。
+    #[test]
+    fn ime_column_maps_cells_to_utf16_index() {
+        // "ab😀" 的格占用为 1+1+2；UTF-16 长度为 4（表情符号占两个单元）。
+        assert_eq!(ime_column_to_utf16_index("ab😀", 0), 0);
+        assert_eq!(ime_column_to_utf16_index("ab😀", 1), 1);
+        // 第 2 格已进入表情符号的区间，返回其起点下标 2
+        assert_eq!(ime_column_to_utf16_index("ab😀", 2), 2);
+        // 越过组合文本末尾收敛到全长
+        assert_eq!(ime_column_to_utf16_index("ab😀", 9), 4);
+        assert_eq!(ime_column_to_utf16_index("", 3), 0);
+    }
 }
