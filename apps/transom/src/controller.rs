@@ -593,6 +593,9 @@ async fn run_controller(
                     let mut prev_cpu = None;
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    // 跳过 interval 的第一个瞬时 tick，保证首个采样窗口是完整的
+                    // 3 秒；否则首个 tick 立即完成，前两次采样背靠背，CPU 占比失真。
+                    interval.tick().await;
                     loop {
                         let cmd = "cat /proc/stat /proc/meminfo 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime 2>/dev/null; echo \"__DF__\"; df -P -k / 2>/dev/null; echo \"__OS__\"; cat /etc/os-release 2>/dev/null";
                         match remote_clone.exec_command(cmd).await {
@@ -658,6 +661,8 @@ async fn run_controller(
                     let mut prev_cpu = None;
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    // 与远端采样同口径：跳过首个瞬时 tick，保证完整的 3 秒采样窗口。
+                    interval.tick().await;
                     loop {
                         let stat = tokio::fs::read_to_string("/proc/stat")
                             .await
