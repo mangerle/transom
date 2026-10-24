@@ -199,6 +199,12 @@ form:
   auto_reconnect:
     en: Auto reconnect on unexpected drop
     zh-CN: 断线后自动重连
+  connect_timeout:
+    en: Connect Timeout (seconds)
+    zh-CN: 连接超时（秒）
+  keepalive:
+    en: Keepalive Interval (seconds, 0 disables)
+    zh-CN: 保活间隔（秒，0 为禁用）
   save_password:
     en: Save password
     zh-CN: 保存密码
@@ -1227,12 +1233,6 @@ settings:
   panel_side_right:
     en: Right
     zh-CN: 右侧
-  connect_timeout:
-    en: Connect Timeout (seconds)
-    zh-CN: 连接超时（秒）
-  keepalive:
-    en: Keepalive Interval (seconds, 0 disables)
-    zh-CN: 保活间隔（秒，0 为禁用）
   tab_appearance:
     en: Appearance
     zh-CN: 外观
