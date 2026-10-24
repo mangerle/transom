@@ -246,6 +246,19 @@ pub(crate) struct AuthPromptState {
     pub(crate) save: bool,
 }
 
+/// TOFU 主机指纹确认弹窗状态。
+///
+/// 设计原理（Why）：首次连接必须让用户核对指纹后才写入 known_hosts，
+/// 首连被中间人劫持时用户才有感知与拦截机会；`responder` 析构（标签页
+/// 关闭、弹窗被顶掉）即视为取消，认证方按失败处理并断开连接。
+pub(crate) struct HostKeyConfirmState {
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    pub(crate) key_type: String,
+    pub(crate) fingerprint: String,
+    pub(crate) responder: flume::Sender<bool>,
+}
+
 pub struct AppShell {
     pub(crate) services: UiServices,
     pub(crate) settings: AppSettings,
@@ -270,6 +283,8 @@ pub struct AppShell {
     pub(crate) folder_form: Option<FolderForm>,
     /// 认证阶段由 net 层发起的凭据询问；连接前不再拦截。
     pub(crate) auth_prompt: Option<AuthPromptState>,
+    /// TOFU 首连主机指纹确认弹窗；同一时刻最多一个在等用户作答。
+    pub(crate) host_key_confirm: Option<HostKeyConfirmState>,
     /// 认证成功后才落盘的凭据，见 [`PendingCredential`]。
     pub(crate) pending_credential: Option<PendingCredential>,
     pub(crate) show_known_hosts_modal: bool,
@@ -443,6 +458,7 @@ impl AppShell {
             form: None,
             folder_form: None,
             auth_prompt: None,
+            host_key_confirm: None,
             pending_credential: None,
             show_known_hosts_modal: false,
             known_hosts_records,
@@ -632,6 +648,9 @@ impl AppShell {
         }
         if self.auth_prompt.is_some() {
             overlays.push(self.render_auth_prompt(window, cx, &p));
+        }
+        if self.host_key_confirm.is_some() {
+            overlays.push(self.render_host_key_confirm(window, cx, &p));
         }
         if self.show_known_hosts_modal {
             overlays.push(self.render_known_hosts_modal(window, cx, &p));

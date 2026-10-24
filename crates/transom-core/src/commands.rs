@@ -72,6 +72,17 @@ pub enum AppEvent {
         prompts: Vec<PromptInfo>,
         responder: flume::Sender<Vec<String>>,
     },
+    /// 首次连接遇到未知主机密钥，请求用户确认是否信任该指纹（TOFU）。
+    /// `responder` 回传用户决定；弹窗被关闭时响应通道析构，认证方按取消处理。
+    HostKeyConfirm {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        host: String,
+        port: u16,
+        key_type: String,
+        fingerprint: String,
+        responder: flume::Sender<bool>,
+    },
     SftpListing {
         tab_id: TabId,
         connection_id: ConnectionId,

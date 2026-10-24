@@ -57,6 +57,8 @@ struct ClientHandler {
     port: u16,
     known_hosts: Arc<dyn KnownHostsStore>,
     remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    /// TOFU 指纹确认走认证提示通道，与凭据索取共用同一条 UI 往返链路。
+    prompter: Arc<dyn AuthPrompter>,
 }
 
 impl client::Handler for ClientHandler {
@@ -68,8 +70,9 @@ impl client::Handler for ClientHandler {
     ) -> Result<bool, Self::Error> {
         let public_key = server_key.public_key();
         let fingerprint = public_key.fingerprint(HashAlg::Sha256).to_string();
+        let key_type = format!("{:?}", public_key.algorithm());
         let info = HostKeyInfo::new(
-            format!("{:?}", public_key.algorithm()),
+            key_type.clone(),
             fingerprint.clone(),
             public_key.to_openssh().ok(),
         );
@@ -77,8 +80,24 @@ impl client::Handler for ClientHandler {
         match self.known_hosts.check(&self.host, self.port, &info)? {
             HostKeyStatus::Match => Ok(true),
             HostKeyStatus::Unknown => {
+                // TOFU：首次连接必须由用户确认指纹后才记录信任，杜绝首连
+                // 被 MITM 无感通过；无界面提示器按自身策略自动放行或失败。
+                let accepted = self
+                    .prompter
+                    .confirm_host_key(&self.host, self.port, &key_type, &fingerprint)
+                    .await
+                    .map_err(ClientError)?;
+                if !accepted {
+                    return Err(ClientError(AppError::with_detail(
+                        ErrorCode::HostKeyUnknown,
+                        format!(
+                            "用户拒绝了 {}:{} 的主机密钥指纹 {fingerprint}",
+                            self.host, self.port
+                        ),
+                    )));
+                }
                 self.known_hosts.record(&self.host, self.port, &info)?;
-                tracing::info!(host = %self.host, port = self.port, %fingerprint, "recorded new host key");
+                tracing::info!(host = %self.host, port = self.port, %fingerprint, "用户确认后记录新主机密钥");
                 Ok(true)
             }
             HostKeyStatus::Mismatch {
@@ -285,6 +304,8 @@ pub async fn connect_ssh(
         port: connection.port,
         known_hosts,
         remote_forwards: remote_forwards.clone(),
+        // 同一个 Arc 稍后还要传给 authenticate 做凭据索取，这里只克隆引用
+        prompter: prompter.clone(),
     };
     let connect_timeout = Duration::from_secs(connection.options.connect_timeout_secs.max(1));
     let host = connection.host.clone();
@@ -757,13 +778,25 @@ mod tests {
     use russh::keys::key::safe_rng;
     use russh::keys::{Algorithm, PrivateKey};
 
-    /// 测试替身：按预设答案回应认证索取，`Err` 分支模拟用户取消。
+    /// 测试替身：按预设答案回应认证索取，`Err` 分支模拟用户取消；
+    /// `host_key` 决定 TOFU 指纹确认的答复，模拟用户信任或拒绝。
     struct ScriptedPrompter {
         answers: Result<Vec<String>, ()>,
+        host_key: bool,
     }
 
     #[async_trait::async_trait]
     impl AuthPrompter for ScriptedPrompter {
+        async fn confirm_host_key(
+            &self,
+            _host: &str,
+            _port: u16,
+            _key_type: &str,
+            _fingerprint: &str,
+        ) -> Result<bool, AppError> {
+            Ok(self.host_key)
+        }
+
         async fn keyboard_interactive(
             &self,
             _name: &str,
@@ -835,6 +868,10 @@ mod tests {
             port: 22,
             known_hosts: known_hosts.clone(),
             remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            prompter: Arc::new(ScriptedPrompter {
+                answers: Ok(Vec::new()),
+                host_key: true,
+            }),
         };
 
         assert!(handler.check_server_key(&server_key).await.unwrap());
@@ -846,10 +883,36 @@ mod tests {
         assert!(handler.check_server_key(&other_key).await.is_err());
     }
 
+    /// TOFU 拒绝路径：用户不确认指纹时连接必须失败，且不得写入 known_hosts。
+    #[tokio::test]
+    async fn handler_rejected_host_key_is_not_recorded() {
+        let key = PrivateKey::random(&mut safe_rng(), Algorithm::Ed25519).unwrap();
+        let server_key = PublicKeyOrCertificate::from(key.public_key().clone());
+        let known_hosts = Arc::new(MemoryKnownHosts {
+            inner: Mutex::new(Vec::new()),
+        });
+        let mut handler = ClientHandler {
+            host: "example.com".into(),
+            port: 22,
+            known_hosts: known_hosts.clone(),
+            remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            prompter: Arc::new(ScriptedPrompter {
+                answers: Ok(Vec::new()),
+                host_key: false,
+            }),
+        };
+        assert!(handler.check_server_key(&server_key).await.is_err());
+        assert!(
+            known_hosts.inner.lock().is_empty(),
+            "拒绝指纹时绝不能记录信任"
+        );
+    }
+
     #[tokio::test]
     async fn request_secret_returns_the_prompted_answer() {
         let prompter = ScriptedPrompter {
             answers: Ok(vec!["s3cret".to_string()]),
+            host_key: true,
         };
         let secret = request_secret(&prompter, PromptKind::Password)
             .await
@@ -861,6 +924,7 @@ mod tests {
     async fn request_secret_fails_on_empty_or_cancelled_input() {
         let blank = ScriptedPrompter {
             answers: Ok(vec![String::new()]),
+            host_key: true,
         };
         assert!(
             request_secret(&blank, PromptKind::Passphrase)
@@ -868,7 +932,10 @@ mod tests {
                 .is_err()
         );
 
-        let cancelled = ScriptedPrompter { answers: Err(()) };
+        let cancelled = ScriptedPrompter {
+            answers: Err(()),
+            host_key: true,
+        };
         assert!(
             request_secret(&cancelled, PromptKind::Password)
                 .await

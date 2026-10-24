@@ -1421,6 +1421,36 @@ struct UiPrompter {
 
 #[async_trait]
 impl AuthPrompter for UiPrompter {
+    /// TOFU 指纹确认：与认证提示同一条事件通道往返，握手本就阻塞在此，
+    /// 等待用户作答即天然反压；弹窗被关闭时响应通道析构，按取消处理。
+    async fn confirm_host_key(
+        &self,
+        host: &str,
+        port: u16,
+        key_type: &str,
+        fingerprint: &str,
+    ) -> Result<bool, AppError> {
+        let (responder, answer) = flume::bounded(1);
+        self.event_tx
+            .send_async(AppEvent::HostKeyConfirm {
+                tab_id: self.tab_id,
+                connection_id: self.connection_id,
+                host: host.to_string(),
+                port,
+                key_type: key_type.to_string(),
+                fingerprint: fingerprint.to_string(),
+                responder,
+            })
+            .await
+            .map_err(|_| {
+                AppError::with_detail(ErrorCode::Cancelled, "应用窗口已关闭，无法确认主机指纹")
+            })?;
+        answer
+            .recv_async()
+            .await
+            .map_err(|_| AppError::with_detail(ErrorCode::Cancelled, "主机指纹确认已被取消"))
+    }
+
     async fn keyboard_interactive(
         &self,
         name: &str,

@@ -361,6 +361,22 @@ impl AppShell {
         self.auth_prompt = None;
     }
 
+    /// 用户信任首连主机指纹：回传确认，known_hosts 记录由认证方完成后继续握手。
+    pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
+        if let Some(state) = self.host_key_confirm.take() {
+            let _ = state.responder.send(true);
+            cx.notify();
+        }
+    }
+
+    /// 用户拒绝首连主机指纹：连接将以此失败，known_hosts 不落任何记录。
+    pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
+        if let Some(state) = self.host_key_confirm.take() {
+            let _ = state.responder.send(false);
+            cx.notify();
+        }
+    }
+
     pub(crate) fn render_auth_prompt(
         &mut self,
         _window: &mut Window,
@@ -471,6 +487,76 @@ impl AppShell {
             "auth-prompt-modal",
             rust_i18n::t!("prompt.auth_title").to_string(),
             Some(hint),
+            content,
+            Some(footer),
+            px(440.0),
+            p,
+        );
+        Self::overlay(dialog, p)
+    }
+
+    /// TOFU 首连主机指纹确认弹窗：展示主机、密钥类型与 SHA256 指纹，
+    /// 用户"信任并连接"才写入 known_hosts，拒绝则中止连接。
+    pub(crate) fn render_host_key_confirm(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(state) = self.host_key_confirm.as_ref() else {
+            return div().into_any_element();
+        };
+        let body = rust_i18n::t!(
+            "prompt.host_key_body",
+            host = state.host.as_str(),
+            port = state.port
+        )
+        .to_string();
+        let content = v_flex()
+            .gap_3()
+            .child(div().text_sm().child(body))
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(format!("{}: {}", state.key_type, state.host)),
+                    )
+                    // 指纹需要逐字符核对，用等宽字体避免视觉混淆
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_family("monospace")
+                            .child(state.fingerprint.clone()),
+                    ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(p.danger)
+                    .child(rust_i18n::t!("prompt.host_key_warning").to_string()),
+            );
+        let footer = h_flex()
+            .gap_2()
+            .justify_end()
+            .child(
+                Button::new("reject-host-key")
+                    .ghost()
+                    .label(rust_i18n::t!("prompt.host_key_reject").to_string())
+                    .on_click(cx.listener(|this, _, _, cx| this.reject_host_key(cx))),
+            )
+            .child(
+                Button::new("accept-host-key")
+                    .primary()
+                    .label(rust_i18n::t!("prompt.host_key_trust").to_string())
+                    .on_click(cx.listener(|this, _, _, cx| this.accept_host_key(cx))),
+            );
+        let dialog = Self::dialog_frame(
+            "host-key-modal",
+            rust_i18n::t!("prompt.host_key_title").to_string(),
+            Some(rust_i18n::t!("prompt.host_key_hint").to_string()),
             content,
             Some(footer),
             px(440.0),

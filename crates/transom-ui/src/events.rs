@@ -1,6 +1,6 @@
 //! 应用顶层事件分发与终端事件回调处理模块。
 
-use crate::app::{AppShell, AuthPromptState, TabStatus};
+use crate::app::{AppShell, AuthPromptState, HostKeyConfirmState, TabStatus};
 use crate::palette::localized_error;
 use crate::sftp::{
     SftpPreviewResponse, SftpPropertiesModalState, format_size, remote_file_properties,
@@ -163,6 +163,29 @@ impl AppShell {
                     session_id,
                     secret_kind,
                     save: false,
+                });
+            }
+            AppEvent::HostKeyConfirm {
+                tab_id,
+                connection_id,
+                host,
+                port,
+                key_type,
+                fingerprint,
+                responder,
+            } => {
+                let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+                    return;
+                };
+                if tab.connection_id != Some(connection_id) {
+                    return;
+                }
+                self.host_key_confirm = Some(HostKeyConfirmState {
+                    host,
+                    port,
+                    key_type,
+                    fingerprint,
+                    responder,
                 });
             }
             AppEvent::SftpListing {
