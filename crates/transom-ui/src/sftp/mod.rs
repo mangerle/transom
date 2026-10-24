@@ -6,6 +6,7 @@ mod editor_panel;
 mod editor_view;
 mod file_ops;
 mod filter;
+mod local_only;
 mod local_pane_view;
 mod modals;
 mod nav_actions;
@@ -16,6 +17,7 @@ mod preview_view;
 mod properties;
 mod queue_actions;
 mod queue_view;
+mod quick_paths;
 mod status;
 mod sync_actions;
 mod sync_modal;
@@ -23,6 +25,7 @@ mod sync_modal;
 pub(crate) use self::editor_panel::EditorPanelState;
 pub(crate) use self::preview::SftpPreviewResponse;
 use self::preview::SftpPreviewState;
+pub(crate) use self::quick_paths::LocalQuickPaths;
 use crate::palette::Palette;
 use chrono::{Local, TimeZone};
 use gpui_kit::assets::IconName;
@@ -121,6 +124,10 @@ pub(crate) struct SftpPanelState {
     pub(crate) local_path_input: Entity<InputState>,
     pub(crate) local_filter_input: Entity<InputState>,
     pub(crate) local_entries: Vec<LocalFileEntry>,
+    /// 打开面板时解析一次的常用目录，避免逐帧读取 XDG 配置。
+    pub(crate) local_quick_paths: LocalQuickPaths,
+    /// 本地终端专用：只渲染本地栏，不包含远端、队列与上传入口。
+    pub(crate) local_only: bool,
     pub(crate) local_selected: Option<PathBuf>,
     /// 本地栏多选集合；`local_selected` 始终指向其中最近操作的主项。
     pub(crate) local_selection: BTreeSet<PathBuf>,

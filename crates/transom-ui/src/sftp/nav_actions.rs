@@ -1,7 +1,7 @@
 //! SFTP 双栏目录导航、路径跳转、终端联动与过滤控制方法。
 
 use super::{
-    SftpActivePane, SftpPanelState, extract_candidate_path, list_local_dir, local_home,
+    LocalQuickPaths, SftpActivePane, SftpPanelState, extract_candidate_path, list_local_dir,
     parent_remote,
 };
 use crate::app::{AppShell, TabStatus};
@@ -50,7 +50,13 @@ impl AppShell {
             cx.notify();
             return;
         }
-        if !matches!(self.tabs[index].session.connection, Connection::Ssh(_)) {
+        let is_local = matches!(&self.tabs[index].session.connection, Connection::Local(_));
+        let is_ssh = matches!(&self.tabs[index].session.connection, Connection::Ssh(_));
+        if is_local {
+            self.open_local_file_panel(index, window, cx);
+            return;
+        }
+        if !is_ssh {
             self.error = Some(rust_i18n::t!("error.sftp_requires_ssh").to_string());
             cx.notify();
             return;
@@ -61,12 +67,12 @@ impl AppShell {
             return;
         }
 
-        let home = local_home();
-        let local_path = if home.join("Downloads").is_dir() {
-            home.join("Downloads")
-        } else {
-            home
-        };
+        let quick_paths = LocalQuickPaths::resolve();
+        let local_path = quick_paths
+            .downloads
+            .clone()
+            .or_else(|| quick_paths.home.clone())
+            .unwrap_or_else(|| PathBuf::from("."));
         let local_entries = list_local_dir(&local_path).unwrap_or_default();
         let initial_remote_path =
             extract_candidate_path(&self.tabs[index].title).unwrap_or_else(|| ".".to_string());
@@ -117,6 +123,8 @@ impl AppShell {
             local_path_input,
             local_filter_input,
             local_entries,
+            local_quick_paths: quick_paths,
+            local_only: false,
             local_selected: None,
             local_selection: BTreeSet::new(),
             local_anchor: None,
@@ -249,6 +257,16 @@ impl AppShell {
             self.sftp_local_navigate_only(tab_id, local_target, window, cx);
         }
         self.request_sftp_list(tab_id, path, cx);
+    }
+
+    /// 远端主目录：SFTP 会话初始目录就是用户 home，请求 `.` 即可。
+    pub(crate) fn sftp_remote_go_home(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.sftp_navigate(tab_id, ".".to_string(), window, cx);
     }
 
     pub(crate) fn sftp_go_up(
@@ -481,8 +499,14 @@ impl AppShell {
             panel.show_filter = !panel.show_filter;
             let remote_filter = panel.remote_filter_input.clone();
             let local_filter = panel.local_filter_input.clone();
+            let local_only = panel.local_only;
             if panel.show_filter {
-                remote_filter.update(cx, |input, cx| {
+                let target = if local_only {
+                    local_filter.clone()
+                } else {
+                    remote_filter.clone()
+                };
+                target.update(cx, |input, cx| {
                     input.focus(window, cx);
                 });
             } else {
@@ -548,6 +572,9 @@ impl AppShell {
         let Some(panel) = tab.sftp.as_mut() else {
             return;
         };
+        if panel.local_only {
+            return;
+        }
         if let Some(candidate) = extract_candidate_path(title)
             && candidate != panel.path
         {

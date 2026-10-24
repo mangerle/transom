@@ -1,11 +1,12 @@
 //! SFTP 本地文件浏览器左栏视图渲染。
 
 use super::preview::{PreviewKey, SftpHoverTarget};
-use super::{LocalFileEntry, format_size, sftp_file_icon};
+use super::{LocalFileEntry, LocalQuickPaths, format_size, sftp_file_icon};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
@@ -13,6 +14,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use std::path::PathBuf;
 use transom_core::TabId;
 
 pub(crate) struct SftpLocalPaneProps {
@@ -22,6 +24,10 @@ pub(crate) struct SftpLocalPaneProps {
     pub(crate) local_filter_input: Entity<InputState>,
     pub(crate) local_entries: Vec<LocalFileEntry>,
     pub(crate) local_scroll_handle: VirtualListScrollHandle,
+    /// 主目录/桌面/下载等快捷路径；目录不存在时对应按钮禁用。
+    pub(crate) quick_paths: LocalQuickPaths,
+    /// 本地终端模式没有远端，上传入口必须隐藏。
+    pub(crate) remote_available: bool,
 }
 
 impl AppShell {
@@ -37,6 +43,8 @@ impl AppShell {
         let local_filter_input = props.local_filter_input;
         let local_entries = props.local_entries;
         let local_scroll_handle = props.local_scroll_handle;
+        let quick_paths = props.quick_paths;
+        let remote_available = props.remote_available;
 
         let local_content = if local_entries.is_empty() {
             div()
@@ -224,34 +232,40 @@ impl AppShell {
                                     let p_prop = entry_path_cm.clone();
                                     let p_ren = entry_path_cm.clone();
                                     let p_del = entry_path_cm.clone();
-                                    menu.item(
-                                        PopupMenuItem::new("上传").icon(IconName::Upload).on_click(
-                                            {
-                                                let app = app.clone();
-                                                move |_, _, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        if let Some(panel) = this
-                                                            .tabs
-                                                            .iter_mut()
-                                                            .find(|t| t.id == tab_id)
-                                                            .and_then(|t| t.sftp.as_mut())
-                                                        {
-                                                            if panel.local_selection.contains(&p_up)
+                                    let mut menu = menu;
+                                    if remote_available {
+                                        menu = menu.item(
+                                            PopupMenuItem::new("上传")
+                                                .icon(IconName::Upload)
+                                                .on_click({
+                                                    let app = app.clone();
+                                                    move |_, _, cx| {
+                                                        app.update(cx, |this, cx| {
+                                                            if let Some(panel) = this
+                                                                .tabs
+                                                                .iter_mut()
+                                                                .find(|t| t.id == tab_id)
+                                                                .and_then(|t| t.sftp.as_mut())
                                                             {
-                                                                panel.set_local_primary(
-                                                                    p_up.clone(),
-                                                                );
-                                                            } else {
-                                                                panel.select_local(p_up.clone());
+                                                                if panel
+                                                                    .local_selection
+                                                                    .contains(&p_up)
+                                                                {
+                                                                    panel.set_local_primary(
+                                                                        p_up.clone(),
+                                                                    );
+                                                                } else {
+                                                                    panel
+                                                                        .select_local(p_up.clone());
+                                                                }
                                                             }
-                                                        }
-                                                        this.sftp_queue_upload(tab_id, cx);
-                                                    });
-                                                }
-                                            },
-                                        ),
-                                    )
-                                    .item(
+                                                            this.sftp_queue_upload(tab_id, cx);
+                                                        });
+                                                    }
+                                                }),
+                                        );
+                                    }
+                                    menu.item(
                                         PopupMenuItem::new("复制绝对路径")
                                             .icon(IconName::Copy)
                                             .on_click({
@@ -471,16 +485,43 @@ impl AppShell {
                         h_flex()
                             .gap_1()
                             .items_center()
-                            .child(
-                                Button::new("local-action-upload")
-                                    .primary()
-                                    .xsmall()
-                                    .icon(IconName::Upload)
-                                    .tooltip("上传")
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.sftp_queue_upload(tab_id, cx);
-                                    })),
-                            )
+                            .child(Self::local_quick_path_button(
+                                "local-quick-home",
+                                IconName::House,
+                                rust_i18n::t!("sftp.home").to_string(),
+                                quick_paths.home.clone(),
+                                tab_id,
+                                cx,
+                            ))
+                            .child(Self::local_quick_path_button(
+                                "local-quick-desktop",
+                                IconName::Monitor,
+                                rust_i18n::t!("sftp.desktop").to_string(),
+                                quick_paths.desktop.clone(),
+                                tab_id,
+                                cx,
+                            ))
+                            .child(Self::local_quick_path_button(
+                                "local-quick-downloads",
+                                IconName::FolderDown,
+                                rust_i18n::t!("sftp.downloads").to_string(),
+                                quick_paths.downloads.clone(),
+                                tab_id,
+                                cx,
+                            ))
+                            .child(div().w(px(1.0)).h(px(14.0)).mx_1().bg(p.sidebar_border))
+                            .when(remote_available, |this| {
+                                this.child(
+                                    Button::new("local-action-upload")
+                                        .primary()
+                                        .xsmall()
+                                        .icon(IconName::Upload)
+                                        .tooltip("上传")
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.sftp_queue_upload(tab_id, cx);
+                                        })),
+                                )
+                            })
                             .child(
                                 Button::new("local-action-mkdir")
                                     .ghost()
@@ -539,8 +580,37 @@ impl AppShell {
             .into_any_element()
     }
 
+    fn local_quick_path_button(
+        id: &'static str,
+        icon: IconName,
+        label: String,
+        target: Option<PathBuf>,
+        tab_id: TabId,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let enabled = target.is_some();
+        let tooltip = if enabled {
+            label
+        } else {
+            format!("{label} ({})", rust_i18n::t!("sftp.missing_dir"))
+        };
+        let mut button = Button::new(id)
+            .ghost()
+            .xsmall()
+            .icon(icon)
+            .tooltip(tooltip)
+            .disabled(!enabled);
+        if let Some(target) = target {
+            button = button.on_click(cx.listener(move |this, _, window, cx| {
+                this.sftp_local_navigate(tab_id, target.clone(), window, cx);
+            }));
+        }
+        button.into_any_element()
+    }
+
     pub(crate) fn render_sftp_panel_header(
         &self,
+        title: String,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -548,7 +618,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::X)
-            .tooltip("关闭 SFTP 面板")
+            .tooltip("关闭面板")
             .on_click(cx.listener(|this, _, _, cx| {
                 if let Some(tab_id) = this.active_tab
                     && let Some(tab) = this.tabs.iter_mut().find(|tab| tab.id == tab_id)
@@ -567,11 +637,16 @@ impl AppShell {
             .border_color(p.sidebar_border)
             .child(
                 div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .truncate()
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(rust_i18n::t!("sftp.title").to_string()),
+                    .child(title),
             )
-            .child(close_btn)
+            .child(div().flex_none().child(close_btn))
             .into_any_element()
     }
 }

@@ -533,6 +533,21 @@ sftp:
   title:
     en: SFTP
     zh-CN: SFTP
+  local_files_title:
+    en: Local Files
+    zh-CN: 本地文件
+  home:
+    en: Home
+    zh-CN: 主目录
+  desktop:
+    en: Desktop
+    zh-CN: 桌面
+  downloads:
+    en: Downloads
+    zh-CN: 下载
+  missing_dir:
+    en: Directory not found
+    zh-CN: 目录不存在
   path:
     en: Remote path
     zh-CN: 远程路径

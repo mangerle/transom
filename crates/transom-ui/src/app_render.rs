@@ -46,18 +46,48 @@ impl Render for AppShell {
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.sftp.is_some());
-        if show_sftp && !self.immersive {
-            resizable_group = resizable_group.child(
-                resizable_panel()
-                    .size(px(760.0))
-                    .fixed()
-                    .child(self.render_sftp_panel(window, cx, &p)),
-            );
-        }
+        let sftp_local_only = self
+            .active_tab
+            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab| tab.sftp.as_ref())
+            .is_some_and(|panel| panel.local_only);
         let show_forwards = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.forwards_panel.is_some());
+        let sftp_width: f32 = if sftp_local_only { 480.0 } else { 760.0 };
+        let sftp_min_width: f32 = if sftp_local_only { 320.0 } else { 360.0 };
+        // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
+        // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
+        let sidebar_width = if self.sidebar_visible {
+            self.workspace_panels
+                .read(cx)
+                .sizes()
+                .first()
+                .copied()
+                .filter(|width| *width >= px(100.0))
+                .unwrap_or(px(270.0))
+                .as_f32()
+        } else {
+            0.0
+        };
+        let forward_width = if show_forwards { 340.0 } else { 0.0 };
+        let available_width = window.viewport_size().width.as_f32()
+            - ACTIVITY_BAR_WIDTH
+            - sidebar_width
+            - forward_width
+            - 100.0
+            - 8.0;
+        let sftp_max_width = available_width.max(sftp_min_width);
+        if show_sftp && !self.immersive {
+            resizable_group = resizable_group.child(
+                resizable_panel()
+                    .size(px(sftp_width.min(sftp_max_width)))
+                    .size_range(px(sftp_min_width)..px(sftp_max_width))
+                    .fixed()
+                    .child(self.render_sftp_panel(window, cx, &p)),
+            );
+        }
         if show_forwards && !self.immersive {
             resizable_group = resizable_group.child(
                 resizable_panel()

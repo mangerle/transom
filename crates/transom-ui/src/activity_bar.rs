@@ -203,6 +203,13 @@ impl AppShell {
             } else {
                 "切换为中文 (Switch to Chinese)".to_string()
             }
+        } else if id == ActivityItemId::Sftp
+            && self
+                .active_tab
+                .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+                .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
+        {
+            rust_i18n::t!("sftp.local_files_title").to_string()
         } else {
             label.to_string()
         }
@@ -229,10 +236,20 @@ impl AppShell {
         if !matches!(id, ActivityItemId::Forwards | ActivityItemId::Sftp) {
             return false;
         }
-        !self
+        let Some(tab) = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
-            .is_some_and(|tab| matches!(tab.session.connection, Connection::Ssh(_)))
+        else {
+            return true;
+        };
+        match id {
+            ActivityItemId::Forwards => !matches!(tab.session.connection, Connection::Ssh(_)),
+            ActivityItemId::Sftp => !matches!(
+                tab.session.connection,
+                Connection::Ssh(_) | Connection::Local(_)
+            ),
+            _ => false,
+        }
     }
 
     fn activate_activity_item(

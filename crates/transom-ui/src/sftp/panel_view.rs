@@ -35,6 +35,9 @@ impl AppShell {
         let Some(panel) = tab.sftp.as_ref() else {
             return div().into_any_element();
         };
+        if panel.local_only {
+            return self.render_local_only_panel(tab_id, p, cx);
+        }
 
         let show_filter = panel.show_filter;
         let show_hidden = panel.show_hidden;
@@ -85,6 +88,7 @@ impl AppShell {
             .cloned()
             .collect();
         let local_error = panel.local_error.clone();
+        let quick_paths = panel.local_quick_paths.clone();
 
         let queue = panel.queue.clone();
         let resume_enabled = panel.resume_enabled;
@@ -131,6 +135,8 @@ impl AppShell {
                 local_filter_input,
                 local_entries,
                 local_scroll_handle,
+                quick_paths,
+                remote_available: true,
             },
             p,
             cx,
@@ -625,6 +631,17 @@ impl AppShell {
                             .gap_1()
                             .items_center()
                             .child(
+                                Button::new("sftp-home")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::House)
+                                    .tooltip(rust_i18n::t!("sftp.home").to_string())
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.sftp_remote_go_home(tab_id, window, cx);
+                                    })),
+                            )
+                            .child(div().w(px(1.0)).h(px(14.0)).mx_1().bg(p.sidebar_border))
+                            .child(
                                 Button::new("sftp-action-download")
                                     .primary()
                                     .xsmall()
@@ -814,7 +831,7 @@ impl AppShell {
             cx,
         );
 
-        let header = self.render_sftp_panel_header(p, cx);
+        let header = self.render_sftp_panel_header(rust_i18n::t!("sftp.title").to_string(), p, cx);
 
         let mut panel_element = v_flex()
             .id(ElementId::Name("sftp-panel-container".into()))
