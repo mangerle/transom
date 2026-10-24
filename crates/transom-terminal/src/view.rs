@@ -146,7 +146,9 @@ impl TerminalView {
             let _ = exit_tx.try_send(Event::Exit);
         }
 
-        let (input_tx, input_rx) = flume::unbounded::<Vec<u8>>();
+        // 有界输入通道：深度 256 覆盖人速按键与整批粘贴（每条消息一批字节），
+        // 写入线程卡死时通过 try_send 快速失败丢弃而不是无限积压内存。
+        let (input_tx, input_rx) = flume::bounded::<Vec<u8>>(256);
         let mut writer = io.writer;
         let writer_spawn = thread::Builder::new()
             .name("transom-terminal-writer".into())
@@ -296,7 +298,16 @@ impl TerminalView {
         }
         // 输入瞬间强制点亮光标，避免用户打字时恰好处于熄灭相位。
         self.cursor_blink_on = true;
-        self.input_tx.send(bytes.to_vec()).is_ok()
+        match self.input_tx.try_send(bytes.to_vec()) {
+            Ok(()) => true,
+            // 256 深度对人速按键与整批粘贴绰绰有余，打满只可能是写入线程
+            // 卡死：此时丢掉本批输入并继续存活判定，比在 UI 线程阻塞等待好。
+            Err(flume::TrySendError::Full(_)) => {
+                tracing::warn!("终端输入队列已满，本批输入被丢弃");
+                true
+            }
+            Err(flume::TrySendError::Disconnected(_)) => false,
+        }
     }
 
     /// 将程序化文本写入终端输入通道。
