@@ -5,8 +5,7 @@
 
 use super::{
     BAND_HEIGHT, FolderRow, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow, SidebarDrag,
-    SidebarTarget, TINT_FOLDER_HOVER, TINT_FOLDER_IDLE, TINT_FOLDER_INTO, TINT_HOVER, TINT_IDLE,
-    TINT_SELECTED, TINT_SELECTED_HOVER, indent_padding,
+    SidebarTarget, TINT_FOLDER_IDLE, TINT_FOLDER_INTO, TINT_IDLE, TINT_SELECTED, indent_padding,
 };
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -209,7 +208,11 @@ impl AppShell {
             });
         // `drag_over` 闭包要求 `'static`，先取成局部颜色再捕获。
         let into_bg = p.sidebar_accent.opacity(TINT_FOLDER_INTO);
+        // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配
+        // global_id 与悬浮状态，缺少 id 时鼠标移入不会触发重绘，高亮只能等
+        // 别的事件顺带重绘才补上，看上去就是"悬停不跟手"。
         let mut band = h_flex()
+            .id(ElementId::Name(format!("folder-band-{folder_id}").into()))
             .relative()
             .w_full()
             .h(BAND_HEIGHT)
@@ -221,7 +224,7 @@ impl AppShell {
             .border_b_1()
             .border_color(p.sidebar_border.opacity(0.55))
             .text_color(p.sidebar_foreground)
-            .hover(|style| style.bg(p.sidebar_accent.opacity(TINT_FOLDER_HOVER)))
+            .hover(|style| style.bg(p.sidebar_accent))
             .drag_over::<SidebarDrag>(move |style, _, _, _| style.bg(into_bg))
             .child(Icon::new(chevron).with_size(ROW_CHEVRON_SIZE))
             .child(
@@ -409,12 +412,11 @@ impl AppShell {
         } else {
             TINT_IDLE
         };
-        let hover_tint = if is_selected_row {
-            TINT_SELECTED_HOVER
-        } else {
-            TINT_HOVER
-        };
+        // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配
+        // global_id 与悬浮状态，缺少 id 时鼠标移入不会触发重绘，高亮只能等
+        // 别的事件顺带重绘才补上，看上去就是"悬停不跟手"。
         let mut inner = h_flex()
+            .id(ElementId::Name(format!("session-band-{session_id}").into()))
             .relative()
             .w_full()
             .h(BAND_HEIGHT)
@@ -428,8 +430,23 @@ impl AppShell {
             } else {
                 p.sidebar_foreground
             });
-        if !is_active {
-            inner = inner.hover(|style| style.bg(p.sidebar_accent.opacity(hover_tint)));
+        if is_active {
+            // 活动会话与悬浮态同为实心强调色，靠左侧竖条区分"当前正在使用的会话"。
+            // 竖条绝对定位、不占布局宽度，切换活动会话时行内图标不会发生位移。
+            inner = inner.child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top_0()
+                    .bottom_0()
+                    .w(px(2.0))
+                    .rounded_full()
+                    .bg(p.list_active_border),
+            );
+        } else {
+            // 悬浮铺满实心强调色：低透明度叠加在深色侧边栏上几乎看不出差别，
+            // 换成实色才有 SFTP 文件行那种"整条弹出"的清晰反馈。
+            inner = inner.hover(|style| style.bg(p.sidebar_accent));
         }
         if selection_mode {
             inner = inner.child(

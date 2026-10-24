@@ -22,6 +22,8 @@ pub(crate) struct Palette {
     pub(crate) sidebar_border: Hsla,
     pub(crate) sidebar_accent: Hsla,
     pub(crate) sidebar_accent_foreground: Hsla,
+    /// 列表当前项的强调边框色，用于把"正在使用的会话"与普通悬浮态区分开。
+    pub(crate) list_active_border: Hsla,
     pub(crate) tab_bar: Hsla,
     pub(crate) tab_active: Hsla,
     pub(crate) tab_foreground: Hsla,
@@ -50,6 +52,7 @@ impl Palette {
             sidebar_border: theme.sidebar_border,
             sidebar_accent: theme.sidebar_accent,
             sidebar_accent_foreground: theme.sidebar_accent_foreground,
+            list_active_border: theme.list_active_border,
             tab_bar: theme.tab_bar,
             tab_active: theme.tab_active,
             tab_foreground: theme.tab_foreground,
