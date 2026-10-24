@@ -23,6 +23,12 @@ use zeroize::Zeroizing;
 #[derive(Debug)]
 pub struct ClientError(pub AppError);
 
+/// 远端转发建立到目标主机的 TCP 连接的最长等待时间。
+///
+/// 转发目标通常是内网邻近服务，正常连接远快于该上限；取 30 秒是为
+/// 跨机房高延迟链路留余量，同时兜住"对端不可达导致任务永久泄漏"。
+const FORWARD_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
 impl fmt::Display for ClientError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
@@ -108,10 +114,17 @@ impl client::Handler for ClientHandler {
         };
         let mut stream = channel.into_stream();
         tokio::spawn(async move {
-            if let Ok(mut tcp) = TcpStream::connect((host.as_str(), port)).await {
-                let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
-            } else {
-                let _ = stream.shutdown().await;
+            // 转发目标是任意外部地址：对端不可达或防火墙静默丢包时 connect 会
+            // 无限挂起，任务与通道随之泄漏。只给连接阶段设限，建立后的双向
+            // 转发不设限——长空闲本身就是隧道的正常形态。
+            let connect = TcpStream::connect((host.as_str(), port));
+            match tokio::time::timeout(FORWARD_CONNECT_TIMEOUT, connect).await {
+                Ok(Ok(mut tcp)) => {
+                    let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+                }
+                _ => {
+                    let _ = stream.shutdown().await;
+                }
             }
         });
         Ok(())
