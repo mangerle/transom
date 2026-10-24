@@ -48,13 +48,24 @@ impl Controller {
             .build()
             .map_err(|error| AppError::with_detail(ErrorCode::Io, error.to_string()))?;
 
-        runtime.spawn(run_controller(
+        let root = runtime.spawn(run_controller(
             known_hosts,
             command_rx,
             internal_tx,
             internal_rx,
             event_tx,
         ));
+        // 根控制器是整个应用的控制平面：panic 后命令与事件全部停摆，
+        // 必须可观察（日志上报）而不是静默失效。
+        runtime.spawn(async move {
+            match root.await {
+                Ok(()) => tracing::warn!("控制器主循环已退出"),
+                Err(error) if error.is_panic() => {
+                    tracing::error!("控制器主循环异常崩溃，控制平面已失效: {error}")
+                }
+                Err(error) => tracing::error!("控制器主循环任务失败，控制平面已失效: {error}"),
+            }
+        });
 
         Ok(Self {
             _runtime: runtime,
@@ -128,8 +139,7 @@ async fn run_controller(
     let mut current_connections: HashMap<TabId, ConnectionId> = HashMap::new();
     let mut remotes: HashMap<TabId, (ConnectionId, SshRemote)> = HashMap::new();
     let mut sftp_clients: HashMap<TabId, SftpClient> = HashMap::new();
-    let mut sftp_transfers: HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>> =
-        HashMap::new();
+    let mut sftp_tasks: HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>> = HashMap::new();
     let mut forwards: HashMap<TabId, HashMap<ForwardId, ForwardTask>> = HashMap::new();
     let mut traffic_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
     let mut key_deploy_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
@@ -195,7 +205,7 @@ async fn run_controller(
                 sftp_exec::dispatch_sftp_op(SftpDispatch {
                     remotes: &remotes,
                     sftp_clients: &mut sftp_clients,
-                    sftp_transfers: &mut sftp_transfers,
+                    sftp_tasks: &mut sftp_tasks,
                     event_tx: event_tx.clone(),
                     internal_tx: internal_tx.clone(),
                     tab_id,
@@ -205,7 +215,7 @@ async fn run_controller(
                 });
             }
             Incoming::Command(Ok(AppCommand::SftpCancel { tab_id, op_id })) => {
-                if let Some(handle) = sftp_transfers.remove(&(tab_id, op_id)) {
+                if let Some(handle) = sftp_tasks.remove(&(tab_id, op_id)) {
                     handle.abort();
                 }
             }
@@ -310,7 +320,7 @@ async fn run_controller(
                 stop_stats(&mut stats_tasks, tab_id);
                 drop_local_stats(&local_stats_tabs, tab_id);
                 sftp_clients.remove(&tab_id);
-                sftp_transfers.retain(|(t, _), handle| {
+                sftp_tasks.retain(|(t, _), handle| {
                     if *t == tab_id {
                         handle.abort();
                         false
@@ -333,7 +343,7 @@ async fn run_controller(
                     traffic_tasks: &mut traffic_tasks,
                     key_deploy_tasks: &mut key_deploy_tasks,
                     stats_tasks: &mut stats_tasks,
-                    sftp_transfers: &mut sftp_transfers,
+                    sftp_tasks: &mut sftp_tasks,
                     remotes: &mut remotes,
                     cleanup: &mut cleanup_set,
                     local_stats_task: &mut local_stats_task,
@@ -534,7 +544,7 @@ async fn run_controller(
                     Ok(client) => {
                         sftp_clients.insert(tab_id, client.clone());
                         sftp_exec::spawn_sftp_op(
-                            &mut sftp_transfers,
+                            &mut sftp_tasks,
                             event_tx.clone(),
                             tab_id,
                             connection_id,
@@ -620,7 +630,7 @@ async fn run_controller(
                         });
                     }
                     sftp_clients.remove(&tab_id);
-                    sftp_transfers.retain(|(t, _), handle| {
+                    sftp_tasks.retain(|(t, _), handle| {
                         if *t == tab_id {
                             handle.abort();
                             false

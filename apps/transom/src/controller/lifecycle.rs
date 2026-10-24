@@ -150,7 +150,7 @@ pub(super) struct ShutdownTables<'a> {
     pub(super) traffic_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
     pub(super) key_deploy_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
     pub(super) stats_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) sftp_transfers: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
+    pub(super) sftp_tasks: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
     pub(super) remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
     pub(super) cleanup: &'a mut JoinSet<()>,
     pub(super) local_stats_task: &'a mut Option<tokio::task::JoinHandle<()>>,
@@ -168,7 +168,7 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
         traffic_tasks,
         key_deploy_tasks,
         stats_tasks,
-        sftp_transfers,
+        sftp_tasks,
         remotes,
         cleanup,
         local_stats_task,
@@ -177,7 +177,7 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
     for (_, entry) in connecting.drain() {
         entry.task.abort();
     }
-    for (_, handle) in sftp_transfers.drain() {
+    for (_, handle) in sftp_tasks.drain() {
         handle.abort();
     }
     for (_, handle) in traffic_tasks.drain() {

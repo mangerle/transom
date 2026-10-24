@@ -382,7 +382,7 @@ pub(super) async fn execute_sftp_op(
 pub(super) struct SftpDispatch<'a> {
     pub(super) remotes: &'a HashMap<TabId, (ConnectionId, SshRemote)>,
     pub(super) sftp_clients: &'a mut HashMap<TabId, SftpClient>,
-    pub(super) sftp_transfers: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
+    pub(super) sftp_tasks: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
     pub(super) event_tx: flume::Sender<AppEvent>,
     pub(super) internal_tx: flume::Sender<Internal>,
     pub(super) tab_id: TabId,
@@ -398,7 +398,7 @@ pub(super) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
     let SftpDispatch {
         remotes,
         sftp_clients,
-        sftp_transfers,
+        sftp_tasks,
         event_tx,
         internal_tx,
         tab_id,
@@ -424,7 +424,7 @@ pub(super) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
     let cached = sftp_clients.get(&tab_id).cloned();
     match cached {
         Some(client) => spawn_sftp_op(
-            sftp_transfers,
+            sftp_tasks,
             event_tx,
             tab_id,
             connection_id,
@@ -466,11 +466,11 @@ fn send_sftp_not_ready(
     });
 }
 
-/// 派发单个 SFTP 操作执行：传输类操作纳入任务表跟踪以便取消。
+/// 派发单个 SFTP 操作执行：全部操作纳入任务表跟踪，标签关闭与停机时可统一取消。
 /// 直接 spawn 具名 async 函数返回的 future：经由 async 块包装会触发
 /// rustc 对泛型闭包的 HRTT 推断限制（FnOnce is not general enough）。
 pub(super) fn spawn_sftp_op(
-    sftp_transfers: &mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
+    sftp_tasks: &mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
     event_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
     connection_id: ConnectionId,
@@ -478,14 +478,6 @@ pub(super) fn spawn_sftp_op(
     client: SftpClient,
     op: SftpOperation,
 ) {
-    let is_transfer = matches!(
-        op,
-        SftpOperation::Download { .. }
-            | SftpOperation::Upload { .. }
-            | SftpOperation::DownloadDir { .. }
-            | SftpOperation::UploadDir { .. }
-            | SftpOperation::SyncDirs { .. }
-    );
     let handle = tokio::spawn(execute_sftp_op(
         event_tx,
         tab_id,
@@ -494,8 +486,9 @@ pub(super) fn spawn_sftp_op(
         client,
         op,
     ));
-    if is_transfer {
-        sftp_transfers.retain(|_, h| !h.is_finished());
-        sftp_transfers.insert((tab_id, op_id), handle);
-    }
+    // 全部操作（含目录列举、属性修改等只读/短操作）统一登记：
+    // 标签关闭与停机时能取消所有在途操作，生命周期策略不再按
+    // 操作类型分裂；SftpCancel 对非传输操作同样可取消。
+    sftp_tasks.retain(|_, h| !h.is_finished());
+    sftp_tasks.insert((tab_id, op_id), handle);
 }
