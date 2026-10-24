@@ -1,5 +1,5 @@
 use crate::ids::SnippetId;
-use crate::layout::ActivityBarLayout;
+use crate::layout::{ActivityBarLayout, StatusBarLayout};
 use crate::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
 use crate::terminal::{TerminalInteraction, TerminalProfile};
 use serde::{Deserialize, Serialize};
@@ -156,6 +156,9 @@ pub struct AppSettings {
     /// 活动栏顺序、隐藏项与上下分区；旧配置缺少该字段时使用默认布局。
     #[serde(default)]
     pub activity_bar: ActivityBarLayout,
+    /// 状态栏顺序与隐藏项；旧配置缺少该字段时使用默认布局。
+    #[serde(default)]
+    pub status_bar: StatusBarLayout,
 }
 
 /// 快捷命令条上的一键命令。
@@ -285,6 +288,7 @@ impl Default for AppSettings {
             shortcuts: ShortcutSettings::default(),
             snippets: SnippetSettings::default(),
             activity_bar: ActivityBarLayout::default(),
+            status_bar: StatusBarLayout::default(),
         }
     }
 }

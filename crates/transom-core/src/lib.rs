@@ -44,7 +44,7 @@ pub use ids::{
 };
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
-pub use layout::{ActivityBarLayout, ActivityItemId};
+pub use layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, StatusItemId};
 pub use prompt::{PromptInfo, PromptKind};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
 pub use serial::{SerialPortDescriptor, SerialPortProvider};

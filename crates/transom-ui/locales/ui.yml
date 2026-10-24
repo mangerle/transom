@@ -435,6 +435,24 @@ status:
   failed:
     en: Failed
     zh-CN: 失败
+  network:
+    en: Network
+    zh-CN: 网络
+  os:
+    en: OS
+    zh-CN: 系统
+  unknown:
+    en: Unknown Status
+    zh-CN: 未知状态
+  hide_item:
+    en: Hide This Status
+    zh-CN: 隐藏此状态
+  network_tooltip_ssh:
+    en: Current SSH connection throughput in bytes per second, including terminal, SFTP and port forwarding traffic
+    zh-CN: 当前 SSH 连接速率，单位为字节/秒，含终端、SFTP 与端口转发流量
+  network_tooltip_local:
+    en: Local host NIC throughput in bytes per second, excluding the loopback interface
+    zh-CN: 本机非回环网卡的合计速率，单位为字节/秒
   copied:
     en: Copied to clipboard
     zh-CN: 已复制到剪贴板
@@ -870,6 +888,12 @@ settings:
   activity_bar_note:
     en: Drag icons in the activity bar to reorder them. Visibility and order changes are saved immediately; the settings entry cannot be hidden. In the blank area between the two groups, the upper half appends to the top group and the lower half prepends to the bottom group.
     zh-CN: 可直接在活动栏中拖动图标调整顺序；显隐与顺序改动会立即保存，设置入口不可隐藏。拖到两组之间的空白区时，上半区追加到顶组末尾，下半区插到底组开头。
+  status_bar:
+    en: Status Bar
+    zh-CN: 状态栏
+  status_bar_note:
+    en: Drag badges on the right side of the status bar to reorder them; drop on the blank area to their left to move one to the front. Visibility and order changes are saved immediately; the left connection status stays fixed.
+    zh-CN: 右侧徽标可直接拖动调整顺序，拖到徽标簇左侧空白可移到最前；显隐与顺序改动会立即保存。左侧连接状态固定，不参与排序。
   tab_general:
     en: General & Sound
     zh-CN: 通用与声音

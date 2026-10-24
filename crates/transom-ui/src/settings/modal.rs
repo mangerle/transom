@@ -75,7 +75,7 @@ impl AppShell {
                 }
             })));
 
-        let page_layout = layout_page::activity_layout_page(app_entity.clone(), *p);
+        let page_layout = layout_page::layout_settings_page(app_entity.clone(), *p);
 
         let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
             .icon(IconName::Globe)

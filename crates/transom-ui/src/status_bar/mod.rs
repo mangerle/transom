@@ -1,0 +1,461 @@
+//! 底部状态栏（系统资源与网络指标）与顶部错误横幅渲染模块。
+//!
+//! 右侧徽标按用户布局动态排序，隐藏状态持久化；在场性由实时数据决定：没有
+//! 网络采样、没有系统指标时对应条目直接不渲染，但顺序仍按全集保存，数据恢复
+//! 后不会跳到别的位置。左侧连接状态固定，不参与排序。
+//!
+//! 所有数值徽标都给固定宽度的数值槽：网络速率会在 B/KB/MB/GB 与不同位数之间
+//! 频繁变化，若宽度跟着内容走，整条状态栏会每秒抖动；固定槽让位置稳定，变化
+//! 只发生在槽内。
+
+mod drag;
+
+use crate::app::{AppShell, TabStatus, TerminalTab};
+use crate::palette::Palette;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::h_flex;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::*;
+use transom_core::{Connection, NetworkTraffic, StatusItemId, SystemStats};
+
+const RATE_WIDTH: f32 = 40.0;
+const CPU_VALUE_WIDTH: f32 = 28.0;
+const MEMORY_VALUE_WIDTH: f32 = 84.0;
+const DISK_VALUE_WIDTH: f32 = 96.0;
+const OS_VALUE_WIDTH: f32 = 104.0;
+const UPTIME_VALUE_WIDTH: f32 = 48.0;
+const BADGE_HEIGHT: f32 = 20.0;
+
+/// 将字节/秒格式化为紧凑单位，状态栏只保留数字与单字母单位。
+///
+/// 例如 `1.5K/s`、`123M/s`。完整口径由徽标 tooltip 说明；这样上下行两个速率
+/// 不会因为 "KB/s" 这类长后缀把状态栏撑宽。
+pub(crate) fn format_rate(bytes_per_sec: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+
+    let value = bytes_per_sec as f64;
+    if value < KB {
+        return format!("{bytes_per_sec}B/s");
+    }
+    let (scaled, unit) = if value < MB {
+        (value / KB, "K")
+    } else if value < GB {
+        (value / MB, "M")
+    } else {
+        (value / GB, "G")
+    };
+    if scaled < 100.0 {
+        format!("{scaled:.1}{unit}/s")
+    } else {
+        format!("{scaled:.0}{unit}/s")
+    }
+}
+
+/// 当前活动标签能提供的指标快照。
+struct StatusData<'a> {
+    traffic: Option<&'a NetworkTraffic>,
+    stats: Option<&'a SystemStats>,
+    /// SSH 的网络速率来自连接传输层；其余会话（如本地终端）来自本机网卡。
+    is_ssh: bool,
+}
+
+impl<'a> StatusData<'a> {
+    fn from_tab(tab: Option<&'a TerminalTab>) -> Self {
+        match tab {
+            Some(tab) => Self {
+                traffic: tab.network_traffic.as_ref(),
+                stats: tab.system_stats.as_ref(),
+                is_ssh: matches!(tab.session.connection, Connection::Ssh(_)),
+            },
+            None => Self {
+                traffic: None,
+                stats: None,
+                is_ssh: false,
+            },
+        }
+    }
+}
+
+impl AppShell {
+    pub(crate) fn render_status_bar(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let active_tab_info = self
+            .active_tab
+            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id));
+
+        let (status_dot_color, status_text) = if let Some(tab) = active_tab_info {
+            let (color, text) = match &tab.status {
+                TabStatus::Connecting => (
+                    p.muted_foreground,
+                    rust_i18n::t!("status.connecting").to_string(),
+                ),
+                TabStatus::Connected => (p.success, rust_i18n::t!("status.connected").to_string()),
+                TabStatus::Disconnected => {
+                    (p.danger, rust_i18n::t!("status.disconnected").to_string())
+                }
+                TabStatus::Failed(_) => (p.danger, rust_i18n::t!("status.failed").to_string()),
+            };
+            (color, format!("{}: {}", tab.display_name(), text))
+        } else {
+            (
+                p.muted_foreground,
+                rust_i18n::t!("status.ready").to_string(),
+            )
+        };
+
+        let data = StatusData::from_tab(active_tab_info);
+        let items: Vec<StatusItemId> = self.settings.status_bar.visible_items().collect();
+        let app = cx.entity().clone();
+        let mut right_elements = Vec::with_capacity(items.len());
+        for id in items {
+            if let Some(badge) = Self::render_status_item(id, &data, &app, p) {
+                right_elements.push(badge);
+            }
+        }
+
+        if right_elements.is_empty() {
+            let text = self
+                .status
+                .clone()
+                .unwrap_or_else(|| "Transom v0.1.0".to_string());
+            right_elements.push(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(text)
+                    .into_any_element(),
+            );
+        }
+
+        let connection_pill = h_flex()
+            .id("status-connection")
+            .flex_none()
+            .gap_2()
+            .items_center()
+            .h(px(BADGE_HEIGHT))
+            .px_2()
+            .rounded_md()
+            .bg(p.muted)
+            .border_1()
+            .border_color(p.foreground.opacity(0.08))
+            .cursor_default()
+            .hover(|style| style.bg(p.foreground.opacity(0.06)))
+            .child(div().size(px(8.0)).rounded_full().bg(status_dot_color))
+            .child(div().text_xs().text_color(p.foreground).child(status_text));
+
+        let menu_app = app.clone();
+        h_flex()
+            .id("status-bar")
+            .h(px(28.0))
+            .px_3()
+            .items_center()
+            .bg(p.status_bar)
+            .border_t_1()
+            .border_color(p.border)
+            .child(connection_pill)
+            // 右侧徽标簇靠右对齐，簇左侧的空白直接作为"移到最前"的落点。
+            .child(drag::status_front_drop_zone(&app, p))
+            .child(
+                h_flex()
+                    .flex_none()
+                    .gap_2()
+                    .items_center()
+                    .children(right_elements),
+            )
+            // 空白区与左侧固定状态都落到整条状态栏的兜底菜单；徽标自己的菜单
+            // 先命中并阻止冒泡，因此不会出现两层菜单同时打开。
+            .context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app))
+            .into_any_element()
+    }
+
+    fn render_status_item(
+        id: StatusItemId,
+        data: &StatusData<'_>,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> Option<AnyElement> {
+        match id {
+            StatusItemId::Network => {
+                let traffic = data.traffic?;
+                let tooltip = if data.is_ssh {
+                    rust_i18n::t!("status.network_tooltip_ssh").to_string()
+                } else {
+                    rust_i18n::t!("status.network_tooltip_local").to_string()
+                };
+                let content = h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(Self::rate_entry(
+                        IconName::ArrowUp,
+                        format_rate(traffic.upload_bytes_per_sec),
+                        p,
+                    ))
+                    .child(Self::rate_entry(
+                        IconName::ArrowDown,
+                        format_rate(traffic.download_bytes_per_sec),
+                        p,
+                    ))
+                    .into_any_element();
+                Some(Self::status_badge(id, tooltip, content, app, p))
+            }
+            StatusItemId::Cpu => {
+                let stats = data.stats?;
+                let cpu_color = if stats.cpu_percent > 85.0 {
+                    p.danger
+                } else if stats.cpu_percent > 65.0 {
+                    p.sidebar_accent_foreground
+                } else {
+                    p.foreground
+                };
+                let content = Self::icon_value(
+                    IconName::Cpu,
+                    format!("{:.0}%", stats.cpu_percent),
+                    CPU_VALUE_WIDTH,
+                    cpu_color,
+                    cpu_color,
+                );
+                Some(Self::status_badge(
+                    id,
+                    rust_i18n::t!("monitor.cpu").to_string(),
+                    content,
+                    app,
+                    p,
+                ))
+            }
+            StatusItemId::Memory => {
+                let stats = data.stats.filter(|stats| stats.mem_total_bytes > 0)?;
+                let used_gb = stats.mem_used_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
+                let total_gb = stats.mem_total_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
+                let mem_pct = (stats.mem_used_bytes as f64 / stats.mem_total_bytes as f64) * 100.0;
+                let content = Self::icon_value(
+                    IconName::MemoryStick,
+                    format!("{used_gb:.0}G/{total_gb:.0}G {mem_pct:.0}%"),
+                    MEMORY_VALUE_WIDTH,
+                    p.foreground,
+                    p.muted_foreground,
+                );
+                let tooltip = format!(
+                    "{}: {used_gb:.1}G / {total_gb:.1}G ({mem_pct:.0}%)",
+                    rust_i18n::t!("monitor.mem")
+                );
+                Some(Self::status_badge(id, tooltip, content, app, p))
+            }
+            StatusItemId::Disk => {
+                let stats = data.stats.filter(|stats| stats.disk_total_bytes > 0)?;
+                let used_gb = stats.disk_used_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
+                let total_gb = stats.disk_total_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
+                let disk_pct =
+                    (stats.disk_used_bytes as f64 / stats.disk_total_bytes as f64) * 100.0;
+                let content = Self::icon_value(
+                    IconName::HardDrive,
+                    format!("{used_gb:.0}G/{total_gb:.0}G {disk_pct:.0}%"),
+                    DISK_VALUE_WIDTH,
+                    p.foreground,
+                    p.muted_foreground,
+                );
+                let tooltip = format!(
+                    "{}: {used_gb:.1}G / {total_gb:.1}G ({disk_pct:.0}%)",
+                    rust_i18n::t!("monitor.disk")
+                );
+                Some(Self::status_badge(id, tooltip, content, app, p))
+            }
+            StatusItemId::Os => {
+                let stats = data.stats.filter(|stats| !stats.os_name.is_empty())?;
+                let os_name = stats.os_name.clone();
+                let content = Self::icon_value(
+                    IconName::Monitor,
+                    os_name.clone(),
+                    OS_VALUE_WIDTH,
+                    p.foreground,
+                    p.muted_foreground,
+                );
+                Some(Self::status_badge(id, os_name, content, app, p))
+            }
+            StatusItemId::Uptime => {
+                let stats = data
+                    .stats
+                    .filter(|stats| stats.uptime_secs > 0 || !stats.os_name.is_empty())?;
+                let days = stats.uptime_secs / 86400;
+                let hours = (stats.uptime_secs % 86400) / 3600;
+                let mins = (stats.uptime_secs % 3600) / 60;
+                let up_text = if days > 0 {
+                    format!("{days}d{hours}h")
+                } else if hours > 0 {
+                    format!("{hours}h{mins}m")
+                } else if mins > 0 {
+                    format!("{mins}m")
+                } else {
+                    "<1m".to_string()
+                };
+                let content = Self::icon_value(
+                    IconName::Clock,
+                    up_text,
+                    UPTIME_VALUE_WIDTH,
+                    p.foreground,
+                    p.muted_foreground,
+                );
+                Some(Self::status_badge(
+                    id,
+                    rust_i18n::t!("monitor.uptime").to_string(),
+                    content,
+                    app,
+                    p,
+                ))
+            }
+            StatusItemId::Unknown => None,
+        }
+    }
+
+    /// 统一徽标外壳：底色、细边框、hover 与拖拽光标都在这里定义，条目只负责内容。
+    fn status_badge(
+        id: StatusItemId,
+        tooltip: String,
+        content: AnyElement,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let badge = div()
+            .id(ElementId::Name(format!("status-{}", id.key()).into()))
+            .relative()
+            .h(px(BADGE_HEIGHT))
+            .flex()
+            .items_center()
+            .gap_1()
+            .px_1p5()
+            .rounded_md()
+            .bg(p.muted)
+            .border_1()
+            .border_color(p.foreground.opacity(0.10))
+            .cursor_grab()
+            .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
+            .hover(|style| {
+                style
+                    .bg(p.foreground.opacity(0.10))
+                    .border_color(p.foreground.opacity(0.28))
+            })
+            .active(|style| style.bg(p.foreground.opacity(0.16)))
+            .child(content);
+        drag::attach_status_drag(badge, id, app, p)
+    }
+
+    fn rate_entry(icon: IconName, value: String, p: &Palette) -> AnyElement {
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
+            .child(
+                div().w(px(RATE_WIDTH)).flex().child(
+                    div()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .truncate()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.foreground)
+                        .child(value),
+                ),
+            )
+            .into_any_element()
+    }
+
+    /// 固定宽度的数值槽：数值紧贴图标，槽位剩余空间留到右侧。
+    ///
+    /// 不用右对齐：内存、运行时间这类短数值会在图标和数字之间空出一大块，
+    /// 看起来像排版断裂。槽宽固定保证徽标整体不抖，左对齐保证数字始终贴着图标。
+    fn icon_value(
+        icon: IconName,
+        value: String,
+        width: f32,
+        value_color: Hsla,
+        icon_color: Hsla,
+    ) -> AnyElement {
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(Icon::new(icon).xsmall().text_color(icon_color))
+            .child(
+                div().w(px(width)).flex().child(
+                    div()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .truncate()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(value_color)
+                        .child(value),
+                ),
+            )
+            .into_any_element()
+    }
+
+    pub(crate) fn render_error_banner(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        h_flex()
+            .px_3()
+            .py_2()
+            .gap_3()
+            .items_center()
+            .justify_between()
+            .bg(p.danger)
+            .text_color(p.danger_foreground)
+            .child(
+                div()
+                    .text_sm()
+                    .child(self.error.clone().unwrap_or_default()),
+            )
+            .child(
+                Button::new("dismiss-error")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::X)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.error = None;
+                        cx.notify();
+                    })),
+            )
+            .into_any_element()
+    }
+}
+
+pub(crate) fn status_item_icon(id: StatusItemId) -> IconName {
+    match id {
+        StatusItemId::Network => IconName::ArrowUpDown,
+        StatusItemId::Cpu => IconName::Cpu,
+        StatusItemId::Memory => IconName::MemoryStick,
+        StatusItemId::Disk => IconName::HardDrive,
+        StatusItemId::Os => IconName::Monitor,
+        StatusItemId::Uptime => IconName::Clock,
+        StatusItemId::Unknown => IconName::CircleAlert,
+    }
+}
+
+pub(crate) fn status_item_label(id: StatusItemId) -> String {
+    let key = match id {
+        StatusItemId::Network => "status.network",
+        StatusItemId::Cpu => "monitor.cpu",
+        StatusItemId::Memory => "monitor.mem",
+        StatusItemId::Disk => "monitor.disk",
+        StatusItemId::Os => "status.os",
+        StatusItemId::Uptime => "monitor.uptime",
+        StatusItemId::Unknown => "status.unknown",
+    };
+    rust_i18n::t!(key).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_rate;
+
+    #[test]
+    fn formats_rates_with_compact_units() {
+        assert_eq!(format_rate(0), "0B/s");
+        assert_eq!(format_rate(512), "512B/s");
+        assert_eq!(format_rate(1536), "1.5K/s");
+        assert_eq!(format_rate(1024 * 1024), "1.0M/s");
+        assert_eq!(format_rate(3 * 1024 * 1024 * 1024), "3.0G/s");
+        assert_eq!(format_rate(1024 * 1024 / 2), "512K/s");
+    }
+}

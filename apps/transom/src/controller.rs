@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::process::Command;
 use tokio::runtime::Runtime;
+use transom_core::traffic::parse_net_dev_totals;
 use transom_core::{
     AppCommand, AppError, AppEvent, Connection, ConnectionId, ErrorCode, ForwardId, ForwardState,
     ForwardStatus, KnownHostsStore, NetworkTraffic, PromptInfo, SftpOperation, TabId, TerminalIo,
@@ -133,6 +134,18 @@ async fn run_controller(
         event_tx: flume::Sender<AppEvent>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
+            // 先交一个零样本，让网络徽标在连接建立后立刻出现；首个真实速率
+            // 仍从完整的一秒窗口开始计算，避免瞬时大数字。
+            if event_tx
+                .send(AppEvent::NetworkTrafficUpdated {
+                    tab_id,
+                    connection_id,
+                    traffic: NetworkTraffic::default(),
+                })
+                .is_err()
+            {
+                return;
+            }
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             // 跳过 interval 的第一个瞬时 tick，保证首个速率窗口是完整的 1 秒。
@@ -147,6 +160,63 @@ async fn run_controller(
                 let current = traffic.totals();
                 let sample = NetworkTraffic::from_delta(previous, current, elapsed);
                 previous = current;
+                if event_tx
+                    .send(AppEvent::NetworkTrafficUpdated {
+                        tab_id,
+                        connection_id,
+                        traffic: sample,
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+    }
+
+    /// 本地终端的网络采样：读取本机 `/proc/net/dev` 的非回环网卡累计字节。
+    ///
+    /// 与 SSH 传输层计数不同，这里得到的是整台机器所有非回环接口的合计吞吐，
+    /// 因此界面上要按会话类型区分提示文案。读取失败时跳过本轮并保留上一次
+    /// 有效样本，避免把一次文件读取抖动显示成断网。
+    fn spawn_local_traffic_sampler(
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        event_tx: flume::Sender<AppEvent>,
+    ) -> tokio::task::JoinHandle<()> {
+        async fn read_totals() -> Option<(u64, u64)> {
+            let content = tokio::fs::read_to_string("/proc/net/dev").await.ok()?;
+            parse_net_dev_totals(&content)
+        }
+
+        tokio::spawn(async move {
+            if event_tx
+                .send(AppEvent::NetworkTrafficUpdated {
+                    tab_id,
+                    connection_id,
+                    traffic: NetworkTraffic::default(),
+                })
+                .is_err()
+            {
+                return;
+            }
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval.tick().await;
+            let mut previous = read_totals().await;
+            let mut previous_at = std::time::Instant::now();
+            loop {
+                interval.tick().await;
+                let Some(current) = read_totals().await else {
+                    continue;
+                };
+                let now = std::time::Instant::now();
+                let elapsed = now.saturating_duration_since(previous_at);
+                previous_at = now;
+                let Some(previous_totals) = previous.replace(current) else {
+                    continue;
+                };
+                let sample = NetworkTraffic::from_delta(previous_totals, current, elapsed);
                 if event_tx
                     .send(AppEvent::NetworkTrafficUpdated {
                         tab_id,
@@ -578,6 +648,10 @@ async fn run_controller(
                         connection_id,
                     });
                 });
+
+                let traffic_task =
+                    spawn_local_traffic_sampler(tab_id, connection_id, event_tx.clone());
+                traffic_tasks.insert(tab_id, traffic_task);
 
                 let event_tx_stats = event_tx.clone();
                 tokio::spawn(async move {

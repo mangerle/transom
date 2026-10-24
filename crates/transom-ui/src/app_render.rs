@@ -84,7 +84,7 @@ impl Render for AppShell {
             .error
             .as_ref()
             .map(|_| self.render_error_banner(&p, cx));
-        let status_bar = (!self.immersive).then(|| self.render_status_bar(&p));
+        let status_bar = (!self.immersive).then(|| self.render_status_bar(&p, cx));
         // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现
         // 弹窗在面板下面、用户点不到确认按钮的层序错误。
         let editor_layers = self.render_editor_panels(window, &p, cx);

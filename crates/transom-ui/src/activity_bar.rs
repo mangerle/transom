@@ -9,7 +9,7 @@
 //! 开头，这样"拖到空白处"有确定结果，且不会让条目在两组之间来回跳。
 
 use crate::app::AppShell;
-use crate::palette::{Palette, localized_error};
+use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
@@ -345,7 +345,7 @@ impl AppShell {
                     .activity_bar
                     .move_relative_to(dragged, anchor, !before)
                 {
-                    this.persist_activity_bar(cx);
+                    this.persist_layout_settings(cx);
                 } else {
                     cx.notify();
                 }
@@ -390,7 +390,7 @@ impl AppShell {
                     this.settings.activity_bar.move_to_bottom_start(dragged)
                 };
                 if changed {
-                    this.persist_activity_bar(cx);
+                    this.persist_layout_settings(cx);
                 } else {
                     cx.notify();
                 }
@@ -402,7 +402,7 @@ impl AppShell {
 
     fn hide_activity_item(&mut self, id: ActivityItemId, cx: &mut Context<Self>) {
         if self.settings.activity_bar.set_visible(id, false) {
-            self.persist_activity_bar(cx);
+            self.persist_layout_settings(cx);
         } else {
             cx.notify();
         }
@@ -410,21 +410,10 @@ impl AppShell {
 
     pub(crate) fn restore_activity_bar(&mut self, cx: &mut Context<Self>) {
         if self.settings.activity_bar.restore_defaults() {
-            self.persist_activity_bar(cx);
+            self.persist_layout_settings(cx);
         } else {
             cx.notify();
         }
-    }
-
-    /// 布局是直接操作型配置，拖完/隐藏后立即落盘，不等待设置弹窗的保存按钮。
-    ///
-    /// 这里只做保存与错误上报，不重复解析字体等输入框状态；设置弹窗的取消
-    /// 语义不覆盖布局改动，界面文案会明确提示"立即保存"。
-    pub(crate) fn persist_activity_bar(&mut self, cx: &mut Context<Self>) {
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
-            self.error = Some(localized_error(&error));
-        }
-        cx.notify();
     }
 }
 

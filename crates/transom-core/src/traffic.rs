@@ -1,8 +1,11 @@
-//! SSH 传输层网络吞吐统计模型。
+//! 网络吞吐统计模型。
 //!
-//! 计数刻意下沉到传输层（加密字节流）而不是终端通道：这样终端输入输出、
-//! SFTP 传输、端口转发与心跳保活都会被统一计入，与用户对“当前连接网速”的
+//! SSH 会话的计数下沉到传输层（加密字节流）而不是终端通道：这样终端输入输出、
+//! SFTP 传输、端口转发与心跳保活都会被统一计入，与用户对"当前连接网速"的
 //! 直觉一致，也不会因为多开 SFTP 通道而漏算。
+//!
+//! 本地终端没有 SSH 传输层，改为读取 `/proc/net/dev` 汇总非回环网卡的累计
+//! 收发字节，得到的是本机系统级网速；两者共用 [`NetworkTraffic`] 的差值换算。
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -37,6 +40,40 @@ impl TrafficCounter {
             self.sent_bytes.load(Ordering::Relaxed),
         )
     }
+}
+
+/// 汇总 `/proc/net/dev` 中所有非回环网卡的累计收发字节。
+///
+/// 返回顺序为 `(接收字节, 发送字节)`，与 [`TrafficCounter::totals`] 一致，供本地
+/// 终端按差值换算系统级网速。只排除 `lo`：docker/veth/vpn 等虚拟接口是否重复
+/// 计数取决于系统拓扑，这里不做过早猜测，保持与 `ifconfig` 总量口径一致。
+///
+/// 没有可解析的非回环接口时返回 `None`，调用方应保留上一次有效样本而不是
+/// 发送零速率，避免网络采样偶发失败被误显示为"断网"。
+pub fn parse_net_dev_totals(content: &str) -> Option<(u64, u64)> {
+    let mut received = 0u64;
+    let mut sent = 0u64;
+    let mut found = false;
+    for line in content.lines() {
+        let Some((interface, values)) = line.split_once(':') else {
+            continue;
+        };
+        if interface.trim().is_empty() || interface.trim() == "lo" {
+            continue;
+        }
+        let mut fields = values.split_whitespace();
+        let Some(receive_bytes) = fields.next().and_then(|value| value.parse::<u64>().ok()) else {
+            continue;
+        };
+        // 冒号后第 9 个字段是发送字节数；先消费接收字节，再跳过 7 个接收统计字段。
+        let Some(transmit_bytes) = fields.nth(7).and_then(|value| value.parse::<u64>().ok()) else {
+            continue;
+        };
+        received = received.saturating_add(receive_bytes);
+        sent = sent.saturating_add(transmit_bytes);
+        found = true;
+    }
+    found.then_some((received, sent))
 }
 
 /// 某一采样时刻的上下行速率快照，单位为字节/秒。
@@ -104,5 +141,28 @@ mod tests {
 
         let zero = NetworkTraffic::from_delta((0, 0), (100, 100), Duration::ZERO);
         assert_eq!(zero, NetworkTraffic::default());
+    }
+
+    #[test]
+    fn net_dev_totals_sum_non_loopback_interfaces() {
+        let content = "\
+Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo: 900 1 0 0 0 0 0 0 800 1 0 0 0 0 0 0
+  eth0: 1000 10 0 0 0 0 0 0 2000 20 0 0 0 0 0 0
+ wlan0: 300 3 0 0 0 0 0 0 400 4 0 0 0 0 0 0
+";
+        assert_eq!(parse_net_dev_totals(content), Some((1300, 2400)));
+    }
+
+    #[test]
+    fn net_dev_totals_ignore_malformed_and_loopback_only() {
+        let content = "\
+  lo: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0
+bad_line_without_colon
+  eth0: not-a-number 1 0 0 0 0 0 0 2 0 0 0 0 0 0 0
+  eth1: 1 0 0 0
+";
+        assert_eq!(parse_net_dev_totals(content), None);
     }
 }

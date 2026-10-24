@@ -96,7 +96,8 @@ pub(crate) struct TerminalTab {
     pub(crate) forwards_panel: Option<ForwardPanelState>,
     pub(crate) forward_statuses: HashMap<ForwardId, ForwardStatus>,
     pub(crate) system_stats: Option<SystemStats>,
-    /// 当前 SSH 连接的传输层实时速率；本地终端为 `None`。
+    /// 当前网络的实时速率：SSH 为传输层连接速率，本地终端为本机非回环网卡
+    /// 合计速率；串口与尚未开始采样时为 `None`。
     pub(crate) network_traffic: Option<NetworkTraffic>,
     /// 初始化命令的后台调度任务；重连或关标签时丢弃以取消。
     pub(crate) _startup_task: Option<Task<()>>,
@@ -326,6 +327,7 @@ impl AppShell {
     ) -> Self {
         // 设置文件是外部输入：未知条目、重复项、越界分区都在进入运行期前清洗。
         settings.activity_bar.normalize();
+        settings.status_bar.normalize();
         cx.bind_keys(keymap::bindings(&settings.shortcuts));
         let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
             &settings.shortcuts,

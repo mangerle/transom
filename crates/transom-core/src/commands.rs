@@ -160,7 +160,8 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         stats: SystemStats,
     },
-    /// SSH 传输层按固定周期采样得到的上下行速率。
+    /// 按固定周期采样得到的上下行速率：SSH 来自传输层计数，本地终端来自
+    /// 本机非回环网卡的累计字节差。
     NetworkTrafficUpdated {
         tab_id: TabId,
         connection_id: ConnectionId,

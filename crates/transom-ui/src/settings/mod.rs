@@ -25,6 +25,17 @@ fn read_font_family(input: &Entity<InputState>, cx: &App) -> Option<String> {
 }
 
 impl AppShell {
+    /// 直接操作型布局（活动栏、状态栏）的即时落盘入口。
+    ///
+    /// 拖拽或显隐发生在设置弹窗之外，不能等待弹窗的保存按钮；这里只做保存与
+    /// 错误上报，不重复解析字体等输入框状态，也不改变弹窗的取消语义。
+    pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
+        if let Err(error) = self.services.settings_store.save(&self.settings) {
+            self.error = Some(localized_error(&error));
+        }
+        cx.notify();
+    }
+
     pub(crate) fn open_settings_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let profile = self.settings.terminal_profile.clone();
         self.settings_font_family.update(cx, |input, cx| {
