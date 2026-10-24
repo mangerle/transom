@@ -374,6 +374,8 @@ pub struct AppShell {
     pub(crate) editor_panels: Vec<EditorPanelState>,
     /// 被脏编辑面板拦下的标签/会话关闭意图；面板全部处理完毕后续行执行。
     pub(crate) pending_editor_close: Option<PendingEditorClose>,
+    /// 工具栏"已打开编辑器"浮层的受控显隐（与快捷命令卡片同口径）。
+    pub(crate) editor_list_open: bool,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
     pub(crate) sftp_modals: SftpModals,
     /// 快捷命令面板的聚合状态：卡片展开开关与新增/编辑小弹窗。
@@ -557,6 +559,7 @@ impl AppShell {
             confirm_forward_any: None,
             editor_panels: Vec::new(),
             pending_editor_close: None,
+            editor_list_open: false,
             sftp_modals: SftpModals {
                 chmod: None,
                 input: None,

@@ -258,6 +258,15 @@ pub struct SftpSettings {
     /// 由 config.toml 单点承载，需要放宽时改一处即可。
     #[serde(default = "default_edit_max_bytes")]
     pub edit_max_bytes: u64,
+    /// 内置编辑器回传覆盖前，是否先把远端当前内容备份为 `{路径}.transom-bak`。
+    ///
+    /// 设计原理（Why）：回传是"整文件覆盖"而非原子替换，写入中断会在远端留下
+    /// 半份文件；备份是 SFTP 协议下零 inode 副作用的最低成本兜底（rename 原子
+    /// 替换会改变 inode，可能破坏正在读取该文件的进程，故不采用）。默认关闭：
+    /// 备份会在远端留下额外文件，是否可接受属于部署方策略，交给 config.toml
+    /// 单点承载（与 edit_max_bytes 同理，不进设置页）。
+    #[serde(default)]
+    pub editor_write_backup: bool,
 }
 
 impl Default for SftpSettings {
@@ -267,6 +276,7 @@ impl Default for SftpSettings {
             verify_after_transfer: false,
             max_concurrent_transfers: default_max_concurrent_transfers(),
             edit_max_bytes: default_edit_max_bytes(),
+            editor_write_backup: false,
         }
     }
 }

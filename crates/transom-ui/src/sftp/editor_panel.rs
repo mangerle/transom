@@ -72,8 +72,12 @@ pub(crate) struct EditorPanelState {
     /// 最近一次与远端一致的内容，用于脏检查与恢复；回传成功后整体替换。
     pub(crate) baseline: SharedString,
     /// 远端文本版本指纹：读取装载与回传成功时刷新，保存请求携带它做并发
-    /// 冲突比对；`None` 只存在于读取完成前的窗口期。
+    /// 冲突比对。新建文件面板持有零尺寸指纹——远端尚无此文件，若同名非空
+    /// 文件恰好已存在，首次保存会被指纹比对拦成冲突而不是静默覆盖。
+    /// `None` 只存在于读取完成前的窗口期。
     pub(crate) remote_meta: Option<RemoteTextMeta>,
+    /// 新建文件面板：缓冲区为空、基线为空，首次保存才真正创建远端文件。
+    pub(crate) new_file: bool,
     /// 由编辑器 `Change` 事件置位，避免每帧比较整份文本。
     pub(crate) dirty: bool,
     /// 是否已成功装载过远端内容。

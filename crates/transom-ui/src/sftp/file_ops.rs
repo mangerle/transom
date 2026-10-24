@@ -121,6 +121,27 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 打开"新建远端文件并编辑"输入模态：提交后由编辑器打开空面板，
+    /// 首次保存才在远端创建文件。
+    pub(crate) fn sftp_open_editor_new_file_modal(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let input = sftp_text_input(window, cx, "", "新文件名称");
+        input.update(cx, |state, cx| state.focus(window, cx));
+        self.sftp_modals.input = Some(SftpInputModalState {
+            tab_id,
+            title: "新建远端文件".to_string(),
+            prompt: "输入新文件名称（在当前远端目录下创建）:".to_string(),
+            input,
+            target: SftpInputTarget::RemoteEditorNewFile,
+            error: None,
+        });
+        cx.notify();
+    }
+
     pub(crate) fn sftp_open_rename_modal(
         &mut self,
         tab_id: TabId,
@@ -268,6 +289,44 @@ impl AppShell {
             return;
         }
 
+        // 新建文件在通用校验后直接分流：目录列表里已有同名条目时不创建，
+        // 目录报错回填、文件直接打开编辑；全新路径才生成空编辑面板。
+        // 整条分支在 match 之前完成，避免部分移动的模态再被改写。
+        if matches!(modal.target, SftpInputTarget::RemoteEditorNewFile) {
+            let existing = self
+                .tabs
+                .iter()
+                .find(|t| t.id == tab_id)
+                .and_then(|t| t.sftp.as_ref())
+                .map(|panel| {
+                    let path = join_remote(&panel.path, &name);
+                    let is_dir = panel
+                        .entries
+                        .iter()
+                        .find(|entry| entry.path == path)
+                        .map(|entry| entry.is_dir);
+                    (path, is_dir)
+                });
+            let Some((path, existing_is_dir)) = existing else {
+                return;
+            };
+            match existing_is_dir {
+                Some(true) => {
+                    let mut modal = modal;
+                    modal.error = Some(format!("同名目录已存在，无法创建文件：{name}"));
+                    let input = modal.input.clone();
+                    self.sftp_modals.input = Some(modal);
+                    input.update(cx, |state, cx| state.focus(window, cx));
+                    cx.notify();
+                }
+                // 列表里已有同名文件：交给既有打开流程（读取失败会在面板内报错）。
+                Some(false) => self.sftp_edit_remote_file(tab_id, path, window, cx),
+                // 目录列表未命中：按新文件打开空编辑面板。
+                None => self.spawn_new_editor_panel(tab_id, path, name, window, cx),
+            }
+            return;
+        }
+
         match modal.target {
             SftpInputTarget::RemoteMkdir => {
                 let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
@@ -281,6 +340,9 @@ impl AppShell {
                 };
                 self.send_sftp_op(tab_id, op, cx);
             }
+            // 新建文件已在 match 之前的前置分支完整处理：同名条目分流、
+            // 目录报错回填、文件直接打开或生成空面板。
+            SftpInputTarget::RemoteEditorNewFile => {}
             SftpInputTarget::RemoteRename { old_path } => {
                 let op = SftpOperation::Rename {
                     from: old_path.clone(),

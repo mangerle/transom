@@ -1,5 +1,6 @@
 //! SFTP 双栏文件管理器主面板视图渲染。
 
+use super::editor_list::render_editor_list_popover;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::preview::{PreviewKey, SftpHoverTarget};
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
@@ -662,6 +663,16 @@ impl AppShell {
                                     })),
                             )
                             .child(
+                                Button::new("sftp-new-file")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::FilePlus)
+                                    .tooltip("新建文件并编辑")
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.sftp_open_editor_new_file_modal(tab_id, window, cx);
+                                    })),
+                            )
+                            .child(
                                 Button::new("sftp-rename")
                                     .ghost()
                                     .xsmall()
@@ -694,6 +705,7 @@ impl AppShell {
                                         }
                                     })),
                             )
+                            .child(render_editor_list_popover(self, tab_id, p, cx))
                             .child(
                                 Button::new("sftp-chmod")
                                     .ghost()

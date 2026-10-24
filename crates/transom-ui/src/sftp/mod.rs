@@ -5,6 +5,7 @@ mod editor_actions;
 mod editor_banner;
 mod editor_close;
 mod editor_diff;
+mod editor_list;
 mod editor_navigate;
 mod editor_open;
 mod editor_ops;
@@ -89,11 +90,21 @@ pub(crate) struct SftpSyncModalState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SftpInputTarget {
     RemoteMkdir,
-    RemoteRename { old_path: String },
-    RemoteSymlink { target: String },
+    /// 新建远端文件并直接进入编辑面板；提交后由编辑器打开空缓冲区。
+    RemoteEditorNewFile,
+    RemoteRename {
+        old_path: String,
+    },
+    RemoteSymlink {
+        target: String,
+    },
     LocalMkdir,
-    LocalRename { old_path: PathBuf },
-    LocalSymlink { target_path: PathBuf },
+    LocalRename {
+        old_path: PathBuf,
+    },
+    LocalSymlink {
+        target_path: PathBuf,
+    },
 }
 
 pub(crate) struct SftpInputModalState {

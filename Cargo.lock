@@ -8139,6 +8139,7 @@ name = "transom-net"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "encoding_rs",
  "flume",
  "futures",
  "parking_lot",

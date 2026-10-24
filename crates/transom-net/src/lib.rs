@@ -12,6 +12,7 @@ mod sftp_dir;
 mod sftp_hash;
 mod sftp_scan;
 mod sftp_sync;
+mod sftp_text;
 mod traffic;
 
 pub use auth::{AuthPrompter, PasswordPrompter};

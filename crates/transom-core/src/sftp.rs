@@ -47,27 +47,42 @@ pub struct RemoteDeleteTarget {
     pub is_dir: bool,
 }
 
-/// 远端文本的版本指纹：编辑面板打开或上次回传成功时记录，保存前与远端当前
-/// 指纹比对，检测"打开后文件被他人修改"的并发冲突（丢失更新）。
+/// 远端文本的版本指纹与形态标记：编辑面板打开或上次回传成功时记录。
+///
+/// 版本指纹部分（size/mtime）用于保存前与远端当前值比对，检测"打开后文件被
+/// 他人修改"的并发冲突（丢失更新）。
 ///
 /// 设计原理（Why）：stat-then-write 是乐观锁而非原子操作，比对与写入之间存在
 /// 窗口；但它是 SFTP 协议下无需服务端配合的唯一可行方案，能拦住绝大多数
 /// "打开到保存间隔数分钟"的真实冲突。代价与局限：mtime 精度为秒，同秒内同尺寸
 /// 的修改无法识别；个别服务器不回传 mtime 时退化为仅按字节数比对。
+///
+/// 形态标记部分（bom/crlf/transcoded）描述读取时对原始字节做过的规整：编辑
+/// 缓冲区持有的并非远端原样字节，回传时必须按标记还原，否则保存一次就把
+/// BOM、CRLF 行尾悄悄改掉。transcoded 为 true 表示内容按 GBK 解码而来，
+/// 只读预览、禁止回传。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteTextMeta {
-    /// 打开时或上次回传成功后的远端字节数。
+    /// 打开时或上次回传成功后的远端字节数（原始字节，含 BOM 与 CRLF）。
+    ///
+    /// 指纹比对的对象是远端 stat，必须用原始尺寸；编辑缓冲区长度因规整而
+    /// 不同，不能混用。
     pub size: u64,
     /// 远端 mtime（秒）。`None` 表示服务器未回传，该维度视为通配不做比对，
     /// 避免偶发缺字段把合法保存误判成冲突。
     pub mtime: Option<u32>,
+    /// 远端文件带 UTF-8 BOM，读取时已剥离，回传时需原样补回。
+    pub bom: bool,
+    /// 远端文件使用 CRLF 行尾，读取时已统一为 LF，回传时需原样还原。
+    pub crlf: bool,
+    /// 内容按 GBK 解码而来（原字节不是合法 UTF-8）；只读预览，禁止回传。
+    pub transcoded: bool,
 }
 
 impl RemoteTextMeta {
     /// 与远端当前指纹不一致即视为冲突。
     ///
-    /// 任一侧 mtime 缺失时跳过该维度，仅按字节数判定；两侧字节数都来自
-    /// stat，缺失会直接跳过整个比对（见 net 层 `write_text`）。
+    /// 任一侧 mtime 缺失时跳过该维度，仅按字节数判定；形态标记不参与比对。
     pub fn conflicts_with(&self, current: &RemoteTextMeta) -> bool {
         if self.size != current.size {
             return true;
@@ -302,13 +317,22 @@ pub enum SftpOperation {
     /// `content` 为 UTF-8 字节；用 `Vec<u8>` 而非 `String` 是把编码决策留在
     /// 边界上，命令在通道里只被移动不被复制。
     ///
-    /// `expected` 为打开或上次回传成功时的远端版本指纹（乐观锁）：写前先 stat
-    /// 比对，不一致说明远端已被他人修改，拒绝覆盖并回报冲突。`None` 表示跳过
-    /// 比对强制覆盖（用户在冲突横幅上明确选择"强制覆盖远端"时使用）。
+    /// `expected` 为打开或上次回传成功时的远端版本指纹（乐观锁）：net 层写前先
+    /// stat 比对，不一致说明远端已被他人修改，拒绝覆盖并回报冲突；同时按指纹的
+    /// 形态标记还原 BOM/CRLF。`None` 表示新文件（远端尚不存在），不做比对、
+    /// 不做还原。
+    ///
+    /// `force` 为 true 时跳过指纹比对（用户在冲突横幅上明确选择"强制覆盖远端"），
+    /// 但形态还原仍然生效，避免强制覆盖悄悄改掉文件的 BOM/CRLF。
+    ///
+    /// `backup` 为 true 时先把远端当前内容备份为 `{path}.transom-bak` 再覆盖
+    /// （由设置项下发）；备份属尽力而为，远端不存在或读取失败时跳过。
     WriteText {
         path: String,
         content: Vec<u8>,
         expected: Option<RemoteTextMeta>,
+        force: bool,
+        backup: bool,
     },
     /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径
     Symlink {
@@ -389,21 +413,33 @@ mod tests {
         let opened = RemoteTextMeta {
             size: 100,
             mtime: Some(1000),
+            bom: false,
+            crlf: false,
+            transcoded: false,
         };
         // 远端与打开时完全一致：不冲突。
         assert!(!opened.conflicts_with(&RemoteTextMeta {
             size: 100,
             mtime: Some(1000),
+            bom: false,
+            crlf: false,
+            transcoded: false,
         }));
         // 大小变化（含保存后内容变短/变长）：冲突。
         assert!(opened.conflicts_with(&RemoteTextMeta {
             size: 90,
             mtime: Some(1000),
+            bom: false,
+            crlf: false,
+            transcoded: false,
         }));
         // 大小相同但 mtime 变化（同尺寸被改写）：冲突。
         assert!(opened.conflicts_with(&RemoteTextMeta {
             size: 100,
             mtime: Some(2000),
+            bom: false,
+            crlf: false,
+            transcoded: false,
         }));
     }
 
@@ -414,19 +450,31 @@ mod tests {
         let opened = RemoteTextMeta {
             size: 100,
             mtime: None,
+            bom: false,
+            crlf: false,
+            transcoded: false,
         };
         assert!(!opened.conflicts_with(&RemoteTextMeta {
             size: 100,
             mtime: Some(2000),
+            bom: false,
+            crlf: false,
+            transcoded: false,
         }));
         assert!(opened.conflicts_with(&RemoteTextMeta {
             size: 120,
             mtime: Some(2000),
+            bom: false,
+            crlf: false,
+            transcoded: false,
         }));
         // 两侧 mtime 均缺失：退化为纯大小比对。
         assert!(!opened.conflicts_with(&RemoteTextMeta {
             size: 100,
             mtime: None,
+            bom: false,
+            crlf: false,
+            transcoded: false,
         }));
     }
 }

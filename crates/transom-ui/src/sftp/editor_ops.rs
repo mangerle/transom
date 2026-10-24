@@ -11,6 +11,7 @@
 //!   修改时 net 层拒绝覆盖并回报 `SftpTextConflict`，这里只置冲突横幅交用户
 //!   决策（重新载入 / 强制覆盖 / 继续编辑），杜绝静默丢失他人改动。
 
+use super::editor_open::parent_dir;
 use super::editor_panel::{EditorPanelState, EditorPhase};
 use crate::app::AppShell;
 use crate::keymap;
@@ -80,7 +81,11 @@ impl AppShell {
         }
         let tab_id = item.tab_id;
         let remote_path = item.remote_path.clone();
-        let expected = if force { None } else { item.remote_meta };
+        // expected 始终携带已知指纹：它同时承载并发比对基准与 BOM/CRLF 形态还原
+        // 标记（强制覆盖也必须还原形态，否则保存一次就改掉文件行尾）；跳过比对
+        // 由 force 表达。新文件面板指纹为 None，net 层据此不做比对与还原。
+        let expected = item.remote_meta;
+        let backup = self.settings.sftp.editor_write_backup;
         let content = editor.read(cx).value();
         let Some(connection_id) = self
             .tabs
@@ -108,6 +113,8 @@ impl AppShell {
                 path: remote_path,
                 content: content.as_bytes().to_vec(),
                 expected,
+                force,
+                backup,
             },
         }) {
             if let Some(item) = self.editor_panel_mut(editor) {
@@ -150,7 +157,7 @@ impl AppShell {
         else {
             return;
         };
-        let (editor, close_after, tab_id, remote_path) = {
+        let (editor, close_after, was_new_file, tab_id, remote_path) = {
             let item = &mut self.editor_panels[index];
             item.pending_op = None;
             item.baseline = item.editor.read(cx).value();
@@ -165,9 +172,13 @@ impl AppShell {
             item.diff = None;
             let close_after = item.close_after_write;
             item.close_after_write = false;
+            let was_new_file = item.new_file;
+            // 首次保存成功，面板自此对应一个真实存在的远端文件。
+            item.new_file = false;
             (
                 item.editor.clone(),
                 close_after,
+                was_new_file,
                 item.tab_id,
                 item.remote_path.clone(),
             )
@@ -183,6 +194,19 @@ impl AppShell {
         {
             entry.size = meta.size;
             entry.modified = meta.mtime;
+        }
+        // 新建文件首次落盘：列表里还没有这个条目，就地补丁无效，按需刷新
+        // 当前目录（仅当用户仍停留在该文件所在目录时）。
+        if was_new_file
+            && let Some(parent) = parent_dir(&remote_path)
+            && self
+                .tabs
+                .iter()
+                .find(|tab| tab.id == tab_id)
+                .and_then(|tab| tab.sftp.as_ref())
+                .is_some_and(|panel| panel.path == parent)
+        {
+            self.request_sftp_list(tab_id, parent.to_string(), cx);
         }
         if close_after {
             self.drop_editor_panel(&editor, window, cx);

@@ -335,6 +335,7 @@ fn render_panel_status(
         .child(div().flex_none().child(caret))
         .child(div().flex_none().child(item.language.clone()))
         // 权限八进制与只读标记来自打开时刻的目录项快照，可能过期，仅作提示。
+        // GBK 转码内容单独标注编码与"只读预览"，只读原因一目了然。
         .when_some(item.permissions, |this, permissions| {
             this.child(
                 div()
@@ -343,7 +344,13 @@ fn render_panel_status(
             )
         })
         .when(!item.writable, |this| {
-            this.child(div().flex_none().text_color(p.danger).child("只读"))
+            let transcoded = item.remote_meta.is_some_and(|meta| meta.transcoded);
+            let label = if transcoded {
+                "GBK · 只读预览"
+            } else {
+                "只读"
+            };
+            this.child(div().flex_none().text_color(p.danger).child(label))
         })
         .child(
             h_flex()

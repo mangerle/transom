@@ -270,13 +270,15 @@ pub(super) async fn execute_sftp_op(
             path,
             content,
             expected,
+            force,
+            backup,
         } => {
             // 回传比读取更慢（写要落盘并等待远端确认），给更宽的超时；
             // 失败与超时统一回抛给编辑面板就地显示，不影响队列与状态栏。
             // 版本指纹冲突走独立事件：面板要弹出三选一横幅，不能按普通失败处理。
             let result = tokio::time::timeout(
                 TEXT_WRITE_TIMEOUT,
-                client.write_text(&path, &content, expected),
+                client.write_text(&path, &content, expected, force, backup),
             )
             .await;
             match result {

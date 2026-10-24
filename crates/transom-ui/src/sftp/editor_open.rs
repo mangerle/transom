@@ -55,6 +55,31 @@ fn permissions_writable(permissions: Option<u32>) -> bool {
     permissions.is_none_or(|p| p & 0o222 != 0)
 }
 
+/// 面板初始形态：普通打开（读取在途）与新建文件（空缓冲区立即可编辑）。
+///
+/// 权限位属于"打开既有条目"的信息（来自目录列表快照），随读取种子传入；
+/// 新建文件没有已存在的权限位可依据，视作可写。
+enum PanelSeed {
+    /// 打开既有文件：面板先出现，等待 `SftpTextRead` 装载内容。
+    Reading {
+        op_id: TransferId,
+        permissions: Option<u32>,
+    },
+    /// 新建文件：空缓冲区、基线为空，首次保存创建远端文件。
+    NewFile,
+}
+
+/// 取远端路径的父目录；根目录文件返回 `/`，无 `/` 的相对路径返回 `None`。
+pub(crate) fn parent_dir(path: &str) -> Option<&str> {
+    let trimmed = path.strip_suffix('/').unwrap_or(path);
+    let index = trimmed.rfind('/')?;
+    if index == 0 {
+        Some("/")
+    } else {
+        Some(&trimmed[..index])
+    }
+}
+
 impl AppShell {
     /// 双击/点击远端文本文件：立刻开一个读取态面板，并发命令整份拉取内容。
     pub(crate) fn sftp_edit_remote_file(
@@ -139,8 +164,7 @@ impl AppShell {
             tab_id,
             remote_path.clone(),
             file_name,
-            permissions,
-            op_id,
+            PanelSeed::Reading { op_id, permissions },
             window,
             cx,
         );
@@ -157,15 +181,31 @@ impl AppShell {
         }
     }
 
-    /// 建立一个处于读取态的面板：空缓冲区、订阅就位、按已开面板数量级联落位。
-    #[allow(clippy::too_many_arguments)]
+    /// 新建远端文件并打开编辑面板：空缓冲区立即可编辑，首次保存才创建远端文件。
+    ///
+    /// 面板携带零尺寸指纹：若同名非空文件恰好已存在（目录列表过期时可能发生），
+    /// 首次保存会被 net 层指纹比对拦成冲突，弹出横幅而不是静默覆盖。
+    pub(crate) fn spawn_new_editor_panel(
+        &mut self,
+        tab_id: TabId,
+        remote_path: String,
+        file_name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.spawn_editor_panel(tab_id, remote_path, file_name, PanelSeed::NewFile, window, cx);
+    }
+
+    /// 建立编辑面板：空缓冲区、订阅就位、按已开面板数量级联落位。
+    ///
+    /// 读取态与新建态共用一套装配，只差初始状态字段（见 `PanelSeed`）；
+    /// 新建面板可编辑、无在途任务，读取面板等待 `SftpTextRead` 装载内容。
     fn spawn_editor_panel(
         &mut self,
         tab_id: TabId,
         remote_path: String,
         file_name: String,
-        permissions: Option<u32>,
-        op_id: TransferId,
+        seed: PanelSeed,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -180,6 +220,11 @@ impl AppShell {
         });
         // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
         // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。
+        // 新建文件没有已存在的权限位可依据，视作可写。
+        let permissions = match &seed {
+            PanelSeed::Reading { permissions, .. } => *permissions,
+            PanelSeed::NewFile => None,
+        };
         let writable = permissions_writable(permissions);
         if !writable {
             editor.update(cx, |state, cx| state.set_readonly(true, cx));
@@ -230,6 +275,23 @@ impl AppShell {
                 cx.notify();
             }
         });
+        let (loaded, phase, pending_op, remote_meta, new_file) = match seed {
+            PanelSeed::Reading { op_id, .. } => (false, EditorPhase::Reading, Some(op_id), None, false),
+            // 新建面板：可编辑即可打字；零尺寸指纹让首次保存具备同名覆盖保护。
+            PanelSeed::NewFile => (
+                true,
+                EditorPhase::Idle,
+                None,
+                Some(RemoteTextMeta {
+                    size: 0,
+                    mtime: None,
+                    bom: false,
+                    crlf: false,
+                    transcoded: false,
+                }),
+                true,
+            ),
+        };
         self.editor_panels.push(EditorPanelState {
             tab_id,
             remote_path,
@@ -237,13 +299,14 @@ impl AppShell {
             language,
             editor,
             baseline: SharedString::default(),
-            remote_meta: None,
+            remote_meta,
+            new_file,
             caret,
             dirty: false,
-            loaded: false,
-            phase: EditorPhase::Reading,
+            loaded,
+            phase,
             written_size: None,
-            pending_op: Some(op_id),
+            pending_op,
             error: None,
             permissions,
             writable,
@@ -298,6 +361,13 @@ impl AppShell {
         item.conflict = false;
         item.showing_diff = false;
         item.diff = None;
+        // GBK 等转码内容只读预览：转码回写需要反向编码决策，超出内置编辑器
+        // 的安全边界；缓冲区不可编辑，dirty 不会置位，保存自然被禁用。
+        if meta.transcoded {
+            item.writable = false;
+            item.editor
+                .update(cx, |state, cx| state.set_readonly(true, cx));
+        }
         item.editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
     }
@@ -363,5 +433,22 @@ impl AppShell {
             return;
         }
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parent_dir;
+
+    #[test]
+    fn test_parent_dir_extracts_remote_parent() {
+        assert_eq!(parent_dir("/etc/nginx/nginx.conf"), Some("/etc/nginx"));
+        assert_eq!(parent_dir("/app/config.yaml"), Some("/app"));
+        // 根目录下的文件：父目录是根本身，而不是空串。
+        assert_eq!(parent_dir("/hosts.txt"), Some("/"));
+        // 末尾斜杠不影响解析。
+        assert_eq!(parent_dir("/app/config.yaml/"), Some("/app"));
+        // 相对路径没有父目录语义，交由调用方按当前目录拼接。
+        assert_eq!(parent_dir("config.yaml"), None);
     }
 }
