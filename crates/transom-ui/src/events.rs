@@ -199,6 +199,7 @@ impl AppShell {
                 transferred,
                 total,
             } => {
+                let mut applied = false;
                 if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id)
                     && let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
                 {
@@ -207,7 +208,14 @@ impl AppShell {
                         task.size = total;
                     }
                     panel.recompute_progress();
+                    applied = true;
                 }
+                // 进度事件高频到达：只有当前可见标签的传输队列在显示进度时
+                // 才值得整帧重绘外壳；后台标签的数据照常更新，切回时自然呈现。
+                if applied && self.active_tab == Some(tab_id) && !self.immersive {
+                    cx.notify();
+                }
+                return;
             }
             AppEvent::SftpFinished {
                 tab_id,
@@ -460,22 +468,35 @@ impl AppShell {
                 connection_id,
                 stats,
             } => {
+                let mut applied = false;
                 if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
                     && tab.connection_id == Some(connection_id)
                 {
                     tab.system_stats = Some(stats);
+                    applied = true;
                 }
+                // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
+                if applied && self.active_tab == Some(tab_id) && !self.immersive {
+                    cx.notify();
+                }
+                return;
             }
             AppEvent::NetworkTrafficUpdated {
                 tab_id,
                 connection_id,
                 traffic,
             } => {
+                let mut applied = false;
                 if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
                     && tab.connection_id == Some(connection_id)
                 {
                     tab.network_traffic = Some(traffic);
+                    applied = true;
                 }
+                if applied && self.active_tab == Some(tab_id) && !self.immersive {
+                    cx.notify();
+                }
+                return;
             }
             AppEvent::PublicKeyDeployed {
                 tab_id: _,

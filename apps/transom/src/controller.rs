@@ -766,6 +766,37 @@ async fn run_controller(
 /// 否则一次卡顿会让预览通道长期占用内存并阻塞同一会话上的后续预览。
 const PREVIEW_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// 传输进度事件的最小发送间隔。
+///
+/// 传输层每 64KB 回调一次，内网下每秒可达数千次；直接透传会让 UI 以相同
+/// 频率整帧重绘。进度是单调可覆盖的状态量且终值由 `SftpFinished` 事件兜底，
+/// 中间样本按 100ms 窗口抽样丢弃不损失最终一致性，人眼对进度条刷新的
+/// 分辨率也远低于 10Hz。
+const PROGRESS_EVENT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// 构造按 [`PROGRESS_EVENT_INTERVAL`] 节流的进度回调。
+fn throttled_progress(
+    progress_tx: flume::Sender<AppEvent>,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op_id: TransferId,
+) -> impl FnMut(u64, Option<u64>) + Send {
+    let mut last_sent: Option<std::time::Instant> = None;
+    move |transferred, total| {
+        let now = std::time::Instant::now();
+        if last_sent.is_none_or(|at| now.duration_since(at) >= PROGRESS_EVENT_INTERVAL) {
+            last_sent = Some(now);
+            let _ = progress_tx.send(AppEvent::SftpProgress {
+                tab_id,
+                connection_id,
+                op_id,
+                transferred,
+                total,
+            });
+        }
+    }
+}
+
 /// 编辑器读取远端文本的最长等待时间。
 ///
 /// 与预览不同，编辑是用户主动发起且界面正在等的操作，超时过短会把慢链路上一次
@@ -810,21 +841,12 @@ async fn execute_sftp_op(
             resume,
             verify,
         } => {
-            let progress_tx = event_tx.clone();
             let result = client
                 .download_resumable(
                     &remote_path,
                     &local_path,
                     resume,
-                    move |transferred, total| {
-                        let _ = progress_tx.send(AppEvent::SftpProgress {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            transferred,
-                            total,
-                        });
-                    },
+                    throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
             let result =
@@ -837,21 +859,12 @@ async fn execute_sftp_op(
             resume,
             verify,
         } => {
-            let progress_tx = event_tx.clone();
             let result = client
                 .upload_resumable(
                     &local_path,
                     &remote_path,
                     resume,
-                    move |transferred, total| {
-                        let _ = progress_tx.send(AppEvent::SftpProgress {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            transferred,
-                            total,
-                        });
-                    },
+                    throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
             let result =
@@ -865,7 +878,6 @@ async fn execute_sftp_op(
             filter,
             verify,
         } => {
-            let progress_tx = event_tx.clone();
             let result = client
                 .upload_dir(
                     &local_path,
@@ -873,15 +885,7 @@ async fn execute_sftp_op(
                     resume,
                     &filter,
                     verify,
-                    move |transferred, total| {
-                        let _ = progress_tx.send(AppEvent::SftpProgress {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            transferred,
-                            total,
-                        });
-                    },
+                    throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
             finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
@@ -893,7 +897,6 @@ async fn execute_sftp_op(
             filter,
             verify,
         } => {
-            let progress_tx = event_tx.clone();
             let result = client
                 .download_dir(
                     &remote_path,
@@ -901,15 +904,7 @@ async fn execute_sftp_op(
                     resume,
                     &filter,
                     verify,
-                    move |transferred, total| {
-                        let _ = progress_tx.send(AppEvent::SftpProgress {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            transferred,
-                            total,
-                        });
-                    },
+                    throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
             finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
@@ -1122,22 +1117,13 @@ async fn execute_sftp_op(
             items,
             verify,
         } => {
-            let progress_tx = event_tx.clone();
             let result = client
                 .sync_items(
                     &local_path,
                     &remote_path,
                     &items,
                     verify,
-                    move |transferred, total| {
-                        let _ = progress_tx.send(AppEvent::SftpProgress {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            transferred,
-                            total,
-                        });
-                    },
+                    throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
                 )
                 .await;
             finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result);
