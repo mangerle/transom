@@ -365,7 +365,6 @@ impl AppShell {
                         op_id,
                         result: Ok((bytes, truncated)),
                     },
-                    window,
                     cx,
                 );
             }
@@ -382,7 +381,6 @@ impl AppShell {
                         op_id,
                         result: Err(error),
                     },
-                    window,
                     cx,
                 );
             }

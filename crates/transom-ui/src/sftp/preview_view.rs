@@ -13,6 +13,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Icon;
 use gpui_kit::*;
+use std::sync::Arc;
 
 impl AppShell {
     /// 渲染当前活动面板的悬停预览卡片；无预览或仍在延迟期时返回 `None`。
@@ -130,15 +131,21 @@ fn preview_card_header(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
 fn preview_card_body(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
     match &preview.content {
         PreviewContent::Pending => div().into_any_element(),
-        PreviewContent::Loading => h_flex()
-            .h(px(64.0))
-            .w_full()
-            .items_center()
-            .justify_center()
-            .text_xs()
-            .text_color(p.muted_foreground)
-            .child("正在读取预览…")
-            .into_any_element(),
+        PreviewContent::Loading => {
+            let message = match preview.kind {
+                PreviewKind::Image => "正在生成缩略图…",
+                PreviewKind::Text => "正在读取预览…",
+            };
+            h_flex()
+                .h(px(64.0))
+                .w_full()
+                .items_center()
+                .justify_center()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(message)
+                .into_any_element()
+        }
         PreviewContent::Error(message) => div()
             .w_full()
             .text_xs()
@@ -146,7 +153,7 @@ fn preview_card_body(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
             .child(message.clone())
             .into_any_element(),
         PreviewContent::Text { lines, truncated } => render_text_preview(lines, *truncated, p),
-        PreviewContent::Image { path } => render_image_preview(path, p),
+        PreviewContent::Image { thumbnail } => render_image_preview(thumbnail, p),
     }
 }
 
@@ -198,9 +205,7 @@ fn render_text_preview(lines: &[String], truncated: bool, p: &Palette) -> AnyEle
     body.into_any_element()
 }
 
-fn render_image_preview(path: &std::path::Path, p: &Palette) -> AnyElement {
-    let muted = p.muted;
-    let muted_foreground = p.muted_foreground;
+fn render_image_preview(thumbnail: &Arc<RenderImage>, p: &Palette) -> AnyElement {
     v_flex()
         .child(
             div()
@@ -208,29 +213,13 @@ fn render_image_preview(path: &std::path::Path, p: &Palette) -> AnyElement {
                 .h(px(PREVIEW_IMAGE_HEIGHT))
                 .rounded_md()
                 .overflow_hidden()
-                .bg(muted)
+                .bg(p.muted)
                 .child(
-                    img(path.to_path_buf())
+                    img(ImageSource::Render(thumbnail.clone()))
                         .w_full()
                         .h_full()
-                        .object_fit(ObjectFit::Contain)
-                        .with_loading(move || image_placeholder("正在加载图片…", muted_foreground))
-                        .with_fallback(move || {
-                            image_placeholder("无法解析该图片", muted_foreground)
-                        }),
+                        .object_fit(ObjectFit::Contain),
                 ),
         )
-        .into_any_element()
-}
-
-fn image_placeholder(message: &'static str, color: Hsla) -> AnyElement {
-    div()
-        .size_full()
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_xs()
-        .text_color(color)
-        .child(message)
         .into_any_element()
 }

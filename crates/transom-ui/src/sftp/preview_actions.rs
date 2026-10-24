@@ -1,27 +1,35 @@
-//! SFTP 悬停预览的交互状态机：延迟、请求、结果写回与任务生命周期。
+//! SFTP 悬停预览的交互状态机：延迟、读取请求、缩略图生成与任务生命周期。
 //!
 //! 与 `preview.rs` 的分工：本模块只负责「什么时候读、读到哪里去」，
-//! 文件类型判定、文本行生成与缓存路径等纯逻辑留在 `preview`，
+//! 文件类型判定、文本行生成与缩略图解码等纯逻辑留在 `preview`，
 //! 两者拆开是为了让状态机与内容处理都能被单独审阅。
 
 use super::preview::{
     HOVER_PREVIEW_DELAY, PREVIEW_IMAGE_MAX_BYTES, PREVIEW_TEXT_MAX_BYTES, PreviewContent,
     PreviewKey, PreviewKind, SftpHoverTarget, SftpPreviewResponse, SftpPreviewState,
-    image_extension, preview_cache_path, preview_kind, read_local_text_head, text_preview_lines,
+    decode_preview_thumbnail, preview_kind, read_local_text_head, text_preview_lines,
 };
 use super::{SftpPanelState, format_size};
 use crate::app::AppShell;
 use crate::palette::localized_error;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use transom_core::{AppCommand, PreviewMode, SftpOperation, TabId, TransferId};
 
-/// 远端图片写缓存所需的完整参数，避免写盘任务入口平铺过多参数。
-struct PreviewImageWrite {
+/// 图片缩略图任务的输入来源。
+enum PreviewImageInput {
+    /// 远端预览事件已经返回的完整字节。
+    Remote(Vec<u8>),
+    /// 本地图片路径与目录列表给出的文件大小。
+    Local { path: PathBuf, size: u64 },
+}
+
+/// 图片缩略图任务参数，避免异步入口平铺过多参数。
+struct PreviewImageJob {
     tab_id: TabId,
     op_id: TransferId,
-    path: PathBuf,
-    bytes: Vec<u8>,
+    input: PreviewImageInput,
 }
 
 impl AppShell {
@@ -62,19 +70,17 @@ impl AppShell {
         let Some(panel) = self.sftp_panel_mut_by_tab(target.tab_id) else {
             return;
         };
-        if let Some(previous) = panel.hover_preview.replace(SftpPreviewState {
+        // 直接覆盖旧状态：旧延迟/解码任务随旧值析构而取消。
+        panel.hover_preview = Some(SftpPreviewState {
             key: target.key,
             name: target.name,
             kind,
             anchor,
             content: PreviewContent::Pending,
             op_id: None,
-            cache_file: None,
             _delay_task: Some(delay_task),
-            write_task: None,
-        }) {
-            previous.discard_cache_file_if_any();
-        }
+            decode_task: None,
+        });
         cx.notify();
     }
 
@@ -95,8 +101,7 @@ impl AppShell {
         {
             return;
         }
-        if let Some(preview) = panel.hover_preview.take() {
-            preview.discard_cache_file_if_any();
+        if panel.hover_preview.take().is_some() {
             cx.notify();
         }
     }
@@ -106,8 +111,7 @@ impl AppShell {
         let Some(panel) = self.sftp_panel_mut_by_tab(tab_id) else {
             return;
         };
-        if let Some(preview) = panel.hover_preview.take() {
-            preview.discard_cache_file_if_any();
+        if panel.hover_preview.take().is_some() {
             cx.notify();
         }
     }
@@ -162,8 +166,9 @@ impl AppShell {
 
         if kind == PreviewKind::Image && target.size > PREVIEW_IMAGE_MAX_BYTES {
             preview.content = PreviewContent::Error(format!(
-                "图片大小 {} 超过 8 MB，已跳过预览",
-                format_size(target.size)
+                "图片大小 {} 超过上限 {}，已跳过预览",
+                format_size(target.size),
+                format_size(PREVIEW_IMAGE_MAX_BYTES)
             ));
             cx.notify();
             return;
@@ -195,9 +200,19 @@ impl AppShell {
         } else {
             match kind {
                 PreviewKind::Image => {
-                    preview.content = PreviewContent::Image {
-                        path: PathBuf::from(&target.key.path),
-                    };
+                    let op_id = TransferId::new();
+                    preview.op_id = Some(op_id);
+                    preview.decode_task = Some(Self::spawn_preview_image_thumbnail(
+                        cx,
+                        PreviewImageJob {
+                            tab_id: target.tab_id,
+                            op_id,
+                            input: PreviewImageInput::Local {
+                                path: PathBuf::from(&target.key.path),
+                                size: target.size,
+                            },
+                        },
+                    ));
                 }
                 PreviewKind::Text => {
                     preview.content = match read_local_text_head(
@@ -220,7 +235,6 @@ impl AppShell {
     pub(crate) fn handle_sftp_preview(
         &mut self,
         response: SftpPreviewResponse,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let SftpPreviewResponse {
@@ -256,20 +270,13 @@ impl AppShell {
                         preview.content =
                             PreviewContent::Error("远端图片内容为空，无法预览".to_string());
                     } else {
-                        let path =
-                            preview_cache_path(tab_id, op_id, image_extension(&preview.name));
-                        if let Some(previous) = preview.cache_file.take() {
-                            let _ = std::fs::remove_file(previous);
-                        }
                         preview.content = PreviewContent::Loading;
-                        preview.write_task = Some(Self::spawn_preview_image_write(
+                        preview.decode_task = Some(Self::spawn_preview_image_thumbnail(
                             cx,
-                            window,
-                            PreviewImageWrite {
+                            PreviewImageJob {
                                 tab_id,
                                 op_id,
-                                path,
-                                bytes,
+                                input: PreviewImageInput::Remote(bytes),
                             },
                         ));
                     }
@@ -279,41 +286,55 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 在后台线程把远端图片字节写入本地缓存，避免大图写盘卡住 UI 线程。
-    fn spawn_preview_image_write(
-        cx: &mut Context<Self>,
-        window: &mut Window,
-        write: PreviewImageWrite,
-    ) -> Task<()> {
-        let PreviewImageWrite {
+    /// 在后台线程读取本地图片并生成缩略图，避免解码与磁盘 IO 卡住 UI 线程。
+    fn spawn_preview_image_thumbnail(cx: &mut Context<Self>, job: PreviewImageJob) -> Task<()> {
+        let PreviewImageJob {
             tab_id,
             op_id,
-            path,
-            bytes,
-        } = write;
-        cx.spawn_in(window, async move |this, cx| {
-            let write_path = path.clone();
+            input,
+        } = job;
+        cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    if let Some(dir) = write_path.parent() {
-                        std::fs::create_dir_all(dir)?;
-                    }
-                    std::fs::write(&write_path, &bytes)?;
-                    Ok::<PathBuf, std::io::Error>(write_path)
+                    let bytes = match input {
+                        PreviewImageInput::Remote(bytes) => bytes,
+                        PreviewImageInput::Local { path, size } => {
+                            if size > PREVIEW_IMAGE_MAX_BYTES {
+                                return Err(format!(
+                                    "图片大小 {} 超过上限 {}，已跳过预览",
+                                    format_size(size),
+                                    format_size(PREVIEW_IMAGE_MAX_BYTES)
+                                ));
+                            }
+                            let bytes = std::fs::read(&path)
+                                .map_err(|error| format!("读取本地图片失败: {error}"))?;
+                            if u64::try_from(bytes.len()).unwrap_or(u64::MAX)
+                                > PREVIEW_IMAGE_MAX_BYTES
+                            {
+                                return Err(format!(
+                                    "图片大小 {} 超过上限 {}，已跳过预览",
+                                    format_size(u64::try_from(bytes.len()).unwrap_or(u64::MAX)),
+                                    format_size(PREVIEW_IMAGE_MAX_BYTES)
+                                ));
+                            }
+                            bytes
+                        }
+                    };
+                    decode_preview_thumbnail(&bytes)
                 })
                 .await;
-            let _ = this.update_in(cx, |this, _window, cx| {
-                this.finish_sftp_preview_image_write(tab_id, op_id, result, cx);
+            let _ = this.update(cx, |this, cx| {
+                this.finish_sftp_preview_image_thumbnail(tab_id, op_id, result, cx);
             });
         })
     }
 
-    fn finish_sftp_preview_image_write(
+    fn finish_sftp_preview_image_thumbnail(
         &mut self,
         tab_id: TabId,
         op_id: TransferId,
-        result: std::io::Result<PathBuf>,
+        result: Result<Arc<RenderImage>, String>,
         cx: &mut Context<Self>,
     ) {
         let Some(panel) = self.sftp_panel_mut_by_tab(tab_id) else {
@@ -326,16 +347,11 @@ impl AppShell {
             return;
         }
         preview.op_id = None;
-        preview.write_task = None;
-        match result {
-            Ok(path) => {
-                preview.content = PreviewContent::Image { path: path.clone() };
-                preview.cache_file = Some(path);
-            }
-            Err(error) => {
-                preview.content = PreviewContent::Error(format!("写入图片预览缓存失败: {error}"));
-            }
-        }
+        preview.decode_task = None;
+        preview.content = match result {
+            Ok(thumbnail) => PreviewContent::Image { thumbnail },
+            Err(message) => PreviewContent::Error(message),
+        };
         cx.notify();
     }
 }

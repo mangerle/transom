@@ -157,18 +157,6 @@ pub(crate) struct SftpPanelState {
     pub(crate) _subscriptions: Vec<Subscription>,
 }
 
-/// 面板销毁时清理远端图片预览产生的临时缓存。
-///
-/// 预览字节必须先落到本地文件才能交给 gpui 的图片加载器解码，
-/// 这些文件只在面板生命周期内有意义，随面板一起删除可避免临时目录堆积。
-impl Drop for SftpPanelState {
-    fn drop(&mut self) {
-        if let Some(preview) = self.hover_preview.take() {
-            preview.discard_cache_file_if_any();
-        }
-    }
-}
-
 impl SftpPanelState {
     /// 选中远程条目并标记远程栏为活动栏（行点击与右键菜单共用）。
     ///

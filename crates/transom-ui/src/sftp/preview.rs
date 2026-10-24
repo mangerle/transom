@@ -7,10 +7,10 @@
 //!   不占用队列进度与通知，也不会因一次误悬停产生大流量；
 //! - 代价与局限：预览结果不做内存缓存，同一文件重复悬停会重新读取；
 //!   这是为了保持状态机简单，把磁盘/网络开销限制在用户主动悬停的时机。
-//!   远端图片仅把字节写入临时文件供渲染器异步解码，不保留预览内容本身。
 
 use gpui_kit::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use transom_core::{AppError, ConnectionId, TabId, TransferId};
 
@@ -22,6 +22,15 @@ pub(crate) const PREVIEW_TEXT_LINES: usize = 20;
 pub(crate) const PREVIEW_TEXT_MAX_BYTES: u64 = 64 * 1024;
 /// 图片缩略图允许下载的最大字节数；超过则直接跳过预览。
 pub(crate) const PREVIEW_IMAGE_MAX_BYTES: u64 = 8 * 1024 * 1024;
+/// 单张图片允许解码的最大像素数。
+///
+/// 文件体积小不等于解码内存小：一张 8 MB 的高压缩 JPEG 可能达到数千万像素，
+/// 解码后占用数百 MB；在解码前读取图片头校验像素数，才能把峰值内存钉在
+/// 可预期范围内。32 MP 已覆盖常见相机照片。
+pub(crate) const PREVIEW_IMAGE_MAX_PIXELS: u64 = 32_000_000;
+/// 缩略图目标尺寸：卡片图片区域（420x260）的 2 倍，高分屏下仍然清晰。
+pub(crate) const PREVIEW_THUMBNAIL_MAX_WIDTH: u32 = 840;
+pub(crate) const PREVIEW_THUMBNAIL_MAX_HEIGHT: u32 = 520;
 /// 单行文本的字符上限，防止压缩后的单行日志把卡片撑出屏幕。
 const PREVIEW_LINE_MAX_CHARS: usize = 120;
 /// 预览卡片宽度；文本与图片共用，保持浮层视觉一致。
@@ -63,8 +72,9 @@ pub(crate) enum PreviewContent {
         lines: Vec<String>,
         truncated: bool,
     },
+    /// 已在后台解码并缩放好的缩略图，渲染阶段不再接触原图。
     Image {
-        path: PathBuf,
+        thumbnail: Arc<RenderImage>,
     },
     Error(String),
 }
@@ -92,22 +102,12 @@ pub(crate) struct SftpPreviewState {
     pub(crate) kind: PreviewKind,
     pub(crate) anchor: Point<Pixels>,
     pub(crate) content: PreviewContent,
-    /// 远端图片预览的请求标识；文本与本地预览为 `None`。
+    /// 当前预览请求的标识：远端事件与本地缩略图任务都用它校验结果归属。
     pub(crate) op_id: Option<TransferId>,
-    /// 远端图片写入的本地缓存文件；清理时删除，绝不指向用户本地文件。
-    pub(crate) cache_file: Option<PathBuf>,
     /// 仅用于持有延迟任务：替换/清理状态时 drop 即取消。
     pub(super) _delay_task: Option<Task<()>>,
-    pub(super) write_task: Option<Task<()>>,
-}
-
-impl SftpPreviewState {
-    /// 删除预览产生的本地缓存文件（仅远端图片存在缓存）。
-    pub(crate) fn discard_cache_file_if_any(&self) {
-        if let Some(path) = &self.cache_file {
-            let _ = std::fs::remove_file(path);
-        }
-    }
+    /// 图片缩略图解码任务；切换目标时 drop 取消。
+    pub(super) decode_task: Option<Task<()>>,
 }
 
 /// 按文件名判断是否支持预览；扩展名优先，无扩展名时按常见文件名匹配。
@@ -133,8 +133,12 @@ pub(crate) fn preview_kind(name: &str) -> Option<PreviewKind> {
         .then_some(PreviewKind::Text)
 }
 
+/// 可本地解码为缩略图的位图格式；SVG 是文本 XML，归入文本预览。
+///
+/// AVIF 等需要额外编解码器的格式不在其中：宁可当作未知文件跳过，
+/// 也不要在悬停时弹出无法解析的图片卡片。
 const IMAGE_EXTENSIONS: &[&str] = &[
-    "avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "tif", "tiff", "webp",
+    "bmp", "gif", "ico", "jpeg", "jpg", "png", "tif", "tiff", "webp",
 ];
 
 const TEXT_EXTENSIONS: &[&str] = &[
@@ -203,6 +207,7 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "sh",
     "sql",
     "svelte",
+    "svg",
     "swift",
     "tex",
     "text",
@@ -299,29 +304,94 @@ pub(super) fn read_local_text_head(
     Ok((buffer, truncated))
 }
 
-pub(super) fn preview_cache_path(tab_id: TabId, op_id: TransferId, extension: String) -> PathBuf {
-    std::env::temp_dir()
-        .join("transom-sftp-preview")
-        .join(tab_id.to_string())
-        .join(format!("{op_id}.{extension}"))
+/// 解码图片并生成适合卡片展示的缩略图。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：SFTP 没有缩略图接口，远端只能传回完整文件；若把原图直接交给
+///   渲染器解码，一张高分辨率照片可能解出数百 MB 的像素缓冲；
+/// - 核心优势：先在解码前读取图片头校验像素数，再在后台线程解码并缩放到
+///   卡片所需的 2 倍尺寸，UI 线程只接收这张小图；EXIF 方向在缩放前应用，
+///   竖拍照片不会横着显示；
+/// - 代价与局限：解码阶段仍会短暂持有原图像素缓冲（峰值由像素上限约束）；
+///   动图只取首帧，缩略图不播放动画。
+pub(super) fn decode_preview_thumbnail(bytes: &[u8]) -> Result<Arc<RenderImage>, String> {
+    decode_thumbnail(
+        bytes,
+        PREVIEW_IMAGE_MAX_PIXELS,
+        PREVIEW_THUMBNAIL_MAX_WIDTH,
+        PREVIEW_THUMBNAIL_MAX_HEIGHT,
+    )
 }
 
-pub(super) fn image_extension(name: &str) -> String {
-    name.rsplit_once('.')
-        .map(|(_, extension)| extension.to_ascii_lowercase())
-        .filter(|extension| !extension.is_empty())
-        .unwrap_or_else(|| "png".to_string())
+fn decode_thumbnail(
+    bytes: &[u8],
+    max_pixels: u64,
+    max_width: u32,
+    max_height: u32,
+) -> Result<Arc<RenderImage>, String> {
+    use image::ImageDecoder as _;
+
+    let dimensions = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|error| format!("无法识别图片格式: {error}"))?
+        .into_dimensions()
+        .map_err(|error| format!("读取图片尺寸失败: {error}"))?;
+    let pixels = u64::from(dimensions.0).saturating_mul(u64::from(dimensions.1));
+    if pixels > max_pixels {
+        return Err(format!(
+            "图片尺寸 {}x{}（{pixels} 像素）超过预览上限 {max_pixels} 像素",
+            dimensions.0, dimensions.1
+        ));
+    }
+
+    let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|error| format!("无法识别图片格式: {error}"))?;
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|error| format!("创建图片解码器失败: {error}"))?;
+    // 方向信息缺失时按不旋转处理，宁可保持原始方向也不要让预览失败。
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut image = image::DynamicImage::from_decoder(decoder)
+        .map_err(|error| format!("解码图片失败: {error}"))?;
+    image.apply_orientation(orientation);
+
+    let image = if image.width() <= max_width && image.height() <= max_height {
+        image
+    } else {
+        image.thumbnail(max_width, max_height)
+    };
+    let mut rgba = image.into_rgba8();
+    // gpui 的 RenderImage 约定 BGRA；与内置解码器保持一致的通道顺序。
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        pixel.swap(0, 2);
+    }
+    Ok(Arc::new(RenderImage::new([image::Frame::new(rgba)])))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{PreviewKind, image_extension, preview_kind, text_preview_lines};
+    use super::{PreviewKind, decode_thumbnail, preview_kind, text_preview_lines};
+
+    fn encode_png(width: u32, height: u32, color: [u8; 4]) -> Vec<u8> {
+        let image = image::RgbaImage::from_pixel(width, height, image::Rgba(color));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(image)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .expect("测试图片编码必须成功");
+        bytes
+    }
 
     #[test]
     fn test_preview_kind_image_by_extension() {
         assert_eq!(preview_kind("photo.PNG"), Some(PreviewKind::Image));
         assert_eq!(preview_kind("photo.jpeg"), Some(PreviewKind::Image));
-        assert_eq!(preview_kind("icon.svg"), Some(PreviewKind::Image));
+        assert_eq!(preview_kind("icon.svg"), Some(PreviewKind::Text));
     }
 
     #[test]
@@ -338,6 +408,7 @@ mod tests {
     fn test_preview_kind_unknown_is_skipped() {
         assert_eq!(preview_kind("archive.tar.gz"), None);
         assert_eq!(preview_kind("firmware.bin"), None);
+        assert_eq!(preview_kind("photo.avif"), None);
         assert_eq!(preview_kind("binary"), None);
         assert_eq!(preview_kind(""), None);
     }
@@ -382,9 +453,32 @@ mod tests {
     }
 
     #[test]
-    fn test_image_extension_normalizes() {
-        assert_eq!(image_extension("photo.PNG"), "png");
-        assert_eq!(image_extension("photo.jpeg"), "jpeg");
-        assert_eq!(image_extension("no-extension"), "png");
+    fn test_decode_thumbnail_downscales_and_converts_to_bgra() {
+        let bytes = encode_png(100, 40, [255, 0, 0, 255]);
+        let thumbnail = decode_thumbnail(&bytes, 10_000_000, 20, 20).expect("解码缩略图必须成功");
+        assert_eq!(thumbnail.size(0).width.0, 20);
+        assert_eq!(thumbnail.size(0).height.0, 8);
+        let pixels = thumbnail.as_bytes(0).expect("缩略图必须包含像素");
+        assert_eq!(&pixels[..4], &[0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn test_decode_thumbnail_keeps_small_image() {
+        let bytes = encode_png(2, 1, [0, 255, 0, 255]);
+        let thumbnail = decode_thumbnail(&bytes, 100, 10, 10).expect("小图必须保留原尺寸");
+        assert_eq!(thumbnail.size(0).width.0, 2);
+        assert_eq!(thumbnail.size(0).height.0, 1);
+    }
+
+    #[test]
+    fn test_decode_thumbnail_rejects_too_many_pixels() {
+        let bytes = encode_png(3, 3, [0, 0, 0, 255]);
+        let error = decode_thumbnail(&bytes, 8, 10, 10).expect_err("9 像素超过上限 8");
+        assert!(error.contains("超过预览上限"));
+    }
+
+    #[test]
+    fn test_decode_thumbnail_rejects_invalid_bytes() {
+        assert!(decode_thumbnail(b"not an image", 100, 10, 10).is_err());
     }
 }

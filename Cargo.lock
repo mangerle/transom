@@ -8140,6 +8140,7 @@ dependencies = [
  "directories",
  "flume",
  "gpui-kit",
+ "image",
  "notify-rust",
  "parking_lot",
  "rfd",
