@@ -1,6 +1,7 @@
 //! 窗口顶栏（Top Bar）渲染模块。
 
 use crate::app::AppShell;
+use crate::brand;
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
@@ -8,6 +9,9 @@ use gpui_kit::base::h_flex;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+
+/// 顶栏品牌标志边长（rem）：与原 Lucide 图标的视觉重量对齐，同时随密度档等比缩放。
+const LOGO_SIZE: f32 = 1.125;
 
 impl AppShell {
     pub(crate) fn render_top_bar(
@@ -111,7 +115,7 @@ impl AppShell {
                 h_flex()
                     .items_center()
                     .gap_2()
-                    .child(Icon::new(IconName::Terminal).text_color(p.sidebar_accent_foreground))
+                    .child(brand::logo_mark(LOGO_SIZE))
                     .child(
                         div()
                             .text_sm()

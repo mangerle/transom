@@ -12,6 +12,7 @@ mod app_render;
 mod audit;
 mod backup;
 mod batch;
+mod brand;
 mod chrome;
 mod cloud_sync;
 mod connection;
