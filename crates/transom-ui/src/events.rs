@@ -66,8 +66,19 @@ impl AppShell {
                         .iter()
                         .any(|binding| keystroke.should_match(binding))
                 });
+                // 审计落盘按连接粒度开启：路径在派发前算好，读线程内才创建文件。
+                let audit_path =
+                    crate::audit::audit_path_for(&self.tabs[index], self.settings.audit.enabled);
                 let terminal = cx.new(|cx| {
-                    TerminalView::new(window, cx, io, profile, interaction, Some(key_filter))
+                    TerminalView::new(
+                        window,
+                        cx,
+                        io,
+                        profile,
+                        interaction,
+                        Some(key_filter),
+                        audit_path,
+                    )
                 });
                 let focus_handle = terminal.read(cx).focus_handle().clone();
                 // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，

@@ -341,6 +341,21 @@ pub struct AppSettings {
     /// ZMODEM 下载目录与自动接收开关；旧配置缺少该字段时使用默认。
     #[serde(default)]
     pub zmodem: crate::zmodem::ZmodemSettings,
+    /// 会话输出审计落盘；旧配置缺少该字段时按关闭降级。
+    #[serde(default)]
+    pub audit: AuditSettings,
+}
+
+/// 会话输出审计落盘设置。
+///
+/// 为什么默认关闭：审计文件会把远端输出的全部内容（含可能出现在屏幕上的
+/// 口令、令牌与业务数据）落到本地磁盘。这是合规诉求，但不是每个人都愿意
+/// 在不知情时被记录，所以必须由用户显式开启。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditSettings {
+    /// 总开关；关闭时不创建文件，也不产生任何额外 IO。
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 /// 快捷命令条上的一键命令。
@@ -505,6 +520,7 @@ impl Default for AppSettings {
             status_bar: StatusBarLayout::default(),
             sync: SyncSettings::default(),
             zmodem: crate::zmodem::ZmodemSettings::default(),
+            audit: AuditSettings::default(),
         }
     }
 }

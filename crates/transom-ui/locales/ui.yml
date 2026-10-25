@@ -1301,6 +1301,27 @@ settings:
   verify_after_transfer_desc:
     en: Compare SHA256 checksums on both ends after each transfer.
     zh-CN: 每次传输完成后比对两端 SHA256，代价是额外的读盘耗时。
+  audit_group:
+    en: Session Output Audit
+    zh-CN: 会话输出审计
+  audit_enabled:
+    en: Record session output to disk
+    zh-CN: 将会话输出落盘记录
+  audit_enabled_desc:
+    en: "Writes the raw output byte stream of every new connection into the audit directory. Off by default, because the log contains everything that appears on screen, including secrets typed back to it. Existing connections are not affected until they reconnect."
+    zh-CN: 每个新建连接的终端原始输出按会话写入审计目录。默认关闭：日志会包含屏幕上出现过的全部内容（包括回显的口令）。已打开的连接需重连后才开始记录。
+  audit_dir:
+    en: Audit directory
+    zh-CN: 审计目录
+  audit_dir_desc:
+    en: One file per connection, named after the session, host and start time. Files are never cleaned up automatically.
+    zh-CN: 每次连接一个文件，名称由会话名、主机与开始时间组成；不会自动清理。
+  audit_dir_open:
+    en: Open folder
+    zh-CN: 打开目录
+  audit_revealed:
+    en: Audit folder opened in the system file manager
+    zh-CN: 已在系统文件管理器中打开审计目录
   zmodem_group:
     en: ZMODEM
     zh-CN: ZMODEM 文件传输

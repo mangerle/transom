@@ -640,6 +640,60 @@ impl AppShell {
             .into_any_element()
     }
 
+    /// 审计组：会话输出落盘开关与日志目录入口。
+    pub(crate) fn render_settings_audit(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let dir = transom_core::paths::audit_dir();
+        let reveal_dir = dir.clone();
+        let reveal = cx.listener(move |this, _, _, cx| {
+            crate::audit::reveal_in_file_manager(reveal_dir.clone());
+            this.status = Some(rust_i18n::t!("settings.audit_revealed").to_string());
+            cx.notify();
+        });
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.audit_enabled",
+                Some("settings.audit_enabled_desc"),
+                Switch::new("toggle-audit-enabled")
+                    .small()
+                    .checked(self.settings.audit.enabled)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.audit.enabled = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.audit_dir",
+                Some("settings.audit_dir_desc"),
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div()
+                            .max_w(rems(24.0))
+                            .truncate()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(dir.display().to_string()),
+                    )
+                    .child(
+                        Button::new("audit-dir-reveal")
+                            .small()
+                            .label(rust_i18n::t!("settings.audit_dir_open").to_string())
+                            .on_click(reveal),
+                    )
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
     /// 鼠标组：右键动作与中键粘贴。
     pub(crate) fn render_settings_mouse(
         &mut self,

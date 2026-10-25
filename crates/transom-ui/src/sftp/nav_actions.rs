@@ -446,24 +446,7 @@ impl AppShell {
         else {
             return;
         };
-        #[cfg(target_os = "macos")]
-        let program = "open";
-        #[cfg(target_os = "windows")]
-        let program = "explorer";
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        let program = "xdg-open";
-
-        let path_for_thread = local_path.clone();
-        let _ = std::thread::Builder::new()
-            .name("transom-open-file-manager".into())
-            .spawn(move || {
-                if let Ok(mut child) = std::process::Command::new(program)
-                    .arg(&path_for_thread)
-                    .spawn()
-                {
-                    let _ = child.wait();
-                }
-            });
+        crate::audit::reveal_in_file_manager(local_path.clone());
 
         if let Some(panel) = self
             .tabs

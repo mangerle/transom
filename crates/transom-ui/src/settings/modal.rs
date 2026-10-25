@@ -105,6 +105,12 @@ impl AppShell {
                 p,
                 "settings.zmodem_group",
                 AppShell::render_settings_zmodem,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.audit_group",
+                AppShell::render_settings_audit,
             ));
 
         let page_mouse =

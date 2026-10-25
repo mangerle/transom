@@ -60,6 +60,7 @@
 ### 界面
 - 内置 6 套主题（One Dark、Dracula、Monokai Pro、Nord、Solarized Dark、Gruvbox Dark），客户端窗口控制三键支持拖动与双击缩放，记忆窗口尺寸与位置，提供沉浸式全屏。
 - 界面中英双语，可在设置中切换——本 README 的双语结构与应用一致。
+- 可选的会话输出审计：每次连接的原始输出字节流可落盘到 `~/.config/transom/audit`，按会话名、主机与开始时间一连接一文件。默认关闭——日志会包含屏幕上出现过的全部内容。
 - 所有快捷键均可自定义并带冲突检测。下表中的 `$app` 在 macOS 为 <kbd>Cmd</kbd>，其他平台为 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>。
 
 | 动作 | 默认键 | 动作 | 默认键 |

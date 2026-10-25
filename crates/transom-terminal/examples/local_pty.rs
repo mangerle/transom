@@ -71,6 +71,7 @@ impl Demo {
                 TerminalProfile::default(),
                 TerminalInteraction::default(),
                 None,
+                None,
             )
         });
         let focus_handle = terminal.read(cx).focus_handle().clone();

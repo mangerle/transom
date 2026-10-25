@@ -4,6 +4,7 @@ rust_i18n::i18n!("locales", fallback = "en");
 mod activity_bar;
 mod app;
 mod app_render;
+mod audit;
 mod backup;
 mod batch;
 mod chrome;

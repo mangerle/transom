@@ -60,6 +60,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 ### Interface
 - Six built-in themes (One Dark, Dracula, Monokai Pro, Nord, Solarized Dark, Gruvbox Dark), client-side window controls with drag and double-click maximize, remembered window geometry, and full-screen immersive mode.
 - Bilingual UI (English / 简体中文) switchable in settings — this README mirrors the app.
+- Optional session audit: every connection's raw output stream can be recorded to `~/.config/transom/audit`, one file per connection named after session, host and start time. Off by default because the log captures whatever was shown on screen.
 - Every shortcut is remappable with conflict detection. `$app` below means <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd>+<kbd>Shift</kbd> elsewhere.
 
 | Action | Default | Action | Default |

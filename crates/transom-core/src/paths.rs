@@ -59,6 +59,42 @@ pub fn themes_dir() -> PathBuf {
     config_dir().join("themes")
 }
 
+/// 会话审计日志目录；每个连接建立时开一个文件，落的是原始终端输出字节流。
+pub fn audit_dir() -> PathBuf {
+    config_dir().join("audit")
+}
+
+/// 清洗用于文件名的会话标签：只保留安全字符，杜绝路径穿越。
+///
+/// 为什么必须清洗：审计文件名取自用户可编辑的会话名（导入的 SSH config、
+/// 云端同步下来的目录都可能带 `../`、`/`、控制字符），拼接前不洗就等于把
+/// 任意文件写入交给了一份配置文件。
+///
+/// 规则：允许 ASCII 字母数字与 `._-`，其余（含空格、斜杠、非 ASCII）替换为
+/// `_`，连续下划线折叠，首尾点号去掉（`.`/`..` 与以点开头的隐藏名都不合适），
+/// 超过 64 字节截断；结果为空时回落到 `session`。
+pub fn sanitize_audit_label(input: &str) -> String {
+    let mut out = String::with_capacity(input.len().min(64));
+    let mut last_was_underscore = false;
+    for ch in input.chars() {
+        let safe = ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-');
+        if !safe || out.len() >= 64 {
+            if !last_was_underscore && !out.is_empty() {
+                out.push('_');
+                last_was_underscore = true;
+            }
+            continue;
+        }
+        out.push(ch);
+        last_was_underscore = false;
+    }
+    let trimmed = out.trim_matches(|c| c == '_' || c == '.').to_string();
+    if trimmed.is_empty() {
+        return "session".to_string();
+    }
+    trimmed
+}
+
 /// ZMODEM 下载的默认目录：系统下载目录（XDG 配置感知），缺失时退回用户
 /// 主目录，再退回当前目录。用户显式配置的目录优先级更高（见
 /// `ZmodemSettings::resolved_download_dir`），这里只提供兜底值。

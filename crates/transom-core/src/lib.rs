@@ -62,9 +62,9 @@ pub use session::{
     TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use settings::{
-    AppSettings, AppearanceSettings, BellStyle, PanelSide, SavedLayout, SavedTabGroup,
-    SftpSettings, ShortcutSettings, Snippet, SnippetSettings, SplitAxis, UiDensity, UiThemeMode,
-    WindowSettings,
+    AppSettings, AppearanceSettings, AuditSettings, BellStyle, PanelSide, SavedLayout,
+    SavedTabGroup, SftpSettings, ShortcutSettings, Snippet, SnippetSettings, SplitAxis, UiDensity,
+    UiThemeMode, WindowSettings,
 };
 pub use sftp::{
     PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation,

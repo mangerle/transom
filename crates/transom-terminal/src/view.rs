@@ -1,3 +1,4 @@
+use crate::audit::AuditSink;
 use crate::engine::TerminalEngine;
 use crate::event::TerminalEvent;
 use crate::input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
@@ -100,6 +101,7 @@ impl TerminalView {
         profile: TerminalProfile,
         interaction: TerminalInteraction,
         key_filter: Option<KeyFilter>,
+        audit_path: Option<std::path::PathBuf>,
     ) -> Self {
         cx.bind_keys([
             KeyBinding::new("tab", SendTab, Some(CONTEXT)),
@@ -124,11 +126,17 @@ impl TerminalView {
         let reader_spawn = thread::Builder::new()
             .name("transom-terminal-reader".into())
             .spawn(move || {
+                // 审计落盘挂在这里：本线程已经是专用 OS 线程，同步写盘不会
+                // 影响 GPUI 主循环；文件也在此刻才创建，避免打开会话的UI路径上做 IO。
+                let mut audit = audit_path.map(AuditSink::new);
                 let mut buffer = [0u8; 8192];
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => break,
                         Ok(count) => {
+                            if let Some(audit) = audit.as_mut() {
+                                audit.record(&buffer[..count]);
+                            }
                             if bytes_tx.send(buffer[..count].to_vec()).is_err() {
                                 break;
                             }
@@ -140,6 +148,10 @@ impl TerminalView {
                             break;
                         }
                     }
+                }
+                // 退出时刷完缓冲（Drop 也会做，显式调用让"最后一秒不丢"可读）。
+                if let Some(audit) = audit.as_mut() {
+                    audit.finish();
                 }
             });
         if reader_spawn.is_err() {

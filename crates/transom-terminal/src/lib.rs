@@ -1,5 +1,6 @@
 //! Terminal emulation and GPUI rendering.
 
+mod audit;
 mod engine;
 mod event;
 mod input;
