@@ -1,0 +1,16 @@
+#!/bin/sh
+# transom 卸载后钩子：文件已全部移除，此时重建缓存才真正收敛。
+#
+# 设计原理（Why）：prerm 执行时包里还有文件，刷新到的仍是旧内容；postrm 才是
+# 清掉残留图标项与 MIME 条目的正确时机。工具缺席或目录已空都不阻断卸载。
+set -u
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || true
+fi
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d /usr/share/icons/hicolor ]; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+fi
+
+exit 0

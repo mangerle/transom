@@ -1,6 +1,10 @@
 [package]
 name = "transom"
-description = "Native SSH, serial console and terminal workspace with integrated SFTP, written in Rust on GPUI."
+# 这行同时是 DEB 控制元数据的 Description 首行：cargo-deb 会对它折行，超宽会把
+# 句子中间切断、折出来的缩进混进长描述。Debian 惯例是摘要行保持单行短句，
+# 细节写进 extended-description。全仓库无人读取 CARGO_PKG_DESCRIPTION（关于页
+# 用 APP_NAME/APP_VERSION 常量），所以缩短不影响界面文案。
+description = "Native SSH, serial console and terminal workspace with SFTP"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -26,3 +30,39 @@ fern.workspace = true
 # 日志时间戳格式化；工作区内已有同一版本，不新增编译单元。
 chrono.workspace = true
 portable-pty.workspace = true
+
+# DEB 打包元数据（cargo-deb）。设计原理（Why）：
+# - 依赖表按本机 `ldd` 与 `dpkg -S` 实测手写而不是 `$auto`/dpkg-shlibdeps：
+#   后两者把出包结果绑到构建机的包库状态上，同一份代码在不同 Ubuntu 版本
+#   会得到不同的 Depends，不可复现；手写清单换 gpui 大版本时需同步，代价
+#   是可控的（`packaging/linux/deb/README.md` 记了复核命令）。
+# - 只装二进制、桌面条目与矢量图标，不写任何系统级默认程序配置：是否成为
+#   默认终端由应用内"桌面集成"开关决定，与"不静默抢占既有工作流"的口径
+#   一致，也避免影响同一台机器上的其他用户。
+# - Exec 用裸命令名 `transom`（包安装到 /usr/bin 即在 PATH），与用户级注册
+#   写绝对路径互不冲突：两者解析到同一个可执行文件。
+[package.metadata.deb]
+maintainer = "wangle <wangle@agree.com.cn>"
+copyright = "2026, wangle <wangle@agree.com.cn>"
+license-file = ["../../LICENSE", "4"]
+section = "utils"
+priority = "optional"
+# amd64 由构建机架构自动写入，无需在此固定以免交叉编译时出错。
+depends = "libc6, libgcc-s1, libxcb1, libxcb-xkb1, libxkbcommon0, libxkbcommon-x11-0, libxau6, libxdmcp6, hicolor-icon-theme"
+extended-description = """\
+Transom is a native desktop terminal workspace built on GPUI: SSH and
+serial-console sessions, a tabbed/paneled terminal with SFTP file transfer
+side-by-side, snippet library, command history, port forwarding and audit
+logging."""
+assets = [
+    # 二进制：cargo-deb 用这个前缀识别需要编译的目标，切勿改成实际路径。
+    ["target/release/transom", "usr/bin/transom", "755"],
+    ["../../packaging/linux/com.github.mangerle.transom.desktop", "usr/share/applications/com.github.mangerle.transom.desktop", "644"],
+    # 图标只随一份 SVG 进 hicolor 主题的 scalable 目录：主题名与 .desktop 的
+    # Icon 键（com.github.mangerle.transom）逐字对应，桌面环境按目标尺寸
+    # 矢量出图，任何 DPI 都不会出现放大颗粒感。
+    ["../../logo/transom-logo.svg", "usr/share/icons/hicolor/scalable/apps/com.github.mangerle.transom.svg", "644"],
+    ["../../README.md", "usr/share/doc/transom/README.md", "644"],
+]
+maintainer-scripts = "../../packaging/linux/deb"
+

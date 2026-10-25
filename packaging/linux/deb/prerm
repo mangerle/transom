@@ -1,0 +1,17 @@
+#!/bin/sh
+# transom 卸载前钩子：文件移除后重建两份缓存。
+#
+# 设计原理（Why）：与 postinst 同理，缓存里若残留已删除的条目，桌面环境会
+# 显示坏图标或点到不存在的应用。此处发生在文件尚未全部删净之前（prerm），
+# 所以真正的收敛要靠 postrm 再刷一次；两次都幂等，重复执行没有副作用。
+set -u
+
+case "${1:-}" in
+    remove|deconfigure)
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications || true
+        fi
+        ;;
+esac
+
+exit 0

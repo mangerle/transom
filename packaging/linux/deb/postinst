@@ -1,0 +1,18 @@
+#!/bin/sh
+# transom 安装后钩子：刷新桌面条目与图标主题缓存。
+#
+# 设计原理（Why）：/usr/share/applications 的 MIME 数据库与 hicolor 的
+# index.cache 都是缓存，不刷新的话用户要等到下一次桌面环境自行扫描才看得到
+# 新图标；两个工具都可能因极简系统缺包而不存在，所以先探测再执行，任何失败
+# 都不能让安装本身回滚——图标暂时不显示是体验问题，装不上是事故。
+set -u
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || true
+fi
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d /usr/share/icons/hicolor ]; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+fi
+
+exit 0
