@@ -47,6 +47,10 @@ copyright = "2026, wangle <wangle@agree.com.cn>"
 license-file = ["../../LICENSE", "4"]
 section = "utils"
 priority = "optional"
+# 修订号固定为空：Debian 的 -N 用于同一上游版本的多次打包修订，本项目每个
+# 版本只出一次 GitHub Release 附件，版本号统一取自 workspace，产物名不应多
+# 出 -1 后缀；cargo-deb 默认会补 -1，必须显式清空。
+revision = ""
 # amd64 由构建机架构自动写入，无需在此固定以免交叉编译时出错。
 depends = "libc6, libgcc-s1, libxcb1, libxcb-xkb1, libxkbcommon0, libxkbcommon-x11-0, libxau6, libxdmcp6, hicolor-icon-theme"
 extended-description = """\
