@@ -33,3 +33,5 @@ parking_lot.workspace = true
 ssh-key.workspace = true
 transom-store.workspace = true
 tempfile.workspace = true
+# ZMODEM 真机互操作测试：起 lrzsz 的 sz/rz 子进程需要伪终端（工作区既有依赖）。
+portable-pty.workspace = true

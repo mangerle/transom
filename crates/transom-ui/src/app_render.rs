@@ -217,6 +217,9 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_focus_pane_right))
             .on_action(cx.listener(Self::on_focus_pane_up))
             .on_action(cx.listener(Self::on_focus_pane_down))
+            // Esc 的传输取消监听：键盘事件沿焦点路径回溯，终端（焦点方）
+            // 先收到并向远端写一次转义序列，再由根节点截获成取消命令。
+            .on_key_down(cx.listener(Self::on_zmodem_cancel_key))
             // 拖拽悬浮面板的位移与收尾由 EditorDragTracker 的窗口级监听接管：
             // 普通元素监听带"指针命中"门槛，拖拽中指针会移出面板乃至窗口，
             // 元素级监听收不到这些事件。追踪器以无视觉元素的形式挂在本容器

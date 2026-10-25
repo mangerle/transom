@@ -34,6 +34,7 @@ mod terminal_search;
 mod theme;
 mod window_state;
 mod workspace;
+mod zmodem;
 
 pub use app::AppShell;
 

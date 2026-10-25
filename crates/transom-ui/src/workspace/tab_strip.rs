@@ -61,6 +61,13 @@ impl AppShell {
                 TabStatus::Connected => p.success,
                 TabStatus::Failed(_) | TabStatus::Disconnected => p.danger,
             };
+            // 传输中的标签把状态点换成主题强调色：状态栏徽章只跟随活跃标签，
+            // 用户切走后后台仍在跑的传输需要在这里保持可见。
+            let dot_color = if tab.zmodem.is_some() {
+                p.primary
+            } else {
+                dot_color
+            };
             let tab_icon = match &tab.session.connection {
                 Connection::Local(_) => IconName::Terminal,
                 Connection::Serial(_) => IconName::Cable,

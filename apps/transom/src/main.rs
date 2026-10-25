@@ -29,7 +29,10 @@ fn main() -> anyhow::Result<()> {
     let serial_ports: Arc<dyn SerialPortProvider> = Arc::new(SystemSerialPortProvider);
     let backup: Arc<dyn BackupService> = Arc::new(CatalogBackupService::new(secret_store.clone()));
 
-    let controller = Controller::start(known_hosts.clone())?;
+    let controller = Controller::start(
+        known_hosts.clone(),
+        settings_store.clone(),
+    )?;
     let services = transom_ui::UiServices {
         session_store,
         settings_store,

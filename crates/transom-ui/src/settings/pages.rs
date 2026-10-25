@@ -576,6 +576,70 @@ impl AppShell {
             .into_any_element()
     }
 
+    /// ZMODEM 组：下载目录与自动接收开关。
+    ///
+    /// 与其余设置一致采用"即时改内存、保存时统一落盘"；下载目录为空表示
+    /// 跟随系统下载目录，选择后写入显式路径。
+    pub(crate) fn render_settings_zmodem(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let resolved = self.settings.zmodem.resolved_download_dir();
+        let dir_label = match self.settings.zmodem.download_dir.clone() {
+            Some(dir) => dir.display().to_string(),
+            None => format!(
+                "{}（{}）",
+                rust_i18n::t!("settings.zmodem_dir_default"),
+                resolved.display()
+            ),
+        };
+        let browse = cx.listener(|this, _, _, _cx| {
+            if let Some(dir) = rfd::FileDialog::new().pick_folder() {
+                this.settings.zmodem.download_dir = Some(dir);
+            }
+        });
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.zmodem_dir",
+                Some("settings.zmodem_dir_desc"),
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div()
+                            .max_w(rems(24.0))
+                            .truncate()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(dir_label),
+                    )
+                    .child(
+                        Button::new("zmodem-dir-browse")
+                            .small()
+                            .label(rust_i18n::t!("settings.zmodem_dir_browse").to_string())
+                            .on_click(browse),
+                    )
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.zmodem_auto_receive",
+                Some("settings.zmodem_auto_receive_desc"),
+                Switch::new("toggle-zmodem-auto-receive")
+                    .small()
+                    .checked(self.settings.zmodem.auto_receive)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.zmodem.auto_receive = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
     /// 鼠标组：右键动作与中键粘贴。
     pub(crate) fn render_settings_mouse(
         &mut self,

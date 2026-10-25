@@ -1,0 +1,22 @@
+//! ZMODEM 文件传输协议实现。
+//!
+//! 模块分层：
+//! - [`frames`]：常量、CRC、ZDLE 转义与帧头/子包构造（纯函数）；
+//! - [`scanner`]：字节流增量解析（帧头/子包事件化）；
+//! - [`receiver`] / [`sender`]：收发双方的状态机（纯逻辑，I/O 由调用方执行）；
+//! - [`files`]：文件读写执行层（状态机由此隔离系统调用）；
+//! - [`fsm`]：会话状态机与驱动循环；
+//! - [`attach`]：读写过滤层，并把上述部件装配到 `TerminalIo` 上。
+//!
+//! 全部字节级语义以 lrzsz 参考实现为准，关键分歧点（头字节序、ZDLE 转义
+//! 范围、CRC 字序、rz 的 ZRINIT 轮询行为）已在各文件文档注释中定案。
+
+pub(crate) mod attach;
+pub(crate) mod files;
+pub(crate) mod frames;
+pub(crate) mod fsm;
+pub(crate) mod receiver;
+pub(crate) mod scanner;
+pub(crate) mod sender;
+
+pub use attach::{ZmodemConfig, ZmodemControl, attach_zmodem};

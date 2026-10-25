@@ -334,6 +334,9 @@ pub struct AppSettings {
     /// 状态栏顺序与隐藏项；旧配置缺少该字段时使用默认布局。
     #[serde(default)]
     pub status_bar: StatusBarLayout,
+    /// ZMODEM 下载目录与自动接收开关；旧配置缺少该字段时使用默认。
+    #[serde(default)]
+    pub zmodem: crate::zmodem::ZmodemSettings,
 }
 
 /// 快捷命令条上的一键命令。
@@ -496,6 +499,7 @@ impl Default for AppSettings {
             snippets: SnippetSettings::default(),
             activity_bar: ActivityBarLayout::default(),
             status_bar: StatusBarLayout::default(),
+            zmodem: crate::zmodem::ZmodemSettings::default(),
         }
     }
 }

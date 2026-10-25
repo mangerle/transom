@@ -26,6 +26,7 @@ pub mod system_stats;
 pub mod terminal;
 pub mod theme;
 pub mod traffic;
+pub mod zmodem;
 
 pub use backup::{
     BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,
@@ -79,3 +80,4 @@ pub use terminal::{
 };
 pub use theme::{PaletteMode, PresetTheme, preset_themes};
 pub use traffic::{NetworkTraffic, TrafficCounter};
+pub use zmodem::{ZmodemDirection, ZmodemEvent, ZmodemFinished, ZmodemSettings};

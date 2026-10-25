@@ -4,7 +4,8 @@ use tokio::runtime::Runtime;
 use tokio::task::JoinSet;
 use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, ForwardState,
-    ForwardStatus, KnownHostsStore, SftpOperation, TabId, TerminalIo, TransferId,
+    ForwardStatus, KnownHostsStore, SettingsStore, SftpOperation, TabId, TerminalIo,
+    TransferId,
 };
 mod lifecycle;
 mod pty;
@@ -15,7 +16,7 @@ mod sftp_finish;
 use lifecycle::{
     Admission, AdoptConnection, ConnectingTab, KeyDeployParams, ShutdownTables, TabCleanupTables,
     admit_connection, adopt_connection, deploy_key, drop_local_stats, shutdown_all, stop_forwards,
-    stop_key_deploy, stop_stats, stop_traffic,
+    stop_key_deploy, stop_stats, stop_traffic, stop_zmodem,
 };
 use pty::ConnectDispatch;
 use samplers::{
@@ -24,7 +25,10 @@ use samplers::{
 };
 use sftp_exec::SftpDispatch;
 
-use transom_net::{ForwardTask, SftpClient, SshRemote, SshSession, start_forward};
+use transom_net::{
+    ForwardTask, SftpClient, SshRemote, SshSession, ZmodemConfig, ZmodemControl,
+    start_forward,
+};
 
 pub struct Controller {
     _runtime: Runtime,
@@ -33,7 +37,10 @@ pub struct Controller {
 }
 
 impl Controller {
-    pub fn start(known_hosts: Arc<dyn KnownHostsStore>) -> Result<Self, AppError> {
+    pub fn start(
+        known_hosts: Arc<dyn KnownHostsStore>,
+        settings_store: Arc<dyn SettingsStore>,
+    ) -> Result<Self, AppError> {
         // 三条通道的容量与背压策略（全工程禁止无界通道）：
         // - 命令 256：用户命令低频，UI 侧 try_send 快速失败并提示；
         // - 事件 1024：进度节流后 10Hz/任务，controller 侧 send_async 反压——
@@ -50,6 +57,7 @@ impl Controller {
 
         let root = runtime.spawn(run_controller(
             known_hosts,
+            settings_store,
             command_rx,
             internal_tx,
             internal_rx,
@@ -135,8 +143,19 @@ enum Incoming {
     Internal(Result<Internal, flume::RecvError>),
 }
 
+/// 连接接入时读取 ZMODEM 配置：每次连接取最新设置（改目录后新连接生效），
+/// 读取失败按默认值降级（下载目录退回系统下载目录、自动接收开启）。
+fn zmodem_config(settings: &Arc<dyn SettingsStore>) -> ZmodemConfig {
+    let settings = settings.load().unwrap_or_default();
+    ZmodemConfig {
+        download_dir: settings.zmodem.resolved_download_dir(),
+        auto_receive: settings.zmodem.auto_receive,
+    }
+}
+
 async fn run_controller(
     known_hosts: Arc<dyn KnownHostsStore>,
+    settings_store: Arc<dyn SettingsStore>,
     command_rx: flume::Receiver<AppCommand>,
     internal_tx: flume::Sender<Internal>,
     internal_rx: flume::Receiver<Internal>,
@@ -166,6 +185,10 @@ async fn run_controller(
     let local_traffic_tabs: samplers::LocalTrafficTabs =
         Arc::new(std::sync::Mutex::new(Vec::new()));
     let mut local_traffic_task: Option<tokio::task::JoinHandle<()>> = None;
+    // ZMODEM：每标签一个事件转发任务与一个控制句柄；连接接入时建立，
+    // 断开/关标签/重连时随 stop_zmodem 回收。
+    let mut zmodem_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
+    let mut zmodem_controls: HashMap<TabId, ZmodemControl> = HashMap::new();
 
     loop {
         let incoming = tokio::select! {
@@ -317,6 +340,19 @@ async fn run_controller(
                 })
                 .await;
             }
+            Incoming::Command(Ok(AppCommand::ZmodemUpload { tab_id, files })) => {
+                if let Some(control) = zmodem_controls.get(&tab_id)
+                    && !control.upload(files)
+                {
+                    // 通道满或无等待会话：丢弃并让界面提示重试。
+                    tracing::warn!("ZMODEM 上传决策被丢弃，标签 {tab_id:?} 无等待中的传输会话");
+                }
+            }
+            Incoming::Command(Ok(AppCommand::ZmodemCancel { tab_id })) => {
+                if let Some(control) = zmodem_controls.get(&tab_id) {
+                    control.cancel();
+                }
+            }
             Incoming::Command(Ok(AppCommand::CloseTab { tab_id })) => {
                 current_connections.remove(&tab_id);
                 // 关闭即注销连接意图并取消建连任务：DNS/握手/认证等待中的
@@ -359,6 +395,7 @@ async fn run_controller(
                     cleanup: &mut cleanup_set,
                     local_stats_task: &mut local_stats_task,
                     local_traffic_task: &mut local_traffic_task,
+                    zmodem_tasks: &mut zmodem_tasks,
                 })
                 .await;
                 break;
@@ -398,6 +435,8 @@ async fn run_controller(
                         sftp_clients: &mut sftp_clients,
                         remotes: &mut remotes,
                         cleanup: &mut cleanup_set,
+                        zmodem_tasks: &mut zmodem_tasks,
+                        zmodem_controls: &mut zmodem_controls,
                     },
                     AdoptConnection {
                         tab_id,
@@ -408,6 +447,7 @@ async fn run_controller(
                         },
                         remote: Some(remote),
                         disconnect_reason: "reconnected",
+                        zmodem_config: zmodem_config(&settings_store),
                     },
                     &event_tx,
                     &internal_tx,
@@ -456,6 +496,8 @@ async fn run_controller(
                         sftp_clients: &mut sftp_clients,
                         remotes: &mut remotes,
                         cleanup: &mut cleanup_set,
+                        zmodem_tasks: &mut zmodem_tasks,
+                        zmodem_controls: &mut zmodem_controls,
                     },
                     AdoptConnection {
                         tab_id,
@@ -466,6 +508,7 @@ async fn run_controller(
                         },
                         remote: None,
                         disconnect_reason: "reconnected to local",
+                        zmodem_config: zmodem_config(&settings_store),
                     },
                     &event_tx,
                     &internal_tx,
@@ -532,6 +575,8 @@ async fn run_controller(
                         sftp_clients: &mut sftp_clients,
                         remotes: &mut remotes,
                         cleanup: &mut cleanup_set,
+                        zmodem_tasks: &mut zmodem_tasks,
+                        zmodem_controls: &mut zmodem_controls,
                     },
                     AdoptConnection {
                         tab_id,
@@ -542,6 +587,7 @@ async fn run_controller(
                         },
                         remote: None,
                         disconnect_reason: "reconnected to serial",
+                        zmodem_config: zmodem_config(&settings_store),
                     },
                     &event_tx,
                     &internal_tx,
@@ -578,6 +624,8 @@ async fn run_controller(
                         sftp_clients: &mut sftp_clients,
                         remotes: &mut remotes,
                         cleanup: &mut cleanup_set,
+                        zmodem_tasks: &mut zmodem_tasks,
+                        zmodem_controls: &mut zmodem_controls,
                     },
                     AdoptConnection {
                         tab_id,
@@ -588,6 +636,7 @@ async fn run_controller(
                         },
                         remote: None,
                         disconnect_reason: "reconnected to telnet",
+                        zmodem_config: zmodem_config(&settings_store),
                     },
                     &event_tx,
                     &internal_tx,
@@ -690,6 +739,7 @@ async fn run_controller(
                     stop_stats(&mut stats_tasks, tab_id);
                     drop_local_stats(&local_stats_tabs, tab_id);
                     drop_local_stats(&local_traffic_tabs, tab_id);
+                    stop_zmodem(&mut zmodem_tasks, &mut zmodem_controls, tab_id);
                     // 优雅断开远端：直接丢弃 Handle 会跳过 disconnect 通知，
                     // 服务器侧要等 keepalive 超时才回收会话。
                     if let Some((_, remote)) = remotes.remove(&tab_id) {

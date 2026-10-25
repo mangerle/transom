@@ -539,6 +539,14 @@ impl AppShell {
             } => {
                 self.handle_public_key_deployed(key_name, error, cx);
             }
+            AppEvent::Zmodem {
+                tab_id,
+                connection_id: _,
+                event,
+            } => {
+                self.handle_zmodem_event(tab_id, event, cx);
+                return;
+            }
         }
         cx.notify();
     }

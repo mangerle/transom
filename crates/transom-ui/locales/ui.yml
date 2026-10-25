@@ -455,6 +455,44 @@ search:
     en: No terminal is ready in the current pane
     zh-CN: 当前窗格还没有可用的终端
 
+zmodem:
+  started:
+    en: ZMODEM transfer started
+    zh-CN: ZMODEM 传输已开始
+  upload:
+    en: Upload
+    zh-CN: 上传
+  download:
+    en: Download
+    zh-CN: 下载
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+  cancel_hint:
+    en: Press Esc to cancel
+    zh-CN: 按 Esc 取消
+  done:
+    en: ZMODEM finished, %{files} file(s) transferred
+    zh-CN: ZMODEM 传输完成，共 %{files} 个文件
+  cancelled:
+    en: ZMODEM transfer cancelled
+    zh-CN: ZMODEM 传输已取消
+  command_busy:
+    en: Command channel is busy, please retry
+    zh-CN: 命令通道繁忙，请重试
+  notify_done_title:
+    en: Transom ZMODEM
+    zh-CN: Transom ZMODEM
+  notify_done_body:
+    en: Transfer finished, %{files} file(s) received
+    zh-CN: 传输完成，共 %{files} 个文件
+  notify_failed_title:
+    en: Transom ZMODEM Failed
+    zh-CN: Transom ZMODEM 传输失败
+  notify_failed_body:
+    en: Transfer failed, see status bar for details
+    zh-CN: 传输失败，详情见状态栏
+
 status:
   ready:
     en: Ready
@@ -1221,6 +1259,27 @@ settings:
   verify_after_transfer_desc:
     en: Compare SHA256 checksums on both ends after each transfer.
     zh-CN: 每次传输完成后比对两端 SHA256，代价是额外的读盘耗时。
+  zmodem_group:
+    en: ZMODEM
+    zh-CN: ZMODEM 文件传输
+  zmodem_dir:
+    en: Download Directory
+    zh-CN: 下载目录
+  zmodem_dir_desc:
+    en: Where incoming rz/sz files are saved.
+    zh-CN: 对端 sz 发来的文件保存位置。
+  zmodem_dir_default:
+    en: Follow system Downloads
+    zh-CN: 跟随系统下载目录
+  zmodem_dir_browse:
+    en: Browse…
+    zh-CN: 浏览…
+  zmodem_auto_receive:
+    en: Auto Receive (sz)
+    zh-CN: 自动接收（sz）
+  zmodem_auto_receive_desc:
+    en: Accept incoming sz transfers automatically; disabled transfers are cancelled immediately.
+    zh-CN: 对端发起 sz 下载时自动接收；关闭后检测到传输立即取消。
   alternate_scroll:
     en: Alternate Screen Scrolling
     zh-CN: 备屏滚轮翻页

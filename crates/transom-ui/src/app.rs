@@ -107,6 +107,8 @@ pub(crate) struct TerminalTab {
     pub(crate) reconnect_attempts: u32,
     /// 待执行的自动重连任务；用户手动重连或关标签时随任务丢弃而取消。
     pub(crate) reconnect_task: Option<Task<()>>,
+    /// 活跃的 ZMODEM 传输展示快照；连接接入时清空，事件驱动更新。
+    pub(crate) zmodem: Option<crate::zmodem::ZmodemState>,
 }
 
 impl TerminalTab {
@@ -154,6 +156,7 @@ impl TerminalTab {
             _subscription: None,
             reconnect_attempts: 0,
             reconnect_task: None,
+            zmodem: None,
         }
     }
 }

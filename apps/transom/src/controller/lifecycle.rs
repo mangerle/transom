@@ -5,8 +5,9 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 use transom_core::{
     AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, TabId, TerminalIo, TransferId,
+    ZmodemEvent,
 };
-use transom_net::{ForwardTask, SftpClient, SshRemote};
+use transom_net::{ForwardTask, SftpClient, SshRemote, ZmodemConfig, ZmodemControl, attach_zmodem};
 
 use super::Internal;
 
@@ -62,6 +63,17 @@ pub(super) fn stop_key_deploy(
     }
 }
 
+pub(super) fn stop_zmodem(
+    zmodem_tasks: &mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+    zmodem_controls: &mut HashMap<TabId, ZmodemControl>,
+    tab_id: TabId,
+) {
+    if let Some(task) = zmodem_tasks.remove(&tab_id) {
+        task.abort();
+    }
+    zmodem_controls.remove(&tab_id);
+}
+
 /// 连接接入时需要清理的各状态表借用集合，收敛参数个数（规范：超过
 /// 5 个参数必须参数对象化）。
 pub(super) struct TabCleanupTables<'a> {
@@ -73,6 +85,8 @@ pub(super) struct TabCleanupTables<'a> {
     pub(super) sftp_clients: &'a mut HashMap<TabId, SftpClient>,
     pub(super) remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
     pub(super) cleanup: &'a mut JoinSet<()>,
+    pub(super) zmodem_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+    pub(super) zmodem_controls: &'a mut HashMap<TabId, ZmodemControl>,
 }
 
 /// 新连接接入的登记参数。
@@ -89,6 +103,8 @@ pub(super) struct AdoptConnection<J> {
     pub(super) remote: Option<SshRemote>,
     /// 顶掉旧连接时的断开说明，用于区分"SSH 重连"与"切回本地/串口"。
     pub(super) disconnect_reason: &'static str,
+    /// ZMODEM 监督层配置（下载目录与自动接收开关），连接接入时从设置读取。
+    pub(super) zmodem_config: ZmodemConfig,
 }
 
 /// 三类连接（SSH/本地/串口）接入的公共路径：登记当前连接、停掉旧连接的
@@ -124,11 +140,36 @@ pub(super) async fn adopt_connection<J>(
             old_remote.disconnect(&reason).await;
         });
     }
+    // ZMODEM 监督层统一挂载：读过滤（发起标记扫描/协议字节接管）与写过滤
+    // （激活期拦截键入）对所有传输一致生效。事件转发任务是独立句柄，
+    // 断开/重连时随 stop_zmodem 中止，杜绝孤儿任务。
+    stop_zmodem(tables.zmodem_tasks, tables.zmodem_controls, tab_id);
+    let (zmodem_tx, zmodem_rx) = flume::bounded::<ZmodemEvent>(64);
+    let (io, control) = attach_zmodem(setup.io, setup.zmodem_config, zmodem_tx);
+    tables.zmodem_controls.insert(tab_id, control);
+    let event_tx_zmodem = event_tx.clone();
+    let zmodem_task = tokio::spawn(async move {
+        while let Ok(event) = zmodem_rx.recv_async().await {
+            if event_tx_zmodem
+                .send_async(AppEvent::Zmodem {
+                    tab_id,
+                    connection_id,
+                    event,
+                })
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+    tables.zmodem_tasks.insert(tab_id, zmodem_task);
+
     let _ = event_tx
         .send_async(AppEvent::TerminalReady {
             tab_id,
             connection_id,
-            io: setup.io,
+            io,
         })
         .await;
     let internal_tx = internal_tx.clone();
@@ -155,6 +196,7 @@ pub(super) struct ShutdownTables<'a> {
     pub(super) cleanup: &'a mut JoinSet<()>,
     pub(super) local_stats_task: &'a mut Option<tokio::task::JoinHandle<()>>,
     pub(super) local_traffic_task: &'a mut Option<tokio::task::JoinHandle<()>>,
+    pub(super) zmodem_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
 }
 
 /// 优雅停机：停掉全部后台任务、断开全部远端并限时等待收尾，不再让任务
@@ -174,6 +216,7 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
         cleanup,
         local_stats_task,
         local_traffic_task,
+        zmodem_tasks,
     } = tables;
     // 待连接任务：建连中的握手与认证随停机中止
     for (_, entry) in connecting.drain() {
@@ -207,6 +250,9 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
         task.abort();
     }
     if let Some(task) = local_traffic_task.take() {
+        task.abort();
+    }
+    for (_, task) in zmodem_tasks.drain() {
         task.abort();
     }
     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {

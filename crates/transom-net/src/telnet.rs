@@ -133,6 +133,10 @@ impl TelnetReader {
                 self.decoded.clear();
                 // decode_to_string 以 String 现有容量为输出上限且不自行扩容，
                 // 必须循环消费：OutputFull 时扩容重试剩余输入，直至读完。
+                // 第三参数是 encoding_rs 的 `last`（本块是否为流末尾），故传
+                // false 表示后续仍有字节：被读取块切开的 GBK/Big5 双字节序列
+                // 才会暂存在解码器等后半段；误传 true 等于每块都收尾，块边界
+                // 的半个序列既会被替换成 U+FFFD，之后再用该解码器还会直接 panic。
                 let mut consumed = 0;
                 while consumed < self.clean.len() {
                     let (result, read, _) =
@@ -210,11 +214,15 @@ impl Write for TelnetWriter {
 ///
 /// 逐段循环直到源文本全部消费：输出缓冲不足时扩容重试，不可映射字符
 /// 由 encoding_rs 落成数字字符引用（已消费，继续后续文本）。
+///
+/// 第三参数是 encoding_rs 的 `last`（本段是否为输入末尾）：编码器跨多次
+/// 写入复用，必须传 false，否则第一次写入就把编码器置为 Finished 生命周期，
+/// 用户接着敲第二个字符时直接 panic。
 fn encode_input(encoder: &mut encoding_rs::Encoder, text: &str, out: &mut Vec<u8>) {
     let mut consumed = 0;
     while consumed < text.len() {
         let (result, read, _had_unmappable) =
-            encoder.encode_from_utf8_to_vec(&text[consumed..], out, true);
+            encoder.encode_from_utf8_to_vec(&text[consumed..], out, false);
         consumed += read;
         match result {
             encoding_rs::CoderResult::InputEmpty => break,
@@ -494,6 +502,48 @@ mod tests {
         assert_eq!(written, vec![IAC, WILL, OPT_TTYPE]);
     }
 
+    /// 逐字节交付的读源：用来复现被读取块切开的双字节编码序列。
+    struct ByteAtATime {
+        data: Vec<u8>,
+        offset: usize,
+    }
+
+    impl Read for ByteAtATime {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.offset >= self.data.len() {
+                return Ok(0);
+            }
+            buf[0] = self.data[self.offset];
+            self.offset += 1;
+            Ok(1)
+        }
+    }
+
+    /// 跨读取块的双字节 GBK 序列必须拼回原字符：解码若按"最后一块"刷新，
+    /// 块边界处的半个序列会被替换成 U+FFFD，真实链路上表现为随机乱码。
+    #[test]
+    fn gbk_sequence_split_across_reads_is_rejoined() {
+        let (sink, _shared) = SharedSink::new();
+        let (exit_tx, _exit_rx) = tokio::sync::oneshot::channel::<()>();
+        let mut reader = TelnetReader {
+            stream: Box::new(ByteAtATime {
+                data: vec![0xb5, 0xc7, 0xc2, 0xbc],
+                offset: 0,
+            }),
+            wire: wire_with_sink(sink),
+            parser: IacParser::new(),
+            decoder: Some(encoding_rs::GBK.new_decoder()),
+            clean: Vec::new(),
+            pending: Vec::new(),
+            offset: 0,
+            decoded: String::new(),
+            closed: Arc::new(AtomicBool::new(false)),
+            exit: Some(exit_tx),
+        };
+        let output = drain_reader(&mut reader).expect("读取不应失败");
+        assert_eq!(String::from_utf8_lossy(&output), "登录");
+    }
+
     #[test]
     fn writer_encodes_gbk() {
         let (sink, shared) = SharedSink::new();
@@ -504,12 +554,20 @@ mod tests {
             escaped: Vec::new(),
         };
         writer.write_all("密码".as_bytes()).expect("写入不应失败");
+        // 第二次写入：编码器若被上一次调用标记为 Finished，这里会直接 panic，
+        // 真实表现为 GBK/Big5 会话里用户接着敲字就崩。
+        writer
+            .write_all("登录".as_bytes())
+            .expect("连续写入不应失败");
         let written = shared
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
         // "密码" 的 GBK 字节；GBK 输出不含 0xFF，转义为恒等。
-        assert_eq!(written, vec![0xc3, 0xdc, 0xc2, 0xeb]);
+        assert_eq!(
+            written,
+            vec![0xc3, 0xdc, 0xc2, 0xeb, 0xb5, 0xc7, 0xc2, 0xbc]
+        );
     }
 
     #[test]

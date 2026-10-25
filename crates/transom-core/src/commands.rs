@@ -43,6 +43,15 @@ pub enum AppCommand {
         key_name: String,
         public_key: String,
     },
+    /// ZMODEM 上传决策：用户从文件选择对话框确认后的文件列表。
+    ZmodemUpload {
+        tab_id: TabId,
+        files: Vec<std::path::PathBuf>,
+    },
+    /// 取消当前标签的 ZMODEM 传输（状态栏按钮或 Esc）。
+    ZmodemCancel {
+        tab_id: TabId,
+    },
     CloseTab {
         tab_id: TabId,
     },
@@ -195,6 +204,13 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         key_name: String,
         error: Option<AppError>,
+    },
+    /// ZMODEM 传输事件（开始/进度/请求选择文件/结束），由控制器从传输层
+    /// 事件通道转发。
+    Zmodem {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        event: crate::zmodem::ZmodemEvent,
     },
 }
 

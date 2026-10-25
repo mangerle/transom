@@ -32,7 +32,7 @@ const MEMORY_VALUE_WIDTH: f32 = 5.25;
 const DISK_VALUE_WIDTH: f32 = 6.0;
 const OS_VALUE_WIDTH: f32 = 6.5;
 const UPTIME_VALUE_WIDTH: f32 = 3.0;
-const BADGE_HEIGHT: f32 = 1.25;
+pub(crate) const BADGE_HEIGHT: f32 = 1.25;
 
 /// 将字节/秒格式化为紧凑单位，状态栏只保留数字与单字母单位。
 ///
@@ -177,10 +177,15 @@ impl AppShell {
         let snippets_entry = self.render_snippets_popover(p, cx);
         let front_zone = drag::status_front_drop_zone(&app, p);
         let menu_app = app.clone();
+        // ZMODEM 传输徽章优先于常规状态项：传输进行中用户最关心进度与取消。
+        let zmodem_badge = self
+            .active_tab
+            .and_then(|tab_id| self.render_zmodem_badge(tab_id, p, cx));
         let badges = h_flex()
             .flex_none()
             .gap_2()
             .items_center()
+            .children(zmodem_badge)
             .children(right_elements);
 
         let mut bar = h_flex()

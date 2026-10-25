@@ -14,6 +14,7 @@ mod sftp_scan;
 mod sftp_sync;
 mod sftp_text;
 mod telnet;
+mod zmodem;
 mod telnet_iac;
 mod traffic;
 
@@ -25,3 +26,4 @@ pub use keys::deploy_public_key;
 pub use serial::{SerialSession, SystemSerialPortProvider, open_serial};
 pub use sftp::SftpClient;
 pub use telnet::{TelnetSession, connect_telnet};
+pub use zmodem::{ZmodemConfig, ZmodemControl, attach_zmodem};
