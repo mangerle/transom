@@ -115,7 +115,7 @@ impl AppShell {
                 h_flex()
                     .items_center()
                     .gap_2()
-                    .child(brand::logo_mark(LOGO_SIZE))
+                    .child(brand::logo_mark(LOGO_SIZE, window, cx))
                     .child(
                         div()
                             .text_sm()

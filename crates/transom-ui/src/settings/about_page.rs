@@ -92,8 +92,12 @@ fn openable_row(
 impl AppShell {
     /// 渲染"关于"分组：标志与名称头部，外加版本、构建、许可、作者、主页、
     /// 配置目录与运行环境各行。
+    ///
+    /// 需要 `window`：品牌标志要按窗口 DPI 光栅化（见 `crate::brand`），拿不到
+    /// 窗口就只能按 SVG 固有尺寸出图，再被 GPU 缩小采样成颗粒。
     pub(crate) fn render_settings_about(
         &mut self,
+        window: &mut Window,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -118,7 +122,7 @@ impl AppShell {
             .gap_4()
             .items_center()
             .pb_2()
-            .child(brand::logo_mark(LOGO_SIZE))
+            .child(brand::logo_mark(LOGO_SIZE, window, cx))
             .child(
                 v_flex()
                     .gap_0p5()

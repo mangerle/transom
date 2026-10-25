@@ -27,6 +27,26 @@ fn setting_group(
         }))
 }
 
+/// 组装配 helper（带 `window` 版）。
+///
+/// 只有需要按窗口度量出图的分组走这里——目前就"关于"页一处：品牌标志的 SVG 必须
+/// 按 `window.scale_factor()` 光栅化，否则会得到一张 512px 位图再被 GPU 缩小采样。
+/// 没有把通用 `setting_group` 一并改掉，是为了不让七个页的签名跟着一起动。
+fn setting_group_with_window(
+    app: &Entity<AppShell>,
+    p: &Palette,
+    title: &'static str,
+    render: fn(&mut AppShell, &mut Window, &Palette, &mut Context<AppShell>) -> AnyElement,
+) -> SettingGroup {
+    let app = app.clone();
+    let p = p.clone();
+    SettingGroup::new()
+        .title(rust_i18n::t!(title).to_string())
+        .item(SettingItem::render(move |_options, window, cx| {
+            app.update(cx, |this, cx| render(this, window, &p, cx))
+        }))
+}
+
 impl AppShell {
     pub(crate) fn render_settings_modal(
         &mut self,
@@ -222,7 +242,7 @@ impl AppShell {
         // 关于页只读：呈现版本、许可与本机运行环境，不参与保存/取消语义。
         let page_about = SettingPage::new(rust_i18n::t!("settings.tab_about").to_string())
             .icon(IconName::Info)
-            .group(setting_group(
+            .group(setting_group_with_window(
                 &app_entity,
                 p,
                 "settings.about_group",
