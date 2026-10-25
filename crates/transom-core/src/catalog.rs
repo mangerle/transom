@@ -47,6 +47,9 @@ pub struct SessionCatalog {
     pub folders: Vec<SessionFolder>,
     #[serde(default)]
     pub sessions: Vec<Session>,
+    /// 凭据模板清单；老目录文件没有该字段时按空清单降级。
+    #[serde(default)]
+    pub identities: Vec<crate::identity::Identity>,
 }
 
 /// 备份合并统计。
@@ -56,6 +59,9 @@ pub struct CatalogMergeSummary {
     pub updated_sessions: usize,
     pub added_folders: usize,
     pub updated_folders: usize,
+    /// 新增/更新的凭据模板数；口令是否随之落盘由导出选项决定，这里只报目录变化。
+    pub added_identities: usize,
+    pub updated_identities: usize,
 }
 
 /// 拖拽落点的侧向：插到锚点条目之前或之后。
@@ -79,6 +85,10 @@ pub enum CatalogError {
     FolderNotFound(FolderId),
     #[error("会话不存在: {0}")]
     SessionNotFound(SessionId),
+    #[error("凭据模板不存在: {0}")]
+    IdentityNotFound(crate::ids::IdentityId),
+    #[error("凭据模板仍被 {0} 个会话引用，请先解除引用再删除")]
+    IdentityInUse(usize),
     #[error("不能将文件夹移动到自身或其子文件夹: {0}")]
     FolderCycle(FolderId),
 }
@@ -449,8 +459,70 @@ impl SessionCatalog {
                 summary.added_sessions += 1;
             }
         }
+        for identity in other.identities {
+            if let Some(existing) = self
+                .identities
+                .iter_mut()
+                .find(|existing| existing.id == identity.id)
+            {
+                *existing = identity;
+                summary.updated_identities += 1;
+            } else {
+                self.identities.push(identity);
+                summary.added_identities += 1;
+            }
+        }
         self.normalize();
         summary
+    }
+
+    /// 按 ID 查找凭据模板。
+    pub fn identity(&self, id: crate::ids::IdentityId) -> Option<&crate::identity::Identity> {
+        self.identities.iter().find(|identity| identity.id == id)
+    }
+
+    /// 仍引用该模板的会话数；删除前的闸门，也是界面提示的口径来源。
+    pub fn identity_users(&self, id: crate::ids::IdentityId) -> usize {
+        self.sessions
+            .iter()
+            .filter(|session| session.identity_id == Some(id))
+            .count()
+    }
+
+    /// 删除凭据模板；仍被引用时拒绝并返回引用数。
+    ///
+    /// 为什么不做"级联清空引用"：删除模板后那些会话会静默退回自己的内联认证
+    /// （往往是空的或过期的用户名），表现为"昨天还能连今天连不上"。让用户先
+    /// 显式处理引用，比替他做决定安全。
+    pub fn delete_identity(&mut self, id: crate::ids::IdentityId) -> Result<(), CatalogError> {
+        if !self.identities.iter().any(|identity| identity.id == id) {
+            return Err(CatalogError::IdentityNotFound(id));
+        }
+        let users = self.identity_users(id);
+        if users > 0 {
+            return Err(CatalogError::IdentityInUse(users));
+        }
+        self.identities.retain(|identity| identity.id != id);
+        Ok(())
+    }
+
+    /// 把引用模板的用户名与认证方式叠加到会话副本上。
+    ///
+    /// 设计原理（Why）：叠加发生在连接派发前的最后一刻，net 层与 SFTP/转发等
+    /// 所有下游只看到一个"已经知道自己该怎么登录"的 Session，不必到处判断
+    /// "这个字段是会话的还是模板的"。模板不提供主机与端口：那属于机器属性。
+    /// 未引用模板、或模板已被手改删除时，原样返回，绝不让会话连不上。
+    #[must_use]
+    pub fn resolved_session(&self, session: &Session) -> Session {
+        let mut resolved = session.clone();
+        let Some(Some(identity)) = session.identity_id.map(|id| self.identity(id)) else {
+            return resolved;
+        };
+        if let crate::session::Connection::Ssh(ssh) = &mut resolved.connection {
+            ssh.username = identity.username.clone();
+            ssh.auth = identity.auth.clone();
+        }
+        resolved
     }
 
     /// 修复外部文件中的损坏树结构，保证后续 UI 与移动操作安全。
@@ -501,6 +573,22 @@ impl SessionCatalog {
                 .is_some_and(|id| !folder_ids.contains(&id))
             {
                 session.folder_id = None;
+            }
+        }
+
+        // 模板同理：重复 ID 只留第一个，悬空引用清成"未引用"，
+        // 让会话退回自己的内联认证而不是带着坏指针去连接。
+        let mut seen_identities = HashSet::with_capacity(self.identities.len());
+        self.identities
+            .retain(|identity| seen_identities.insert(identity.id));
+        let identity_ids: HashSet<crate::ids::IdentityId> =
+            self.identities.iter().map(|identity| identity.id).collect();
+        for session in &mut self.sessions {
+            if session
+                .identity_id
+                .is_some_and(|id| !identity_ids.contains(&id))
+            {
+                session.identity_id = None;
             }
         }
     }
@@ -750,5 +838,141 @@ mod tests {
         catalog.normalize();
         assert_eq!(catalog.folders.len(), 1);
         assert_eq!(catalog.folders[0].name, "one");
+    }
+
+    fn ssh_session(catalog: &mut SessionCatalog, name: &str) -> SessionId {
+        let session = Session::new(
+            name,
+            crate::session::Connection::Ssh(crate::session::SshConnection::new("h", "inline-user")),
+        );
+        let id = session.id;
+        catalog.sessions.push(session);
+        id
+    }
+
+    fn ops(catalog: &mut SessionCatalog) -> crate::ids::IdentityId {
+        let identity = crate::identity::Identity::new(
+            "ops",
+            "ops-user",
+            crate::session::AuthMethod::Password { save: true },
+        );
+        let id = identity.id;
+        catalog.identities.push(identity);
+        id
+    }
+
+    /// 模板叠加只改身份（用户名 + 认证方式），主机、端口与机器级选项保持不变。
+    #[test]
+    fn resolved_session_overrides_identity_fields_only() {
+        let mut catalog = SessionCatalog::default();
+        let identity_id = ops(&mut catalog);
+        let session_id = ssh_session(&mut catalog, "web");
+        catalog
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+            .unwrap()
+            .identity_id = Some(identity_id);
+
+        let session = catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .unwrap();
+        let resolved = catalog.resolved_session(session);
+        match &resolved.connection {
+            crate::session::Connection::Ssh(ssh) => {
+                assert_eq!(ssh.username, "ops-user");
+                assert_eq!(ssh.host, "h");
+                assert_eq!(ssh.port, 22);
+                assert!(matches!(
+                    ssh.auth,
+                    crate::session::AuthMethod::Password { save: true }
+                ));
+            }
+            _ => panic!("应仍是 SSH 连接"),
+        }
+        // 原会话不被修改：叠加发生在连接派发时的副本上。
+        match &session.connection {
+            crate::session::Connection::Ssh(ssh) => assert_eq!(ssh.username, "inline-user"),
+            _ => panic!("应仍是 SSH 连接"),
+        }
+    }
+
+    /// 未引用模板时逐字段原样返回，保证老会话行为不变。
+    #[test]
+    fn resolved_session_passes_through_without_reference() {
+        let catalog = SessionCatalog::default();
+        let session = Session::new(
+            "web",
+            crate::session::Connection::Ssh(crate::session::SshConnection::new("h", "u")),
+        );
+        let resolved = catalog.resolved_session(&session);
+        match &resolved.connection {
+            crate::session::Connection::Ssh(ssh) => {
+                assert_eq!(ssh.username, "u");
+                assert!(matches!(ssh.auth, crate::session::AuthMethod::Agent));
+            }
+            _ => panic!("应仍是 SSH 连接"),
+        }
+        assert_eq!(resolved.id, session.id);
+    }
+
+    /// 引用模板的会话必须先解除引用才能删模板：静默清引用会让那些会话
+    /// 突然退回（可能为空的）内联认证，表现为"昨天还能连今天连不上"。
+    #[test]
+    fn delete_identity_refuses_while_referenced() {
+        let mut catalog = SessionCatalog::default();
+        let identity_id = ops(&mut catalog);
+        let session_id = ssh_session(&mut catalog, "web");
+        catalog
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+            .unwrap()
+            .identity_id = Some(identity_id);
+
+        assert_eq!(catalog.identity_users(identity_id), 1);
+        assert_eq!(
+            catalog.delete_identity(identity_id),
+            Err(CatalogError::IdentityInUse(1))
+        );
+        assert_eq!(catalog.identities.len(), 1);
+
+        catalog
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+            .unwrap()
+            .identity_id = None;
+        assert_eq!(catalog.identity_users(identity_id), 0);
+        assert!(catalog.delete_identity(identity_id).is_ok());
+        assert!(catalog.identities.is_empty());
+        assert!(matches!(
+            catalog.delete_identity(identity_id),
+            Err(CatalogError::IdentityNotFound(_))
+        ));
+    }
+
+    /// 悬空模板引用与重复模板 id 都要在归一时收敛：坏数据不能让会话带着
+    /// 无效指针去连接，也不能让口令存进两个同 id 槽位。
+    #[test]
+    fn normalize_clears_dangling_identity_references() {
+        let mut catalog = SessionCatalog::default();
+        let identity_id = ops(&mut catalog);
+        let session_id = ssh_session(&mut catalog, "web");
+        catalog
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == session_id)
+            .unwrap()
+            .identity_id = Some(crate::ids::IdentityId::new());
+        let duplicate = catalog.identities[0].clone();
+        catalog.identities.push(duplicate);
+
+        catalog.normalize();
+        assert_eq!(catalog.identities.len(), 1);
+        assert_eq!(catalog.identities[0].id, identity_id);
+        assert!(catalog.sessions[0].identity_id.is_none());
     }
 }

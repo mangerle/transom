@@ -111,6 +111,22 @@ impl AppShell {
     ///
     /// 批量编辑、备份导入等操作会整体替换目录记录；已连接终端不受影响，
     /// 但分屏、重连与初始化命令应使用新配置。
+    /// 目录里的凭据模板快照，供会话表单渲染可选项。
+    ///
+    /// 只给 id/名字/用户名三项：表单不需要认证细节，把目录对象整个传进去会让
+    /// 表单有能力改目录数据，破坏"表单只产出 BuiltSession"的边界。
+    pub(crate) fn identity_options(&self) -> Vec<crate::session_form::IdentityOption> {
+        self.catalog
+            .identities
+            .iter()
+            .map(|identity| crate::session_form::IdentityOption {
+                id: identity.id,
+                name: identity.name.clone(),
+                username: identity.username.clone(),
+            })
+            .collect()
+    }
+
     pub(crate) fn refresh_tab_sessions(&mut self) {
         for tab in &mut self.tabs {
             if let Some(session) = self
@@ -119,7 +135,9 @@ impl AppShell {
                 .iter()
                 .find(|session| session.id == tab.session_id)
             {
-                tab.session = session.clone();
+                // 刷新写回的是"叠加凭据模板之后"的会话：标签上的用户名与认证
+                // 方式必须与真正拿去连接的参数一致，否则改完模板界面还显示旧身份。
+                tab.session = self.catalog.resolved_session(session);
             }
         }
     }
@@ -168,7 +186,13 @@ impl AppShell {
     }
 
     pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.form = Some(SessionForm::new(window, cx, None, None));
+        self.form = Some(SessionForm::new(
+            window,
+            cx,
+            None,
+            None,
+            self.identity_options(),
+        ));
         cx.notify();
     }
 
@@ -191,7 +215,13 @@ impl AppShell {
             .folder_id
             .and_then(|id| self.catalog.folder_path(id));
         let is_serial = matches!(session.connection, Connection::Serial(_));
-        let mut form = SessionForm::new(window, cx, Some(session), folder_path);
+        let mut form = SessionForm::new(
+            window,
+            cx,
+            Some(session),
+            folder_path,
+            self.identity_options(),
+        );
         self.prefill_secrets(&mut form, window, cx);
         self.form = Some(form);
         if is_serial {
@@ -289,34 +319,44 @@ impl AppShell {
         // 勾选保存但把内容清空，语义就是"删掉这条凭据"：输入框现在是已存口令的
         // 编辑视图，清空必须能生效，否则用户的删除意图会被无声忽略。
         // 与登录密码同规则：清空已回填的口令即表示删除。
+        //
+        // 引用凭据模板时整段跳过：口令归模板所有，会话这边既不该写进自己的槽位，
+        // 也不该把模板的槽位误删——会话自己的残留值留到它退回内联认证时再说。
         let mut secret_writes = Vec::new();
-        if save_password {
-            match &built.password {
-                Some(password) => {
-                    secret_writes.push(SecretWrite::Set(password_key, password.clone()))
+        if built.session.identity_id.is_none() {
+            if save_password {
+                match &built.password {
+                    Some(password) => {
+                        secret_writes.push(SecretWrite::Set(password_key, password.clone()))
+                    }
+                    None => secret_writes.push(SecretWrite::Delete(password_key)),
                 }
-                None => secret_writes.push(SecretWrite::Delete(password_key)),
+            } else {
+                secret_writes.push(SecretWrite::Delete(password_key));
             }
-        } else {
-            secret_writes.push(SecretWrite::Delete(password_key));
-        }
-        if save_passphrase {
-            match &built.key_passphrase {
-                Some(passphrase) => {
-                    secret_writes.push(SecretWrite::Set(passphrase_key, passphrase.clone()))
+            if save_passphrase {
+                match &built.key_passphrase {
+                    Some(passphrase) => {
+                        secret_writes.push(SecretWrite::Set(passphrase_key, passphrase.clone()))
+                    }
+                    None => secret_writes.push(SecretWrite::Delete(passphrase_key)),
                 }
-                None => secret_writes.push(SecretWrite::Delete(passphrase_key)),
+            } else {
+                secret_writes.push(SecretWrite::Delete(passphrase_key));
             }
-        } else {
-            secret_writes.push(SecretWrite::Delete(passphrase_key));
         }
         // 钥匙串写入/删除走 D-Bus 可能挂起秒级：放后台执行，失败结果异步回填错误栏
         let secret_store = self.services.secret_store.clone();
         cx.spawn(async move |this, cx| {
-            let error = cx
-                .background_executor()
-                .spawn(async move { apply_secret_writes(secret_store.as_ref(), &secret_writes) })
-                .await;
+            let error = if secret_writes.is_empty() {
+                None
+            } else {
+                cx.background_executor()
+                    .spawn(
+                        async move { apply_secret_writes(secret_store.as_ref(), &secret_writes) },
+                    )
+                    .await
+            };
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
                     this.error = Some(localized_error(&error));

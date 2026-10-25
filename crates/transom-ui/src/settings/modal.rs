@@ -111,6 +111,12 @@ impl AppShell {
                 p,
                 "settings.audit_group",
                 AppShell::render_settings_audit,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.identity_group",
+                AppShell::render_settings_identities,
             ));
 
         let page_mouse =

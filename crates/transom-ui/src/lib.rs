@@ -13,6 +13,7 @@ mod connection;
 mod events;
 mod forward;
 mod host_actions;
+mod identity_panel;
 mod keymap;
 mod keys;
 mod modals;

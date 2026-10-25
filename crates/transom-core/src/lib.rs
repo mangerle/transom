@@ -8,6 +8,7 @@ pub mod error;
 pub mod forward;
 mod highlight;
 pub mod host;
+pub mod identity;
 pub mod ids;
 pub mod keys;
 pub mod known_hosts;
@@ -46,15 +47,17 @@ pub use forward::{
 };
 pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan, TerminalHighlight};
 pub use host::{HostAction, HostOutcome};
+pub use identity::Identity;
 pub use ids::{
-    ConnectionId, FolderId, ForwardId, GroupId, SessionId, SnippetId, SplitId, TabId, TransferId,
+    ConnectionId, FolderId, ForwardId, GroupId, IdentityId, SessionId, SnippetId, SplitId, TabId,
+    TransferId,
 };
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, StatusItemId};
 pub use mac::{MacAddress, MacParseError, normalize_mac};
 pub use prompt::{PromptInfo, PromptKind};
-pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
+pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};
 pub use serial::{SerialPortDescriptor, SerialPortProvider};
 pub use session::{
     AuthMethod, Connection, LocalConnection, SerialConnection, SerialDataBits, SerialFlowControl,

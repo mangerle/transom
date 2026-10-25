@@ -19,6 +19,13 @@ pub struct Session {
     /// 连接建立后自动在交互式 Shell 中执行的命令。
     #[serde(default)]
     pub startup: StartupCommands,
+    /// 引用的凭据模板；`None` 表示用本会话自己的用户名与认证方式。
+    ///
+    /// 引用生效点在连接时（`SessionCatalog::resolved_session` 把模板的用户名与
+    /// 认证方式叠加到会话副本上），因此老会话文件缺该字段就是"未引用"，
+    /// 行为与从前完全一致。
+    #[serde(default)]
+    pub identity_id: Option<crate::ids::IdentityId>,
 }
 
 impl Session {
@@ -31,7 +38,20 @@ impl Session {
             terminal: TerminalProfile::default(),
             forwards: Vec::new(),
             startup: StartupCommands::default(),
+            identity_id: None,
         }
+    }
+
+    /// 该会话口令在钥匙串里的归属。
+    ///
+    /// 引用凭据模板时归模板（一份口令、改一处生效），否则归会话自己。
+    /// `identity_id` 已由 `SessionCatalog::normalize` 保证指向存在的模板，
+    /// 因此这里不必再回查目录。
+    pub fn secret_owner(&self) -> crate::secrets::SecretOwner {
+        self.identity_id
+            .map_or(crate::secrets::SecretOwner::Session(self.id), |id| {
+                crate::secrets::SecretOwner::Identity(id)
+            })
     }
 
     /// 该会话可能使用的钥匙串口令种类。

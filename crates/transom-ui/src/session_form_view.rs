@@ -159,44 +159,99 @@ impl AppShell {
 
         match form.connection {
             ConnectionChoice::Ssh => {
-                content = content
-                    .child(
-                        h_flex()
-                            .gap_3()
-                            .items_end()
-                            .child(div().flex_1().child(Self::form_field(
-                                rust_i18n::t!("form.host").to_string(),
-                                form.host.clone(),
-                                p,
-                            )))
-                            .child(div().w(px(110.0)).child(Self::form_field(
-                                rust_i18n::t!("form.port").to_string(),
-                                form.port.clone(),
-                                p,
-                            ))),
-                    )
-                    .child(Self::form_field(
-                        rust_i18n::t!("form.username").to_string(),
-                        form.username.clone(),
-                        p,
-                    ))
-                    .child(
+                content = content.child(
+                    h_flex()
+                        .gap_3()
+                        .items_end()
+                        .child(div().flex_1().child(Self::form_field(
+                            rust_i18n::t!("form.host").to_string(),
+                            form.host.clone(),
+                            p,
+                        )))
+                        .child(div().w(px(110.0)).child(Self::form_field(
+                            rust_i18n::t!("form.port").to_string(),
+                            form.port.clone(),
+                            p,
+                        ))),
+                );
+                // 模板选择行只在真的有模板时出现：一个都没有时这行只有一个
+                // "不使用"按钮，等于噪声。
+                if !form.identities.is_empty() {
+                    content = content.child(
                         v_flex()
                             .gap_2()
                             .child(
                                 div()
                                     .text_xs()
                                     .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("form.auth").to_string()),
+                                    .child(rust_i18n::t!("form.identity").to_string()),
                             )
                             .child(
                                 h_flex()
                                     .gap_2()
-                                    .child(auth_password)
-                                    .child(auth_key)
-                                    .child(auth_agent),
+                                    .child(
+                                        Button::new("identity-none")
+                                            .small()
+                                            .label(rust_i18n::t!("form.identity_none").to_string())
+                                            .selected(form.identity_choice.is_none())
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                if let Some(form) = this.form.as_mut() {
+                                                    form.identity_choice = None;
+                                                }
+                                                cx.notify();
+                                            })),
+                                    )
+                                    .children(form.identities.iter().enumerate().map(
+                                        |(index, option)| {
+                                            let identity_id = option.id;
+                                            let selected =
+                                                form.identity_choice == Some(identity_id);
+                                            Button::new(ElementId::Name(
+                                                format!("identity-{index}").into(),
+                                            ))
+                                            .small()
+                                            .label(option.name.clone())
+                                            .selected(selected)
+                                            .on_click(
+                                                cx.listener(move |this, _, _, cx| {
+                                                    if let Some(form) = this.form.as_mut() {
+                                                        form.identity_choice = Some(identity_id);
+                                                    }
+                                                    cx.notify();
+                                                }),
+                                            )
+                                        },
+                                    )),
                             ),
                     );
+                }
+                // 选中凭据模板时隐藏用户名与认证方式这一段：身份归模板，
+                // 在这里再放一份可编辑的口令只会让人以为改了就生效。
+                if form.identity_choice.is_none() {
+                    content = content
+                        .child(Self::form_field(
+                            rust_i18n::t!("form.username").to_string(),
+                            form.username.clone(),
+                            p,
+                        ))
+                        .child(
+                            v_flex()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(rust_i18n::t!("form.auth").to_string()),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_2()
+                                        .child(auth_password)
+                                        .child(auth_key)
+                                        .child(auth_agent),
+                                ),
+                        );
+                }
                 content = content.child(
                     h_flex()
                         .justify_between()

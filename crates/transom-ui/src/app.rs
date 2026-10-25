@@ -236,6 +236,8 @@ pub(crate) struct ShortcutCapture {
 /// 对了还是失败"的现象。
 pub(crate) struct PendingCredential {
     pub(crate) session_id: SessionId,
+    /// 口令实际落位的归属：会话引用凭据模板时为模板，保证"改一处全生效"。
+    pub(crate) owner: transom_core::SecretOwner,
     pub(crate) connection_id: ConnectionId,
     pub(crate) kind: SecretKind,
     pub(crate) value: Zeroizing<String>,
@@ -309,6 +311,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) appearance_snapshot: Option<AppearanceSettings>,
     /// 云同步端点与凭据输入框（凭据为掩码框，不回填钥匙串已有值）。
     pub(crate) sync_form: SyncFormInputs,
+    /// 凭据模板编辑器状态；`None` 表示当前未在编辑模板。
+    pub(crate) identity_edit: Option<crate::identity_panel::IdentityEditState>,
 }
 
 /// SFTP 五类弹窗（权限、输入、属性、过滤、同步）与编辑器跳转行的聚合状态。
@@ -640,6 +644,7 @@ impl AppShell {
                 notify_threshold: settings_notify_threshold,
                 highlight_keywords: settings_highlight_keywords,
                 appearance_snapshot: None,
+                identity_edit: None,
                 sync_form,
             },
             confirm_forward_any: None,

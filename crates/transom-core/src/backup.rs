@@ -11,8 +11,9 @@
 
 use crate::catalog::{SessionCatalog, SessionFolder};
 use crate::error::AppError;
-use crate::ids::SessionId;
-use crate::secrets::SecretKind;
+use crate::identity::Identity;
+use crate::ids::{IdentityId, SessionId};
+use crate::secrets::{SecretKind, SecretOwner};
 use crate::session::Session;
 use crate::storage::SecretStore;
 use serde::de::Deserializer;
@@ -40,7 +41,7 @@ pub fn collect_catalog_secrets(
             let key = crate::secrets::SecretKey::new(session.id, *kind);
             match secrets.get(&key) {
                 Ok(Some(value)) => collected.push(BackupSecret {
-                    session_id: session.id,
+                    owner: SecretOwner::Session(session.id),
                     kind: *kind,
                     value,
                 }),
@@ -51,6 +52,30 @@ pub fn collect_catalog_secrets(
                         format!(
                             "读取会话「{}」的口令失败：系统钥匙串不可用；请取消「包含已保存的口令」后重试",
                             session.name
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    // 凭据模板的口令同样只有一份：不收集它们的话，换机导入后每个引用会话
+    // 都会重新被问一遍密码，而"改一处生效"的前提就是这份口令能跟着目录走。
+    for identity in &catalog.identities {
+        for kind in identity.secret_kinds() {
+            let key = crate::secrets::SecretKey::new(identity.id, *kind);
+            match secrets.get(&key) {
+                Ok(Some(value)) => collected.push(BackupSecret {
+                    owner: SecretOwner::Identity(identity.id),
+                    kind: *kind,
+                    value,
+                }),
+                Ok(None) => {}
+                Err(_error) => {
+                    return Err(AppError::with_detail(
+                        crate::ErrorCode::SecretStoreUnavailable,
+                        format!(
+                            "读取凭据模板「{}」的口令失败：系统钥匙串不可用；请取消「包含已保存的口令」后重试",
+                            identity.name
                         ),
                     ));
                 }
@@ -72,6 +97,9 @@ pub struct BackupDocument {
     /// 会话清单。
     #[serde(default)]
     pub sessions: Vec<Session>,
+    /// 凭据模板清单；老备份文件没有该字段时按空清单导入。
+    #[serde(default)]
+    pub identities: Vec<Identity>,
     /// 钥匙串口令快照；未勾选"包含口令"时整个字段不出现。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secrets: Option<Vec<BackupSecret>>,
@@ -83,6 +111,7 @@ impl BackupDocument {
         Self {
             folders: catalog.folders.clone(),
             sessions: catalog.sessions.clone(),
+            identities: catalog.identities.clone(),
             secrets: None,
         }
     }
@@ -93,6 +122,7 @@ impl BackupDocument {
             SessionCatalog {
                 folders: self.folders,
                 sessions: self.sessions,
+                identities: self.identities,
             },
             self.secrets,
         )
@@ -106,6 +136,7 @@ impl BackupDocument {
         let mut catalog = SessionCatalog {
             folders: std::mem::take(&mut self.folders),
             sessions: std::mem::take(&mut self.sessions),
+            identities: std::mem::take(&mut self.identities),
         };
         catalog.normalize();
         self.folders = catalog.folders;
@@ -115,8 +146,8 @@ impl BackupDocument {
 
 /// 备份中的一条钥匙串口令。
 pub struct BackupSecret {
-    /// 口令归属的会话。
-    pub session_id: SessionId,
+    /// 口令归属：会话本身或其引用的凭据模板。
+    pub owner: SecretOwner,
     /// 口令种类：登录密码或私钥口令。
     pub kind: SecretKind,
     /// 口令明文；文档释放时归零。
@@ -127,7 +158,7 @@ impl fmt::Debug for BackupSecret {
     /// 口令值一律脱敏：备份文档会随错误信息与日志流转，明文不得外泄。
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BackupSecret")
-            .field("session_id", &self.session_id)
+            .field("owner", &self.owner)
             .field("kind", &self.kind)
             .field("value", &"<已脱敏>")
             .finish()
@@ -135,9 +166,15 @@ impl fmt::Debug for BackupSecret {
 }
 
 impl Serialize for BackupSecret {
+    /// 会话口令写 `session_id`（与既有备份文件逐字节一致），模板口令写
+    /// `identity_id`：两种归属各用一个字段名，老版本读到自己的字段就能用，
+    /// 不必为区分归属再引入一层包装结构。
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("BackupSecret", 3)?;
-        state.serialize_field("session_id", &self.session_id)?;
+        match self.owner {
+            SecretOwner::Session(id) => state.serialize_field("session_id", &id)?,
+            SecretOwner::Identity(id) => state.serialize_field("identity_id", &id)?,
+        }
         state.serialize_field("kind", &self.kind)?;
         state.serialize_field("value", self.value.as_str())?;
         state.end()
@@ -148,14 +185,28 @@ impl<'de> Deserialize<'de> for BackupSecret {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         struct Raw {
-            session_id: SessionId,
+            #[serde(default)]
+            session_id: Option<SessionId>,
+            #[serde(default)]
+            identity_id: Option<IdentityId>,
             kind: SecretKind,
             value: String,
         }
 
         let raw = Raw::deserialize(deserializer)?;
+        // 两个字段都缺或同时出现都视为坏数据：宁可报错，也不猜归属，
+        // 猜错会把口令写到别人的槽位上。
+        let owner = match (raw.session_id, raw.identity_id) {
+            (Some(id), None) => SecretOwner::Session(id),
+            (None, Some(id)) => SecretOwner::Identity(id),
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "备份口令条目必须恰好带 session_id 或 identity_id 之一",
+                ));
+            }
+        };
         Ok(Self {
-            session_id: raw.session_id,
+            owner,
             kind: raw.kind,
             value: Zeroizing::new(raw.value),
         })
@@ -255,8 +306,9 @@ mod tests {
         let document = BackupDocument {
             folders: Vec::new(),
             sessions: vec![session.clone()],
+            identities: Vec::new(),
             secrets: Some(vec![BackupSecret {
-                session_id: session.id,
+                owner: SecretOwner::Session(session.id),
                 kind: SecretKind::Password,
                 value: Zeroizing::new("s3cret".to_string()),
             }]),
@@ -273,6 +325,45 @@ mod tests {
         let debug = format!("{:?}", secrets[0]);
         assert!(!debug.contains("s3cret"));
         assert!(debug.contains("已脱敏"));
+    }
+
+    /// 模板口令写 `identity_id`，老备份的 `session_id` 必须照常可读：
+    /// 备份文件是用户手上的历史资产，格式变更不能让他们导不出旧包。
+    #[test]
+    fn identity_secrets_use_separate_field_and_legacy_still_parses() {
+        let identity = crate::identity::Identity::new(
+            "ops",
+            "ops",
+            crate::AuthMethod::Password { save: true },
+        );
+        let secret = BackupSecret {
+            owner: SecretOwner::Identity(identity.id),
+            kind: SecretKind::Password,
+            value: Zeroizing::new("p@ss".to_string()),
+        };
+        let json = serde_json::to_string(&secret).unwrap();
+        assert!(json.contains("identity_id"), "实际: {json}");
+        assert!(!json.contains("session_id"), "实际: {json}");
+
+        let decoded: BackupSecret = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.owner, SecretOwner::Identity(identity.id));
+
+        let legacy = format!(
+            "{{\"session_id\":\"{}\",\"kind\":\"password\",\"value\":\"old\"}}",
+            crate::ids::SessionId::new()
+        );
+        let decoded: BackupSecret = serde_json::from_str(&legacy).unwrap();
+        assert!(matches!(decoded.owner, SecretOwner::Session(_)));
+
+        // 两个归属字段同时出现时按坏数据处理，绝不猜归属。
+        let both = format!(
+            "{{\"session_id\":\"{}\",\"identity_id\":\"{}\",\"kind\":\"password\",\"value\":\"x\"}}",
+            crate::ids::SessionId::new(),
+            identity.id
+        );
+        assert!(serde_json::from_str::<BackupSecret>(&both).is_err());
+        let neither = r#"{"kind":"password","value":"x"}"#;
+        assert!(serde_json::from_str::<BackupSecret>(neither).is_err());
     }
 
     /// 口令类型由认证方式决定：只有口令认证与私钥认证才有钥匙串条目。

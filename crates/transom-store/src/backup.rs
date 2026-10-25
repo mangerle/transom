@@ -142,7 +142,7 @@ impl BackupService for CatalogBackupService {
     fn restore_secrets(&self, secrets: &[BackupSecret]) -> Result<SecretRestoreReport, AppError> {
         let mut report = SecretRestoreReport::default();
         for secret in secrets {
-            let key = SecretKey::new(secret.session_id, secret.kind);
+            let key = SecretKey::new(secret.owner, secret.kind);
             match self.secrets.get(&key) {
                 // 本机已有同名口令：保留现有值，导入备份不改本机正在用的密码。
                 Ok(Some(_)) => report.kept += 1,
@@ -151,7 +151,7 @@ impl BackupService for CatalogBackupService {
                     Err(error) => {
                         report.failed += 1;
                         tracing::warn!(
-                            session_id = %secret.session_id,
+                            owner = ?secret.owner,
                             kind = ?secret.kind,
                             %error,
                             "备份口令写入钥匙串失败"
@@ -477,7 +477,7 @@ fn temporary_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    use transom_core::{AuthMethod, Connection, SecretKind, Session, SshConnection};
+    use transom_core::{AuthMethod, Connection, SecretKind, SecretOwner, Session, SshConnection};
 
     /// 构造一个仅含内存钥匙串的假存储，避免测试依赖系统 Secret Service。
     #[derive(Default)]
@@ -728,7 +728,7 @@ mod tests {
 
         let service = service(store.clone());
         let secrets = vec![BackupSecret {
-            session_id: catalog.sessions[0].id,
+            owner: SecretOwner::Session(catalog.sessions[0].id),
             kind: SecretKind::Password,
             value: Zeroizing::new("from-backup".to_string()),
         }];
@@ -747,7 +747,7 @@ mod tests {
 
         let service = service(store.clone());
         let secrets = vec![BackupSecret {
-            session_id: catalog.sessions[0].id,
+            owner: SecretOwner::Session(catalog.sessions[0].id),
             kind: SecretKind::Password,
             value: Zeroizing::new("from-backup".to_string()),
         }];

@@ -39,6 +39,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 - Right-click a session or a whole folder to TCP-probe every host in one batch (handshake latency per row, 16 in flight at a time) and to send a Wake-on-LAN magic packet to the MAC stored on the session.
 - Sessions restored and reconnected on launch; catalog exported/imported as plain JSON/YAML or as an Argon2id + XChaCha20-Poly1305 encrypted vault.
 - Quick open (`$app-k`) doubles as quick connect: type `deploy@10.0.0.8:2222` and the panel offers a direct connection that never enters the session list.
+- Credential templates (identities): keep one username + password / key per account and let any number of sessions reference it, so a password change is applied once. Templates and their keyring slots travel with the catalog through backup and cloud sync.
 
 ### Terminal
 - Nested split views (split direction belongs to each cut), draggable dividers, per-pane zoom, and pane detach into a tab.

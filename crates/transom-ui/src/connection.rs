@@ -32,7 +32,7 @@ fn collect_connection_secrets(
     };
     match &ssh.auth {
         AuthMethod::Password { .. } => {
-            let key = SecretKey::new(session.id, SecretKind::Password);
+            let key = SecretKey::new(session.secret_owner(), SecretKind::Password);
             match secret_store.get(&key) {
                 Ok(Some(secret)) => secrets.password = Some(secret),
                 Ok(None) => {}
@@ -44,7 +44,7 @@ fn collect_connection_secrets(
             save_passphrase, ..
         } => {
             if *save_passphrase {
-                let key = SecretKey::new(session.id, SecretKind::KeyPassphrase);
+                let key = SecretKey::new(session.secret_owner(), SecretKind::KeyPassphrase);
                 match secret_store.get(&key) {
                     Ok(Some(secret)) => secrets.key_passphrase = Some(secret),
                     Ok(None) => {}
@@ -208,15 +208,17 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(session) = self
+        // 叠加凭据模板后再派发：net 层与 SFTP/转发下游只看到一个"已经知道自己
+        // 该怎么登录"的会话，不必各自判断字段来自会话还是模板。
+        let Some(found) = self
             .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
-            .cloned()
         else {
             return;
         };
+        let session = self.catalog.resolved_session(found);
 
         let tab_id = TabId::new();
         self.create_group(tab_id, session_id);
@@ -379,6 +381,7 @@ impl AppShell {
         {
             self.pending_credential = Some(PendingCredential {
                 session_id: state.session_id,
+                owner: self.secret_owner_for(state.session_id),
                 connection_id: state.connection_id,
                 kind,
                 value: Zeroizing::new(value.clone()),
@@ -407,10 +410,10 @@ impl AppShell {
         let Some(pending) = self.pending_credential.take() else {
             return;
         };
-        let key = SecretKey::new(pending.session_id, pending.kind);
+        let key = SecretKey::new(pending.owner, pending.kind);
         // 目录上的保存标记是纯内存更新，立即生效；钥匙串写入走 D-Bus 可能挂起
         // 秒级，放后台执行，避免连接成功的瞬间冻结界面。
-        self.mark_credential_saved(pending.session_id);
+        self.mark_credential_saved(pending.owner);
         let secret_store = self.services.secret_store.clone();
         cx.spawn(async move |this, cx| {
             let error = cx
@@ -443,26 +446,43 @@ impl AppShell {
         }
     }
 
-    /// 打开会话上的"凭据保存到钥匙串"标记，使目录记录与钥匙串实际状态一致。
-    fn mark_credential_saved(&mut self, session_id: SessionId) {
-        let Some(session) = self
-            .catalog
+    /// 会话口令归属：引用凭据模板时归模板。目录里查不到该会话（模板或会话已被
+    /// 手改删除）时退回会话本身，最坏情况是多存一份口令，不会存错人。
+    fn secret_owner_for(&self, session_id: SessionId) -> transom_core::SecretOwner {
+        self.catalog
             .sessions
-            .iter_mut()
+            .iter()
             .find(|session| session.id == session_id)
-        else {
-            return;
+            .map_or(transom_core::SecretOwner::Session(session_id), |session| {
+                session.secret_owner()
+            })
+    }
+
+    /// 打开"凭据保存到钥匙串"标记，使目录记录与钥匙串实际状态一致。
+    ///
+    /// 标记落在真正持有这条口令的对象上：会话引用模板时改的是模板的开关，
+    /// 否则下次保存模板会让会话白存一份"我不保存"的旗子。
+    fn mark_credential_saved(&mut self, owner: transom_core::SecretOwner) {
+        let flipped = match owner {
+            transom_core::SecretOwner::Session(session_id) => self
+                .catalog
+                .sessions
+                .iter_mut()
+                .find(|session| session.id == session_id)
+                .and_then(|session| match &mut session.connection {
+                    Connection::Ssh(ssh) => Some(ssh),
+                    _ => None,
+                })
+                .is_some_and(|ssh| enable_auth_save(&mut ssh.auth)),
+            transom_core::SecretOwner::Identity(identity_id) => self
+                .catalog
+                .identities
+                .iter_mut()
+                .find(|identity| identity.id == identity_id)
+                .is_some_and(|identity| enable_auth_save(&mut identity.auth)),
         };
-        let Connection::Ssh(ssh) = &mut session.connection else {
+        if !flipped {
             return;
-        };
-        match &mut ssh.auth {
-            AuthMethod::Password { save } => *save = true,
-            AuthMethod::PrivateKey {
-                save_passphrase, ..
-            } => *save_passphrase = true,
-            // agent 等方式没有可保存的凭据，能到这里说明目录已被改过，保持原样即可。
-            _ => {}
         }
         self.refresh_tab_sessions();
         self.persist_catalog();
@@ -674,5 +694,22 @@ impl AppShell {
             p,
         );
         Self::overlay(dialog, p)
+    }
+}
+
+/// 打开认证方式上的"保存口令"标记；agent 等方式没有可保存的凭据，返回 `false`。
+fn enable_auth_save(auth: &mut AuthMethod) -> bool {
+    match auth {
+        AuthMethod::Password { save } => {
+            *save = true;
+            true
+        }
+        AuthMethod::PrivateKey {
+            save_passphrase, ..
+        } => {
+            *save_passphrase = true;
+            true
+        }
+        _ => false,
     }
 }

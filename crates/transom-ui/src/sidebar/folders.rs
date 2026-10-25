@@ -63,7 +63,13 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let path = self.catalog.folder_path(folder_id);
-        self.form = Some(SessionForm::new(window, cx, None, path));
+        self.form = Some(SessionForm::new(
+            window,
+            cx,
+            None,
+            path,
+            self.identity_options(),
+        ));
         cx.notify();
     }
 

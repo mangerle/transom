@@ -2,8 +2,8 @@ use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    AuthMethod, Connection, SerialConnection, SerialDataBits, SerialFlowControl, SerialParity,
-    SerialPortDescriptor, SerialStopBits, Session, SshConnection, StartupCommands,
+    AuthMethod, Connection, IdentityId, SerialConnection, SerialDataBits, SerialFlowControl,
+    SerialParity, SerialPortDescriptor, SerialStopBits, Session, SshConnection, StartupCommands,
     TelnetConnection, TerminalProfile, TextEncoding,
 };
 use zeroize::Zeroizing;
@@ -58,8 +58,22 @@ pub(crate) struct SessionForm {
     pub auto_reconnect: bool,
     /// 关机主机的网卡 MAC，供 Wake-on-LAN 使用；留空表示不启用唤醒。
     pub wol_mac: Entity<InputState>,
+    /// 可选的凭据模板清单（打开表单时从目录快照而来）。
+    pub identities: Vec<IdentityOption>,
+    /// 当前选用的凭据模板；`None` 表示用本会话自己的用户名与认证方式。
+    pub identity_choice: Option<IdentityId>,
     pub confirm_delete: bool,
     pub error: Option<String>,
+}
+
+/// 会话表单里的一个凭据模板选项。
+///
+/// 带上用户名是因为选中模板后要用它填进连接参数：表单无法访问目录，
+/// 让调用方把需要的两个字段一起给全，比在表单里再查一次目录更直接。
+pub(crate) struct IdentityOption {
+    pub id: IdentityId,
+    pub name: String,
+    pub username: String,
 }
 
 pub(crate) struct BuiltSession {
@@ -96,6 +110,8 @@ struct SessionFormSeed {
     serial_stop_bits: SerialStopBits,
     serial_flow_control: SerialFlowControl,
     telnet_encoding: TextEncoding,
+    /// 可选凭据模板清单；表单只认这份快照，不回查目录。
+    identities: Vec<IdentityOption>,
 }
 
 impl SessionForm {
@@ -104,6 +120,7 @@ impl SessionForm {
         cx: &mut Context<impl Sized>,
         base: Option<Session>,
         folder_path: Option<String>,
+        identities: Vec<IdentityOption>,
     ) -> Self {
         let connection = match base.as_ref().map(|session| &session.connection) {
             Some(Connection::Serial(_)) => ConnectionChoice::Serial,
@@ -220,6 +237,7 @@ impl SessionForm {
                 serial_stop_bits,
                 serial_flow_control,
                 telnet_encoding,
+                identities,
             },
         )
     }
@@ -244,6 +262,7 @@ impl SessionForm {
             serial_stop_bits,
             serial_flow_control,
             telnet_encoding,
+            identities,
         } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
@@ -272,6 +291,8 @@ impl SessionForm {
         let username = ssh
             .map(|ssh| ssh.username.clone())
             .unwrap_or_else(default_username);
+        // Self 字面量会移走 base，需要读的字段先取出来。
+        let identity_choice = base.as_ref().and_then(|session| session.identity_id);
         let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
             || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
         // 只有 SSH 会话有 MAC 字段（见 HostAction::wake_for），回填同口径。
@@ -339,6 +360,8 @@ impl SessionForm {
                 &wol_mac,
                 &rust_i18n::t!("form.wol_mac_placeholder"),
             ),
+            identities,
+            identity_choice,
             confirm_delete: false,
             error: None,
         }
@@ -378,6 +401,11 @@ impl SessionForm {
         session.name = name;
         session.startup = startup;
         session.connection = connection;
+        session.identity_id = match self.connection {
+            // 只有 SSH 有“用户名 + 认证方式”这组身份概念，其它类型忽略模板。
+            ConnectionChoice::Ssh => self.identity_choice,
+            _ => None,
+        };
         if self.base.is_none() {
             session.terminal = TerminalProfile::default();
         }
@@ -397,7 +425,15 @@ impl SessionForm {
         if host.is_empty() {
             return Err(rust_i18n::t!("form.error_host").to_string());
         }
-        let username = self.username.read(cx).value().trim().to_string();
+        // 选中凭据模板时用户名取自模板：会话里存一份同样的用户名，退回内联
+        // 认证时不至于留空；模板的认证方式与口令由引用关系在连接时叠加。
+        let template = self
+            .identity_choice
+            .and_then(|id| self.identities.iter().find(|option| option.id == id));
+        let username = match template {
+            Some(option) => option.username.clone(),
+            None => self.username.read(cx).value().trim().to_string(),
+        };
         if username.is_empty() {
             return Err(rust_i18n::t!("form.error_username").to_string());
         }
@@ -464,15 +500,16 @@ impl SessionForm {
             },
             AuthChoice::Agent => AuthMethod::Agent,
         };
+        // 引用模板时口令归模板槽位，这里一律不产出，避免同一密码写进两处。
         let password = match auth {
-            AuthMethod::Password { .. } => {
+            AuthMethod::Password { .. } if template.is_none() => {
                 let value = self.password.read(cx).value().to_string();
                 (!value.is_empty()).then(|| Zeroizing::new(value))
             }
             _ => None,
         };
         let key_passphrase = match auth {
-            AuthMethod::PrivateKey { .. } => {
+            AuthMethod::PrivateKey { .. } if template.is_none() => {
                 let value = self.passphrase.read(cx).value().to_string();
                 (!value.is_empty()).then(|| Zeroizing::new(value))
             }
@@ -569,7 +606,7 @@ impl SessionForm {
     }
 }
 
-fn text_input(
+pub(crate) fn text_input(
     window: &mut Window,
     cx: &mut Context<impl Sized>,
     value: &str,

@@ -202,6 +202,12 @@ form:
   auto_reconnect:
     en: Auto reconnect on unexpected drop
     zh-CN: 断线后自动重连
+  identity:
+    en: Credential template
+    zh-CN: 凭据模板
+  identity_none:
+    en: No template (use this session's own credentials)
+    zh-CN: 不使用模板（用本会话自己的凭据）
   connect_timeout:
     en: Connect Timeout (seconds)
     zh-CN: 连接超时（秒）
@@ -997,6 +1003,77 @@ menu:
   detach_pane:
     en: Detach Pane to Tab
     zh-CN: 拆分为新标签
+identity:
+  group:
+    en: Credential Templates
+    zh-CN: 凭据模板
+  new:
+    en: New template
+    zh-CN: 新建模板
+  empty:
+    en: No credential templates yet. Create one to share a username and password across many sessions.
+    zh-CN: 还没有凭据模板。建一个就能把用户名与口令共享给多个会话，改密只改这里。
+  name:
+    en: Template name
+    zh-CN: 模板名称
+  username:
+    en: Login username
+    zh-CN: 登录用户名
+  password:
+    en: Password
+    zh-CN: 登录密码
+  password_placeholder:
+    en: Stored in the system keyring only
+    zh-CN: 只存入系统钥匙串
+  passphrase:
+    en: Private key passphrase
+    zh-CN: 私钥口令
+  passphrase_placeholder:
+    en: Leave blank if the key has no passphrase
+    zh-CN: 私钥无口令时留空
+  key_path:
+    en: Private key path
+    zh-CN: 私钥路径
+  save_password:
+    en: Save password to keyring
+    zh-CN: 把密码保存到钥匙串
+  save_passphrase:
+    en: Save passphrase to keyring
+    zh-CN: 把口令保存到钥匙串
+  auth_password:
+    en: Password
+    zh-CN: 密码认证
+  auth_key:
+    en: Private key
+    zh-CN: 私钥认证
+  auth_agent:
+    en: ssh-agent
+    zh-CN: ssh-agent
+  auth_other:
+    en: Other
+    zh-CN: 其他方式
+  used_by:
+    en: "Used by %{count} session(s)"
+    zh-CN: "被 %{count} 个会话使用"
+  created:
+    en: Credential template created
+    zh-CN: 凭据模板已创建
+  updated:
+    en: Credential template updated; every session using it now picks up the change
+    zh-CN: 凭据模板已更新，引用它的会话即刻共用新身份
+  deleted:
+    en: "Credential template deleted: %{name}"
+    zh-CN: "凭据模板已删除：%{name}"
+  error_name:
+    en: Template name is required
+    zh-CN: 模板名称不能为空
+  error_username:
+    en: Login username is required
+    zh-CN: 登录用户名不能为空
+  error_key:
+    en: Private key path is required for key authentication
+    zh-CN: 私钥认证必须填写私钥路径
+
 settings:
   title:
     en: Preferences & Settings
@@ -1304,6 +1381,9 @@ settings:
   audit_group:
     en: Session Output Audit
     zh-CN: 会话输出审计
+  identity_group:
+    en: Credential Templates
+    zh-CN: 凭据模板
   audit_enabled:
     en: Record session output to disk
     zh-CN: 将会话输出落盘记录

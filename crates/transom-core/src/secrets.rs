@@ -1,4 +1,4 @@
-use crate::ids::SessionId;
+use crate::ids::{IdentityId, SessionId};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -16,15 +16,43 @@ pub enum SecretKind {
     CloudSyncPassphrase,
 }
 
+/// 口令归属：某个会话，或某个可被多个会话引用的凭据模板。
+///
+/// 为什么需要这一层：会话引用凭据模板时，口令必须只存一份、改一处生效；
+/// 若继续按 SessionId 归档，同一密码会在几十个会话的钥匙串槽里各存一份，
+/// 改密就退化成"逐台重填"。类型上区分归属，也杜绝把 IdentityId 当
+/// SessionId 传进 `SecretKey::new` 的错用。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretOwner {
+    Session(SessionId),
+    Identity(IdentityId),
+}
+
+impl From<SessionId> for SecretOwner {
+    fn from(id: SessionId) -> Self {
+        Self::Session(id)
+    }
+}
+
+impl From<IdentityId> for SecretOwner {
+    fn from(id: IdentityId) -> Self {
+        Self::Identity(id)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretKey {
-    pub session_id: SessionId,
+    pub owner: SecretOwner,
     pub kind: SecretKind,
 }
 
 impl SecretKey {
-    pub fn new(session_id: SessionId, kind: SecretKind) -> Self {
-        Self { session_id, kind }
+    /// 构造口令槽位；调用方传 SessionId 或 IdentityId 均可，无需手写枚举包装。
+    pub fn new(owner: impl Into<SecretOwner>, kind: SecretKind) -> Self {
+        Self {
+            owner: owner.into(),
+            kind,
+        }
     }
 
     /// 云同步端点凭据的固定槽位。
@@ -44,6 +72,11 @@ impl SecretKey {
         SessionId::from(uuid::Uuid::nil())
     }
 
+    /// 钥匙串账号串。
+    ///
+    /// 会话槽位必须保持 `<uuid>/<kind>` 的**既有形状**：已保存的口令靠这个
+    /// 字符串定位，改名等于把用户的全部凭据弄丢。凭据模板另起 `identity/`
+    /// 前缀命名空间，与任何会话 UUID 都不可能撞车。
     pub fn account(&self) -> String {
         let kind = match self.kind {
             SecretKind::Password => "password",
@@ -53,7 +86,10 @@ impl SecretKey {
             SecretKind::CloudSyncCredential => return "cloud-sync/credential".to_string(),
             SecretKind::CloudSyncPassphrase => return "cloud-sync/passphrase".to_string(),
         };
-        format!("{}/{kind}", self.session_id)
+        match self.owner {
+            SecretOwner::Session(id) => format!("{id}/{kind}"),
+            SecretOwner::Identity(id) => format!("identity/{id}/{kind}"),
+        }
     }
 }
 

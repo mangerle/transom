@@ -49,3 +49,5 @@ id_type!(ConnectionId);
 // 快捷命令条条目标识：编辑弹窗按它定位要替换哪一行，不能依赖数组下标。
 id_type!(SnippetId);
 id_type!(TransferId);
+// 凭据模板标识：口令在钥匙串里按它归档，因此必须与会话 id 同为 UUID 新类型。
+id_type!(IdentityId);

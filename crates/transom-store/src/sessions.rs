@@ -7,7 +7,9 @@ use crate::file_io::{read_json, write_json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use transom_core::{AppError, ErrorCode, Session, SessionCatalog, SessionFolder, SessionStore};
+use transom_core::{
+    AppError, ErrorCode, Identity, Session, SessionCatalog, SessionFolder, SessionStore,
+};
 
 const SCHEMA_VERSION: u32 = 2;
 
@@ -16,6 +18,9 @@ struct SessionFileRef<'a> {
     version: u32,
     folders: &'a [SessionFolder],
     sessions: &'a [Session],
+    /// 凭据模板与会话同文件存放：会话引用模板时，两者必须一起走才有意义，
+    /// 拆成两个文件会多出一份"只同步了一半"的错配可能。
+    identities: &'a [Identity],
 }
 
 #[derive(Debug, Deserialize)]
@@ -26,6 +31,8 @@ struct SessionFileRaw {
     folders: Vec<SessionFolder>,
     #[serde(default)]
     sessions: Vec<Value>,
+    #[serde(default)]
+    identities: Vec<Identity>,
 }
 
 fn schema_version() -> u32 {
@@ -47,6 +54,7 @@ impl JsonSessionStore {
         let mut catalog = SessionCatalog {
             folders: file.folders,
             sessions: Vec::with_capacity(file.sessions.len()),
+            identities: file.identities,
         };
         catalog.normalize();
         for value in file.sessions {
@@ -99,6 +107,7 @@ impl SessionStore for JsonSessionStore {
                 version: SCHEMA_VERSION,
                 folders: &catalog.folders,
                 sessions: &catalog.sessions,
+                identities: &catalog.identities,
             },
         )
     }
