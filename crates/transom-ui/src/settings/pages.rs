@@ -607,14 +607,7 @@ impl AppShell {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(
-                        div()
-                            .max_w(rems(24.0))
-                            .truncate()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(dir_label),
-                    )
+                    .child(Self::setting_path_value("zmodem-dir", dir_label, p))
                     .child(
                         Button::new("zmodem-dir-browse")
                             .small()
@@ -706,14 +699,11 @@ impl AppShell {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(
-                        div()
-                            .max_w(rems(24.0))
-                            .truncate()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(dir.display().to_string()),
-                    )
+                    .child(Self::setting_path_value(
+                        "audit-dir",
+                        dir.display().to_string(),
+                        p,
+                    ))
                     .child(
                         Button::new("audit-dir-reveal")
                             .small()

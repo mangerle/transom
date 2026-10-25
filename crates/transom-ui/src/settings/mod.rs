@@ -17,10 +17,15 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{AppearanceSettings, FOLLOW_UI_THEME, TerminalCursorShape, TerminalHighlight};
 use transom_terminal::TerminalView;
+
+/// 路径型设置值的显示上限（rem，标准档 16px 基准）：够看清目录层级，又不会把
+/// 右侧控件挤出面板；全文由 tooltip 给出。
+const PATH_VALUE_MAX_WIDTH: f32 = 12.0;
 
 /// 读取字体族输入框：留空表示"不指定"，交给默认字体或系统回退。
 fn read_font_family(input: &Entity<InputState>, cx: &App) -> Option<String> {
@@ -35,6 +40,11 @@ impl AppShell {
     /// 全设置页的开关/按钮行共用这一构造，行高与对齐才一致；说明文字用弱色
     /// 小字，缺省时标题与控件垂直居中。输入类行仍用 `form_field` 纵排（输入框
     /// 需要完整宽度，且多带独立说明）。
+    ///
+    /// 宽度约束是这里的重点：左列必须 `flex_1 + min_w_0`，控件必须 `flex_none`。
+    /// 少任一条，弹性布局就会按内容固有宽度排版——一句长中文说明能把整行撑到比
+    /// 面板内容区还宽，右侧开关/按钮被推到面板外截断（审计目录、命令历史、日志
+    /// 目录都踩过这个坑）。左列拿到有界宽度后说明文字自然换行，而不是溢出裁切。
     pub(crate) fn setting_row(
         title_key: &'static str,
         description_key: Option<&'static str>,
@@ -49,6 +59,8 @@ impl AppShell {
             .gap_4()
             .child(
                 v_flex()
+                    .flex_1()
+                    .min_w_0()
                     .gap_0p5()
                     .child(div().text_sm().child(rust_i18n::t!(title_key).to_string()))
                     .when_some(description_key, |this, key| {
@@ -60,7 +72,34 @@ impl AppShell {
                         )
                     }),
             )
-            .child(control)
+            .child(div().flex_none().child(control))
+            .into_any_element()
+    }
+
+    /// 路径型设置值：定宽截断，完整路径挂在悬停 tooltip 上。
+    ///
+    /// 也用于项目主页这类"长而必须看全"的只读值（URL 同样按内容排版会撑爆整行）。
+    ///
+    /// 为什么定宽：配置目录、下载目录、审计目录都可能是任意长路径，按内容排版
+    /// 会把整行撑爆（与上面 `setting_row` 的约束配合，这里再给一个明确上限）。
+    /// 为什么要 tooltip：截断后用户看不出"到底写到哪个目录"，而这条信息恰恰是
+    /// 排查落盘问题时最需要的，所以把全文挂在悬停上；悬浮状态依赖带 `id` 的元素。
+    pub(crate) fn setting_path_value(
+        element_key: &'static str,
+        label: String,
+        p: &Palette,
+    ) -> AnyElement {
+        let tip = label.clone();
+        div()
+            .id(ElementId::Name(
+                format!("setting-path-{element_key}").into(),
+            ))
+            .max_w(rems(PATH_VALUE_MAX_WIDTH))
+            .truncate()
+            .text_xs()
+            .text_color(p.muted_foreground)
+            .tooltip(move |_window, cx| Tooltip::new(tip.clone()).build(_window, cx))
+            .child(label)
             .into_any_element()
     }
 

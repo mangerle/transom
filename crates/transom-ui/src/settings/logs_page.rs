@@ -89,14 +89,7 @@ impl AppShell {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(
-                        div()
-                            .max_w(rems(24.0))
-                            .truncate()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(dir_label),
-                    )
+                    .child(Self::setting_path_value("log-dir", dir_label, p))
                     .child(
                         Button::new("log-dir-reveal")
                             .small()
