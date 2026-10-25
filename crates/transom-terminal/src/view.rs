@@ -9,6 +9,7 @@ use alacritty_terminal::index::{Column, Line, Point as AlacPoint, Side};
 use alacritty_terminal::selection::SelectionType;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{CursorShape, Rgb as AnsiRgb};
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use parking_lot::Mutex;
@@ -935,6 +936,10 @@ impl Render for TerminalView {
             );
 
         let search_bar = self.render_search_bar(cx);
+        // 拖放高亮用主色调半透明蒙色：不改布局、不依赖主题里的具体色值，
+        // 深浅色终端下都能看清"松手就落在这里"。
+        let drop_tint = cx.theme().primary.opacity(0.12);
+        let entity = cx.entity().clone();
         // 检索栏与终端层平级：放在终端层子树里会让输入框的按键沿焦点路径冒泡到
         // `on_key_down`，敲搜索词的同时也把字符送进了 Shell。
         div()
@@ -943,6 +948,16 @@ impl Render for TerminalView {
             .overflow_hidden()
             .on_action(cx.listener(Self::on_search_enter))
             .on_action(cx.listener(Self::on_search_escape))
+            // 外部文件拖放：命中区域就是网格本身，视图只投递事件，
+            // 要不要接收、传到哪儿由应用层按会话类型决定。
+            .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(drop_tint))
+            .on_drop(move |paths: &ExternalPaths, _window, cx| {
+                let dropped = paths.paths().to_vec();
+                if dropped.is_empty() {
+                    return;
+                }
+                entity.update(cx, |_, cx| cx.emit(TerminalEvent::FilesDropped(dropped)));
+            })
             .child(layer)
             .children(search_bar)
     }

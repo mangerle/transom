@@ -4,6 +4,7 @@ use super::join_remote;
 use crate::app::AppShell;
 use crate::palette::localized_error;
 use gpui_kit::*;
+use std::path::PathBuf;
 use transom_core::{
     AppCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId, TransferKind,
     TransferMode, TransferStatus, TransferTask,
@@ -11,65 +12,58 @@ use transom_core::{
 
 impl AppShell {
     pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let paths = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_ref())
+            .map(|panel| panel.selected_local_paths())
+            .unwrap_or_default();
+        if let Err(message) = self.enqueue_uploads(tab_id, &paths, cx) {
+            self.set_sftp_panel_error(tab_id, message, cx);
+        }
+    }
+
+    /// 把一组本地路径入队为上传任务并启动调度。
+    ///
+    /// 面板里的"上传"按钮与终端拖放共用这条路径：两者的差别只在路径来源
+    /// （本地栏选中项 vs 拖入的文件），任务构造、状态文案与调度都必须一致。
+    /// 返回 `Err(文案)` 表示整批未入队，由调用方决定把文案写到面板还是错误栏。
+    pub(crate) fn enqueue_uploads(
+        &mut self,
+        tab_id: TabId,
+        paths: &[PathBuf],
+        cx: &mut Context<Self>,
+    ) -> Result<usize, String> {
+        if paths.is_empty() {
+            return Err(rust_i18n::t!("sftp.upload_file").to_string());
+        }
         let verify = self.settings.sftp.verify_after_transfer;
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
-            return;
+            return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
         let Some(panel) = tab.sftp.as_mut() else {
-            return;
+            return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
-        let paths = panel.selected_local_paths();
-        if paths.is_empty() {
-            panel.error = Some(rust_i18n::t!("sftp.upload_file").to_string());
-            cx.notify();
-            return;
-        }
-        let mode = if panel.resume_enabled {
-            TransferMode::Resume
-        } else {
-            TransferMode::Overwrite
-        };
-        let mut tasks = Vec::with_capacity(paths.len());
-        for local_path in paths {
-            let Some(file_name) = local_path.file_name().and_then(|name| name.to_str()) else {
-                panel.error = Some(rust_i18n::t!("sftp.upload_file").to_string());
-                cx.notify();
-                return;
-            };
-            let remote_path = join_remote(&panel.path, file_name);
-            let is_directory = std::fs::symlink_metadata(&local_path)
-                .map(|metadata| metadata.is_dir())
-                .unwrap_or(false);
-            let size = if is_directory {
-                None
-            } else {
-                std::fs::metadata(&local_path).map(|meta| meta.len()).ok()
-            };
-            let mut task = if is_directory {
-                TransferTask::new_directory(
-                    TransferDirection::Upload,
-                    local_path,
-                    remote_path,
-                    size,
-                    mode,
-                )
-            } else {
-                TransferTask::new(
-                    TransferDirection::Upload,
-                    local_path,
-                    remote_path,
-                    size,
-                    mode,
-                )
-            };
-            task.verify = verify;
-            tasks.push(task);
-        }
+        let tasks = upload_tasks(paths, &panel.path, panel.resume_enabled, verify)?;
         let count = tasks.len();
         panel.queue.extend(tasks);
-        panel.status = Some(format!("已加入 {count} 个上传任务"));
+        panel.status = Some(rust_i18n::t!("sftp.upload_queued", count = count).to_string());
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
+        Ok(count)
+    }
+
+    fn set_sftp_panel_error(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
+        if let Some(panel) = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_mut())
+        {
+            panel.error = Some(message);
+            cx.notify();
+        }
     }
 
     pub(crate) fn sftp_queue_download(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
@@ -491,6 +485,61 @@ impl AppShell {
             self.send_command(AppCommand::SftpCancel { tab_id, op_id });
         }
     }
+}
+
+/// 把本地路径列表转成上传任务；目录与文件走不同的构造分支。
+///
+/// 设计原理（Why）：入队逻辑必须与"上传按钮"完全一致，因此抽成纯函数——
+/// 它只读文件系统元数据，不碰界面状态，可单测覆盖目录/文件分派与取名失败。
+///
+/// 单个路径取不到文件名（如拖入文件系统根目录或含无效 UTF-8 的名称）时整批
+/// 拒绝：部分入队会让用户以为"传了 3 个"，实际只传了 2 个。
+fn upload_tasks(
+    paths: &[PathBuf],
+    remote_dir: &str,
+    resume_enabled: bool,
+    verify: bool,
+) -> Result<Vec<TransferTask>, String> {
+    let mode = if resume_enabled {
+        TransferMode::Resume
+    } else {
+        TransferMode::Overwrite
+    };
+    let mut tasks = Vec::with_capacity(paths.len());
+    for local_path in paths {
+        let Some(file_name) = local_path.file_name().and_then(|name| name.to_str()) else {
+            return Err(rust_i18n::t!("sftp.upload_file").to_string());
+        };
+        let remote_path = join_remote(remote_dir, file_name);
+        let is_directory = std::fs::symlink_metadata(local_path)
+            .map(|metadata| metadata.is_dir())
+            .unwrap_or(false);
+        let size = if is_directory {
+            None
+        } else {
+            std::fs::metadata(local_path).map(|meta| meta.len()).ok()
+        };
+        let mut task = if is_directory {
+            TransferTask::new_directory(
+                TransferDirection::Upload,
+                local_path.clone(),
+                remote_path,
+                size,
+                mode,
+            )
+        } else {
+            TransferTask::new(
+                TransferDirection::Upload,
+                local_path.clone(),
+                remote_path,
+                size,
+                mode,
+            )
+        };
+        task.verify = verify;
+        tasks.push(task);
+    }
+    Ok(tasks)
 }
 
 fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Option<SftpOperation> {

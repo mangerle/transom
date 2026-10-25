@@ -65,7 +65,21 @@ impl AppShell {
             cx.notify();
             return;
         }
+        self.open_sftp_panel(tab_id, index, window, cx);
+    }
 
+    /// 为已连接且已就绪的 SSH 标签建立 SFTP 面板（输入框、回车订阅与两侧初始列表）。
+    ///
+    /// 从 `toggle_sftp` 里抽出来是因为拖拽上传也要"没有面板就先建一个"：
+    /// 那条路径不能走 toggle（会把已打开的面板关掉），而面板构造涉及十几个字段
+    /// 与两条回车订阅，复制一份必然与这里走偏。
+    pub(crate) fn open_sftp_panel(
+        &mut self,
+        tab_id: TabId,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let quick_paths = LocalQuickPaths::resolve();
         let local_path = quick_paths
             .downloads

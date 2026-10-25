@@ -607,6 +607,9 @@ impl AppShell {
                 }
             }
             TerminalEvent::ContextMenuRequested { .. } => {}
+            TerminalEvent::FilesDropped(paths) => {
+                self.handle_dropped_files(tab_id, paths, window, cx);
+            }
             TerminalEvent::CommandFinished {
                 exit_code,
                 duration_ms,

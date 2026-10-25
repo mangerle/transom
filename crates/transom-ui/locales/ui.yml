@@ -658,6 +658,15 @@ sftp:
   upload_file:
     en: Local file to upload
     zh-CN: 要上传的本地文件
+  upload_queued:
+    en: "Queued %{count} upload task(s)"
+    zh-CN: "已加入 %{count} 个上传任务"
+  drop_needs_ssh:
+    en: "Drop-to-upload works only on a connected SSH session."
+    zh-CN: "拖拽上传仅支持已连接的 SSH 会话。"
+  drop_not_connected:
+    en: "The session is not connected yet; connect first, then drop the files."
+    zh-CN: "会话尚未连接，请连接后再拖入文件。"
   name:
     en: Name
     zh-CN: 名称

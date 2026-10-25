@@ -52,6 +52,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 
 ### SFTP
 - Dual-pane local/remote browser with resume, a transfer queue supporting priority insert, retry-all and clear-completed, and per-task rate and percentage.
+- Drag files straight onto the terminal grid to upload them into the session's current remote directory — the same resume/verify/queue path as the upload button, no need to open the file panel first.
 - Directory diff and one-way selective sync based on size and mtime, with mtime preserved after transfer so nothing re-copies.
 - Optional streamed SHA-256 verification of both endpoints (64 KiB chunks) after transfer, and wildcard exclusion rules that prune `.git/` and `node_modules/` as directories.
 - Built-in remote editor with read-only protection, unified-diff preview before saving, and backup-on-write; `chmod` as a 9-cell grid or octal literal; hover previews for images and the first lines of text files; `Ctrl+F` filename filter.
