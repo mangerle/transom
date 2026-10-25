@@ -1,6 +1,7 @@
 use crate::ids::SnippetId;
 use crate::layout::{ActivityBarLayout, StatusBarLayout};
 use crate::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
+use crate::sync::SyncSettings;
 use crate::terminal::{TerminalInteraction, TerminalProfile};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -334,6 +335,9 @@ pub struct AppSettings {
     /// 状态栏顺序与隐藏项；旧配置缺少该字段时使用默认布局。
     #[serde(default)]
     pub status_bar: StatusBarLayout,
+    /// 云端同步端点与最近同步时间；旧配置缺少该字段时按未启用降级。
+    #[serde(default)]
+    pub sync: SyncSettings,
     /// ZMODEM 下载目录与自动接收开关；旧配置缺少该字段时使用默认。
     #[serde(default)]
     pub zmodem: crate::zmodem::ZmodemSettings,
@@ -499,6 +503,7 @@ impl Default for AppSettings {
             snippets: SnippetSettings::default(),
             activity_bar: ActivityBarLayout::default(),
             status_bar: StatusBarLayout::default(),
+            sync: SyncSettings::default(),
             zmodem: crate::zmodem::ZmodemSettings::default(),
         }
     }

@@ -187,6 +187,12 @@ impl AppShell {
                 p,
                 "settings.backup_group",
                 AppShell::render_settings_backup,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.sync_group",
+                AppShell::render_settings_cloud_sync,
             ));
 
         let settings_component = Settings::new("app-settings")
@@ -300,8 +306,8 @@ impl AppShell {
                                     .primary()
                                     .small()
                                     .label(rust_i18n::t!("common.save").to_string())
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.save_settings(cx);
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.save_settings(window, cx);
                                     })),
                             ),
                     ),

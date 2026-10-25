@@ -7,6 +7,7 @@ mod app_render;
 mod backup;
 mod batch;
 mod chrome;
+mod cloud_sync;
 mod connection;
 mod events;
 mod forward;

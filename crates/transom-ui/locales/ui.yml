@@ -594,6 +594,12 @@ error:
   forward_failed:
     en: Port forwarding error
     zh-CN: 端口转发错误
+  cloud_sync_failed:
+    en: Cloud sync error
+    zh-CN: 云端同步错误
+  cloud_sync_missing:
+    en: No backup on the cloud yet
+    zh-CN: 云端还没有备份
   forward_requires_ssh:
     en: Port forwarding is only available for SSH sessions.
     zh-CN: 端口转发仅支持 SSH 会话。
@@ -1145,6 +1151,9 @@ settings:
   backup_group:
     en: Data Backup
     zh-CN: 数据备份
+  sync_group:
+    en: Cloud Sync
+    zh-CN: 云同步
   language_desc:
     en: Click to switch the interface language.
     zh-CN: 点击在中英文之间切换界面语言。
@@ -1479,6 +1488,118 @@ monitor:
   disk:
     en: Disk
     zh-CN: 磁盘
+sync:
+  group:
+    en: Cloud Sync
+    zh-CN: 云同步
+  endpoint:
+    en: Sync Endpoint
+    zh-CN: 同步端点
+  endpoint_desc:
+    en: Upload or download the encrypted catalog through a WebDAV or S3-compatible endpoint you own.
+    zh-CN: 通过自有的 WebDAV 或 S3 兼容端点上传下载加密备份，实现多设备同步。
+  endpoint_off:
+    en: Off
+    zh-CN: 关闭
+  endpoint_webdav:
+    en: WebDAV
+    zh-CN: WebDAV
+  endpoint_s3:
+    en: S3
+    zh-CN: S3
+  webdav_url:
+    en: Server URL
+    zh-CN: 服务器地址
+  webdav_url_hint:
+    en: https://dav.jianguoyun.com/dav/
+    zh-CN: https://dav.jianguoyun.com/dav/
+  username:
+    en: Account
+    zh-CN: 账号
+  username_hint:
+    en: WebDAV account; for Jianguo Cloud use the account email with an app password.
+    zh-CN: WebDAV 账号；坚果云请填写账户邮箱并使用应用密码。
+  password:
+    en: App Password
+    zh-CN: 应用密码
+  password_hint:
+    en: Saved to the system keychain, never written to settings files.
+    zh-CN: 保存到系统钥匙串，不写入设置文件。
+  s3_endpoint:
+    en: Endpoint
+    zh-CN: 端点地址
+  s3_endpoint_hint:
+    en: https://s3.example.com:9000
+    zh-CN: https://s3.example.com:9000
+  region:
+    en: Region
+    zh-CN: 区域
+  bucket:
+    en: Bucket
+    zh-CN: 存储桶
+  access_key:
+    en: Access Key
+    zh-CN: Access Key
+  secret:
+    en: Secret Key
+    zh-CN: Secret Key
+  secret_hint:
+    en: Saved to the system keychain, never written to settings files.
+    zh-CN: 保存到系统钥匙串，不写入设置文件。
+  directory:
+    en: Remote Directory
+    zh-CN: 远端目录
+  passphrase:
+    en: Sync Passphrase
+    zh-CN: 同步口令
+  passphrase_hint:
+    en: Encrypts the backup with Argon2id + XChaCha20-Poly1305; every device must use the same passphrase, and a lost passphrase cannot be recovered.
+    zh-CN: 使用 Argon2id + XChaCha20-Poly1305 加密备份内容；所有设备必须使用同一口令，口令遗失将无法恢复云端备份。
+  credential_hint:
+    en: Credentials and the sync passphrase live in the OS keychain. Sync always uploads an encrypted vault; the remote never sees your host names in clear text.
+    zh-CN: 凭据与同步口令保存在系统钥匙串。同步内容始终整体加密后上传，云端不会出现任何明文主机信息。
+  include_secrets:
+    en: Include stored passphrases
+    zh-CN: 包含已保存的口令
+  include_secrets_desc:
+    en: Encrypt stored session passphrases into the cloud backup so a new device needs no re-entry.
+    zh-CN: 把钥匙串里保存的会话口令一并加密上传，新设备恢复后无需重输密码。
+  push:
+    en: Upload Now
+    zh-CN: 立即上传
+  pull:
+    en: Download Now
+    zh-CN: 立即下载
+  push_started:
+    en: Uploading encrypted backup to the cloud…
+    zh-CN: 正在上传加密备份到云端…
+  pull_started:
+    en: Downloading backup from the cloud…
+    zh-CN: 正在从云端下载备份…
+  pushed:
+    en: "Cloud backup uploaded: %{sessions} sessions, %{kb} KB."
+    zh-CN: 云端备份已上传：%{sessions} 个会话，%{kb} KB。
+  pulled:
+    en: "Restored from cloud: %{added} added, %{updated} updated, %{folders} folders."
+    zh-CN: 已从云端恢复：新增 %{added}，更新 %{updated}，新增文件夹 %{folders}。
+  safety_note:
+    en: A pre-merge copy of this machine was saved to %{path}.
+    zh-CN: 合并前的本机目录已备份到 %{path}。
+  last_push:
+    en: Last upload
+    zh-CN: 上次上传
+  last_pull:
+    en: Last download
+    zh-CN: 上次下载
+  never:
+    en: never
+    zh-CN: 从未
+  missing_remote:
+    en: No backup exists on the endpoint yet. Upload from this or another device first.
+    zh-CN: 端点上还没有备份，请先从任一设备上传。
+  error_no_endpoint:
+    en: Pick and configure a sync endpoint first.
+    zh-CN: 请先选择并填写同步端点。
 backup:
   title:
     en: Session Backup

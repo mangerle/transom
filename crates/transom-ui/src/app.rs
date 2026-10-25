@@ -1,6 +1,7 @@
 //! GPUI 顶层应用外壳状态、快捷键动作委托与主布局容器。
 
 use crate::UiServices;
+use crate::cloud_sync::SyncFormInputs;
 use crate::forward::{ForwardPanelState, PendingForwardConfirm};
 use crate::keymap;
 use crate::keys::KeyWizardState;
@@ -305,6 +306,8 @@ pub(crate) struct SettingsModalState {
     /// 界面主题与密度在弹窗内即时预览（改一档立刻全局生效），取消时凭它恢复，
     /// 与"保存才落盘"的单点纪律对齐；其余设置项维持原有不回滚行为。
     pub(crate) appearance_snapshot: Option<AppearanceSettings>,
+    /// 云同步端点与凭据输入框（凭据为掩码框，不回填钥匙串已有值）。
+    pub(crate) sync_form: SyncFormInputs,
 }
 
 /// SFTP 五类弹窗（权限、输入、属性、过滤、同步）与编辑器跳转行的聚合状态。
@@ -419,6 +422,8 @@ pub struct AppShell {
     pub(crate) batch_edit: Option<BatchEditForm>,
     pub(crate) backup_prompt: Option<BackupPromptState>,
     pub(crate) _backup_task: Option<Task<()>>,
+    /// 云同步下载合并的后台任务；合并完成后置空。
+    pub(crate) _sync_pull_task: Option<Task<()>>,
     /// 系统明暗变化订阅；随 AppShell 存活，drop 即退订。
     pub(crate) _appearance_subscription: Subscription,
     pub(crate) _event_task: Task<()>,
@@ -589,6 +594,8 @@ impl AppShell {
                 .placeholder("10000")
                 .default_value(&scrollback_val)
         });
+        // 云同步表单：端点字段回填设置值，凭据掩码框恒为空。
+        let sync_form = SyncFormInputs::new(window, cx);
 
         let mut this = Self {
             services,
@@ -628,6 +635,7 @@ impl AppShell {
                 notify_threshold: settings_notify_threshold,
                 highlight_keywords: settings_highlight_keywords,
                 appearance_snapshot: None,
+                sync_form,
             },
             confirm_forward_any: None,
             editor_panels: Vec::new(),
@@ -660,6 +668,7 @@ impl AppShell {
             batch_edit: None,
             backup_prompt: None,
             _backup_task: None,
+            _sync_pull_task: None,
             _appearance_subscription: appearance_subscription,
             _event_task: event_task,
         };

@@ -63,6 +63,12 @@ image = { version = "0.25", default-features = false, features = [
     "webp",
 ] }
 sha2 = "0.10"
+# 云同步的 HTTPS 传输：关闭默认特性避免引入 native-tls，统一走 rustls；
+# 连接池由 Client 内建，全局单例长生命周期复用。
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# S3 SigV4 签名：与 sha2 同属 RustCrypto 家族的轻量 HMAC 封装，树内已有 0.12。
+hmac = "0.12"
+hex = "0.4"
 serialport = { version = "4.10", default-features = false }
 argon2 = "0.5"
 chacha20poly1305 = "0.10"

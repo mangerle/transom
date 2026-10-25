@@ -31,6 +31,7 @@ fn main() -> anyhow::Result<()> {
 
     let controller = Controller::start(
         known_hosts.clone(),
+        secret_store.clone(),
         settings_store.clone(),
     )?;
     let services = transom_ui::UiServices {

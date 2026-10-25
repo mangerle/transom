@@ -27,6 +27,10 @@ pub enum ErrorCode {
     BackupNotEncrypted,
     Cancelled,
     Protocol,
+    /// 云端同步失败：端点不可达、认证被拒、远端拒绝写入或内容超限。
+    CloudSyncFailed,
+    /// 云端还没有任何备份：首次拉取属预期状态，界面按提示而非故障处理。
+    CloudSyncMissing,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

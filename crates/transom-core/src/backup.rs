@@ -10,14 +10,55 @@
 //!   互斥的文件形态，用 `Option` 能让非法组合在类型层面无法出现。
 
 use crate::catalog::{SessionCatalog, SessionFolder};
+use crate::error::AppError;
 use crate::ids::SessionId;
 use crate::secrets::SecretKind;
 use crate::session::Session;
+use crate::storage::SecretStore;
 use serde::de::Deserializer;
 use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::Zeroizing;
+
+/// 按会话的认证方式收集钥匙串里保存的口令。
+///
+/// 本地备份导出与云端同步上传共用这一条收集路径：钥匙串整体不可用时直接
+/// 失败——此时"含口令"的备份只会得到一份缺口的文件，用户很难察觉，必须
+/// 让他显式取消勾选或修复钥匙串，而不是静默产出残缺备份。
+///
+/// # Errors
+/// 任一会话的口令读取失败（钥匙串不可用）时返回 `AppError`，错误码为
+/// [`ErrorCode::SecretStoreUnavailable`](crate::ErrorCode::SecretStoreUnavailable)。
+pub fn collect_catalog_secrets(
+    secrets: &dyn SecretStore,
+    catalog: &SessionCatalog,
+) -> Result<Vec<BackupSecret>, AppError> {
+    let mut collected = Vec::new();
+    for session in &catalog.sessions {
+        for kind in session.secret_kinds() {
+            let key = crate::secrets::SecretKey::new(session.id, *kind);
+            match secrets.get(&key) {
+                Ok(Some(value)) => collected.push(BackupSecret {
+                    session_id: session.id,
+                    kind: *kind,
+                    value,
+                }),
+                Ok(None) => {}
+                Err(_error) => {
+                    return Err(AppError::with_detail(
+                        crate::ErrorCode::SecretStoreUnavailable,
+                        format!(
+                            "读取会话「{}」的口令失败：系统钥匙串不可用；请取消「包含已保存的口令」后重试",
+                            session.name
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(collected)
+}
 
 /// 一次导出的完整内容。
 ///

@@ -22,6 +22,8 @@ zeroize.workspace = true
 globset.workspace = true
 ssh-key.workspace = true
 rand.workspace = true
+# 云同步目标（WebDAV/S3）是异步契约，UI 测试与 net 实现要共用同一个 trait 形状。
+async-trait.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

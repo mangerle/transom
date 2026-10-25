@@ -20,7 +20,7 @@ use std::sync::Arc;
 use transom_core::{
     AppError, BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions,
     BackupSecret, BackupService, ErrorCode, SecretKey, SecretRestoreReport, SecretStore,
-    SessionCatalog,
+    SessionCatalog, collect_catalog_secrets,
 };
 use zeroize::Zeroizing;
 
@@ -94,37 +94,6 @@ impl CatalogBackupService {
     pub fn new(secrets: Arc<dyn SecretStore>) -> Self {
         Self { secrets }
     }
-
-    /// 按会话的认证方式收集钥匙串里保存的口令。
-    ///
-    /// 钥匙串整体不可用时直接失败：此时导出"含口令"的备份只会得到一份
-    /// 缺口的文件，用户很难察觉，必须让他显式取消勾选或修复钥匙串。
-    fn collect_secrets(&self, catalog: &SessionCatalog) -> Result<Vec<BackupSecret>, AppError> {
-        let mut secrets = Vec::new();
-        for session in &catalog.sessions {
-            for kind in session.secret_kinds() {
-                let key = SecretKey::new(session.id, *kind);
-                match self.secrets.get(&key) {
-                    Ok(Some(value)) => secrets.push(BackupSecret {
-                        session_id: session.id,
-                        kind: *kind,
-                        value,
-                    }),
-                    Ok(None) => {}
-                    Err(_error) => {
-                        return Err(AppError::with_detail(
-                            ErrorCode::SecretStoreUnavailable,
-                            format!(
-                                "读取会话「{}」的口令失败：系统钥匙串不可用；请取消「包含已保存的口令」后重试",
-                                session.name
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
-        Ok(secrets)
-    }
 }
 
 impl BackupService for CatalogBackupService {
@@ -136,7 +105,7 @@ impl BackupService for CatalogBackupService {
     ) -> Result<BackupExportReport, AppError> {
         let mut document = BackupDocument::from_catalog(catalog);
         if options.include_secrets {
-            document.secrets = Some(self.collect_secrets(catalog)?);
+            document.secrets = Some(collect_catalog_secrets(self.secrets.as_ref(), catalog)?);
         }
         let format = BackupFormat::from_path(path);
         write_backup(

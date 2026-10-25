@@ -539,12 +539,28 @@ impl AppShell {
             } => {
                 self.handle_public_key_deployed(key_name, error, cx);
             }
+            AppEvent::CloudSyncPushed { result } => {
+                self.handle_cloud_sync_pushed(result, cx);
+                return;
+            }
             AppEvent::Zmodem {
                 tab_id,
                 connection_id: _,
                 event,
             } => {
                 self.handle_zmodem_event(tab_id, event, cx);
+                return;
+            }
+            AppEvent::CloudSyncPulled { result } => {
+                match result {
+                    Ok(document) => self.finish_cloud_sync_pull(document, window, cx),
+                    Err(error) if error.code == transom_core::ErrorCode::CloudSyncMissing => {
+                        self.handle_cloud_sync_missing(cx);
+                    }
+                    Err(error) => {
+                        self.error = Some(localized_error(&error));
+                    }
+                }
                 return;
             }
         }

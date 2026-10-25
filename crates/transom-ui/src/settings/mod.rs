@@ -5,6 +5,7 @@ mod layout_page;
 mod modal;
 mod pages;
 mod shortcuts_page;
+mod sync_page;
 
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
@@ -123,6 +124,7 @@ impl AppShell {
         self.settings_modal.scrollback.update(cx, |input, cx| {
             input.set_value(&scrollback, window, cx);
         });
+        self.fill_sync_form(window, cx);
         self.settings_modal.open = true;
         cx.notify();
     }
@@ -172,7 +174,7 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // 界面字体族：留空表示跟随主题。
         self.settings.appearance.ui_font_family =
             read_font_family(&self.settings_modal.ui_font_family, cx);
@@ -194,6 +196,11 @@ impl AppShell {
             && (1..=16).contains(&max)
         {
             self.settings.sftp.max_concurrent_transfers = max;
+        }
+        // 云同步：凭据先落钥匙串（非空才写），端点拓扑清洗后进设置文件。
+        if self.persist_sync_credentials(window, cx) {
+            self.settings.sync = self.collect_sync_settings(cx);
+            self.settings.sync.normalize();
         }
         // 外观偏好在弹窗内已即时写入，落盘前归一化兜底值，保证文件可回读。
         self.settings.appearance.normalize();

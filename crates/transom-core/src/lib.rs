@@ -22,6 +22,7 @@ pub mod sftp_filter;
 pub mod sftp_sync;
 pub mod ssh_config;
 pub mod storage;
+pub mod sync;
 pub mod system_stats;
 pub mod terminal;
 pub mod theme;
@@ -30,7 +31,7 @@ pub mod zmodem;
 
 pub use backup::{
     BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,
-    SecretRestoreReport,
+    SecretRestoreReport, collect_catalog_secrets,
 };
 pub use catalog::{CatalogError, CatalogMergeSummary, DropSide, SessionCatalog, SessionFolder};
 pub use color::Rgb;
@@ -74,6 +75,10 @@ pub use sftp_sync::{
 };
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
 pub use storage::{BackupService, SecretStore, SessionStore, SettingsStore};
+pub use sync::{
+    CloudSyncTarget, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME, SyncEndpoint, SyncPushReport,
+    SyncSettings,
+};
 pub use terminal::{
     FOLLOW_UI_THEME, TerminalControl, TerminalControlHandle, TerminalCursorShape,
     TerminalInteraction, TerminalIo, TerminalPalette, TerminalProfile, TerminalSize,

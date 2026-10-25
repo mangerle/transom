@@ -456,7 +456,7 @@ impl AppShell {
 }
 
 /// 口令写回结果的附加说明。
-fn secret_restore_note(secrets: Result<SecretRestoreReport, AppError>) -> String {
+pub(crate) fn secret_restore_note(secrets: Result<SecretRestoreReport, AppError>) -> String {
     match secrets {
         Ok(report) if report.restored > 0 || report.kept > 0 => format!(
             " {}",

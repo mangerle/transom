@@ -1,0 +1,358 @@
+//! 云同步编排：目录快照 -> Argon2id/XChaCha20 加密信封 -> 远端对象。
+//!
+//! 设计说明（Why）：
+//! - 上云内容一律加密：口令派生与信封格式复用本地备份的同一条实现
+//!   （`encrypt_document`/`decrypt_document`），云端与本地备份文件可互换，
+//!   也杜绝了"明文备份意外留在网盘"这类单点失误；
+//! - 端点凭据与同步口令在编排前从钥匙串读出，内存中经 `Zeroizing` 保活，
+//!   不落盘、不进日志；
+//! - Argon2 派生（64 MiB 内存）与口令收集（钥匙串同步调用）都是阻塞操作，
+//!   统一放进 `spawn_blocking`，不占用异步工作线程。
+
+use std::sync::Arc;
+use transom_core::{
+    AppError, BackupDocument, ErrorCode, SecretKey, SecretStore, SessionCatalog, SyncEndpoint,
+    SyncPushReport, SyncSettings, collect_catalog_secrets,
+};
+use transom_store::{BackupFormat, decrypt_document, encrypt_document};
+use zeroize::Zeroizing;
+
+use super::s3::S3Target;
+use super::webdav::WebDavTarget;
+
+/// 云同步服务：持有全局唯一的 HTTP 客户端（连接池复用）与钥匙串访问。
+pub struct CloudSyncService {
+    http: reqwest::Client,
+    secrets: Arc<dyn SecretStore>,
+}
+
+impl CloudSyncService {
+    /// 构造服务；HTTP 客户端随服务生存，长生命周期复用连接池。
+    ///
+    /// # Errors
+    /// TLS 后端初始化失败时返回 `AppError`。
+    pub fn new(secrets: Arc<dyn SecretStore>) -> Result<Self, AppError> {
+        let http = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(15))
+            // 16 MiB 信封在家庭宽带上行下的最坏耗时预留，含 MKCOL 重试。
+            .timeout(std::time::Duration::from_secs(180))
+            .build()
+            .map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::CloudSyncFailed,
+                    format!("初始化同步传输层失败: {error}"),
+                )
+            })?;
+        Ok(Self { http, secrets })
+    }
+
+    /// 把目录快照加密上传到配置的端点。
+    ///
+    /// # Errors
+    /// 未配置端点、同步口令未设置、端点凭据缺失、加密失败或网络失败时
+    /// 返回 `AppError`。
+    pub async fn push(
+        &self,
+        catalog: &SessionCatalog,
+        settings: &SyncSettings,
+    ) -> Result<SyncPushReport, AppError> {
+        let endpoint = required_endpoint(settings)?;
+        let target = self.build_target(endpoint)?;
+        let passphrase = self.read_passphrase()?;
+        let include_secrets = settings.include_secrets;
+        let secrets = self.secrets.clone();
+        // 会话与文件夹数量在快照进入任务前取好：闭包按值接管快照，统计
+        // 不必为它保留第二份克隆。
+        let sessions = catalog.sessions.len();
+        let folders = catalog.folders.len();
+        let catalog = catalog.clone();
+
+        let (data, secret_count) = tokio::task::spawn_blocking(move || {
+            build_envelope(&catalog, include_secrets, secrets.as_ref(), &passphrase)
+        })
+        .await
+        .map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::CloudSyncFailed,
+                format!("加密备份任务失败: {error}"),
+            )
+        })??;
+
+        target.put_document(&data).await?;
+        let report = SyncPushReport {
+            sessions,
+            folders,
+            secrets: secret_count,
+            bytes: data.len() as u64,
+            at: chrono::Utc::now().timestamp(),
+        };
+        tracing::info!(
+            sessions = report.sessions,
+            folders = report.folders,
+            bytes = report.bytes,
+            "云同步备份上传完成"
+        );
+        Ok(report)
+    }
+
+    /// 从端点下载并解密备份文档；合并与口令写回由调用方编排。
+    ///
+    /// # Errors
+    /// 未配置端点、同步口令未设置、远端无备份、解密失败或网络失败时
+    /// 返回 `AppError`。
+    pub async fn pull(&self, settings: &SyncSettings) -> Result<BackupDocument, AppError> {
+        let endpoint = required_endpoint(settings)?;
+        let target = self.build_target(endpoint)?;
+        let passphrase = self.read_passphrase()?;
+
+        let data = target.get_document().await?;
+        tokio::task::spawn_blocking(move || decrypt_document(&data, &passphrase))
+            .await
+            .map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::CloudSyncFailed,
+                    format!("解密备份任务失败: {error}"),
+                )
+            })?
+    }
+
+    /// 按端点配置构造远端目标；端点凭据从钥匙串读取。
+    fn build_target(
+        &self,
+        endpoint: &SyncEndpoint,
+    ) -> Result<Box<dyn transom_core::CloudSyncTarget>, AppError> {
+        match endpoint {
+            SyncEndpoint::Webdav {
+                url,
+                username,
+                directory,
+            } => {
+                let password = self.read_credential()?.map(|password| password.to_string());
+                Ok(Box::new(WebDavTarget::new(
+                    self.http.clone(),
+                    url,
+                    username,
+                    password.as_deref(),
+                    directory,
+                )?))
+            }
+            SyncEndpoint::S3 {
+                endpoint,
+                region,
+                bucket,
+                access_key,
+                directory,
+            } => {
+                let secret_key = self.read_credential()?.ok_or_else(|| {
+                    AppError::with_detail(
+                        ErrorCode::Configuration,
+                        "尚未在钥匙串保存 S3 Secret Key，请先在设置中填写并保存",
+                    )
+                })?;
+                Ok(Box::new(S3Target::new(
+                    self.http.clone(),
+                    endpoint,
+                    region,
+                    bucket,
+                    access_key,
+                    secret_key,
+                    directory,
+                )?))
+            }
+        }
+    }
+
+    fn read_credential(&self) -> Result<Option<Zeroizing<String>>, AppError> {
+        self.secrets.get(&SecretKey::cloud_sync_credential())
+    }
+
+    fn read_passphrase(&self) -> Result<Zeroizing<String>, AppError> {
+        self.secrets
+            .get(&SecretKey::cloud_sync_passphrase())?
+            .ok_or_else(|| {
+                AppError::with_detail(
+                    ErrorCode::Configuration,
+                    "尚未设置同步口令，云端备份必须加密；请先在设置中填写并保存",
+                )
+            })
+    }
+}
+
+/// 取出已启用的端点配置。
+fn required_endpoint(settings: &SyncSettings) -> Result<&SyncEndpoint, AppError> {
+    settings
+        .endpoint
+        .as_ref()
+        .ok_or_else(|| AppError::with_detail(ErrorCode::Configuration, "尚未配置云同步端点"))
+}
+
+/// 构建加密信封：收集口令（可选）-> 快照文档 -> Argon2id 派生加密。
+///
+/// 返回信封字节与加密口令数；阻塞操作，调用方必须放在阻塞线程池执行。
+fn build_envelope(
+    catalog: &SessionCatalog,
+    include_secrets: bool,
+    secrets: &dyn SecretStore,
+    passphrase: &str,
+) -> Result<(Vec<u8>, usize), AppError> {
+    let mut document = BackupDocument::from_catalog(catalog);
+    let mut secret_count = 0;
+    if include_secrets {
+        let collected = collect_catalog_secrets(secrets, catalog)?;
+        secret_count = collected.len();
+        document.secrets = Some(collected);
+    }
+    let data = encrypt_document(&document, passphrase, BackupFormat::Json)?;
+    Ok((data, secret_count))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use transom_core::{AuthMethod, CloudSyncTarget, Connection, Session, SshConnection};
+
+    /// 内存钥匙串：覆盖"已设置/未设置"两种状态，不依赖系统 Secret Service。
+    #[derive(Default)]
+    struct MemorySecrets {
+        entries: Mutex<HashMap<String, String>>,
+    }
+
+    impl MemorySecrets {
+        fn put(&self, key: &SecretKey, value: &str) {
+            self.entries
+                .lock()
+                .unwrap()
+                .insert(key.account(), value.to_string());
+        }
+    }
+
+    impl SecretStore for MemorySecrets {
+        fn get(&self, key: &SecretKey) -> Result<Option<Zeroizing<String>>, AppError> {
+            Ok(self
+                .entries
+                .lock()
+                .unwrap()
+                .get(&key.account())
+                .map(|value| Zeroizing::new(value.clone())))
+        }
+
+        fn set(&self, key: &SecretKey, secret: &str) -> Result<(), AppError> {
+            self.entries
+                .lock()
+                .unwrap()
+                .insert(key.account(), secret.to_string());
+            Ok(())
+        }
+
+        fn delete(&self, key: &SecretKey) -> Result<(), AppError> {
+            self.entries.lock().unwrap().remove(&key.account());
+            Ok(())
+        }
+    }
+
+    /// 内存远端：记录上传内容，可配置为"空端点"模拟首次拉取。
+    struct MemoryTarget {
+        stored: Mutex<Option<Vec<u8>>>,
+    }
+
+    impl MemoryTarget {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                stored: Mutex::new(None),
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl CloudSyncTarget for MemoryTarget {
+        async fn put_document(&self, data: &[u8]) -> Result<(), AppError> {
+            *self.stored.lock().unwrap() = Some(data.to_vec());
+            Ok(())
+        }
+
+        async fn get_document(&self) -> Result<Vec<u8>, AppError> {
+            self.stored.lock().unwrap().clone().ok_or_else(|| {
+                AppError::with_detail(ErrorCode::CloudSyncMissing, "远端还没有同步备份")
+            })
+        }
+    }
+
+    fn catalog() -> SessionCatalog {
+        let mut catalog = SessionCatalog::default();
+        catalog.sessions.push(Session::new(
+            "web-01",
+            Connection::Ssh(SshConnection {
+                host: "web.example.com".into(),
+                port: 22,
+                username: "deploy".into(),
+                auth: AuthMethod::Password { save: true },
+                options: Default::default(),
+            }),
+        ));
+        catalog
+    }
+
+    fn settings(endpoint: Option<SyncEndpoint>) -> SyncSettings {
+        SyncSettings {
+            endpoint,
+            include_secrets: true,
+            ..Default::default()
+        }
+    }
+
+    fn webdav_endpoint() -> SyncEndpoint {
+        SyncEndpoint::Webdav {
+            url: "https://dav.example.com/dav".into(),
+            username: "user".into(),
+            directory: "transom".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn push_requires_endpoint_and_passphrase() {
+        let service = CloudSyncService::new(Arc::new(MemorySecrets::default())).unwrap();
+
+        let error = service.push(&catalog(), &settings(None)).await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::Configuration);
+        assert!(error.detail.unwrap_or_default().contains("端点"));
+
+        let error = service
+            .push(&catalog(), &settings(Some(webdav_endpoint())))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::Configuration);
+        assert!(error.detail.unwrap_or_default().contains("同步口令"));
+    }
+
+    /// 加密信封往返：build_envelope 的产物必须能被 decrypt_document 还原，
+    /// 且错误口令被拒。云端与本地备份文件格式一致是产品契约。
+    #[tokio::test]
+    async fn envelope_round_trips_and_rejects_wrong_passphrase() {
+        let secrets = MemorySecrets::default();
+        secrets.put(&SecretKey::cloud_sync_credential(), "app-password");
+
+        let (data, secret_count) =
+            build_envelope(&catalog(), true, &secrets, "correct horse").unwrap();
+        assert_eq!(secret_count, 0, "测试目录未保存任何会话口令");
+        assert!(!String::from_utf8_lossy(&data).contains("web.example.com"));
+
+        let remote = MemoryTarget::new();
+        remote.put_document(&data).await.unwrap();
+        let document =
+            decrypt_document(&remote.get_document().await.unwrap(), "correct horse").unwrap();
+        assert_eq!(document.sessions.len(), 1);
+        assert_eq!(document.sessions[0].name, "web-01");
+
+        let downloaded = remote.get_document().await.unwrap();
+        assert!(decrypt_document(&downloaded, "wrong").is_err());
+    }
+
+    #[tokio::test]
+    async fn empty_remote_reports_missing() {
+        let remote = MemoryTarget::new();
+        let error = remote.get_document().await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::CloudSyncMissing);
+    }
+}

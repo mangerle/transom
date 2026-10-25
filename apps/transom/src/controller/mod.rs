@@ -4,7 +4,7 @@ use tokio::runtime::Runtime;
 use tokio::task::JoinSet;
 use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, ForwardState,
-    ForwardStatus, KnownHostsStore, SettingsStore, SftpOperation, TabId, TerminalIo,
+    ForwardStatus, KnownHostsStore, SecretStore, SettingsStore, SftpOperation, TabId, TerminalIo,
     TransferId,
 };
 mod lifecycle;
@@ -12,6 +12,7 @@ mod pty;
 mod samplers;
 mod sftp_exec;
 mod sftp_finish;
+mod sync_exec;
 
 use lifecycle::{
     Admission, AdoptConnection, ConnectingTab, KeyDeployParams, ShutdownTables, TabCleanupTables,
@@ -24,9 +25,10 @@ use samplers::{
     spawn_traffic_sampler,
 };
 use sftp_exec::SftpDispatch;
+use sync_exec::{CloudSyncJob, dispatch_cloud_sync};
 
 use transom_net::{
-    ForwardTask, SftpClient, SshRemote, SshSession, ZmodemConfig, ZmodemControl,
+    CloudSyncService, ForwardTask, SftpClient, SshRemote, SshSession, ZmodemConfig, ZmodemControl,
     start_forward,
 };
 
@@ -39,6 +41,7 @@ pub struct Controller {
 impl Controller {
     pub fn start(
         known_hosts: Arc<dyn KnownHostsStore>,
+        secrets: Arc<dyn SecretStore>,
         settings_store: Arc<dyn SettingsStore>,
     ) -> Result<Self, AppError> {
         // 三条通道的容量与背压策略（全工程禁止无界通道）：
@@ -55,6 +58,8 @@ impl Controller {
             .build()
             .map_err(|error| AppError::with_detail(ErrorCode::Io, error.to_string()))?;
 
+        // 云同步服务随控制器构建一次：HTTP 客户端连接池全生命周期复用。
+        let cloud_sync = Arc::new(CloudSyncService::new(secrets)?);
         let root = runtime.spawn(run_controller(
             known_hosts,
             settings_store,
@@ -62,6 +67,7 @@ impl Controller {
             internal_tx,
             internal_rx,
             event_tx,
+            cloud_sync,
         ));
         // 根控制器是整个应用的控制平面：panic 后命令与事件全部停摆，
         // 必须可观察（日志上报）而不是静默失效。
@@ -160,6 +166,7 @@ async fn run_controller(
     internal_tx: flume::Sender<Internal>,
     internal_rx: flume::Receiver<Internal>,
     event_tx: flume::Sender<AppEvent>,
+    cloud_sync: Arc<CloudSyncService>,
 ) {
     let mut current_connections: HashMap<TabId, ConnectionId> = HashMap::new();
     let mut remotes: HashMap<TabId, (ConnectionId, SshRemote)> = HashMap::new();
@@ -170,6 +177,8 @@ async fn run_controller(
     let mut key_deploy_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
     // 远端系统统计采样任务：按标签跟踪，断开/关闭时中止，杜绝孤儿任务。
     let mut stats_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
+    // 云同步任务：全局同一时刻只允许一个在途，进行中时拒绝新命令。
+    let mut sync_task: Option<tokio::task::JoinHandle<()>> = None;
     // 收尾任务集合（断开远端、转发优雅停止）：集中纳管 JoinHandle，
     // 停机时统一限时等待，任务不再脱缰。
     let mut cleanup_set: JoinSet<()> = JoinSet::new();
@@ -340,6 +349,24 @@ async fn run_controller(
                 })
                 .await;
             }
+            Incoming::Command(Ok(AppCommand::CloudSyncPush { settings, catalog })) => {
+                dispatch_cloud_sync(
+                    &cloud_sync,
+                    &event_tx,
+                    &mut sync_task,
+                    CloudSyncJob::Push { settings, catalog },
+                )
+                .await;
+            }
+            Incoming::Command(Ok(AppCommand::CloudSyncPull { settings })) => {
+                dispatch_cloud_sync(
+                    &cloud_sync,
+                    &event_tx,
+                    &mut sync_task,
+                    CloudSyncJob::Pull { settings },
+                )
+                .await;
+            }
             Incoming::Command(Ok(AppCommand::ZmodemUpload { tab_id, files })) => {
                 if let Some(control) = zmodem_controls.get(&tab_id)
                     && !control.upload(files)
@@ -384,6 +411,10 @@ async fn run_controller(
             Incoming::Command(Ok(AppCommand::Shutdown))
             | Incoming::Command(Err(_))
             | Incoming::Internal(Err(_)) => {
+                // 在途云同步没有可续传的事务，停机即中止。
+                if let Some(task) = sync_task.take() {
+                    task.abort();
+                }
                 shutdown_all(ShutdownTables {
                     connecting: &mut connecting,
                     forwards: &mut forwards,

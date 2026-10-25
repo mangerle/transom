@@ -6,6 +6,7 @@ use crate::secrets::ConnectionSecrets;
 use crate::session::Session;
 use crate::sftp::{RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation};
 use crate::sftp_sync::DirComparison;
+use crate::sync::{SyncPushReport, SyncSettings};
 use crate::terminal::{TerminalIo, TerminalSize};
 use crate::traffic::NetworkTraffic;
 
@@ -42,6 +43,18 @@ pub enum AppCommand {
         connection_id: ConnectionId,
         key_name: String,
         public_key: String,
+    },
+    /// 把目录快照加密上传到云同步端点。
+    ///
+    /// `catalog` 是界面侧目录的完整快照：同步不在控制器内维护目录状态，
+    /// 快照进快出，控制平面不感知会话内容的生命周期。
+    CloudSyncPush {
+        settings: SyncSettings,
+        catalog: crate::catalog::SessionCatalog,
+    },
+    /// 从云同步端点下载并解密备份文档，合并动作由界面侧完成。
+    CloudSyncPull {
+        settings: SyncSettings,
     },
     /// ZMODEM 上传决策：用户从文件选择对话框确认后的文件列表。
     ZmodemUpload {
@@ -204,6 +217,14 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         key_name: String,
         error: Option<AppError>,
+    },
+    /// 云端上传完成；`Err` 时界面展示错误，成功时回填统计与时间戳。
+    CloudSyncPushed {
+        result: Result<SyncPushReport, AppError>,
+    },
+    /// 云端下载解密完成；备份文档交由界面合并，口令写回也在界面侧编排。
+    CloudSyncPulled {
+        result: Result<crate::backup::BackupDocument, AppError>,
     },
     /// ZMODEM 传输事件（开始/进度/请求选择文件/结束），由控制器从传输层
     /// 事件通道转发。
