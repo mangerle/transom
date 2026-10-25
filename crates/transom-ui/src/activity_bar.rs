@@ -234,7 +234,6 @@ impl AppShell {
                 .active_tab
                 .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| tab.forwards_panel.is_some()),
-            ActivityItemId::Snippets => self.snippet_panel.open,
             ActivityItemId::Sftp => self
                 .active_tab
                 .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
@@ -277,7 +276,6 @@ impl AppShell {
             }
             ActivityItemId::QuickOpen => self.toggle_quick_open(window, cx),
             ActivityItemId::Forwards => self.toggle_forward_panel(window, cx),
-            ActivityItemId::Snippets => self.toggle_snippets_panel(cx),
             ActivityItemId::Sftp => self.toggle_sftp(window, cx),
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
@@ -454,7 +452,6 @@ pub(crate) fn activity_item_icon(id: ActivityItemId) -> IconName {
         ActivityItemId::Sessions => IconName::Server,
         ActivityItemId::QuickOpen => IconName::Search,
         ActivityItemId::Forwards => IconName::ArrowLeftRight,
-        ActivityItemId::Snippets => IconName::ListChecks,
         ActivityItemId::Sftp => IconName::Folder,
         ActivityItemId::Language => IconName::Globe,
         ActivityItemId::ImportSshConfig => IconName::Download,
@@ -470,7 +467,6 @@ pub(crate) fn activity_item_label(id: ActivityItemId) -> String {
         ActivityItemId::Sessions => "app.sessions",
         ActivityItemId::QuickOpen => "app.quick_open",
         ActivityItemId::Forwards => "forward.title",
-        ActivityItemId::Snippets => "snippets.title",
         ActivityItemId::Sftp => "sftp.title",
         ActivityItemId::Language => "activity.language",
         ActivityItemId::ImportSshConfig => "app.import_ssh_config",
