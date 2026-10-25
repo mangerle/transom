@@ -96,6 +96,11 @@ impl AppShell {
                 let tab = &mut self.tabs[index];
                 tab.terminal = Some(terminal);
                 tab.status = TabStatus::Connected;
+                log::info!(
+                    "连接建立完成，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
+                    tab.session.name,
+                    crate::connection::describe_target(&tab.session)
+                );
                 // 连接成功后自动重连计数清零，下次断线重新享有完整退避序列。
                 tab.reconnect_attempts = 0;
                 tab.network_traffic = None;
@@ -120,7 +125,13 @@ impl AppShell {
                 {
                     tab.status = TabStatus::Failed(error.clone());
                     tab.network_traffic = None;
-                    self.error = Some(localized_error(&error));
+                    let message = localized_error(&error);
+                    log::error!(
+                        "连接建立失败，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}，原因: {message}",
+                        tab.session.name,
+                        crate::connection::describe_target(&tab.session)
+                    );
+                    self.error = Some(message);
                 }
                 self.discard_pending_credential(connection_id);
                 self.mark_forwards_stopped(tab_id);
@@ -136,6 +147,11 @@ impl AppShell {
                 {
                     tab.status = TabStatus::Disconnected;
                     tab.network_traffic = None;
+                    log::info!(
+                        "连接已断开，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
+                        tab.session.name,
+                        crate::connection::describe_target(&tab.session)
+                    );
                 }
                 self.mark_forwards_stopped(tab_id);
                 self.schedule_auto_reconnect(tab_id, connection_id, cx);

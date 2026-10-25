@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::task::JoinSet;
 use transom_core::{
-    AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, ForwardState,
+    AppCommand, AppError, AppEvent, AppSettings, ConnectionId, ErrorCode, ForwardId, ForwardState,
     ForwardStatus, KnownHostsStore, SecretStore, SettingsStore, SftpOperation, TabId, TerminalIo,
     TransferId,
 };
@@ -79,7 +79,7 @@ impl Controller {
         // 必须可观察（日志上报）而不是静默失效。
         runtime.spawn(async move {
             match root.await {
-                Ok(()) => log::warn!("控制器主循环已退出"),
+                Ok(()) => log::info!("控制器主循环已正常退出，控制平面停机"),
                 Err(error) if error.is_panic() => {
                     log::error!("控制器主循环异常崩溃，控制平面已失效: {error}")
                 }
@@ -170,7 +170,13 @@ enum Incoming {
 /// 连接接入时读取 ZMODEM 配置：每次连接取最新设置（改目录后新连接生效），
 /// 读取失败按默认值降级（下载目录退回系统下载目录、自动接收开启）。
 fn zmodem_config(settings: &Arc<dyn SettingsStore>) -> ZmodemConfig {
-    let settings = settings.load().unwrap_or_default();
+    let settings = match settings.load() {
+        Ok(settings) => settings,
+        Err(error) => {
+            log::warn!("读取设置失败，本次连接的 ZMODEM 按默认配置处理，原因: {error}");
+            AppSettings::default()
+        }
+    };
     ZmodemConfig {
         download_dir: settings.zmodem.resolved_download_dir(),
         auto_receive: settings.zmodem.auto_receive,

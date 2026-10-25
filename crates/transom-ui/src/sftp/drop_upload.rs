@@ -49,7 +49,12 @@ impl AppShell {
             return;
         };
         if let Some(key) = drop_rejection(&self.tabs[index].session, &self.tabs[index].status) {
-            self.status = Some(rust_i18n::t!(key).to_string());
+            let message = rust_i18n::t!(key).to_string();
+            log::warn!(
+                "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
+                paths.len()
+            );
+            self.status = Some(message);
             cx.notify();
             return;
         }
@@ -65,6 +70,11 @@ impl AppShell {
             cx.notify();
             return;
         }
+        log::info!(
+            "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
+            paths.len(),
+            crate::connection::describe_target(&self.tabs[index].session)
+        );
         self.show_drop_overlay(tab_id, cx);
     }
 }

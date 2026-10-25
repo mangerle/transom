@@ -16,6 +16,24 @@ use transom_core::{
 };
 use zeroize::Zeroizing;
 
+/// 连接目标的日志用描述：`user@host:port`，本地与串口按各自口径。
+///
+/// 只输出定位所需的最小信息：绝不落口令、私钥内容或 token。用户名与主机名是
+/// 排查"连错机器/用错账号"唯一的线索，因此保留。
+pub(crate) fn describe_target(session: &Session) -> String {
+    match &session.connection {
+        Connection::Ssh(ssh) => format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
+        Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
+        Connection::Local(local) => {
+            format!("本地终端 {}", local.shell.as_deref().unwrap_or("sh"))
+        }
+        Connection::Serial(serial) => format!("串口 {}@{}", serial.port, serial.baud_rate),
+        // `Connection` 是 #[non_exhaustive]：新增变体时这里必须还能编译，
+        // 日志宁可写"未知类型"也不能因为漏一个分支就挡住整个界面。
+        _ => "未知连接类型".to_string(),
+    }
+}
+
 /// 按认证方式收集钥匙串中已保存的连接凭据。
 ///
 /// 阻塞函数（走 D-Bus Secret Service，可能挂起秒级），仅允许在后台执行器
@@ -304,6 +322,11 @@ impl AppShell {
                 attempt + 1
             ),
         ));
+        log::warn!(
+            "已安排自动重连，窗格: {tab_id}，会话: {}，延迟 {delay_secs} 秒（第 {}/3 次），原因: {reason}",
+            tab.session.name,
+            attempt + 1
+        );
         let session = tab.session.clone();
         let session_id = tab.session_id;
         let executor = cx.background_executor().clone();
@@ -331,6 +354,11 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let connection_id = ConnectionId::new();
+        log::info!(
+            "开始建立连接，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
+            session.name,
+            describe_target(&session)
+        );
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
             tab.connection_id = Some(connection_id);
             tab.sftp = None;

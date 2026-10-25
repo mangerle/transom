@@ -70,6 +70,7 @@ impl AppShell {
     /// 错误上报，不重复解析字体等输入框状态，也不改变弹窗的取消语义。
     pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
         if let Err(error) = self.services.settings_store.save(&self.settings) {
+            log::error!("保存布局设置失败，界面仍是新值但下次启动会回退，原因: {error}");
             self.error = Some(localized_error(&error));
         }
         cx.notify();
@@ -275,8 +276,14 @@ impl AppShell {
         }
         self.sync_terminal_palette(cx);
         if let Err(error) = self.services.settings_store.save(&self.settings) {
+            log::error!("保存偏好设置失败，界面仍是新值但下次启动会回退，原因: {error}");
             self.error = Some(localized_error(&error));
         } else {
+            log::info!(
+                "偏好设置已保存，语言: {}，日志级别: {}",
+                self.settings.language,
+                self.settings.logs.level.as_str()
+            );
             self.apply_appearance_to_live_panes(cx);
             self.apply_shortcut_settings(cx);
             self.status = Some(rust_i18n::t!("status.ready").to_string());

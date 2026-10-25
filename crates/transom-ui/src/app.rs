@@ -519,8 +519,20 @@ impl AppShell {
             .detach();
         let (catalog, error) = match services.session_store.load() {
             Ok(catalog) => (catalog, None),
-            Err(error) => (SessionCatalog::default(), Some(localized_error(&error))),
+            Err(error) => {
+                log::error!(
+                    "读取会话目录失败，界面按空目录启动，原因: {}",
+                    localized_error(&error)
+                );
+                (SessionCatalog::default(), Some(localized_error(&error)))
+            }
         };
+        log::info!(
+            "会话目录就绪，会话数: {}，分组数: {}，凭据模板数: {}",
+            catalog.sessions.len(),
+            catalog.folders.len(),
+            catalog.identities.len()
+        );
 
         let event_rx = services.event_rx.clone();
         let event_task = cx.spawn_in(window, async move |this, cx| {

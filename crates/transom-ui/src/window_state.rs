@@ -26,11 +26,20 @@ impl AppShell {
                 })
             })
             .collect();
-        let _ = self.services.settings_store.save(&self.settings);
+        if let Err(error) = self.services.settings_store.save(&self.settings) {
+            // 这一处原先是静默丢弃的：保存失败等于下次启动窗口位置与标签组全丢，
+            // 用户只会说"我上次开的那几个标签没了"，日志是唯一能回溯的现场。
+            log::warn!("退出前保存窗口与标签组状态失败，下次启动将沿用上一次的记录，原因: {error}");
+        }
     }
 
     /// 关闭程序前保存状态并退出
     pub(crate) fn close_app(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        log::info!(
+            "应用正在退出，窗格数: {}，标签组数: {}",
+            self.tabs.len(),
+            self.groups.len()
+        );
         self.save_window_state(window);
         cx.quit();
     }

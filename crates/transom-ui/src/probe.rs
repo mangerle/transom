@@ -96,6 +96,10 @@ impl AppShell {
             .filter_map(HostAction::probe_for)
             .collect();
         if probeable.is_empty() {
+            log::warn!(
+                "批量拨测没有可探测的网络主机，请求会话数: {}",
+                requested.len()
+            );
             self.error = Some(rust_i18n::t!("probe.no_target").to_string());
             cx.notify();
             return;
@@ -109,6 +113,7 @@ impl AppShell {
             return;
         }
         let dispatched: Vec<SessionId> = fresh.iter().map(HostAction::session_id).collect();
+        log::info!("派发批量拨测，目标数: {}", dispatched.len());
         if !self.send_command(AppCommand::RunHostActions { actions: fresh }) {
             // 命令通道已关闭：不点亮状态点，否则在途态永远等不到回报。
             return;
@@ -127,25 +132,45 @@ impl AppShell {
     ) {
         // tooltip 里带上目标地址：列表里同名会话不少，光说"可达"定位不到是哪台。
         let target = self.session_target(session_id);
+        let label = self.session_label(session_id);
         let (badge, ttl) = match outcome {
-            HostOutcome::Reachable { latency_ms } => (
-                ProbeBadge::Reachable {
-                    tooltip: format!(
-                        "{target} · {}",
-                        rust_i18n::t!("probe.latency", ms = latency_ms)
-                    )
-                    .into(),
-                },
-                REACHABLE_TTL,
-            ),
-            HostOutcome::Unreachable { error } => (
-                ProbeBadge::Unreachable {
-                    tooltip: format!("{target} · {}", localized_error(&error)).into(),
-                },
-                UNREACHABLE_TTL,
-            ),
+            HostOutcome::Reachable { latency_ms } => {
+                // 可达按 `debug` 记：一次分组拨测上百台，逐条 info 会把有意义
+                // 的生命周期日志冲走；不通的那条才值得 warn。
+                log::debug!("拨测可达，会话: {label}，目标: {target}，耗时 {latency_ms} 毫秒");
+                (
+                    ProbeBadge::Reachable {
+                        tooltip: format!(
+                            "{target} · {}",
+                            rust_i18n::t!("probe.latency", ms = latency_ms)
+                        )
+                        .into(),
+                    },
+                    REACHABLE_TTL,
+                )
+            }
+            HostOutcome::Unreachable { error } => {
+                let reason = localized_error(&error);
+                log::warn!("拨测不可达，会话: {label}，目标: {target}，原因: {reason}");
+                (
+                    ProbeBadge::Unreachable {
+                        tooltip: format!("{target} · {reason}").into(),
+                    },
+                    UNREACHABLE_TTL,
+                )
+            }
         };
         self.set_probe_badge(session_id, badge, Some(ttl), cx);
+    }
+
+    /// 会话名（日志定位用）；查不到时退回 id，保证每条日志都能追到一行记录。
+    fn session_label(&self, session_id: SessionId) -> String {
+        self.catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.name.clone())
+            .unwrap_or_else(|| format!("会话 {session_id}"))
     }
 
     /// 该会话是否有在途拨测。

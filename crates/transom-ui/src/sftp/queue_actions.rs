@@ -47,6 +47,11 @@ impl AppShell {
         };
         let tasks = upload_tasks(paths, &panel.path, panel.resume_enabled, verify)?;
         let count = tasks.len();
+        log::info!(
+            "上传任务入队，窗格: {tab_id}，新增 {count} 项，目标目录: {}，队列现有 {} 项，校验: {verify}",
+            panel.path,
+            panel.queue.len() + count
+        );
         panel.queue.extend(tasks);
         panel.status = Some(rust_i18n::t!("sftp.upload_queued", count = count).to_string());
         cx.notify();
@@ -304,6 +309,10 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
+        // 取消要留在日志里：远端可能已经写出一个半成品文件，事后"文件哪来的"
+        // 只能靠这条记录对上时间线。按 debug 记是因为它由用户逐个点击触发，
+        // 不属于全局生命周期节点。
+        log::debug!("取消传输任务，窗格: {tab_id}，任务: {op_id}");
         let mut should_cancel = false;
         if let Some(panel) = self
             .tabs
@@ -394,6 +403,7 @@ impl AppShell {
 
     /// 暂停全部活动与排队任务；队列收起时由状态栏调用。
     pub(crate) fn sftp_pause_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        log::debug!("暂停整列传输任务，窗格: {tab_id}");
         // 借用 panel 前先收集活动任务 id：发送取消命令需要整体可变借用 self
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
@@ -454,6 +464,7 @@ impl AppShell {
 
     /// 取消全部活动、排队与暂停任务。
     pub(crate) fn sftp_cancel_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        log::debug!("取消整列传输任务，窗格: {tab_id}");
         // 借用 panel 前先收集活动任务 id：发送取消命令需要整体可变借用 self
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self

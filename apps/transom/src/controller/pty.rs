@@ -114,6 +114,12 @@ pub(super) fn open_local_pty(
         .spawn_command(command)
         .map_err(|e| AppError::with_detail(ErrorCode::Io, format!("启动本地 Shell 失败: {e}")))?;
     drop(pair.slave);
+    log::info!(
+        "本地伪终端已就绪，Shell: {shell}，尺寸: {}x{}，工作目录: {:?}",
+        size.cols,
+        size.rows,
+        local.working_dir
+    );
 
     let reader = pair
         .master
@@ -149,7 +155,12 @@ pub(super) fn open_local_pty(
     std::thread::Builder::new()
         .name("transom-pty-wait".into())
         .spawn(move || {
-            let _ = child.wait();
+            // 退出原因必须留痕：界面只看得见"标签自己关了"，到底是被 exit 掉的
+            // 还是被信号打死的，只有这里有答案。
+            match child.wait() {
+                Ok(status) => log::info!("本地 Shell 进程已退出，状态: {status:?}"),
+                Err(error) => log::warn!("等待本地 Shell 进程退出失败，原因: {error}"),
+            }
             let _ = exit_tx.send(());
         })
         .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;

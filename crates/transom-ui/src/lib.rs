@@ -55,8 +55,8 @@ use gpui_kit::component as gpui_component;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppEvent, BackupService, KnownHostsStore, SecretStore, SerialPortProvider,
-    SessionStore, SettingsStore,
+    AppCommand, AppEvent, AppSettings, BackupService, KnownHostsStore, LogLevel, SecretStore,
+    SerialPortProvider, SessionStore, SettingsStore,
 };
 
 #[derive(Clone)]
@@ -74,7 +74,15 @@ pub struct UiServices {
 }
 
 pub fn run(services: UiServices) {
-    let settings = services.settings_store.load().unwrap_or_default();
+    // 设置文件读不出来时不能把用户关在外面：按默认值起界面，但一定要在日志里留痕，
+    // 否则"设置莫名其妙回到默认"这类报障完全没有线索可查。
+    let settings = match services.settings_store.load() {
+        Ok(settings) => settings,
+        Err(error) => {
+            log::error!("读取设置失败，本次启动按默认配置运行，原因: {error}");
+            AppSettings::default()
+        }
+    };
     let language = settings.language.clone();
     // 应用装配日志时还不知道配置值，这里补上用户设的级别。
     //
@@ -82,7 +90,7 @@ pub fn run(services: UiServices) {
     // 否则用户改一次配置就把现场冲掉了。设置页里显式改级别走的是另一条路径
     // （直接 `log::set_max_level`），代表用户最新意图，不再被环境变量否决。
     log::set_max_level(
-        transom_core::LogLevel::from_env()
+        LogLevel::from_env()
             .unwrap_or(settings.logs.level)
             .to_filter(),
     );
