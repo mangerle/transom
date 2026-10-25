@@ -609,7 +609,7 @@ impl AppShell {
                 return;
             }
             AppEvent::DeepLink { request } => {
-                self.handle_deep_link(request, cx);
+                self.handle_deep_link(request, window, cx);
                 return;
             }
         }

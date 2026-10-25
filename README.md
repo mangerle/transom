@@ -84,20 +84,31 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 
 `ssh-agent` authentication is Unix-only today; terminal hyperlinks open via `xdg-open`.
 
-### Desktop integration (`ssh://` links)
+### Desktop integration (default terminal, `ssh://` links)
 
-On Linux, Transom can serve `ssh://[user@]host[:port]` links from a browser or another tool, and it runs as a single instance: a second launch hands the address to the already running window through a private socket under `$XDG_RUNTIME_DIR/transom` and exits immediately.
+On Linux, Transom can serve `ssh://[user@]host[:port]` links from a browser or another tool, and it runs as a single instance: a second launch hands the request to the already running window through a private socket under `$XDG_RUNTIME_DIR/transom` and exits immediately.
 
-Registration is a manual step, because most distributions already map `ssh://` to a terminal emulator and silently stealing that handler would change behavior outside this app:
+**Set as default terminal** — Settings → General → Desktop Integration (Linux only). The switch is opt-in because most distributions already map the terminal shortcut and `ssh://` to an existing emulator, and silently stealing that would change behavior outside this app. Turning it on writes, under your user directories only:
+
+- `~/.local/share/applications/com.github.mangerle.transom.desktop` (absolute `Exec`, so any launch path works);
+- `~/.local/share/icons/hicolor/scalable/apps/com.github.mangerle.transom.svg` — the icon ships as a single scalable vector, so the launcher renders it with librsvg at any size and DPI with no grainy upscaling;
+- `com.github.mangerle.transom.desktop` prepended to `~/.config/xdg-terminals.list`, leaving every other preference line untouched.
+
+This follows the freedesktop Default Terminal Execution spec, which GNOME (including Ubuntu) routes both the terminal keyboard shortcut and the file manager "Open in Terminal" through (verified against `nautilus 50.2.2`, which calls `xdg-terminal-exec --dir=%f`). The entry declares `X-TerminalArgDir=--dir=`, so the target directory arrives as an explicit option and both paths work: a cold start opens a terminal there, and when an instance is already running the second process forwards the directory over the single-instance socket so the existing window opens a new local tab in it.
+
+Turning the switch off removes only our own preference line, renames the desktop entry to `.disabled` (reversible, nothing of yours is destroyed) and drops the icon; the previous default is not "restored" because the spec keeps no snapshot of it.
+
+`ssh://` registration stays a manual step unless you use the switch:
 
 ```bash
-mkdir -p ~/.local/share/applications
+mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
 cp packaging/linux/com.github.mangerle.transom.desktop ~/.local/share/applications
+cp logo/transom-logo.svg ~/.local/share/icons/hicolor/scalable/apps/com.github.mangerle.transom.svg
 update-desktop-database ~/.local/share/applications
 xdg-mime default com.github.mangerle.transom.desktop x-scheme-handler/ssh   # optional: make it the default
 ```
 
-A deep link opens a new tab in the existing window, connecting without saving a session. Bringing an already minimized window to the foreground is **not** implemented — GPUI exposes no raise/focus API on Linux.
+A deep link opens a new tab in the existing window, connecting without saving a session. On wake-up, Transom requests window activation on both levels: the app-level `App::activate` (a no-op on Linux; it is what macOS/Windows use) and the window-level `activate_window`, which sends `_NET_ACTIVE_WINDOW` on X11 and asks for an `xdg_activation` token on Wayland. Focus is the compositor's call, and the outcome is verified per platform: on Ubuntu GNOME under Wayland, `activate_window` brings an existing window forward **and** restores a minimized one — Wayland has no un-minimize primitive (`xdg_toplevel.set_minimized` is one-way), so recovery rides on that same activation request. Minimizing itself uses `Window::minimize_window` (what the title bar button calls). On X11 the request is `_NET_ACTIVE_WINDOW`, which has not been tested separately on this machine.
 
 ## Build from source
 
@@ -154,7 +165,7 @@ cargo test
 
 ## Roadmap
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 115 evaluated capabilities with per-item completion status. Currently in flight: ProxyJump bastion chaining, broadcast input across panes, a compose bar, and per-environment session colors. Already tracked as gaps: SOCKS5 accepts unauthenticated proxies only, and no signed installers yet.
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 115 evaluated capabilities with per-item completion status. Currently in flight: ProxyJump bastion chaining, broadcast input across panes, a compose bar, and per-environment session colors. Already tracked as gaps: SOCKS5 accepts unauthenticated proxies only, no signed installers yet, and a request to "run this command in a terminal" (`xdg-terminal-exec -- <cmd>`) opens Transom without running the command — the launcher injects its default `-e <cmd>` for entries that don't declare `X-TerminalArgExec`, and that semantic is not implemented.
 
 ## Contributing
 

@@ -172,10 +172,21 @@ impl AppShell {
     /// 与 Quick Connect 共用 `quick_connect_session`：浏览器点来的 `ssh://`
     /// 地址和面板里手敲的主机串必须按同一套规则解析，否则会出现"这里能连、
     /// 那里连不上"的割裂行为。深链同样是临时会话，不落 catalog。
-    /// `cx.activate` 在 Linux 是空操作（gpui 未实现平台唤起），仅 macOS/
-    /// Windows 生效；这里调用它是为了在支持的平台上不留死角。
-    pub(crate) fn handle_deep_link(&mut self, request: DeepLinkRequest, cx: &mut Context<Self>) {
+    /// `cx.activate` 是平台级应用激活，在 Linux 只有日志（gpui 的空实现），
+    /// 服务 macOS/Windows；真正能把窗口提到前台的是窗口级 `activate_window`：
+    /// X11 后端发 `_NET_ACTIVE_WINDOW` 客户端消息，Wayland 后端经
+    /// `xdg_activation` 申请 token。两者都调，覆盖各自平台。
+    ///
+    /// 实测（2026-10-25，Ubuntu GNOME/Wayland）：窗口级激活能把已运行的窗口
+    /// 调到前台。gpui 上游注释担心"自激活多半被合成器拒绝"，Mutter 实际接受。
+    pub(crate) fn handle_deep_link(
+        &mut self,
+        request: DeepLinkRequest,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.activate(true);
+        window.activate_window();
         match request {
             DeepLinkRequest::Ssh { url } => self.connect_quick_host(&url, cx),
             DeepLinkRequest::Dir { path } => self.spawn_local_terminal(Some(path), cx),

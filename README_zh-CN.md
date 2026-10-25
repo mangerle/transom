@@ -84,20 +84,31 @@
 
 `ssh-agent` 认证目前仅支持 Unix；终端超链接通过 `xdg-open` 打开。
 
-### 桌面集成（`ssh://` 链接）
+### 桌面集成（默认终端、`ssh://` 链接）
 
-Linux 上 Transom 可以接管浏览器或其他工具发出的 `ssh://[user@]host[:port]` 链接，并以单实例方式运行：第二次启动会把地址通过 `$XDG_RUNTIME_DIR/transom` 下的私有套接字交给已在运行的窗口，然后立即退出。
+Linux 上 Transom 可以接管浏览器或其他工具发出的 `ssh://[user@]host[:port]` 链接，并以单实例方式运行：第二次启动会把请求通过 `$XDG_RUNTIME_DIR/transom` 下的私有套接字交给已在运行的窗口，然后立即退出。
 
-注册这一步刻意留给用户手动执行——多数发行版已把 `ssh://` 绑给某个终端模拟器，应用私自改写默认处理程序会影响到本项目之外的行为：
+**设为默认终端**——设置 → 通用 → 桌面集成（仅 Linux）。这一步刻意做成显式开关：多数发行版已把终端快捷键与 `ssh://` 绑给既有终端，私自抢占会影响本项目之外的行为。打开后只往当前用户目录写三样东西：
+
+- `~/.local/share/applications/com.github.mangerle.transom.desktop`（`Exec` 写绝对路径，任何安装位置都能解析）；
+- `~/.local/share/icons/hicolor/scalable/apps/com.github.mangerle.transom.svg`——图标只随一份矢量 SVG，桌面环境用 librsvg 按目标尺寸出图，任何大小与 DPI 都不会出现放大颗粒感；
+- 把本应用的条目 ID 置顶写入 `~/.config/xdg-terminals.list`，其余偏好行原样保留。
+
+这套做法遵循 freedesktop 的默认终端执行规范，GNOME（含 Ubuntu）的终端快捷键与文件管理器"在终端打开"都走该规范（实测 `nautilus 50.2.2` 调用 `xdg-terminal-exec --dir=%f`）。条目声明 `X-TerminalArgDir=--dir=`，目标目录以显式选项传入，因此两条路径都成立：冷启动直接在该目录开终端；已有实例在跑时，第二个进程把目录经单实例套接字转交，既有窗口新开一个本地终端标签。
+
+关闭开关只摘除我们自己的偏好行、把桌面条目改名为 `.disabled`（可逆，不销毁用户数据）并删除图标；不"恢复注册前的默认终端"——规范里没有旧优先级快照，伪造恢复反而危险。
+
+`ssh://` 的注册在不使用开关时仍留给手动步骤：
 
 ```bash
-mkdir -p ~/.local/share/applications
+mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps
 cp packaging/linux/com.github.mangerle.transom.desktop ~/.local/share/applications
+cp logo/transom-logo.svg ~/.local/share/icons/hicolor/scalable/apps/com.github.mangerle.transom.svg
 update-desktop-database ~/.local/share/applications
 xdg-mime default com.github.mangerle.transom.desktop x-scheme-handler/ssh   # 可选：设为默认
 ```
 
-深链会在既有窗口里新开一个标签并直接连接，不保存会话。把已最小化的窗口提到前台**尚未实现**：GPUI 在 Linux 没有提供窗口 raise/焦点接口。
+深链会在既有窗口里新开一个标签并直接连接，不保存会话。唤起时 transom 会同时请求两级激活：平台级 `App::activate`（Linux 只有日志，真正生效的是 macOS/Windows）与窗口级 `activate_window`——X11 后端发 `_NET_ACTIVE_WINDOW`，Wayland 后端经 `xdg_activation` 申请 token。焦点归属由合成器裁定，效果按平台分别核实：Ubuntu GNOME 的 Wayland 会话实测能把已在运行的窗口调到前台。窗口可以最小化（`Window::minimize_window`，标题栏按钮就用它）；Wayland 没有"取消最小化"的原语（`xdg_toplevel.set_minimized` 是单向请求），实测恢复走的就是上面同一个激活请求——已最小化的窗口能被重新调到前台。X11 侧发 `_NET_ACTIVE_WINDOW`，未在本机单独实测。
 
 ## 源码构建
 
@@ -154,7 +165,7 @@ cargo test
 
 ## 路线图
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 115 项评估过的能力及其完成状态。推进中的项目：跳板机 ProxyJump 链式隧道、跨窗格广播输入、撰写窗格、以及会话环境色标识。已明确记录的缺口：SOCKS5 目前仅支持无认证代理，且尚未提供签名安装包。
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 115 项评估过的能力及其完成状态。推进中的项目：跳板机 ProxyJump 链式隧道、跨窗格广播输入、撰写窗格、以及会话环境色标识。已明确记录的缺口：SOCKS5 目前仅支持无认证代理；尚未提供签名安装包；外部工具经 `xdg-terminal-exec -- <命令>` 请求"在终端里执行这条命令"时，transom 只会打开终端而不执行该命令（启动器按未声明 `X-TerminalArgExec` 的条目注入默认 `-e <命令>`，transom 未实现该语义）。
 
 ## 参与贡献
 
