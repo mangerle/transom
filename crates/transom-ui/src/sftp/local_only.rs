@@ -58,6 +58,8 @@ impl AppShell {
         );
 
         self.tabs[index].sftp = Some(SftpPanelState {
+            open: true,
+            overlay: super::DropOverlayState::default(),
             path: String::new(),
             path_input,
             name_input,

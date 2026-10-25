@@ -20,6 +20,7 @@ mod local_only;
 mod local_pane_view;
 mod modals;
 mod nav_actions;
+mod overlay;
 mod panel_view;
 mod preview;
 mod preview_actions;
@@ -35,6 +36,7 @@ mod sync_modal;
 pub(crate) use self::editor_close::PendingEditorClose;
 pub(crate) use self::editor_drag_tracker::EditorDragTracker;
 pub(crate) use self::editor_panel::EditorPanelState;
+pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;
 use self::preview::SftpPreviewState;
 pub(crate) use self::quick_paths::LocalQuickPaths;
@@ -132,6 +134,15 @@ pub(crate) enum SftpActivePane {
 }
 
 pub(crate) struct SftpPanelState {
+    /// 面板列是否展开显示。
+    ///
+    /// 设计原理（Why）：`tab.sftp` 是 `Some` 只代表传输队列与目录状态存在，
+    /// 不再等于"面板开着"——拖文件到终端上传要在不打开面板的前提下也持有队列，
+    /// 因此建出状态、把进度改由终端右下角浮层呈现。凡是决定"要不要渲染面板列/
+    /// 活动栏是否高亮"的地方一律读本字段，而不是读 `Option` 本身。
+    pub(crate) open: bool,
+    /// 终端右下角上传浮层的状态（面板未展开时用它承接进度可见性）。
+    pub(crate) overlay: DropOverlayState,
     pub(crate) path: String,
     pub(crate) path_input: Entity<InputState>,
     pub(crate) name_input: Entity<InputState>,

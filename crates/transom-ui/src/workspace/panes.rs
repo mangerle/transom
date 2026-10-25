@@ -289,10 +289,15 @@ impl AppShell {
             return div().into_any_element();
         };
         if let Some(terminal) = self.tabs[index].terminal.clone() {
+            // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的
+            // 最小外包块，绝对定位因此不受侧栏与面板列宽度变化的影响。
+            let overlay = self.render_drop_overlay(tab_id, p, cx);
             div()
                 .flex_1()
+                .relative()
                 .overflow_hidden()
                 .child(terminal)
+                .children(overlay)
                 .into_any_element()
         } else {
             self.render_tab_status(index, window, cx, p)

@@ -259,6 +259,11 @@ impl AppShell {
                 }
                 // 进度事件高频到达：只有当前可见标签的传输队列在显示进度时
                 // 才值得整帧重绘外壳；后台标签的数据照常更新，切回时自然呈现。
+                if applied {
+                    // 浮层的速率与重绘按"窗格是否真的在屏上"判断，比只看活动窗格更宽：
+                    // 分屏里两个窗格可以同时显示各自的浮层。
+                    self.note_drop_overlay_progress(tab_id, cx);
+                }
                 if applied && self.active_tab == Some(tab_id) && !self.immersive {
                     cx.notify();
                 }
@@ -338,6 +343,8 @@ impl AppShell {
                         refresh = Some(panel.path.clone());
                     }
                 }
+                // 任务落定，浮层据此决定继续常驻还是进入 5 秒停留窗口。
+                self.sync_drop_overlay(tab_id, cx);
                 if let Some((dir, file_name, bytes)) = notify_info {
                     let action = match dir {
                         TransferDirection::Upload => "上传完成",
@@ -488,6 +495,7 @@ impl AppShell {
                         panel.error = Some(err_msg);
                     }
                 }
+                self.sync_drop_overlay(tab_id, cx);
                 if let Some((file_name, err_msg)) = failed_notify {
                     send_desktop_notification(
                         "Transom SFTP 传输失败",

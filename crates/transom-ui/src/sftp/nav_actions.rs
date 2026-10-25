@@ -1,7 +1,8 @@
 //! SFTP 双栏目录导航、路径跳转、终端联动与过滤控制方法。
 
 use super::{
-    LocalQuickPaths, SftpActivePane, SftpPanelState, extract_candidate_path, parent_remote,
+    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpPanelState, extract_candidate_path,
+    parent_remote,
 };
 use crate::app::{AppShell, TabStatus};
 use crate::keymap;
@@ -44,10 +45,31 @@ impl AppShell {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
             return;
         };
-        if self.tabs[index].sftp.is_some() {
-            self.tabs[index].sftp = None;
-            cx.notify();
-            return;
+        // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，
+        // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
+        match self.tabs[index].sftp.as_ref().map(|panel| panel.open) {
+            Some(true) => {
+                self.tabs[index].sftp = None;
+                cx.notify();
+                return;
+            }
+            Some(false) => {
+                let path = self.tabs[index]
+                    .sftp
+                    .as_ref()
+                    .map(|panel| panel.path.clone())
+                    .unwrap_or_else(|| ".".to_string());
+                if let Some(panel) = self.tabs[index].sftp.as_mut() {
+                    panel.open = true;
+                }
+                // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。
+                self.sync_drop_overlay(tab_id, cx);
+                self.spawn_local_dir_refresh(tab_id, None, cx);
+                self.request_sftp_list(tab_id, path, cx);
+                cx.notify();
+                return;
+            }
+            None => {}
         }
         let is_local = matches!(&self.tabs[index].session.connection, Connection::Local(_));
         let is_ssh = matches!(&self.tabs[index].session.connection, Connection::Ssh(_));
@@ -65,18 +87,23 @@ impl AppShell {
             cx.notify();
             return;
         }
-        self.open_sftp_panel(tab_id, index, window, cx);
+        self.build_sftp_panel(tab_id, index, true, window, cx);
     }
 
-    /// 为已连接且已就绪的 SSH 标签建立 SFTP 面板（输入框、回车订阅与两侧初始列表）。
+    /// 为已连接且已就绪的 SSH 标签建立 SFTP 面板状态（输入框、回车订阅与列表）。
     ///
     /// 从 `toggle_sftp` 里抽出来是因为拖拽上传也要"没有面板就先建一个"：
     /// 那条路径不能走 toggle（会把已打开的面板关掉），而面板构造涉及十几个字段
     /// 与两条回车订阅，复制一份必然与这里走偏。
-    pub(crate) fn open_sftp_panel(
+    ///
+    /// `open` 决定建出来就展开还是只持有状态：`false` 供拖拽上传使用，此时不发
+    /// 列目录请求（隐藏的面板没人看，白跑一趟远端 `ls` 与本地目录扫描），
+    /// 等用户真去展开面板时再补上。
+    pub(crate) fn build_sftp_panel(
         &mut self,
         tab_id: TabId,
         index: usize,
+        open: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -123,6 +150,8 @@ impl AppShell {
         let local_filter_input = sftp_text_input(window, cx, "", "过滤本地文件 (模糊匹配名称)...");
 
         self.tabs[index].sftp = Some(SftpPanelState {
+            open,
+            overlay: DropOverlayState::default(),
             path: initial_remote_path.clone(),
             path_input,
             name_input,
@@ -164,9 +193,11 @@ impl AppShell {
             hover_preview: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         });
-        // 本地栏初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
-        self.spawn_local_dir_refresh(tab_id, None, cx);
-        self.request_sftp_list(tab_id, initial_remote_path, cx);
+        if open {
+            // 本地栏初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
+            self.spawn_local_dir_refresh(tab_id, None, cx);
+            self.request_sftp_list(tab_id, initial_remote_path, cx);
+        }
     }
 
     pub(crate) fn request_sftp_list(

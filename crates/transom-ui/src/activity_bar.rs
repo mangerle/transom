@@ -237,7 +237,7 @@ impl AppShell {
             ActivityItemId::Sftp => self
                 .active_tab
                 .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
-                .is_some_and(|tab| tab.sftp.is_some()),
+                .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open)),
             ActivityItemId::Keys => self.settings_modal.key_wizard.is_some(),
             _ => false,
         }

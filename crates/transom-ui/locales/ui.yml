@@ -715,6 +715,45 @@ sftp:
   transferring:
     en: Transferring
     zh-CN: 传输中
+  paused:
+    en: Paused
+    zh-CN: 暂停
+  completed:
+    en: Completed
+    zh-CN: 已完成
+  cancelled:
+    en: Cancelled
+    zh-CN: 已取消
+  overlay_target:
+    en: Upload target folder
+    zh-CN: 上传目标目录
+  overlay_summary:
+    en: "Uploading %{busy}/%{total} item(s)"
+    zh-CN: "上传中 %{busy}/%{total} 项"
+  overlay_expand:
+    en: Show or hide transfer details
+    zh-CN: 展开或收起逐项明细
+  overlay_dismiss:
+    en: Dismiss this overlay
+    zh-CN: 收起浮层
+  overlay_pause_all:
+    en: Pause all
+    zh-CN: 全部暂停
+  overlay_cancel_all:
+    en: Cancel all
+    zh-CN: 全部取消
+  overlay_pause:
+    en: Pause this item
+    zh-CN: 暂停此项
+  overlay_resume:
+    en: Resume this item
+    zh-CN: 继续此项
+  overlay_cancel:
+    en: Cancel this item
+    zh-CN: 取消此项
+  overlay_remove:
+    en: Remove this record
+    zh-CN: 移除记录
   folder_tag:
     en: DIR
     zh-CN: 目录

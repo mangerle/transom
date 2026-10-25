@@ -54,17 +54,18 @@ impl AppShell {
             return;
         }
 
-        // 面板已存在时沿用它当前的远端目录（用户看到哪儿就传到哪儿）；
-        // 不存在则先建面板，建面板会按终端标题推断初始目录并发起首次列目录。
+        // 面板已存在时沿用它当前的远端目录（用户看到哪儿就传到哪儿）；不存在则
+        // 建一份隐藏状态：队列、续传与校验都照旧，只是进度改由终端右下角浮层呈现，
+        // 不再为了传一个文件而弹开一整列文件管理器。
         if self.tabs[index].sftp.is_none() {
-            self.open_sftp_panel(tab_id, index, window, cx);
+            self.build_sftp_panel(tab_id, index, false, window, cx);
         }
         if let Err(message) = self.enqueue_uploads(tab_id, paths, cx) {
             self.error = Some(message);
             cx.notify();
             return;
         }
-        cx.notify();
+        self.show_drop_overlay(tab_id, cx);
     }
 }
 

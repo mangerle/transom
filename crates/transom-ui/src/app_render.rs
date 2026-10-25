@@ -38,10 +38,11 @@ impl Render for AppShell {
         if self.sidebar_visible {
             sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
         }
+        // 状态存在不等于面板展开：拖拽上传留下的隐藏状态不该把面板列撑出来。
         let show_sftp = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
-            .is_some_and(|tab| tab.sftp.is_some());
+            .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open));
         let sftp_local_only = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))

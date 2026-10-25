@@ -146,6 +146,26 @@ impl AppShell {
         self.groups.iter().position(|group| group.contains(tab_id))
     }
 
+    /// 该窗格此刻是否正被渲染：属于活动组、在分割树里，且没被"单窗格最大化"挡在后面。
+    ///
+    /// 传输进度这类高频事件据此决定要不要整帧重绘外壳：后台标签与被最大化隐藏的
+    /// 兄弟窗格重绘了也看不见，白付一次布局成本。
+    pub(crate) fn is_rendered_pane(&self, tab_id: TabId) -> bool {
+        let (Some(group_index), Some(active_index)) =
+            (self.group_index_for_tab(tab_id), self.active_group_index())
+        else {
+            return false;
+        };
+        if group_index != active_index {
+            return false;
+        }
+        let group = &self.groups[group_index];
+        match group.zoomed {
+            Some(zoomed) => zoomed == tab_id,
+            None => group.root.contains(tab_id),
+        }
+    }
+
     pub(crate) fn active_group_index(&self) -> Option<usize> {
         self.active_tab
             .and_then(|tab_id| self.group_index_for_tab(tab_id))
