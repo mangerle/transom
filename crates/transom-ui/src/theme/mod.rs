@@ -426,6 +426,124 @@ mod tests {
         }
     }
 
+    /// colors 键名必须命中 gpui-kit 的 serde 契约名：`ThemeConfigColors` 没有
+    /// `deny_unknown_fields`，错名会被静默丢掉，再按模式落到 `ThemeColor::dark()
+    /// /light()` 兜底，两边都没有的键最终是透明色，表现为"该角色永远不跟随主题"
+    /// 且没有任何报错。出厂两套主题就栽在 8 个错名上（用的是 `Theme` 的 Rust 字段
+    /// 名而不是 JSON 键名，如 `drag_border` 应为 `drag.border`、
+    /// `progress_bar.background` 应为 `progress.bar.background`）。
+    ///
+    /// 判定方式是把主题反序列化成 `ThemeConfig` 再序列化回来取键名差集：上游增删
+    /// 键位时测试自动反映，无需手抄 140 个 rename 名。
+    #[test]
+    fn builtin_theme_color_keys_are_recognized_by_gpui() {
+        for content in builtin::ALL {
+            let doc = parse(content);
+            for theme in doc["themes"].as_array().expect("themes 应为数组") {
+                let config: ThemeConfig = serde_json::from_value(theme.clone())
+                    .expect("内置主题应能按 gpui-kit 契约反序列化");
+                let round_trip = serde_json::to_value(&config).expect("ThemeConfig 应可序列化");
+                let source = theme["colors"].as_object().expect("colors 应为对象");
+                let known = round_trip["colors"]
+                    .as_object()
+                    .expect("回写 colors 应为对象");
+                let unknown: Vec<&String> = source
+                    .keys()
+                    .filter(|key| !matches!(known.get(*key), Some(value) if !value.is_null()))
+                    .collect();
+                assert!(
+                    unknown.is_empty(),
+                    "主题 {} 的 colors 键名不被 gpui-kit 识别: {unknown:?}",
+                    config.name
+                );
+            }
+        }
+    }
+
+    /// sRGB 的 CIELAB 明度 L*，带 alpha 的十六进制只看前 6 位。
+    ///
+    /// 为什么用 L* 差而不是 WCAG 对比度比值：比值在近黑与近白两端压缩严重，同一个
+    /// 比值在浅色区明显、在深色区几乎不可辨——Islands 亮暗两套主题的 border 换算成
+    /// 比值都接近 1.1，但只有浅色那套看得见。L* 差是跨明暗可比的感知量。
+    fn l_star(color: &str) -> f64 {
+        let digits = color.trim_start_matches('#');
+        let body = &digits[..digits.len().min(6)];
+        let channel = |offset: usize| -> f64 {
+            let raw =
+                u8::from_str_radix(&body[offset..offset + 2], 16).expect("主题色应为十六进制");
+            let value = f64::from(raw) / 255.0;
+            if value <= 0.04045 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let y = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+        if y > 0.008_856 {
+            116.0 * y.cbrt() - 16.0
+        } else {
+            903.3 * y
+        }
+    }
+
+    /// 中性色阶档位契约：结构线必须与它围合的面拉开可辨差，铬件必须与面板底分档。
+    ///
+    /// 阈值取自 gpui-kit 自带 Default Dark 的层级关系（面板 2.7 / 铬件 7.7 /
+    /// 结构线 15.2 / 输入框线 19.4，即线比面亮 +12.5），换算成下限后浅色减半——
+    /// 组件库的语法是"面少线多"，分隔靠线而不是靠加亮的面，内置主题必须供得起
+    /// 这条线。输入框线单独一档只在深色校验：浅色主题两者同值时仍有 4 档以上的
+    /// 底色差兜底，强行分档反而要自造上游没有的颜色。
+    ///
+    /// 只校验内置主题：用户目录里的主题由用户自己负责，越界判定只会把好主题拒掉。
+    #[test]
+    fn builtin_neutral_ramp_keeps_separators_visible() {
+        let mut violations: Vec<String> = Vec::new();
+        for content in builtin::ALL {
+            let doc = parse(content);
+            for theme in doc["themes"].as_array().expect("themes 应为数组") {
+                let name = theme["name"].as_str().unwrap_or_default();
+                let dark = theme["mode"] == "dark";
+                let colors = &theme["colors"];
+                let tone = |key: &str| -> Option<f64> { colors[key].as_str().map(l_star) };
+                let (Some(line), Some(panel), Some(raised), Some(input), Some(chrome)) = (
+                    tone("border"),
+                    tone("sidebar.background"),
+                    tone("popover.background"),
+                    tone("input.border"),
+                    tone("title_bar.background"),
+                ) else {
+                    violations.push(format!("{name}: 缺少档位校验所需的中性色键"));
+                    continue;
+                };
+                let line_gap = if dark { 8.0 } else { 4.0 };
+                let chrome_min = if dark { 3.0 } else { 1.5 };
+                for (label, gap) in [
+                    ("结构线 vs 侧栏底", (line - panel).abs()),
+                    ("结构线 vs 弹窗底", (line - raised).abs()),
+                ] {
+                    if gap < line_gap {
+                        violations.push(format!("{name}: {label} ΔL*={gap:.1} 低于 {line_gap:.1}"));
+                    }
+                }
+                let input_gap = input - line;
+                if dark && input_gap < 3.0 {
+                    violations.push(format!("{name}: 输入框线未与结构线分档 ΔL*={input_gap:.1}"));
+                }
+                let chrome_gap = (chrome - panel).abs();
+                if !(chrome_min..=9.0).contains(&chrome_gap) {
+                    violations.push(format!(
+                        "{name}: 铬件与面板底差 ΔL*={chrome_gap:.1} 超出 [{chrome_min:.1}, 9.0]"
+                    ));
+                }
+            }
+        }
+        assert!(
+            violations.is_empty(),
+            "内置主题中性色阶档位不达标：\n{}",
+            violations.join("\n")
+        );
+    }
+
     /// 注册逻辑本体：不依赖 App，直接验证 load_themes_from_str 能把内置主题
     /// 装进注册表并被 sorted_themes 列出（复现真实启动序列的核心步骤）。
     #[test]
