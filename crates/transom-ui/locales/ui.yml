@@ -1426,15 +1426,42 @@ settings:
   remember_window_bounds:
     en: Remember Window Size & Position
     zh-CN: 记忆窗口大小与位置
-  restore_previous_tabs:
-    en: Restore Previous Session Tabs
-    zh-CN: 启动时恢复上次会话标签页
+  startup_group:
+    en: Startup
+    zh-CN: 启动
+  startup_tabs:
+    en: Tabs On Launch
+    zh-CN: 启动时打开
+  startup_tabs_desc:
+    en: "Applies on next launch. Restoring reopens the groups and split layout from the last clean exit; New Local Terminal starts fresh instead of restoring, so no duplicate tab is added."
+    zh-CN: "下次启动生效。恢复上次会按上次正常退出时的标签组与分屏形状重开；新建本地终端不叠加恢复结果，而是只开这一个，所以不会出现凭空多出的标签。"
+  startup_restore_last:
+    en: Restore last tabs
+    zh-CN: 恢复上次标签
+  startup_empty:
+    en: Empty workspace
+    zh-CN: 空工作台
+  startup_local:
+    en: New local terminal
+    zh-CN: 新建本地终端
+  sidebar_startup:
+    en: Session List Visibility
+    zh-CN: 会话列表展开状态
+  sidebar_startup_desc:
+    en: "Applies on next launch. Remember last keeps whatever you had when the app quit; Always show is the escape hatch for a list you collapsed once and never got back."
+    zh-CN: "下次启动生效。记住上次沿用退出前的状态；选始终展开可摆脱“某次手动收起后每次都收起”，选始终收起则每次从工作台开始。"
+  sidebar_remember:
+    en: Remember last
+    zh-CN: 记住上次
+  sidebar_show:
+    en: Always show
+    zh-CN: 始终展开
+  sidebar_hide:
+    en: Always hide
+    zh-CN: 始终收起
   remember_window_bounds_desc:
     en: Restore window size and position from the last session.
     zh-CN: 重新打开时恢复上次关闭时的窗口尺寸和屏幕坐标。
-  restore_previous_tabs_desc:
-    en: Reconnect and reopen the tabs from the last session on startup.
-    zh-CN: 启动时自动重连并打开上次退出时的终端会话。
   bell_style_desc:
     en: How the terminal rings when a bell event occurs.
     zh-CN: 终端响铃事件的提示方式：静默、屏幕闪烁或系统提示音。

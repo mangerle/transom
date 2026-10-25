@@ -14,6 +14,10 @@ impl AppShell {
             self.settings.window.window_x = Some(bounds.origin.x / px(1.0));
             self.settings.window.window_y = Some(bounds.origin.y / px(1.0));
         }
+        // 会话列表展开状态与标签组、窗口几何同属"上次状态"，一起在退出时落盘：
+        // 崩溃后三者一起退到上次正常退出，不会出现标签组是旧的、侧栏是新的那种
+        // 半新半旧；也不必为一次点击写一次配置文件。
+        self.settings.window.last_sidebar_visible = self.sidebar_visible;
         self.settings.window.previous_tab_sessions = self.tabs.iter().map(session_key).collect();
         self.settings.window.previous_tab_groups = self
             .groups

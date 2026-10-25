@@ -70,8 +70,9 @@ pub use session::{
 };
 pub use settings::{
     AppSettings, AppearanceSettings, AuditSettings, BellStyle, HistorySettings, LogLevel,
-    LogSettings, PanelSide, SavedLayout, SavedTabGroup, SftpSettings, ShortcutSettings, Snippet,
-    SnippetSettings, SplitAxis, UiDensity, UiThemeMode, WindowSettings,
+    LogSettings, PanelSide, SavedLayout, SavedTabGroup, SftpSettings, ShortcutSettings,
+    SidebarStartup, Snippet, SnippetSettings, SplitAxis, StartupTabs, UiDensity, UiThemeMode,
+    WindowSettings,
 };
 pub use sftp::{
     PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation,

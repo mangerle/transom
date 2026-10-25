@@ -72,9 +72,20 @@ pub struct WindowSettings {
     /// 是否记忆窗口大小与位置
     #[serde(default = "default_true")]
     pub remember_window_bounds: bool,
-    /// 是否在启动时恢复上次会话标签页
+    /// 启动时标签区开什么。取代早期的 `restore_previous_tabs` 布尔（已废弃：文件里
+    /// 残留该键会被忽略，下次保存自然消失）。
+    #[serde(default)]
+    pub startup_tabs: StartupTabs,
+    /// 启动时会话列表（侧栏）的展开策略。
+    #[serde(default)]
+    pub sidebar_startup: SidebarStartup,
+    /// 上次退出时会话列表是否展开。
+    ///
+    /// 只在 `sidebar_startup = RememberLast` 时参与决策，由退出流程与窗口几何、
+    /// 标签组同批写入：它属于"上次状态"而不是"配置意图"，所以不随每次点击落盘，
+    /// 丢失边界也与标签组一致（崩溃后一起退到上次正常退出）。
     #[serde(default = "default_true")]
-    pub restore_previous_tabs: bool,
+    pub last_sidebar_visible: bool,
     /// 上次打开的会话 ID 列表
     #[serde(default)]
     pub previous_tab_sessions: Vec<String>,
@@ -84,6 +95,127 @@ pub struct WindowSettings {
     /// 工具面板（SFTP/转发）停靠方向；旧配置缺省按右侧。
     #[serde(default)]
     pub sftp_panel_side: PanelSide,
+}
+
+/// 启动时标签区的内容。
+///
+/// 为什么是枚举而不是"恢复上次"+"开本地终端"两个布尔：两个旋钮会出现
+/// "恢复出三个标签后再叠一个本地终端"这种没人想要的组合；三档互斥后每个取值
+/// 都是一句能说清的话，也不存在优先级要解释。
+///
+/// 反序列化沿用 [`LogLevel`] 的口径：设置文件属外部输入，认不出的值退回默认档，
+/// 而不是让整个 `settings.json` 加载失败、把所有设置一起丢掉。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupTabs {
+    /// 恢复上次退出时打开的标签组（默认，等价于早期布尔 `true`）。
+    #[default]
+    RestoreLast,
+    /// 启动后留空工作台（等价于早期布尔 `false`）。
+    EmptyWorkspace,
+    /// 每次启动新建一个本地终端标签，不恢复上次标签。
+    NewLocalTerminal,
+}
+
+impl StartupTabs {
+    /// 全部档位，供设置页分段按钮遍历。
+    pub const ALL: [Self; 3] = [
+        Self::RestoreLast,
+        Self::EmptyWorkspace,
+        Self::NewLocalTerminal,
+    ];
+
+    /// 稳定小写名：设置文件里的取值。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RestoreLast => "restore_last",
+            Self::EmptyWorkspace => "empty_workspace",
+            Self::NewLocalTerminal => "new_local_terminal",
+        }
+    }
+
+    /// 解析设置里的档位；无法识别时退回默认档。
+    pub fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "empty_workspace" | "empty" | "none" => Self::EmptyWorkspace,
+            "new_local_terminal" | "local" => Self::NewLocalTerminal,
+            _ => Self::RestoreLast,
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for StartupTabs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Ok(Self::parse(&raw))
+    }
+}
+
+/// 启动时会话列表（侧栏）的展开策略。
+///
+/// 为什么把"记住上次"做成一个档位而不是再加一个开关：单靠"记住"会让用户被自己的
+/// 上一次行为绑架——某次手动收起后，每次启动都收起且无法解释；而单靠"固定默认值"
+/// 又丢掉了"记住"这个常见预期。合成三档后两种诉求都是显式选择，互不屏蔽。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SidebarStartup {
+    /// 沿用上次退出时的展开状态（默认）。
+    #[default]
+    RememberLast,
+    /// 每次启动都展开。
+    AlwaysShow,
+    /// 每次启动都收起。
+    AlwaysHide,
+}
+
+impl SidebarStartup {
+    /// 全部档位，供设置页分段按钮遍历。
+    pub const ALL: [Self; 3] = [Self::RememberLast, Self::AlwaysShow, Self::AlwaysHide];
+
+    /// 稳定小写名：设置文件里的取值。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RememberLast => "remember_last",
+            Self::AlwaysShow => "always_show",
+            Self::AlwaysHide => "always_hide",
+        }
+    }
+
+    /// 解析设置里的档位；无法识别时退回默认档。
+    pub fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "always_show" | "show" => Self::AlwaysShow,
+            "always_hide" | "hide" => Self::AlwaysHide,
+            _ => Self::RememberLast,
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SidebarStartup {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Ok(Self::parse(&raw))
+    }
+}
+
+impl WindowSettings {
+    /// 启动时会话列表是否展开。
+    ///
+    /// 纯函数：三档策略与"上次状态"的组合是启动期最容易配错的地方，抽出来才能
+    /// 被单测逐个钉住，而不是靠界面点上碰一次。
+    pub fn sidebar_visible_at_startup(&self) -> bool {
+        match self.sidebar_startup {
+            SidebarStartup::AlwaysShow => true,
+            SidebarStartup::AlwaysHide => false,
+            SidebarStartup::RememberLast => self.last_sidebar_visible,
+        }
+    }
 }
 
 /// 分屏方向，同时用于运行期布局与窗口恢复。
@@ -139,7 +271,9 @@ impl Default for WindowSettings {
             window_x: None,
             window_y: None,
             remember_window_bounds: true,
-            restore_previous_tabs: true,
+            startup_tabs: StartupTabs::default(),
+            sidebar_startup: SidebarStartup::default(),
+            last_sidebar_visible: true,
             previous_tab_sessions: Vec::new(),
             previous_tab_groups: Vec::new(),
             sftp_panel_side: PanelSide::Right,
@@ -662,6 +796,70 @@ fn default_language() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 启动档位互斥、档名稳定：设置页分段按钮按 `ALL` 遍历，档名同时是落盘值。
+    #[test]
+    fn startup_enums_have_stable_names() {
+        let tabs: Vec<&str> = StartupTabs::ALL.iter().map(|t| t.as_str()).collect();
+        assert_eq!(
+            tabs,
+            vec!["restore_last", "empty_workspace", "new_local_terminal"]
+        );
+        let sidebar: Vec<&str> = SidebarStartup::ALL.iter().map(|s| s.as_str()).collect();
+        assert_eq!(sidebar, vec!["remember_last", "always_show", "always_hide"]);
+        for tab in StartupTabs::ALL {
+            assert_eq!(StartupTabs::parse(tab.as_str()), tab, "档名要能原样读回");
+        }
+        for startup in SidebarStartup::ALL {
+            assert_eq!(SidebarStartup::parse(startup.as_str()), startup);
+        }
+    }
+
+    /// 侧栏初值的三档决策：显式档位必须压过记忆位，只有 RememberLast 才看上次。
+    #[test]
+    fn sidebar_startup_overrides_the_remembered_state() {
+        let mut window = WindowSettings::default();
+        assert!(
+            window.sidebar_visible_at_startup(),
+            "默认记住上次，且上次是展开"
+        );
+
+        window.last_sidebar_visible = false;
+        assert!(
+            !window.sidebar_visible_at_startup(),
+            "RememberLast 应沿用上次的收起状态"
+        );
+
+        // 关键回归点：用户某次手动收起后，"始终展开"必须还能救回来，
+        // 否则他每次启动都要手动展开一次。
+        window.sidebar_startup = SidebarStartup::AlwaysShow;
+        assert!(
+            window.sidebar_visible_at_startup(),
+            "AlwaysShow 要压过记忆位"
+        );
+
+        window.last_sidebar_visible = true;
+        window.sidebar_startup = SidebarStartup::AlwaysHide;
+        assert!(
+            !window.sidebar_visible_at_startup(),
+            "AlwaysHide 要压过记忆位"
+        );
+    }
+
+    /// 老设置文件里残留的 `restore_previous_tabs` 布尔被忽略，新字段按默认档走。
+    #[test]
+    fn legacy_restore_switch_is_ignored_without_breaking_load() {
+        let window: WindowSettings =
+            serde_json::from_str(r#"{"restore_previous_tabs":false,"window_width":1000.0}"#)
+                .expect("未知旧键不应让窗口设置加载失败");
+        assert_eq!(window.startup_tabs, StartupTabs::RestoreLast);
+        assert_eq!(
+            window.sidebar_startup,
+            SidebarStartup::RememberLast,
+            "缺字段应退回默认档，而不是让整个设置加载失败"
+        );
+        assert!(window.last_sidebar_visible);
+    }
 
     /// 日志级别来自设置文件（外部输入）：无法识别的值退回默认档 `info`，
     /// 既不能让整份设置加载失败，更不能因为一个错值把日志整个关掉。

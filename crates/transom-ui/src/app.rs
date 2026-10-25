@@ -24,7 +24,8 @@ use std::sync::Arc;
 use transom_core::{
     AppCommand, AppError, AppSettings, AppearanceSettings, Connection, ConnectionId, FolderId,
     ForwardId, ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PanelSide, PromptInfo,
-    SecretKind, Session, SessionCatalog, SessionId, SplitId, SystemStats, TabId, UiThemeMode,
+    SecretKind, Session, SessionCatalog, SessionId, SplitId, StartupTabs, SystemStats, TabId,
+    UiThemeMode,
 };
 use transom_terminal::TerminalView;
 use zeroize::Zeroizing;
@@ -642,6 +643,9 @@ impl AppShell {
         // 云同步表单：端点字段回填设置值，凭据掩码框恒为空。
         let sync_form = SyncFormInputs::new(window, cx);
 
+        // 侧栏初值必须在构造期定下来：先按展开建出侧栏再收起，会在首帧闪一次宽度跳变。
+        let sidebar_visible = settings.window.sidebar_visible_at_startup();
+
         let mut this = Self {
             services,
             settings,
@@ -705,7 +709,7 @@ impl AppShell {
             },
             status: None,
             error,
-            sidebar_visible: true,
+            sidebar_visible,
             immersive: false,
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
@@ -733,28 +737,36 @@ impl AppShell {
         // settings.json 里的落盘值只是上次解析的缓存。
         this.sync_terminal_palette(cx);
 
-        if this.settings.window.restore_previous_tabs {
-            let saved_groups = this.settings.window.previous_tab_groups.clone();
-            if !saved_groups.is_empty() {
-                for group in saved_groups {
-                    this.restore_tab_group(&group, window, cx);
-                }
-            } else if !this.settings.window.previous_tab_sessions.is_empty() {
-                let session_keys = this.settings.window.previous_tab_sessions.clone();
-                for key in session_keys {
-                    if key == "local" {
-                        this.open_local_terminal(window, cx);
-                    } else if let Some(session) = this
-                        .catalog
-                        .sessions
-                        .iter()
-                        .find(|s| s.id.to_string() == key)
-                        .cloned()
-                    {
-                        this.connect_session(session.id, window, cx);
+        match this.settings.window.startup_tabs {
+            // 沿用上次退出时的标签组与分屏形状。
+            StartupTabs::RestoreLast => {
+                let saved_groups = this.settings.window.previous_tab_groups.clone();
+                if !saved_groups.is_empty() {
+                    for group in saved_groups {
+                        this.restore_tab_group(&group, window, cx);
+                    }
+                } else if !this.settings.window.previous_tab_sessions.is_empty() {
+                    let session_keys = this.settings.window.previous_tab_sessions.clone();
+                    for key in session_keys {
+                        if key == "local" {
+                            this.open_local_terminal(window, cx);
+                        } else if let Some(session) = this
+                            .catalog
+                            .sessions
+                            .iter()
+                            .find(|s| s.id.to_string() == key)
+                            .cloned()
+                        {
+                            this.connect_session(session.id, window, cx);
+                        }
                     }
                 }
             }
+            // 空工作台：什么都不开，等用户从会话列表或新建入口起手。
+            StartupTabs::EmptyWorkspace => {}
+            // 强制新建一个本地终端，且不恢复上次标签——两者同开会叠出用户没要的
+            // 重复标签，所以档位做成互斥的。
+            StartupTabs::NewLocalTerminal => this.open_local_terminal(window, cx),
         }
 
         this

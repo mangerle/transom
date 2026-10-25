@@ -204,6 +204,12 @@ impl AppShell {
                     p,
                     "settings.status_bar",
                     AppShell::render_settings_status_bar,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.startup_group",
+                    AppShell::render_settings_startup,
                 ));
 
         let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())

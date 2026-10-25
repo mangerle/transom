@@ -7,6 +7,7 @@ mod logs_page;
 mod modal;
 mod pages;
 mod shortcuts_page;
+mod startup_page;
 mod sync_page;
 
 use crate::app::AppShell;

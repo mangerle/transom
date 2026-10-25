@@ -931,19 +931,6 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
-                "settings.restore_previous_tabs",
-                Some("settings.restore_previous_tabs_desc"),
-                Switch::new("toggle-restore-tabs")
-                    .small()
-                    .checked(self.settings.window.restore_previous_tabs)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.window.restore_previous_tabs = checked;
-                        cx.notify();
-                    }))
-                    .into_any_element(),
-                p,
-            ))
             .into_any_element()
     }
 }
