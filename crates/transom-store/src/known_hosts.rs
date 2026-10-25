@@ -51,7 +51,10 @@ impl JsonKnownHostsStore {
             Err(error) => {
                 return Err(AppError::with_detail(
                     ErrorCode::Io,
-                    format!("failed to read {}: {error}", path.display()),
+                    format!(
+                        "读取已知主机文件失败，路径: {}，原因: {error}",
+                        path.display()
+                    ),
                 ));
             }
         };
@@ -62,10 +65,9 @@ impl JsonKnownHostsStore {
     }
 
     fn persist(&self, hosts: &[HostKeyRecord]) -> Result<(), AppError> {
-        let parent = self
-            .path
-            .parent()
-            .ok_or_else(|| AppError::with_detail(ErrorCode::Configuration, "invalid store path"))?;
+        let parent = self.path.parent().ok_or_else(|| {
+            AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
+        })?;
         fs::create_dir_all(parent).map_err(AppError::from)?;
 
         let file = KnownHostsFile {

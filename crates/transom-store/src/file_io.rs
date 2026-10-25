@@ -8,21 +8,24 @@ pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, A
         Ok(text) => serde_json::from_str(&text).map(Some).map_err(|error| {
             AppError::with_detail(
                 ErrorCode::Configuration,
-                format!("invalid config file {}: {error}", path.display()),
+                format!(
+                    "配置文件内容损坏，无法解析，路径: {}，原因: {error}",
+                    path.display()
+                ),
             )
         }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(AppError::with_detail(
             ErrorCode::Io,
-            format!("failed to read {}: {error}", path.display()),
+            format!("读取配置文件失败，路径: {}，原因: {error}", path.display()),
         )),
     }
 }
 
 pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), AppError> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| AppError::with_detail(ErrorCode::Configuration, "invalid store path"))?;
+    let parent = path.parent().ok_or_else(|| {
+        AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
+    })?;
     fs::create_dir_all(parent).map_err(AppError::from)?;
 
     let data = serde_json::to_vec_pretty(value)

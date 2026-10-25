@@ -30,7 +30,7 @@ impl SecretStore for KeyringSecretStore {
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(AppError::with_detail(
                 ErrorCode::SecretStoreUnavailable,
-                format!("failed to read keychain entry: {error}"),
+                format!("读取钥匙串条目失败，原因: {error}"),
             )),
         }
     }

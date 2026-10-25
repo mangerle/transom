@@ -111,7 +111,7 @@ cargo run --bin transom            # 开发构建
 cargo build --release --bin transom  # 产物位于 target/release/transom
 ```
 
-Release 构建剥离符号表并启用 thin LTO。日志走 `tracing` 的 `env-filter`，`RUST_LOG=debug ./target/release/transom` 可提高详细度，默认级别为 `info`。
+Release 构建剥离符号表并启用 thin LTO。日志经 `log` 门面落到 `~/.config/transom/logs/transom.log`，按大小轮转（单文件 5 MiB，另留 4 份），崩溃后记录仍在，可以直接附到 issue 里。级别在「偏好设置 → 通用 → 运行日志」里调，改完立即生效、无需重启；也可以用启动时的 `TRANSOM_LOG=debug` 或 `RUST_LOG=debug ./target/release/transom` 覆盖，环境变量优先于配置值。默认级别为 `info`；标准错误输出只镜像警告及以上，从终端拉起时不会被细节刷屏。
 
 ### 数据存放位置
 
@@ -122,6 +122,8 @@ Release 构建剥离符号表并启用 thin LTO。日志走 `tracing` 的 `env-f
 | `sessions.json` | 会话树与连接配置。 |
 | `settings.json` | 偏好设置、主题、字体、快捷键与快捷命令。 |
 | `known_hosts.json` | 主机密钥指纹（首次信任）。 |
+| `logs/` | 应用运行日志，按大小轮转。不含口令与私钥材料；`debug` 与 `trace` 档会记录主机名、路径与命令行。 |
+| `audit/` | 可选的每连接原始输出留档，默认关闭。 |
 | 系统钥匙串，服务名 `transom` | 口令与私钥 passphrase，绝不落盘。 |
 
 密钥向导生成的密钥对默认写入 `~/.ssh`。

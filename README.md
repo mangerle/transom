@@ -111,7 +111,7 @@ cargo run --bin transom            # development build
 cargo build --release --bin transom  # artifact at target/release/transom
 ```
 
-Release builds strip symbols and use thin LTO. Logging goes through `tracing` with an `env-filter`, so `RUST_LOG=debug ./target/release/transom` raises verbosity; the default level is `info`.
+Release builds strip symbols and use thin LTO. Logging goes through the `log` facade onto a rotating file at `~/.config/transom/logs/transom.log` (5 MiB per file, four backups kept), so the trail survives a crash and is attachable to a bug report. Raise the level in Preferences → General → Application Logs — it applies immediately, no restart — or with `TRANSOM_LOG=debug` / `RUST_LOG=debug ./target/release/transom` at startup, which wins over the saved value. The default level is `info`; stderr only mirrors warnings and above, so a terminal launch stays readable.
 
 ### Where your data lives
 
@@ -122,6 +122,8 @@ Everything is under the user config directory (`~/.config/transom` on Linux, `~/
 | `sessions.json` | Session tree and connection settings. |
 | `settings.json` | Preferences, theme, fonts, shortcuts, snippets. |
 | `known_hosts.json` | Host key fingerprints (trust-on-first-use). |
+| `logs/` | Application log with size-based rotation. Never contains passwords or key material; `debug` and `trace` do record hostnames, paths and command lines. |
+| `audit/` | Optional per-connection raw output capture, off by default. |
 | OS keyring, service `transom` | Passwords and key passphrases. Never on disk. |
 
 Generated key pairs default to `~/.ssh`.
