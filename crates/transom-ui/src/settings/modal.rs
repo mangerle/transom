@@ -225,7 +225,18 @@ impl AppShell {
                 p,
                 "settings.notify_group",
                 AppShell::render_settings_notify,
-            ))
+            ));
+
+        // 桌面集成组仅 Linux：默认终端注册依赖 freedesktop 规范，macOS/Windows
+        // 没有对应机制，展示只会误导。
+        #[cfg(target_os = "linux")]
+        let page_general = page_general.group(setting_group(
+            &app_entity,
+            p,
+            "settings.desktop_integration_group",
+            AppShell::render_settings_desktop_integration,
+        ));
+        let page_general = page_general
             .group(setting_group(
                 &app_entity,
                 p,

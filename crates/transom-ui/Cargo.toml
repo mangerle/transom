@@ -16,6 +16,7 @@ publish.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 serde_json.workspace = true
 transom-core.workspace = true
+transom-store.workspace = true
 transom-terminal.workspace = true
 gpui-kit.workspace = true
 flume.workspace = true

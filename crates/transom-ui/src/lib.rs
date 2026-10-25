@@ -84,6 +84,7 @@ pub fn run(services: UiServices) {
         }
     };
     let language = settings.language.clone();
+    reassert_default_terminal(&settings);
     // 应用装配日志时还不知道配置值，这里补上用户设的级别。
     //
     // 环境变量仍然优先：报障场景下 `TRANSOM_LOG=debug` 必须能盖过配置里的 `info`，
@@ -153,3 +154,33 @@ pub fn run(services: UiServices) {
         .expect("failed to open window");
     });
 }
+
+/// 开关为"开"时校验并（仅在不一致时）重言默认终端注册。
+///
+/// 设计原理（Why）：注册里的 `Exec` 写的是当前可执行文件绝对路径，构建位置
+/// 或安装前缀一变注册就悬空，所以每次启动比对一次；比对是三次小文件读，
+/// 漂移才重写，常态启动零写入。放在 `run` 而不是 `main`：这里已经加载过
+/// 设置，`main` 侧再读一遍会出现第二个加载点与另一份容错逻辑。
+///
+/// 失败只降级不阻断启动：桌面集成是可延后的体验，不是主流程前提。
+#[cfg(target_os = "linux")]
+fn reassert_default_terminal(settings: &AppSettings) {
+    if !settings.window.default_terminal {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        log::warn!("无法定位当前可执行文件，默认终端注册校验跳过");
+        return;
+    };
+    if transom_store::desktop::default_terminal_registered(&exe) {
+        return;
+    }
+    match transom_store::desktop::apply_default_terminal(true) {
+        Ok(()) => log::info!("默认终端注册已重言，可执行文件: {}", exe.display()),
+        Err(error) => log::warn!("默认终端注册重言失败，桌面入口暂不可用，原因: {error}"),
+    }
+}
+
+/// 非 Linux 平台没有默认终端规范可对账，开关本身也不在设置页展示。
+#[cfg(not(target_os = "linux"))]
+fn reassert_default_terminal(_settings: &AppSettings) {}

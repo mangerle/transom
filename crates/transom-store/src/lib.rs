@@ -4,6 +4,7 @@ mod file_io;
 mod history;
 
 pub mod backup;
+pub mod desktop;
 pub mod known_hosts;
 pub mod paths;
 pub mod secrets;

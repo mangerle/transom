@@ -451,6 +451,13 @@ snippets:
     en: Too many snippets (max 40)
     zh-CN: 快捷命令数量已达上限（40 条）
 
+desktop:
+  default_terminal_switch:
+    en: Set as default terminal
+    zh-CN: 设为默认终端
+  default_terminal_desc:
+    en: Registers Transom in the desktop default-terminal preference (xdg-terminal-exec), so terminal shortcuts and file manager "Open in Terminal" launch Transom in that directory. Takes effect immediately; unchecked restores the list.
+    zh-CN: 按 freedesktop 默认终端规范写入系统偏好（xdg-terminal-exec）：终端快捷键与文件管理器"在终端打开"将启动 Transom 并进入对应目录。点击立即生效；关闭后移除本应用的注册，其余偏好原样保留。
 notify:
   desktop_switch:
     en: Desktop notifications (long commands finished, OSC 777)
@@ -1378,6 +1385,9 @@ settings:
   notify_group:
     en: Notification & Sound
     zh-CN: 通知与声音
+  desktop_integration_group:
+    en: Desktop Integration
+    zh-CN: 桌面集成
   backup_group:
     en: Data Backup
     zh-CN: 数据备份

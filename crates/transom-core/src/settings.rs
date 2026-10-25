@@ -95,6 +95,11 @@ pub struct WindowSettings {
     /// 工具面板（SFTP/转发）停靠方向；旧配置缺省按右侧。
     #[serde(default)]
     pub sftp_panel_side: PanelSide,
+    /// 是否把 transom 注册为系统默认终端（仅 Linux 生效）：接管桌面快捷键
+    /// 与文件管理器"在终端打开"。属于显式 opt-in，默认关闭，
+    /// 与 `.desktop` 模板"不静默抢占默认程序"的设计一致。
+    #[serde(default)]
+    pub default_terminal: bool,
 }
 
 /// 启动时标签区的内容。
@@ -277,6 +282,7 @@ impl Default for WindowSettings {
             previous_tab_sessions: Vec::new(),
             previous_tab_groups: Vec::new(),
             sftp_panel_side: PanelSide::Right,
+            default_terminal: false,
         }
     }
 }

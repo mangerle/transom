@@ -1,7 +1,7 @@
-//! 偏好设置中的通用页：语言、通知与声音、数据备份。
+//! 偏好设置中的通用页：语言、通知与声音、桌面集成、数据备份。
 
 use crate::app::AppShell;
-use crate::palette::Palette;
+use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -96,6 +96,51 @@ impl AppShell {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("notify.threshold_note").to_string()),
             )
+            .into_any_element()
+    }
+
+    /// 桌面集成组：默认终端注册开关（仅 Linux）。
+    ///
+    /// 设计原理（Why）：这一项与其他偏好不同——它改的是系统注册而非应用内
+    /// 状态，等弹窗"保存"按钮再生效会让开关与真实系统状态脱节，所以点击
+    /// 即执行注册/撤销并落盘；失败时回滚开关并把错误抛给用户看。
+    pub(crate) fn render_settings_desktop_integration(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "desktop.default_terminal_switch",
+                Some("desktop.default_terminal_desc"),
+                Switch::new("toggle-default-terminal")
+                    .checked(self.settings.window.default_terminal)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        let previous = this.settings.window.default_terminal;
+                        this.settings.window.default_terminal = checked;
+                        match transom_store::desktop::apply_default_terminal(checked) {
+                            Ok(()) => {
+                                if let Err(error) =
+                                    this.services.settings_store.save(&this.settings)
+                                {
+                                    log::error!("默认终端注册已生效但偏好落盘失败，原因: {error}");
+                                }
+                            }
+                            Err(error) => {
+                                log::error!(
+                                    "默认终端{}失败，界面已回滚，原因: {error}",
+                                    if checked { "注册" } else { "撤销" }
+                                );
+                                this.settings.window.default_terminal = previous;
+                                this.error = Some(localized_error(&error));
+                            }
+                        }
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
             .into_any_element()
     }
 

@@ -8222,6 +8222,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "transom-core",
+ "transom-store",
  "transom-terminal",
  "zeroize",
 ]
