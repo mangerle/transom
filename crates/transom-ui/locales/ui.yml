@@ -940,18 +940,6 @@ menu:
   rename:
     en: Rename
     zh-CN: 重命名
-  probe:
-    en: Check Reachability
-    zh-CN: 拨测连通性
-  probe_folder:
-    en: Check Reachability (Whole Folder)
-    zh-CN: 拨测本文件夹连通性
-  wake_on_lan:
-    en: Wake On LAN
-    zh-CN: 唤醒主机 (WoL)
-  wake_folder:
-    en: Wake On LAN (Whole Folder)
-    zh-CN: 唤醒本文件夹主机 (WoL)
   delete_folder:
     en: Delete Folder (Keep Sessions)
     zh-CN: 删除文件夹（保留会话）
@@ -1924,27 +1912,18 @@ keys:
     zh-CN: 导出
 
 probe:
-  title:
-    en: "Reachability check on %{count} host(s)"
-    zh-CN: "拨测 %{count} 台主机"
-  wake_title:
-    en: "Wake-on-LAN sent to %{count} host(s)"
-    zh-CN: "向 %{count} 台主机发送唤醒包"
-  running:
-    en: "%{pending} host(s) still pending..."
-    zh-CN: "还有 %{pending} 台待返回..."
-  done_hint:
-    en: "TCP handshake only: no protocol traffic is sent, and results are not persisted."
-    zh-CN: "仅做 TCP 握手，不发送任何协议报文；结果不落盘，关闭即消失。"
+  pending:
+    en: "Probing…"
+    zh-CN: "拨测中…"
+  session_tooltip:
+    en: "Check reachability of this host (TCP handshake only)"
+    zh-CN: "拨测这台主机的连通性（仅 TCP 握手，不发送协议报文）"
+  folder_tooltip:
+    en: "Check every host in this folder, subfolders included (TCP handshake only)"
+    zh-CN: "拨测本分组内全部主机的连通性，含子分组；仅 TCP 握手，不发送协议报文"
   latency:
     en: "reachable in %{ms} ms"
     zh-CN: "可达，耗时 %{ms} 毫秒"
-  wake_sent:
-    en: "magic packet sent"
-    zh-CN: "魔法包已发出"
   no_target:
     en: "Selected sessions have no network host to probe (local shell and serial ports are skipped)."
     zh-CN: "所选会话没有可拨测的网络主机（本地终端与串口已跳过）。"
-  no_mac:
-    en: "None of the selected sessions has a Wake-on-LAN MAC configured."
-    zh-CN: "所选会话都没有配置 Wake-on-LAN 网卡 MAC。"

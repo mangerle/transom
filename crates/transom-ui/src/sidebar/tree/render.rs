@@ -13,9 +13,54 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{Connection, DropSide, SessionId};
+use transom_core::{Connection, DropSide, HostAction, SessionId};
+
+/// 行内动作按钮的命中边长（px）。
+const ROW_ACTION_SIZE: Pixels = px(20.0);
+/// 行内动作按钮的图标边长（px），与折叠箭头同级，避免抢过会话协议图标。
+const ROW_ACTION_ICON_SIZE: Pixels = px(14.0);
+
+/// 行内图标按钮：常驻但弱色，悬停时才加深并垫一层底色。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：入口要挂在每一行上才谈得上"快捷"，做成悬停才浮现等于把入口藏起来，
+///   用户反而不知道该点哪里，所以图标必须始终可见。
+/// - 核心优势：用 `muted_foreground` 弱色与 14px 小尺寸，让它明显轻于行首的
+///   18px 协议图标，几百行的列表不会被图标压成噪声；hover 态再补足可读性。
+///   悬浮样式与 `id` 落在同一个元素上，靠按钮自己的 hover 表达状态，不去读父行
+///   （父行的 hover 只会改底色，拿不到布尔值）。
+/// - 常态色由调用方给出：活动会话是实心强调底，弱色图标在上面会糊成一片，
+///   与行首协议图标共用同一套 `is_active` 判断才不各自漂移。
+/// - 代价与局限：图标占据固定布局宽度（不是绝对定位叠加），行名可用宽度比没有
+///   按钮时少 20px；不这么做的话悬停时行名会跟着抖动，比少 20px 更难接受。
+fn row_action_button(
+    element_id: String,
+    icon: IconName,
+    tooltip: String,
+    idle_color: Hsla,
+    p: &Palette,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    div()
+        .id(ElementId::Name(element_id.into()))
+        .flex_none()
+        .size(ROW_ACTION_SIZE)
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(p.radius.md)
+        .cursor_pointer()
+        .text_color(idle_color)
+        .hover(|style| style.bg(p.foreground.opacity(0.10)))
+        .active(|style| style.bg(p.border))
+        .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
+        .on_click(on_click)
+        .child(Icon::new(icon).with_size(ROW_ACTION_ICON_SIZE))
+        .into_any_element()
+}
 
 /// 拖动时跟随鼠标的轻量预览卡片。
 pub(crate) struct SidebarDragPreview {
@@ -192,40 +237,6 @@ impl AppShell {
                             }),
                     )
                     .item(PopupMenuItem::separator())
-                    // 文件夹口径含子文件夹：一次问清整组机器通不通，或整组唤醒。
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.probe_folder").to_string())
-                            .icon(IconName::Network)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.run_host_actions_for_folder(
-                                            crate::host_actions::HostActionKind::Probe,
-                                            folder_id,
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.wake_folder").to_string())
-                            .icon(IconName::Power)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.run_host_actions_for_folder(
-                                            crate::host_actions::HostActionKind::Wake,
-                                            folder_id,
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
-                    .item(PopupMenuItem::separator())
                     .item(
                         PopupMenuItem::new(rust_i18n::t!("menu.delete_folder").to_string())
                             .icon(IconName::Trash)
@@ -288,6 +299,19 @@ impl AppShell {
                     .child(format!("({})", row.folder_count)),
             );
         }
+        // 表头这一个按钮拨测整组（含子文件夹）：分组巡检是本功能的主用法。
+        band = band.child(row_action_button(
+            format!("folder-probe-{folder_id}"),
+            IconName::Radar,
+            rust_i18n::t!("probe.folder_tooltip").to_string(),
+            p.muted_foreground,
+            p,
+            cx.listener(move |this, _: &ClickEvent, _window, cx| {
+                // 点按钮不该顺带折叠/展开这个分组。
+                cx.stop_propagation();
+                this.probe_folder(folder_id, cx);
+            }),
+        ));
         let anchor = SidebarDrag::Folder(folder_id);
         // 文件夹行保留中段作为“放入该分组”，上下各三分之一用于同级换序。
         band = band.child(Self::reorder_overlay(&app_entity, anchor, true, p));
@@ -414,38 +438,6 @@ impl AppShell {
                             }),
                     )
                     .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.probe").to_string())
-                            .icon(IconName::Network)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.run_host_actions_for_sessions(
-                                            crate::host_actions::HostActionKind::Probe,
-                                            session_id,
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.wake_on_lan").to_string())
-                            .icon(IconName::Power)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.run_host_actions_for_sessions(
-                                            crate::host_actions::HostActionKind::Wake,
-                                            session_id,
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
                         PopupMenuItem::new(rust_i18n::t!("menu.edit").to_string())
                             .icon(IconName::Settings)
                             .on_click({
@@ -566,9 +558,37 @@ impl AppShell {
                             .child(detail_text),
                     ),
             );
+        // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
+        let probe_badge = self
+            .probe_badges
+            .get(&session_id)
+            .map(|badge| AppShell::render_probe_badge(session_id, badge, p));
+        // 本地 Shell 与串口没有可拨测的网络地址，按钮也不画：点了只会弹一句
+        // "没有可拨测主机"，不如根本不给出这个动作。
+        let probe_button = HostAction::probe_for(session).map(|_| {
+            row_action_button(
+                format!("session-probe-{session_id}"),
+                IconName::Radar,
+                rust_i18n::t!("probe.session_tooltip").to_string(),
+                if is_active {
+                    p.sidebar_accent_foreground
+                } else {
+                    p.muted_foreground
+                },
+                p,
+                cx.listener(move |this, _: &ClickEvent, _window, cx| {
+                    // 拨测这一台不该同时选中这一行，更不该触发双击连接。
+                    cx.stop_propagation();
+                    this.probe_session(session_id, cx);
+                }),
+            )
+        });
         let anchor = SidebarDrag::Session(session_id);
         // 会话行没有子级，整行二分为“插到之前/之后”，不存在落空的中间区。
-        let inner = inner.child(Self::reorder_overlay(&app_entity, anchor, false, p));
+        let inner = inner
+            .children(probe_badge)
+            .children(probe_button)
+            .child(Self::reorder_overlay(&app_entity, anchor, false, p));
         element.child(inner).into_any_element()
     }
 }

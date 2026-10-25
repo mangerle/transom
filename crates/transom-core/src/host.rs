@@ -1,20 +1,20 @@
-//! 主机级网络动作契约：批量拨测与 Wake-on-LAN 的入参与结果类型。
+//! 主机级网络动作契约：批量拨测的入参、派生与结果类型。
 //!
 //! 设计原理（Why）：
-//! - 实现初衷：这两件事在界面上是同一个入口（对会话列表里的若干主机做一次
-//!   网络操作），在执行上是同一个并发管道（有界并发 + 逐条回报）。拆成两套
-//!   命令/事件会让控制器多出一段几乎重复的 JoinSet 代码，因此收敛为一个
-//!   `HostAction` 枚举；
-//! - 核心优势：动作由界面侧从 `Session` 派生（`probe_for` / `wake_for`），
-//!   控制器只认已经合法的 host/port/MAC，不在控制平面里重新解释会话结构；
-//! - 代价与局限：只覆盖 TCP 握手探测与魔法包发送，不做 ICMP（需要 root 或
-//!   非特权 ping 组，跨发行版行为不一致），也无法确认 WoL 是否真的唤醒了
-//!   机器——`WakeSent` 的语义上限就是"包已发出"。
+//! - 动作由界面侧从 `Session` 派生（`probe_for`），控制器只认已经合法的
+//!   host/port，不在控制平面里重新解释会话结构，也就不需要为"哪些会话可拨测"
+//!   在两侧各写一套判断；
+//! - 代价与局限：只做 TCP 握手探测，不做 ICMP（需要 root 或非特权 ping 组，
+//!   跨发行版行为不一致）。
+//!
+//! Wake-on-LAN 的界面入口已按产品决策移除（会话列表只保留拨测），本模块因此不再
+//! 携带唤醒动作；网络层 `transom_net::send_wake_on_lan` 与 `SessionOptions::wol_mac`
+//! 仍然保留，前者是已单测的公开能力，后者是既有会话文件里的用户数据。
 
 use crate::ids::SessionId;
 use crate::session::{Connection, Session};
 
-/// 一次主机级网络动作；`session_id` 用于把结果回填到界面表格的对应行。
+/// 一次主机级网络动作；`session_id` 用于把结果回填到会话列表的对应行。
 #[derive(Debug, Clone)]
 pub enum HostAction {
     /// TCP 连接探测：只做三次握手，成功后立即断开，不发送任何协议报文。
@@ -23,19 +23,15 @@ pub enum HostAction {
         host: String,
         port: u16,
     },
-    /// 发送 Wake-on-LAN 魔法包；`mac` 已在界面侧规范化为 `aa:bb:...`。
-    Wake { session_id: SessionId, mac: String },
 }
 
-/// 动作结果。拨测与唤醒共用一套：界面按"会话 → 结果"渲染一行。
+/// 动作结果；界面按"会话 → 结果"渲染一个状态点。
 #[derive(Debug, Clone)]
 pub enum HostOutcome {
     /// 端口可达，`latency_ms` 为 TCP 握手耗时（饱和到 u64 毫秒）。
     Reachable { latency_ms: u64 },
     /// 不可达或探测失败：`error` 携带可展示的原因（超时、拒绝、解析失败）。
     Unreachable { error: crate::AppError },
-    /// 魔法包已发出；不代表网卡已唤醒目标机器。
-    WakeSent,
 }
 
 impl HostAction {
@@ -59,29 +55,10 @@ impl HostAction {
         })
     }
 
-    /// 从会话派生唤醒动作；未配置 MAC 时返回 `None`，由界面给出明确提示。
-    ///
-    /// 只有 SSH 会话可唤醒：唤醒的是跑通用操作系统的服务器/工作站，Telnet
-    /// 面向的是网络设备，两者很少需要 WoL，为此把 `wol_mac` 只放进 SSH 的
-    /// `SessionOptions`，避免同义字段在两套 options 里各写一遍。
-    pub fn wake_for(session: &Session) -> Option<Self> {
-        let Connection::Ssh(ssh) = &session.connection else {
-            return None;
-        };
-        let mac = ssh.options.wol_mac.as_deref().unwrap_or("").trim();
-        if mac.is_empty() {
-            return None;
-        }
-        Some(Self::Wake {
-            session_id: session.id,
-            mac: mac.to_string(),
-        })
-    }
-
     /// 动作归属的会话；结果事件按它回填界面行。
     pub fn session_id(&self) -> SessionId {
         match self {
-            Self::Probe { session_id, .. } | Self::Wake { session_id, .. } => *session_id,
+            Self::Probe { session_id, .. } => *session_id,
         }
     }
 }
@@ -91,15 +68,16 @@ mod tests {
     use super::*;
     use crate::session::{LocalConnection, SshConnection, TelnetConnection};
 
-    fn ssh_session(mac: Option<String>) -> Session {
-        let mut ssh = SshConnection::new("10.0.0.8", "deploy");
-        ssh.options.wol_mac = mac;
-        Session::new("web", Connection::Ssh(ssh))
+    fn ssh_session() -> Session {
+        Session::new(
+            "web",
+            Connection::Ssh(SshConnection::new("10.0.0.8", "deploy")),
+        )
     }
 
     #[test]
     fn probe_derives_host_and_port_per_protocol() {
-        let probe = HostAction::probe_for(&ssh_session(None)).unwrap();
+        let probe = HostAction::probe_for(&ssh_session()).unwrap();
         assert!(matches!(
             probe,
             HostAction::Probe { host, port: 22, .. } if host == "10.0.0.8"
@@ -119,21 +97,10 @@ mod tests {
 
     #[test]
     fn probe_skips_sessions_without_host() {
-        let mut session = ssh_session(None);
+        let mut session = ssh_session();
         if let Connection::Ssh(ssh) = &mut session.connection {
             ssh.host = "   ".to_string();
         }
         assert!(HostAction::probe_for(&session).is_none());
-    }
-
-    #[test]
-    fn wake_requires_configured_mac() {
-        assert!(HostAction::wake_for(&ssh_session(None)).is_none());
-        assert!(HostAction::wake_for(&ssh_session(Some(String::new()))).is_none());
-        let action = HostAction::wake_for(&ssh_session(Some("aa:bb:cc:dd:ee:ff".to_string())));
-        assert!(matches!(
-            action,
-            Some(HostAction::Wake { mac, .. }) if mac == "aa:bb:cc:dd:ee:ff"
-        ));
     }
 }

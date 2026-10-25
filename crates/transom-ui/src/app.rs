@@ -3,11 +3,11 @@
 use crate::UiServices;
 use crate::cloud_sync::SyncFormInputs;
 use crate::forward::{ForwardPanelState, PendingForwardConfirm};
-use crate::host_actions::HostActionsModal;
 use crate::keymap;
 use crate::keys::KeyWizardState;
 use crate::palette::{Palette, localized_error};
 use crate::pane_tree::LayoutNode;
+use crate::probe::ProbeBadge;
 use crate::session_form::{AuthChoice, SessionForm};
 use crate::sftp::{
     EditorPanelState, PendingEditorClose, SftpChmodModalState, SftpFilterModalState,
@@ -396,9 +396,12 @@ pub struct AppShell {
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
     /// 共享给每个终端视图的历史查询回调（同一份快照，不各自复制）。
     pub(crate) history_provider: transom_terminal::HistoryProvider,
-    /// 主机批量拨测/唤醒的结果弹窗；同一时刻只有一批在展示，重复发起会直接
-    /// 覆盖上一批（控制器侧的并发闸门仍在，不会叠出第二批在途动作）。
-    pub(crate) host_actions: Option<HostActionsModal>,
+    /// 会话列表行尾的拨测状态点，按会话 id 索引；结果点到期后自动移除，
+    /// 因此这里只存"当前还该画出来"的点，不承担历史记录职责。
+    pub(crate) probe_badges: HashMap<SessionId, ProbeBadge>,
+    /// 每个状态点的到期清理任务。写入新状态时覆盖旧句柄即取消旧定时器，
+    /// 保证上一批结果的到期不会抹掉这一批结果。
+    pub(crate) probe_expiry_tasks: HashMap<SessionId, Task<()>>,
     pub(crate) show_quick_open: bool,
     pub(crate) quick_open_state: Entity<CommandState>,
     /// 设置弹窗的聚合状态：开关、密钥向导与全部输入框实体。
@@ -650,7 +653,8 @@ impl AppShell {
                 records: known_hosts_records,
                 search: known_hosts_search,
             },
-            host_actions: None,
+            probe_badges: HashMap::new(),
+            probe_expiry_tasks: HashMap::new(),
             show_quick_open: false,
             quick_open_state,
             settings_modal: SettingsModalState {
@@ -870,9 +874,6 @@ impl AppShell {
         }
         if self.known_hosts_modal.open {
             overlays.push(self.render_known_hosts_modal(window, cx, &p));
-        }
-        if self.host_actions.is_some() {
-            overlays.push(self.render_host_actions_modal(window, cx, &p));
         }
         if self.confirm_forward_any.is_some() {
             overlays.push(self.render_forward_confirm_modal(window, cx, &p));

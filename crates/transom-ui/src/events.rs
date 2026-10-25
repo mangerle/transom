@@ -581,7 +581,7 @@ impl AppShell {
                 session_id,
                 outcome,
             } => {
-                self.handle_host_action_result(session_id, outcome, cx);
+                self.handle_probe_result(session_id, outcome, cx);
                 return;
             }
             AppEvent::DeepLink { url } => {

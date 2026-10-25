@@ -1,4 +1,4 @@
-//! 主机批量动作执行：有界并发跑拨测与 Wake-on-LAN，逐条回报结果。
+//! 主机批量动作执行：有界并发跑 TCP 拨测，逐条回报结果。
 //!
 //! 设计原理（Why）：
 //! - 实现初衷：拨测的耗时来自"不可达主机要等超时"，串行跑 50 台最坏要分钟级；
@@ -16,7 +16,7 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use transom_core::{AppError, AppEvent, ErrorCode, HostAction, HostOutcome, SessionId};
-use transom_net::{probe_tcp, send_wake_on_lan};
+use transom_net::probe_tcp;
 
 /// 跨批次共享的在途动作上限。
 ///
@@ -82,35 +82,27 @@ async fn report(event_tx: &flume::Sender<AppEvent>, session_id: SessionId, outco
 
 /// 执行单条动作；网络错误一律结算成可展示的失败结果，不向上抛。
 async fn execute(action: HostAction) -> (SessionId, HostOutcome) {
-    match action {
-        HostAction::Probe {
+    // 用不可解构模式取字段：`HostAction` 目前只有拨测一个变体，写成 match 反而
+    // 暗示还有别的分支。
+    let HostAction::Probe {
+        session_id,
+        host,
+        port,
+    } = action;
+    match probe_tcp(&host, port, PROBE_TIMEOUT).await {
+        Ok(latency) => (
             session_id,
-            host,
-            port,
-        } => match probe_tcp(&host, port, PROBE_TIMEOUT).await {
-            Ok(latency) => (
-                session_id,
-                HostOutcome::Reachable {
-                    // 饱和转换：外部耗时无上界，不能让它回绕成小数值。
-                    latency_ms: latency.as_millis().min(u64::MAX as u128) as u64,
-                },
-            ),
-            Err(error) => (
-                session_id,
-                HostOutcome::Unreachable {
-                    error: AppError::from(error),
-                },
-            ),
-        },
-        HostAction::Wake { session_id, mac } => match send_wake_on_lan(&mac).await {
-            Ok(()) => (session_id, HostOutcome::WakeSent),
-            Err(error) => (
-                session_id,
-                HostOutcome::Unreachable {
-                    error: AppError::from(error),
-                },
-            ),
-        },
+            HostOutcome::Reachable {
+                // 饱和转换：外部耗时无上界，不能让它回绕成小数值。
+                latency_ms: latency.as_millis().min(u64::MAX as u128) as u64,
+            },
+        ),
+        Err(error) => (
+            session_id,
+            HostOutcome::Unreachable {
+                error: AppError::from(error),
+            },
+        ),
     }
 }
 
@@ -124,8 +116,8 @@ fn failed_outcome(reason: String) -> HostOutcome {
 mod tests {
     use super::*;
 
-    /// `run_batch` 必须为每条动作发恰好一个结果事件：界面靠这个计数收敛，
-    /// 少发一次就永远转圈，多发一次会把它减成负数。
+    /// `run_batch` 必须为每条动作发恰好一个结果事件：会话行的"拨测中"状态点
+    /// 靠它落定，少发一次点就永远挂着，多发一次会把已经到期的点重新点亮。
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn every_action_reports_exactly_once() {
         let open = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -145,10 +137,6 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: closed_port,
             },
-            HostAction::Wake {
-                session_id: SessionId::new(),
-                mac: "aa:bb:cc:dd:ee:ff".to_string(),
-            },
         ];
         let (tx, rx) = flume::bounded::<AppEvent>(16);
         let permits = Arc::new(Semaphore::new(MAX_CONCURRENT_ACTIONS));
@@ -157,7 +145,6 @@ mod tests {
         // 完成顺序不保证与派发顺序一致，因此按结局种类计数而不是按下标断言。
         let mut reachable = 0;
         let mut unreachable = 0;
-        let mut wake_sent = 0;
         let mut reported: Vec<SessionId> = Vec::new();
         while let Ok(event) = rx.try_recv() {
             match event {
@@ -169,7 +156,6 @@ mod tests {
                     match outcome {
                         HostOutcome::Reachable { .. } => reachable += 1,
                         HostOutcome::Unreachable { .. } => unreachable += 1,
-                        HostOutcome::WakeSent => wake_sent += 1,
                     }
                 }
                 // AppEvent 没有 Debug：只能按变体判定，不能打印现场。
@@ -178,7 +164,6 @@ mod tests {
         }
         assert_eq!(reachable, 1, "开放端口应判可达");
         assert_eq!(unreachable, 1, "已关闭端口应判不可达");
-        assert_eq!(wake_sent, 1, "唤醒应判已发送");
         assert_eq!(reported.len(), actions.len());
         // 每条动作归属唯一会话：结果串行化到行全靠这个 id。
         assert_eq!(
@@ -189,31 +174,5 @@ mod tests {
             actions.len()
         );
         drop(open);
-    }
-
-    /// 非法 MAC 也要有结果：不能因为解析失败就静默吞掉一条动作。
-    #[tokio::test]
-    async fn invalid_mac_still_reports_result() {
-        let (tx, rx) = flume::bounded::<AppEvent>(4);
-        let permits = Arc::new(Semaphore::new(1));
-        run_batch(
-            vec![HostAction::Wake {
-                session_id: SessionId::new(),
-                mac: "not-a-mac".to_string(),
-            }],
-            tx,
-            permits,
-        )
-        .await;
-        let event = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv_async())
-            .await
-            .expect("必须有一条结果回报")
-            .expect("事件通道不应被关闭");
-        match event {
-            AppEvent::HostActionResult { outcome, .. } => {
-                assert!(matches!(outcome, HostOutcome::Unreachable { .. }));
-            }
-            _ => panic!("应回报失败结果"),
-        }
     }
 }
