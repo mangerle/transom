@@ -10,8 +10,12 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 
-/// 顶栏品牌标志边长（rem）：与原 Lucide 图标的视觉重量对齐，同时随密度档等比缩放。
-const LOGO_SIZE: f32 = 1.125;
+/// 顶栏品牌标志边长（rem）：随密度档等比缩放。
+///
+/// 取 1.5rem（标准档 24px）而不是图标的 1.125rem：品牌标志是实心色块，
+/// 按线性图标的尺寸给会显得比旁边的粗体应用名还弱；但顶栏只有 2.25rem（36px）高，
+/// 再大就会贴上下边框，24px 留 6px 上下呼吸位。
+const LOGO_SIZE: f32 = 1.5;
 
 impl AppShell {
     pub(crate) fn render_top_bar(

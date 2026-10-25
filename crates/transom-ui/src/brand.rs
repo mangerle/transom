@@ -13,10 +13,11 @@
 //!   单色剪影，品牌色直接丢掉。所以只能自己出全彩位图。
 //! - 现在的做法：SVG 解析一次常驻缓存，出图边长按 rem 逻辑尺寸 × `window.rem_size()`
 //!   × `window.scale_factor()` 算出目标设备像素再交给光栅化器。注意
-//!   `SvgRenderer::render_parsed` 对 `SvgSize::ScaleFactor` 内部还会再乘一次
-//!   `SMOOTH_SVG_SCALE_FACTOR`（当前为 2）并把 `RenderImage.scale_factor` 标成同一个值，
-//!   于是纹理实际是目标尺寸的约 2 倍超采样，绘制时只做约 2:1 的降采样——相对原来
-//!   512（含 gpui 的 ×2 超采样即 1024）压到 36 设备像素的二十多倍欠采样，细线不再碎裂。
+//!   出图用 `SvgSize::Size`（直接给设备像素宽高），纹理与显示盒严格等大，绘制时
+//!   零重采样。刻意不用 `SvgSize::ScaleFactor`：它会被 `render_parsed` 内部再乘一次
+//!   `SMOOTH_SVG_SCALE_FACTOR`（2），变成两倍超采样位图再降采样 2:1，48px 的标志
+//!   边缘仍能看到颗粒。相对最初"512 固有尺寸（含 ×2 即 1024）压到 36 设备像素"
+//!   的二十多倍欠采样，现在是 1:1。
 //!   顺带一提，`ImageSource::Render` 是同步就绪的，因此也消掉了异步资产链路在启动
 //!   首帧画不出标志的那一闪。
 //! - 代价与局限：位图与窗口 DPI 绑定，跨屏拖动改变 `scale_factor` 后要多缓存一档
@@ -33,10 +34,6 @@ use std::sync::{Arc, OnceLock};
 
 /// 内嵌的舷窗标志源文件（512x512，品牌青渐变底）。
 const LOGO_SVG: &[u8] = include_bytes!("../../../logo/transom-logo.svg");
-
-/// SVG 自身声明的固有边长（px），必须与 `logo/transom-logo.svg` 的 width/height
-/// 一致：栅格缩放比是按它算的，改了 SVG 尺寸不改这里，标志会整体缩放错误。
-const LOGO_INTRINSIC_PX: f32 = 512.0;
 
 /// 解析结果与各显示尺寸的栅格缓存。
 ///
@@ -81,10 +78,13 @@ fn rasterize(device_px: u32, cx: &App) -> Option<Arc<RenderImage>> {
             }
         },
     };
-    // 比值按"目标设备像素 / SVG 固有像素"给；`render_parsed` 会再乘一次内部
-    // 超采样系数（2），得到约 2 倍于目标的多采样板图，绘制时降采样回盒子大小。
-    let scale = device_px as f32 / LOGO_INTRINSIC_PX;
-    match renderer.render_parsed(parsed, SvgSize::ScaleFactor(scale)) {
+    // 用 `SvgSize::Size`（设备像素宽高）而不是 `ScaleFactor`：后者会被
+    // `render_parsed` 内部再乘一次 `SMOOTH_SVG_SCALE_FACTOR`（2），得到两倍于目标
+    // 的超采样位图，绘制时必须做 2:1 双线性降采样——48px 的标志边缘因此仍起颗粒。
+    // 前者按 `image_scale_factor = 1.0` 出图，纹理尺寸与显示盒的设备像素严格相等，
+    // `img` 元素不再有任何重采样（矢量反锯齿由光栅化器按最终分辨率算，正是我们要的）。
+    let px = DevicePixels(device_px as i32);
+    match renderer.render_parsed(parsed, SvgSize::Size(size(px, px))) {
         Ok(image) => {
             cache.rasterized.insert(device_px, image.clone());
             Some(image)
