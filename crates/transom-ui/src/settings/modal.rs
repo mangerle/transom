@@ -213,6 +213,16 @@ impl AppShell {
                 AppShell::render_settings_cloud_sync,
             ));
 
+        // 关于页只读：呈现版本、许可与本机运行环境，不参与保存/取消语义。
+        let page_about = SettingPage::new(rust_i18n::t!("settings.tab_about").to_string())
+            .icon(IconName::Info)
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.about_group",
+                AppShell::render_settings_about,
+            ));
+
         let settings_component = Settings::new("app-settings")
             .sidebar_width(px(220.0))
             .pages(vec![
@@ -223,6 +233,7 @@ impl AppShell {
                 page_shortcuts,
                 page_window_layout,
                 page_general,
+                page_about,
             ]);
 
         // 尺寸随密度档位缩放；max_w/max_h 以 overlay 全屏为上限，宽松档下小

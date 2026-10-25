@@ -28,10 +28,24 @@ pub(crate) fn audit_path_for(tab: &TerminalTab, enabled: bool) -> Option<PathBuf
 }
 
 /// 在系统文件管理器里打开给定目录（审计落盘后用户要能一眼找到文件）。
+pub(crate) fn reveal_in_file_manager(path: PathBuf) {
+    open_with_default_app(path.as_os_str());
+}
+
+/// 用系统默认程序打开外部链接（"关于"页的项目主页）。
+///
+/// 与打开目录共用同一条 xdg-open/`open`/`explorer` 通路：三者都接受 URL，
+/// 因此不必为链接再写一套进程派生与收割逻辑。调用方只传代码里的常量地址，
+/// 不接受用户或远端输入，不存在被诱导执行任意参数的风险。
+pub(crate) fn open_web_page(url: &str) {
+    open_with_default_app(std::ffi::OsStr::new(url));
+}
+
+/// 交给系统默认程序处理一个目标，并在同一线程里收割子进程。
 ///
 /// 子进程在同一线程里 `wait` 收割，避免遗留僵尸进程；失败只记日志，
 /// 因为打不开文件管理器属于可降级的体验问题，不该冒泡成界面错误。
-pub(crate) fn reveal_in_file_manager(path: PathBuf) {
+fn open_with_default_app(target: &std::ffi::OsStr) {
     #[cfg(target_os = "macos")]
     let program = "open";
     #[cfg(target_os = "windows")]
@@ -39,20 +53,21 @@ pub(crate) fn reveal_in_file_manager(path: PathBuf) {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let program = "xdg-open";
 
+    let target = target.to_os_string();
     let spawned = std::thread::Builder::new()
         .name("transom-open-file-manager".into())
         .spawn(
-            move || match std::process::Command::new(program).arg(&path).spawn() {
+            move || match std::process::Command::new(program).arg(&target).spawn() {
                 Ok(mut child) => {
                     let _ = child.wait();
                 }
                 Err(error) => {
-                    tracing::warn!("调用系统文件管理器失败，原因: {error}");
+                    tracing::warn!("调用系统默认程序失败，原因: {error}");
                 }
             },
         );
     if spawned.is_err() {
-        tracing::warn!("启动文件管理器线程失败，已忽略本次打开请求");
+        tracing::warn!("启动系统默认程序线程失败，已忽略本次打开请求");
     }
 }
 

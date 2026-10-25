@@ -5,6 +5,9 @@ rust_i18n::i18n!("locales", fallback = "en");
 /// 这一份，避免版本号与仓库地址散落到多处硬编码后各自漂移。
 pub(crate) const APP_NAME: &str = "Transom";
 pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub(crate) const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
+pub(crate) const APP_REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
+pub(crate) const APP_AUTHORS: &str = "wangle";
 
 mod activity_bar;
 mod app;

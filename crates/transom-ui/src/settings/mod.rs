@@ -1,5 +1,6 @@
 //! 偏好设置中心的动作入口与通用/渲染/快捷键配置页模块。
 
+mod about_page;
 mod general_page;
 mod layout_page;
 mod modal;

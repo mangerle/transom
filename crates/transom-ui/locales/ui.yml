@@ -1096,6 +1096,51 @@ settings:
   status_bar_note:
     en: Drag badges on the right side of the status bar to reorder them; drop on the blank area to their left to move one to the front. Visibility and order changes are saved immediately; the left connection status stays fixed.
     zh-CN: 右侧徽标可直接拖动调整顺序，拖到徽标簇左侧空白可移到最前；显隐与顺序改动会立即保存。左侧连接状态固定，不参与排序。
+  tab_about:
+    en: About
+    zh-CN: 关于
+  about_group:
+    en: Application Information
+    zh-CN: 应用信息
+  about_summary:
+    en: Native SSH, serial console and terminal workspace with integrated SFTP
+    zh-CN: 原生 SSH、串口与终端工作台，内置 SFTP 文件传输
+  about_version:
+    en: Version
+    zh-CN: 版本号
+  about_build:
+    en: Build
+    zh-CN: 构建类型
+  about_build_debug:
+    en: Debug build (unoptimized)
+    zh-CN: 调试构建（未优化）
+  about_build_release:
+    en: Release build (optimized)
+    zh-CN: 正式发布构建（已优化）
+  about_license:
+    en: License
+    zh-CN: 开源许可
+  about_author:
+    en: Author
+    zh-CN: 维护者
+  about_platform:
+    en: Runtime environment
+    zh-CN: 运行环境
+  about_homepage:
+    en: Project homepage
+    zh-CN: 项目主页
+  about_homepage_open:
+    en: Open homepage
+    zh-CN: 打开主页
+  about_config_dir:
+    en: Config directory
+    zh-CN: 配置目录
+  about_config_dir_desc:
+    en: Sessions, settings, themes, command history and audit logs all live under this folder.
+    zh-CN: 会话、设置、主题、命令历史与审计日志都保存在这个目录下。
+  about_dir_revealed:
+    en: Config folder opened in the system file manager
+    zh-CN: 已在系统文件管理器中打开配置目录
   tab_general:
     en: General & Sound
     zh-CN: 通用与声音
