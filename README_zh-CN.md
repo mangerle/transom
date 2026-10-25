@@ -37,6 +37,7 @@
 - 只保留现代加密套件：AES-128/256-GCM 与 ChaCha20-Poly1305、SHA2-512 MAC、`zlib` 传输压缩，密钥支持 RSA / ECDSA / Ed25519。
 - 连接层默认每 30 秒心跳、连续 3 次无应答断开，避免云厂商防火墙静默掐断空闲连接。
 - 启动时自动恢复并重连上次打开的会话；会话库可导出/导入为明文 JSON/YAML，或导出为 Argon2id + XChaCha20-Poly1305 加密备份。
+- 快速打开面板（`$app-k`）兼作免保存直连：输入 `deploy@10.0.0.8:2222` 即可直接发起连接，这条会话不会进入会话列表。
 
 ### 终端
 - 标签内自由分屏：切分方向属于每一刀、可嵌套，分隔线可拖拽，支持单窗格最大化与拆出为独立标签。
@@ -77,6 +78,21 @@
 | macOS、Windows | 已有跨平台代码路径（修饰键映射、钥匙串后端、在文件管理器中显示）并可编译，但**尚未经 CI 或发布产物验证**，请按实验性看待。 |
 
 `ssh-agent` 认证目前仅支持 Unix；终端超链接通过 `xdg-open` 打开。
+
+### 桌面集成（`ssh://` 链接）
+
+Linux 上 Transom 可以接管浏览器或其他工具发出的 `ssh://[user@]host[:port]` 链接，并以单实例方式运行：第二次启动会把地址通过 `$XDG_RUNTIME_DIR/transom` 下的私有套接字交给已在运行的窗口，然后立即退出。
+
+注册这一步刻意留给用户手动执行——多数发行版已把 `ssh://` 绑给某个终端模拟器，应用私自改写默认处理程序会影响到本项目之外的行为：
+
+```bash
+mkdir -p ~/.local/share/applications
+cp packaging/linux/com.github.mangerle.transom.desktop ~/.local/share/applications
+update-desktop-database ~/.local/share/applications
+xdg-mime default com.github.mangerle.transom.desktop x-scheme-handler/ssh   # 可选：设为默认
+```
+
+深链会在既有窗口里新开一个标签并直接连接，不保存会话。把已最小化的窗口提到前台**尚未实现**：GPUI 在 Linux 没有提供窗口 raise/焦点接口。
 
 ## 源码构建
 

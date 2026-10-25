@@ -47,6 +47,9 @@ pub struct SshTarget {
 /// 默认 SSH 端口，补齐与展示（名称是否附端口）共用同一常量，避免魔数分叉。
 pub const DEFAULT_SSH_PORT: u16 = 22;
 
+/// 深链与快速连接识别的 URL scheme（小写字面量，比较处一律大小写不敏感）。
+const SSH_SCHEME: &str = "ssh://";
+
 /// 解析 `[user@]host[:port]` 或 `ssh://[user@]host[:port]`，返回三段原始值。
 ///
 /// 规则：
@@ -56,9 +59,12 @@ pub const DEFAULT_SSH_PORT: u16 = 22;
 /// - IPv6 字面量必须写作 `[::1]` 或 `ssh://[::1]:22`，防止冒号与端口分隔符歧义。
 pub fn parse_ssh_target(input: &str) -> Result<SshTarget, String> {
     let input = input.trim();
-    let body = match input.strip_prefix("ssh://") {
-        Some(rest) => rest,
-        None => {
+    // scheme 判定与剥离共用 is_ssh_url 的大小写不敏感规则，避免桌面深链
+    // （大小写随启动器）与快速连接输入框两处行为分叉。
+    let scheme = is_ssh_url(input);
+    let body = match scheme {
+        true => &input[SSH_SCHEME.len()..],
+        false => {
             if input.is_empty() || input.chars().any(char::is_whitespace) {
                 return Err("快速连接地址不能为空或包含空白字符".to_string());
             }
@@ -72,7 +78,7 @@ pub fn parse_ssh_target(input: &str) -> Result<SshTarget, String> {
         .filter(|rest| !rest.is_empty())
         .ok_or_else(|| format!("SSH 地址缺少主机部分，原始输入: {input}"))?;
 
-    let (username, rest) = split_username(body, input.starts_with("ssh://"))?;
+    let (username, rest) = split_username(body, scheme)?;
     let (host, port) = split_host_port(rest)?;
     if host.is_empty() {
         return Err(format!("SSH 地址缺少主机部分，原始输入: {input}"));
@@ -195,6 +201,17 @@ fn is_hex(b: u8) -> bool {
     b.is_ascii_hexdigit()
 }
 
+/// 判断命令行参数是否为 `ssh://` 深链地址（大小写不敏感）。
+///
+/// 桌面环境把 URL 作为 argv 交给应用时不做规范化，可能带任意大小写与前导
+/// 空白；非此形态的参数（文件路径、启动器附加的选项）一律忽略，避免把
+/// 无关参数当成主机连接。
+pub fn is_ssh_url(arg: &str) -> bool {
+    let trimmed = arg.trim();
+    trimmed.len() >= SSH_SCHEME.len()
+        && trimmed.as_bytes()[..SSH_SCHEME.len()].eq_ignore_ascii_case(SSH_SCHEME.as_bytes())
+}
+
 /// 判断输入是否更像"主机地址"而不是"会话搜索词"（快速打开面板的虚拟项门槛）。
 ///
 /// 门槛刻意保守：只有带 `ssh://` 前缀、含 `@`、或整体呈 `host[:port]` 形态
@@ -205,7 +222,7 @@ pub fn looks_like_host(input: &str) -> bool {
     if input.is_empty() || input.chars().any(char::is_whitespace) {
         return false;
     }
-    if input.starts_with("ssh://") || input.contains('@') {
+    if is_ssh_url(input) || input.contains('@') {
         return true;
     }
     // 方括号包裹的 IPv6 字面量天然是地址，无需再满足点号门槛。
@@ -308,6 +325,25 @@ mod tests {
         } else {
             panic!("应生成 SSH 连接");
         }
+    }
+
+    /// 深链 URL 的大小写由桌面启动器决定，scheme 判定必须不敏感；
+    /// 但只有出现在开头的 ssh:// 才算地址，句中出现的不能误判。
+    #[test]
+    fn scheme_detection_is_case_insensitive_and_anchored() {
+        assert!(is_ssh_url("ssh://host.example"));
+        assert!(is_ssh_url("SSH://host.example"));
+        assert!(is_ssh_url("  ssh://host.example"));
+        assert!(!is_ssh_url("host.example"));
+        assert!(!is_ssh_url("not-ssh://host"));
+        assert!(!is_ssh_url("ssh:/host"));
+
+        // scheme 大小写不敏感必须一路贯通到解析结果。
+        assert_eq!(
+            target("SSH://deploy@host.example:2222"),
+            target("deploy@host.example:2222")
+        );
+        assert!(looks_like_host("SSH://host.example"));
     }
 
     #[test]

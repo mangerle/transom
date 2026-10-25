@@ -76,7 +76,8 @@ pub use sftp_sync::{
 };
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
 pub use ssh_url::{
-    DEFAULT_SSH_PORT, SshTarget, looks_like_host, parse_ssh_target, quick_connect_session,
+    DEFAULT_SSH_PORT, SshTarget, is_ssh_url, looks_like_host, parse_ssh_target,
+    quick_connect_session,
 };
 pub use storage::{BackupService, SecretStore, SessionStore, SettingsStore};
 pub use sync::{

@@ -37,6 +37,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 - Modern crypto only: AES-128/256-GCM and ChaCha20-Poly1305 ciphers, SHA2-512 MACs, `zlib` stream compression, RSA / ECDSA / Ed25519 keys.
 - Keepalive probes every 30 s with 3-strike disconnect, so cloud firewalls cannot silently drop an idle session.
 - Sessions restored and reconnected on launch; catalog exported/imported as plain JSON/YAML or as an Argon2id + XChaCha20-Poly1305 encrypted vault.
+- Quick open (`$app-k`) doubles as quick connect: type `deploy@10.0.0.8:2222` and the panel offers a direct connection that never enters the session list.
 
 ### Terminal
 - Nested split views (split direction belongs to each cut), draggable dividers, per-pane zoom, and pane detach into a tab.
@@ -77,6 +78,21 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 | macOS, Windows | Cross-platform code paths exist (modifier keys, keyring backends, reveal-in-file-manager) and compile, but they are **not yet verified by CI or a release artifact**. Treat them as experimental. |
 
 `ssh-agent` authentication is Unix-only today; terminal hyperlinks open via `xdg-open`.
+
+### Desktop integration (`ssh://` links)
+
+On Linux, Transom can serve `ssh://[user@]host[:port]` links from a browser or another tool, and it runs as a single instance: a second launch hands the address to the already running window through a private socket under `$XDG_RUNTIME_DIR/transom` and exits immediately.
+
+Registration is a manual step, because most distributions already map `ssh://` to a terminal emulator and silently stealing that handler would change behavior outside this app:
+
+```bash
+mkdir -p ~/.local/share/applications
+cp packaging/linux/com.github.mangerle.transom.desktop ~/.local/share/applications
+update-desktop-database ~/.local/share/applications
+xdg-mime default com.github.mangerle.transom.desktop x-scheme-handler/ssh   # optional: make it the default
+```
+
+A deep link opens a new tab in the existing window, connecting without saving a session. Bringing an already minimized window to the foreground is **not** implemented — GPUI exposes no raise/focus API on Linux.
 
 ## Build from source
 

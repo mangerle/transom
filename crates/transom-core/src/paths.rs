@@ -6,6 +6,12 @@
 use directories::{BaseDirs, UserDirs};
 use std::path::PathBuf;
 
+/// 应用桌面标识（reverse-DNS）。
+///
+/// WM_CLASS、.desktop 文件名与 `StartupWMClass` 必须逐字一致，否则任务栏
+/// 分组与 `ssh://` 处理程序回指都会失效，所以只在这里定义一次。
+pub const APP_ID: &str = "com.github.mangerle.transom";
+
 /// 应用配置根目录；无法定位用户目录时退回当前目录下的 `.transom`。
 pub fn config_dir() -> PathBuf {
     BaseDirs::new()
@@ -23,6 +29,26 @@ pub fn sessions_path() -> PathBuf {
 
 pub fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
+}
+
+/// 运行期私有目录（XDG runtime），存放只在进程存活期间有意义的文件。
+///
+/// 为什么与配置目录分开：套接字这类 IPC 端点不该被备份/同步波及，且
+/// XDG_RUNTIME_DIR 是用户私有、会话结束即回收的 tmpfs；环境变量缺失时
+/// （非桌面会话、容器）退回配置目录，功能不受影响。仅本模块内部使用，
+/// 对外只暴露具体端点路径。
+fn runtime_dir() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .map(|dir| dir.join("transom"))
+        .unwrap_or_else(config_dir)
+}
+
+/// 单实例深链套接字路径；后启动的进程把 `ssh://` 地址写入这里转交给
+/// 已运行实例。放在运行期目录并配合 0700 目录权限，天然限定同用户访问。
+pub fn instance_socket_path() -> PathBuf {
+    runtime_dir().join("transom.sock")
 }
 
 /// 用户自定义 UI 主题目录；放入 gpui-kit ThemeConfig 格式的 JSON 即可在设置

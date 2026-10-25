@@ -233,6 +233,10 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         event: crate::zmodem::ZmodemEvent,
     },
+    /// 桌面深链唤起：`Some(url)` 是外部（浏览器 `ssh://` 链接、其他工具）
+    /// 请求直连的地址；`None` 表示用户在没有地址的情况下再次启动应用，
+    /// 只需要把已有实例唤起。经单实例套接字进入与控制器共用的事件通道。
+    DeepLink { url: Option<String> },
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]

@@ -113,6 +113,9 @@ pub fn run(services: UiServices) {
             ..Default::default()
         };
         open_window(options, cx, |window, cx| {
+            // 桌面标识用于任务栏分组与 `ssh://` 处理程序回指本应用，必须与
+            // packaging/linux 下 .desktop 的 StartupWMClass 保持一致。
+            window.set_app_id(transom_core::paths::APP_ID);
             cx.new(|cx| AppShell::new(window, cx, services.clone(), settings.clone()))
         })
         .expect("failed to open window");

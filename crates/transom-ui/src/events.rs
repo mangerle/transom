@@ -563,6 +563,10 @@ impl AppShell {
                 }
                 return;
             }
+            AppEvent::DeepLink { url } => {
+                self.handle_deep_link(url, cx);
+                return;
+            }
         }
         cx.notify();
     }

@@ -35,6 +35,7 @@ use transom_net::{
 pub struct Controller {
     _runtime: Runtime,
     command_tx: flume::Sender<AppCommand>,
+    event_tx: flume::Sender<AppEvent>,
     event_rx: flume::Receiver<AppEvent>,
 }
 
@@ -60,6 +61,9 @@ impl Controller {
 
         // 云同步服务随控制器构建一次：HTTP 客户端连接池全生命周期复用。
         let cloud_sync = Arc::new(CloudSyncService::new(secrets)?);
+        // 事件发送端留一份克隆给应用外壳：深链监听不在控制平面内，
+        // 但唤起请求要走同一条事件总线。
+        let outer_event_tx = event_tx.clone();
         let root = runtime.spawn(run_controller(
             known_hosts,
             settings_store,
@@ -84,6 +88,7 @@ impl Controller {
         Ok(Self {
             _runtime: runtime,
             command_tx,
+            event_tx: outer_event_tx,
             event_rx,
         })
     }
@@ -94,6 +99,17 @@ impl Controller {
 
     pub fn event_receiver(&self) -> flume::Receiver<AppEvent> {
         self.event_rx.clone()
+    }
+
+    /// 事件总线发送端：供应用外壳（深链监听）投递与连接无关的界面事件。
+    pub fn event_sender(&self) -> flume::Sender<AppEvent> {
+        self.event_tx.clone()
+    }
+
+    /// 控制平面运行时句柄：应用外壳的辅助常驻任务（深链监听）挂到这里，
+    /// 与控制器共享线程池并随控制器一起停机，不再单独开一个运行时。
+    pub fn runtime(&self) -> &Runtime {
+        &self._runtime
     }
 }
 

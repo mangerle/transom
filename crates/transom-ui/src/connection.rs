@@ -128,6 +128,22 @@ impl AppShell {
         self.start_connection(tab_id, session, cx);
     }
 
+    /// 桌面深链唤起：`Some(url)` 直连该地址，`None` 表示只是再次启动应用。
+    ///
+    /// 与 Quick Connect 共用 `quick_connect_session`：浏览器点来的 `ssh://`
+    /// 地址和面板里手敲的主机串必须按同一套规则解析，否则会出现"这里能连、
+    /// 那里连不上"的割裂行为。深链同样是临时会话，不落 catalog。
+    /// `cx.activate` 在 Linux 是空操作（gpui 未实现平台唤起），仅 macOS/
+    /// Windows 生效；这里调用它是为了在支持的平台上不留死角。
+    pub(crate) fn handle_deep_link(&mut self, url: Option<String>, cx: &mut Context<Self>) {
+        cx.activate(true);
+        let Some(url) = url else {
+            cx.notify();
+            return;
+        };
+        self.connect_quick_host(&url, cx);
+    }
+
     pub(crate) fn import_ssh_config(&mut self, cx: &mut Context<Self>) {
         let ssh_config_path =
             directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));
