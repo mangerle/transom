@@ -7,6 +7,7 @@ use transom_core::{
     ForwardStatus, KnownHostsStore, SecretStore, SettingsStore, SftpOperation, TabId, TerminalIo,
     TransferId,
 };
+mod host_exec;
 mod lifecycle;
 mod pty;
 mod samplers;
@@ -14,6 +15,7 @@ mod sftp_exec;
 mod sftp_finish;
 mod sync_exec;
 
+use host_exec::run_batch;
 use lifecycle::{
     Admission, AdoptConnection, ConnectingTab, KeyDeployParams, ShutdownTables, TabCleanupTables,
     admit_connection, adopt_connection, deploy_key, drop_local_stats, shutdown_all, stop_forwards,
@@ -214,11 +216,25 @@ async fn run_controller(
     // 断开/关标签/重连时随 stop_zmodem 回收。
     let mut zmodem_tasks: HashMap<TabId, tokio::task::JoinHandle<()>> = HashMap::new();
     let mut zmodem_controls: HashMap<TabId, ZmodemControl> = HashMap::new();
+    // 主机动作（拨测/唤醒）批次任务与跨批次并发闸门：信号量放在控制器侧，
+    // 用户连点两次也不会翻倍占用在途连接数。
+    let action_permits = Arc::new(tokio::sync::Semaphore::new(
+        host_exec::MAX_CONCURRENT_ACTIONS,
+    ));
+    let mut host_action_tasks: JoinSet<()> = JoinSet::new();
 
     loop {
         let incoming = tokio::select! {
             command = command_rx.recv_async() => Incoming::Command(command),
             internal = internal_rx.recv_async() => Incoming::Internal(internal),
+            // 批次任务收自己：异常退出要可见，否则界面会停在"进行中"。
+            joined = host_action_tasks.join_next(), if !host_action_tasks.is_empty() => {
+                // 批次任务内部已为每条动作补齐结果，这里只记录批次级异常。
+                if let Some(Err(error)) = joined {
+                    tracing::error!("主机动作批次任务异常退出，本批结果可能不完整: {error}");
+                }
+                continue;
+            }
         };
 
         match incoming {
@@ -382,6 +398,13 @@ async fn run_controller(
                     CloudSyncJob::Pull { settings },
                 )
                 .await;
+            }
+            Incoming::Command(Ok(AppCommand::RunHostActions { actions })) => {
+                host_action_tasks.spawn(run_batch(
+                    actions,
+                    event_tx.clone(),
+                    action_permits.clone(),
+                ));
             }
             Incoming::Command(Ok(AppCommand::ZmodemUpload { tab_id, files })) => {
                 if let Some(control) = zmodem_controls.get(&tab_id)

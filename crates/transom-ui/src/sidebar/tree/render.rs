@@ -192,6 +192,40 @@ impl AppShell {
                             }),
                     )
                     .item(PopupMenuItem::separator())
+                    // 文件夹口径含子文件夹：一次问清整组机器通不通，或整组唤醒。
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("menu.probe_folder").to_string())
+                            .icon(IconName::Network)
+                            .on_click({
+                                let app = app.clone();
+                                move |_, _, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.run_host_actions_for_folder(
+                                            crate::host_actions::HostActionKind::Probe,
+                                            folder_id,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("menu.wake_folder").to_string())
+                            .icon(IconName::Power)
+                            .on_click({
+                                let app = app.clone();
+                                move |_, _, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.run_host_actions_for_folder(
+                                            crate::host_actions::HostActionKind::Wake,
+                                            folder_id,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )
+                    .item(PopupMenuItem::separator())
                     .item(
                         PopupMenuItem::new(rust_i18n::t!("menu.delete_folder").to_string())
                             .icon(IconName::Trash)
@@ -375,6 +409,38 @@ impl AppShell {
                                 move |_, _, cx| {
                                     app.update(cx, |this, cx| {
                                         this.duplicate_session(session_id, cx);
+                                    });
+                                }
+                            }),
+                    )
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("menu.probe").to_string())
+                            .icon(IconName::Network)
+                            .on_click({
+                                let app = app.clone();
+                                move |_, _, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.run_host_actions_for_sessions(
+                                            crate::host_actions::HostActionKind::Probe,
+                                            session_id,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("menu.wake_on_lan").to_string())
+                            .icon(IconName::Power)
+                            .on_click({
+                                let app = app.clone();
+                                move |_, _, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.run_host_actions_for_sessions(
+                                            crate::host_actions::HostActionKind::Wake,
+                                            session_id,
+                                            cx,
+                                        );
                                     });
                                 }
                             }),

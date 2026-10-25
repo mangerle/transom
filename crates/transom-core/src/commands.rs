@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forward::{ForwardRule, ForwardStatus};
-use crate::ids::{ConnectionId, ForwardId, TabId, TransferId};
+use crate::host::{HostAction, HostOutcome};
+use crate::ids::{ConnectionId, ForwardId, SessionId, TabId, TransferId};
 use crate::prompt::PromptInfo;
 use crate::secrets::ConnectionSecrets;
 use crate::session::Session;
@@ -55,6 +56,11 @@ pub enum AppCommand {
     /// 从云同步端点下载并解密备份文档，合并动作由界面侧完成。
     CloudSyncPull {
         settings: SyncSettings,
+    },
+    /// 批量主机动作（TCP 拨测 / Wake-on-LAN）；动作已由界面侧从会话派生为
+    /// 合法入参，控制器只负责并发执行并逐条回报结果。
+    RunHostActions {
+        actions: Vec<HostAction>,
     },
     /// ZMODEM 上传决策：用户从文件选择对话框确认后的文件列表。
     ZmodemUpload {
@@ -237,6 +243,12 @@ pub enum AppEvent {
     /// 请求直连的地址；`None` 表示用户在没有地址的情况下再次启动应用，
     /// 只需要把已有实例唤起。经单实例套接字进入与控制器共用的事件通道。
     DeepLink { url: Option<String> },
+    /// 一条主机动作的结局；每个 `HostAction` 恰好回报一次，界面据此收敛
+    /// "进行中"计数，不会出现漏报导致的转圈不停。
+    HostActionResult {
+        session_id: SessionId,
+        outcome: HostOutcome,
+    },
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]

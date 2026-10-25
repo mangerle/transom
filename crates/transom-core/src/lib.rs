@@ -7,10 +7,12 @@ pub mod commands;
 pub mod error;
 pub mod forward;
 mod highlight;
+pub mod host;
 pub mod ids;
 pub mod keys;
 pub mod known_hosts;
 pub mod layout;
+pub mod mac;
 pub mod paths;
 pub mod prompt;
 pub mod secrets;
@@ -43,12 +45,14 @@ pub use forward::{
     TargetAddress,
 };
 pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan, TerminalHighlight};
+pub use host::{HostAction, HostOutcome};
 pub use ids::{
     ConnectionId, FolderId, ForwardId, GroupId, SessionId, SnippetId, SplitId, TabId, TransferId,
 };
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, StatusItemId};
+pub use mac::{MacAddress, MacParseError, normalize_mac};
 pub use prompt::{PromptInfo, PromptKind};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind};
 pub use serial::{SerialPortDescriptor, SerialPortProvider};

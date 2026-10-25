@@ -135,6 +135,7 @@ async fn connect(port: u16, dir: &tempfile::TempDir) -> SshSession {
             keepalive_secs: 0,
             allow_keyboard_interactive: false,
             auto_reconnect: false,
+            wol_mac: None,
         },
     };
     tokio::time::timeout(

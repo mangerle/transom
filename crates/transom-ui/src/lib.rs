@@ -11,6 +11,7 @@ mod cloud_sync;
 mod connection;
 mod events;
 mod forward;
+mod host_actions;
 mod keymap;
 mod keys;
 mod modals;

@@ -46,6 +46,16 @@ pub enum NetError {
     /// 用户取消（关闭弹窗、凭据输入为空等）。
     #[error("操作已取消: {reason}")]
     Cancelled { reason: String },
+    /// 主机拨测超时：端口在给定时间内没有完成三次握手。
+    #[error("探测远端端口超时，主机: {host}，端口: {port}，等待: {timeout_ms} 毫秒")]
+    ProbeTimeout {
+        host: String,
+        port: u16,
+        timeout_ms: u64,
+    },
+    /// Wake-on-LAN 魔法包发送失败（MAC 非法、无广播路由或套接字不可用）。
+    #[error("发送 Wake-on-LAN 魔法包失败，网卡: {mac}，原因: {reason}")]
+    Wake { mac: String, reason: String },
 }
 
 impl NetError {
@@ -57,6 +67,10 @@ impl NetError {
             Self::Auth { .. } => ErrorCode::AuthFailed,
             Self::Channel { .. } => ErrorCode::ChannelFailed,
             Self::Cancelled { .. } => ErrorCode::Cancelled,
+            Self::ProbeTimeout { .. } => ErrorCode::Timeout,
+            // 唤醒失败是"本机没能把包发出去"，归到 IO 而不是连接失败：
+            // 目标机器状态未知，不能被误读成对端拒绝。
+            Self::Wake { .. } => ErrorCode::Io,
         }
     }
 }
@@ -90,5 +104,25 @@ mod tests {
             transom_core::AppError::from(error).code,
             transom_core::ErrorCode::AuthFailed
         );
+
+        // 拨测超时归 Timeout，与"连不上"区分开，界面可单独提示改长超时。
+        let error = NetError::ProbeTimeout {
+            host: "10.0.0.8".to_string(),
+            port: 22,
+            timeout_ms: 2000,
+        };
+        assert_eq!(
+            transom_core::AppError::from(error).code,
+            transom_core::ErrorCode::Timeout
+        );
+
+        // 唤醒失败是本地发送问题，不能报成对端连接失败。
+        let error = NetError::Wake {
+            mac: "aa:bb:cc:dd:ee:ff".to_string(),
+            reason: "network is unreachable".to_string(),
+        };
+        let app_error = transom_core::AppError::from(error);
+        assert_eq!(app_error.code, transom_core::ErrorCode::Io);
+        assert!(app_error.to_string().contains("aa:bb:cc:dd:ee:ff"));
     }
 }

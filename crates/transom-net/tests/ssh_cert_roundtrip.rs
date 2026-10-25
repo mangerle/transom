@@ -175,6 +175,7 @@ async fn run_case(
             keepalive_secs: 0,
             allow_keyboard_interactive: false,
             auto_reconnect: false,
+            wol_mac: None,
         },
     };
     let result = tokio::time::timeout(

@@ -56,6 +56,8 @@ pub(crate) struct SessionForm {
     pub save_passphrase: bool,
     /// 意外断线后自动重连（见 AppShell::schedule_auto_reconnect）。
     pub auto_reconnect: bool,
+    /// 关机主机的网卡 MAC，供 Wake-on-LAN 使用；留空表示不启用唤醒。
+    pub wol_mac: Entity<InputState>,
     pub confirm_delete: bool,
     pub error: Option<String>,
 }
@@ -272,6 +274,10 @@ impl SessionForm {
             .unwrap_or_else(default_username);
         let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
             || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
+        // 只有 SSH 会话有 MAC 字段（见 HostAction::wake_for），回填同口径。
+        let wol_mac = ssh
+            .and_then(|ssh| ssh.options.wol_mac.clone())
+            .unwrap_or_default();
 
         Self {
             base,
@@ -327,6 +333,12 @@ impl SessionForm {
             save_password,
             save_passphrase,
             auto_reconnect,
+            wol_mac: text_input(
+                window,
+                cx,
+                &wol_mac,
+                &rust_i18n::t!("form.wol_mac_placeholder"),
+            ),
             confirm_delete: false,
             error: None,
         }
@@ -417,6 +429,12 @@ impl SessionForm {
             .map(|ssh| ssh.options.clone())
             .unwrap_or_default();
         options.auto_reconnect = self.auto_reconnect;
+        // MAC 只在非空时校验：留空是"不启用唤醒"的合法表达，不该报错。
+        // 填错必须挡下——静默保留旧值会让用户以为改成功了。
+        options.wol_mac = match transom_core::normalize_mac(&self.wol_mac.read(cx).value()) {
+            Ok(mac) => mac,
+            Err(_) => return Err(rust_i18n::t!("form.error_mac").to_string()),
+        };
         // 连接参数与键位一样属于"填错就填不进"的数值：越界一律回退存量，
         // 不用报错打断保存流程。
         if let Ok(timeout) = self.connect_timeout.read(cx).value().trim().parse::<u64>()

@@ -3,6 +3,7 @@
 use crate::UiServices;
 use crate::cloud_sync::SyncFormInputs;
 use crate::forward::{ForwardPanelState, PendingForwardConfirm};
+use crate::host_actions::HostActionsModal;
 use crate::keymap;
 use crate::keys::KeyWizardState;
 use crate::palette::{Palette, localized_error};
@@ -387,6 +388,9 @@ pub struct AppShell {
     pub(crate) pending_credential: Option<PendingCredential>,
     /// known_hosts 管理弹窗的聚合状态（开关、记录与搜索框）。
     pub(crate) known_hosts_modal: KnownHostsModalState,
+    /// 主机批量拨测/唤醒的结果弹窗；同一时刻只有一批在展示，重复发起会直接
+    /// 覆盖上一批（控制器侧的并发闸门仍在，不会叠出第二批在途动作）。
+    pub(crate) host_actions: Option<HostActionsModal>,
     pub(crate) show_quick_open: bool,
     pub(crate) quick_open_state: Entity<CommandState>,
     /// 设置弹窗的聚合状态：开关、密钥向导与全部输入框实体。
@@ -618,6 +622,7 @@ impl AppShell {
                 records: known_hosts_records,
                 search: known_hosts_search,
             },
+            host_actions: None,
             show_quick_open: false,
             quick_open_state,
             settings_modal: SettingsModalState {
@@ -836,6 +841,9 @@ impl AppShell {
         }
         if self.known_hosts_modal.open {
             overlays.push(self.render_known_hosts_modal(window, cx, &p));
+        }
+        if self.host_actions.is_some() {
+            overlays.push(self.render_host_actions_modal(window, cx, &p));
         }
         if self.confirm_forward_any.is_some() {
             overlays.push(self.render_forward_confirm_modal(window, cx, &p));

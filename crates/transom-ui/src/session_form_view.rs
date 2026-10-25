@@ -230,6 +230,13 @@ impl AppShell {
                         rust_i18n::t!("form.keepalive").to_string(),
                         form.keepalive.clone(),
                         p,
+                    ))
+                    // 关机后靠魔法包唤醒才谈得上连接，所以放在 SSH 段里；
+                    // 只有填了 MAC 的会话才在右键菜单上具备唤醒能力。
+                    .child(Self::form_field(
+                        rust_i18n::t!("form.wol_mac").to_string(),
+                        form.wol_mac.clone(),
+                        p,
                     ));
                 match form.auth {
                     AuthChoice::Password => {

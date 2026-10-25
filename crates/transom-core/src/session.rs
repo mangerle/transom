@@ -311,6 +311,12 @@ pub struct SessionOptions {
     /// 老会话文件没有该字段，按关闭降级。
     #[serde(default)]
     pub auto_reconnect: bool,
+    /// 关机主机的网卡 MAC（规范化为 `aa:bb:cc:dd:ee:ff`），供 Wake-on-LAN 使用。
+    ///
+    /// 存文本而非新类型：单个手写坏值只会让这一条会话的唤醒失败并给出明确
+    /// 错误，而不是把整个会话库的反序列化打挂。老会话文件没有该字段，按未配置降级。
+    #[serde(default)]
+    pub wol_mac: Option<String>,
 }
 
 impl Default for SessionOptions {
@@ -320,6 +326,7 @@ impl Default for SessionOptions {
             keepalive_secs: 30,
             allow_keyboard_interactive: true,
             auto_reconnect: false,
+            wol_mac: None,
         }
     }
 }
@@ -335,6 +342,25 @@ mod tests {
             r#"{"connect_timeout_secs":15,"keepalive_secs":30,"allow_keyboard_interactive":true}"#;
         let options: SessionOptions = serde_json::from_str(legacy).unwrap();
         assert!(!options.auto_reconnect);
+    }
+
+    /// MAC 字段更晚加入：老会话文件的 options 没有它，必须按未配置降级而不是解析失败。
+    #[test]
+    fn legacy_options_load_without_wol_mac() {
+        let legacy = r#"{
+            "connect_timeout_secs":15,
+            "keepalive_secs":30,
+            "allow_keyboard_interactive":true,
+            "auto_reconnect":true
+        }"#;
+        let options: SessionOptions = serde_json::from_str(legacy).unwrap();
+        assert_eq!(options.wol_mac, None);
+
+        let configured: SessionOptions = serde_json::from_str(
+            r#"{"connect_timeout_secs":15,"keepalive_secs":0,"allow_keyboard_interactive":false,"wol_mac":"aa:bb:cc:dd:ee:ff"}"#,
+        )
+        .unwrap();
+        assert_eq!(configured.wol_mac.as_deref(), Some("aa:bb:cc:dd:ee:ff"));
     }
 
     /// 证书字段是后加的：老会话文件里的私钥认证没有 `cert_path`，必须按"不带证书"降级。

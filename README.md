@@ -36,6 +36,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 - Connection types: SSH2 (password, keyboard-interactive, public key, OpenSSH CA user certificates, `ssh-agent` on Unix), local PTY shell, and serial console for embedded boards and switch management ports.
 - Modern crypto only: AES-128/256-GCM and ChaCha20-Poly1305 ciphers, SHA2-512 MACs, `zlib` stream compression, RSA / ECDSA / Ed25519 keys.
 - Keepalive probes every 30 s with 3-strike disconnect, so cloud firewalls cannot silently drop an idle session.
+- Right-click a session or a whole folder to TCP-probe every host in one batch (handshake latency per row, 16 in flight at a time) and to send a Wake-on-LAN magic packet to the MAC stored on the session.
 - Sessions restored and reconnected on launch; catalog exported/imported as plain JSON/YAML or as an Argon2id + XChaCha20-Poly1305 encrypted vault.
 - Quick open (`$app-k`) doubles as quick connect: type `deploy@10.0.0.8:2222` and the panel offers a direct connection that never enters the session list.
 
