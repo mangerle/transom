@@ -152,7 +152,7 @@ cargo test
 
 ## 路线图
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 116 项评估过的能力及其完成状态。推进中的项目：跳板机 ProxyJump 链式隧道、跨窗格广播输入、撰写窗格、以及会话环境色标识。已明确记录的缺口：SOCKS5 目前仅支持无认证代理，且尚未提供签名安装包。
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 115 项评估过的能力及其完成状态。推进中的项目：跳板机 ProxyJump 链式隧道、跨窗格广播输入、撰写窗格、以及会话环境色标识。已明确记录的缺口：SOCKS5 目前仅支持无认证代理，且尚未提供签名安装包。
 
 ## 参与贡献
 
