@@ -52,8 +52,11 @@ app:
     en: Quick Open
     zh-CN: 快速打开
   quick_open_placeholder:
-    en: Type to search sessions or local terminal...
-    zh-CN: 输入关键字搜索会话或本地终端...
+    en: Type to search sessions, or paste a host to connect directly...
+    zh-CN: 输入关键字搜索会话，或填入主机地址直接连接...
+  quick_connect:
+    en: "Connect directly to %{host} (without saving)"
+    zh-CN: "直接连接 %{host}（不保存会话）"
   error:
     en: Error
     zh-CN: 错误

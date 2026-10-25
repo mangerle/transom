@@ -105,6 +105,29 @@ impl AppShell {
         self.start_connection(tab_id, session, cx);
     }
 
+    /// Quick Connect：解析主机串并发起不落盘的临时 SSH 连接。
+    ///
+    /// 设计原理（Why）：与 `open_local_terminal` 同形——构造 `Session` 后直接
+    /// 走建组与连接，不写入 catalog、不调 `persist_catalog`，因此"试一次新主机"
+    /// 不会污染会话列表；解析失败只在错误栏提示，不打断面板操作。
+    /// 临时会话的凭据按 Agent 方式发起，服务器要求口令时由认证阶段向用户索取。
+    pub(crate) fn connect_quick_host(&mut self, host: &str, cx: &mut Context<Self>) {
+        let session = match transom_core::quick_connect_session(host) {
+            Ok(session) => session,
+            Err(error) => {
+                self.error = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+        let tab_id = TabId::new();
+        self.create_group(tab_id, session.id);
+        self.tabs
+            .push(TerminalTab::pending(tab_id, session.clone()));
+        self.active_tab = Some(tab_id);
+        self.start_connection(tab_id, session, cx);
+    }
+
     pub(crate) fn import_ssh_config(&mut self, cx: &mut Context<Self>) {
         let ssh_config_path =
             directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));

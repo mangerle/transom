@@ -21,6 +21,7 @@ pub mod sftp;
 pub mod sftp_filter;
 pub mod sftp_sync;
 pub mod ssh_config;
+pub mod ssh_url;
 pub mod storage;
 pub mod sync;
 pub mod system_stats;
@@ -74,6 +75,9 @@ pub use sftp_sync::{
     SyncItem, build_dir_comparison,
 };
 pub use ssh_config::{parse_ssh_config, parse_ssh_config_with_home};
+pub use ssh_url::{
+    DEFAULT_SSH_PORT, SshTarget, looks_like_host, parse_ssh_target, quick_connect_session,
+};
 pub use storage::{BackupService, SecretStore, SessionStore, SettingsStore};
 pub use sync::{
     CloudSyncTarget, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME, SyncEndpoint, SyncPushReport,

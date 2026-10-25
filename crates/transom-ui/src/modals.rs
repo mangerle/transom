@@ -162,11 +162,16 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let app_entity = cx.entity().clone();
+        // 渲染期读取当前查询词：CommandState 在查询变化时会触发重渲染，
+        // 虚拟直连项因此始终与输入框内容同步，无需额外的 on_query 状态回写。
+        let query = self.quick_open_state.read(cx).query(cx).trim().to_string();
 
         #[derive(Clone)]
         enum QuickOpenTarget {
             Local,
             Session(SessionId),
+            /// 免保存直连：查询词本身是主机地址时的虚拟条目（Quick Connect）。
+            QuickConnect,
         }
 
         let mut targets: Vec<QuickOpenTarget> = Vec::new();
@@ -228,6 +233,18 @@ impl AppShell {
             );
         }
 
+        // 免保存直连虚拟项：查询词形似主机地址时追加，keywords 含查询词本身
+        // 保证过滤命中；放在已保存会话之后，同名主机的既有会话优先。
+        if transom_core::looks_like_host(&query) {
+            targets.push(QuickOpenTarget::QuickConnect);
+            items.push(
+                CommandItem::new()
+                    .icon(IconName::Globe)
+                    .label(rust_i18n::t!("app.quick_connect", host = query.clone()).to_string())
+                    .keywords(vec![SharedString::from(query)]),
+            );
+        }
+
         let targets = std::rc::Rc::new(targets);
         let targets_confirm = targets.clone();
 
@@ -250,6 +267,16 @@ impl AppShell {
                                 app.update(cx, |this, cx| {
                                     this.show_quick_open = false;
                                     this.connect_session(session_id, window, cx);
+                                });
+                            }
+                            QuickOpenTarget::QuickConnect => {
+                                // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
+                                let host = app.read_with(cx, |this, cx| {
+                                    this.quick_open_state.read(cx).query(cx).trim().to_string()
+                                });
+                                app.update(cx, |this, cx| {
+                                    this.show_quick_open = false;
+                                    this.connect_quick_host(&host, cx);
                                 });
                             }
                         }
