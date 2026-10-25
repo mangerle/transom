@@ -47,7 +47,7 @@ for f in $(ldd target/release/transom | awk '/=> \//{print $3}'); do echo "$f ->
 ## 核验命令
 
 ```bash
-dpkg-deb -I target/debian/transom_0.1.0-1_amd64.deb   # 控制字段与维护者脚本
-dpkg-deb -c target/debian/transom_0.1.0-1_amd64.deb   # 文件布局与权限位
+dpkg-deb -I target/debian/transom_1.0.0_amd64.deb   # 控制字段与维护者脚本
+dpkg-deb -c target/debian/transom_1.0.0_amd64.deb   # 文件布局与权限位
 desktop-file-validate packaging/linux/com.github.mangerle.transom.desktop
 ```

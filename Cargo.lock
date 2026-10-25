@@ -8106,7 +8106,7 @@ dependencies = [
 
 [[package]]
 name = "transom"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8124,7 +8124,7 @@ dependencies = [
 
 [[package]]
 name = "transom-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "directories",
@@ -8143,7 +8143,7 @@ dependencies = [
 
 [[package]]
 name = "transom-net"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -8172,7 +8172,7 @@ dependencies = [
 
 [[package]]
 name = "transom-store"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "argon2 0.5.3",
  "base64 0.22.1",
@@ -8191,7 +8191,7 @@ dependencies = [
 
 [[package]]
 name = "transom-terminal"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "alacritty_terminal",
  "flume",
@@ -8204,7 +8204,7 @@ dependencies = [
 
 [[package]]
 name = "transom-ui"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "directories",
