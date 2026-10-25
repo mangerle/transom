@@ -6,8 +6,8 @@ mod logging;
 use controller::Controller;
 use std::sync::Arc;
 use transom_core::{
-    AppEvent, BackupService, KnownHostsStore, LogLevel, SecretStore, SerialPortProvider,
-    SessionStore, SettingsStore,
+    AppEvent, BackupService, DeepLinkRequest, KnownHostsStore, LogLevel, SecretStore,
+    SerialPortProvider, SessionStore, SettingsStore,
 };
 use transom_net::SystemSerialPortProvider;
 use transom_store::{
@@ -28,14 +28,14 @@ fn main() -> anyhow::Result<()> {
         eprintln!("日志系统装配失败，本次运行只有标准错误输出，原因: {error}");
     }
 
-    let urls = startup_urls();
+    let startup = startup_request();
 
     // 深链与单实例判定早于一切重量级初始化（钥匙串走 D-Bus 可能挂起秒级）：
-    // 已有实例在跑时本进程只负责转交地址，不该建立存储、控制器与窗口。
-    // `None` 即"地址已交接"，进程直接退出。
+    // 已有实例在跑时本进程只负责转交请求，不该建立存储、控制器与窗口。
+    // `None` 即"请求已交接"，进程直接退出。
     #[cfg(unix)]
-    let Some(primary) = deep_link::acquire_primary(&urls)? else {
-        log::info!("地址已转交给正在运行的实例，本次启动结束");
+    let Some(primary) = deep_link::acquire_primary(&startup)? else {
+        log::info!("唤起请求已转交给正在运行的实例，本次启动结束");
         return Ok(());
     };
 
@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(unix)]
     let _deep_link = primary.serve(controller.runtime(), controller.event_sender());
 
-    deliver_startup_urls(&controller, &urls);
+    deliver_startup_requests(&controller, startup);
 
     let services = transom_ui::UiServices {
         session_store,
@@ -80,32 +80,68 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 启动参数里的 `ssh://` 地址。
+/// 启动参数解析出的唤起请求（`ssh://` 地址 + 可选目录）。
 ///
-/// 非 Unix 平台返回空表：macOS/Windows 由平台层派发 URL 事件，这里若也接管
-/// 会把同一条地址连两次。
-fn startup_urls() -> Vec<String> {
+/// 非 Unix 平台返回空请求：macOS/Windows 由平台层派发 URL 事件，这里若也
+/// 接管会把同一条地址连两次。
+fn startup_request() -> StartupRequest {
     #[cfg(unix)]
     {
-        deep_link::urls_from_args(std::env::args())
+        deep_link::request_from_args(std::env::args())
     }
     #[cfg(not(unix))]
     {
+        StartupRequest::default()
+    }
+}
+
+/// 跨平台统一的启动请求形态：Unix 复用深链模块的解析结果，其余平台恒为空。
+#[cfg(unix)]
+type StartupRequest = deep_link::LaunchRequest;
+#[cfg(not(unix))]
+#[derive(Default)]
+struct StartupRequest;
+
+#[cfg(not(unix))]
+impl StartupRequest {
+    /// 非 Unix 恒为空迭代：平台层负责 URL 事件，这里不重复产出。
+    fn into_events(self) -> Vec<AppEvent> {
         Vec::new()
     }
 }
 
-/// 把冷启动带来的地址投进事件总线。
-///
-/// 与运行期唤起共用同一条路径：界面事件泵启动后按到达顺序消费，不必为
-/// "带地址启动"另开入口，也避免两个时机各写一遍连接逻辑。
-fn deliver_startup_urls(controller: &Controller, urls: &[String]) {
+impl StartupRequest {
+    /// 把冷启动请求按到达顺序展开成事件，与运行期唤起共用同一条投递路径：
+    /// 界面事件泵启动后顺序消费，不必为"带参数启动"另开入口。
+    #[cfg(unix)]
+    fn into_events(self) -> Vec<AppEvent> {
+        let mut events: Vec<AppEvent> = self
+            .urls
+            .into_iter()
+            .map(|url| AppEvent::DeepLink {
+                request: DeepLinkRequest::Ssh { url },
+            })
+            .collect();
+        if let Some(path) = self.dir {
+            events.push(AppEvent::DeepLink {
+                request: DeepLinkRequest::Dir { path },
+            });
+        }
+        events
+    }
+
+    #[cfg(not(unix))]
+    fn into_events(self) -> Vec<AppEvent> {
+        Vec::new()
+    }
+}
+
+/// 把冷启动带来的请求投进事件总线。
+fn deliver_startup_requests(controller: &Controller, startup: StartupRequest) {
     let event_tx = controller.event_sender();
-    for url in urls {
-        if let Err(error) = event_tx.try_send(AppEvent::DeepLink {
-            url: Some(url.clone()),
-        }) {
-            log::error!("启动参数中的深链地址未能投递，已丢弃，原因: {error}");
+    for event in startup.into_events() {
+        if let Err(error) = event_tx.try_send(event) {
+            log::error!("启动参数中的唤起请求未能投递，已丢弃，原因: {error}");
         }
     }
 }

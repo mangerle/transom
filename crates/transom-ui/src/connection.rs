@@ -10,9 +10,9 @@ use gpui_kit::component::input::Enter;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, AppError, AuthMethod, Connection, ConnectionId, ConnectionSecrets, ErrorCode,
-    LocalConnection, PromptKind, SecretKey, SecretKind, SecretStore, Session, SessionId, TabId,
-    TerminalSize, parse_ssh_config,
+    AppCommand, AppError, AuthMethod, Connection, ConnectionId, ConnectionSecrets, DeepLinkRequest,
+    ErrorCode, LocalConnection, PromptKind, SecretKey, SecretKind, SecretStore, Session, SessionId,
+    TabId, TerminalSize, parse_ssh_config,
 };
 use zeroize::Zeroizing;
 
@@ -107,13 +107,33 @@ impl AppShell {
     }
 
     pub(crate) fn open_local_terminal(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.spawn_local_terminal(None, cx);
+    }
+
+    /// 新开一个本地终端标签；`working_dir` 为 `None` 时子进程继承应用进程目录
+    /// （默认终端场景：launcher 已把本进程 `cd` 进目标目录）。
+    ///
+    /// 带目录的标签标题附目录名：文件管理器连点"在终端打开"会开出多个
+    /// 同名"本地终端"标签，没有目录名就无法区分靶子。
+    fn spawn_local_terminal(
+        &mut self,
+        working_dir: Option<std::path::PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        let title = match working_dir.as_deref().and_then(|dir| {
+            dir.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        }) {
+            Some(name) => format!("{} · {name}", rust_i18n::t!("app.new_local")),
+            None => rust_i18n::t!("app.new_local").to_string(),
+        };
         let tab_id = TabId::new();
         let session = Session::new(
-            rust_i18n::t!("app.new_local").to_string(),
+            title,
             Connection::Local(LocalConnection {
                 // 本地 shell 是全局偏好：一键创建的本地终端没有表单可填。
                 shell: self.settings.local_shell.clone(),
-                working_dir: None,
+                working_dir,
             }),
         );
         self.create_group(tab_id, session.id);
@@ -146,20 +166,21 @@ impl AppShell {
         self.start_connection(tab_id, session, cx);
     }
 
-    /// 桌面深链唤起：`Some(url)` 直连该地址，`None` 表示只是再次启动应用。
+    /// 桌面深链唤起：按 [`DeepLinkRequest`] 语义分派——ssh 地址走 Quick
+    /// Connect、目录请求新开带目录的本地终端、`Activate` 仅唤起界面。
     ///
     /// 与 Quick Connect 共用 `quick_connect_session`：浏览器点来的 `ssh://`
     /// 地址和面板里手敲的主机串必须按同一套规则解析，否则会出现"这里能连、
     /// 那里连不上"的割裂行为。深链同样是临时会话，不落 catalog。
     /// `cx.activate` 在 Linux 是空操作（gpui 未实现平台唤起），仅 macOS/
     /// Windows 生效；这里调用它是为了在支持的平台上不留死角。
-    pub(crate) fn handle_deep_link(&mut self, url: Option<String>, cx: &mut Context<Self>) {
+    pub(crate) fn handle_deep_link(&mut self, request: DeepLinkRequest, cx: &mut Context<Self>) {
         cx.activate(true);
-        let Some(url) = url else {
-            cx.notify();
-            return;
-        };
-        self.connect_quick_host(&url, cx);
+        match request {
+            DeepLinkRequest::Ssh { url } => self.connect_quick_host(&url, cx),
+            DeepLinkRequest::Dir { path } => self.spawn_local_terminal(Some(path), cx),
+            DeepLinkRequest::Activate => cx.notify(),
+        }
     }
 
     /// 记录一条采集到的命令：更新内存快照并后台落盘。

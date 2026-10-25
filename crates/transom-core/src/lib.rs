@@ -40,7 +40,7 @@ pub use backup::{
 };
 pub use catalog::{CatalogError, CatalogMergeSummary, DropSide, SessionCatalog, SessionFolder};
 pub use color::Rgb;
-pub use commands::{AppCommand, AppEvent, SystemStats};
+pub use commands::{AppCommand, AppEvent, DeepLinkRequest, SystemStats};
 pub use error::{AppError, ErrorCode};
 pub use forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,

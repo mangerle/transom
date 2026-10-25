@@ -239,16 +239,31 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         event: crate::zmodem::ZmodemEvent,
     },
-    /// 桌面深链唤起：`Some(url)` 是外部（浏览器 `ssh://` 链接、其他工具）
-    /// 请求直连的地址；`None` 表示用户在没有地址的情况下再次启动应用，
-    /// 只需要把已有实例唤起。经单实例套接字进入与控制器共用的事件通道。
-    DeepLink { url: Option<String> },
+    /// 桌面深链唤起：外部（浏览器 `ssh://` 链接、文件管理器"在终端打开"、
+    /// 再次启动应用）经单实例套接字进来的请求，语义见 [`DeepLinkRequest`]。
+    DeepLink { request: DeepLinkRequest },
     /// 一条主机动作的结局；每个 `HostAction` 恰好回报一次，界面据此收敛
     /// "进行中"计数，不会出现漏报导致的转圈不停。
     HostActionResult {
         session_id: SessionId,
         outcome: HostOutcome,
     },
+}
+
+/// 外部进程经单实例套接字转交的唤起请求语义。
+///
+/// 设计原理（Why）：三种意图（直连地址、开本地终端、仅唤起）互斥，用枚举
+/// 而非 `Option<String>` 加散落标志位，让编译器挡住"又带地址又带目录 yet
+/// 只处理一个"这类漏实现；新增变体时所有 match 点强制曝光。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeepLinkRequest {
+    /// 浏览器等外部来源请求直连的 `ssh://[user@]host[:port]` 地址。
+    Ssh { url: String },
+    /// 文件管理器等外部来源请求在指定本地目录新开一个终端标签；
+    /// 路径在进入事件前已校验为存在的绝对目录。
+    Dir { path: std::path::PathBuf },
+    /// 无参数的再次启动：只需要把已有实例界面唤起。
+    Activate,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]

@@ -608,8 +608,8 @@ impl AppShell {
                 self.handle_probe_result(session_id, outcome, cx);
                 return;
             }
-            AppEvent::DeepLink { url } => {
-                self.handle_deep_link(url, cx);
+            AppEvent::DeepLink { request } => {
+                self.handle_deep_link(request, cx);
                 return;
             }
         }
