@@ -1,6 +1,11 @@
 //! GPUI application shell, views, localization, and key bindings.
 rust_i18n::i18n!("locales", fallback = "en");
 
+/// 应用展示元数据。构建期由 cargo 注入版本号，状态栏兜底文案与设置"关于"页共用
+/// 这一份，避免版本号与仓库地址散落到多处硬编码后各自漂移。
+pub(crate) const APP_NAME: &str = "Transom";
+pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 mod activity_bar;
 mod app;
 mod app_render;

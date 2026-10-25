@@ -28,8 +28,10 @@ use transom_core::{Connection, NetworkTraffic, StatusItemId, SystemStats};
 const RATE_WIDTH: f32 = 2.5;
 /// CPU 数值槽按最宽的 `100%` 预留，取值跨到三位数时不会把百分号截掉。
 const CPU_VALUE_WIDTH: f32 = 2.25;
-const MEMORY_VALUE_WIDTH: f32 = 5.25;
-const DISK_VALUE_WIDTH: f32 = 6.0;
+// 内存与磁盘槽按"1023G/1023G 100%"这一最宽组合预留：体积带上小数后比纯整数
+// 多出两到三个字符，槽宽不足会走 truncate，把磁盘百分比整个截掉。
+const MEMORY_VALUE_WIDTH: f32 = 6.5;
+const DISK_VALUE_WIDTH: f32 = 6.5;
 const OS_VALUE_WIDTH: f32 = 6.5;
 const UPTIME_VALUE_WIDTH: f32 = 3.0;
 pub(crate) const BADGE_HEIGHT: f32 = 1.25;
@@ -58,6 +60,30 @@ pub(crate) fn format_rate(bytes_per_sec: u64) -> String {
         format!("{scaled:.1}{unit}/s")
     } else {
         format!("{scaled:.0}{unit}/s")
+    }
+}
+
+/// 内存/磁盘体积的紧凑格式：按 1024 进位选单位，精度沿用 [`format_rate`] 的口径
+/// （小于 100 保留一位小数，否则取整）。
+///
+/// 设计原理（Why）：原先直接写 `{:.0}G`，把 `3.7G` 显示成 `4G`，小内存机器与
+/// 半满/将满的区分度全丢；同时 TB 级磁盘会显示成 `1863G` 这种四位长串。改为单位
+/// 进位后字符串长度有界（最长 `1023G`），既能给出小数又不会撑爆数值槽。
+fn format_compact_size(bytes: u64) -> String {
+    const UNITS: [char; 5] = ['B', 'K', 'M', 'G', 'T'];
+    let mut value = bytes as f64;
+    let mut unit = 0usize;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        return format!("{bytes}B");
+    }
+    if value < 100.0 {
+        format!("{value:.1}{}", UNITS[unit])
+    } else {
+        format!("{value:.0}{}", UNITS[unit])
     }
 }
 
@@ -132,7 +158,7 @@ impl AppShell {
             let text = self
                 .status
                 .clone()
-                .unwrap_or_else(|| "Transom v0.1.0".to_string());
+                .unwrap_or_else(|| format!("{} v{}", crate::APP_NAME, crate::APP_VERSION));
             right_elements.push(
                 div()
                     .text_xs()
@@ -302,7 +328,11 @@ impl AppShell {
                 let mem_pct = (stats.mem_used_bytes as f64 / stats.mem_total_bytes as f64) * 100.0;
                 let content = Self::icon_value(
                     IconName::MemoryStick,
-                    format!("{used_gb:.0}G/{total_gb:.0}G {mem_pct:.0}%"),
+                    format!(
+                        "{}/{} {mem_pct:.0}%",
+                        format_compact_size(stats.mem_used_bytes),
+                        format_compact_size(stats.mem_total_bytes)
+                    ),
                     MEMORY_VALUE_WIDTH,
                     p.foreground,
                     p.muted_foreground,
@@ -321,7 +351,11 @@ impl AppShell {
                     (stats.disk_used_bytes as f64 / stats.disk_total_bytes as f64) * 100.0;
                 let content = Self::icon_value(
                     IconName::HardDrive,
-                    format!("{used_gb:.0}G/{total_gb:.0}G {disk_pct:.0}%"),
+                    format!(
+                        "{}/{} {disk_pct:.0}%",
+                        format_compact_size(stats.disk_used_bytes),
+                        format_compact_size(stats.disk_total_bytes)
+                    ),
                     DISK_VALUE_WIDTH,
                     p.foreground,
                     p.muted_foreground,
@@ -489,7 +523,7 @@ pub(crate) fn status_item_label(id: StatusItemId) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::format_rate;
+    use super::{format_compact_size, format_rate};
 
     #[test]
     fn formats_rates_with_compact_units() {
@@ -499,5 +533,26 @@ mod tests {
         assert_eq!(format_rate(1024 * 1024), "1.0M/s");
         assert_eq!(format_rate(3 * 1024 * 1024 * 1024), "3.0G/s");
         assert_eq!(format_rate(1024 * 1024 / 2), "512K/s");
+    }
+
+    #[test]
+    fn formats_sizes_with_one_decimal_below_hundred() {
+        const KIB: u64 = 1024;
+        const MIB: u64 = KIB * 1024;
+        const GIB: u64 = MIB * 1024;
+        const TIB: u64 = GIB * 1024;
+        // 不足 1 KiB 仍是字节，不带小数。
+        assert_eq!(format_compact_size(0), "0B");
+        assert_eq!(format_compact_size(1023), "1023B");
+        // 小于 100 保留一位小数：小内存机器不再被抹成整数。
+        assert_eq!(format_compact_size(KIB), "1.0K");
+        assert_eq!(format_compact_size(1536 * MIB), "1.5G");
+        assert_eq!(format_compact_size(15 * GIB + GIB / 2), "15.5G");
+        // 大于等于 100 取整，避免 `999.9G` 这类长串挤掉百分比。
+        assert_eq!(format_compact_size(512 * GIB), "512G");
+        assert_eq!(format_compact_size(1023 * GIB), "1023G");
+        // TB 级磁盘自动进位，不会显示成 `1863G`。
+        assert_eq!(format_compact_size(1536 * GIB), "1.5T");
+        assert_eq!(format_compact_size(TIB), "1.0T");
     }
 }
