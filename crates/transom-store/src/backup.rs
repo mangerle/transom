@@ -150,11 +150,10 @@ impl BackupService for CatalogBackupService {
                     Ok(()) => report.restored += 1,
                     Err(error) => {
                         report.failed += 1;
-                        tracing::warn!(
-                            owner = ?secret.owner,
-                            kind = ?secret.kind,
-                            %error,
-                            "备份口令写入钥匙串失败"
+                        log::warn!(
+                            "备份口令写入钥匙串失败，归属: {:?}，类型: {:?}，原因: {error}",
+                            secret.owner,
+                            secret.kind
                         );
                     }
                 },

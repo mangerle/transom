@@ -151,7 +151,7 @@ impl TerminalView {
                         // EINTR 是被信号打断的可重试错误：误判为退出会让终端凭空断开。
                         Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
                         Err(error) => {
-                            tracing::warn!("读取终端输出失败，按已退出处理，原因: {error}");
+                            log::warn!("读取终端输出失败，按已退出处理，原因: {error}");
                             break;
                         }
                     }
@@ -162,7 +162,7 @@ impl TerminalView {
                 }
             });
         if reader_spawn.is_err() {
-            tracing::error!("创建终端读取线程失败，该窗格按已退出降级处理");
+            log::error!("创建终端读取线程失败，该窗格按已退出降级处理");
             let _ = exit_tx.try_send(Event::Exit);
         }
 
@@ -176,7 +176,7 @@ impl TerminalView {
                 while let Ok(bytes) = input_rx.recv() {
                     // write_all 内部已对 Interrupted 自动重试，这里只需兜底真实故障。
                     if let Err(error) = writer.write_all(&bytes) {
-                        tracing::warn!("写入终端输入失败，按已退出处理，原因: {error}");
+                        log::warn!("写入终端输入失败，按已退出处理，原因: {error}");
                         let _ = writer_exit_tx.try_send(Event::Exit);
                         break;
                     }
@@ -184,7 +184,7 @@ impl TerminalView {
                 }
             });
         if writer_spawn.is_err() {
-            tracing::error!("创建终端写入线程失败，该窗格按已退出降级处理");
+            log::error!("创建终端写入线程失败，该窗格按已退出降级处理");
             let _ = exit_tx.try_send(Event::Exit);
         }
 
@@ -333,7 +333,7 @@ impl TerminalView {
             // 256 深度对人速按键与整批粘贴绰绰有余，打满只可能是写入线程
             // 卡死：此时丢掉本批输入并继续存活判定，比在 UI 线程阻塞等待好。
             Err(flume::TrySendError::Full(_)) => {
-                tracing::warn!("终端输入队列已满，本批输入被丢弃");
+                log::warn!("终端输入队列已满，本批输入被丢弃");
                 true
             }
             Err(flume::TrySendError::Disconnected(_)) => false,
@@ -708,16 +708,16 @@ impl TerminalView {
             .iter()
             .any(|prefix| uri.starts_with(prefix))
         {
-            tracing::warn!("超链接协议不在白名单内，已拒绝打开: {uri}");
+            log::warn!("超链接协议不在白名单内，已拒绝打开: {uri}");
             return true;
         }
-        tracing::info!("打开终端超链接: {uri}");
+        log::info!("打开终端超链接: {uri}");
         #[cfg(unix)]
         if let Err(error) = std::process::Command::new("xdg-open").arg(&uri).spawn() {
-            tracing::warn!("打开超链接失败: {error}");
+            log::warn!("打开超链接失败: {error}");
         }
         #[cfg(not(unix))]
-        tracing::warn!("当前平台暂不支持打开终端超链接");
+        log::warn!("当前平台暂不支持打开终端超链接");
         true
     }
 
@@ -897,16 +897,16 @@ impl Render for TerminalView {
                             // 尺寸同步失败会直接导致网格与 PTY 失配（提示符错位），
                             // 因此不再静默忽略，按警告记录并给出排查方向
                             if control.resize(size) {
-                                tracing::debug!(
-                                    cols = size.cols,
-                                    rows = size.rows,
-                                    "终端网格尺寸已更新并同步至 PTY"
+                                log::debug!(
+                                    "终端网格尺寸已更新并同步至 PTY，列数: {}，行数: {}",
+                                    size.cols,
+                                    size.rows
                                 );
                             } else {
-                                tracing::warn!(
-                                    cols = size.cols,
-                                    rows = size.rows,
-                                    "PTY 窗口尺寸同步失败（控制通道已断开），画面可能持续错位，请重连会话"
+                                log::warn!(
+                                    "PTY 窗口尺寸同步失败（控制通道已断开），画面可能持续错位，请重连会话，列数: {}，行数: {}",
+                                    size.cols,
+                                    size.rows
                                 );
                             }
                         }

@@ -1,12 +1,13 @@
 mod controller;
 #[cfg(unix)]
 mod deep_link;
+mod logging;
 
 use controller::Controller;
 use std::sync::Arc;
 use transom_core::{
-    AppEvent, BackupService, KnownHostsStore, SecretStore, SerialPortProvider, SessionStore,
-    SettingsStore,
+    AppEvent, BackupService, KnownHostsStore, LogLevel, SecretStore, SerialPortProvider,
+    SessionStore, SettingsStore,
 };
 use transom_net::SystemSerialPortProvider;
 use transom_store::{
@@ -15,12 +16,17 @@ use transom_store::{
 };
 
 fn main() -> anyhow::Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .try_init();
+    // 日志必须最先装配：后面的单实例交接、存储建目录与控制器启动都要留痕。
+    //
+    // 级别取环境变量覆盖，否则退回默认档 `info`；设置页里配的级别由界面读到配置后
+    // 立即补上（`transom_ui::run` 里那一次 `log::set_max_level`）。不在这里先读一遍
+    // 配置文件：那会让启动路径多加载一次设置，且与界面侧的加载点各写一份容错逻辑。
+    //
+    // 装配失败只可能是重复装 logger（本进程不会发生），此时降级为"没有日志"继续启动，
+    // 绝不能因为日志把应用关在外面。
+    if let Err(error) = logging::init(logging::resolve_level(LogLevel::default())) {
+        eprintln!("日志系统装配失败，本次运行只有标准错误输出，原因: {error}");
+    }
 
     let urls = startup_urls();
 
@@ -29,7 +35,7 @@ fn main() -> anyhow::Result<()> {
     // `None` 即"地址已交接"，进程直接退出。
     #[cfg(unix)]
     let Some(primary) = deep_link::acquire_primary(&urls)? else {
-        tracing::info!("地址已转交给正在运行的实例，本次启动结束");
+        log::info!("地址已转交给正在运行的实例，本次启动结束");
         return Ok(());
     };
 
@@ -99,7 +105,7 @@ fn deliver_startup_urls(controller: &Controller, urls: &[String]) {
         if let Err(error) = event_tx.try_send(AppEvent::DeepLink {
             url: Some(url.clone()),
         }) {
-            tracing::error!("启动参数中的深链地址未能投递，已丢弃，原因: {error}");
+            log::error!("启动参数中的深链地址未能投递，已丢弃，原因: {error}");
         }
     }
 }

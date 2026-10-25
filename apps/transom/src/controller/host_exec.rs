@@ -54,12 +54,12 @@ pub(super) async fn run_batch(
                 report(&event_tx, session_id, outcome).await;
             }
             // 任务 panic/被取消：会话归属未知，交给下面的补齐逻辑结算。
-            Err(error) => tracing::error!("主机动作任务异常退出，将在批次结束时补齐结果: {error}"),
+            Err(error) => log::error!("主机动作任务异常退出，将在批次结束时补齐结果: {error}"),
         }
     }
 
     for session_id in pending {
-        tracing::error!("主机动作未产生结果，会话 {session_id:?} 按失败结算");
+        log::error!("主机动作未产生结果，会话 {session_id:?} 按失败结算");
         report(
             &event_tx,
             session_id,
@@ -76,7 +76,7 @@ async fn report(event_tx: &flume::Sender<AppEvent>, session_id: SessionId, outco
         outcome,
     };
     if let Err(error) = event_tx.send_async(event).await {
-        tracing::warn!("主机动作结果未能送达界面，事件通道已关闭: {error}");
+        log::warn!("主机动作结果未能送达界面，事件通道已关闭: {error}");
     }
 }
 

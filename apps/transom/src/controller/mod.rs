@@ -79,11 +79,11 @@ impl Controller {
         // 必须可观察（日志上报）而不是静默失效。
         runtime.spawn(async move {
             match root.await {
-                Ok(()) => tracing::warn!("控制器主循环已退出"),
+                Ok(()) => log::warn!("控制器主循环已退出"),
                 Err(error) if error.is_panic() => {
-                    tracing::error!("控制器主循环异常崩溃，控制平面已失效: {error}")
+                    log::error!("控制器主循环异常崩溃，控制平面已失效: {error}")
                 }
-                Err(error) => tracing::error!("控制器主循环任务失败，控制平面已失效: {error}"),
+                Err(error) => log::error!("控制器主循环任务失败，控制平面已失效: {error}"),
             }
         });
 
@@ -231,7 +231,7 @@ async fn run_controller(
             joined = host_action_tasks.join_next(), if !host_action_tasks.is_empty() => {
                 // 批次任务内部已为每条动作补齐结果，这里只记录批次级异常。
                 if let Some(Err(error)) = joined {
-                    tracing::error!("主机动作批次任务异常退出，本批结果可能不完整: {error}");
+                    log::error!("主机动作批次任务异常退出，本批结果可能不完整: {error}");
                 }
                 continue;
             }
@@ -411,7 +411,7 @@ async fn run_controller(
                     && !control.upload(files)
                 {
                     // 通道满或无等待会话：丢弃并让界面提示重试。
-                    tracing::warn!("ZMODEM 上传决策被丢弃，标签 {tab_id:?} 无等待中的传输会话");
+                    log::warn!("ZMODEM 上传决策被丢弃，标签 {tab_id:?} 无等待中的传输会话");
                 }
             }
             Incoming::Command(Ok(AppCommand::ZmodemCancel { tab_id })) => {
@@ -487,7 +487,9 @@ async fn run_controller(
                 ) {
                     // 迟到或已作废的连接结果：主动断开释放，不触碰任何状态表，
                     // 避免踢掉已接入的新连接
-                    tracing::debug!(?tab_id, ?connection_id, "拒收过期的 SSH 连接完成结果并断开");
+                    log::debug!(
+                        "拒收过期的 SSH 连接完成结果并断开，窗格: {tab_id:?}，连接: {connection_id:?}"
+                    );
                     cleanup_set.spawn(async move {
                         remote.disconnect("superseded by newer connection").await;
                     });
@@ -548,10 +550,8 @@ async fn run_controller(
                 ) {
                     // 迟到或已作废的连接：丢弃 IO 即关闭 PTY 主端/串口句柄，
                     // 子进程随之退出，退出通知因连接不再现任而被忽略
-                    tracing::debug!(
-                        ?tab_id,
-                        ?connection_id,
-                        "拒收过期的LocalConnected连接完成结果"
+                    log::debug!(
+                        "拒收过期的本地终端连接完成结果，窗格: {tab_id:?}，连接: {connection_id:?}"
                     );
                     continue;
                 }
@@ -627,10 +627,8 @@ async fn run_controller(
                 ) {
                     // 迟到或已作废的连接：丢弃 IO 即关闭 PTY 主端/串口句柄，
                     // 子进程随之退出，退出通知因连接不再现任而被忽略
-                    tracing::debug!(
-                        ?tab_id,
-                        ?connection_id,
-                        "拒收过期的SerialConnected连接完成结果"
+                    log::debug!(
+                        "拒收过期的串口连接完成结果，窗格: {tab_id:?}，连接: {connection_id:?}"
                     );
                     continue;
                 }
@@ -676,10 +674,8 @@ async fn run_controller(
                 ) {
                     // 迟到或已作废的连接：丢弃 IO 即关闭 TCP 流，远端随之
                     // 读到 EOF，退出通知因连接不再现任而被忽略
-                    tracing::debug!(
-                        ?tab_id,
-                        ?connection_id,
-                        "拒收过期的TelnetConnected连接完成结果"
+                    log::debug!(
+                        "拒收过期的 Telnet 连接完成结果，窗格: {tab_id:?}，连接: {connection_id:?}"
                     );
                     continue;
                 }

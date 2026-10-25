@@ -45,7 +45,7 @@ impl JsonHistoryStore {
             Ok(Some(file)) => file.commands,
             Ok(None) => Vec::new(),
             Err(error) => {
-                tracing::warn!(
+                log::warn!(
                     "读取命令历史失败，按空历史启动，路径: {:?}，原因: {error}",
                     self.path
                 );

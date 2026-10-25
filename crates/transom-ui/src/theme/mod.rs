@@ -143,7 +143,7 @@ pub(crate) fn register_builtin(cx: &mut App) {
         if let Err(error) = ThemeRegistry::global_mut(cx).load_themes_from_str(content) {
             // 单个内置主题集注册失败只损失对应选项：注册表仍保有 gpui-kit 默认
             // 主题，解析回退路径不受影响，记录后继续启动。
-            tracing::error!("注册内置 UI 主题 #{index} 失败，已跳过，原因: {error}");
+            log::error!("注册内置 UI 主题 #{index} 失败，已跳过，原因: {error}");
         }
     }
 }
@@ -265,7 +265,7 @@ fn ensure_builtin_theme_files(dir: &std::path::Path) {
             continue;
         }
         if let Err(error) = std::fs::write(&path, content) {
-            tracing::warn!(
+            log::warn!(
                 "写入内置主题文件失败，热重载后该主题将不可见，文件: {}，原因: {error}",
                 path.display()
             );
@@ -283,7 +283,7 @@ fn ensure_builtin_theme_files(dir: &std::path::Path) {
 pub(crate) fn watch_user_dir(cx: &mut App) {
     let dir = transom_core::paths::themes_dir();
     if let Err(error) = std::fs::create_dir_all(&dir) {
-        tracing::warn!(
+        log::warn!(
             "创建用户主题目录失败，自定义主题不可用，目录: {}，原因: {error}",
             dir.display()
         );
@@ -297,9 +297,9 @@ pub(crate) fn watch_user_dir(cx: &mut App) {
         // 新增主题仍需用户在设置页选择后才生效。伴生终端调色板一并重建
         // （仅启动与本次回调；后续文件变动需重启刷新绑定，见绑定表文档）。
         rebuild_terminal_bindings(cx);
-        tracing::info!("用户主题目录已重载");
+        log::info!("用户主题目录已重载");
     }) {
-        tracing::warn!("监听用户主题目录失败，自定义主题不可用，原因: {error}");
+        log::warn!("监听用户主题目录失败，自定义主题不可用，原因: {error}");
     }
 }
 

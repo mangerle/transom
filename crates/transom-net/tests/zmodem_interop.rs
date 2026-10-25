@@ -83,7 +83,7 @@ fn reap(child: &mut Box<dyn Child + Send + Sync>, slave: Box<dyn portable_pty::S
             Ok(Some(_)) => return,
             Ok(None) => std::thread::sleep(Duration::from_millis(50)),
             Err(error) => {
-                tracing::warn!("lrzsz 子进程状态查询失败，按强杀处理: {error}");
+                log::warn!("lrzsz 子进程状态查询失败，按强杀处理: {error}");
                 break;
             }
         }
@@ -148,7 +148,7 @@ fn drive(
     reap(&mut child, slave);
     let _ = zmodem;
     if pump.join().is_err() {
-        tracing::warn!("终端抽取线程异常结束");
+        log::warn!("终端抽取线程异常结束");
     }
     events
 }

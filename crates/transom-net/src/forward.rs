@@ -127,7 +127,7 @@ async fn start_dynamic(remote: &SshRemote, bind: &BindAddress) -> Result<Forward
                     let remote = remote.clone();
                     tokio::spawn(async move {
                         if let Err(error) = run_socks5(remote, tcp).await {
-                            tracing::debug!(%error, "SOCKS5 forwarding connection failed");
+                            log::debug!("SOCKS5 转发连接处理失败，原因: {error}");
                         }
                     });
                 }
@@ -375,7 +375,7 @@ async fn run_socks5_udp_relay(
                 let (len, peer) = match res {
                     Ok(val) => val,
                     Err(error) => {
-                        tracing::debug!(%error, "接收客户端 UDP 数据失败");
+                        log::debug!("接收客户端 UDP 数据失败，原因: {error}");
                         continue;
                     }
                 };
@@ -454,7 +454,7 @@ async fn run_socks5_udp_relay(
                 let (len, remote_peer) = match res {
                     Ok(val) => val,
                     Err(error) => {
-                        tracing::debug!(%error, "接收目标服务器 UDP 响应失败");
+                        log::debug!("接收目标服务器 UDP 响应失败，原因: {error}");
                         continue;
                     }
                 };

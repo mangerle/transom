@@ -21,6 +21,8 @@ tokio.workspace = true
 flume.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
+log.workspace = true
+fern.workspace = true
+# 日志时间戳格式化；工作区内已有同一版本，不新增编译单元。
+chrono.workspace = true
 portable-pty.workspace = true

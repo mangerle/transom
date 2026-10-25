@@ -86,11 +86,11 @@ impl CloudSyncService {
             bytes: data.len() as u64,
             at: chrono::Utc::now().timestamp(),
         };
-        tracing::info!(
-            sessions = report.sessions,
-            folders = report.folders,
-            bytes = report.bytes,
-            "云同步备份上传完成"
+        log::info!(
+            "云同步备份上传完成，会话数: {}，分组数: {}，字节数: {}",
+            report.sessions,
+            report.folders,
+            report.bytes
         );
         Ok(report)
     }

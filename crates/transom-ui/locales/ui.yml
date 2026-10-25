@@ -1123,6 +1123,54 @@ settings:
   status_bar_note:
     en: Drag badges on the right side of the status bar to reorder them; drop on the blank area to their left to move one to the front. Visibility and order changes are saved immediately; the left connection status stays fixed.
     zh-CN: 右侧徽标可直接拖动调整顺序，拖到徽标簇左侧空白可移到最前；显隐与顺序改动会立即保存。左侧连接状态固定，不参与排序。
+  log_group:
+    en: Application Logs
+    zh-CN: 运行日志
+  log_level:
+    en: Log level
+    zh-CN: 日志级别
+  log_level_desc:
+    en: "Info is enough for everyday use; Debug and Trace write protocol and command details into the local log, so turn them on only while reproducing a problem. Takes effect immediately."
+    zh-CN: "信息档够日常使用；调试与追踪会把协议与命令细节写进本地日志，只在复现问题时打开。改完立即生效，不必重启。"
+  log_level_error:
+    en: Error
+    zh-CN: 错误
+  log_level_warn:
+    en: Warn
+    zh-CN: 警告
+  log_level_info:
+    en: Info
+    zh-CN: 信息
+  log_level_debug:
+    en: Debug
+    zh-CN: 调试
+  log_level_trace:
+    en: Trace
+    zh-CN: 追踪
+  log_dir:
+    en: Log folder
+    zh-CN: 日志目录
+  log_dir_desc:
+    en: Each file rolls over at 5 MiB and at most 4 backups are kept (about 25 MiB total). Session audit output is stored elsewhere.
+    zh-CN: 单个文件写到 5 MiB 自动切走，最多再留 4 份（合计约 25 MiB）。会话输出审计不在这里，另有一套目录。
+  log_dir_open:
+    en: Open folder
+    zh-CN: 打开目录
+  log_revealed:
+    en: Log folder opened in the system file manager
+    zh-CN: 已在系统文件管理器中打开日志目录
+  log_cleanup:
+    en: Clean up rotated logs
+    zh-CN: 清理历史日志
+  log_cleanup_desc:
+    en: Deletes only the rotated .1..N backups; the file being written now is left alone.
+    zh-CN: 只删已经轮转出去的 .1..N 备份，正在写入的当前文件不动。
+  log_cleanup_action:
+    en: Clean up
+    zh-CN: 立即清理
+  log_cleanup_done:
+    en: "Removed %{count} rotated log file(s)"
+    zh-CN: "已清理 %{count} 份历史日志"
   tab_about:
     en: About
     zh-CN: 关于

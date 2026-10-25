@@ -76,6 +76,16 @@ pub struct UiServices {
 pub fn run(services: UiServices) {
     let settings = services.settings_store.load().unwrap_or_default();
     let language = settings.language.clone();
+    // 应用装配日志时还不知道配置值，这里补上用户设的级别。
+    //
+    // 环境变量仍然优先：报障场景下 `TRANSOM_LOG=debug` 必须能盖过配置里的 `info`，
+    // 否则用户改一次配置就把现场冲掉了。设置页里显式改级别走的是另一条路径
+    // （直接 `log::set_max_level`），代表用户最新意图，不再被环境变量否决。
+    log::set_max_level(
+        transom_core::LogLevel::from_env()
+            .unwrap_or(settings.logs.level)
+            .to_filter(),
+    );
 
     application().with_assets(assets::AllAssets).run(move |cx| {
         rust_i18n::extend!(gpui_component);

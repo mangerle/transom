@@ -62,12 +62,12 @@ fn open_with_default_app(target: &std::ffi::OsStr) {
                     let _ = child.wait();
                 }
                 Err(error) => {
-                    tracing::warn!("调用系统默认程序失败，原因: {error}");
+                    log::warn!("调用系统默认程序失败，原因: {error}");
                 }
             },
         );
     if spawned.is_err() {
-        tracing::warn!("启动系统默认程序线程失败，已忽略本次打开请求");
+        log::warn!("启动系统默认程序线程失败，已忽略本次打开请求");
     }
 }
 

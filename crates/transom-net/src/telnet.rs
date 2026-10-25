@@ -100,7 +100,7 @@ impl Read for TelnetReader {
                             // 协议应答写失败意味着线路已断，随后读取也会出错，
                             // 这里仅记录告警，不中断当前批次的数据剥离。
                             if let Err(error) = wire.send_raw(bytes) {
-                                tracing::warn!("写入 Telnet 协议应答失败: {error}");
+                                log::warn!("写入 Telnet 协议应答失败: {error}");
                             }
                         });
                     if self.clean.is_empty() {
@@ -369,11 +369,10 @@ pub fn connect_telnet(
         )
     })?;
 
-    tracing::info!(
-        host = host,
-        port = connection.port,
-        encoding = ?connection.encoding,
-        "Telnet 会话已建立"
+    log::info!(
+        "Telnet 会话已建立，主机: {host}，端口: {}，编码: {:?}",
+        connection.port,
+        connection.encoding
     );
     Ok(TelnetSession { io, exit: exit_rx })
 }

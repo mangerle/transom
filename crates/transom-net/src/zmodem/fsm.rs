@@ -156,7 +156,7 @@ impl Fsm {
                     ZSINIT | ZFILE => {
                         // 对端确为 sz：进入下载会话，按头格式切换子包 CRC。
                         if !self.config.auto_receive {
-                            tracing::info!("ZMODEM 自动接收已禁用，取消对端下载请求");
+                            log::info!("ZMODEM 自动接收已禁用，取消对端下载请求");
                             self.write_wire(&cancel_sequence());
                             self.finish(ZmodemFinished::Failed(
                                 "ZMODEM 自动接收已禁用，传输已取消".to_string(),
@@ -167,7 +167,7 @@ impl Fsm {
                         // 目录）。在应答前一次性建好：若等到每个 ZFILE 建文件时
                         // 才失败，只会得到逐文件 ZSKIP 与"完成 0 个文件"的误导结论。
                         if let Err(error) = std::fs::create_dir_all(&self.config.download_dir) {
-                            tracing::error!(
+                            log::error!(
                                 "ZMODEM 下载目录创建失败: {}，原因: {error}",
                                 self.config.download_dir.display()
                             );
@@ -356,7 +356,7 @@ impl Fsm {
     /// 一起卡住，表现为对端超时。
     fn emit_progress(&self, event: ZmodemEvent) {
         if self.events.try_send(event).is_err() {
-            tracing::debug!("ZMODEM 进度事件通道已满，丢弃本次快照");
+            log::debug!("ZMODEM 进度事件通道已满，丢弃本次快照");
         }
     }
 
@@ -364,11 +364,11 @@ impl Fsm {
     fn open_download_file(&mut self, name: String) {
         match files::create_download_file(&self.config.download_dir, &name) {
             Ok((file, path)) => {
-                tracing::info!("ZMODEM 下载开始写入文件: {}", path.display());
+                log::info!("ZMODEM 下载开始写入文件: {}", path.display());
                 self.download_file = Some(file);
             }
             Err(error) => {
-                tracing::warn!("ZMODEM 下载文件创建失败，将请求对端跳过: {name}，原因: {error}");
+                log::warn!("ZMODEM 下载文件创建失败，将请求对端跳过: {name}，原因: {error}");
                 let actions = self.receiver.notify_create_failed();
                 self.run_recv(actions);
             }
@@ -381,7 +381,7 @@ impl Fsm {
             return;
         };
         if let Err(error) = files::append(file, &data) {
-            tracing::error!("ZMODEM 下载数据写盘失败，传输中止: {error}");
+            log::error!("ZMODEM 下载数据写盘失败，传输中止: {error}");
             let actions = self.receiver.cancel();
             self.run_recv(actions);
         }
@@ -403,7 +403,7 @@ impl Fsm {
                 self.run_send(actions);
             }
             Err(error) => {
-                tracing::warn!(
+                log::warn!(
                     "ZMODEM 上传文件打开失败，跳过该文件: {}，原因: {error}",
                     path.display()
                 );
@@ -426,7 +426,7 @@ impl Fsm {
                 self.run_send(actions);
             }
             Err(error) => {
-                tracing::error!("ZMODEM 上传文件读写失败，传输中止，偏移: {offset}，原因: {error}");
+                log::error!("ZMODEM 上传文件读写失败，传输中止，偏移: {offset}，原因: {error}");
                 let actions = self.sender.cancel();
                 self.run_send(actions);
             }
@@ -437,7 +437,7 @@ impl Fsm {
         let mut guard = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
         if let Err(error) = guard.write_all(wire) {
             drop(guard);
-            tracing::error!("ZMODEM 线路写入失败，传输中止: {error}");
+            log::error!("ZMODEM 线路写入失败，传输中止: {error}");
             self.finish(ZmodemFinished::Failed(
                 "线路写入失败，连接可能已断开".to_string(),
             ));
@@ -480,7 +480,7 @@ impl Fsm {
                     // 文件选择是阻塞式系统弹窗，用户慢慢挑完回来时决策窗口可能
                     // 已经过期。静默丢弃的表现只是"对话框关掉、什么都没发生"，
                     // 因此必须回一条失败结局写进状态栏。
-                    tracing::warn!(
+                    log::warn!(
                         "ZMODEM 上传决策已过期，当前阶段 {:?}，待上传文件数 {}",
                         self.mode,
                         files.len()

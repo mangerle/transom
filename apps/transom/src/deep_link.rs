@@ -118,7 +118,7 @@ impl PrimaryInstance {
         let join = match UnixListener::from_std(listener) {
             Ok(async_listener) => runtime.spawn(run_loop(async_listener, event_tx, socket)),
             Err(error) => {
-                tracing::error!(
+                log::error!(
                     "实例套接字切换到异步监听失败，深链唤起不可用，路径: {path:?}，原因: {error}"
                 );
                 // 监听建不起来也要让守卫析构删除文件，并返回一个已完成句柄，
@@ -129,11 +129,11 @@ impl PrimaryInstance {
         };
         runtime.spawn(async move {
             match join.await {
-                Ok(()) => tracing::info!("深链监听任务已退出"),
+                Ok(()) => log::info!("深链监听任务已退出"),
                 Err(error) if error.is_panic() => {
-                    tracing::error!("深链监听任务异常崩溃，外部唤起将不再响应: {error}")
+                    log::error!("深链监听任务异常崩溃，外部唤起将不再响应: {error}")
                 }
-                Err(error) => tracing::warn!("深链监听任务被取消: {error}"),
+                Err(error) => log::warn!("深链监听任务被取消: {error}"),
             }
         })
     }
@@ -198,12 +198,12 @@ async fn run_loop(listener: UnixListener, event_tx: flume::Sender<AppEvent>, soc
         match listener.accept().await {
             Ok((mut stream, _)) => {
                 if let Err(error) = accept_one(&mut stream, &event_tx).await {
-                    tracing::warn!("深链请求处理失败，原因: {error}");
+                    log::warn!("深链请求处理失败，原因: {error}");
                 }
             }
             Err(error) => {
                 // 守卫在此只用于报错时定位端点；析构发生在监听任务结束之时。
-                tracing::error!(
+                log::error!(
                     "实例套接字接受连接失败，路径: {:?}，原因: {error}",
                     socket.path
                 );
@@ -238,14 +238,14 @@ async fn accept_one<R: AsyncRead + Unpin>(
             "深链请求不是 ssh:// 地址，已拒绝，原始输入: {request}"
         ));
     };
-    tracing::info!(
-        url = url.as_deref().unwrap_or("<仅唤起>"),
-        "收到外部深链唤起请求"
+    log::info!(
+        "收到外部深链唤起请求，地址: {}",
+        url.as_deref().unwrap_or("<仅唤起>")
     );
     // try_send：事件通道满说明界面循环已积压，丢弃这次唤起并留痕，
     // 绝不在接收循环里阻塞（会拖垮后续请求）。
     if event_tx.try_send(AppEvent::DeepLink { url }).is_err() {
-        tracing::warn!("深链唤起未能投递到界面事件通道（队列已满），本次请求已丢弃");
+        log::warn!("深链唤起未能投递到界面事件通道（队列已满），本次请求已丢弃");
     }
     Ok(())
 }

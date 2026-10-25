@@ -93,7 +93,7 @@ impl Drop for FsmLifeline {
         self.shared.active.store(false, Ordering::Release);
         self.shared.terminated.store(true, Ordering::Release);
         if panicked {
-            tracing::error!("ZMODEM 驱动线程异常退出，本连接文件传输已停用");
+            log::error!("ZMODEM 驱动线程异常退出，本连接文件传输已停用");
             let _ = self
                 .events
                 .send(ZmodemEvent::Finished(ZmodemFinished::Failed(
@@ -311,7 +311,7 @@ pub fn attach_zmodem(
             fsm_loop(fsm);
         })
     {
-        tracing::error!("ZMODEM 驱动线程创建失败，本连接禁用文件传输: {error}");
+        log::error!("ZMODEM 驱动线程创建失败，本连接禁用文件传输: {error}");
     }
 
     (

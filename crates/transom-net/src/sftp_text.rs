@@ -171,20 +171,20 @@ impl SftpClient {
     async fn backup_remote_file(&self, path: &str) -> Result<(), AppError> {
         let backup_path = format!("{path}.transom-bak");
         let Ok(metadata) = self.session.metadata(path).await else {
-            tracing::debug!(path, "跳过远端备份：无法获取文件属性（可能不存在）");
+            log::debug!("跳过远端备份：无法获取文件属性（可能不存在），路径: {path}");
             return Ok(());
         };
         let Some(size) = metadata.size else {
-            tracing::debug!(path, "跳过远端备份：远端未回传文件大小");
+            log::debug!("跳过远端备份：远端未回传文件大小，路径: {path}");
             return Ok(());
         };
         let Ok(file) = self.session.open(path).await else {
-            tracing::debug!(path, "跳过远端备份：打开远端文件失败");
+            log::debug!("跳过远端备份：打开远端文件失败，路径: {path}");
             return Ok(());
         };
         let cap = size.saturating_add(BACKUP_SLACK_BYTES);
         let Ok(raw) = read_file_capped(file, path, cap).await else {
-            tracing::debug!(path, "跳过远端备份：读取当前内容失败");
+            log::debug!("跳过远端备份：读取当前内容失败，路径: {path}");
             return Ok(());
         };
         let mut backup = self
@@ -202,11 +202,16 @@ impl SftpClient {
             .await
             .map_err(sftp_io_error)
             .inspect_err(|_| {
-                tracing::warn!(path, backup_path, "写入远端备份文件失败，已中止覆盖");
+                log::warn!(
+                    "写入远端备份文件失败，已中止覆盖，路径: {path}，备份路径: {backup_path}"
+                );
             })?;
         backup.flush().await.map_err(sftp_io_error)?;
         let _ = backup.close().await;
-        tracing::debug!(path, bytes = raw.len(), "已备份远端文件当前内容");
+        log::debug!(
+            "已备份远端文件当前内容，路径: {path}，字节数: {}",
+            raw.len()
+        );
         Ok(())
     }
 }

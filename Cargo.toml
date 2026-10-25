@@ -41,8 +41,12 @@ flume = "0.12"
 directories = "6"
 keyring = "4.2"
 parking_lot = "0.12"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# 日志统一走 log 门面：gpui/russh 等上游依赖本身就调用 log，接上门面后它们的内部
+# 日志也会落进同一份文件，排查时不必再猜是应用没打还是上游没打。
+log = "0.4"
+# 输出分发（stderr + 自写按大小轮转的文件层）。只用它做分发与格式，不取任何
+# 可选后端特性：轮转策略与保留份数由本项目自己实现，避免被第三方轮转语义绑住。
+fern = "0.7"
 futures = "0.3"
 zeroize = "1"
 async-trait = "0.1"

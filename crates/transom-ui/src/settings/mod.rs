@@ -3,6 +3,7 @@
 mod about_page;
 mod general_page;
 mod layout_page;
+mod logs_page;
 mod modal;
 mod pages;
 mod shortcuts_page;

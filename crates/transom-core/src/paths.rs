@@ -4,7 +4,7 @@
 //! 组装都要用），store 侧重持久化实现，core 才是共同依赖的最底层。
 
 use directories::{BaseDirs, UserDirs};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// 应用桌面标识（reverse-DNS）。
 ///
@@ -67,6 +67,40 @@ pub fn history_path() -> PathBuf {
 /// 会话审计日志目录；每个连接建立时开一个文件，落的是原始终端输出字节流。
 pub fn audit_dir() -> PathBuf {
     config_dir().join("audit")
+}
+
+/// 应用运行日志目录。
+///
+/// 为什么与审计目录分开：审计落的是远端屏幕原始字节（含口令回显，默认关闭、
+/// 用户自行清理），运行日志是应用自身的诊断轨迹（不含凭证，按大小自动轮转）。
+/// 混在一个目录里会让"把日志发给开发者排查"这件事顺手泄露审计内容。
+pub fn log_dir() -> PathBuf {
+    config_dir().join("logs")
+}
+
+/// 主日志文件路径（轮转出的历史份在其后追加 `.1`..`.N`）。
+pub fn log_file_path() -> PathBuf {
+    log_dir().join("transom.log")
+}
+
+/// 第 `index` 份轮转历史文件（`1` 最新，数字越大越旧）。
+///
+/// 命名规则放在这里而不是应用侧：写入器轮转与设置页清理都必须按同一套名字找
+/// 文件，两处各拼一遍迟早对不上，清理按钮就会删不掉文件还以为删了。
+pub fn log_backup_path(index: usize) -> PathBuf {
+    rotated_backup_path(&log_file_path(), index)
+}
+
+/// 给定主日志文件路径，推出第 `index` 份轮转备份的路径（同级目录加 `.N` 后缀）。
+pub fn rotated_backup_path(log_path: &Path, index: usize) -> PathBuf {
+    let name = format!(
+        "{}.{index}",
+        log_path.file_name().unwrap_or_default().to_string_lossy()
+    );
+    match log_path.parent() {
+        Some(dir) => dir.join(name),
+        None => PathBuf::from(name),
+    }
 }
 
 /// 清洗用于文件名的会话标签：只保留安全字符，杜绝路径穿越。

@@ -97,7 +97,11 @@ impl client::Handler for ClientHandler {
                     )));
                 }
                 self.known_hosts.record(&self.host, self.port, &info)?;
-                tracing::info!(host = %self.host, port = self.port, %fingerprint, "用户确认后记录新主机密钥");
+                log::info!(
+                    "用户确认后记录新主机密钥，主机: {}，端口: {}，指纹: {fingerprint}",
+                    self.host,
+                    self.port
+                );
                 Ok(true)
             }
             HostKeyStatus::Mismatch {
@@ -327,7 +331,7 @@ pub async fn connect_ssh(
                 source: error,
             })?;
         if let Err(error) = socket.set_nodelay(true) {
-            tracing::debug!(%error, "设置 TCP_NODELAY 失败，将继续使用默认行为");
+            log::debug!("设置 TCP_NODELAY 失败，将继续使用默认行为，原因: {error}");
         }
         let traffic = Arc::new(TrafficCounter::default());
         let stream = CountingStream::new(socket, traffic.clone());
@@ -497,11 +501,10 @@ async fn password_flow(
             return Ok(true);
         }
         if attempt + 1 < MAX_PASSWORD_ATTEMPTS {
-            tracing::warn!(
-                user,
-                attempt = attempt + 1,
-                max = MAX_PASSWORD_ATTEMPTS,
-                "密码被服务器拒绝，将在本次认证中重新询问"
+            log::warn!(
+                "密码被服务器拒绝，将在本次认证中重新询问，用户: {user}，本次第 {} 次，上限 {} 次",
+                attempt + 1,
+                MAX_PASSWORD_ATTEMPTS
             );
         }
     }
@@ -570,7 +573,7 @@ async fn authenticate_private_key(
     // 退回裸公钥认证：服务器没配 trusteduserca、证书过期或 principal 不匹配时，同一把私钥
     // 往往仍在其 authorized_keys 里；只发证书会让这些机器直接连不上。回退不是静默掩盖问题，
     // 证书被拒已经按 warn 记录，路径与主机都在日志里。
-    tracing::warn!(
+    log::warn!(
         "证书认证被服务器拒绝，回退到公钥认证，主机: {}，证书: {}",
         connection.host,
         cert_path.display()
@@ -767,11 +770,10 @@ async fn run_terminal_actor(
                     .window_change(size.cols as u32, size.rows as u32, 0, 0)
                     .await
                 {
-                    tracing::warn!(
-                        cols = size.cols,
-                        rows = size.rows,
-                        %error,
-                        "同步远端 PTY 窗口尺寸失败，远端 shell 将以旧尺寸排版，画面可能持续错位"
+                    log::warn!(
+                        "同步远端 PTY 窗口尺寸失败，远端 shell 将以旧尺寸排版，画面可能持续错位，列数: {}，行数: {}，原因: {error}",
+                        size.cols,
+                        size.rows
                     );
                 }
             }

@@ -18,7 +18,7 @@ alacritty_terminal.workspace = true
 gpui-kit.workspace = true
 flume.workspace = true
 parking_lot.workspace = true
-tracing.workspace = true
+log.workspace = true
 
 [dev-dependencies]
 portable-pty.workspace = true

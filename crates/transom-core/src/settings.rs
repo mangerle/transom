@@ -347,6 +347,113 @@ pub struct AppSettings {
     /// 命令历史与建议；旧配置缺少该字段时按默认开启降级。
     #[serde(default)]
     pub history: HistorySettings,
+    /// 运行日志级别；旧配置缺少该字段时按默认 `info` 降级。
+    #[serde(default)]
+    pub logs: LogSettings,
+}
+
+/// 运行日志设置。
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct LogSettings {
+    /// 全局记录级别。改完立即生效：`log::set_max_level` 本身就是运行期可写的原子量。
+    #[serde(default)]
+    pub level: LogLevel,
+}
+
+/// 日志级别档位。
+///
+/// 为什么用枚举而不是裸字符串：级别要同时参与设置持久化、界面下拉与到
+/// `log::LevelFilter` 的映射，散着写字符串必然出现"用户调了级别但没生效"这类
+/// 最难查的失配。
+///
+/// 为什么默认 `Info`：这是给日常使用的第一档——生命周期节点与告警都在，量又不大。
+/// `Debug` 留给排障（含上下文状态变迁），`Trace` 是协议与字节级数据流，
+/// 生产环境常开会把磁盘打满。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LogLevel {
+    Error,
+    Warn,
+    /// 默认档：`#[serde(default)]` 与 `Default` 都指向它。
+    #[default]
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LogLevel {
+    /// 全部档位（由严到宽），供设置页下拉与遍历使用。
+    pub const ALL: [Self; 5] = [
+        Self::Error,
+        Self::Warn,
+        Self::Info,
+        Self::Debug,
+        Self::Trace,
+    ];
+
+    /// 稳定小写名：同时是设置文件的取值与 i18n key 的后缀（`settings.log_level.{}`）。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warn => "warn",
+            Self::Info => "info",
+            Self::Debug => "debug",
+            Self::Trace => "trace",
+        }
+    }
+
+    /// 读取环境变量里的级别覆盖（`TRANSOM_LOG`，兼容更熟悉的 `RUST_LOG`）。
+    ///
+    /// 为什么留这条通道：用户报障最常见的情形是"应用一起来就来不及改设置"，
+    /// 一条环境变量就能把现场捞下来。
+    ///
+    /// 为什么忽略 `目标=级别` 这类写法：那是过滤器而不是整体级别，硬当级别解析会
+    /// 悄悄退成 `info`，用户以为调到了 debug 其实没有；返回 `None` 让设置值继续
+    /// 生效更诚实。
+    pub fn from_env() -> Option<Self> {
+        ["TRANSOM_LOG", "RUST_LOG"]
+            .iter()
+            .find_map(|key| std::env::var(key).ok())
+            .map(|raw| raw.trim().to_string())
+            .filter(|raw| !raw.is_empty() && !raw.contains('='))
+            .map(|raw| Self::parse(&raw))
+    }
+
+    /// 映射到 log 门面的过滤级别。
+    pub fn to_filter(self) -> log::LevelFilter {
+        match self {
+            Self::Error => log::LevelFilter::Error,
+            Self::Warn => log::LevelFilter::Warn,
+            Self::Info => log::LevelFilter::Info,
+            Self::Debug => log::LevelFilter::Debug,
+            Self::Trace => log::LevelFilter::Trace,
+        }
+    }
+
+    /// 解析设置里的级别。
+    ///
+    /// 设置文件属于外部输入：认不出来的值一律退回默认档 `Info`，绝不允许因为
+    /// 一个手写的错值把整个日志关掉（那样反而没有日志可排查）。
+    pub fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "error" => Self::Error,
+            "warn" | "warning" => Self::Warn,
+            "debug" => Self::Debug,
+            "trace" | "verbose" => Self::Trace,
+            _ => Self::Info,
+        }
+    }
+}
+
+/// 反序列化走 [`LogLevel::parse`]：未知值降级为默认档，而不是让整个设置文件报错。
+impl<'de> serde::Deserialize<'de> for LogLevel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Ok(Self::parse(&raw))
+    }
 }
 
 /// 命令历史与建议设置。
@@ -543,6 +650,7 @@ impl Default for AppSettings {
             zmodem: crate::zmodem::ZmodemSettings::default(),
             audit: AuditSettings::default(),
             history: HistorySettings::default(),
+            logs: LogSettings::default(),
         }
     }
 }
@@ -554,6 +662,27 @@ fn default_language() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 日志级别来自设置文件（外部输入）：无法识别的值退回默认档 `info`，
+    /// 既不能让整份设置加载失败，更不能因为一个错值把日志整个关掉。
+    #[test]
+    fn log_level_degrades_to_info_on_unknown_value() {
+        let loose: AppSettings = serde_json::from_str(r#"{"logs":{"level":"VERBOSE"}}"#).unwrap();
+        assert_eq!(loose.logs.level, LogLevel::Trace);
+
+        let unknown: AppSettings = serde_json::from_str(r#"{"logs":{"level":"chatty"}}"#).unwrap();
+        assert_eq!(unknown.logs.level, LogLevel::Info);
+
+        let absent: AppSettings = serde_json::from_str(r#"{"logs":{}}"#).unwrap();
+        assert_eq!(absent.logs.level, LogLevel::Info);
+
+        let legacy: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
+        assert_eq!(legacy.logs.level, LogLevel::Info);
+
+        // 序列化必须写回稳定小写名，否则往返一次就变成另一个值。
+        assert_eq!(serde_json::to_string(&LogLevel::Warn).unwrap(), "\"warn\"");
+        assert_eq!(LogLevel::Warn.to_filter(), log::LevelFilter::Warn);
+    }
 
     #[test]
     fn old_settings_without_tab_groups_still_load() {

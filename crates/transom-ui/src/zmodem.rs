@@ -91,7 +91,7 @@ impl AppShell {
     fn send_zmodem_upload(&mut self, tab_id: transom_core::TabId, files: Vec<PathBuf>) {
         let command = AppCommand::ZmodemUpload { tab_id, files };
         if let Err(error) = self.services.command_tx.try_send(command) {
-            tracing::warn!("ZMODEM 上传命令发送失败: {error}");
+            log::warn!("ZMODEM 上传命令发送失败: {error}");
             self.status = Some(rust_i18n::t!("zmodem.command_busy").to_string());
         }
     }
@@ -100,7 +100,7 @@ impl AppShell {
     pub(crate) fn send_zmodem_cancel(&mut self, tab_id: transom_core::TabId) {
         let command = AppCommand::ZmodemCancel { tab_id };
         if let Err(error) = self.services.command_tx.try_send(command) {
-            tracing::warn!("ZMODEM 取消命令发送失败: {error}");
+            log::warn!("ZMODEM 取消命令发送失败: {error}");
         }
     }
 

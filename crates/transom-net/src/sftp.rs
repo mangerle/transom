@@ -331,10 +331,9 @@ impl SftpClient {
         if let Some(mtime) = mtime
             && let Err(error) = set_local_mtime(local_path, mtime).await
         {
-            tracing::debug!(
-                path = %local_path.display(),
-                %error,
-                "保留本地文件修改时间失败"
+            log::debug!(
+                "保留本地文件修改时间失败，路径: {}，原因: {error}",
+                local_path.display()
             );
         }
         Ok(transferred)
@@ -455,7 +454,7 @@ impl SftpClient {
         if let Some(mtime) = local_mtime
             && let Err(error) = self.set_mtime(remote_path, mtime).await
         {
-            tracing::debug!(path = %remote_path, %error, "保留远端文件修改时间失败");
+            log::debug!("保留远端文件修改时间失败，路径: {remote_path}，原因: {error}");
         }
         Ok(transferred)
     }

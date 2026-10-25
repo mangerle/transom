@@ -64,7 +64,7 @@ impl AuditSink {
             return;
         };
         if let Err(error) = writer.flush() {
-            tracing::warn!(
+            log::warn!(
                 "会话审计日志收尾刷盘失败，可能丢失最后一秒输出，路径: {:?}，原因: {error}",
                 self.path
             );
@@ -76,7 +76,7 @@ impl AuditSink {
         if let Some(parent) = self.path.parent()
             && let Err(error) = std::fs::create_dir_all(parent)
         {
-            tracing::warn!("创建审计目录失败，本会话不落盘，路径: {parent:?}，原因: {error}");
+            log::warn!("创建审计目录失败，本会话不落盘，路径: {parent:?}，原因: {error}");
             return false;
         }
         match OpenOptions::new()
@@ -87,11 +87,11 @@ impl AuditSink {
             Ok(file) => {
                 // 64 KiB 缓冲：单次 `cat` 大文件也不会每块一次系统调用。
                 self.writer = Some(BufWriter::with_capacity(64 * 1024, file));
-                tracing::info!("会话审计日志已开始写入，路径: {:?}", self.path);
+                log::info!("会话审计日志已开始写入，路径: {:?}", self.path);
                 true
             }
             Err(error) => {
-                tracing::warn!(
+                log::warn!(
                     "创建会话审计日志失败，本会话不落盘，路径: {:?}，原因: {error}",
                     self.path
                 );
@@ -101,7 +101,7 @@ impl AuditSink {
     }
 
     fn disable(&mut self, error: &std::io::Error) {
-        tracing::warn!(
+        log::warn!(
             "写入会话审计日志失败，本会话停止审计以保护终端可用性，路径: {:?}，原因: {error}",
             self.path
         );

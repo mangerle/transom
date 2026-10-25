@@ -39,7 +39,7 @@ pub(super) async fn dispatch_cloud_sync(
             CloudSyncJob::Pull { .. } => AppEvent::CloudSyncPulled { result: Err(error) },
         };
         if event_tx.try_send(event).is_err() {
-            tracing::warn!("云同步忙碌提示发送失败：事件通道已满");
+            log::warn!("云同步忙碌提示发送失败：事件通道已满");
         }
         return;
     }

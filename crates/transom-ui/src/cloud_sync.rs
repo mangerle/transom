@@ -277,7 +277,7 @@ impl AppShell {
     ) {
         let safety_path = self.write_sync_safety_copy();
         if let Some(path) = &safety_path {
-            tracing::info!(path = %path.display(), "下载合并前已保存本机安全副本");
+            log::info!("下载合并前已保存本机安全副本，路径: {}", path.display());
         }
 
         let backup = self.services.backup.clone();
@@ -307,10 +307,10 @@ impl AppShell {
         match self.services.backup.export(&path, &self.catalog, &options) {
             Ok(_) => Some(path),
             Err(error) => {
-                tracing::warn!(
-                    path = %path.display(),
-                    error = %localized_error(&error),
-                    "云同步安全副本写入失败，继续执行合并"
+                log::warn!(
+                    "云同步安全副本写入失败，继续执行合并，路径: {}，原因: {}",
+                    path.display(),
+                    localized_error(&error)
                 );
                 None
             }

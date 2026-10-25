@@ -211,6 +211,12 @@ impl AppShell {
                 p,
                 "settings.sync_group",
                 AppShell::render_settings_cloud_sync,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.log_group",
+                AppShell::render_settings_logs,
             ));
 
         // 关于页只读：呈现版本、许可与本机运行环境，不参与保存/取消语义。

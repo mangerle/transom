@@ -167,7 +167,7 @@ impl AppShell {
                 .spawn(async move { store.save(&snapshot).err() })
                 .await;
             if let Some(error) = error {
-                tracing::warn!("命令历史写盘失败，本次仍保留在内存中，原因: {error}");
+                log::warn!("命令历史写盘失败，本次仍保留在内存中，原因: {error}");
             }
         })
         .detach();
