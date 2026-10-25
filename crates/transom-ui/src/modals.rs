@@ -198,6 +198,10 @@ impl AppShell {
                     format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
                     IconName::Server,
                 ),
+                Connection::Telnet(telnet) => (
+                    format!("Telnet: {}:{}", telnet.host, telnet.port),
+                    IconName::Network,
+                ),
                 Connection::Local(l) => {
                     let shell = l.shell.as_deref().unwrap_or("sh");
                     (format!("Local: {shell}"), IconName::Terminal)

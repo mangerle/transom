@@ -101,6 +101,12 @@ enum Internal {
         io: TerminalIo,
         join: tokio::sync::oneshot::Receiver<()>,
     },
+    TelnetConnected {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        io: TerminalIo,
+        join: tokio::sync::oneshot::Receiver<()>,
+    },
     Disconnected {
         tab_id: TabId,
         connection_id: ConnectionId,
@@ -536,6 +542,52 @@ async fn run_controller(
                         },
                         remote: None,
                         disconnect_reason: "reconnected to serial",
+                    },
+                    &event_tx,
+                    &internal_tx,
+                )
+                .await;
+            }
+            Incoming::Internal(Ok(Internal::TelnetConnected {
+                tab_id,
+                connection_id,
+                io,
+                join,
+            })) => {
+                if matches!(
+                    admit_connection(&connecting, tab_id, connection_id),
+                    Admission::Reject
+                ) {
+                    // 迟到或已作废的连接：丢弃 IO 即关闭 TCP 流，远端随之
+                    // 读到 EOF，退出通知因连接不再现任而被忽略
+                    tracing::debug!(
+                        ?tab_id,
+                        ?connection_id,
+                        "拒收过期的TelnetConnected连接完成结果"
+                    );
+                    continue;
+                }
+                connecting.remove(&tab_id);
+                adopt_connection(
+                    TabCleanupTables {
+                        current_connections: &mut current_connections,
+                        forwards: &mut forwards,
+                        traffic_tasks: &mut traffic_tasks,
+                        key_deploy_tasks: &mut key_deploy_tasks,
+                        stats_tasks: &mut stats_tasks,
+                        sftp_clients: &mut sftp_clients,
+                        remotes: &mut remotes,
+                        cleanup: &mut cleanup_set,
+                    },
+                    AdoptConnection {
+                        tab_id,
+                        connection_id,
+                        io,
+                        join: async move {
+                            let _ = join.await;
+                        },
+                        remote: None,
+                        disconnect_reason: "reconnected to telnet",
                     },
                     &event_tx,
                     &internal_tx,

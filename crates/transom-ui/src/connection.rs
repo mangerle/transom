@@ -191,7 +191,8 @@ impl AppShell {
     ///
     /// 设计原理（Why）：
     /// - 触发条件是"会话显式开启 auto_reconnect 且尝试次数未超上限"，串口与
-    ///   本地终端不存在断线重连语义，直接跳过；
+    ///   本地终端不存在断线重连语义，直接跳过；Telnet 与 SSH 同属网络会话，
+    ///   按会话选项参与重连；
     /// - 重试前再次校验标签仍持有失败时的 connection_id：用户手动重连、切换
     ///   会话或关闭标签都会改变它，自动重试随之自然取消，无需独立状态机；
     /// - 退避 2s/5s/10s、上限 3 次：服务器宕机时快速放弃而不是无限打扰；
@@ -209,10 +210,12 @@ impl AppShell {
         if tab.connection_id != Some(failed_connection) {
             return;
         }
-        let Connection::Ssh(ssh) = &tab.session.connection else {
-            return;
+        let auto_reconnect = match &tab.session.connection {
+            Connection::Ssh(ssh) => ssh.options.auto_reconnect,
+            Connection::Telnet(telnet) => telnet.options.auto_reconnect,
+            _ => false,
         };
-        if !ssh.options.auto_reconnect {
+        if !auto_reconnect {
             return;
         }
         let attempt = tab.reconnect_attempts as usize;
@@ -268,7 +271,10 @@ impl AppShell {
         }
         if !matches!(
             session.connection,
-            Connection::Ssh(_) | Connection::Local(_) | Connection::Serial(_)
+            Connection::Ssh(_)
+                | Connection::Local(_)
+                | Connection::Serial(_)
+                | Connection::Telnet(_)
         ) {
             self.error = Some(rust_i18n::t!("error.configuration").to_string());
             return;

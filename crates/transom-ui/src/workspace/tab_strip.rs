@@ -64,6 +64,7 @@ impl AppShell {
             let tab_icon = match &tab.session.connection {
                 Connection::Local(_) => IconName::Terminal,
                 Connection::Serial(_) => IconName::Cable,
+                Connection::Telnet(_) => IconName::Network,
                 _ => IconName::Server,
             };
             let mut tab_element = h_flex()

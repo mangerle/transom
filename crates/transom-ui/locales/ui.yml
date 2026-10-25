@@ -223,6 +223,12 @@ form:
   conn_serial:
     en: Serial Port
     zh-CN: 串口
+  telnet_encoding:
+    en: Character encoding
+    zh-CN: 字符编码
+  telnet_hint:
+    en: Telnet has no built-in authentication; sign in inside the terminal. Choose GBK/Big5 when the remote side is a legacy device or a Chinese BBS.
+    zh-CN: Telnet 无内建认证，登录在终端内交互完成；远端为老设备或中文 BBS 时请选择 GBK/Big5 编码。
   serial_port:
     en: Serial device
     zh-CN: 串口设备

@@ -192,7 +192,12 @@ pub(crate) fn render_serial_fields(
     fields.into_any_element()
 }
 
-fn serial_option_row(label: String, choices: impl IntoElement, p: &Palette) -> AnyElement {
+/// 协议选项的行式布局：左侧标签、右侧按钮组。
+pub(crate) fn serial_option_row(
+    label: String,
+    choices: impl IntoElement,
+    p: &Palette,
+) -> AnyElement {
     h_flex()
         .justify_between()
         .items_center()

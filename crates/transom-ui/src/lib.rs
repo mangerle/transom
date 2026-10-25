@@ -18,6 +18,7 @@ mod palette;
 mod pane_tree;
 mod session_form;
 mod session_form_serial;
+mod session_form_telnet;
 mod session_form_view;
 mod session_serial;
 mod settings;

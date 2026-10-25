@@ -52,6 +52,7 @@ pub use serial::{SerialPortDescriptor, SerialPortProvider};
 pub use session::{
     AuthMethod, Connection, LocalConnection, SerialConnection, SerialDataBits, SerialFlowControl,
     SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
+    TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use settings::{
     AppSettings, AppearanceSettings, BellStyle, PanelSide, SavedLayout, SavedTabGroup,

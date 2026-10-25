@@ -13,6 +13,8 @@ mod sftp_hash;
 mod sftp_scan;
 mod sftp_sync;
 mod sftp_text;
+mod telnet;
+mod telnet_iac;
 mod traffic;
 
 pub use auth::{AuthPrompter, PasswordPrompter};
@@ -22,3 +24,4 @@ pub use forward::{ForwardTask, start_forward};
 pub use keys::deploy_public_key;
 pub use serial::{SerialSession, SystemSerialPortProvider, open_serial};
 pub use sftp::SftpClient;
+pub use telnet::{TelnetSession, connect_telnet};

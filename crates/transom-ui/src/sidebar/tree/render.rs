@@ -273,6 +273,10 @@ impl AppShell {
         let app_entity = cx.entity().clone();
         let (icon_name, detail_text) = match &session.connection {
             Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
+            Connection::Telnet(telnet) => (
+                IconName::Network,
+                format!("Telnet: {}:{}", telnet.host, telnet.port),
+            ),
             Connection::Local(local) => {
                 let shell = local.shell.as_deref().unwrap_or("sh");
                 (IconName::Terminal, format!("Local: {shell}"))

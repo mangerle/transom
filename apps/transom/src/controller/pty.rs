@@ -6,7 +6,7 @@ use transom_core::{
     AppError, AppEvent, Connection, ConnectionId, ConnectionSecrets, ErrorCode, KnownHostsStore,
     PromptInfo, Session, TabId, TerminalIo, TerminalSize,
 };
-use transom_net::{AuthPrompter, connect_ssh, open_serial};
+use transom_net::{AuthPrompter, connect_ssh, connect_telnet, open_serial};
 
 use super::Internal;
 
@@ -284,6 +284,45 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                                 error: AppError::with_detail(
                                     ErrorCode::Io,
                                     format!("串口连接任务异常终止: {error}"),
+                                ),
+                            })
+                            .await;
+                    }
+                }
+            }
+            Connection::Telnet(telnet) => {
+                let telnet = telnet.clone();
+                let internal_tx = internal_tx.clone();
+                let event_tx = event_tx.clone();
+                // TCP 拨号与域名解析是阻塞系统调用，禁止占用异步工作线程。
+                match tokio::task::spawn_blocking(move || connect_telnet(&telnet, size)).await {
+                    Ok(Ok(connected)) => {
+                        let _ = internal_tx
+                            .send_async(Internal::TelnetConnected {
+                                tab_id,
+                                connection_id,
+                                io: connected.io,
+                                join: connected.exit,
+                            })
+                            .await;
+                    }
+                    Ok(Err(error)) => {
+                        let _ = event_tx
+                            .send_async(AppEvent::ConnectionFailed {
+                                tab_id,
+                                connection_id,
+                                error,
+                            })
+                            .await;
+                    }
+                    Err(error) => {
+                        let _ = event_tx
+                            .send_async(AppEvent::ConnectionFailed {
+                                tab_id,
+                                connection_id,
+                                error: AppError::with_detail(
+                                    ErrorCode::Io,
+                                    format!("Telnet 连接任务异常终止: {error}"),
                                 ),
                             })
                             .await;

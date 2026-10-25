@@ -115,7 +115,7 @@ impl TerminalTab {
     /// 为什么不复用 `title`：`title` 是运行期标题，会被远端 `PS1` 里的 OSC 序列改写，
     /// 拿它当标签名会出现"标签跟着 cd 变名"，而且同会话多标签也无法靠它区分。
     /// 会话名在表单里是必填项，因此兜底分支只对手工编辑的目录文件生效：
-    /// SSH 用 `用户@主机`，串口用设备名，本地终端用 shell 名。
+    /// SSH 用 `用户@主机`，Telnet 用 `主机:端口`，串口用设备名，本地终端用 shell 名。
     pub(crate) fn display_name(&self) -> String {
         let name = self.session.name.trim();
         if !name.is_empty() {
@@ -123,6 +123,7 @@ impl TerminalTab {
         }
         match &self.session.connection {
             Connection::Ssh(ssh) => format!("{}@{}", ssh.username, ssh.host),
+            Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
             Connection::Serial(serial) => serial.port.clone(),
             Connection::Local(local) => local.shell.clone().unwrap_or_else(|| "shell".to_string()),
             // `Connection` 标记为 non-exhaustive：将来新增连接类型时退回运行期标题，

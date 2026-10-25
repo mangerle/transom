@@ -4,6 +4,7 @@ use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::session_form::{AuthChoice, ConnectionChoice};
 use crate::session_form_serial::render_serial_fields;
+use crate::session_form_telnet::render_telnet_fields;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -137,6 +138,18 @@ impl AppShell {
                                         };
                                         if needs_ports {
                                             this.refresh_serial_ports(window, cx);
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(
+                                Button::new("conn-telnet")
+                                    .small()
+                                    .label("Telnet")
+                                    .selected(form.connection == ConnectionChoice::Telnet)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        if let Some(form) = this.form.as_mut() {
+                                            form.connection = ConnectionChoice::Telnet;
                                         }
                                         cx.notify();
                                     })),
@@ -340,6 +353,9 @@ impl AppShell {
             }
             ConnectionChoice::Serial => {
                 content = content.child(render_serial_fields(form, cx, p));
+            }
+            ConnectionChoice::Telnet => {
+                content = content.child(render_telnet_fields(form, cx, p));
             }
         }
 

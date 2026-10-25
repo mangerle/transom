@@ -3,7 +3,8 @@ use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
     AuthMethod, Connection, SerialConnection, SerialDataBits, SerialFlowControl, SerialParity,
-    SerialPortDescriptor, SerialStopBits, Session, SshConnection, StartupCommands, TerminalProfile,
+    SerialPortDescriptor, SerialStopBits, Session, SshConnection, StartupCommands,
+    TelnetConnection, TerminalProfile, TextEncoding,
 };
 use zeroize::Zeroizing;
 
@@ -18,6 +19,7 @@ pub(crate) enum AuthChoice {
 pub(crate) enum ConnectionChoice {
     Ssh,
     Serial,
+    Telnet,
 }
 
 pub(crate) struct SessionForm {
@@ -42,6 +44,8 @@ pub(crate) struct SessionForm {
     pub serial_flow_control: SerialFlowControl,
     pub serial_ports: Vec<SerialPortDescriptor>,
     pub serial_ports_error: Option<String>,
+    /// Telnet 字符编码；远端为老设备或 BBS 时选择 GBK/Big5。
+    pub telnet_encoding: TextEncoding,
     pub startup_commands: Entity<TextareaState>,
     /// SSH 连接超时（秒）；留空或非法值回退会话存量/默认。
     pub connect_timeout: Entity<InputState>,
@@ -89,6 +93,7 @@ struct SessionFormSeed {
     serial_parity: SerialParity,
     serial_stop_bits: SerialStopBits,
     serial_flow_control: SerialFlowControl,
+    telnet_encoding: TextEncoding,
 }
 
 impl SessionForm {
@@ -100,10 +105,15 @@ impl SessionForm {
     ) -> Self {
         let connection = match base.as_ref().map(|session| &session.connection) {
             Some(Connection::Serial(_)) => ConnectionChoice::Serial,
+            Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
             _ => ConnectionChoice::Ssh,
         };
         let serial = base.as_ref().and_then(|session| match &session.connection {
             Connection::Serial(serial) => Some(serial),
+            _ => None,
+        });
+        let telnet = base.as_ref().and_then(|session| match &session.connection {
+            Connection::Telnet(telnet) => Some(telnet),
             _ => None,
         });
         let ssh = base.as_ref().and_then(|session| match &session.connection {
@@ -155,16 +165,20 @@ impl SessionForm {
         let (connect_timeout, keepalive) = base
             .as_ref()
             .and_then(|session| match &session.connection {
-                Connection::Ssh(ssh) => Some(ssh),
+                Connection::Ssh(ssh) => {
+                    Some((ssh.options.connect_timeout_secs, ssh.options.keepalive_secs))
+                }
+                Connection::Telnet(telnet) => Some((
+                    telnet.options.connect_timeout_secs,
+                    telnet.options.keepalive_secs,
+                )),
                 _ => None,
             })
-            .map(|ssh| {
-                (
-                    ssh.options.connect_timeout_secs.to_string(),
-                    ssh.options.keepalive_secs.to_string(),
-                )
-            })
+            .map(|(timeout, keepalive)| (timeout.to_string(), keepalive.to_string()))
             .unwrap_or_else(|| ("15".to_string(), "30".to_string()));
+        let telnet_encoding = telnet
+            .map(|telnet| telnet.encoding)
+            .unwrap_or(TextEncoding::Utf8);
         let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
         let serial_baud = serial
             .map(|serial| serial.baud_rate)
@@ -203,6 +217,7 @@ impl SessionForm {
                 serial_parity,
                 serial_stop_bits,
                 serial_flow_control,
+                telnet_encoding,
             },
         )
     }
@@ -226,21 +241,37 @@ impl SessionForm {
             serial_parity,
             serial_stop_bits,
             serial_flow_control,
+            telnet_encoding,
         } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
+            _ => None,
+        });
+        let telnet = base.as_ref().and_then(|session| match &session.connection {
+            Connection::Telnet(telnet) => Some(telnet),
             _ => None,
         });
         let name = base
             .as_ref()
             .map(|session| session.name.clone())
             .unwrap_or_default();
-        let host = ssh.map(|ssh| ssh.host.clone()).unwrap_or_default();
-        let port = ssh.map(|ssh| ssh.port).unwrap_or(22).to_string();
+        let host = ssh
+            .map(|ssh| ssh.host.clone())
+            .or_else(|| telnet.map(|telnet| telnet.host.clone()))
+            .unwrap_or_default();
+        let port = ssh
+            .map(|ssh| ssh.port)
+            .or_else(|| telnet.map(|telnet| telnet.port))
+            .unwrap_or(match connection {
+                ConnectionChoice::Telnet => 23,
+                _ => 22,
+            })
+            .to_string();
         let username = ssh
             .map(|ssh| ssh.username.clone())
             .unwrap_or_else(default_username);
-        let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect);
+        let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
+            || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
 
         Self {
             base,
@@ -287,6 +318,7 @@ impl SessionForm {
             serial_flow_control,
             serial_ports: Vec::new(),
             serial_ports_error: None,
+            telnet_encoding,
             startup_commands: cx
                 .new(|cx| TextareaState::new(window, cx).default_value(startup_commands)),
             connect_timeout: text_input(window, cx, &connect_timeout, "15"),
@@ -317,6 +349,11 @@ impl SessionForm {
             }
             ConnectionChoice::Serial => (
                 Connection::Serial(self.build_serial_connection(cx)?),
+                None,
+                None,
+            ),
+            ConnectionChoice::Telnet => (
+                Connection::Telnet(self.build_telnet_connection(cx)?),
                 None,
                 None,
             ),
@@ -433,6 +470,55 @@ impl SessionForm {
             }),
             password,
             key_passphrase,
+        })
+    }
+
+    /// 构建 Telnet 连接：无内建认证，仅主机、端口、编码与选项。
+    ///
+    /// 超时与保活的取值口径与 SSH 一致：越界一律回退存量，不用报错打断
+    /// 保存流程。
+    fn build_telnet_connection(
+        &self,
+        cx: &mut Context<impl Sized>,
+    ) -> Result<TelnetConnection, String> {
+        let host = self.host.read(cx).value().trim().to_string();
+        if host.is_empty() {
+            return Err(rust_i18n::t!("form.error_host").to_string());
+        }
+        let port: u16 = self
+            .port
+            .read(cx)
+            .value()
+            .trim()
+            .parse()
+            .map_err(|_| rust_i18n::t!("form.error_port").to_string())?;
+        if port == 0 {
+            return Err(rust_i18n::t!("form.error_port").to_string());
+        }
+        let mut options = self
+            .base
+            .as_ref()
+            .and_then(|session| match &session.connection {
+                Connection::Telnet(telnet) => Some(telnet.options.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        options.auto_reconnect = self.auto_reconnect;
+        if let Ok(timeout) = self.connect_timeout.read(cx).value().trim().parse::<u64>()
+            && (1..=120).contains(&timeout)
+        {
+            options.connect_timeout_secs = timeout;
+        }
+        if let Ok(keepalive) = self.keepalive.read(cx).value().trim().parse::<u64>()
+            && keepalive <= 3600
+        {
+            options.keepalive_secs = keepalive;
+        }
+        Ok(TelnetConnection {
+            host,
+            port,
+            encoding: self.telnet_encoding,
+            options,
         })
     }
 
