@@ -7,6 +7,7 @@ pub mod commands;
 pub mod error;
 pub mod forward;
 mod highlight;
+pub mod history;
 pub mod host;
 pub mod identity;
 pub mod ids;
@@ -46,6 +47,9 @@ pub use forward::{
     TargetAddress,
 };
 pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan, TerminalHighlight};
+pub use history::{
+    HISTORY_LIMIT, SUGGESTION_LIMIT, record as record_command, suggestions as command_suggestions,
+};
 pub use host::{HostAction, HostOutcome};
 pub use identity::Identity;
 pub use ids::{
@@ -65,9 +69,9 @@ pub use session::{
     TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use settings::{
-    AppSettings, AppearanceSettings, AuditSettings, BellStyle, PanelSide, SavedLayout,
-    SavedTabGroup, SftpSettings, ShortcutSettings, Snippet, SnippetSettings, SplitAxis, UiDensity,
-    UiThemeMode, WindowSettings,
+    AppSettings, AppearanceSettings, AuditSettings, BellStyle, HistorySettings, PanelSide,
+    SavedLayout, SavedTabGroup, SftpSettings, ShortcutSettings, Snippet, SnippetSettings,
+    SplitAxis, UiDensity, UiThemeMode, WindowSettings,
 };
 pub use sftp::{
     PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation,
@@ -86,7 +90,7 @@ pub use ssh_url::{
     DEFAULT_SSH_PORT, SshTarget, is_ssh_url, looks_like_host, parse_ssh_target,
     quick_connect_session,
 };
-pub use storage::{BackupService, SecretStore, SessionStore, SettingsStore};
+pub use storage::{BackupService, HistoryStore, SecretStore, SessionStore, SettingsStore};
 pub use sync::{
     CloudSyncTarget, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME, SyncEndpoint, SyncPushReport,
     SyncSettings,

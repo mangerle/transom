@@ -640,6 +640,38 @@ impl AppShell {
             .into_any_element()
     }
 
+    /// 历史组：命令采集与建议开关。
+    pub(crate) fn render_settings_history(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.history_enabled",
+                Some("settings.history_enabled_desc"),
+                Switch::new("toggle-history-enabled")
+                    .small()
+                    .checked(self.settings.history.enabled)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.history.enabled = checked;
+                        // 关掉时把内存里的建议一起收起：下次开回来仍从文件恢复，
+                        // 不做删除，避免"关一下就把历史清空"的误伤。
+                        if !checked {
+                            this.history.write().clear();
+                        } else if this.history.read().is_empty() {
+                            let loaded = this.services.history.load();
+                            *this.history.write() = loaded;
+                        }
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
     /// 审计组：会话输出落盘开关与日志目录入口。
     pub(crate) fn render_settings_audit(
         &mut self,

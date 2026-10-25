@@ -144,6 +144,35 @@ impl AppShell {
         self.connect_quick_host(&url, cx);
     }
 
+    /// 记录一条采集到的命令：更新内存快照并后台落盘。
+    ///
+    /// 落盘失败只提示不打断使用：历史是加速器，不是主流程；写盘放后台是因为
+    /// 这条路径来自终端事件处理，不该在界面线程做文件 IO。
+    pub(crate) fn record_history_command(&mut self, command: &str, cx: &mut Context<Self>) {
+        if !self.settings.history.enabled {
+            return;
+        }
+        let recorded = {
+            let mut snapshot = self.history.write();
+            transom_core::record_command(&mut snapshot, command)
+        };
+        if !recorded {
+            return;
+        }
+        let snapshot: Vec<String> = self.history.read().clone();
+        let store = self.services.history.clone();
+        cx.spawn(async move |_, cx| {
+            let error = cx
+                .background_executor()
+                .spawn(async move { store.save(&snapshot).err() })
+                .await;
+            if let Some(error) = error {
+                tracing::warn!("命令历史写盘失败，本次仍保留在内存中，原因: {error}");
+            }
+        })
+        .detach();
+    }
+
     pub(crate) fn import_ssh_config(&mut self, cx: &mut Context<Self>) {
         let ssh_config_path =
             directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));

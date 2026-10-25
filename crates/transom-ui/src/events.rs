@@ -80,6 +80,9 @@ impl AppShell {
                         audit_path,
                     )
                 });
+                // 建议能力挂到视图：查询回调是全应用共享的一份内存快照。
+                let provider = self.history_provider.clone();
+                terminal.update(cx, |view, _| view.attach_history(provider));
                 let focus_handle = terminal.read(cx).focus_handle().clone();
                 // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，
                 // 普通 subscribe 拿不到 Window。
@@ -618,6 +621,9 @@ impl AppShell {
                 }
             }
             TerminalEvent::ContextMenuRequested { .. } => {}
+            TerminalEvent::CommandRecorded { command } => {
+                self.record_history_command(command, cx);
+            }
             TerminalEvent::FilesDropped(paths) => {
                 self.handle_dropped_files(tab_id, paths, window, cx);
             }

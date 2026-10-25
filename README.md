@@ -47,6 +47,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 - Always-on highlighting for `ERROR` / `WARN` / `INFO` / `DEBUG`, IPv4 addresses and UUIDs, and up to 32 custom keywords, all mapped to theme palette slots so they follow your colorscheme.
 - Rectangular column select with <kbd>Alt</kbd>+drag that still works inside `vim` and `htop`, configurable double-click word separators, and OSC 133 / OSC 777 desktop notifications when a command crosses a runtime threshold.
 - Snippets bar for repeating a saved one-liner across the focused pane.
+- Command history with inline suggestions: commands are collected from shell-integration markers (OSC 133 reported text, falling back to a grid snapshot between prompt end and the cursor), stored in `~/.config/transom/history.json`, and offered as you type — <kbd>Tab</kbd> completes the top match, <kbd>Enter</kbd> still runs what you typed.
 
 ### Port forwarding
 - Local, remote and dynamic (SOCKS5) tunnels started and stopped against a live session, with a panel that lists rules, connection counts and channel state.

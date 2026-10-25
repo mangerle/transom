@@ -1,6 +1,6 @@
 use crate::audit::AuditSink;
 use crate::engine::TerminalEngine;
-use crate::event::TerminalEvent;
+use crate::event::{HistoryProvider, TerminalEvent};
 use crate::input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
 use crate::osc::{CommandTracker, OscEvent};
 use crate::renderer::{PaintRequest, TerminalRenderer};
@@ -84,6 +84,13 @@ pub struct TerminalView {
     pub(crate) search_input: Option<Entity<InputState>>,
     /// 命令生命周期归并：把 OSC 133 的零散标记算成"一条命令跑了多久"。
     command_tracker: CommandTracker,
+    /// 命令历史候选查询；未挂接时建议功能整体不生效。
+    pub(crate) history_provider: Option<HistoryProvider>,
+    /// 本地跟踪的当前输入行，只用于取建议前缀。
+    pub(crate) input_line: String,
+    /// 当前候选列表与选中位置（Tab 逐个采纳，不抢上下键）。
+    pub(crate) suggestions: Vec<String>,
+    pub(crate) suggestion_index: usize,
     /// 是否把查询词当正则表达式解析（与引擎里的快照同步）。
     pub(crate) search_regex_mode: bool,
     /// 检索输入框的事件订阅；随实体存活，收起搜索栏也不释放（下次复用同一输入框）。
@@ -257,6 +264,10 @@ impl TerminalView {
             cursor_blink_on: true,
             scroll_pixel_remainder: 0.0,
             command_tracker: CommandTracker::default(),
+            history_provider: None,
+            input_line: String::new(),
+            suggestions: Vec::new(),
+            suggestion_index: 0,
             search_open: false,
             search_input: None,
             search_regex_mode: false,
@@ -433,6 +444,9 @@ impl TerminalView {
                 OscEvent::Notify { title, body } => {
                     cx.emit(TerminalEvent::DesktopNotification { title, body });
                 }
+                OscEvent::CommandRecorded { command } => {
+                    cx.emit(TerminalEvent::CommandRecorded { command });
+                }
                 event => {
                     if let Some(tracked) = self.command_tracker.on_event(&event, now) {
                         cx.emit(TerminalEvent::CommandFinished {
@@ -559,7 +573,9 @@ impl TerminalView {
         }
 
         // Tab is consumed by the terminal context action to avoid focus traversal.
+        // 建议浮层打开时先用来补全：这是用户此刻最想要 Tab 干的事。
         if key == "tab" {
+            self.accept_suggestion(cx);
             return;
         }
 
@@ -578,6 +594,22 @@ impl TerminalView {
             && self.write_input(&bytes)
         {
             self.engine.lock().scroll_to_bottom();
+            // 回车结算一行、退格删一格，其余控制键（方向键、Ctrl-R、Esc 序列）
+            // 都可能让 shell 自己改这一行，本地跟踪只能作废。
+            match key.as_str() {
+                "enter" => {
+                    self.input_line.clear();
+                    self.clear_suggestions();
+                }
+                "backspace" => {
+                    self.input_line.pop();
+                    self.note_input_changed(false, cx);
+                }
+                _ => {
+                    self.input_line.clear();
+                    self.clear_suggestions();
+                }
+            }
             cx.notify();
         }
     }
@@ -971,6 +1003,7 @@ impl Render for TerminalView {
                 entity.update(cx, |_, cx| cx.emit(TerminalEvent::FilesDropped(dropped)));
             })
             .child(layer)
+            .children(self.render_suggestion_bar(cx))
             .children(search_bar)
     }
 }

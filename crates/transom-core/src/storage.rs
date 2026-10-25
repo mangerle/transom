@@ -62,6 +62,22 @@ pub trait BackupService: Send + Sync {
     fn restore_secrets(&self, secrets: &[BackupSecret]) -> Result<SecretRestoreReport, AppError>;
 }
 
+/// 命令历史的读写契约。
+///
+/// 与 `SessionStore` 分开：历史是"用过什么"，会话目录是"有哪些机器"，
+/// 体积与生命周期都不同，混在一个文件里会让每敲一条命令都重写整份会话库。
+pub trait HistoryStore: Send + Sync {
+    /// 读取历史；实现方对损坏与缺失一律降级成空表，不让应用起不来。
+    fn load(&self) -> Vec<String>;
+
+    /// 覆盖式保存整份历史。
+    ///
+    /// # Errors
+    /// 目录创建、序列化或原子改名失败时返回底层错误；调用方（界面）只记提示，
+    /// 写盘失败不影响本次会话的使用。
+    fn save(&self, commands: &[String]) -> Result<(), AppError>;
+}
+
 pub trait SecretStore: Send + Sync {
     fn get(&self, key: &SecretKey) -> Result<Option<Zeroizing<String>>, AppError>;
     fn set(&self, key: &SecretKey, secret: &str) -> Result<(), AppError>;

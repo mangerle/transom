@@ -59,6 +59,11 @@ pub fn themes_dir() -> PathBuf {
     config_dir().join("themes")
 }
 
+/// 命令历史文件；记录采集到的命令行，供输入时弹出建议。
+pub fn history_path() -> PathBuf {
+    config_dir().join("history.json")
+}
+
 /// 会话审计日志目录；每个连接建立时开一个文件，落的是原始终端输出字节流。
 pub fn audit_dir() -> PathBuf {
     config_dir().join("audit")

@@ -344,6 +344,27 @@ pub struct AppSettings {
     /// 会话输出审计落盘；旧配置缺少该字段时按关闭降级。
     #[serde(default)]
     pub audit: AuditSettings,
+    /// 命令历史与建议；旧配置缺少该字段时按默认开启降级。
+    #[serde(default)]
+    pub history: HistorySettings,
+}
+
+/// 命令历史与建议设置。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HistorySettings {
+    /// 总开关：关闭后不再采集命令，也不再弹建议。
+    ///
+    /// 为什么默认开启：采集到的只是"这一行敲过什么"，与 shell 自己在
+    /// `~/.bash_history` 里留的内容同性质，且不落远端；建议功能只有在
+    /// 有历史时才出现，关掉它反而让多数人以为功能坏了。
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for HistorySettings {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 /// 会话输出审计落盘设置。
@@ -521,6 +542,7 @@ impl Default for AppSettings {
             sync: SyncSettings::default(),
             zmodem: crate::zmodem::ZmodemSettings::default(),
             audit: AuditSettings::default(),
+            history: HistorySettings::default(),
         }
     }
 }

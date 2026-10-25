@@ -392,6 +392,10 @@ pub struct AppShell {
     pub(crate) pending_credential: Option<PendingCredential>,
     /// known_hosts 管理弹窗的聚合状态（开关、记录与搜索框）。
     pub(crate) known_hosts_modal: KnownHostsModalState,
+    /// 命令历史内存快照：终端视图的查询回调共享它，避免每次按键都读盘。
+    pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
+    /// 共享给每个终端视图的历史查询回调（同一份快照，不各自复制）。
+    pub(crate) history_provider: transom_terminal::HistoryProvider,
     /// 主机批量拨测/唤醒的结果弹窗；同一时刻只有一批在展示，重复发起会直接
     /// 覆盖上一批（控制器侧的并发闸门仍在，不会叠出第二批在途动作）。
     pub(crate) host_actions: Option<HostActionsModal>,
@@ -480,6 +484,24 @@ impl AppShell {
             &settings.shortcuts,
         )));
         let applied_shortcut_keys = keymap::effective_key_strings(&settings.shortcuts);
+        // 命令历史读一次进内存，之后终端视图的查询回调只读这份快照：
+        // 建议要在每次按键时同步返回，不能去碰磁盘。关闭开关时连读都不读。
+        let history: Arc<parking_lot::RwLock<Vec<String>>> =
+            Arc::new(parking_lot::RwLock::new(if settings.history.enabled {
+                services.history.load()
+            } else {
+                Vec::new()
+            }));
+        let history_provider: transom_terminal::HistoryProvider = {
+            let snapshot = Arc::clone(&history);
+            Arc::new(move |prefix: &str| {
+                transom_core::command_suggestions(
+                    &snapshot.read(),
+                    prefix,
+                    transom_core::SUGGESTION_LIMIT,
+                )
+            })
+        };
         let search = cx.new(|cx| {
             InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
         });
@@ -621,6 +643,8 @@ impl AppShell {
             auth_prompt: None,
             host_key_confirm: None,
             pending_credential: None,
+            history,
+            history_provider,
             known_hosts_modal: KnownHostsModalState {
                 open: false,
                 records: known_hosts_records,

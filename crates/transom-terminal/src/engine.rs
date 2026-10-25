@@ -8,7 +8,7 @@ const MAX_PENDING_OSC_EVENTS: usize = 64;
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionRange, SelectionType};
-use alacritty_terminal::term::cell::Cell;
+use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{
     CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle, Processor,
@@ -53,6 +53,9 @@ pub struct TerminalEngine {
     osc_scanner: OscScanner,
     /// 扫描器产出、等待视图取走的事件。
     osc_events: Vec<OscEvent>,
+    /// 最近一次 `B`（提示符结束）时的光标位置：命令输入行的起点，
+    /// 供 `C` 到达时按网格补采命令文本。
+    command_input_point: Option<Point>,
     /// 全文检索状态（查询、命中快照与游标），行为见 [`crate::search`]。
     pub(crate) search: SearchState,
     /// 最近一次收到字节流的时刻，用于把重扫推迟到输出停歇之后。
@@ -93,6 +96,7 @@ impl TerminalEngine {
             size,
             osc_scanner: OscScanner::default(),
             osc_events: Vec::new(),
+            command_input_point: None,
             search: SearchState::default(),
             last_write: None,
             epoch: 0,
@@ -100,12 +104,22 @@ impl TerminalEngine {
     }
 
     pub fn process(&mut self, bytes: &[u8]) {
+        let mut saw_input_start = false;
         if !bytes.is_empty() {
             self.last_write = Some(Instant::now());
             self.epoch = self.epoch.wrapping_add(1);
             // 先旁路扫 OSC，再把同一份字节交给内核解析器：扫描器不消费输入，
             // 因此畸形序列也只影响通知，不影响屏幕内容。
-            self.osc_events.extend(self.osc_scanner.feed(bytes));
+            let scanned = self.osc_scanner.feed(bytes);
+            // 只看这批新扫到的标记：队列里可能有视图还没取走的旧 CommandStart，
+            // 按队列判断会在后续每一批字节上反复重置起点，采到半条命令。
+            saw_input_start = scanned
+                .iter()
+                .any(|event| matches!(event, OscEvent::CommandStart));
+            // 采命令文本必须在内核消费这批字节**之前**：此刻网格里是"提示符 +
+            // 用户已敲并回显的整行"，而命令的输出还没进来。
+            self.collect_command_text(&scanned);
+            self.osc_events.extend(scanned);
             if self.osc_events.len() > MAX_PENDING_OSC_EVENTS {
                 // 视图长时间没取走（例如标签被隐藏）时丢最旧的，绝不让队列无界增长。
                 let drop = self.osc_events.len() - MAX_PENDING_OSC_EVENTS;
@@ -113,6 +127,83 @@ impl TerminalEngine {
             }
         }
         self.parser.advance(&mut self.term, bytes);
+        // 记录输入起点要在这批字节入屏**之后**：shell 把 `A`/`B` 嵌在 PS1 里，
+        // 提示符字形与本批字节同源，提前取光标会落在提示符之前，采到提示符文本。
+        if saw_input_start {
+            self.command_input_point = Some(self.term.grid().cursor.point);
+        }
+    }
+
+    /// 按 OSC 133 的 `C`/`E` 采集命令文本，产出一条 `CommandRecorded`。
+    ///
+    /// 两条来源按优先级取：集成直接上报的命令文本最准（不受折行与重绘影响），
+    /// 没有参数时退回"提示符结束点到光标"的网格快照。两者都拿不到就不记录，
+    /// 绝不从滚动缓冲里猜——猜出来的历史命令比没有历史更糟。
+    fn collect_command_text(&mut self, scanned: &[OscEvent]) {
+        for event in scanned {
+            let OscEvent::PreExec { command } = event else {
+                continue;
+            };
+            let text = match command {
+                Some(text) => text.trim().to_string(),
+                None => self.grid_command_text().unwrap_or_default(),
+            };
+            // 空串、单字符与以空格开头的命令（HIST_IGNORE_SPACE 约定）都不记录。
+            if text.chars().count() < 2 || text.starts_with(' ') {
+                continue;
+            }
+            self.osc_events
+                .push(OscEvent::CommandRecorded { command: text });
+        }
+    }
+
+    /// 从记录的输入起点读到当前光标，拼出用户敲下的那一行。
+    ///
+    /// 折行的长命令按 `WRAPLINE` 标记继续拼接；宽字符的占位格跳过，
+    /// 否则中文命令行会在每个汉字后多出一个空格。
+    fn grid_command_text(&self) -> Option<String> {
+        let start = self.command_input_point?;
+        let grid = self.term.grid();
+        let cursor = grid.cursor.point;
+        // 起点已不在当前可见窗口（发生过清屏或大幅滚动）时放弃，不猜。
+        if cursor.line < start.line {
+            return None;
+        }
+        let cols = self.size.cols as usize;
+        let mut text = String::new();
+        let mut line = start.line;
+        let mut column = start.column;
+        loop {
+            let last_column = if line == cursor.line {
+                cursor.column
+            } else {
+                Column(cols.saturating_sub(1))
+            };
+            while column <= last_column {
+                let cell = &grid[Point::new(line, column)];
+                if !cell
+                    .flags
+                    .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+                    && cell.c != '\0'
+                {
+                    text.push(cell.c);
+                }
+                column = Column(column.0.saturating_add(1));
+            }
+            if line == cursor.line {
+                break;
+            }
+            // 只有上一行确实折到下一行才继续；否则说明换了行（例如已回车执行）。
+            let wrapped = grid[Point::new(line, Column(cols.saturating_sub(1)))]
+                .flags
+                .intersects(Flags::WRAPLINE);
+            if !wrapped {
+                break;
+            }
+            line += 1;
+            column = Column(0);
+        }
+        Some(text.trim_end().to_string())
     }
 
     /// 取走并清空待处理的 OSC 事件。
@@ -252,6 +343,65 @@ impl TerminalEngine {
 mod tests {
     use super::*;
     use alacritty_terminal::index::Line;
+
+    /// shell 集成只给边界标记（绝大多数 bash/zsh 配置）时，命令文本按
+    /// "提示符结束点到光标"的网格快照补采。
+    #[test]
+    fn captures_command_from_grid_between_prompt_and_cursor() {
+        let (mut engine, _events) = engine(40, 3);
+        engine.process(b"\x1b]133;A\x1b\\user@host:~$ \x1b]133;B\x1b\\");
+        engine.process(b"git status");
+        engine.process(b"\x1b]133;C\x1b\\");
+        assert_eq!(
+            captured(&engine),
+            vec!["git status".to_string()],
+            "应采到用户敲下的整行且不含提示符"
+        );
+    }
+
+    /// 集成把命令文本直接上报（WezTerm 的 `E;<cmd>`）时以它为准：
+    /// 网格快照可能被折行与重绘影响，上报值不会。
+    #[test]
+    fn prefers_command_text_reported_by_shell_integration() {
+        let (mut engine, _events) = engine(40, 3);
+        engine.process(b"\x1b]133;A\x1b\\$ \x1b]133;B\x1b\\");
+        engine.process(b"echo hi\x1b]133;E;echo hi > /tmp/x\x1b\\");
+        assert_eq!(
+            captured(&engine),
+            vec!["echo hi > /tmp/x".to_string()],
+            "带参上报优先于网格快照"
+        );
+    }
+
+    /// 单字符、以空格开头的行（`HIST_IGNORE_SPACE` 约定）都不该进历史。
+    #[test]
+    fn skips_short_and_opted_out_commands() {
+        let (mut engine, _events) = engine(40, 3);
+        engine.process(b"\x1b]133;A\x1b\\$ \x1b]133;B\x1b\\");
+        engine.process(b"x\x1b]133;C\x1b\\");
+        engine.process(b"\x1b]133;A\x1b\\$ \x1b]133;B\x1b\\");
+        engine.process(b" secret-token abc\x1b]133;C\x1b\\");
+        assert!(captured(&engine).is_empty(), "短行与刻意不留档的行都不记录");
+    }
+
+    /// 没有 shell 集成（从不发 `B`）时不能凭空产出历史：起点未知就放弃。
+    #[test]
+    fn captures_nothing_without_prompt_marker() {
+        let (mut engine, _events) = engine(40, 3);
+        engine.process(b"plain output without integration\x1b]133;C\x1b\\");
+        assert!(captured(&engine).is_empty());
+    }
+
+    fn captured(engine: &TerminalEngine) -> Vec<String> {
+        engine
+            .osc_events
+            .iter()
+            .filter_map(|event| match event {
+                OscEvent::CommandRecorded { command } => Some(command.clone()),
+                _ => None,
+            })
+            .collect()
+    }
     use alacritty_terminal::term::cell::Flags;
     use alacritty_terminal::vte::ansi::{Color, NamedColor};
 

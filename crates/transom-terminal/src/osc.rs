@@ -34,6 +34,10 @@ pub(crate) enum OscEvent {
         exit_code: Option<i32>,
         duration_ms: Option<u64>,
     },
+    /// 命令即将执行（`C` 或 WezTerm 的 `E`）；部分集成会把命令文本一并带在参数里。
+    PreExec { command: Option<String> },
+    /// 采集到的一条完整命令文本，用于命令历史与建议。
+    CommandRecorded { command: String },
     /// 程序显式请求的桌面通知（OSC 777）。
     Notify { title: String, body: String },
 }
@@ -156,7 +160,8 @@ fn emit(bytes: &[u8], events: &mut Vec<OscEvent>) {
 /// OSC 133 的参数：iTerm2/WezTerm 系 shell 集成用它标记提示符与命令边界。
 ///
 /// 形如 `A`（提示符开始）、`B`（命令输入开始）、`C`（命令输出开始）、
-/// `D`、`D;退出码`、`D;退出码;耗时毫秒`。
+/// `D`、`D;退出码`、`D;退出码;耗时毫秒`，以及 WezTerm 系扩展的
+/// `C;<命令>` / `E;<命令>`（把正要执行的命令一并上报）。
 fn parse_command_marker(params: &str) -> Option<OscEvent> {
     let mut parts = params.split(';');
     // 标记必须整段等于 A/B/C/D：被吞进垃圾字节的前缀（例如未闭合序列）不允许
@@ -169,7 +174,14 @@ fn parse_command_marker(params: &str) -> Option<OscEvent> {
             exit_code: parts.next().and_then(|value| value.parse::<i32>().ok()),
             duration_ms: parts.next().and_then(|value| value.parse::<u64>().ok()),
         }),
-        // `C`（命令输出开始）与其它标记对本功能没有额外信息量。
+        // `C`/`E` 都表示"命令即将执行"：带参数时命令文本已经在手上，
+        // 不带参数时交给引擎按网格快照补采。
+        "C" | "E" => Some(OscEvent::PreExec {
+            command: parts
+                .next()
+                .map(str::to_string)
+                .filter(|text| !text.is_empty()),
+        }),
         _ => None,
     }
 }
@@ -249,6 +261,8 @@ impl CommandTracker {
                     duration_ms: measured,
                 })
             }
+            // 边界与通知类事件不参与"耗时结算"，交由视图自行处理。
+            OscEvent::PreExec { .. } | OscEvent::CommandRecorded { .. } => None,
             OscEvent::PromptStart => {
                 let started_at = self.started_at.take()?;
                 let elapsed = now.checked_duration_since(started_at)?.as_millis() as u64;
@@ -287,7 +301,20 @@ mod tests {
     fn parses_bel_terminated_command_markers() {
         assert_eq!(collect(&[b"\x1b]133;A\x07"]), vec![OscEvent::PromptStart]);
         assert_eq!(collect(&[b"\x1b]133;B\x07"]), vec![OscEvent::CommandStart]);
-        assert_eq!(collect(&[b"\x1b]133;C\x07"]), vec![]);
+        // `C` 现在会产出 PreExec：命令文本没带参数时由引擎按网格快照补采。
+        assert_eq!(
+            collect(&[b"\x1b]133;C\x07"]),
+            vec![OscEvent::PreExec { command: None }]
+        );
+        // 带参上报（WezTerm 的 E、部分集成的 C）直接给出命令文本。
+        assert_eq!(
+            collect(&[b"\x1b]133;E;git status\x07"]),
+            vec![OscEvent::PreExec {
+                command: Some("git status".to_string())
+            }]
+        );
+        // 未知标记不能因为"首字母相同"就产出事件。
+        assert_eq!(collect(&[b"\x1b]133;Z\x07"]), vec![]);
         assert_eq!(collect(&[b"\x1b]133;D\x07"]), finish(None, None));
         assert_eq!(collect(&[b"\x1b]133;D;0\x07"]), finish(Some(0), None));
         assert_eq!(

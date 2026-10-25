@@ -58,6 +58,8 @@ pub struct UiServices {
     pub known_hosts: Arc<dyn KnownHostsStore>,
     pub serial_ports: Arc<dyn SerialPortProvider>,
     pub backup: Arc<dyn BackupService>,
+    /// 命令历史读写（独立于会话目录的一份本地文件）。
+    pub history: Arc<dyn transom_core::HistoryStore>,
     pub command_tx: flume::Sender<AppCommand>,
     pub event_rx: flume::Receiver<AppEvent>,
 }

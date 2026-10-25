@@ -1,6 +1,12 @@
 use alacritty_terminal::event::{Event, EventListener};
 use flume::Sender;
 
+/// 命令历史候选的查询回调：按输入前缀返回若干条历史命令。
+///
+/// 用回调而不是把存储塞进视图：终端 crate 不该知道历史存在哪个文件、留多少条，
+/// 那些都是应用侧的策略。回调在 UI 线程同步调用，实现方必须走内存快照。
+pub type HistoryProvider = std::sync::Arc<dyn Fn(&str) -> Vec<String> + Send + Sync>;
+
 /// Events surfaced to the application view.
 #[derive(Debug, Clone)]
 pub enum TerminalEvent {
@@ -14,6 +20,13 @@ pub enum TerminalEvent {
     CommandFinished {
         exit_code: Option<i32>,
         duration_ms: u64,
+    },
+    /// 采集到一条用户执行过的命令文本，供历史与建议使用。
+    ///
+    /// 只在能确定命令内容时才发：shell 集成上报的参数或提示符到光标之间的网格
+    /// 文本，二者都取不到就不发——猜出来的历史比没有历史更糟。
+    CommandRecorded {
+        command: String,
     },
     /// 终端程序通过 OSC 777 显式请求的桌面通知。
     DesktopNotification {

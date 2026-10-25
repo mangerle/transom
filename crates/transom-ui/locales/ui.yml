@@ -1384,6 +1384,15 @@ settings:
   identity_group:
     en: Credential Templates
     zh-CN: 凭据模板
+  history_group:
+    en: Command History
+    zh-CN: 命令历史
+  history_enabled:
+    en: Collect commands and suggest them while typing
+    zh-CN: 采集命令并在输入时给出建议
+  history_enabled_desc:
+    en: "Requires shell integration that emits OSC 133 markers; commands are kept in ~/.config/transom/history.json and never leave the machine. Tab completes the top match."
+    zh-CN: "需要能输出 OSC 133 标记的 shell 集成；命令存在 ~/.config/transom/history.json，不会离开本机。按 Tab 补全第一条建议。"
   audit_enabled:
     en: Record session output to disk
     zh-CN: 将会话输出落盘记录
