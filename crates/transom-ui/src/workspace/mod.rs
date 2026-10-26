@@ -40,7 +40,12 @@ impl AppShell {
         if let Some(tab_id) = disconnected_tab {
             main = main.child(self.render_reconnect_banner(tab_id, p, cx));
         }
-        main.child(content).into_any_element()
+        main = main.child(content);
+        // 广播条贴在终端区底部、状态栏之上；关闭时完全不参与布局。
+        if self.broadcast.open {
+            main = main.child(self.render_broadcast_bar(cx, p));
+        }
+        main.into_any_element()
     }
 
     /// 按标签组渲染标签栏：一个标签组只显示一个条目，标题取活动窗格。
@@ -156,7 +161,7 @@ impl AppShell {
 ///
 /// 窗格头与标签栏的窗格列表共用同一套映射，避免两处对"什么颜色代表连接失败"
 /// 的理解分叉。
-pub(super) fn pane_status_indicator(status: &TabStatus, p: &Palette) -> (Hsla, IconName) {
+pub(crate) fn pane_status_indicator(status: &TabStatus, p: &Palette) -> (Hsla, IconName) {
     match status {
         TabStatus::Connecting => (p.muted_foreground, IconName::Loader),
         TabStatus::Connected => (p.success, IconName::Terminal),

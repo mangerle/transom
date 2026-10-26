@@ -141,6 +141,34 @@ tab:
   pane_count:
     en: "%{title} · %{count} panes"
     zh-CN: "%{title} · %{count} 个窗格"
+broadcast:
+  title:
+    en: Broadcast Input
+    zh-CN: 广播输入
+  targets:
+    en: Select Targets
+    zh-CN: 选择目标
+  no_targets:
+    en: No panes available to broadcast
+    zh-CN: 没有可广播的窗格
+  single_placeholder:
+    en: Type a command and press Enter to broadcast
+    zh-CN: 输入命令后回车广播
+  multi_placeholder:
+    en: Edit a script; Enter broadcasts, Shift+Enter inserts a newline
+    zh-CN: 编辑脚本，回车广播，Shift+Enter 换行
+  expand:
+    en: Expand to multi-line
+    zh-CN: 展开多行
+  collapse:
+    en: Collapse to single line
+    zh-CN: 收起为单行
+  send_failed:
+    en: Broadcast failed on some disconnected panes
+    zh-CN: 部分窗格已断开，广播发送失败
+  pane_suffix:
+    en: "Pane %{index}"
+    zh-CN: "窗格 %{index}"
 form:
   new_title:
     en: New Session

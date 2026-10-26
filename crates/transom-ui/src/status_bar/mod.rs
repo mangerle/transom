@@ -201,6 +201,7 @@ impl AppShell {
             );
 
         let snippets_entry = self.render_snippets_popover(p, cx);
+        let broadcast_entry = self.render_broadcast_trigger(cx);
         let front_zone = drag::status_front_drop_zone(&app, p);
         let menu_app = app.clone();
         // ZMODEM 传输徽章优先于常规状态项：传输进行中用户最关心进度与取消。
@@ -247,6 +248,7 @@ impl AppShell {
                         .border_l_1()
                         .border_color(p.sidebar_border)
                         .child(snippets_entry)
+                        .child(broadcast_entry)
                         .child(front_zone)
                         .child(badges),
                 );
@@ -257,6 +259,7 @@ impl AppShell {
                 .gap_2()
                 .child(connection_pill)
                 .child(snippets_entry)
+                .child(broadcast_entry)
                 .child(front_zone)
                 .child(badges);
         }

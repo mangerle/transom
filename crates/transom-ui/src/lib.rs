@@ -16,6 +16,7 @@ mod audit;
 mod backup;
 mod batch;
 mod brand;
+mod broadcast;
 mod chrome;
 mod cloud_sync;
 mod connection;

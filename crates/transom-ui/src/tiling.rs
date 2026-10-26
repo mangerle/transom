@@ -132,6 +132,8 @@ impl AppShell {
     /// 退出并排视图，只改变显示方式：两个标签组都保持打开与连接。
     pub(crate) fn untile_tabs(&mut self, cx: &mut Context<Self>) {
         if self.tiled_tabs.take().is_some() {
+            // 视觉标签从合并条目拆回单标签，广播目标跟着收敛。
+            self.sync_broadcast_targets();
             cx.notify();
         }
     }
@@ -156,17 +158,12 @@ impl AppShell {
     /// 配对原样保留；再点回对里的任一标签就恢复两格同屏。新建连接、重连等路径
     /// 直接写 `active_tab` 而不经过 `activate_tab`，写完调用本方法补齐焦点格。
     pub(crate) fn present_active_group(&mut self) {
-        let Some(tiled) = self.tiled_tabs else {
-            return;
-        };
-        let Some(group) = self
-            .active_tab
-            .and_then(|tab| self.group_index_for_tab(tab))
-            .map(|index| self.groups[index].id)
-        else {
-            return;
-        };
-        if let Some(side) = tiled.side_of(group)
+        if let Some(tiled) = self.tiled_tabs
+            && let Some(group) = self
+                .active_tab
+                .and_then(|tab| self.group_index_for_tab(tab))
+                .map(|index| self.groups[index].id)
+            && let Some(side) = tiled.side_of(group)
             && tiled.focused != side
         {
             self.tiled_tabs = Some(TiledTabs {
@@ -174,6 +171,8 @@ impl AppShell {
                 ..tiled
             });
         }
+        // 新建标签/重连可能直接写 active_tab，广播目标要跟着当前视觉标签走。
+        self.sync_broadcast_targets();
     }
 
     /// 校验并排绑定是否仍然有效；标签组被删除或重复绑定时解除配对。
@@ -188,6 +187,7 @@ impl AppShell {
         let second_alive = self.groups.iter().any(|group| group.id == tiled.second);
         if !first_alive || !second_alive || tiled.first == tiled.second {
             self.tiled_tabs = None;
+            self.sync_broadcast_targets();
             return;
         }
 
@@ -203,6 +203,7 @@ impl AppShell {
                 ..tiled
             });
         }
+        self.sync_broadcast_targets();
     }
 
     /// 当前活动标签是否属于并排对，决定内容区渲染两格还是单屏。

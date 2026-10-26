@@ -488,6 +488,7 @@ impl AppShell {
             self.active_tab = replacement.or_else(|| self.groups.first().map(|g| g.active_pane));
         }
         self.prune_tiling();
+        self.sync_broadcast_targets();
         let _ = self
             .services
             .secret_store
@@ -658,6 +659,8 @@ impl AppShell {
             let focus_handle = terminal.read(cx).focus_handle().clone();
             window.focus(&focus_handle, cx);
         }
+        // 广播条开着时，目标集合跟随标签切换；同一标签内换焦点不会重置。
+        self.sync_broadcast_targets();
         cx.notify();
     }
 
@@ -734,6 +737,7 @@ impl AppShell {
             }
         }
         self.prune_tiling();
+        self.sync_broadcast_targets();
         if self.groups.is_empty() && self.settings.window.close_window_on_all_tabs_closed {
             self.close_app(window, cx);
             return;
@@ -802,6 +806,7 @@ impl AppShell {
                 .or_else(|| self.groups.first().map(|group| group.active_pane));
         }
         self.prune_tiling();
+        self.sync_broadcast_targets();
     }
 
     pub(crate) fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {

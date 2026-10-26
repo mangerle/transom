@@ -353,6 +353,25 @@ impl TerminalView {
         sent
     }
 
+    /// 按粘贴语义把一段文本写入终端输入通道，可选在末尾补回车执行。
+    ///
+    /// 多行脚本使用终端当前的括号粘贴模式：远端 shell 会把整段文本当作一次
+    /// 粘贴，而不是每读到一行就提前执行；对端未开启括号粘贴时退回原始字节。
+    /// 与键盘输入复用同一条有界队列，返回 `false` 表示终端写入线程已退出。
+    pub fn send_paste(&mut self, text: &str, execute: bool, cx: &mut Context<Self>) -> bool {
+        let mode = self.engine.lock().mode();
+        let mut bytes = paste_bytes(mode, text);
+        if execute {
+            bytes.push(b'\r');
+        }
+        let sent = self.write_input(&bytes);
+        if sent {
+            self.engine.lock().scroll_to_bottom();
+            cx.notify();
+        }
+        sent
+    }
+
     fn mark_exited(&mut self, cx: &mut Context<Self>) {
         if !self.exited {
             self.exited = true;

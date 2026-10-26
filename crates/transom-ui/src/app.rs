@@ -1,6 +1,7 @@
 //! GPUI 顶层应用外壳状态、快捷键动作委托与主布局容器。
 
 use crate::UiServices;
+use crate::broadcast::BroadcastBarState;
 use crate::cloud_sync::SyncFormInputs;
 use crate::forward::{ForwardPanelState, PendingForwardConfirm};
 use crate::keymap;
@@ -16,7 +17,7 @@ use crate::sftp::{
 use crate::snippets::SnippetFormState;
 use crate::tiling::TiledTabs;
 use gpui_kit::component::command::CommandState;
-use gpui_kit::component::input::{EditorState, InputState};
+use gpui_kit::component::input::{EditorState, InputEvent, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
@@ -423,6 +424,8 @@ pub struct AppShell {
     pub(crate) sftp_modals: SftpModals,
     /// 快捷命令面板的聚合状态：卡片展开开关与新增/编辑小弹窗。
     pub(crate) snippet_panel: SnippetPanelState,
+    /// 底部广播输入条：目标集合、单行/多行输入与展开状态。
+    pub(crate) broadcast: BroadcastBarState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
     pub(crate) status: Option<String>,
     /// 全局错误缓冲：渲染时取走并转成应用内通知，界面不再有独立错误横幅。
@@ -515,6 +518,15 @@ impl AppShell {
             InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
         });
         let quick_open_state = cx.new(|cx| CommandState::new(window, cx));
+        let broadcast_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("broadcast.single_placeholder").to_string())
+        });
+        let broadcast_textarea = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .submit_on_enter(true)
+                .placeholder(rust_i18n::t!("broadcast.multi_placeholder").to_string())
+        });
         let workspace_panels = cx.new(|_| ResizableState::default());
         let workspace_panels_left = cx.new(|_| ResizableState::default());
         let tiling_split_state = cx.new(|_| ResizableState::default());
@@ -718,6 +730,15 @@ impl AppShell {
                 open: false,
                 form: None,
             },
+            broadcast: BroadcastBarState {
+                open: false,
+                multiline: false,
+                targets_open: false,
+                input: broadcast_input,
+                textarea: broadcast_textarea,
+                targets: HashSet::new(),
+                targets_scope: Vec::new(),
+            },
             status: None,
             error,
             sidebar_visible,
@@ -737,6 +758,30 @@ impl AppShell {
             _appearance_subscription: appearance_subscription,
             _event_task: event_task,
         };
+
+        // 广播条的两个输入框都在回车时发送；多行框配置了 `submit_on_enter`，
+        // 因此 Enter 走提交、Shift+Enter 才插入换行。Shift+Enter 同样会广播
+        // PressEnter 事件，必须按 `shift` 区分，否则换行会顺手发出半截脚本。
+        cx.subscribe_in(
+            &this.broadcast.input,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
+                    this.broadcast_send(window, cx);
+                }
+            },
+        )
+        .detach();
+        cx.subscribe_in(
+            &this.broadcast.textarea,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
+                    this.broadcast_send(window, cx);
+                }
+            },
+        )
+        .detach();
 
         // Linux 上窗口级外观上报比应用级可靠（gpui-kit issue #104）；开窗前
         // lib.rs 的首次注入读的是应用级外观，这里在首帧前用窗口读数再校准一次，
