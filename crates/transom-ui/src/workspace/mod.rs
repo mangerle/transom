@@ -3,6 +3,7 @@
 mod panes;
 mod tab_drag;
 mod tab_strip;
+mod tiled;
 
 use crate::app::{AppShell, TabStatus};
 use crate::palette::{Palette, localized_error};

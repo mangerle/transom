@@ -136,10 +136,11 @@ impl AppShell {
                 working_dir,
             }),
         );
-        self.create_group(tab_id, session.id);
+        self.create_local_group(tab_id, session.id, &session.name);
         self.tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
+        self.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 
@@ -163,6 +164,7 @@ impl AppShell {
         self.tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
+        self.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 
@@ -304,6 +306,7 @@ impl AppShell {
         self.tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
         self.active_tab = Some(tab_id);
+        self.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 

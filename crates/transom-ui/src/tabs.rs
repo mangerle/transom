@@ -33,53 +33,87 @@ impl AppShell {
         id
     }
 
-    /// 根据窗口设置恢复一个标签组及其分割树布局。
+    /// 新建本地终端标签组，序号按"本地终端的基础标题"分配。
+    ///
+    /// 本地终端每次打开都会新建一个临时 Session，ID 各不相同；若沿用
+    /// `create_group` 的"按会话 ID 计序号"，每个本地标签都会拿到 0，标签栏上
+    /// 就会出现一排同名条目。这里改为按显示标题归组：普通本地终端共用一个
+    /// 序列，同一目录打开的终端共用另一个序列（标题里的目录名相同），
+    /// 第一个不带后缀，之后依次 `#1`、`#2`。这是 `create_group` 的序号规则
+    /// 在临时会话上的等价物，已确定的序号同样不回改。
+    pub(crate) fn create_local_group(
+        &mut self,
+        tab_id: TabId,
+        session_id: SessionId,
+        base_title: &str,
+    ) -> GroupId {
+        let serial = self
+            .groups
+            .iter()
+            .filter_map(|group| {
+                let tab = self.tabs.iter().find(|tab| tab.id == group.active_pane)?;
+                if !matches!(tab.session.connection, Connection::Local(_)) {
+                    return None;
+                }
+                (tab.session.name == base_title).then_some(group.serial)
+            })
+            .max()
+            .map_or(0, |max| max + 1);
+        let id = self.create_group(tab_id, session_id);
+        if let Some(group) = self.groups.iter_mut().find(|group| group.id == id) {
+            group.serial = serial;
+        }
+        id
+    }
+
+    /// 根据窗口设置恢复一个标签组及其分割树布局，返回实际创建的标签组。
     ///
     /// 布局直接来自设置里的分割树形状。设置文件属外部输入：叶子数超过上限或
     /// 形状损坏时按单窗格处理，绝不一次拉起大量连接。
     ///
     /// 这里不按会话去重：同一会话并列多个标签组是正常状态，去重会让第二个及以后的
     /// 同会话标签在重启后凭空消失。恢复的组数天然等于关窗口时实际打开的标签数。
+    /// 会话缺失等无法创建组的情况返回 `None`，供并排视图按原下标精确回填。
     pub(crate) fn restore_tab_group(
         &mut self,
         saved: &SavedTabGroup,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Option<GroupId> {
         let pane_count = LayoutNode::saved_pane_count(&saved.layout).unwrap_or(1);
 
+        let groups_before = self.groups.len();
         if saved.session == "local" {
             self.open_local_terminal(window, cx);
-        } else if let Some(session) = self
-            .catalog
-            .sessions
-            .iter()
-            .find(|session| session.id.to_string() == saved.session)
-            .cloned()
-        {
-            self.connect_session(session.id, window, cx);
         } else {
-            return;
+            let session = self
+                .catalog
+                .sessions
+                .iter()
+                .find(|session| session.id.to_string() == saved.session)
+                .cloned()?;
+            self.connect_session(session.id, window, cx);
         }
-
-        let Some(group_index) = self.active_group_index() else {
-            return;
-        };
+        if self.groups.len() <= groups_before {
+            return None;
+        }
+        let group_index = self.groups.len() - 1;
+        let group_id = self.groups[group_index].id;
         if pane_count < 2 {
-            return;
+            return Some(group_id);
         }
         let first = self.groups[group_index].active_pane;
         let Some(session) = self.session_for_tab(first) else {
-            return;
+            return Some(group_id);
         };
         // 串口端口独占，恢复时只保留首个窗格。
         if matches!(session.connection, Connection::Serial(_)) {
-            return;
+            return Some(group_id);
         }
         let extra: Vec<TabId> = (1..pane_count).map(|_| TabId::new()).collect();
         let mut ids = std::iter::once(first).chain(extra.iter().copied());
         let Some(root) = LayoutNode::from_saved(&saved.layout, &mut ids) else {
-            return;
+            return Some(group_id);
         };
         self.groups[group_index].root = root;
         for pane_id in extra {
@@ -88,6 +122,7 @@ impl AppShell {
             self.start_connection(pane_id, session.clone(), cx);
         }
         cx.notify();
+        Some(group_id)
     }
 
     /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
@@ -146,20 +181,22 @@ impl AppShell {
         self.groups.iter().position(|group| group.contains(tab_id))
     }
 
-    /// 该窗格此刻是否正被渲染：属于活动组、在分割树里，且没被"单窗格最大化"挡在后面。
+    /// 该窗格此刻是否正被渲染：属于可见标签组、在分割树里，且没被"单窗格最大化"挡在后面。
     ///
-    /// 传输进度这类高频事件据此决定要不要整帧重绘外壳：后台标签与被最大化隐藏的
-    /// 兄弟窗格重绘了也看不见，白付一次布局成本。
+    /// 传输进度这类高频事件据此决定要不要整帧重绘外壳：后台标签、并排视图之外的
+    /// 标签以及被最大化隐藏的兄弟窗格重绘了也看不见，白付一次布局成本。
     pub(crate) fn is_rendered_pane(&self, tab_id: TabId) -> bool {
-        let (Some(group_index), Some(active_index)) =
-            (self.group_index_for_tab(tab_id), self.active_group_index())
-        else {
+        let Some(group_index) = self.group_index_for_tab(tab_id) else {
             return false;
         };
-        if group_index != active_index {
+        let group = &self.groups[group_index];
+        let visible = match self.tiled_tabs {
+            Some(tiled) if self.active_in_tiling(tiled) => tiled.contains(group.id),
+            _ => self.active_group_index() == Some(group_index),
+        };
+        if !visible {
             return false;
         }
-        let group = &self.groups[group_index];
         match group.zoomed {
             Some(zoomed) => zoomed == tab_id,
             None => group.root.contains(tab_id),
@@ -450,6 +487,7 @@ impl AppShell {
         {
             self.active_tab = replacement.or_else(|| self.groups.first().map(|g| g.active_pane));
         }
+        self.prune_tiling();
         let _ = self
             .services
             .secret_store
@@ -534,10 +572,19 @@ impl AppShell {
             return;
         };
         let target_group_id = self.groups[target_group].id;
+        // 合并条目代表整个并排对："关闭其他标签"必须保留对里的两个标签，
+        // 否则用户会在一个视觉条目上操作，却把旁边的搭档也关掉。
+        let mut keep = vec![target_group_id];
+        if let Some(other) = self
+            .tiled_tabs
+            .and_then(|tiled| tiled.other_group(target_group_id))
+        {
+            keep.push(other);
+        }
         let others: Vec<GroupId> = self
             .groups
             .iter()
-            .filter(|group| group.id != target_group_id)
+            .filter(|group| !keep.contains(&group.id))
             .map(|group| group.id)
             .collect();
         for group_id in others {
@@ -570,6 +617,7 @@ impl AppShell {
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
             self.groups[group_index].active_pane = tab_id;
         }
+        self.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 
@@ -585,6 +633,17 @@ impl AppShell {
             && previous != tab_id
         {
             self.dismiss_sftp_hover_preview(previous, cx);
+        }
+        // 并排对是持久的：点到一个不在对里的标签时，单屏显示它、配对保留；
+        // 点回对里的标签则恢复两格同屏，并更新焦点格。
+        let group_id = self
+            .group_index_for_tab(tab_id)
+            .map(|index| self.groups[index].id);
+        if let (Some(mut tiled), Some(group_id)) = (self.tiled_tabs, group_id)
+            && let Some(side) = tiled.side_of(group_id)
+        {
+            tiled.focused = side;
+            self.tiled_tabs = Some(tiled);
         }
         self.active_tab = Some(tab_id);
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
@@ -630,6 +689,11 @@ impl AppShell {
         if self.block_close_for_dirty_editors(&panes, PendingEditorClose::Group(group_id), cx) {
             return;
         }
+        // 两格并排只够容纳一个"另一个标签"：关掉其中任一格后并排失去意义，
+        // 记住另一格的标签组，供焦点兜底使用。
+        let tiled_other = self
+            .tiled_tabs
+            .and_then(|tiled| tiled.other_group(group_id));
         self.groups.remove(index);
         for tab_id in &panes {
             self.send_command(AppCommand::CloseTab { tab_id: *tab_id });
@@ -637,18 +701,39 @@ impl AppShell {
         self.tabs.retain(|tab| !panes.contains(&tab.id));
         self.prune_pane_split_states();
         self.prune_editor_panels();
+        if tiled_other.is_some() || self.groups.is_empty() {
+            self.tiled_tabs = None;
+        }
 
         let active_removed = self.active_tab.is_some_and(|id| panes.contains(&id));
         if active_removed {
-            self.active_tab = self
-                .groups
-                .get(index.saturating_sub(1))
-                .or_else(|| self.groups.first())
-                .map(|group| group.active_pane);
+            // 关掉的是并排对之外的临时标签：优先回到配对，恢复两格同屏；
+            // 配对已被拆掉时再退到相邻标签。
+            let pair_return = self.tiled_tabs.and_then(|tiled| {
+                self.groups
+                    .iter()
+                    .find(|group| group.id == tiled.group(tiled.focused))
+                    .map(|group| group.active_pane)
+            });
+            self.active_tab = tiled_other
+                .and_then(|id| {
+                    self.groups
+                        .iter()
+                        .find(|group| group.id == id)
+                        .map(|group| group.active_pane)
+                })
+                .or(pair_return)
+                .or_else(|| {
+                    self.groups
+                        .get(index.saturating_sub(1))
+                        .or_else(|| self.groups.first())
+                        .map(|group| group.active_pane)
+                });
             if let Some(active) = self.active_tab {
                 self.activate_tab(active, window, cx);
             }
         }
+        self.prune_tiling();
         if self.groups.is_empty() && self.settings.window.close_window_on_all_tabs_closed {
             self.close_app(window, cx);
             return;
@@ -694,12 +779,29 @@ impl AppShell {
     /// 连接尚未建立时的静默移除，不向控制器发送关闭命令。
     pub(crate) fn remove_tab(&mut self, tab_id: TabId) {
         let was_active = self.active_tab == Some(tab_id);
+        let group_id = self
+            .group_index_for_tab(tab_id)
+            .map(|index| self.groups[index].id);
+        let tiled_other =
+            group_id.and_then(|id| self.tiled_tabs.and_then(|tiled| tiled.other_group(id)));
         self.tabs.retain(|tab| tab.id != tab_id);
         self.prune_editor_panels();
         let replacement = self.detach_pane_from_group(tab_id);
         if was_active {
-            self.active_tab = replacement.or_else(|| self.groups.first().map(|g| g.active_pane));
+            // 组内还有别的窗格时替换窗格优先；整组被摘掉时退到并排的另一格，
+            // 最后才是标签栏首项。
+            self.active_tab = replacement
+                .or_else(|| {
+                    tiled_other.and_then(|id| {
+                        self.groups
+                            .iter()
+                            .find(|group| group.id == id)
+                            .map(|group| group.active_pane)
+                    })
+                })
+                .or_else(|| self.groups.first().map(|group| group.active_pane));
         }
+        self.prune_tiling();
     }
 
     pub(crate) fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {

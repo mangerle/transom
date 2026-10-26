@@ -1017,11 +1017,20 @@ menu:
     en: Close Other Tabs
     zh-CN: 关闭其他标签
   split_right:
-    en: Split Right
-    zh-CN: 向右分屏
+    en: Split Pane Right
+    zh-CN: 向右窗格分屏
   split_down:
-    en: Split Down
-    zh-CN: 向下分屏
+    en: Split Pane Down
+    zh-CN: 向下窗格分屏
+  tile_right:
+    en: Tile Tab Right
+    zh-CN: 向右标签并排
+  tile_down:
+    en: Tile Tab Down
+    zh-CN: 向下标签并排
+  untile:
+    en: Stop Tiling Tabs
+    zh-CN: 退出标签并排
   toggle_split_axis:
     en: Toggle Split Direction
     zh-CN: 切换分屏方向
@@ -1710,11 +1719,11 @@ settings:
     en: Toggle Immersive Fullscreen
     zh-CN: 切换沉浸式全屏
   shortcut_split_right:
-    en: Split Right
-    zh-CN: 向右分屏
+    en: Split Pane Right
+    zh-CN: 向右窗格分屏
   shortcut_split_down:
-    en: Split Down
-    zh-CN: 向下分屏
+    en: Split Pane Down
+    zh-CN: 向下窗格分屏
   shortcut_close_pane:
     en: Close Current Pane
     zh-CN: 关闭当前窗格

@@ -45,6 +45,7 @@ mod status_bar;
 mod tabs;
 mod terminal_search;
 mod theme;
+mod tiling;
 mod window_state;
 mod workspace;
 mod zmodem;

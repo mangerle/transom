@@ -9,6 +9,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel, v_resizable};
 use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{SplitAxis, SplitId, TabId};
 
@@ -30,9 +31,31 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
+        // 并排对是持久的，但只有活动标签属于这对时才铺两格；否则单屏显示
+        // 当前标签，配对保留在标签栏里等用户点回来。
+        if let Some(tiled) = self.tiled_tabs
+            && self.active_in_tiling(tiled)
+            && let Some(content) = self.render_tiled_content(tiled, window, cx, p)
+        {
+            return content;
+        }
         let Some(group_index) = self.active_group_index() else {
             return self.render_empty_state(p, cx);
         };
+        self.render_group_content(group_index, window, cx, p)
+    }
+
+    /// 渲染一个标签组的完整内容：单窗格、最大化或按分割树铺满。
+    ///
+    /// 从 `render_active_content` 抽出来，供单标签视图与并排视图的两格共用；
+    /// 组内布局与拖拽比例在两种视图下完全一致。
+    pub(super) fn render_group_content(
+        &mut self,
+        group_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
         let group = &self.groups[group_index];
         // 克隆布局树：渲染期间会改动 self.tabs，避免与 self.groups 的借用冲突。
         let root = group.root.clone();
@@ -152,7 +175,10 @@ impl AppShell {
             .gap_2()
             .items_center()
             .border_b_1()
-            .border_color(p.border)
+            // 焦点窗格只靠背景色区分太弱（激活色与标签栏底色只差几个色阶），
+            // 用同款强调下划线把"焦点在哪一格"显式画出来。
+            .when(active, |style| style.border_b_2())
+            .border_color(if active { p.primary } else { p.border })
             .bg(if active { p.tab_active } else { p.tab_bar })
             .text_color(if active {
                 p.tab_active_foreground

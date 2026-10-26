@@ -92,6 +92,9 @@ pub struct WindowSettings {
     /// 上次打开的标签组与分屏布局；优先于扁平的会话列表。
     #[serde(default)]
     pub previous_tab_groups: Vec<SavedTabGroup>,
+    /// 上次退出时的双标签并排视图；`None` 表示单标签视图。
+    #[serde(default)]
+    pub tab_tiling: Option<SavedTabTiling>,
     /// 工具面板（SFTP/转发）停靠方向；旧配置缺省按右侧。
     #[serde(default)]
     pub sftp_panel_side: PanelSide,
@@ -263,6 +266,25 @@ pub struct SavedTabGroup {
     pub layout: SavedLayout,
 }
 
+/// 双标签并排视图的恢复快照。
+///
+/// 用 `previous_tab_groups` 的下标而不是标签组 ID：组 ID 是运行期生成的 UUID，
+/// 不随标签组落盘，恢复时只能按下标找回刚重建的组。任一下标越界、两个下标相同，
+/// 或对应标签组没有成功恢复时，整份快照作废并退回单标签视图，绝不猜测绑定关系。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedTabTiling {
+    /// 前侧（左/上）标签组在 `previous_tab_groups` 中的下标。
+    pub first: usize,
+    /// 后侧（右/下）标签组的下标。
+    pub second: usize,
+    /// 并排方向：左右还是上下。
+    #[serde(default)]
+    pub axis: SplitAxis,
+    /// 退出时焦点是否落在第二格。
+    #[serde(default)]
+    pub focused_second: bool,
+}
+
 impl Default for WindowSettings {
     fn default() -> Self {
         Self {
@@ -281,6 +303,7 @@ impl Default for WindowSettings {
             last_sidebar_visible: true,
             previous_tab_sessions: Vec::new(),
             previous_tab_groups: Vec::new(),
+            tab_tiling: None,
             sftp_panel_side: PanelSide::Right,
             default_terminal: false,
         }
@@ -1044,6 +1067,24 @@ mod tests {
     fn saved_group_without_layout_degrades_to_single_pane() {
         let decoded: SavedTabGroup = serde_json::from_str(r#"{"session":"local"}"#).unwrap();
         assert_eq!(decoded.layout, SavedLayout::Pane);
+    }
+
+    /// 并排视图是后加字段：老设置没有它时按单标签视图启动，且完整往返不丢方向与焦点。
+    #[test]
+    fn saved_tab_tiling_round_trip_and_missing_field() {
+        let decoded: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
+        assert_eq!(decoded.window.tab_tiling, None);
+
+        let mut settings = AppSettings::default();
+        settings.window.tab_tiling = Some(SavedTabTiling {
+            first: 0,
+            second: 2,
+            axis: SplitAxis::Vertical,
+            focused_second: true,
+        });
+        let json = serde_json::to_string(&settings).unwrap();
+        let decoded: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.window.tab_tiling, settings.window.tab_tiling);
     }
 
     /// 界面外观是后加的字段：老设置里没有它时按内置默认降级，而不是加载失败。

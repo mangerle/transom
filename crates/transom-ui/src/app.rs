@@ -14,6 +14,7 @@ use crate::sftp::{
     SftpInputModalState, SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
 };
 use crate::snippets::SnippetFormState;
+use crate::tiling::TiledTabs;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{EditorState, InputState};
 use gpui_kit::component::resizable::ResizableState;
@@ -368,6 +369,10 @@ pub struct AppShell {
     pub(crate) tabs: Vec<TerminalTab>,
     /// 标签栏条目：每项持有一棵分割树，树里的叶子才是 `tabs` 中的窗格。
     pub(crate) groups: Vec<TabGroup>,
+    /// 双标签并排视图的绑定；`None` 表示只显示活动标签组。
+    pub(crate) tiled_tabs: Option<TiledTabs>,
+    /// 并排两格之间的分隔线拖拽状态，与标签组内部的窗格分隔线彼此独立。
+    pub(crate) tiling_split_state: Entity<ResizableState>,
     /// 各分割节点的拖拽尺寸状态，由外壳持有以跨过不可见的帧。
     ///
     /// 交给 gpui 的 keyed state 会在元素缺席一帧后被回收，切标签或窗格最大化
@@ -512,11 +517,15 @@ impl AppShell {
         let quick_open_state = cx.new(|cx| CommandState::new(window, cx));
         let workspace_panels = cx.new(|_| ResizableState::default());
         let workspace_panels_left = cx.new(|_| ResizableState::default());
+        let tiling_split_state = cx.new(|_| ResizableState::default());
         // 侧栏拖动与状态栏分界线共享尺寸：状态一通知就重绘外壳，分界线实时跟随。
         // 两个方向的分组状态各自订阅（未激活方向不会产生通知）。
         cx.observe(&workspace_panels, |_, _, cx| cx.notify())
             .detach();
         cx.observe(&workspace_panels_left, |_, _, cx| cx.notify())
+            .detach();
+        // 并排分隔线同理：状态变更即时重绘，且状态由外壳跨帧持有。
+        cx.observe(&tiling_split_state, |_, _, cx| cx.notify())
             .detach();
         let (catalog, error) = match services.session_store.load() {
             Ok(catalog) => (catalog, None),
@@ -652,6 +661,8 @@ impl AppShell {
             catalog,
             tabs: Vec::new(),
             groups: Vec::new(),
+            tiled_tabs: None,
+            tiling_split_state,
             pane_split_states: HashMap::new(),
             workspace_panels,
             workspace_panels_left,
@@ -741,9 +752,16 @@ impl AppShell {
             // 沿用上次退出时的标签组与分屏形状。
             StartupTabs::RestoreLast => {
                 let saved_groups = this.settings.window.previous_tab_groups.clone();
+                let saved_tiling = this.settings.window.tab_tiling;
                 if !saved_groups.is_empty() {
-                    for group in saved_groups {
-                        this.restore_tab_group(&group, window, cx);
+                    let mut restored = Vec::with_capacity(saved_groups.len());
+                    for group in &saved_groups {
+                        restored.push(this.restore_tab_group(group, window, cx));
+                    }
+                    // 并排快照按上面对话组的下标引用；任一组没恢复成功就整份作废，
+                    // 退回单标签而不是把两个不相干的标签拼在一起。
+                    if let Some(saved) = saved_tiling {
+                        this.restore_tab_tiling(saved, &restored, window, cx);
                     }
                 } else if !this.settings.window.previous_tab_sessions.is_empty() {
                     let session_keys = this.settings.window.previous_tab_sessions.clone();

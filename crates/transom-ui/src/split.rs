@@ -115,17 +115,26 @@ impl AppShell {
         if group.zoomed == Some(tab_id) {
             group.zoomed = None;
         }
-        // 摘出后的标签仍属于原会话，序号按"该会话第几个标签"继续排。
-        let Some(session_id) = self
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
-            .map(|tab| tab.session_id)
+        // 摘出后的标签仍属于原会话：SSH 按会话序号继续排；本地终端每次都是
+        // 新 Session，改按基础标题序号排，否则会与已有本地标签重名。
+        let Some((session_id, base_title, is_local)) =
+            self.tabs.iter().find(|tab| tab.id == tab_id).map(|tab| {
+                (
+                    tab.session_id,
+                    tab.session.name.clone(),
+                    matches!(tab.session.connection, Connection::Local(_)),
+                )
+            })
         else {
             return;
         };
-        self.create_group(tab_id, session_id);
+        if is_local {
+            self.create_local_group(tab_id, session_id, &base_title);
+        } else {
+            self.create_group(tab_id, session_id);
+        }
         self.prune_pane_split_states();
+        // 摘出的窗格是一个新标签：单屏显示，原并排对保留；点回配对标签即恢复。
         self.activate_tab(tab_id, window, cx);
         cx.notify();
     }
@@ -163,6 +172,8 @@ impl AppShell {
             .root
             .focus_neighbor(active_pane, direction)
         else {
+            // 组内该方向已到头：并排视图下再尝试跨到相邻格，单标签视图则保持不动。
+            self.focus_neighbor_tile(direction, window, cx);
             return;
         };
         self.select_pane(next, window, cx);
