@@ -1038,6 +1038,27 @@ folder:
   deleted:
     en: "Folder %{name} deleted; its sessions were kept"
     zh-CN: "已删除文件夹 %{name}，其中的会话已保留"
+  edit_title:
+    en: Edit Folder & Defaults
+    zh-CN: 编辑文件夹与默认继承属性
+  defaults_legend:
+    en: "Default connection attributes (sub-sessions automatically inherit if unset)"
+    zh-CN: "默认连接属性（下属子会话未配置时自动继承）"
+  default_port:
+    en: Default Port
+    zh-CN: 默认端口
+  default_username:
+    en: Default Username
+    zh-CN: 默认用户名
+  default_key_path:
+    en: Default Private Key
+    zh-CN: 默认私钥路径
+  select_folder:
+    en: Select Folder
+    zh-CN: 选择分组
+  root_level:
+    en: "(Root Level / No Folder)"
+    zh-CN: "(根层级 / 无分组)"
 menu:
   connect:
     en: Connect

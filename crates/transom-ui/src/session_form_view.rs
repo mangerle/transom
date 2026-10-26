@@ -11,6 +11,7 @@ use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Textarea;
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 
@@ -95,11 +96,79 @@ impl AppShell {
                         form.name.clone(),
                         p,
                     )))
-                    .child(div().flex_1().child(Self::form_field(
-                        rust_i18n::t!("form.folder").to_string(),
-                        form.folder_path.clone(),
-                        p,
-                    ))),
+                    .child(
+                        div().flex_1().child(
+                            v_flex()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(rust_i18n::t!("form.folder").to_string()),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_1p5()
+                                        .items_center()
+                                        .child(div().flex_1().child(form.folder_path.clone()))
+                                        .child(
+                                            Button::new("folder-select-dropdown")
+                                                .outline()
+                                                .icon(IconName::Folder)
+                                                .dropdown_menu({
+                                                    let options = form.folder_options.clone();
+                                                    let app_entity = cx.entity().clone();
+                                                    move |menu, _window, _cx| {
+                                                        let app = app_entity.clone();
+                                                        let mut menu = menu.item(
+                                                            PopupMenuItem::new(
+                                                                rust_i18n::t!("folder.root_level")
+                                                                    .to_string(),
+                                                            )
+                                                            .on_click({
+                                                                let app = app.clone();
+                                                                move |_, window, cx| {
+                                                                    app.update(cx, |this, cx| {
+                                                                        this.clear_form_folder(
+                                                                            window, cx,
+                                                                        );
+                                                                    });
+                                                                }
+                                                            }),
+                                                        );
+                                                        if !options.is_empty() {
+                                                            menu = menu
+                                                                .item(PopupMenuItem::separator());
+                                                            for opt in &options {
+                                                                let path = opt.clone();
+                                                                let app = app.clone();
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(path.clone())
+                                                                        .icon(IconName::Folder)
+                                                                        .on_click(
+                                                                            move |_, window, cx| {
+                                                                                app.update(
+                                                                                    cx,
+                                                                                    |this, cx| {
+                                                                                        this.select_form_folder(
+                                                                                            &path,
+                                                                                            window,
+                                                                                            cx,
+                                                                                        );
+                                                                                    },
+                                                                                );
+                                                                            },
+                                                                        ),
+                                                                );
+                                                            }
+                                                        }
+                                                        menu
+                                                    }
+                                                }),
+                                        ),
+                                ),
+                        ),
+                    ),
             )
             .child(Self::render_session_appearance(
                 default_icon_for(form.connection),

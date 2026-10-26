@@ -163,6 +163,47 @@ impl AppShell {
             .collect()
     }
 
+    /// 获取目录中所有已存在的文件夹路径清单（排重且字典序）。
+    pub(crate) fn folder_paths(&self) -> Vec<String> {
+        let mut paths: Vec<String> = self
+            .catalog
+            .folders
+            .iter()
+            .filter_map(|folder| self.catalog.folder_path(folder.id))
+            .collect();
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    /// 在会话表单中选择指定分组，并自动应用该分组及其祖先的默认继承属性。
+    pub(crate) fn select_form_folder(
+        &mut self,
+        folder_path: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let defaults = self
+            .catalog
+            .folders
+            .iter()
+            .find(|folder| self.catalog.folder_path(folder.id).as_deref() == Some(folder_path))
+            .map(|folder| self.catalog.inherited_folder_defaults(folder.id))
+            .unwrap_or_default();
+        if let Some(form) = self.form.as_mut() {
+            form.apply_folder_selection(folder_path, &defaults, window, cx);
+        }
+    }
+
+    /// 在会话表单中清除分组（选择根层级）。
+    pub(crate) fn clear_form_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(form) = self.form.as_mut() {
+            form.folder_path
+                .update(cx, |state, cx| state.set_value("", window, cx));
+            cx.notify();
+        }
+    }
+
     pub(crate) fn refresh_tab_sessions(&mut self) {
         for tab in &mut self.tabs {
             if let Some(session) = self
@@ -251,6 +292,7 @@ impl AppShell {
             None,
             None,
             self.identity_options(),
+            self.folder_paths(),
         ));
         cx.notify();
     }
@@ -280,6 +322,7 @@ impl AppShell {
             Some(session),
             folder_path,
             self.identity_options(),
+            self.folder_paths(),
         );
         self.prefill_secrets(&mut form, window, cx);
         self.form = Some(form);

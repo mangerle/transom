@@ -15,11 +15,20 @@ use crate::ids::{FolderId, SessionId};
 use crate::session::Session;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+
+/// 文件夹配置的默认继承属性。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FolderInheritedDefaults {
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub key_path: Option<PathBuf>,
+}
 
 /// 会话文件夹节点。
 ///
 /// `collapsed` 属于用户界面状态，但与文件夹一起持久化，保证重启后树形收纳状态不变。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct SessionFolder {
     pub id: FolderId,
     pub name: String,
@@ -27,6 +36,15 @@ pub struct SessionFolder {
     pub parent: Option<FolderId>,
     #[serde(default)]
     pub collapsed: bool,
+    /// 默认 SSH 端口（下属会话未显式修改时自动继承）。
+    #[serde(default)]
+    pub default_port: Option<u16>,
+    /// 默认用户名（下属会话未指定时自动继承）。
+    #[serde(default)]
+    pub default_username: Option<String>,
+    /// 默认私钥路径（下属会话未配置时自动继承）。
+    #[serde(default)]
+    pub default_key_path: Option<PathBuf>,
 }
 
 impl SessionFolder {
@@ -36,6 +54,9 @@ impl SessionFolder {
             name: name.into(),
             parent,
             collapsed: false,
+            default_port: None,
+            default_username: None,
+            default_key_path: None,
         }
     }
 }
@@ -190,6 +211,25 @@ impl SessionCatalog {
         Ok(id)
     }
 
+    /// 在指定父文件夹下新建子文件夹，可指定默认继承属性。
+    ///
+    /// # Errors
+    /// 名称为空或父文件夹不存在时返回相应错误。
+    pub fn add_folder_with_defaults(
+        &mut self,
+        name: &str,
+        parent: Option<FolderId>,
+        default_port: Option<u16>,
+        default_username: Option<String>,
+        default_key_path: Option<PathBuf>,
+    ) -> Result<FolderId, CatalogError> {
+        let id = self.add_folder(name, parent)?;
+        if default_port.is_some() || default_username.is_some() || default_key_path.is_some() {
+            let _ = self.update_folder(id, name, default_port, default_username, default_key_path);
+        }
+        Ok(id)
+    }
+
     /// 重命名文件夹。
     ///
     /// # Errors
@@ -208,6 +248,37 @@ impl SessionCatalog {
             .find(|folder| folder.id == id)
             .ok_or(CatalogError::FolderNotFound(id))?;
         folder.name = name.to_string();
+        Ok(())
+    }
+
+    /// 更新文件夹名称与默认继承属性。
+    ///
+    /// # Errors
+    /// 名称为空或文件夹不存在时返回相应错误。
+    pub fn update_folder(
+        &mut self,
+        id: FolderId,
+        name: &str,
+        default_port: Option<u16>,
+        default_username: Option<String>,
+        default_key_path: Option<PathBuf>,
+    ) -> Result<(), CatalogError> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(CatalogError::EmptyFolderName);
+        }
+        if name.contains('/') {
+            return Err(CatalogError::InvalidFolderName);
+        }
+        let folder = self
+            .folders
+            .iter_mut()
+            .find(|folder| folder.id == id)
+            .ok_or(CatalogError::FolderNotFound(id))?;
+        folder.name = name.to_string();
+        folder.default_port = default_port;
+        folder.default_username = default_username.filter(|u| !u.trim().is_empty());
+        folder.default_key_path = default_key_path.filter(|p| !p.as_os_str().is_empty());
         Ok(())
     }
 
@@ -506,15 +577,73 @@ impl SessionCatalog {
         Ok(())
     }
 
-    /// 把引用模板的用户名与认证方式叠加到会话副本上。
+    /// 计算指定文件夹沿祖先链路继承得到的默认属性（就近覆盖：子级未配置则向上查找）。
+    pub fn inherited_folder_defaults(&self, folder_id: FolderId) -> FolderInheritedDefaults {
+        let mut defaults = FolderInheritedDefaults::default();
+        let by_id: HashMap<FolderId, &SessionFolder> = self
+            .folders
+            .iter()
+            .map(|folder| (folder.id, folder))
+            .collect();
+        let mut visited = HashSet::new();
+        let mut current = Some(folder_id);
+        while let Some(id) = current {
+            if !visited.insert(id) {
+                break;
+            }
+            if let Some(folder) = by_id.get(&id) {
+                if defaults.port.is_none() && folder.default_port.is_some() {
+                    defaults.port = folder.default_port;
+                }
+                if defaults.username.is_none()
+                    && folder
+                        .default_username
+                        .as_ref()
+                        .is_some_and(|user| !user.trim().is_empty())
+                {
+                    defaults.username = folder.default_username.clone();
+                }
+                if defaults.key_path.is_none() && folder.default_key_path.is_some() {
+                    defaults.key_path = folder.default_key_path.clone();
+                }
+                current = folder.parent;
+            } else {
+                break;
+            }
+        }
+        defaults
+    }
+
+    /// 把文件夹继承属性与引用模板的用户名与认证方式叠加到会话副本上。
     ///
     /// 设计原理（Why）：叠加发生在连接派发前的最后一刻，net 层与 SFTP/转发等
     /// 所有下游只看到一个"已经知道自己该怎么登录"的 Session，不必到处判断
-    /// "这个字段是会话的还是模板的"。模板不提供主机与端口：那属于机器属性。
-    /// 未引用模板、或模板已被手改删除时，原样返回，绝不让会话连不上。
+    /// "这个字段是会话的、文件夹继承的还是模板的"。
+    /// 继承优先级：凭据模板 > 会话显式配置 > 文件夹链条继承。
     #[must_use]
     pub fn resolved_session(&self, session: &Session) -> Session {
         let mut resolved = session.clone();
+        if let Some(folder_id) = session.folder_id {
+            let defaults = self.inherited_folder_defaults(folder_id);
+            if let crate::session::Connection::Ssh(ssh) = &mut resolved.connection {
+                if ssh.port == 22
+                    && let Some(port) = defaults.port
+                {
+                    ssh.port = port;
+                }
+                if ssh.username.trim().is_empty()
+                    && let Some(username) = &defaults.username
+                {
+                    ssh.username = username.clone();
+                }
+                if let crate::session::AuthMethod::PrivateKey { path, .. } = &mut ssh.auth
+                    && path.as_os_str().is_empty()
+                    && let Some(key_path) = &defaults.key_path
+                {
+                    *path = key_path.clone();
+                }
+            }
+        }
         let Some(Some(identity)) = session.identity_id.map(|id| self.identity(id)) else {
             return resolved;
         };
@@ -777,12 +906,14 @@ mod tests {
             name: "A".into(),
             parent: Some(b),
             collapsed: false,
+            ..Default::default()
         });
         catalog.folders.push(SessionFolder {
             id: b,
             name: "B".into(),
             parent: Some(a),
             collapsed: false,
+            ..Default::default()
         });
         let orphan = session(&mut catalog, "lost");
         catalog.sessions[0].folder_id = Some(FolderId::new());
@@ -808,6 +939,7 @@ mod tests {
             name: "远端".into(),
             parent: None,
             collapsed: false,
+            ..Default::default()
         });
         let mut same = Session::new("same", Connection::Local(LocalConnection::default()));
         same.id = local_session;
@@ -834,6 +966,7 @@ mod tests {
             name: "duplicate".into(),
             parent: None,
             collapsed: false,
+            ..Default::default()
         });
         catalog.normalize();
         assert_eq!(catalog.folders.len(), 1);
@@ -974,5 +1107,64 @@ mod tests {
         assert_eq!(catalog.identities.len(), 1);
         assert_eq!(catalog.identities[0].id, identity_id);
         assert!(catalog.sessions[0].identity_id.is_none());
+    }
+
+    #[test]
+    fn folder_defaults_inheritance_and_session_resolution() {
+        let mut catalog = SessionCatalog::default();
+        let root = catalog.add_folder("root", None).unwrap();
+        catalog
+            .update_folder(
+                root,
+                "root",
+                Some(2200),
+                Some("root_user".to_string()),
+                Some(PathBuf::from("/keys/root_id_rsa")),
+            )
+            .unwrap();
+
+        let sub = catalog.add_folder("sub", Some(root)).unwrap();
+        // sub 只覆盖端口，用户名和私钥留空，继承自 root
+        catalog
+            .update_folder(sub, "sub", Some(2222), None, None)
+            .unwrap();
+
+        let defaults = catalog.inherited_folder_defaults(sub);
+        assert_eq!(defaults.port, Some(2222));
+        assert_eq!(defaults.username.as_deref(), Some("root_user"));
+        assert_eq!(
+            defaults.key_path.as_deref(),
+            Some(std::path::Path::new("/keys/root_id_rsa"))
+        );
+
+        // 新建一个属于 sub 的会话，用户名为空，端口为默认 22，私钥为空
+        let mut session = Session::new(
+            "child_session",
+            crate::session::Connection::Ssh(crate::session::SshConnection {
+                host: "server.internal".into(),
+                port: 22,
+                username: "".into(),
+                auth: crate::session::AuthMethod::PrivateKey {
+                    path: PathBuf::new(),
+                    cert_path: None,
+                    save_passphrase: false,
+                },
+                options: crate::session::SessionOptions::default(),
+            }),
+        );
+        session.folder_id = Some(sub);
+
+        let resolved = catalog.resolved_session(&session);
+        if let crate::session::Connection::Ssh(ssh) = resolved.connection {
+            assert_eq!(ssh.port, 2222);
+            assert_eq!(ssh.username, "root_user");
+            if let crate::session::AuthMethod::PrivateKey { path, .. } = ssh.auth {
+                assert_eq!(path, PathBuf::from("/keys/root_id_rsa"));
+            } else {
+                panic!("应为私钥认证");
+            }
+        } else {
+            panic!("应为 SSH 连接");
+        }
     }
 }

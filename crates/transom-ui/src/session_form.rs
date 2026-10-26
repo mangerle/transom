@@ -27,6 +27,8 @@ pub(crate) struct SessionForm {
     pub name: Entity<InputState>,
     /// 以 `/` 分隔的文件夹路径，保存时解析为稳定的文件夹节点。
     pub folder_path: Entity<InputState>,
+    /// 可选的文件夹路径清单，供下拉快速选择。
+    pub folder_options: Vec<String>,
     pub connection: ConnectionChoice,
     pub host: Entity<InputState>,
     pub port: Entity<InputState>,
@@ -116,6 +118,7 @@ struct SessionFormSeed {
     telnet_encoding: TextEncoding,
     /// 可选凭据模板清单；表单只认这份快照，不回查目录。
     identities: Vec<IdentityOption>,
+    folder_options: Vec<String>,
 }
 
 impl SessionForm {
@@ -125,6 +128,7 @@ impl SessionForm {
         base: Option<Session>,
         folder_path: Option<String>,
         identities: Vec<IdentityOption>,
+        folder_options: Vec<String>,
     ) -> Self {
         let connection = match base.as_ref().map(|session| &session.connection) {
             Some(Connection::Serial(_)) => ConnectionChoice::Serial,
@@ -242,8 +246,45 @@ impl SessionForm {
                 serial_flow_control,
                 telnet_encoding,
                 identities,
+                folder_options,
             },
         )
+    }
+
+    pub(crate) fn apply_folder_selection(
+        &mut self,
+        path: &str,
+        defaults: &transom_core::FolderInheritedDefaults,
+        window: &mut Window,
+        cx: &mut Context<crate::app::AppShell>,
+    ) {
+        self.folder_path
+            .update(cx, |state, cx| state.set_value(path, window, cx));
+        if let Some(port) = defaults.port {
+            let current = self.port.read(cx).value();
+            if current.is_empty() || current == "22" {
+                self.port.update(cx, |state, cx| {
+                    state.set_value(port.to_string(), window, cx)
+                });
+            }
+        }
+        if let Some(username) = &defaults.username {
+            let current = self.username.read(cx).value();
+            if current.is_empty() || current == default_username() {
+                self.username
+                    .update(cx, |state, cx| state.set_value(username, window, cx));
+            }
+        }
+        if let Some(key_path) = &defaults.key_path {
+            let current = self.key_path.read(cx).value();
+            if current.is_empty() {
+                self.auth = AuthChoice::PrivateKey;
+                self.key_path.update(cx, |state, cx| {
+                    state.set_value(key_path.display().to_string(), window, cx)
+                });
+            }
+        }
+        cx.notify();
     }
 
     fn build(window: &mut Window, cx: &mut Context<impl Sized>, seed: SessionFormSeed) -> Self {
@@ -267,6 +308,7 @@ impl SessionForm {
             serial_flow_control,
             telnet_encoding,
             identities,
+            folder_options,
         } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
@@ -321,6 +363,7 @@ impl SessionForm {
                 &folder_path,
                 &rust_i18n::t!("form.folder_placeholder"),
             ),
+            folder_options,
             connection,
             host: text_input(window, cx, &host, &rust_i18n::t!("form.host_placeholder")),
             port: text_input(window, cx, &port, ""),

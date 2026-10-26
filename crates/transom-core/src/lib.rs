@@ -39,7 +39,10 @@ pub use backup::{
     BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,
     SecretRestoreReport, collect_catalog_secrets,
 };
-pub use catalog::{CatalogError, CatalogMergeSummary, DropSide, SessionCatalog, SessionFolder};
+pub use catalog::{
+    CatalogError, CatalogMergeSummary, DropSide, FolderInheritedDefaults, SessionCatalog,
+    SessionFolder,
+};
 pub use color::Rgb;
 pub use commands::{AppCommand, AppEvent, DeepLinkRequest, SystemStats};
 pub use error::{AppError, ErrorCode};

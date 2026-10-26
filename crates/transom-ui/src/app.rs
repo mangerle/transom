@@ -167,13 +167,16 @@ impl TerminalTab {
     }
 }
 
-/// 新建或重命名文件夹的轻量模态表单。
+/// 新建或编辑文件夹的轻量模态表单。
 pub(crate) struct FolderForm {
-    /// 存在时表示重命名该文件夹，否则为新建。
+    /// 存在时表示编辑该文件夹，否则为新建。
     pub(crate) base: Option<FolderId>,
     /// 新建时的父文件夹；`None` 表示根层级。
     pub(crate) parent: Option<FolderId>,
     pub(crate) name: Entity<InputState>,
+    pub(crate) default_port: Entity<InputState>,
+    pub(crate) default_username: Entity<InputState>,
+    pub(crate) default_key_path: Entity<InputState>,
     pub(crate) error: Option<String>,
 }
 
