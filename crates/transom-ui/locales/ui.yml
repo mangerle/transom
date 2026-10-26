@@ -169,6 +169,31 @@ broadcast:
   pane_suffix:
     en: "Pane %{index}"
     zh-CN: "窗格 %{index}"
+tiling:
+  fill_slot:
+    en: Choose Tab
+    zh-CN: 选择标签
+  empty_slot:
+    en: Empty slot
+    zh-CN: 空位
+  no_available:
+    en: No standalone tabs available
+    zh-CN: 没有可用的独立标签
+  auto:
+    en: Auto
+    zh-CN: 自适应
+  fixed:
+    en: Fixed layouts
+    zh-CN: 固定布局
+  table_hint:
+    en: Rows × Columns
+    zh-CN: 行 × 列
+  adjust:
+    en: Re-layout Tiling
+    zh-CN: 重排并排布局
+  too_many:
+    en: "At most %{max} tabs can be tiled"
+    zh-CN: "最多同时并排 %{max} 个标签"
 form:
   new_title:
     en: New Session
@@ -1041,6 +1066,9 @@ menu:
   close_tab:
     en: Close Tab
     zh-CN: 关闭标签
+  close_tiling_group:
+    en: Close Tiled Group
+    zh-CN: 关闭整个并排组
   close_other_tabs:
     en: Close Other Tabs
     zh-CN: 关闭其他标签
@@ -1056,6 +1084,12 @@ menu:
   tile_down:
     en: Tile Tab Down
     zh-CN: 向下标签并排
+  tile_selected:
+    en: "Tile %{count} Selected Tabs…"
+    zh-CN: "并排选中标签（%{count}）…"
+  add_to_tiling:
+    en: "Add to Tiling (+%{count})"
+    zh-CN: "加入并排（+%{count}）"
   untile:
     en: Stop Tiling Tabs
     zh-CN: 退出标签并排

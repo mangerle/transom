@@ -3,7 +3,7 @@
 use crate::app::{AppShell, TabStatus};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
-use crate::tiling::TiledTabs;
+use crate::tiling::{MAX_TILING_SLOTS, StripEntry, TiledTabs, TilingId};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -25,18 +25,33 @@ impl AppShell {
             .border_color(p.border)
             .overflow_hidden();
         let app_entity = cx.entity().clone();
-        // 并排菜单在每个标签上都显示：只有一个标签时置灰，避免用户以为功能
-        // 不存在；右键活动标签时由 `tile_tab` 取标签栏里紧随其后的标签作搭档。
-        let tiled_view = self.tiled_tabs.is_some();
-        let can_tile = self.groups.len() >= 2;
-        // 并排对在标签栏里只占一个条目：位置取对里最靠前的标签，内容取焦点标签。
-        let entries = self.tab_strip_entries();
+        // 并排菜单在每个标签上都显示：条目不足两个时置灰，避免用户以为功能
+        // 不存在；右键标签时由 `tile_tab` 取标签栏左边那一条作搭档，左边是
+        // 并排合并条目则整组加入，不会把网格里的成员拆出来。
+        let entries = self.strip_entries();
+        let can_tile = entries.len() >= 2;
 
-        for (group_index, composite) in entries {
+        for entry in entries {
+            // 并排组在标签栏里合并成一个条目，展示该组的焦点标签。
+            let (group_id, composite, tiled_set) = match entry {
+                StripEntry::Single(group) => (group, false, None),
+                StripEntry::Tiled { id, focus } => {
+                    let Some(tiled) = self.tiling_by_id(id).cloned() else {
+                        continue;
+                    };
+                    (focus, true, Some(tiled))
+                }
+            };
+            let Some(group_index) = self.groups.iter().position(|item| item.id == group_id) else {
+                continue;
+            };
             let group = &self.groups[group_index];
+            // 并排项只对独立标签有意义：合并条目本身已经是一张网格。
+            let tile_enabled = !composite && can_tile;
             let Some(tab) = self.tabs.iter().find(|tab| tab.id == group.active_pane) else {
                 continue;
             };
+            let palette = p.clone();
             let group_id = group.id;
             let active_pane = group.active_pane;
             let session_id = tab.session_id;
@@ -54,10 +69,47 @@ impl AppShell {
             // 并排对里的标签给一条弱下划线：配对仍在，即使当前单屏查看别的
             // 标签也能看到这对搭档；焦点标签再用强调色压住它。合并条目本身
             // 就代表整个并排对，因此始终按"配对"处理。
-            let tiled_paired = composite
-                || self
-                    .tiled_tabs
-                    .is_some_and(|tiled| tiled.contains(group_id));
+            let tiled_paired = composite;
+            let selection_groups = match &tiled_set {
+                Some(tiled) => tiled.occupied_groups(),
+                None => vec![group_id],
+            };
+            let entry_selected = !selection_groups.is_empty()
+                && selection_groups
+                    .iter()
+                    .all(|group| self.tab_selection.contains(group));
+            // 选中的独立标签：只有它们能新建并排或被加进已有并排。
+            let selected_singles: Vec<GroupId> = self
+                .groups
+                .iter()
+                .filter(|group| {
+                    self.tab_selection.contains(&group.id)
+                        && self.tiling_of_group(group.id).is_none()
+                })
+                .map(|group| group.id)
+                .collect();
+            // 选中的并排组：整组参与，绝不隐式重排。碰到多组时没有明确落点，
+            // 相关动作一律不出现。
+            let touched_sets: Vec<TilingId> = self
+                .tiled_sets
+                .iter()
+                .filter(|tiled| {
+                    tiled
+                        .occupied_groups()
+                        .iter()
+                        .any(|group| self.tab_selection.contains(group))
+                })
+                .map(|tiled| tiled.id)
+                .collect();
+            let this_set_id = tiled_set.as_ref().map(|tiled| tiled.id);
+            let show_add_to_tiling = match (this_set_id, touched_sets.as_slice()) {
+                (Some(id), [only]) if *only == id => !selected_singles.is_empty(),
+                _ => false,
+            };
+            let show_multi_tile = entry_selected
+                && touched_sets.is_empty()
+                && (2..=MAX_TILING_SLOTS).contains(&selected_singles.len());
+            let menu_selection: Vec<GroupId> = selected_singles.clone();
             let dot_color = match &tab.status {
                 TabStatus::Connecting => p.muted_foreground,
                 TabStatus::Connected => p.success,
@@ -148,8 +200,14 @@ impl AppShell {
                     })
                     .build(_window, cx)
                 })
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.activate_tab(active_pane, window, cx);
+                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                    let modifiers = event.modifiers();
+                    if modifiers.control || modifiers.platform {
+                        this.toggle_tab_selection(&selection_groups, cx);
+                    } else {
+                        this.clear_tab_selection(cx);
+                        this.activate_tab(active_pane, window, cx);
+                    }
                 }))
                 .context_menu({
                     let app_entity = app_entity.clone();
@@ -272,7 +330,7 @@ impl AppShell {
                             .item(
                                 PopupMenuItem::new(rust_i18n::t!("menu.tile_right").to_string())
                                     .icon(IconName::Columns2)
-                                    .disabled(!can_tile)
+                                    .disabled(!tile_enabled)
                                     .on_click({
                                         let app = app.clone();
                                         move |_, window, cx| {
@@ -290,7 +348,7 @@ impl AppShell {
                             .item(
                                 PopupMenuItem::new(rust_i18n::t!("menu.tile_down").to_string())
                                     .icon(IconName::Rows2)
-                                    .disabled(!can_tile)
+                                    .disabled(!tile_enabled)
                                     .on_click({
                                         let app = app.clone();
                                         move |_, window, cx| {
@@ -304,18 +362,90 @@ impl AppShell {
                                             });
                                         }
                                     }),
-                            )
-                            .item(
-                                PopupMenuItem::new(rust_i18n::t!("menu.untile").to_string())
-                                    .icon(IconName::Minimize2)
-                                    .disabled(!tiled_view)
-                                    .on_click({
-                                        let app = app.clone();
-                                        move |_, _window, cx| {
-                                            app.update(cx, |this, cx| this.untile_tabs(cx));
-                                        }
-                                    }),
                             );
+                        if show_add_to_tiling && let Some(set_id) = this_set_id {
+                            let groups = menu_selection.clone();
+                            let app = app.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!("menu.add_to_tiling", count = groups.len())
+                                        .to_string(),
+                                )
+                                .icon(IconName::LayoutGrid)
+                                .on_click(move |_, window, cx| {
+                                    app.update(cx, |this, cx| {
+                                        if let Some(group) = this.add_groups_to_tiling(
+                                            set_id,
+                                            groups.clone(),
+                                            window,
+                                        ) {
+                                            this.activate_group(group, window, cx);
+                                            this.tab_selection.clear();
+                                        } else {
+                                            this.error = Some(
+                                                rust_i18n::t!(
+                                                    "tiling.too_many",
+                                                    max = MAX_TILING_SLOTS
+                                                )
+                                                .to_string(),
+                                            );
+                                        }
+                                        cx.notify();
+                                    });
+                                }),
+                            );
+                        }
+                        if show_multi_tile {
+                            let groups = menu_selection.clone();
+                            let app = app.clone();
+                            let palette = palette.clone();
+                            menu = menu.submenu_with_icon(
+                                Some(Icon::new(IconName::LayoutGrid)),
+                                rust_i18n::t!("menu.tile_selected", count = groups.len())
+                                    .to_string(),
+                                _window,
+                                _cx,
+                                move |menu, window, cx| {
+                                    super::tiling_menu::build_tiling_layout_submenu(
+                                        menu,
+                                        groups.clone(),
+                                        app.clone(),
+                                        palette.clone(),
+                                        window,
+                                        cx,
+                                    )
+                                },
+                            );
+                        }
+                        if entry_selected && touched_sets.len() > 1 && !selected_singles.is_empty()
+                        {
+                            // 选中跨了多张并排网格：没有唯一落点，置灰而不是隐藏，
+                            // 让用户知道功能存在但当前选择不明确。
+                            menu = menu.item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!(
+                                        "menu.tile_selected",
+                                        count = selected_singles.len()
+                                    )
+                                    .to_string(),
+                                )
+                                .icon(IconName::LayoutGrid)
+                                .disabled(true),
+                            );
+                        }
+                        menu = menu.item(
+                            PopupMenuItem::new(rust_i18n::t!("menu.untile").to_string())
+                                .icon(IconName::Minimize2)
+                                .disabled(this_set_id.is_none())
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, _window, cx| {
+                                        if let Some(id) = this_set_id {
+                                            app.update(cx, |this, cx| this.untile_tiling(id, cx));
+                                        }
+                                    }
+                                }),
+                        );
                         menu.item(PopupMenuItem::separator())
                             .item(
                                 PopupMenuItem::new(rust_i18n::t!("menu.close_tab").to_string())
@@ -328,6 +458,23 @@ impl AppShell {
                                             });
                                         }
                                     }),
+                            )
+                            .item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!("menu.close_tiling_group").to_string(),
+                                )
+                                .icon(IconName::Trash)
+                                .disabled(this_set_id.is_none())
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, window, cx| {
+                                        if let Some(id) = this_set_id {
+                                            app.update(cx, |this, cx| {
+                                                this.close_tiling_group(id, window, cx);
+                                            });
+                                        }
+                                    }
+                                }),
                             )
                             .item(
                                 PopupMenuItem::new(
@@ -481,41 +628,93 @@ impl AppShell {
                         }),
                 );
             }
-            if composite && let Some(tiled) = self.tiled_tabs {
+            if let Some(tiled) = &tiled_set {
                 element = element.child(self.tiled_group_badge(tiled, &app_entity, p));
             }
             if self.settings.window.show_tab_close_button {
+                if let Some(tiled) = &tiled_set {
+                    // 合并条目代表多个标签：关闭前让用户明确选"只关焦点标签"还是
+                    // "关掉整个并排组"，避免一个关闭按钮误伤旁边仍在跑的连接。
+                    let menu_app = app_entity.clone();
+                    let tiling_id = tiled.id;
+                    element = element.child(
+                        Button::new(ElementId::Name(format!("close-{group_id}").into()))
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::WindowClose)
+                            .tooltip(rust_i18n::t!("app.close").to_string())
+                            .dropdown_menu(move |menu, _window, _cx| {
+                                let close_current = menu_app.clone();
+                                let close_all = menu_app.clone();
+                                menu.item(
+                                    PopupMenuItem::new(rust_i18n::t!("menu.close_tab").to_string())
+                                        .icon(IconName::X)
+                                        .on_click(move |_, window, cx| {
+                                            close_current.update(cx, |this, cx| {
+                                                this.close_group(group_id, window, cx);
+                                            });
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new(
+                                        rust_i18n::t!("menu.close_tiling_group").to_string(),
+                                    )
+                                    .icon(IconName::Trash)
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            close_all.update(cx, |this, cx| {
+                                                this.close_tiling_group(tiling_id, window, cx);
+                                            });
+                                        },
+                                    ),
+                                )
+                            }),
+                    );
+                } else {
+                    element = element.child(
+                        div()
+                            .id(ElementId::Name(format!("close-{group_id}").into()))
+                            .size(px(18.0))
+                            .rounded(p.radius.sm)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .text_color(if active {
+                                p.tab_active_foreground
+                            } else {
+                                p.muted_foreground
+                            })
+                            .hover(|s| {
+                                s.bg(p.muted_foreground.opacity(0.2))
+                                    .text_color(p.foreground)
+                            })
+                            .active(|s| s.bg(p.muted_foreground.opacity(0.3)))
+                            .tooltip(move |_window, cx| {
+                                Tooltip::new(rust_i18n::t!("app.close").to_string())
+                                    .build(_window, cx)
+                            })
+                            .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                                window.prevent_default();
+                                cx.stop_propagation();
+                            })
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.close_group(group_id, window, cx);
+                            }))
+                            .child(Icon::new(IconName::WindowClose).xsmall()),
+                    );
+                }
+            }
+            if entry_selected {
+                // 多选态用内描边表达：绝对定位不参与布局，也不遮住状态点与标题。
                 element = element.child(
                     div()
-                        .id(ElementId::Name(format!("close-{group_id}").into()))
-                        .size(px(18.0))
-                        .rounded(p.radius.sm)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .text_color(if active {
-                            p.tab_active_foreground
-                        } else {
-                            p.muted_foreground
-                        })
-                        .hover(|s| {
-                            s.bg(p.muted_foreground.opacity(0.2))
-                                .text_color(p.foreground)
-                        })
-                        .active(|s| s.bg(p.muted_foreground.opacity(0.3)))
-                        .tooltip(move |_window, cx| {
-                            Tooltip::new(rust_i18n::t!("app.close").to_string()).build(_window, cx)
-                        })
-                        .on_mouse_down(MouseButton::Left, |_, window, cx| {
-                            window.prevent_default();
-                            cx.stop_propagation();
-                        })
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.close_group(group_id, window, cx);
-                        }))
-                        .child(Icon::new(IconName::WindowClose).xsmall()),
+                        .absolute()
+                        .inset_0()
+                        .border_1()
+                        .border_color(p.primary)
+                        .rounded(p.radius.sm),
                 );
             }
             if active || tiled_paired {
@@ -560,64 +759,21 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 标签栏要渲染的条目：并排对合并成一个条目，位置取对里最靠前的标签，
-    /// 内容取当前焦点标签。返回 `(标签组下标, 是否为合并条目)`。
-    ///
-    /// 配对失效（任一组缺失、两组相同）时不合并，按普通标签逐个渲染，
-    /// 与 `prune_tiling` 的兜底口径一致。
-    fn tab_strip_entries(&self) -> Vec<(usize, bool)> {
-        let singles = || {
-            (0..self.groups.len())
-                .map(|index| (index, false))
-                .collect::<Vec<_>>()
-        };
-        let Some(tiled) = self.tiled_tabs else {
-            return singles();
-        };
-        let first = self.groups.iter().position(|group| group.id == tiled.first);
-        let second = self
-            .groups
-            .iter()
-            .position(|group| group.id == tiled.second);
-        let (Some(first), Some(second)) = (first, second) else {
-            return singles();
-        };
-        if first == second {
-            return singles();
-        }
-        let Some(focused) = self
-            .groups
-            .iter()
-            .position(|group| group.id == tiled.group(tiled.focused))
-        else {
-            return singles();
-        };
-        let merge_position = first.min(second);
-        let mut entries = Vec::with_capacity(self.groups.len().saturating_sub(1));
-        for index in 0..self.groups.len() {
-            if index == merge_position {
-                entries.push((focused, true));
-            } else if index == first || index == second {
-                continue;
-            } else {
-                entries.push((index, false));
-            }
-        }
-        entries
-    }
-
     /// 合并条目的分组选择器：下拉列出并排对里的标签，可切换焦点或退出并排。
     ///
     /// 复用标签栏已有的状态点与连接图标；条目本身只占一个标签宽度，因此
     /// 组内多个标签不再各自占一格。
     fn tiled_group_badge(
         &self,
-        tiled: TiledTabs,
+        tiled: &TiledTabs,
         app_entity: &Entity<AppShell>,
         p: &Palette,
     ) -> AnyElement {
-        let mut rows = Vec::with_capacity(2);
-        for (position, group_id) in [tiled.first, tiled.second].into_iter().enumerate() {
+        let mut rows = Vec::with_capacity(tiled.occupied_count());
+        for (slot, group_id) in tiled.slots.iter().enumerate() {
+            let Some(group_id) = *group_id else {
+                continue;
+            };
             let Some(group) = self.groups.iter().find(|group| group.id == group_id) else {
                 continue;
             };
@@ -631,89 +787,127 @@ impl AppShell {
             }
             rows.push(TiledRow {
                 group_id,
-                ordinal: position + 1,
+                ordinal: slot + 1,
                 title,
                 dot_color,
                 icon: connection_icon(&tab.session.connection),
-                focused: tiled.group(tiled.focused) == group_id,
+                focused: slot == tiled.focused,
             });
         }
-        let axis_icon = match tiled.axis {
-            SplitAxis::Horizontal => IconName::Columns2,
-            SplitAxis::Vertical => IconName::Rows2,
+        let layout_icon = match (tiled.rows, tiled.cols) {
+            (1, 2) => IconName::Columns2,
+            (2, 1) => IconName::Rows2,
+            (1, 3) => IconName::Columns3,
+            (3, 1) => IconName::Rows3,
+            (2, 2) => IconName::Grid2x2,
+            (2, 3) | (3, 2) => IconName::Grid3x2,
+            (3, 3) => IconName::Grid3x3,
+            _ => IconName::LayoutGrid,
         };
         let count = rows.len();
+        let occupied_groups = tiled.occupied_groups();
+        let badge_palette = p.clone();
         let muted = p.muted_foreground;
         let foreground = p.foreground;
-        Button::new(ElementId::Name(
-            format!("tiled-list-{}", tiled.first).into(),
-        ))
-        .ghost()
-        .xsmall()
-        .icon(axis_icon)
-        .label(count.to_string())
-        .dropdown_menu({
-            let app_entity = app_entity.clone();
-            move |menu, _window, _cx| {
-                let mut menu = menu;
-                for row in rows.iter() {
-                    let group_id = row.group_id;
-                    let title = row.title.clone();
-                    let (dot_color, icon, focused, ordinal) =
-                        (row.dot_color, row.icon, row.focused, row.ordinal);
-                    menu = menu.item(
-                        PopupMenuItem::element(move |_window, _cx| {
-                            let mut row = h_flex()
-                                .gap_2()
-                                .items_center()
-                                .child(div().size(px(7.0)).rounded_full().flex_none().bg(dot_color))
-                                .child(Icon::new(icon).xsmall().text_color(muted))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .flex_none()
-                                        .text_color(muted)
-                                        .child(ordinal.to_string()),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .flex_1()
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .truncate()
-                                        .child(title.clone()),
-                                );
-                            if focused {
-                                row = row.child(
-                                    Icon::new(IconName::Check).xsmall().text_color(foreground),
-                                );
-                            }
-                            row
-                        })
-                        .on_click({
-                            let app = app_entity.clone();
-                            move |_, window, cx| {
-                                app.update(cx, |this, cx| {
-                                    this.activate_group(group_id, window, cx);
-                                });
-                            }
-                        }),
-                    );
+        // 多个并排组各有自己的徽标，元素 ID 必须带上组身份才不会互相覆盖。
+        let tiling_id = tiled.id;
+        Button::new(ElementId::Name(format!("tiled-list-{tiling_id}").into()))
+            .ghost()
+            .xsmall()
+            .icon(layout_icon)
+            .label(count.to_string())
+            .dropdown_menu({
+                let app_entity = app_entity.clone();
+                move |menu, _window, _cx| {
+                    let mut menu = menu;
+                    for row in rows.iter() {
+                        let group_id = row.group_id;
+                        let title = row.title.clone();
+                        let (dot_color, icon, focused, ordinal) =
+                            (row.dot_color, row.icon, row.focused, row.ordinal);
+                        menu = menu.item(
+                            PopupMenuItem::element(move |_window, _cx| {
+                                let mut row = h_flex()
+                                    .gap_2()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .size(px(7.0))
+                                            .rounded_full()
+                                            .flex_none()
+                                            .bg(dot_color),
+                                    )
+                                    .child(Icon::new(icon).xsmall().text_color(muted))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .flex_none()
+                                            .text_color(muted)
+                                            .child(ordinal.to_string()),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .flex_1()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .truncate()
+                                            .child(title.clone()),
+                                    );
+                                if focused {
+                                    row = row.child(
+                                        Icon::new(IconName::Check).xsmall().text_color(foreground),
+                                    );
+                                }
+                                row
+                            })
+                            .on_click({
+                                let app = app_entity.clone();
+                                move |_, window, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.activate_group(group_id, window, cx);
+                                    });
+                                }
+                            }),
+                        );
+                    }
+                    menu.item(PopupMenuItem::separator())
+                        .submenu_with_icon(
+                            Some(Icon::new(IconName::LayoutGrid)),
+                            rust_i18n::t!("tiling.adjust").to_string(),
+                            _window,
+                            _cx,
+                            {
+                                let groups = occupied_groups.clone();
+                                let app = app_entity.clone();
+                                let palette = badge_palette.clone();
+                                move |menu, window, cx| {
+                                    super::tiling_menu::build_tiling_layout_submenu(
+                                        menu,
+                                        groups.clone(),
+                                        app.clone(),
+                                        palette.clone(),
+                                        window,
+                                        cx,
+                                    )
+                                }
+                            },
+                        )
+                        .item(
+                            PopupMenuItem::new(rust_i18n::t!("menu.untile").to_string())
+                                .icon(IconName::Minimize2)
+                                .on_click({
+                                    let app = app_entity.clone();
+                                    move |_, _window, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.untile_tiling(tiling_id, cx)
+                                        });
+                                    }
+                                }),
+                        )
                 }
-                menu.item(PopupMenuItem::separator()).item(
-                    PopupMenuItem::new(rust_i18n::t!("menu.untile").to_string())
-                        .icon(IconName::Minimize2)
-                        .on_click({
-                            let app = app_entity.clone();
-                            move |_, _window, cx| {
-                                app.update(cx, |this, cx| this.untile_tabs(cx));
-                            }
-                        }),
-                )
-            }
-        })
-        .into_any_element()
+            })
+            .into_any_element()
     }
 
     fn tab_strip_button(

@@ -92,9 +92,12 @@ pub struct WindowSettings {
     /// 上次打开的标签组与分屏布局；优先于扁平的会话列表。
     #[serde(default)]
     pub previous_tab_groups: Vec<SavedTabGroup>,
-    /// 上次退出时的双标签并排视图；`None` 表示单标签视图。
+    /// 上次退出时的并排网格；每张网格在标签栏里合并成一个条目，可有多张。
+    ///
+    /// 空列表表示没有并排。旧版的单张快照字段 `tab_tiling` 没有对应结构，
+    /// 反序列化时被忽略：升级后并排会退回单标签，其余标签照常恢复。
     #[serde(default)]
-    pub tab_tiling: Option<SavedTabTiling>,
+    pub tab_tilings: Vec<SavedTabTiling>,
     /// 工具面板（SFTP/转发）停靠方向；旧配置缺省按右侧。
     #[serde(default)]
     pub sftp_panel_side: PanelSide,
@@ -266,23 +269,29 @@ pub struct SavedTabGroup {
     pub layout: SavedLayout,
 }
 
-/// 双标签并排视图的恢复快照。
+/// 多标签并排视图的恢复快照。
 ///
-/// 用 `previous_tab_groups` 的下标而不是标签组 ID：组 ID 是运行期生成的 UUID，
-/// 不随标签组落盘，恢复时只能按下标找回刚重建的组。任一下标越界、两个下标相同，
-/// 或对应标签组没有成功恢复时，整份快照作废并退回单标签视图，绝不猜测绑定关系。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// `slots` 按视觉顺序（从左到右、从上到下）记录每个格子绑定到
+/// `previous_tab_groups` 的哪个下标；`None` 表示空格子。旧版的两格快照字段
+/// （first/second/axis/focused_second）在新结构里没有对应字段，反序列化时被
+/// 忽略；`slots` 为空即视为无有效并排，启动时按单标签恢复。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SavedTabTiling {
-    /// 前侧（左/上）标签组在 `previous_tab_groups` 中的下标。
-    pub first: usize,
-    /// 后侧（右/下）标签组的下标。
-    pub second: usize,
-    /// 并排方向：左右还是上下。
+    /// 网格行数。
     #[serde(default)]
-    pub axis: SplitAxis,
-    /// 退出时焦点是否落在第二格。
+    pub rows: usize,
+    /// 网格列数。
     #[serde(default)]
-    pub focused_second: bool,
+    pub cols: usize,
+    /// 每个格子的标签组下标；长度必须等于 `rows * cols`。
+    #[serde(default)]
+    pub slots: Vec<Option<usize>>,
+    /// 焦点所在格的下标。
+    #[serde(default)]
+    pub focused: usize,
+    /// 布局是否由自适应算法选出（仅用于下次展示/整理，不参与恢复校验）。
+    #[serde(default)]
+    pub auto: bool,
 }
 
 impl Default for WindowSettings {
@@ -303,7 +312,7 @@ impl Default for WindowSettings {
             last_sidebar_visible: true,
             previous_tab_sessions: Vec::new(),
             previous_tab_groups: Vec::new(),
-            tab_tiling: None,
+            tab_tilings: Vec::new(),
             sftp_panel_side: PanelSide::Right,
             default_terminal: false,
         }
@@ -1073,18 +1082,36 @@ mod tests {
     #[test]
     fn saved_tab_tiling_round_trip_and_missing_field() {
         let decoded: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
-        assert_eq!(decoded.window.tab_tiling, None);
+        assert!(decoded.window.tab_tilings.is_empty());
 
         let mut settings = AppSettings::default();
-        settings.window.tab_tiling = Some(SavedTabTiling {
-            first: 0,
-            second: 2,
-            axis: SplitAxis::Vertical,
-            focused_second: true,
-        });
+        settings.window.tab_tilings = vec![
+            SavedTabTiling {
+                rows: 2,
+                cols: 2,
+                slots: vec![Some(0), None, Some(2), Some(3)],
+                focused: 2,
+                auto: true,
+            },
+            SavedTabTiling {
+                rows: 1,
+                cols: 2,
+                slots: vec![Some(4), Some(5)],
+                focused: 1,
+                auto: false,
+            },
+        ];
         let json = serde_json::to_string(&settings).unwrap();
         let decoded: AppSettings = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.window.tab_tiling, settings.window.tab_tiling);
+        assert_eq!(decoded.window.tab_tilings, settings.window.tab_tilings);
+
+        // 旧版单张快照的字段被忽略，slots 为空 → 启动时按单标签恢复。
+        let legacy: SavedTabTiling = serde_json::from_str(
+            r#"{"first":0,"second":1,"axis":"vertical","focused_second":true}"#,
+        )
+        .unwrap();
+        assert!(legacy.slots.is_empty());
+        assert_eq!(legacy.rows, 0);
     }
 
     /// 界面外观是后加的字段：老设置里没有它时按内置默认降级，而不是加载失败。

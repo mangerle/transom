@@ -219,10 +219,8 @@ impl AppShell {
             return Vec::new();
         };
         let active_group = self.groups[active_index].id;
-        if let Some(tiled) = self.tiled_tabs
-            && self.active_in_tiling(tiled)
-        {
-            return vec![tiled.first, tiled.second];
+        if let Some(tiled) = self.active_tiling() {
+            return tiled.occupied_groups();
         }
         vec![active_group]
     }

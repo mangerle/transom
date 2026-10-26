@@ -19,9 +19,10 @@ use transom_core::{GroupId, SessionId, TabId};
 
 /// 被脏面板拦下、待确认后续行的关闭意图。
 ///
-/// 变体对应三条会连带丢面板的关闭路径，保存标识而非标签集合：续行时按当前
+/// 变体对应会连带丢面板的关闭路径，保存标识而非标签集合：续行时按当前
 /// 结构重新解析受影响标签，避免持有过期集合（挂起期间窗格可能被拆分重组）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// 并排组关闭是一个多组意图，因此持有组 ID 列表而不是单组 ID。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PendingEditorClose {
     /// 关闭整个标签组（含其中全部窗格）。
     Group(GroupId),
@@ -29,6 +30,8 @@ pub(crate) enum PendingEditorClose {
     Pane(TabId),
     /// 删除会话（连带其全部标签）。
     Session(SessionId),
+    /// 关闭整个并排组（含组内每个标签组及其窗格）。
+    Tiling(Vec<GroupId>),
 }
 
 impl AppShell {
@@ -71,10 +74,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(intent) = self.pending_editor_close else {
+        let Some(intent) = self.pending_editor_close.clone() else {
             return;
         };
-        let tab_ids = self.tabs_for_pending_close(intent);
+        let tab_ids = self.tabs_for_pending_close(&intent);
         if tab_ids.is_empty() {
             // 目标标签已全部消失：关闭已在别处发生或不再相关，意图作废。
             self.pending_editor_close = None;
@@ -93,24 +96,32 @@ impl AppShell {
             PendingEditorClose::Group(group_id) => self.close_group(group_id, window, cx),
             PendingEditorClose::Pane(tab_id) => self.close_pane(tab_id, window, cx),
             PendingEditorClose::Session(session_id) => self.delete_session_by_id(session_id, cx),
+            PendingEditorClose::Tiling(groups) => {
+                self.close_tiling_groups(groups, window, cx);
+            }
         }
     }
 
     /// 按意图标识解析当前受影响的标签集合；空集表示目标已不存在。
-    fn tabs_for_pending_close(&self, intent: PendingEditorClose) -> Vec<TabId> {
+    fn tabs_for_pending_close(&self, intent: &PendingEditorClose) -> Vec<TabId> {
         match intent {
             PendingEditorClose::Group(group_id) => self
                 .groups
                 .iter()
-                .find(|group| group.id == group_id)
+                .find(|group| group.id == *group_id)
                 .map(|group| group.pane_ids())
                 .unwrap_or_default(),
-            PendingEditorClose::Pane(tab_id) => Vec::from([tab_id]),
+            PendingEditorClose::Pane(tab_id) => Vec::from([*tab_id]),
             PendingEditorClose::Session(session_id) => self
                 .tabs
                 .iter()
-                .filter(|tab| tab.session_id == session_id)
+                .filter(|tab| tab.session_id == *session_id)
                 .map(|tab| tab.id)
+                .collect(),
+            PendingEditorClose::Tiling(groups) => groups
+                .iter()
+                .filter_map(|group_id| self.groups.iter().find(|group| group.id == *group_id))
+                .flat_map(|group| group.pane_ids())
                 .collect(),
         }
     }

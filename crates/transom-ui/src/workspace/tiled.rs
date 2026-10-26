@@ -1,74 +1,96 @@
-//! 双标签并排视图渲染：两个标签组共享内容区，中间是可拖拽分隔线。
+//! 多标签并排渲染：按分组栈铺满网格，每条分隔线都可拖拽。
 //!
-//! 每个格都调用 `render_group_content`，因此标签组内部的窗格分屏、最大化与
-//! 拖拽比例在并排视图里原样生效；这里只负责外层的两格排列、格标题与焦点。
+//! 每个槽位仍调用 `render_group_content`，因此标签组内部的窗格分屏、最大化
+//! 与拖拽比例在并排视图里原样生效；空槽显示“选择标签”占位，点开后可以把
+//! 尚未并排的独立标签填进来。
 
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::theme::tokens::size;
-use crate::tiling::{TileSide, TiledTabs};
+use crate::tiling::{TiledTabs, TilingId, TilingNode};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::resizable::{h_resizable, resizable_panel, v_resizable};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{Connection, SplitAxis};
+use transom_core::{Connection, GroupId, SplitAxis};
 
 impl AppShell {
-    /// 渲染并排的两格；绑定指向的标签组缺失时返回 `None`，由调用方退回单标签。
+    /// 渲染并排网格；没有任何有效槽位时返回 `None`，由调用方退回单标签。
     pub(super) fn render_tiled_content(
         &mut self,
-        tiled: TiledTabs,
+        tiled: &TiledTabs,
         window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> Option<AnyElement> {
-        let first = self
-            .groups
-            .iter()
-            .position(|group| group.id == tiled.first)?;
-        let second = self
-            .groups
-            .iter()
-            .position(|group| group.id == tiled.second)?;
-        if first == second {
+        if tiled.occupied_count() == 0 {
             return None;
         }
-
-        let first_el = self.render_tiled_zone(tiled, TileSide::First, first, window, cx, p);
-        let second_el = self.render_tiled_zone(tiled, TileSide::Second, second, window, cx, p);
-        // 分隔线状态由外壳持有：切换方向或短暂退回单标签后再回来，比例不丢。
-        let state = self.tiling_split_state.clone();
-        let split = match tiled.axis {
-            SplitAxis::Horizontal => h_resizable(tiling_element_id()),
-            SplitAxis::Vertical => v_resizable(tiling_element_id()),
-        }
-        .with_state(&state)
-        .child(resizable_panel().child(first_el))
-        .child(resizable_panel().child(second_el));
+        let body = self.render_tiling_node(&tiled.root, tiled, window, cx, p);
         Some(
             div()
                 .flex_1()
                 .size_full()
                 .overflow_hidden()
-                .child(split)
+                .child(body)
                 .into_any_element(),
         )
     }
 
-    /// 渲染并排中的一格：细条标题（状态、序号、标题、关闭）加标签组内容。
-    fn render_tiled_zone(
+    /// 递归渲染网格：同一方向的 N 个格子交给一个可拖拽容器等分。
+    fn render_tiling_node(
         &mut self,
-        tiled: TiledTabs,
-        side: TileSide,
-        group_index: usize,
+        node: &TilingNode,
+        tiled: &TiledTabs,
         window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let group_id = tiled.group(side);
-        let focused = tiled.focused == side;
+        match node {
+            TilingNode::Slot(slot) => match tiled.group_at(*slot) {
+                Some(group) => {
+                    let Some(index) = self.groups.iter().position(|item| item.id == group) else {
+                        return div().into_any_element();
+                    };
+                    self.render_tiled_zone(index, group, *slot == tiled.focused, window, cx, p)
+                }
+                None => self.render_empty_tiling_slot(tiled.id, *slot, cx, p),
+            },
+            TilingNode::Stack { id, axis, children } => {
+                let child_elements: Vec<AnyElement> = children
+                    .iter()
+                    .map(|child| self.render_tiling_node(child, tiled, window, cx, p))
+                    .collect();
+                // 同一方向的所有格子放进一个可拖拽容器：初始等分，拖动任一分隔线
+                // 只影响相邻两格；状态与窗格分屏共用同一张表。
+                let state = self.pane_split_state(*id, cx);
+                let mut group = match axis {
+                    SplitAxis::Horizontal => h_resizable(super::panes::split_element_id(*id)),
+                    SplitAxis::Vertical => v_resizable(super::panes::split_element_id(*id)),
+                }
+                .with_state(&state);
+                for child in child_elements {
+                    group = group.child(resizable_panel().child(child));
+                }
+                div().flex_1().size_full().child(group).into_any_element()
+            }
+        }
+    }
+
+    /// 渲染并排中的一个标签格：细条标题（状态、标题、关闭）加标签组内容。
+    fn render_tiled_zone(
+        &mut self,
+        group_index: usize,
+        group_id: GroupId,
+        focused: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
         let (pane_id, serial) = {
             let group = &self.groups[group_index];
             (group.active_pane, group.serial)
@@ -156,11 +178,7 @@ impl AppShell {
             .size_full()
             .overflow_hidden()
             .child(header)
-            // 内容必须是这个列向容器的直接子节点：单窗格与分割树都靠 `flex_1`
-            // 吃掉标题栏之外的高度，若再套一层横向容器，终端画布会量到零高度。
             .child(body)
-            // 点格内任意位置接管焦点；终端自身会消费事件，冒泡到这里至少覆盖
-            // 标题与空白区，单击终端时也依赖冒泡把焦点格切过来。
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, _, window, cx| {
@@ -169,9 +187,70 @@ impl AppShell {
             )
             .into_any_element()
     }
-}
 
-/// 并排分隔线的稳定元素标识：同一窗口只有一条，切换方向时复用同一状态。
-fn tiling_element_id() -> ElementId {
-    ElementId::Name("tab-tiling-split".into())
+    /// 空槽占位：把尚未并排的独立标签填进这个格子。
+    fn render_empty_tiling_slot(
+        &mut self,
+        tiling_id: TilingId,
+        slot: usize,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let mut rows: Vec<(GroupId, String)> = Vec::new();
+        for group_id in self.available_tiling_groups() {
+            let Some(group) = self.groups.iter().find(|group| group.id == group_id) else {
+                continue;
+            };
+            let Some(tab) = self.tabs.iter().find(|tab| tab.id == group.active_pane) else {
+                continue;
+            };
+            let mut title = tab.display_name();
+            if group.serial > 0 {
+                title = format!("{title} #{}", group.serial);
+            }
+            rows.push((group_id, title));
+        }
+        let has_rows = !rows.is_empty();
+        let text = if has_rows {
+            rust_i18n::t!("tiling.empty_slot").to_string()
+        } else {
+            rust_i18n::t!("tiling.no_available").to_string()
+        };
+        let mut placeholder = v_flex()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .gap_2()
+            .bg(p.tab_bar)
+            .border_1()
+            .border_dashed()
+            .border_color(p.border)
+            .child(div().text_xs().text_color(p.muted_foreground).child(text));
+        if has_rows {
+            let app = cx.entity().clone();
+            let trigger = Button::new(ElementId::Name(
+                format!("fill-tiling-slot-{tiling_id}-{slot}").into(),
+            ))
+            .ghost()
+            .small()
+            .icon(IconName::Plus)
+            .label(rust_i18n::t!("tiling.fill_slot").to_string())
+            .dropdown_menu(move |menu, _window, _cx| {
+                let mut menu = menu;
+                for (group_id, title) in rows.iter() {
+                    let group_id = *group_id;
+                    let title = title.clone();
+                    let app = app.clone();
+                    menu = menu.item(PopupMenuItem::new(title).on_click(move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.fill_tiling_slot(tiling_id, slot, group_id, window, cx);
+                        });
+                    }));
+                }
+                menu
+            });
+            placeholder = placeholder.child(trigger);
+        }
+        placeholder.into_any_element()
+    }
 }

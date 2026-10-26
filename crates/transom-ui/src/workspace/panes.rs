@@ -31,11 +31,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        // 并排对是持久的，但只有活动标签属于这对时才铺两格；否则单屏显示
-        // 当前标签，配对保留在标签栏里等用户点回来。
-        if let Some(tiled) = self.tiled_tabs
-            && self.active_in_tiling(tiled)
-            && let Some(content) = self.render_tiled_content(tiled, window, cx, p)
+        // 并排网格是持久的，但只有活动标签属于某张网格时才铺格子；否则单屏显示
+        // 当前标签，那张网格保留在标签栏里等用户点回来。
+        if let Some(tiled) = self.active_tiling().cloned()
+            && let Some(content) = self.render_tiled_content(&tiled, window, cx, p)
         {
             return content;
         }
@@ -113,7 +112,11 @@ impl AppShell {
     ///
     /// 状态由 AppShell 持有而不是交给 gpui 的 keyed state：后者只在元素连续出现
     /// 的帧里存活，切换标签或单窗格最大化后再回来，用户拖出的比例会被清零。
-    fn pane_split_state(&mut self, id: SplitId, cx: &mut Context<Self>) -> Entity<ResizableState> {
+    pub(super) fn pane_split_state(
+        &mut self,
+        id: SplitId,
+        cx: &mut Context<Self>,
+    ) -> Entity<ResizableState> {
         if let Some(state) = self.pane_split_states.get(&id) {
             return state.clone();
         }
@@ -130,6 +133,11 @@ impl AppShell {
             .groups
             .iter()
             .flat_map(|group| group.root.split_ids())
+            .chain(
+                self.tiled_sets
+                    .iter()
+                    .flat_map(|tiled| tiled.root.split_ids()),
+            )
             .collect();
         self.pane_split_states.retain(|id, _| alive.contains(id));
     }
@@ -333,6 +341,6 @@ impl AppShell {
 
 /// 分割节点的可拖拽容器标识：同一 SplitId 在任意一帧都拿到同一个 ElementId，
 /// 兄弟窗格增删后祖先重建也不会让子树误当成新元素而重置尺寸。
-fn split_element_id(id: SplitId) -> ElementId {
+pub(super) fn split_element_id(id: SplitId) -> ElementId {
     ElementId::Name(format!("pane-split-{id}").into())
 }
