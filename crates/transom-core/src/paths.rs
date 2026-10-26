@@ -45,10 +45,44 @@ fn runtime_dir() -> PathBuf {
         .unwrap_or_else(config_dir)
 }
 
+/// 判断给定的可执行文件路径是否属于开发或构建产物（如位于 Cargo target 目录、临时构建目录或开启了 debug_assertions）。
+///
+/// 设计原理（Why）：开发调试期间（如 `cargo run` 或 `cargo run --release`），二进制
+/// 产物运行在源码工程的 `target/` 目录下。若在此时触发系统级/用户级的桌面集成注册，
+/// 会将宿主机的默认终端快捷方式和桌面入口覆盖为开发中的 debug/release 产物，破坏
+/// 本地正式安装版本的正常使用。通过此函数统一识别开发态，避免对宿主机环境的意外污染。
+pub fn is_dev_exe(exe: &Path) -> bool {
+    if cfg!(debug_assertions) {
+        return true;
+    }
+    exe.components().any(|component| {
+        let name = component.as_os_str();
+        name == "target" || name == ".cargo"
+    })
+}
+
+/// 判断当前运行的进程是否为开发态二进制。
+pub fn is_current_exe_dev() -> bool {
+    if cfg!(debug_assertions) {
+        return true;
+    }
+    std::env::current_exe()
+        .map(|exe| is_dev_exe(&exe))
+        .unwrap_or(false)
+}
+
 /// 单实例深链套接字路径；后启动的进程把 `ssh://` 地址写入这里转交给
 /// 已运行实例。放在运行期目录并配合 0700 目录权限，天然限定同用户访问。
+///
+/// 开发态与正式安装态使用不同的套接字文件名（`transom-dev.sock` 与 `transom.sock`），
+/// 确保开发者在本地调试开发版时不会抢占或干扰正在运行的正式版。
 pub fn instance_socket_path() -> PathBuf {
-    runtime_dir().join("transom.sock")
+    let socket_name = if is_current_exe_dev() {
+        "transom-dev.sock"
+    } else {
+        "transom.sock"
+    };
+    runtime_dir().join(socket_name)
 }
 
 /// 用户自定义 UI 主题目录；放入 gpui-kit ThemeConfig 格式的 JSON 即可在设置
@@ -147,4 +181,27 @@ pub fn default_download_dir() -> PathBuf {
             })
         })
         .unwrap_or_else(|| PathBuf::from("."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_dev_exe_identifies_target_paths() {
+        assert!(is_dev_exe(Path::new(
+            "/home/user/project/target/debug/transom"
+        )));
+        assert!(is_dev_exe(Path::new(
+            "/home/user/project/target/release/transom"
+        )));
+        assert!(is_dev_exe(Path::new("/home/user/.cargo/bin/transom")));
+    }
+
+    #[test]
+    fn test_instance_socket_path_not_empty() {
+        let socket = instance_socket_path();
+        let filename = socket.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        assert!(filename.ends_with(".sock"));
+    }
 }

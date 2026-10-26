@@ -182,6 +182,13 @@ fn reassert_default_terminal(settings: &AppSettings) {
         log::warn!("无法定位当前可执行文件，默认终端注册校验跳过");
         return;
     };
+    if transom_core::paths::is_dev_exe(&exe) {
+        log::debug!(
+            "当前运行于开发构建目录，跳过默认终端启动重言，路径: {}",
+            exe.display()
+        );
+        return;
+    }
     if transom_store::desktop::default_terminal_registered(&exe) {
         return;
     }
