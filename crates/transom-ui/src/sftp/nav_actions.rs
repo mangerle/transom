@@ -22,7 +22,18 @@ impl AppShell {
     ) -> Option<&mut SftpPanelState> {
         let tab = self.tabs.iter_mut().find(|tab| tab.id == tab_id)?;
         if tab.connection_id != Some(connection_id) {
-            return None;
+            let is_side = tab
+                .sftp
+                .as_ref()
+                .map(|p| {
+                    p.side_remotes
+                        .iter()
+                        .any(|s| s.connection_id == connection_id)
+                })
+                .unwrap_or(false);
+            if !is_side {
+                return None;
+            }
         }
         tab.sftp.as_mut()
     }
@@ -166,12 +177,16 @@ impl AppShell {
             local_entries: Vec::new(),
             local_quick_paths: quick_paths,
             local_only: false,
+            local_collapsed: false,
             local_selected: None,
             local_selection: BTreeSet::new(),
             local_anchor: None,
             local_error: None,
             local_scroll_handle: VirtualListScrollHandle::new(),
             remote_scroll_handle: VirtualListScrollHandle::new(),
+            side_remotes: Vec::new(),
+            clipboard: None,
+            mount_menu_open: false,
             show_filter: false,
             show_hidden: false,
             sync_navigation: false,

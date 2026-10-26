@@ -244,20 +244,42 @@ impl AppShell {
             } => {
                 let mut update_input = None;
                 if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
-                    && tab.connection_id == Some(connection_id)
                     && let Some(panel) = tab.sftp.as_mut()
                 {
-                    panel.path = path.clone();
-                    panel.entries = entries;
-                    panel.loading = false;
-                    panel.error = None;
-                    let valid_paths = panel
-                        .entries
-                        .iter()
-                        .map(|entry| entry.path.clone())
-                        .collect();
-                    panel.sync_remote_selection(&valid_paths);
-                    update_input = Some((panel.path_input.clone(), path));
+                    if tab.connection_id == Some(connection_id) {
+                        panel.path = path.clone();
+                        panel.entries = entries;
+                        panel.loading = false;
+                        panel.error = None;
+                        let valid_paths = panel
+                            .entries
+                            .iter()
+                            .map(|entry| entry.path.clone())
+                            .collect();
+                        panel.sync_remote_selection(&valid_paths);
+                        update_input = Some((panel.path_input.clone(), path));
+                    } else if let Some(side) = panel
+                        .side_remotes
+                        .iter_mut()
+                        .find(|s| s.connection_id == connection_id)
+                    {
+                        side.path = path.clone();
+                        side.entries = entries;
+                        side.loading = false;
+                        side.error = None;
+                        let valid_paths: std::collections::BTreeSet<String> = side
+                            .entries
+                            .iter()
+                            .map(|entry| entry.path.clone())
+                            .collect();
+                        side.selection.retain(|p| valid_paths.contains(p));
+                        if let Some(sel) = &side.selected
+                            && !valid_paths.contains(sel)
+                        {
+                            side.selected = None;
+                        }
+                        update_input = Some((side.path_input.clone(), path));
+                    }
                 }
                 if let Some((input, path)) = update_input {
                     input.update(cx, |state, cx| state.set_value(path, window, cx));
@@ -269,6 +291,8 @@ impl AppShell {
                 op_id,
                 transferred,
                 total,
+                speed_bps,
+                eta_secs,
             } => {
                 let mut applied = false;
                 if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id)
@@ -278,6 +302,8 @@ impl AppShell {
                     if total.is_some() {
                         task.size = total;
                     }
+                    task.speed_bps = speed_bps;
+                    task.eta_secs = eta_secs;
                     panel.recompute_progress();
                     applied = true;
                 }
@@ -302,6 +328,7 @@ impl AppShell {
                 verified,
             } => {
                 let mut refresh = None;
+                let mut refresh_side = None;
                 let mut refresh_local = false;
                 let mut notify_info: Option<(TransferDirection, String, u64)> = None;
                 if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
@@ -309,6 +336,8 @@ impl AppShell {
                     if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
                         completed_transfer = true;
                         task.status = TransferStatus::Completed;
+                        task.speed_bps = None;
+                        task.eta_secs = None;
                         if let Some(bytes) = transferred {
                             task.transferred = bytes;
                         }
@@ -317,11 +346,26 @@ impl AppShell {
                         {
                             refresh_local = true;
                         }
-                        let file_name = task
-                            .local_path
-                            .file_name()
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_else(|| task.remote_path.clone());
+                        if task.direction == TransferDirection::RemoteCopy
+                            && let (Some(target_conn), Some(target_path)) =
+                                (task.target_connection_id, &task.target_remote_path)
+                        {
+                            let dir = target_path
+                                .rsplit_once('/')
+                                .map(|(d, _)| if d.is_empty() { "/" } else { d })
+                                .unwrap_or("/");
+                            refresh_side = Some((target_conn, dir.to_string()));
+                        }
+                        let file_name = if task.direction == TransferDirection::RemoteCopy {
+                            task.target_remote_path
+                                .clone()
+                                .unwrap_or_else(|| task.remote_path.clone())
+                        } else {
+                            task.local_path
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| task.remote_path.clone())
+                        };
                         notify_info = Some((task.direction, file_name, task.transferred));
                     }
                     if completed_transfer {
@@ -374,6 +418,7 @@ impl AppShell {
                         TransferDirection::Upload => "上传完成",
                         TransferDirection::Download => "下载完成",
                         TransferDirection::Sync => "同步完成",
+                        TransferDirection::RemoteCopy => "跨远端传输完成",
                     };
                     send_desktop_notification(
                         &format!("Transom SFTP {action}"),
@@ -385,6 +430,9 @@ impl AppShell {
                 }
                 if let Some(path) = refresh {
                     self.request_sftp_list(tab_id, path, cx);
+                }
+                if let Some((target_conn, target_dir)) = refresh_side {
+                    self.request_sftp_list_for_connection(tab_id, target_conn, target_dir, cx);
                 }
                 self.process_sftp_queue(tab_id, cx);
             }

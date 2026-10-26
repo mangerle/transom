@@ -6,7 +6,9 @@ use super::sftp_finish::{
     verify_transfer_result,
 };
 use std::collections::HashMap;
-use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, SftpOperation, TabId, TransferId};
+use transom_core::{
+    AppError, AppEvent, ConnectionId, ErrorCode, SftpOperation, TabId, TransferFilter, TransferId,
+};
 use transom_net::{SftpClient, SshRemote};
 
 /// 传输进度事件的最小发送间隔。
@@ -17,7 +19,7 @@ use transom_net::{SftpClient, SshRemote};
 /// 分辨率也远低于 10Hz。
 const PROGRESS_EVENT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
-/// 构造按 [`PROGRESS_EVENT_INTERVAL`] 节流的进度回调。
+/// 构造按 [`PROGRESS_EVENT_INTERVAL`] 节流且计算平滑速率与预估时间的进度回调。
 fn throttled_progress(
     progress_tx: flume::Sender<AppEvent>,
     tab_id: TabId,
@@ -25,10 +27,36 @@ fn throttled_progress(
     op_id: TransferId,
 ) -> impl FnMut(u64, Option<u64>) + Send {
     let mut last_sent: Option<std::time::Instant> = None;
+    let mut last_transferred: u64 = 0;
+    let mut speed_ema: Option<f64> = None;
     move |transferred, total| {
         let now = std::time::Instant::now();
         if last_sent.is_none_or(|at| now.duration_since(at) >= PROGRESS_EVENT_INTERVAL) {
+            let (speed_bps, eta_secs) = if let Some(last_at) = last_sent {
+                let elapsed = now.duration_since(last_at).as_secs_f64();
+                if elapsed > 0.0 {
+                    let delta_bytes = transferred.saturating_sub(last_transferred);
+                    let instant = delta_bytes as f64 / elapsed;
+                    let smoothed = match speed_ema {
+                        Some(prev) => prev * 0.7 + instant * 0.3,
+                        None => instant,
+                    };
+                    speed_ema = Some(smoothed);
+                    let smoothed_bps = smoothed as u64;
+                    let eta = if smoothed_bps > 0 {
+                        total.map(|tot| tot.saturating_sub(transferred) / smoothed_bps)
+                    } else {
+                        None
+                    };
+                    (Some(smoothed_bps), eta)
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            };
             last_sent = Some(now);
+            last_transferred = transferred;
             // 回调运行在非 async 上下文：队列满时快速失败丢弃本条样本。
             // 这是显式背压——UI 消费停滞时宁可进度刷新变慢，也不阻塞传输线程。
             let _ = progress_tx.try_send(AppEvent::SftpProgress {
@@ -37,6 +65,8 @@ fn throttled_progress(
                 op_id,
                 transferred,
                 total,
+                speed_bps,
+                eta_secs,
             });
         }
     }
@@ -377,6 +407,9 @@ pub(super) async fn execute_sftp_op(
                 .await;
             finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result).await;
         }
+        SftpOperation::RemoteTransfer { .. } => {
+            // 跨远端互传已由 dispatch_sftp_op 路由至双端流式中转任务
+        }
     }
 }
 
@@ -408,6 +441,109 @@ pub(super) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         op_id,
         op,
     } = dispatch;
+
+    if let SftpOperation::RemoteTransfer {
+        source_connection_id,
+        source_path,
+        target_connection_id,
+        target_path,
+        is_dir,
+        filter,
+        preserve_attributes,
+    } = op
+    {
+        let source_remote = remotes
+            .values()
+            .find(|(c, _)| *c == source_connection_id)
+            .map(|(_, r)| r.clone());
+        let target_remote = remotes
+            .values()
+            .find(|(c, _)| *c == target_connection_id)
+            .map(|(_, r)| r.clone());
+        let (Some(source_remote), Some(target_remote)) = (source_remote, target_remote) else {
+            send_sftp_not_ready(
+                &event_tx,
+                tab_id,
+                connection_id,
+                op_id,
+                "源端或目标端 SSH 连接已断开",
+            );
+            return;
+        };
+
+        let source_tab = remotes
+            .iter()
+            .find(|(_, (c, _))| *c == source_connection_id)
+            .map(|(t, _)| *t);
+        let target_tab = remotes
+            .iter()
+            .find(|(_, (c, _))| *c == target_connection_id)
+            .map(|(t, _)| *t);
+
+        let cached_source = source_tab.and_then(|t| sftp_clients.get(&t).cloned());
+        let cached_target = target_tab.and_then(|t| sftp_clients.get(&t).cloned());
+
+        if let (Some(sc), Some(tc)) = (cached_source.clone(), cached_target.clone()) {
+            spawn_remote_transfer_op(
+                sftp_tasks,
+                event_tx,
+                tab_id,
+                connection_id,
+                op_id,
+                sc,
+                tc,
+                source_path,
+                target_path,
+                is_dir,
+                filter,
+                preserve_attributes,
+            );
+        } else {
+            let event_tx_clone = event_tx.clone();
+            let handle = tokio::spawn(async move {
+                let sc = match cached_source {
+                    Some(c) => Ok(c),
+                    None => SftpClient::open(&source_remote).await,
+                };
+                let tc = match cached_target {
+                    Some(c) => Ok(c),
+                    None => SftpClient::open(&target_remote).await,
+                };
+                match (sc, tc) {
+                    (Ok(sc), Ok(tc)) => {
+                        execute_remote_transfer_op(
+                            event_tx_clone,
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            sc,
+                            tc,
+                            source_path,
+                            target_path,
+                            is_dir,
+                            filter,
+                            preserve_attributes,
+                        )
+                        .await;
+                    }
+                    (Err(err), _) | (_, Err(err)) => {
+                        let _ = event_tx_clone
+                            .send_async(AppEvent::SftpFailed {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                error: err,
+                            })
+                            .await;
+                    }
+                }
+            });
+            sftp_tasks.retain(|_, h| !h.is_finished());
+            sftp_tasks.insert((tab_id, op_id), handle);
+        }
+        return;
+    }
+
     let Some((current_connection, remote)) = remotes.get(&tab_id) else {
         send_sftp_not_ready(&event_tx, tab_id, connection_id, op_id, "SSH 连接尚未就绪");
         return;
@@ -493,4 +629,85 @@ pub(super) fn spawn_sftp_op(
     // 操作类型分裂；SftpCancel 对非传输操作同样可取消。
     sftp_tasks.retain(|_, h| !h.is_finished());
     sftp_tasks.insert((tab_id, op_id), handle);
+}
+
+/// 派发跨远端流式传输任务。
+#[allow(clippy::too_many_arguments)]
+pub(super) fn spawn_remote_transfer_op(
+    sftp_tasks: &mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
+    event_tx: flume::Sender<AppEvent>,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op_id: TransferId,
+    source_client: SftpClient,
+    target_client: SftpClient,
+    source_path: String,
+    target_path: String,
+    is_dir: bool,
+    filter: TransferFilter,
+    preserve_attributes: bool,
+) {
+    let handle = tokio::spawn(execute_remote_transfer_op(
+        event_tx,
+        tab_id,
+        connection_id,
+        op_id,
+        source_client,
+        target_client,
+        source_path,
+        target_path,
+        is_dir,
+        filter,
+        preserve_attributes,
+    ));
+    sftp_tasks.retain(|_, h| !h.is_finished());
+    sftp_tasks.insert((tab_id, op_id), handle);
+}
+
+/// 执行跨远端流式传输操作（文件单项或整棵目录树）。
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn execute_remote_transfer_op(
+    event_tx: flume::Sender<AppEvent>,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op_id: TransferId,
+    source_client: SftpClient,
+    target_client: SftpClient,
+    source_path: String,
+    target_path: String,
+    is_dir: bool,
+    filter: TransferFilter,
+    preserve_attributes: bool,
+) {
+    if is_dir {
+        let result = source_client
+            .transfer_dir_to_remote(
+                &source_path,
+                &target_client,
+                &target_path,
+                &filter,
+                preserve_attributes,
+                throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
+            )
+            .await;
+        finish_sftp_summary(event_tx, tab_id, connection_id, op_id, result).await;
+    } else {
+        let result = source_client
+            .transfer_to_remote(
+                &source_path,
+                &target_client,
+                &target_path,
+                preserve_attributes,
+                throttled_progress(event_tx.clone(), tab_id, connection_id, op_id),
+            )
+            .await;
+        finish_sftp(
+            event_tx,
+            tab_id,
+            connection_id,
+            op_id,
+            result.map(|bytes| (bytes, false)),
+        )
+        .await;
+    }
 }

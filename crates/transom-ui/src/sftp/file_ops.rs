@@ -74,6 +74,7 @@ impl AppShell {
         match active_pane {
             SftpActivePane::Remote => self.sftp_delete_selection(tab_id, cx),
             SftpActivePane::Local => self.sftp_local_delete_selection(tab_id, cx),
+            SftpActivePane::SideRemote(_) => {}
         }
     }
 

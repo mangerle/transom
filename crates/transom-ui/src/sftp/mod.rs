@@ -29,6 +29,8 @@ mod properties;
 mod queue_actions;
 mod queue_view;
 mod quick_paths;
+mod side_remote;
+mod side_remote_view;
 mod status;
 mod sync_actions;
 mod sync_modal;
@@ -40,6 +42,7 @@ pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;
 use self::preview::SftpPreviewState;
 pub(crate) use self::quick_paths::LocalQuickPaths;
+pub(crate) use self::side_remote::{SftpActivePane, SftpClipboardData, SftpSideRemoteState};
 use crate::palette::Palette;
 use chrono::{Local, TimeZone};
 use gpui_kit::assets::IconName;
@@ -122,17 +125,6 @@ pub(crate) struct SftpInputModalState {
 }
 
 /// SFTP 双栏中的活动栏位：最近一次被鼠标点击的栏。
-///
-/// 设计原理（Why）：双栏共用同一键盘上下文（`SftpPanel`），Delete 等快捷键
-/// 需要一个明确的目标栏位来源；以“最近点击”作为意图表达，符合文件管理器惯例，
-/// 且无需引入额外的焦点注册机制。
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum SftpActivePane {
-    #[default]
-    Remote,
-    Local,
-}
-
 pub(crate) struct SftpPanelState {
     /// 面板列是否展开显示。
     ///
@@ -161,6 +153,8 @@ pub(crate) struct SftpPanelState {
     pub(crate) local_quick_paths: LocalQuickPaths,
     /// 本地终端专用：只渲染本地栏，不包含远端、队列与上传入口。
     pub(crate) local_only: bool,
+    /// 本地栏是否折叠为竖条。
+    pub(crate) local_collapsed: bool,
     pub(crate) local_selected: Option<PathBuf>,
     /// 本地栏多选集合；`local_selected` 始终指向其中最近操作的主项。
     pub(crate) local_selection: BTreeSet<PathBuf>,
@@ -169,6 +163,12 @@ pub(crate) struct SftpPanelState {
     pub(crate) local_error: Option<String>,
     pub(crate) local_scroll_handle: VirtualListScrollHandle,
     pub(crate) remote_scroll_handle: VirtualListScrollHandle,
+    /// 并列挂载的其他远端文件会话列表。
+    pub(crate) side_remotes: Vec<SftpSideRemoteState>,
+    /// 跨列文件剪贴板（Ctrl+C / Ctrl+V）。
+    pub(crate) clipboard: Option<SftpClipboardData>,
+    /// 挂载新远端浮层菜单是否打开。
+    pub(crate) mount_menu_open: bool,
     pub(crate) show_filter: bool,
     pub(crate) show_hidden: bool,
     pub(crate) sync_navigation: bool,

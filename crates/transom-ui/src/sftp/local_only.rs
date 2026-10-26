@@ -74,12 +74,16 @@ impl AppShell {
             local_entries,
             local_quick_paths: quick_paths,
             local_only: true,
+            local_collapsed: false,
             local_selected: None,
             local_selection: BTreeSet::new(),
             local_anchor: None,
             local_error,
             local_scroll_handle: VirtualListScrollHandle::new(),
             remote_scroll_handle: VirtualListScrollHandle::new(),
+            side_remotes: Vec::new(),
+            clipboard: None,
+            mount_menu_open: false,
             show_filter: false,
             show_hidden: false,
             sync_navigation: false,
@@ -161,6 +165,7 @@ impl AppShell {
         );
         let header = self.render_sftp_panel_header(
             rust_i18n::t!("sftp.local_files_title").to_string(),
+            None,
             p,
             cx,
         );

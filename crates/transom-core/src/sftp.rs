@@ -1,8 +1,12 @@
-use crate::ids::TransferId;
+use crate::ids::{ConnectionId, TransferId};
 use crate::sftp_filter::TransferFilter;
 use crate::sftp_sync::SyncItem;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+fn default_true() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteFile {
@@ -100,6 +104,8 @@ pub enum TransferDirection {
     Upload,
     /// 目录双向增量同步：单个任务内同时包含上传与下载项
     Sync,
+    /// 跨远端流式互传（两台远端服务器之间流式复制）
+    RemoteCopy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -152,8 +158,23 @@ pub struct TransferTask {
     pub kind: TransferKind,
     pub local_path: PathBuf,
     pub remote_path: String,
+    /// 跨远端互传时的源端连接 ID；本地上传/下载时为 None。
+    #[serde(default)]
+    pub source_connection_id: Option<ConnectionId>,
+    /// 跨远端互传时的目标端连接 ID；本地上传/下载时为 None。
+    #[serde(default)]
+    pub target_connection_id: Option<ConnectionId>,
+    /// 跨远端互传时的目标端绝对路径。
+    #[serde(default)]
+    pub target_remote_path: Option<String>,
     pub size: Option<u64>,
     pub transferred: u64,
+    /// 实时传输平滑速率（字节/秒）。
+    #[serde(default)]
+    pub speed_bps: Option<u64>,
+    /// 预计剩余秒数。
+    #[serde(default)]
+    pub eta_secs: Option<u64>,
     pub status: TransferStatus,
     pub mode: TransferMode,
     /// 同步任务携带的差异项；其他任务为空。
@@ -162,6 +183,9 @@ pub struct TransferTask {
     /// 任务入队时是否要求传输完成后做 SHA256 校验。
     #[serde(default)]
     pub verify: bool,
+    /// 是否在传输完成后保留原始文件的 POSIX 权限与修改时间戳。
+    #[serde(default = "default_true")]
+    pub preserve_attributes: bool,
 }
 
 impl TransferTask {
@@ -178,12 +202,18 @@ impl TransferTask {
             kind: TransferKind::File,
             local_path,
             remote_path,
+            source_connection_id: None,
+            target_connection_id: None,
+            target_remote_path: None,
             size,
             transferred: 0,
+            speed_bps: None,
+            eta_secs: None,
             status: TransferStatus::Pending,
             mode,
             sync_items: Vec::new(),
             verify: false,
+            preserve_attributes: true,
         }
     }
 
@@ -216,6 +246,31 @@ impl TransferTask {
         );
         task.kind = TransferKind::Sync;
         task.sync_items = items;
+        task
+    }
+
+    /// 创建跨远端互传任务（客户端流式中转）。
+    pub fn new_remote_copy(
+        source_connection_id: ConnectionId,
+        source_path: String,
+        target_connection_id: ConnectionId,
+        target_path: String,
+        size: Option<u64>,
+        is_dir: bool,
+    ) -> Self {
+        let mut task = Self::new(
+            TransferDirection::RemoteCopy,
+            PathBuf::from(&source_path),
+            source_path,
+            size,
+            TransferMode::Auto,
+        );
+        if is_dir {
+            task.kind = TransferKind::Directory;
+        }
+        task.source_connection_id = Some(source_connection_id);
+        task.target_connection_id = Some(target_connection_id);
+        task.target_remote_path = Some(target_path);
         task
     }
 }
@@ -352,6 +407,16 @@ pub enum SftpOperation {
         items: Vec<SyncItem>,
         verify: bool,
     },
+    /// 跨远端流式互传（单文件或整棵目录树）。
+    RemoteTransfer {
+        source_connection_id: ConnectionId,
+        source_path: String,
+        target_connection_id: ConnectionId,
+        target_path: String,
+        is_dir: bool,
+        filter: TransferFilter,
+        preserve_attributes: bool,
+    },
 }
 
 /// 将 Linux 文件权限掩码格式化为 3 位八进制字符串（如 `755`、`644`）。
@@ -476,5 +541,48 @@ mod tests {
             crlf: false,
             transcoded: false,
         }));
+    }
+
+    #[test]
+    fn test_transfer_task_remote_copy() {
+        let conn_a = ConnectionId::new();
+        let conn_b = ConnectionId::new();
+        let task = TransferTask::new_remote_copy(
+            conn_a,
+            "/remote/a/file.txt".into(),
+            conn_b,
+            "/remote/b/file.txt".into(),
+            Some(1024),
+            false,
+        );
+        assert_eq!(task.direction, TransferDirection::RemoteCopy);
+        assert_eq!(task.kind, TransferKind::File);
+        assert_eq!(task.source_connection_id, Some(conn_a));
+        assert_eq!(task.target_connection_id, Some(conn_b));
+        assert_eq!(
+            task.target_remote_path.as_deref(),
+            Some("/remote/b/file.txt")
+        );
+        assert!(task.preserve_attributes);
+        assert_eq!(task.size, Some(1024));
+    }
+
+    #[test]
+    fn test_transfer_task_serialization_compatibility() {
+        let task = TransferTask::new(
+            TransferDirection::Download,
+            PathBuf::from("/local/path"),
+            "/remote/path".into(),
+            Some(2048),
+            TransferMode::Auto,
+        );
+        let json = serde_json::to_string(&task).expect("序列化 TransferTask 失败");
+        let deserialized: TransferTask =
+            serde_json::from_str(&json).expect("反序列化 TransferTask 失败");
+        assert_eq!(deserialized.id, task.id);
+        assert_eq!(deserialized.direction, TransferDirection::Download);
+        assert!(deserialized.preserve_attributes);
+        assert_eq!(deserialized.speed_bps, None);
+        assert_eq!(deserialized.eta_secs, None);
     }
 }

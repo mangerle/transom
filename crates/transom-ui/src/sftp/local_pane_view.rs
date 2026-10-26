@@ -1,6 +1,7 @@
 //! SFTP 本地文件浏览器左栏视图渲染。
 
 use super::preview::{PreviewKey, SftpHoverTarget};
+use super::side_remote::{SftpDragItem, SftpDragPreview};
 use super::{LocalFileEntry, LocalQuickPaths, format_size, sftp_file_icon};
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -223,7 +224,19 @@ impl AppShell {
                                     } else {
                                         format_size(entry.size)
                                     },
-                                ))
+                                ));
+                            let drag_payload = SftpDragItem {
+                                source_tab_id: tab_id,
+                                source_connection_id: None,
+                                paths: vec![entry.path.to_string_lossy().to_string()],
+                                file_name: entry.name.clone(),
+                                is_dir,
+                            };
+                            let preview_name = entry.name.clone();
+                            let row = row
+                                .on_drag(drag_payload, move |_, _, _, cx| {
+                                    cx.new(|_| SftpDragPreview::new(preview_name.clone(), 1))
+                                })
                                 .context_menu(move |menu, _window, _cx| {
                                     let app = app_cm.clone();
                                     let p_up = entry_path_cm.clone();
@@ -418,6 +431,32 @@ impl AppShell {
                                                 }
                                             }),
                                     )
+                                    .item(
+                                        PopupMenuItem::new("复制条目 (Ctrl+C)")
+                                            .icon(IconName::Copy)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, _, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        this.sftp_copy_selection(tab_id, cx);
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+                                            .icon(IconName::Clipboard)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, window, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        this.sftp_paste_clipboard(
+                                                            tab_id, window, cx,
+                                                        );
+                                                    });
+                                                }
+                                            }),
+                                    )
                                 });
                             Some(row.into_any_element())
                         })
@@ -479,7 +518,19 @@ impl AppShell {
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.sftp_local_enter_path(tab_id, window, cx)
                                     })),
-                            ),
+                            )
+                            .when(remote_available, |this| {
+                                this.child(
+                                    Button::new("local-collapse")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(IconName::PanelLeftClose)
+                                        .tooltip("收起本地文件列")
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.sftp_toggle_local_collapse(tab_id, cx);
+                                        })),
+                                )
+                            }),
                     )
                     .child(
                         h_flex()
@@ -567,16 +618,43 @@ impl AppShell {
                         this.child(Input::new(&local_filter_input).w_full())
                     }),
             )
-            .child(
+            .child({
+                let app_local_drop = cx.entity().clone();
+                let drop_bg = p.sidebar_accent.opacity(0.3);
+                let drop_border = p.primary;
                 v_flex()
                     .id(ElementId::Name("sftp-local-list".into()))
                     .relative()
                     .flex_1()
                     .overflow_hidden()
                     .p_2()
+                    .drag_over::<SftpDragItem>(move |style, _, _, _| {
+                        style.bg(drop_bg).border_2().border_color(drop_border)
+                    })
+                    .on_drop(move |drag: &SftpDragItem, _window, cx| {
+                        let item = drag.clone();
+                        app_local_drop.update(cx, |this, cx| {
+                            if item.source_connection_id.is_none() {
+                                return;
+                            }
+                            if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
+                                let local_dir = panel.local_path.clone();
+                                for path in &item.paths {
+                                    let fname = path.rsplit('/').next().unwrap_or(path);
+                                    let target_local = local_dir.join(fname);
+                                    this.sftp_enqueue_download_path(
+                                        tab_id,
+                                        path.clone(),
+                                        target_local,
+                                        cx,
+                                    );
+                                }
+                            }
+                        });
+                    })
                     .child(local_content)
-                    .vertical_scrollbar(&local_scroll_handle),
-            )
+                    .vertical_scrollbar(&local_scroll_handle)
+            })
             .into_any_element()
     }
 
@@ -611,6 +689,7 @@ impl AppShell {
     pub(crate) fn render_sftp_panel_header(
         &self,
         title: String,
+        extra: Option<AnyElement>,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -627,6 +706,12 @@ impl AppShell {
                 }
                 cx.notify();
             }));
+
+        let mut right_actions = h_flex().gap_1().items_center();
+        if let Some(extra_element) = extra {
+            right_actions = right_actions.child(extra_element);
+        }
+        right_actions = right_actions.child(close_btn);
 
         h_flex()
             .h(px(32.0))
@@ -646,7 +731,7 @@ impl AppShell {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(title),
             )
-            .child(div().flex_none().child(close_btn))
+            .child(right_actions)
             .into_any_element()
     }
 }

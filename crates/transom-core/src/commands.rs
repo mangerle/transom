@@ -123,6 +123,8 @@ pub enum AppEvent {
         op_id: TransferId,
         transferred: u64,
         total: Option<u64>,
+        speed_bps: Option<u64>,
+        eta_secs: Option<u64>,
     },
     SftpFinished {
         tab_id: TabId,

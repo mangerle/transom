@@ -4,6 +4,7 @@ use super::editor_list::render_editor_list_popover;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::preview::{PreviewKey, SftpHoverTarget};
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
+use super::side_remote::{SftpDragItem, SftpDragPreview, SftpRemoteCopyParams};
 use super::{LocalFileEntry, format_size, fuzzy_match_name, sftp_file_icon};
 use crate::app::AppShell;
 use crate::keymap;
@@ -33,6 +34,7 @@ impl AppShell {
         let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
             return div().into_any_element();
         };
+        let tab_conn_id = tab.connection_id;
         let Some(panel) = tab.sftp.as_ref() else {
             return div().into_any_element();
         };
@@ -102,8 +104,21 @@ impl AppShell {
             .collect();
         let local_error = panel.local_error.clone();
         let quick_paths = panel.local_quick_paths.clone();
+        let local_collapsed = panel.local_collapsed;
+        let side_remotes_count = panel.side_remotes.len();
+        let remote_current_dir = panel.path.clone();
 
         let queue = panel.queue.clone();
+        let total_speed: u64 = queue
+            .iter()
+            .filter(|t| t.status == TransferStatus::Transferring)
+            .filter_map(|t| t.speed_bps)
+            .sum();
+        let total_speed_bps = if total_speed > 0 {
+            Some(total_speed)
+        } else {
+            None
+        };
         let resume_enabled = panel.resume_enabled;
         let verify_after_transfer = self.settings.sftp.verify_after_transfer;
         let max_concurrent_transfers = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
@@ -356,7 +371,19 @@ impl AppShell {
                                     } else {
                                         format_size(entry.size)
                                     },
-                                ))
+                                ));
+                            let drag_payload = SftpDragItem {
+                                source_tab_id: tab_id,
+                                source_connection_id: tab_conn_id,
+                                paths: vec![entry.path.clone()],
+                                file_name: entry.name.clone(),
+                                is_dir: entry_is_dir,
+                            };
+                            let preview_name = entry.name.clone();
+                            let row = row
+                                .on_drag(drag_payload, move |_, _, _, cx| {
+                                    cx.new(|_| SftpDragPreview::new(preview_name.clone(), 1))
+                                })
                                 .context_menu(move |menu, _window, _cx| {
                                     let app = app_cm.clone();
                                     let p_dl = entry_path_cm.clone();
@@ -567,6 +594,32 @@ impl AppShell {
                                                 move |_, _, cx| {
                                                     app.update(cx, |this, cx| {
                                                         this.sftp_refresh(tab_id, cx);
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("复制条目 (Ctrl+C)")
+                                            .icon(IconName::Copy)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, _, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        this.sftp_copy_selection(tab_id, cx);
+                                                    });
+                                                }
+                                            }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+                                            .icon(IconName::Clipboard)
+                                            .on_click({
+                                                let app = app.clone();
+                                                move |_, window, cx| {
+                                                    app.update(cx, |this, cx| {
+                                                        this.sftp_paste_clipboard(
+                                                            tab_id, window, cx,
+                                                        );
                                                     });
                                                 }
                                             }),
@@ -814,16 +867,72 @@ impl AppShell {
                         this.child(Input::new(&remote_filter_input).w_full())
                     }),
             )
-            .child(
+            .child({
+                let app_drop = cx.entity().clone();
+                let dir_drop = remote_current_dir.clone();
+                let drop_bg = p.sidebar_accent.opacity(0.3);
+                let drop_border = p.primary;
                 v_flex()
                     .id(ElementId::Name("sftp-remote-list".into()))
                     .relative()
                     .flex_1()
                     .overflow_hidden()
                     .p_2()
+                    .drag_over::<SftpDragItem>(move |style, _, _, _| {
+                        style.bg(drop_bg).border_2().border_color(drop_border)
+                    })
+                    .on_drop(move |drag: &SftpDragItem, _window, cx| {
+                        let item = drag.clone();
+                        let dir = dir_drop.clone();
+                        app_drop.update(cx, |this, cx| {
+                            let Some(tab) = this.tabs.iter().find(|t| t.id == tab_id) else {
+                                return;
+                            };
+                            let Some(main_conn) = tab.connection_id else {
+                                return;
+                            };
+                            if item.source_connection_id == Some(main_conn) {
+                                return;
+                            }
+                            if let Some(src_conn) = item.source_connection_id {
+                                for path in &item.paths {
+                                    let fname = path.rsplit('/').next().unwrap_or(path);
+                                    let target_path =
+                                        format!("{}/{}", dir.trim_end_matches('/'), fname);
+                                    this.sftp_enqueue_remote_transfer(
+                                        tab_id,
+                                        SftpRemoteCopyParams {
+                                            source_connection_id: src_conn,
+                                            source_path: path.clone(),
+                                            target_connection_id: main_conn,
+                                            target_path,
+                                            is_dir: item.is_dir,
+                                        },
+                                        cx,
+                                    );
+                                }
+                            } else {
+                                for path_str in &item.paths {
+                                    let path_buf = std::path::PathBuf::from(path_str);
+                                    let fname = path_buf
+                                        .file_name()
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| "upload".into());
+                                    let target_path =
+                                        format!("{}/{}", dir.trim_end_matches('/'), fname);
+                                    this.sftp_enqueue_upload_path(
+                                        tab_id,
+                                        path_buf,
+                                        target_path,
+                                        cx,
+                                    );
+                                }
+                            }
+                        });
+                    })
                     .child(remote_content)
-                    .vertical_scrollbar(&remote_scroll_handle),
-            )
+                    .vertical_scrollbar(&remote_scroll_handle)
+            })
             .into_any_element();
 
         let queue_pane = self.render_sftp_queue_pane(
@@ -850,12 +959,34 @@ impl AppShell {
                 remote_error,
                 local_error,
                 status,
+                total_speed_bps,
             },
             p,
             cx,
         );
 
-        let header = self.render_sftp_panel_header(rust_i18n::t!("sftp.title").to_string(), p, cx);
+        let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
+        let header = self.render_sftp_panel_header(
+            rust_i18n::t!("sftp.title").to_string(),
+            Some(mount_btn),
+            p,
+            cx,
+        );
+
+        let mut multi_resizable =
+            h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
+        if local_collapsed {
+            multi_resizable = multi_resizable.child(
+                resizable_panel().child(self.render_sftp_local_collapsed_bar(tab_id, p, cx)),
+            );
+        } else {
+            multi_resizable = multi_resizable.child(resizable_panel().child(local_pane));
+        }
+        multi_resizable = multi_resizable.child(resizable_panel().child(remote_pane));
+        for side_index in 0..side_remotes_count {
+            let side_pane = self.render_sftp_side_remote_pane(tab_id, side_index, p, cx);
+            multi_resizable = multi_resizable.child(resizable_panel().child(side_pane));
+        }
 
         let mut panel_element = v_flex()
             .id(ElementId::Name("sftp-panel-container".into()))
@@ -864,6 +995,15 @@ impl AppShell {
             .on_action(cx.listener(Self::on_focus_sftp_filter))
             .on_action(cx.listener(Self::on_toggle_sftp_hidden))
             .on_action(cx.listener(Self::on_delete_sftp_selection))
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.modifiers.control || event.keystroke.modifiers.platform {
+                    if event.keystroke.key == "c" {
+                        this.sftp_copy_selection(tab_id, cx);
+                    } else if event.keystroke.key == "v" {
+                        this.sftp_paste_clipboard(tab_id, window, cx);
+                    }
+                }
+            }))
             .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
                 this.sftp_update_resize_queue(tab_id, event.position.y.into(), cx);
             }))
@@ -881,11 +1021,11 @@ impl AppShell {
             .border_color(p.sidebar_border)
             .child(header)
             .child(
-                div().flex_1().w_full().overflow_hidden().child(
-                    h_resizable(ElementId::Name(format!("sftp-dual-pane-{tab_id}").into()))
-                        .child(resizable_panel().child(local_pane))
-                        .child(resizable_panel().child(remote_pane)),
-                ),
+                div()
+                    .flex_1()
+                    .w_full()
+                    .overflow_hidden()
+                    .child(multi_resizable),
             )
             .child(queue_pane);
 

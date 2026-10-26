@@ -247,6 +247,116 @@ impl SftpClient {
             verified: verify,
         })
     }
+
+    /// 跨远端递归传输整棵目录树。
+    ///
+    /// # Errors
+    /// 排除规则非法、源端目录读取失败、目标端建目录或跨远端流式写入失败时返回 `ErrorCode::SftpFailed`。
+    pub async fn transfer_dir_to_remote<F>(
+        &self,
+        source_root: &str,
+        target_sftp: &SftpClient,
+        target_root: &str,
+        filter: &TransferFilter,
+        preserve_attributes: bool,
+        progress: F,
+    ) -> Result<TransferSummary, AppError>
+    where
+        F: FnMut(u64, Option<u64>) + Send + 'static,
+    {
+        let matcher = filter.matcher()?;
+        let scan = self.scan_remote_snapshot(source_root, &matcher).await?;
+        let total = scan.total_bytes();
+        let transferred = Arc::new(AtomicU64::new(0));
+        let progress: SharedProgress = Arc::new(std::sync::Mutex::new(Box::new(progress)));
+        notify_shared_progress(&progress, 0, Some(total));
+
+        target_sftp.create_dir_all(target_root).await?;
+        for layer in layered_directories(&scan.entries) {
+            let paths: Vec<String> = layer
+                .iter()
+                .map(|relative| join_remote_path(target_root, relative))
+                .collect();
+            let ensures: Vec<_> = paths
+                .iter()
+                .map(|path| target_sftp.ensure_dir(path))
+                .collect();
+            let results = stream::iter(ensures)
+                .buffer_unordered(DIR_MKDIR_CONCURRENCY)
+                .collect::<Vec<_>>()
+                .await;
+            for result in results {
+                result?;
+            }
+        }
+
+        let files = sorted_files(&scan.entries);
+        let mut tasks = Vec::with_capacity(files.len());
+        for file in files {
+            tasks.push(DirRemoteCopyTask {
+                source_client: self.clone(),
+                target_client: target_sftp.clone(),
+                source_path: join_remote_path(source_root, &file.relative_path),
+                target_path: join_remote_path(target_root, &file.relative_path),
+                preserve_attributes,
+                total,
+                transferred: transferred.clone(),
+                progress: progress.clone(),
+            });
+        }
+        stream::iter(tasks)
+            .map(|task| task.run_remote_copy())
+            .buffer_unordered(DIR_FILE_CONCURRENCY)
+            .try_collect::<Vec<()>>()
+            .await?;
+
+        Ok(TransferSummary {
+            transferred: transferred.load(Ordering::Relaxed),
+            skipped: scan.skipped,
+            verified: false,
+        })
+    }
+}
+
+/// 跨远端目录传输单个文件的并发任务上下文。
+struct DirRemoteCopyTask {
+    source_client: SftpClient,
+    target_client: SftpClient,
+    source_path: String,
+    target_path: String,
+    preserve_attributes: bool,
+    total: u64,
+    transferred: Arc<AtomicU64>,
+    progress: SharedProgress,
+}
+
+impl DirRemoteCopyTask {
+    async fn run_remote_copy(self) -> Result<(), AppError> {
+        let mut last_reported = 0u64;
+        let bytes = self
+            .source_client
+            .transfer_to_remote(
+                &self.source_path,
+                &self.target_client,
+                &self.target_path,
+                self.preserve_attributes,
+                |current, _| {
+                    let delta = current.saturating_sub(last_reported);
+                    last_reported = current;
+                    if delta > 0 {
+                        let done = self.transferred.fetch_add(delta, Ordering::Relaxed) + delta;
+                        notify_shared_progress(&self.progress, done, Some(self.total));
+                    }
+                },
+            )
+            .await?;
+        let tail = bytes.saturating_sub(last_reported);
+        if tail > 0 {
+            let done = self.transferred.fetch_add(tail, Ordering::Relaxed) + tail;
+            notify_shared_progress(&self.progress, done, Some(self.total));
+        }
+        Ok(())
+    }
 }
 
 /// 目录传输单个文件的并发任务上下文。

@@ -588,6 +588,20 @@ fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Opti
             items: task.sync_items.clone(),
             verify: task.verify,
         },
+        (_, TransferDirection::RemoteCopy) => {
+            let source_conn = task.source_connection_id?;
+            let target_conn = task.target_connection_id?;
+            let target_path = task.target_remote_path.clone()?;
+            SftpOperation::RemoteTransfer {
+                source_connection_id: source_conn,
+                source_path: task.remote_path.clone(),
+                target_connection_id: target_conn,
+                target_path,
+                is_dir: task.kind == TransferKind::Directory,
+                filter: filter.clone(),
+                preserve_attributes: task.preserve_attributes,
+            }
+        }
         _ => return None,
     };
     Some(op)

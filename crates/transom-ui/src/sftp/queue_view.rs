@@ -14,6 +14,34 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{TabId, TransferDirection, TransferKind, TransferStatus, TransferTask};
 
+pub(crate) fn format_speed(bytes_per_sec: u64) -> String {
+    if bytes_per_sec >= 1024 * 1024 * 1024 {
+        format!(
+            "{:.1} GB/s",
+            bytes_per_sec as f64 / (1024.0 * 1024.0 * 1024.0)
+        )
+    } else if bytes_per_sec >= 1024 * 1024 {
+        format!("{:.1} MB/s", bytes_per_sec as f64 / (1024.0 * 1024.0))
+    } else if bytes_per_sec >= 1024 {
+        format!("{:.1} KB/s", bytes_per_sec as f64 / 1024.0)
+    } else {
+        format!("{bytes_per_sec} B/s")
+    }
+}
+
+pub(crate) fn format_eta(secs: u64) -> String {
+    if secs >= 3600 {
+        let hours = secs / 3600;
+        let mins = (secs % 3600) / 60;
+        let s = secs % 60;
+        format!("剩余 {hours:02}:{mins:02}:{s:02}")
+    } else {
+        let mins = secs / 60;
+        let s = secs % 60;
+        format!("剩余 {mins:02}:{s:02}")
+    }
+}
+
 pub(crate) struct SftpStatusBarProps {
     pub(crate) tab_id: TabId,
     pub(crate) loading: bool,
@@ -27,6 +55,8 @@ pub(crate) struct SftpStatusBarProps {
     pub(crate) remote_error: Option<String>,
     pub(crate) local_error: Option<String>,
     pub(crate) status: Option<String>,
+    /// 实时总传输速率。
+    pub(crate) total_speed_bps: Option<u64>,
 }
 
 pub(crate) struct SftpQueuePaneProps<'a> {
@@ -70,6 +100,7 @@ impl AppShell {
                     TransferDirection::Upload => "↑ 上传",
                     TransferDirection::Download => "↓ 下载",
                     TransferDirection::Sync => "↕ 同步",
+                    TransferDirection::RemoteCopy => "⇋ 互传",
                 };
                 let status_str = match &task.status {
                     TransferStatus::Pending => rust_i18n::t!("sftp.pending").to_string(),
@@ -87,11 +118,28 @@ impl AppShell {
                     TransferStatus::Failed(err) => format!("失败: {err}"),
                     TransferStatus::Cancelled => "已取消".to_string(),
                 };
-                let file_name = task
-                    .local_path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| task.remote_path.clone());
+                let file_name = if task.direction == TransferDirection::RemoteCopy {
+                    if let Some(target) = &task.target_remote_path {
+                        let src_name = task
+                            .remote_path
+                            .rsplit('/')
+                            .next()
+                            .unwrap_or(&task.remote_path);
+                        let dst_name = target.rsplit('/').next().unwrap_or(target);
+                        if src_name == dst_name {
+                            src_name.to_string()
+                        } else {
+                            format!("{src_name} → {dst_name}")
+                        }
+                    } else {
+                        task.remote_path.clone()
+                    }
+                } else {
+                    task.local_path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| task.remote_path.clone())
+                };
 
                 let task_id = task.id;
                 let status_clone = task.status.clone();
@@ -231,6 +279,8 @@ impl AppShell {
                                     p.sidebar_accent_foreground
                                 } else if task.direction == TransferDirection::Download {
                                     p.success
+                                } else if task.direction == TransferDirection::RemoteCopy {
+                                    p.warning
                                 } else {
                                     p.sidebar_accent_foreground
                                 })
@@ -265,6 +315,16 @@ impl AppShell {
                             ),
                             None => format_size(task.transferred),
                         }))
+                        .when_some(task.speed_bps, |this, speed| {
+                            this.child(
+                                div()
+                                    .text_color(p.sidebar_accent_foreground)
+                                    .child(format_speed(speed)),
+                            )
+                        })
+                        .when_some(task.eta_secs, |this, eta| {
+                            this.child(div().text_color(p.muted_foreground).child(format_eta(eta)))
+                        })
                         .child(
                             div()
                                 .text_color(match &task.status {
@@ -502,13 +562,24 @@ impl AppShell {
             let progress_bar = Progress::new("sftp-transfer-progress").value(percent);
 
             if props.queue_expanded {
-                // 队列展开时行内已有完整状态与操作，底部只保留进度条
+                // 队列展开时底部保留进度条与总速率小字
                 return Some(
                     v_flex()
                         .px_3()
                         .py_1p5()
+                        .gap_1()
                         .bg(p.muted)
                         .child(progress_bar)
+                        .when_some(props.total_speed_bps, |this, speed| {
+                            this.child(
+                                h_flex()
+                                    .justify_between()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .child(format!("总传输速率: {}", format_speed(speed)))
+                                    .child(format!("{:.1}%", percent)),
+                            )
+                        })
                         .into_any_element(),
                 );
             }
@@ -522,8 +593,15 @@ impl AppShell {
                 ),
                 None => format_size(transferred),
             };
+            let speed_suffix = props
+                .total_speed_bps
+                .map(|s| format!(" · {}", format_speed(s)))
+                .unwrap_or_default();
             let progress_str = if props.active_count > 0 {
-                format!("{} 个任务传输中 · {progress_str}", props.active_count)
+                format!(
+                    "{} 个任务传输中{speed_suffix} · {progress_str}",
+                    props.active_count
+                )
             } else if props.paused_count > 0 {
                 format!("已暂停 {} 个任务 · {progress_str}", props.paused_count)
             } else {
