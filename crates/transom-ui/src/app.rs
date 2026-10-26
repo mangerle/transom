@@ -115,6 +115,8 @@ pub(crate) struct TerminalTab {
     pub(crate) reconnect_task: Option<Task<()>>,
     /// 活跃的 ZMODEM 传输展示快照；连接接入时清空，事件驱动更新。
     pub(crate) zmodem: Option<crate::zmodem::ZmodemState>,
+    /// 绑定的只读会话录像播放器视图（若当前为录像播放 Tab）。
+    pub(crate) player: Option<Entity<crate::cast_player::CastPlayerView>>,
 }
 
 impl TerminalTab {
@@ -125,6 +127,9 @@ impl TerminalTab {
     /// 会话名在表单里是必填项，因此兜底分支只对手工编辑的目录文件生效：
     /// SSH 用 `用户@主机`，Telnet 用 `主机:端口`，串口用设备名，本地终端用 shell 名。
     pub(crate) fn display_name(&self) -> String {
+        if self.player.is_some() {
+            return self.title.clone();
+        }
         let name = self.session.name.trim();
         if !name.is_empty() {
             return name.to_string();
@@ -163,6 +168,7 @@ impl TerminalTab {
             reconnect_attempts: 0,
             reconnect_task: None,
             zmodem: None,
+            player: None,
         }
     }
 }
@@ -408,6 +414,8 @@ pub struct AppShell {
     pub(crate) form: Option<SessionForm>,
     pub(crate) folder_form: Option<FolderForm>,
     pub(crate) audit_viewer: Option<crate::audit_viewer::AuditViewer>,
+    /// 交互脚本回放弹窗状态。
+    pub(crate) replay_modal: Option<crate::record_view::ReplayModalState>,
     /// 认证阶段由 net 层发起的凭据询问；连接前不再拦截。
     pub(crate) auth_prompt: Option<AuthPromptState>,
     /// TOFU 首连主机指纹确认弹窗；同一时刻最多一个在等用户作答。
@@ -727,6 +735,7 @@ impl AppShell {
             form: None,
             folder_form: None,
             audit_viewer: None,
+            replay_modal: None,
             auth_prompt: None,
             host_key_confirm: None,
             pending_credential: None,
@@ -1010,6 +1019,9 @@ impl AppShell {
         }
         if self.audit_viewer.is_some() {
             overlays.push(self.render_audit_viewer(window, cx, &p));
+        }
+        if self.replay_modal.is_some() {
+            overlays.push(self.render_replay_modal(window, cx, &p));
         }
         if self.folder_form.is_some() {
             overlays.push(self.render_folder_form(window, cx, &p));

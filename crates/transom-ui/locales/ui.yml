@@ -2229,3 +2229,92 @@ audit_viewer:
   close:
     en: Close
     zh-CN: 关闭
+recorder:
+  toggle_recording:
+    en: Record Session / Stop
+    zh-CN: 录制会话 / 停止
+  replay_menu:
+    en: Replay Interactive Script...
+    zh-CN: 回放交互脚本...
+  start_btn:
+    en: Start Recording Session
+    zh-CN: 开始录制会话
+  stop_btn:
+    en: Stop Recording
+    zh-CN: 停止录制
+  recording:
+    en: REC
+    zh-CN: 录制中
+  started_notice:
+    en: Started recording interactive session (.cast)
+    zh-CN: 已开始录制当前终端交互序列 (.cast)
+  saved_notice:
+    en: "Recording saved: %{name}"
+    zh-CN: "会话录制已保存: %{name}"
+  start_failed:
+    en: Failed to start session recording
+    zh-CN: 启动会话录制失败
+  pick_replay_file:
+    en: Select asciinema recording (.cast)
+    zh-CN: 选择 asciinema 交互录制文件 (.cast)
+  parse_failed:
+    en: Failed to parse recording file
+    zh-CN: 解析交互录制文件失败
+  no_inputs_in_cast:
+    en: No user inputs found in recording
+    zh-CN: 该录制脚本中未找到任何可回放的按键输入
+  replaying_start:
+    en: "Replaying '%{title}' (%{count} steps)..."
+    zh-CN: "正在回放脚本 '%{title}'（共 %{count} 步输入）..."
+  replay_completed:
+    en: Script replay completed
+    zh-CN: 交互脚本回放已完成
+  replay_title:
+    en: Interactive Script Replay
+    zh-CN: 交互脚本自动化回放
+  format_notice:
+    en: Standard asciinema v2 format (.cast), safely stored in config/transom/recordings
+    zh-CN: 标准 asciinema v2 格式 (.cast)，保存在 config/transom/recordings，可在任意终端工具中跨平台使用
+  no_recordings:
+    en: No recordings yet
+    zh-CN: 暂无本地录制脚本
+  no_recordings_hint:
+    en: Click the record button in the status bar or tab menu to record interactive sessions.
+    zh-CN: 点击状态栏红点录制按钮或标签右键菜单即可随时录制交互过程。
+  dialog_hint:
+    en: Select a recorded script to execute inputs on the active terminal.
+    zh-CN: 选择已有录制脚本可一键在当前终端中按时间序自动化执行输入。
+  pick_external:
+    en: Pick External .cast File...
+    zh-CN: 选择外部 .cast 文件...
+  start_replay:
+    en: Start Replay
+    zh-CN: 开始回放执行
+  open_player:
+    en: Open in Player
+    zh-CN: 在播放器中打开
+  player_tab_title:
+    en: "Replay: %{name}"
+    zh-CN: "会话回放: %{name}"
+  play:
+    en: Play
+    zh-CN: 播放
+  pause:
+    en: Pause
+    zh-CN: 暂停
+  restart:
+    en: Replay
+    zh-CN: 重新播放
+  forward_5s:
+    en: Forward 5s
+    zh-CN: 快进 5 秒
+  backward_5s:
+    en: Rewind 5s
+    zh-CN: 快退 5 秒
+  speed:
+    en: Speed
+    zh-CN: 播放倍速
+  double_click_play_hint:
+    en: Double click to play in dedicated player tab
+    zh-CN: 双击条目可直接在独立标签页中只读播放
+

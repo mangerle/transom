@@ -103,6 +103,11 @@ pub fn audit_dir() -> PathBuf {
     config_dir().join("audit")
 }
 
+/// 会话交互脚本录制目录（.cast 文件保存目录）。
+pub fn recordings_dir() -> PathBuf {
+    config_dir().join("recordings")
+}
+
 /// 应用运行日志目录。
 ///
 /// 为什么与审计目录分开：审计落的是远端屏幕原始字节（含口令回显，默认关闭、

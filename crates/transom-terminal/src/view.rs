@@ -3,9 +3,10 @@ use crate::engine::TerminalEngine;
 use crate::event::{HistoryProvider, TerminalEvent};
 use crate::input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
 use crate::osc::{CommandTracker, OscEvent};
+use crate::record::RecorderHandle;
 use crate::renderer::{PaintRequest, TerminalRenderer};
 use alacritty_terminal::event::{Event, WindowSize};
-use alacritty_terminal::grid::Scroll;
+use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint, Side};
 use alacritty_terminal::selection::SelectionType;
 use alacritty_terminal::term::TermMode;
@@ -98,6 +99,7 @@ pub struct TerminalView {
     _reader_task: Task<()>,
     _blink_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
+    recorder: RecorderHandle,
 }
 
 impl TerminalView {
@@ -126,6 +128,8 @@ impl TerminalView {
         )));
         let metrics = Arc::new(Mutex::new(LayoutMetrics::default()));
 
+        let recorder = RecorderHandle::new();
+        let recorder_for_reader = recorder.clone();
         let (bytes_tx, bytes_rx) = flume::bounded::<Vec<u8>>(128);
         let mut reader = io.reader;
         // 线程 spawn 失败属资源耗尽类可恢复异常：不 panic 整个应用，按"终端已
@@ -141,10 +145,12 @@ impl TerminalView {
                     match reader.read(&mut buffer) {
                         Ok(0) => break,
                         Ok(count) => {
+                            let slice = &buffer[..count];
                             if let Some(audit) = audit.as_mut() {
-                                audit.record(&buffer[..count]);
+                                audit.record(slice);
                             }
-                            if bytes_tx.send(buffer[..count].to_vec()).is_err() {
+                            recorder_for_reader.record_output(slice);
+                            if bytes_tx.send(slice.to_vec()).is_err() {
                                 break;
                             }
                         }
@@ -275,6 +281,7 @@ impl TerminalView {
             _reader_task: reader_task,
             _blink_task: blink_task,
             _focus_subscriptions: vec![on_focus, on_blur],
+            recorder,
         }
     }
 
@@ -330,6 +337,7 @@ impl TerminalView {
         }
         // 输入瞬间强制点亮光标，避免用户打字时恰好处于熄灭相位。
         self.cursor_blink_on = true;
+        self.recorder.record_input(bytes);
         match self.input_tx.try_send(bytes.to_vec()) {
             Ok(()) => true,
             // 256 深度对人速按键与整批粘贴绰绰有余，打满只可能是写入线程
@@ -340,6 +348,34 @@ impl TerminalView {
             }
             Err(flume::TrySendError::Disconnected(_)) => false,
         }
+    }
+
+    /// 获取录制器句柄。
+    pub fn recorder(&self) -> &RecorderHandle {
+        &self.recorder
+    }
+
+    /// 查询当前窗格是否正在录制。
+    pub fn is_recording(&self) -> bool {
+        self.recorder.is_recording()
+    }
+
+    /// 开始录制当前终端会话到 `.cast` 文件。
+    pub fn start_recording(
+        &mut self,
+        path: std::path::PathBuf,
+        title: Option<String>,
+    ) -> std::io::Result<()> {
+        let term = self.engine.lock();
+        let cols = term.term().grid().columns();
+        let rows = term.term().grid().screen_lines();
+        drop(term);
+        self.recorder.start(path, cols as u16, rows as u16, title)
+    }
+
+    /// 停止录制并返回文件路径。
+    pub fn stop_recording(&mut self) -> Option<std::path::PathBuf> {
+        self.recorder.stop()
     }
 
     /// 将程序化文本写入终端输入通道。

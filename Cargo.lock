@@ -8199,6 +8199,8 @@ dependencies = [
  "log",
  "parking_lot",
  "portable-pty",
+ "serde",
+ "serde_json",
  "transom-core",
 ]
 

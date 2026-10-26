@@ -122,11 +122,19 @@ impl AppShell {
             } else {
                 dot_color
             };
-            let tab_icon = connection_icon(&tab.session.connection);
+            let tab_icon = if tab.player.is_some() {
+                IconName::Disc
+            } else {
+                connection_icon(&tab.session.connection)
+            };
             // 会话专属图标与环境色：图标可覆盖连接类型图标，环境色在标签左侧
             // 留一条竖杠，一眼能看出这是哪台机器。
             let appearance = self.session_appearance(tab);
-            let tab_icon = appearance.icon.unwrap_or(tab_icon);
+            let tab_icon = if tab.player.is_some() {
+                IconName::Disc
+            } else {
+                appearance.icon.unwrap_or(tab_icon)
+            };
             let session_color = appearance.color;
             let mut tab_element = h_flex()
                 .id(ElementId::Name(format!("tab-{group_id}").into()))
@@ -258,6 +266,34 @@ impl AppShell {
                                     move |_, window, cx| {
                                         app.update(cx, |this, cx| {
                                             this.open_audit_viewer_for_tab(active_pane, window, cx);
+                                        });
+                                    }
+                                }),
+                            )
+                            .item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!("recorder.toggle_recording").to_string(),
+                                )
+                                .icon(IconName::Disc)
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, window, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.toggle_recording(active_pane, window, cx);
+                                        });
+                                    }
+                                }),
+                            )
+                            .item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!("recorder.replay_menu").to_string(),
+                                )
+                                .icon(IconName::Play)
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, window, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.open_replay_modal(active_pane, window, cx);
                                         });
                                     }
                                 }),
