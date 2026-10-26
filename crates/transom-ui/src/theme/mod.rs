@@ -116,6 +116,11 @@ fn effective_mode(mode: UiThemeMode, cx: &App) -> ThemeMode {
 pub(crate) fn apply_appearance(appearance: &AppearanceSettings, cx: &mut App) {
     let resolved = ResolvedThemes::resolve(appearance, cx);
     let density = appearance.density;
+    // 窗口整体透明在主题层生效：主题是所有组件（含 gpui-kit 组件）取色的唯一
+    // 来源，在这里折算表面色 alpha，自绘界面与第三方组件才会一起变透明。
+    let surface_alpha = crate::window_appearance::window_appearance(cx)
+        .map(|appearance| appearance.surface_alpha)
+        .unwrap_or(1.0);
     Theme::update(cx, |theme| {
         theme.apply_config(&resolved.active);
         theme.light_theme = resolved.light;
@@ -127,7 +132,136 @@ pub(crate) fn apply_appearance(appearance: &AppearanceSettings, cx: &mut App) {
         if let Some(family) = appearance.ui_font_family.as_deref() {
             theme.font_family = family.into();
         }
+        apply_surface_transparency(theme, surface_alpha);
     });
+}
+
+/// 按窗口透明度折算主题里的表面色 alpha。
+///
+/// 只折算表面（背景、描边、悬停底色等），文字与强调前景色保持不透明：窗口
+/// 变透明后文字若也跟着半透明，叠在桌面壁纸与彩色内容上就读不清了。
+///
+/// 折算必须落在主题里而不是各个界面里：gpui-kit 的按钮、输入框、菜单、设置页
+/// 都直接读全局主题色，只改自绘界面的调色板会出现"设置页右半边透明、按钮不透明"
+/// 的割裂。
+fn apply_surface_transparency(theme: &mut Theme, factor: f32) {
+    if factor >= 1.0 {
+        return;
+    }
+    let colors = &mut theme.colors;
+    macro_rules! fade {
+        ($($field:ident),+ $(,)?) => {
+            $(
+                colors.$field = colors.$field.alpha(colors.$field.a * factor);
+            )+
+        };
+    }
+    fade!(
+        accent,
+        accordion,
+        background,
+        border,
+        button,
+        button_active,
+        button_hover,
+        button_danger,
+        button_danger_active,
+        button_danger_hover,
+        button_info,
+        button_info_active,
+        button_info_hover,
+        button_primary,
+        button_primary_active,
+        button_primary_hover,
+        button_secondary,
+        button_secondary_active,
+        button_secondary_hover,
+        button_success,
+        button_success_active,
+        button_success_hover,
+        button_warning,
+        button_warning_active,
+        button_warning_hover,
+        group_box,
+        caret,
+        danger,
+        danger_active,
+        danger_hover,
+        description_list_label,
+        drag_border,
+        drop_target,
+        info,
+        info_active,
+        info_hover,
+        input,
+        link,
+        link_active,
+        link_hover,
+        list,
+        list_active,
+        list_active_border,
+        list_even,
+        list_head,
+        list_hover,
+        muted,
+        popover,
+        primary,
+        primary_active,
+        primary_hover,
+        progress_bar,
+        ring,
+        scrollbar,
+        scrollbar_thumb,
+        scrollbar_thumb_hover,
+        secondary,
+        secondary_active,
+        secondary_hover,
+        selection,
+        sidebar,
+        sidebar_accent,
+        sidebar_border,
+        sidebar_primary,
+        skeleton,
+        slider_bar,
+        slider_thumb,
+        success,
+        success_hover,
+        success_active,
+        switch,
+        switch_thumb,
+        tab,
+        tab_active,
+        tab_bar,
+        tab_bar_segmented,
+        table,
+        table_active,
+        table_active_border,
+        table_even,
+        table_head,
+        table_foot,
+        table_hover,
+        table_row_border,
+        title_bar,
+        title_bar_border,
+        status_bar,
+        status_bar_border,
+        warning,
+        warning_active,
+        warning_hover,
+        overlay,
+        window_border,
+    );
+}
+
+/// 主题被外部路径换装后（用户目录热重载、系统明暗切换）重新套用窗口外观。
+///
+/// 换装会把主题色恢复成配置里的不透明值，不补一次折算，窗口就会突然变实色。
+pub(crate) fn refresh_window_appearance(cx: &mut App) {
+    let Some(appearance) = crate::window_appearance::window_appearance(cx) else {
+        return;
+    };
+    let factor = appearance.surface_alpha;
+    Theme::update(cx, |theme| apply_surface_transparency(theme, factor));
 }
 
 /// 启动时在内存中注册全部内置主题（出厂深色 + JetBrains Islands 主题对）。
@@ -297,6 +431,8 @@ pub(crate) fn watch_user_dir(cx: &mut App) {
         // 新增主题仍需用户在设置页选择后才生效。伴生终端调色板一并重建
         // （仅启动与本次回调；后续文件变动需重启刷新绑定，见绑定表文档）。
         rebuild_terminal_bindings(cx);
+        // 换装后的主题色是不透明的，窗口透明度要补一次折算。
+        refresh_window_appearance(cx);
         log::info!("用户主题目录已重载");
     }) {
         log::warn!("监听用户主题目录失败，自定义主题不可用，原因: {error}");
@@ -308,6 +444,8 @@ pub(crate) fn watch_user_dir(cx: &mut App) {
 /// gpui-kit issue #104，`sync_system_appearance` 的文档注释同此结论）。
 pub(crate) fn sync_with_system(window: &mut Window, cx: &mut App) {
     Theme::sync_system_appearance(Some(window), cx);
+    // 明暗切换换掉了整套主题色，窗口透明度要补一次折算。
+    refresh_window_appearance(cx);
 }
 
 #[cfg(test)]

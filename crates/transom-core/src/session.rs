@@ -1,6 +1,7 @@
 use crate::forward::ForwardRule;
 use crate::ids::{FolderId, SessionId};
 use crate::secrets::SecretKind;
+use crate::session_appearance::{SessionColor, SessionIcon};
 use crate::terminal::TerminalProfile;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -26,6 +27,14 @@ pub struct Session {
     /// 行为与从前完全一致。
     #[serde(default)]
     pub identity_id: Option<crate::ids::IdentityId>,
+    /// 会话专属图标；`Auto` 表示按连接类型自动取图标。
+    ///
+    /// 老会话文件没有该字段就是"跟随连接类型"，标签栏与侧栏的图标与从前一致。
+    #[serde(default)]
+    pub icon: SessionIcon,
+    /// 会话环境色；`None` 表示不染色。
+    #[serde(default)]
+    pub color: SessionColor,
 }
 
 impl Session {
@@ -39,6 +48,8 @@ impl Session {
             forwards: Vec::new(),
             startup: StartupCommands::default(),
             identity_id: None,
+            icon: SessionIcon::default(),
+            color: SessionColor::default(),
         }
     }
 

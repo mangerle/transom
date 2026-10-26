@@ -3,8 +3,8 @@ use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
     AuthMethod, Connection, IdentityId, SerialConnection, SerialDataBits, SerialFlowControl,
-    SerialParity, SerialPortDescriptor, SerialStopBits, Session, SshConnection, StartupCommands,
-    TelnetConnection, TerminalProfile, TextEncoding,
+    SerialParity, SerialPortDescriptor, SerialStopBits, Session, SessionColor, SessionIcon,
+    SshConnection, StartupCommands, TelnetConnection, TerminalProfile, TextEncoding,
 };
 use zeroize::Zeroizing;
 
@@ -62,6 +62,10 @@ pub(crate) struct SessionForm {
     pub identities: Vec<IdentityOption>,
     /// 当前选用的凭据模板；`None` 表示用本会话自己的用户名与认证方式。
     pub identity_choice: Option<IdentityId>,
+    /// 会话专属图标；`Auto` 表示按连接类型自动取图标。
+    pub icon: SessionIcon,
+    /// 会话环境色；`None` 表示不染色。
+    pub color: SessionColor,
     pub confirm_delete: bool,
     pub error: Option<String>,
 }
@@ -293,6 +297,14 @@ impl SessionForm {
             .unwrap_or_else(default_username);
         // Self 字面量会移走 base，需要读的字段先取出来。
         let identity_choice = base.as_ref().and_then(|session| session.identity_id);
+        let icon = base
+            .as_ref()
+            .map(|session| session.icon)
+            .unwrap_or_default();
+        let color = base
+            .as_ref()
+            .map(|session| session.color)
+            .unwrap_or_default();
         let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
             || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
         // 只有 SSH 会话有 MAC 字段（见 HostAction::wake_for），回填同口径。
@@ -362,6 +374,8 @@ impl SessionForm {
             ),
             identities,
             identity_choice,
+            icon,
+            color,
             confirm_delete: false,
             error: None,
         }
@@ -406,6 +420,8 @@ impl SessionForm {
             ConnectionChoice::Ssh => self.identity_choice,
             _ => None,
         };
+        session.icon = self.icon;
+        session.color = self.color;
         if self.base.is_none() {
             session.terminal = TerminalProfile::default();
         }

@@ -72,6 +72,15 @@ pub struct WindowSettings {
     /// 是否记忆窗口大小与位置
     #[serde(default = "default_true")]
     pub remember_window_bounds: bool,
+    /// 窗口背景模式：不透明、半透明（透出桌面）或毛玻璃（系统模糊）。
+    #[serde(default)]
+    pub window_background: WindowBackgroundMode,
+    /// 窗口背景透明度（百分比）：0 为完全不透明，100 为完全透明。
+    ///
+    /// 作用在应用自身的表面色与终端背景上；透出桌面还需要窗口背景模式为
+    /// 半透明或毛玻璃，否则窗口底色仍是不透明的。
+    #[serde(default)]
+    pub window_transparency: u8,
     /// 启动时标签区开什么。取代早期的 `restore_previous_tabs` 布尔（已废弃：文件里
     /// 残留该键会被忽略，下次保存自然消失）。
     #[serde(default)]
@@ -259,6 +268,21 @@ pub enum SavedLayout {
     },
 }
 
+/// 窗口背景模式。
+///
+/// 对应窗口管理器层面的背景处理：半透明让桌面内容透进窗口，毛玻璃由系统
+/// 对窗口后方的内容做模糊（平台不一定支持，退化成半透明）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum WindowBackgroundMode {
+    /// 完全不透明：窗口由窗口管理器绘制实心底色。
+    #[default]
+    Opaque,
+    /// 半透明：透出桌面内容。
+    Transparent,
+    /// 毛玻璃：系统模糊窗口后方的内容。
+    Blurred,
+}
+
 /// 窗口恢复时重建的一个标签组。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SavedTabGroup {
@@ -307,6 +331,8 @@ impl Default for WindowSettings {
             window_x: None,
             window_y: None,
             remember_window_bounds: true,
+            window_background: WindowBackgroundMode::default(),
+            window_transparency: 0,
             startup_tabs: StartupTabs::default(),
             sidebar_startup: SidebarStartup::default(),
             last_sidebar_visible: true,

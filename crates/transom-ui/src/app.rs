@@ -19,6 +19,7 @@ use crate::tiling::TiledTabs;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{EditorState, InputEvent, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::component::slider::{SliderEvent, SliderState, SliderValue};
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -27,7 +28,7 @@ use transom_core::{
     AppCommand, AppError, AppSettings, AppearanceSettings, Connection, ConnectionId, FolderId,
     ForwardId, ForwardStatus, GroupId, HostKeyRecord, NetworkTraffic, PanelSide, PromptInfo,
     SecretKind, Session, SessionCatalog, SessionId, SplitId, StartupTabs, SystemStats, TabId,
-    UiThemeMode,
+    UiThemeMode, WindowBackgroundMode,
 };
 use transom_terminal::TerminalView;
 use zeroize::Zeroizing;
@@ -288,6 +289,13 @@ pub(crate) struct KnownHostsModalState {
     pub(crate) search: Entity<InputState>,
 }
 
+/// 窗口外观的快照：取消设置时按它回滚。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WindowAppearanceSnapshot {
+    pub(crate) transparency: u8,
+    pub(crate) background: WindowBackgroundMode,
+}
+
 /// 设置弹窗的聚合状态：开关、密钥向导与全部输入框实体。
 pub(crate) struct SettingsModalState {
     pub(crate) open: bool,
@@ -307,6 +315,10 @@ pub(crate) struct SettingsModalState {
     pub(crate) word_separators: Entity<InputState>,
     pub(crate) notify_threshold: Entity<InputState>,
     pub(crate) highlight_keywords: Entity<InputState>,
+    /// 窗口整体透明度滑块（百分比）。
+    pub(crate) window_transparency: Entity<SliderState>,
+    /// 打开弹窗瞬间的窗口外观取值；取消时按它回滚即时预览。
+    pub(crate) window_appearance_snapshot: Option<WindowAppearanceSnapshot>,
     /// 打开弹窗瞬间的外观偏好快照。
     ///
     /// 界面主题与密度在弹窗内即时预览（改一档立刻全局生效），取消时凭它恢复，
@@ -451,6 +463,8 @@ pub struct AppShell {
     pub(crate) _sync_pull_task: Option<Task<()>>,
     /// 系统明暗变化订阅；随 AppShell 存活，drop 即退订。
     pub(crate) _appearance_subscription: Subscription,
+    /// 终端外观滑块的订阅句柄；随 AppShell 存活，drop 即退订。
+    pub(crate) _terminal_appearance_subscriptions: Vec<Subscription>,
     pub(crate) _event_task: Task<()>,
 }
 
@@ -658,6 +672,35 @@ impl AppShell {
                 .placeholder("10000")
                 .default_value(&scrollback_val)
         });
+        // 窗口整体透明度是连续量：滑块比输入框直观，拖动时还能即时预览。
+        let settings_window_transparency = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(100.0)
+                .step(1.0)
+                .default_value(f32::from(settings.window.window_transparency))
+        });
+        // 订阅要带窗口：窗口背景处理作用在窗口本身，
+        // 只改主题色不会让切角与桌面透出真正生效。
+        let window_transparency_sub = cx.subscribe_in(
+            &settings_window_transparency,
+            window,
+            |this, _, event: &SliderEvent, window, cx| {
+                match event {
+                    SliderEvent::Change(SliderValue::Single(value)) => {
+                        this.set_window_transparency(value.round() as u8, window, cx);
+                    }
+                    // 松手时把外观下发到已打开的窗格：终端背景透明度要重建渲染器，
+                    // 拖动过程中逐帧重建会明显卡顿。
+                    SliderEvent::Release(SliderValue::Single(value)) => {
+                        this.set_window_transparency(value.round() as u8, window, cx);
+                        this.push_window_appearance(cx);
+                    }
+                    _ => {}
+                }
+            },
+        );
+        let terminal_appearance_subscriptions = vec![window_transparency_sub];
         // 云同步表单：端点字段回填设置值，凭据掩码框恒为空。
         let sync_form = SyncFormInputs::new(window, cx);
 
@@ -707,6 +750,8 @@ impl AppShell {
                 word_separators: settings_word_separators,
                 notify_threshold: settings_notify_threshold,
                 highlight_keywords: settings_highlight_keywords,
+                window_transparency: settings_window_transparency,
+                window_appearance_snapshot: None,
                 appearance_snapshot: None,
                 identity_edit: None,
                 sync_form,
@@ -753,6 +798,7 @@ impl AppShell {
             _backup_task: None,
             _sync_pull_task: None,
             _appearance_subscription: appearance_subscription,
+            _terminal_appearance_subscriptions: terminal_appearance_subscriptions,
             _event_task: event_task,
         };
 

@@ -123,6 +123,11 @@ impl AppShell {
                 dot_color
             };
             let tab_icon = connection_icon(&tab.session.connection);
+            // 会话专属图标与环境色：图标可覆盖连接类型图标，环境色在标签左侧
+            // 留一条竖杠，一眼能看出这是哪台机器。
+            let appearance = self.session_appearance(tab);
+            let tab_icon = appearance.icon.unwrap_or(tab_icon);
+            let session_color = appearance.color;
             let mut tab_element = h_flex()
                 .id(ElementId::Name(format!("tab-{group_id}").into()))
                 .relative()
@@ -492,7 +497,21 @@ impl AppShell {
                                 }),
                             )
                     }
-                })
+                });
+            if let Some(color) = session_color {
+                // 环境色竖杠贴在标签左缘：绝对定位，不占标签宽度，
+                // 换色时标题与状态点都不会位移。
+                element = element.child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(3.0))
+                        .bg(color),
+                );
+            }
+            element = element
                 .child(div().size(px(8.0)).rounded_full().flex_none().bg(dot_color))
                 .child(Icon::new(tab_icon).flex_none().text_color(if active {
                     p.tab_active_foreground

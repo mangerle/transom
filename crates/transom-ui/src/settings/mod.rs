@@ -10,18 +10,23 @@ mod shortcuts_page;
 mod startup_page;
 mod sync_page;
 
-use crate::app::AppShell;
+use crate::app::{AppShell, WindowAppearanceSnapshot};
 use crate::palette::{Palette, localized_error};
+use crate::window_appearance::DEFAULT_WINDOW_TRANSPARENCY;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
+use gpui_kit::component::slider::{Slider, SliderState, SliderValue};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{AppearanceSettings, FOLLOW_UI_THEME, TerminalCursorShape, TerminalHighlight};
+use transom_core::{
+    AppearanceSettings, FOLLOW_UI_THEME, TerminalCursorShape, TerminalHighlight,
+    WindowBackgroundMode,
+};
 use transom_terminal::TerminalView;
 
 /// 路径型设置值的显示上限（rem，标准档 16px 基准）：够看清目录层级，又不会把
@@ -33,6 +38,17 @@ fn read_font_family(input: &Entity<InputState>, cx: &App) -> Option<String> {
     let value = input.read(cx).value();
     let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// 滑块取值折算成百分比整数。
+///
+/// 区间滑块返回的是范围，这里只用单值档；出现范围时退回 0，避免把区间下界
+/// 当成百分比显示。
+fn slider_percent(value: &SliderValue) -> u8 {
+    match value {
+        SliderValue::Single(value) => value.round().clamp(0.0, 100.0) as u8,
+        SliderValue::Range(_, _) => 0,
+    }
 }
 
 impl AppShell {
@@ -145,6 +161,21 @@ impl AppShell {
         self.settings_modal.line_height.update(cx, |input, cx| {
             input.set_value(&line_height, window, cx);
         });
+        // 旧配置里可能存着"不透明"档：窗口背景现在只有透明与毛玻璃两档，
+        // 直接按透明处理，界面上也不会出现两个按钮都没选中的状态。
+        if self.settings.window.window_background == WindowBackgroundMode::Opaque {
+            self.settings.window.window_background = WindowBackgroundMode::Transparent;
+        }
+        // 滑块初值跟随当前配置：配置可能在本弹窗之外被改过。
+        let transparency = f32::from(self.settings.window.window_transparency);
+        self.settings_modal
+            .window_transparency
+            .update(cx, |state, cx| state.set_value(transparency, window, cx));
+        // 取消时按这份快照回滚外观预览。
+        self.settings_modal.window_appearance_snapshot = Some(WindowAppearanceSnapshot {
+            transparency: self.settings.window.window_transparency,
+            background: self.settings.window.window_background,
+        });
         self.settings_modal.word_separators.update(cx, |input, cx| {
             input.set_value(
                 self.settings.terminal_profile.word_separators.clone(),
@@ -208,10 +239,17 @@ impl AppShell {
     /// 为什么只有外观回滚：它引入了"未保存也生效"的即时预览，取消语义必须
     /// 成对闭环，否则点取消会留下改了一半的界面；其余设置项维持既有的内存态
     /// 修改保留、等待下次保存覆盖的行为。
-    pub(crate) fn cancel_settings(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn cancel_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(snapshot) = self.settings_modal.appearance_snapshot.take() {
             self.settings.appearance = snapshot;
             crate::theme::apply_appearance(&self.settings.appearance, cx);
+        }
+        // 滑块是即时预览：取消要把窗口外观改回打开弹窗时的值。
+        if let Some(snapshot) = self.settings_modal.window_appearance_snapshot.take() {
+            self.settings.window.window_transparency = snapshot.transparency;
+            self.settings.window.window_background = snapshot.background;
+            self.refresh_window_appearance(window, cx);
+            self.apply_appearance_to_live_panes(cx);
         }
         self.settings_modal.open = false;
         cx.notify();
@@ -315,6 +353,8 @@ impl AppShell {
             self.settings.terminal_profile.scrollback = scrollback;
         }
         self.sync_terminal_palette(cx);
+        // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
+        self.settings_modal.window_appearance_snapshot = None;
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             log::error!("保存偏好设置失败，界面仍是新值但下次启动会回退，原因: {error}");
             self.error = Some(localized_error(&error));
@@ -337,8 +377,11 @@ impl AppShell {
     /// 不做这件事的话，改完字体要重开标签才见效，等于"设置了但没反应"。
     /// 会话本身也带 profile，但当前没有任何界面在会话级别改字体，因此以全局偏好为准；
     /// 将来开放会话级字体时，这里必须改成只补空白、不覆盖会话选择。
-    fn apply_appearance_to_live_panes(&self, cx: &mut Context<Self>) {
-        let profile = self.settings.terminal_profile.clone();
+    pub(crate) fn apply_appearance_to_live_panes(&self, cx: &mut Context<Self>) {
+        let mut profile = self.settings.terminal_profile.clone();
+        // 终端背景随窗口整体透明：窗口半透明时，终端区要透出桌面，
+        // 否则只有侧栏与标签栏变透明，终端仍是一块实色。
+        profile.background_transparency = self.settings.window.window_transparency;
         // 先收集实体再逐个更新：遍历 self.tabs 与逐条 update 会同时借用 self。
         let terminals: Vec<Entity<TerminalView>> = self
             .tabs
@@ -348,6 +391,129 @@ impl AppShell {
         for terminal in terminals {
             terminal.update(cx, |view, cx| view.apply_appearance(&profile, cx));
         }
+    }
+
+    /// 窗口整体透明度变化：写进设置并刷新整窗外观。
+    pub(crate) fn set_window_transparency(
+        &mut self,
+        percent: u8,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let percent = percent.min(100);
+        if self.settings.window.window_transparency == percent {
+            return;
+        }
+        self.settings.window.window_transparency = percent;
+        self.refresh_window_appearance(window, cx);
+    }
+
+    /// 窗口背景模式变化：切到半透明或毛玻璃时若透明度仍是 0，给一个看得出来的
+    /// 初值，否则用户只看到模式变了、界面没变。
+    pub(crate) fn set_window_background_mode(
+        &mut self,
+        mode: WindowBackgroundMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings.window.window_background == mode {
+            return;
+        }
+        self.settings.window.window_background = mode;
+        if mode != WindowBackgroundMode::Opaque && self.settings.window.window_transparency == 0 {
+            self.settings.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY;
+            let value = f32::from(DEFAULT_WINDOW_TRANSPARENCY);
+            self.settings_modal
+                .window_transparency
+                .update(cx, |state, cx| {
+                    state.set_value(value, window, cx);
+                });
+        }
+        self.refresh_window_appearance(window, cx);
+    }
+
+    /// 把窗口外观下发到已打开的窗格：终端背景随窗口整体透明。
+    pub(crate) fn push_window_appearance(&self, cx: &mut Context<Self>) {
+        self.apply_appearance_to_live_panes(cx);
+    }
+
+    /// 窗口外观变化后的统一落地：全局外观值、主题重算与窗口背景处理。
+    ///
+    /// 主题必须整体重算而不是只改自绘界面的调色板：gpui-kit 的按钮、输入框、
+    /// 菜单与设置页都直接读全局主题色，只改一半会出现"设置页右半边透明、
+    /// 按钮不透明"的割裂。重算从配置重新应用，因此不会重复折算 alpha。
+    fn refresh_window_appearance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::window_appearance::apply_window_appearance(&self.settings.window, cx);
+        crate::theme::apply_appearance(&self.settings.appearance, cx);
+        window.set_background_appearance(crate::window_appearance::background_appearance(
+            &self.settings.window,
+        ));
+        cx.notify();
+    }
+
+    /// 窗口外观组：背景模式与整体透明度。
+    pub(crate) fn render_settings_window_appearance(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mode = self.settings.window.window_background;
+        let transparency =
+            slider_percent(&self.settings_modal.window_transparency.read(cx).value());
+        let mode_buttons = h_flex()
+            .gap_1()
+            .children(
+                [
+                    (
+                        "window-bg-transparent",
+                        "settings.window_bg_transparent",
+                        WindowBackgroundMode::Transparent,
+                    ),
+                    (
+                        "window-bg-blurred",
+                        "settings.window_bg_blurred",
+                        WindowBackgroundMode::Blurred,
+                    ),
+                ]
+                .into_iter()
+                .map(|(id, key, choice)| {
+                    Button::new(id)
+                        .small()
+                        .label(rust_i18n::t!(key).to_string())
+                        .selected(mode == choice)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.set_window_background_mode(choice, window, cx);
+                        }))
+                        .into_any_element()
+                }),
+            )
+            .into_any_element();
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.window_background",
+                Some("settings.window_background_desc"),
+                mode_buttons,
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.window_transparency",
+                Some("settings.window_transparency_desc"),
+                Self::percent_slider(&self.settings_modal.window_transparency, transparency, p),
+                p,
+            ))
+            .into_any_element()
+    }
+
+    /// 百分比滑块控件：滑轨加右侧数值。
+    fn percent_slider(state: &Entity<SliderState>, percent: u8, p: &Palette) -> AnyElement {
+        let label = format!("{percent}%");
+        h_flex()
+            .gap_2()
+            .items_center()
+            .child(Slider::new(state).w(px(160.0)))
+            .child(div().text_xs().text_color(p.muted_foreground).child(label))
+            .into_any_element()
     }
 
     /// 界面字体组：界面字体族覆盖；字号由配色方案页的密度档驱动。

@@ -9,6 +9,7 @@ use super::{
 };
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::session_appearance::{session_color, session_icon};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::checkbox::Checkbox;
@@ -345,6 +346,10 @@ impl AppShell {
             ),
             _ => (IconName::Server, String::new()),
         };
+        // 会话专属图标覆盖连接类型图标；环境色直接染在图标上：侧栏行里没有
+        // 放竖杠的位置，图标着色既能标出环境，又不挤占名称与详情的宽度。
+        let session_color = session_color(session.color);
+        let icon_name = session_icon(session.icon).unwrap_or(icon_name);
         let is_active = active_session == Some(session_id);
         let selection_mode = self.selection_mode;
         let is_selected = self.selected_sessions.contains(&session_id);
@@ -524,15 +529,13 @@ impl AppShell {
             );
         }
         let inner = inner
-            .child(
-                Icon::new(icon_name)
-                    .with_size(ROW_ICON_SIZE)
-                    .text_color(if is_active {
-                        p.sidebar_accent_foreground
-                    } else {
-                        p.muted_foreground
-                    }),
-            )
+            .child(Icon::new(icon_name).with_size(ROW_ICON_SIZE).text_color(
+                session_color.unwrap_or(if is_active {
+                    p.sidebar_accent_foreground
+                } else {
+                    p.muted_foreground
+                }),
+            ))
             .child(
                 v_flex()
                     .flex_1()

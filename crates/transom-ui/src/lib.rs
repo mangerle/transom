@@ -30,7 +30,9 @@ mod notify;
 mod palette;
 mod pane_tree;
 mod probe;
+mod session_appearance;
 mod session_form;
+mod session_form_appearance;
 mod session_form_serial;
 mod session_form_telnet;
 mod session_form_view;
@@ -47,6 +49,7 @@ mod tabs;
 mod terminal_search;
 mod theme;
 mod tiling;
+mod window_appearance;
 mod window_state;
 mod workspace;
 mod zmodem;
@@ -106,6 +109,9 @@ pub fn run(services: UiServices) {
         // （首帧即用目标主题渲染，避免启动闪一次默认浅色）。
         theme::register_builtin(cx);
         theme::watch_user_dir(cx);
+        // 窗口外观（整体透明与毛玻璃）同样是全局值，且必须先于主题注入：
+        // 主题注入时会按它折算表面色 alpha，顺序反了首帧就是实色。
+        window_appearance::apply_window_appearance(&settings.window, cx);
         theme::apply_appearance(&settings.appearance, cx);
 
         let window_bounds = {
@@ -141,6 +147,8 @@ pub fn run(services: UiServices) {
             // 宽度的余量。布局结构件全部以 rem 表达，最小窗口按密度基准等比
             // 缩放，宽松档下固定 900px 会把这些列挤出窗口。
             window_min_size: Some(size(px(900.0 * density_scale), px(560.0 * density_scale))),
+            // 窗口背景按设置处理：透明或毛玻璃。
+            window_background: window_appearance::background_appearance(&settings.window),
             titlebar: Some(TitlebarOptions {
                 title: Some("Transom".into()),
                 ..Default::default()

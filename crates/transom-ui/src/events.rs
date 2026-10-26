@@ -58,6 +58,9 @@ impl AppShell {
                 // OSC 4/10/11 动态改色，不受此静态基线影响。
                 profile.theme_name = self.settings.terminal_profile.theme_name.clone();
                 profile.palette = self.settings.terminal_profile.palette.clone();
+                // 终端背景透明度跟随窗口整体透明：窗口半透明时终端区也要透出
+                // 桌面，否则只有界面变透明、终端仍是一块实色。
+                profile.background_transparency = self.settings.window.window_transparency;
                 let interaction = self.settings.terminal_interaction;
                 let reserved = self.shortcut_recording.filter.clone();
                 let key_filter: KeyFilter = Arc::new(move |keystroke| {

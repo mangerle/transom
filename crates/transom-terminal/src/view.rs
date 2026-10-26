@@ -318,6 +318,8 @@ impl TerminalView {
         // 不受此静态基线覆盖影响。
         self.profile.theme_name = profile.theme_name.clone();
         self.profile.palette = profile.palette.clone();
+        // 背景透明度参与渲染：折算成背景色的 alpha，透出下层应用背景。
+        self.profile.background_transparency = profile.background_transparency;
         self.renderer_dirty.store(true, Ordering::Release);
         cx.notify();
     }

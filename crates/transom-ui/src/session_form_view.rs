@@ -3,6 +3,7 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::session_form::{AuthChoice, ConnectionChoice};
+use crate::session_form_appearance::default_icon_for;
 use crate::session_form_serial::render_serial_fields;
 use crate::session_form_telnet::render_telnet_fields;
 use gpui_kit::assets::IconName;
@@ -100,6 +101,13 @@ impl AppShell {
                         p,
                     ))),
             )
+            .child(Self::render_session_appearance(
+                default_icon_for(form.connection),
+                form.icon,
+                form.color,
+                p,
+                cx,
+            ))
             .child(
                 v_flex()
                     .gap_2()

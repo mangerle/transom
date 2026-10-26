@@ -210,6 +210,18 @@ form:
   folder:
     en: Folder
     zh-CN: 文件夹
+  icon:
+    en: Icon
+    zh-CN: 图标
+  icon_auto:
+    en: Follow connection type
+    zh-CN: 跟随连接类型
+  color:
+    en: Environment Color
+    zh-CN: 环境色
+  color_none:
+    en: No color
+    zh-CN: 不染色
   host:
     en: Host
     zh-CN: 主机
@@ -1432,6 +1444,27 @@ settings:
   cursor_group:
     en: Cursor & Scrolling
     zh-CN: 光标与滚动
+  window_appearance_group:
+    en: Window Appearance
+    zh-CN: 窗口外观
+  window_background:
+    en: Window Background
+    zh-CN: 窗口背景
+  window_background_desc:
+    en: See the desktop through the window, or the blurred desktop.
+    zh-CN: 透出桌面本身，或透出模糊后的桌面。
+  window_bg_transparent:
+    en: Transparent
+    zh-CN: 半透明
+  window_bg_blurred:
+    en: Blurred
+    zh-CN: 毛玻璃
+  window_transparency:
+    en: Window Transparency
+    zh-CN: 窗口透明度
+  window_transparency_desc:
+    en: Fade the whole window; 0% is fully opaque, 100% is fully transparent.
+    zh-CN: 整扇窗口一起变透明，0% 为完全不透明，100% 为完全透明。
   highlight_group:
     en: Keyword Highlight
     zh-CN: 关键词高亮

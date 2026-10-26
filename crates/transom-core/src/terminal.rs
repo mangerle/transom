@@ -205,6 +205,13 @@ pub struct TerminalProfile {
     #[serde(default = "default_theme_name")]
     pub theme_name: String,
     pub palette: TerminalPalette,
+    /// 终端背景透明度（百分比）：0 表示完全不透明，100 表示完全透明。
+    ///
+    /// 折算成背景色的 alpha，透出下层应用背景；显式设了背景色的单元格仍保持
+    /// 不透明，否则整块半透明会连同选区与彩色输出一起洗白。
+    /// 该值由窗口外观设置下发（窗口整体透明），界面没有独立的终端级入口。
+    #[serde(default)]
+    pub background_transparency: u8,
 }
 
 impl Default for TerminalProfile {
@@ -224,6 +231,7 @@ impl Default for TerminalProfile {
             theme_name: default_theme_name(),
             highlight: TerminalHighlight::default(),
             palette: TerminalPalette::default(),
+            background_transparency: 0,
         }
     }
 }

@@ -20,6 +20,7 @@ pub mod prompt;
 pub mod secrets;
 pub mod serial;
 pub mod session;
+pub mod session_appearance;
 pub mod settings;
 pub mod sftp;
 pub mod sftp_filter;
@@ -68,11 +69,12 @@ pub use session::{
     SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
     TelnetConnection, TelnetOptions, TextEncoding,
 };
+pub use session_appearance::{SessionColor, SessionIcon};
 pub use settings::{
     AppSettings, AppearanceSettings, AuditSettings, BellStyle, HistorySettings, LogLevel,
     LogSettings, PanelSide, SavedLayout, SavedTabGroup, SavedTabTiling, SftpSettings,
     ShortcutSettings, SidebarStartup, Snippet, SnippetSettings, SplitAxis, StartupTabs, UiDensity,
-    UiThemeMode, WindowSettings,
+    UiThemeMode, WindowBackgroundMode, WindowSettings,
 };
 pub use sftp::{
     PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation,

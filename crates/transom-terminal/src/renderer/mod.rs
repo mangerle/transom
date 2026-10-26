@@ -119,6 +119,16 @@ pub(crate) struct TerminalRenderer {
     /// 不再随帧重编译（原先每帧重建时每个关键词都要一次小堆分配）。
     pub(crate) highlight_rules: CompiledHighlight,
     line_height: f32,
+    /// 背景不透明度系数：1.0 为完全不透明，按背景透明度设置折算。
+    background_alpha: f32,
+}
+
+/// 背景透明度（百分比）折算成不透明度系数。
+///
+/// 百分比先钳到 100 再折算：外部配置里的越界值不该把 alpha 算成负数，
+/// 那会让整块背景消失而不是半透明。
+fn background_alpha(transparency: u8) -> f32 {
+    1.0 - f32::from(transparency.min(100)) / 100.0
 }
 
 /// 静态调色板的预计算 Hsla 集合。
@@ -143,6 +153,7 @@ impl TerminalRenderer {
             highlight: profile.highlight.clone(),
             highlight_rules: CompiledHighlight::compile(&profile.highlight),
             line_height: profile.line_height.max(1.0),
+            background_alpha: background_alpha(profile.background_transparency),
         };
         renderer.measure(window);
         renderer
@@ -333,7 +344,14 @@ impl TerminalRenderer {
         let cols = grid.columns();
         let colors = term.colors();
         let default_bg = self.resolve(Color::Named(NamedColor::Background), colors);
-        window.paint_quad(fill(bounds, default_bg));
+        // 背景按设置折算透明度：整块默认背景变半透明，透出下层应用背景。
+        // 显式设了背景色的单元格仍按原色绘制，不跟着一起洗白。
+        //
+        // 比较必须用未折算的原色：色块区段里"与默认背景同色"的区段靠这个
+        // 比较跳过，交给上面那块半透明底子铺；拿折算后的颜色去比，默认背景
+        // 的区段会被当成普通色块再画一遍不透明，整块终端又变实色。
+        let default_fill = default_bg.alpha(default_bg.a * self.background_alpha);
+        window.paint_quad(fill(bounds, default_fill));
 
         let origin = Point {
             x: bounds.origin.x + Self::TERMINAL_PADDING_X,
@@ -947,13 +965,26 @@ impl TerminalRenderer {
 #[cfg(test)]
 mod tests {
     use super::palette::palette_rgb;
-    use super::{CJK_PROBE_CHAR, PaletteColors, RowScratch, fit_cjk_size, is_cjk_char};
+    use super::{
+        CJK_PROBE_CHAR, PaletteColors, RowScratch, background_alpha, fit_cjk_size, is_cjk_char,
+    };
     use crate::engine::TerminalEngine;
     use alacritty_terminal::index::Line;
     use gpui_kit::{Hsla, px, rgb};
     use transom_core::{
         CompiledHighlight, TerminalHighlight, TerminalPalette, TerminalProfile, TerminalSize,
     };
+
+    /// 背景透明度折算：0% 完全不透明，100% 完全透明；越界值先钳位。
+    #[test]
+    fn background_alpha_maps_transparency_to_opacity() {
+        assert!((background_alpha(0) - 1.0).abs() < f32::EPSILON);
+        assert!((background_alpha(50) - 0.5).abs() < f32::EPSILON);
+        assert!(background_alpha(100).abs() < f32::EPSILON);
+        // 越界百分比不能折出负不透明度：那会让整块背景凭空消失。
+        assert!(background_alpha(200) >= 0.0);
+        assert!((background_alpha(255) - background_alpha(100)).abs() < f32::EPSILON);
+    }
 
     /// 预计算表与即时换算必须逐位一致：查表是渲染热路径的取色来源，
     /// 任何偏差都会在升级后被当成"配色变了"的回归。

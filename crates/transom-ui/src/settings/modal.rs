@@ -71,6 +71,12 @@ impl AppShell {
                     p,
                     "settings.ui_font_group",
                     AppShell::render_settings_ui_font,
+                ))
+                .group(setting_group(
+                    &app_entity,
+                    p,
+                    "settings.window_appearance_group",
+                    AppShell::render_settings_window_appearance,
                 ));
 
         let page_terminal = SettingPage::new(rust_i18n::t!("settings.tab_terminal").to_string())
@@ -369,8 +375,8 @@ impl AppShell {
                                     .ghost()
                                     .small()
                                     .label(rust_i18n::t!("common.cancel").to_string())
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.cancel_settings(cx);
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.cancel_settings(window, cx);
                                     })),
                             )
                             .child(

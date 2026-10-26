@@ -62,6 +62,8 @@ pub(crate) struct Palette {
 impl Palette {
     pub(crate) fn from(cx: &App) -> Self {
         let theme = cx.theme();
+        // 主题里已经按窗口透明度折算过表面色的 alpha，这里直接取用：
+        // 自绘界面与 gpui-kit 组件必须共用同一份透明度，否则会出现割裂。
         Self {
             background: theme.background,
             foreground: theme.foreground,
