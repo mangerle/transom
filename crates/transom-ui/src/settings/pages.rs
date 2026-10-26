@@ -705,6 +705,15 @@ impl AppShell {
                         p,
                     ))
                     .child(
+                        Button::new("audit-viewer-open")
+                            .small()
+                            .outline()
+                            .label(rust_i18n::t!("audit_viewer.title").to_string())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_audit_viewer(None, window, cx);
+                            })),
+                    )
+                    .child(
                         Button::new("audit-dir-reveal")
                             .small()
                             .label(rust_i18n::t!("settings.audit_dir_open").to_string())

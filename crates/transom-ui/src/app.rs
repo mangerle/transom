@@ -407,6 +407,7 @@ pub struct AppShell {
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
     pub(crate) folder_form: Option<FolderForm>,
+    pub(crate) audit_viewer: Option<crate::audit_viewer::AuditViewer>,
     /// 认证阶段由 net 层发起的凭据询问；连接前不再拦截。
     pub(crate) auth_prompt: Option<AuthPromptState>,
     /// TOFU 首连主机指纹确认弹窗；同一时刻最多一个在等用户作答。
@@ -725,6 +726,7 @@ impl AppShell {
             search,
             form: None,
             folder_form: None,
+            audit_viewer: None,
             auth_prompt: None,
             host_key_confirm: None,
             pending_credential: None,
@@ -1005,6 +1007,9 @@ impl AppShell {
         }
         if self.form.is_some() {
             overlays.push(self.render_session_form(window, cx, &p));
+        }
+        if self.audit_viewer.is_some() {
+            overlays.push(self.render_audit_viewer(window, cx, &p));
         }
         if self.folder_form.is_some() {
             overlays.push(self.render_folder_form(window, cx, &p));

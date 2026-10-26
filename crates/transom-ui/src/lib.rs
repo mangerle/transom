@@ -13,6 +13,7 @@ mod activity_bar;
 mod app;
 mod app_render;
 mod audit;
+mod audit_viewer;
 mod backup;
 mod batch;
 mod brand;

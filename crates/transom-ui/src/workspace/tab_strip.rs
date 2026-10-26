@@ -248,6 +248,20 @@ impl AppShell {
                                         }
                                     }),
                             )
+                            .item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!("audit_viewer.menu_item").to_string(),
+                                )
+                                .icon(IconName::FileText)
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, window, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.open_audit_viewer_for_tab(active_pane, window, cx);
+                                        });
+                                    }
+                                }),
+                            )
                             .item(PopupMenuItem::separator())
                             .item(
                                 PopupMenuItem::new(rust_i18n::t!("menu.split_right").to_string())

@@ -1090,6 +1090,9 @@ menu:
   edit:
     en: Edit Session
     zh-CN: 编辑会话
+  audit_logs:
+    en: View Audit Logs
+    zh-CN: 查看审计日志
   delete:
     en: Delete
     zh-CN: 删除
@@ -2176,3 +2179,53 @@ probe:
   no_target:
     en: "Selected sessions have no network host to probe (local shell and serial ports are skipped)."
     zh-CN: "所选会话没有可拨测的网络主机（本地终端与串口已跳过）。"
+
+audit_viewer:
+  title:
+    en: Audit Log Viewer
+    zh-CN: 审计日志查看器
+  for_session:
+    en: "Audit Log Viewer - %{name}"
+    zh-CN: "审计日志查看器 - %{name}"
+  all_logs:
+    en: All Sessions
+    zh-CN: 全部会话日志
+  current_session:
+    en: Current Session Only
+    zh-CN: 仅当前会话
+  no_logs:
+    en: No audit logs found for this session.
+    zh-CN: 当前会话暂无审计日志。
+  no_logs_hint:
+    en: Audit logging must be enabled in Settings before connecting to record session output.
+    zh-CN: 必须先在设置中开启“记录会话审计日志”，连接建立后即可自动按会话记录完整终端输出。
+  open_settings:
+    en: Open Settings
+    zh-CN: 打开设置
+  view_all:
+    en: View All Audit Logs
+    zh-CN: 查看全部审计日志
+  copy_content:
+    en: Copy Content
+    zh-CN: 复制全文
+  copied:
+    en: Audit log copied to clipboard
+    zh-CN: 审计日志全文已复制到剪贴板
+  reveal:
+    en: Reveal in File Manager
+    zh-CN: 在文件管理器中显示
+  truncated_hint:
+    en: "(File is very large, displaying first 2 MiB)"
+    zh-CN: "(日志文件过大，当前展示前 2 MiB)"
+  search_placeholder:
+    en: Search in log...
+    zh-CN: 在日志中搜索...
+  open_viewer:
+    en: Open Log Viewer
+    zh-CN: 打开应用内日志查看器
+  menu_item:
+    en: View Audit Logs
+    zh-CN: 查看审计日志
+  close:
+    en: Close
+    zh-CN: 关闭

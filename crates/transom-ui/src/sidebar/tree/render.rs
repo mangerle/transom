@@ -454,6 +454,18 @@ impl AppShell {
                                 }
                             }),
                     )
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("audit_viewer.menu_item").to_string())
+                            .icon(IconName::FileText)
+                            .on_click({
+                                let app = app.clone();
+                                move |_, window, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.open_audit_viewer_for_session(session_id, window, cx);
+                                    });
+                                }
+                            }),
+                    )
                     .item(PopupMenuItem::separator())
                     .item(
                         PopupMenuItem::new(rust_i18n::t!("menu.delete").to_string())
