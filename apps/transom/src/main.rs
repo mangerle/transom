@@ -76,7 +76,9 @@ fn main() -> anyhow::Result<()> {
     };
 
     transom_ui::run(services);
-    drop(controller);
+    // 优雅停机：控制平面断开全部远端、停止转发并限时收尾，随后关闭运行时。
+    // 不能直接 drop：那会让收尾任务随运行时取消，远端收不到 DISCONNECT。
+    controller.shutdown();
     Ok(())
 }
 

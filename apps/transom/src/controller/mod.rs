@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::mpsc;
 use tokio::runtime::Runtime;
 use tokio::task::JoinSet;
 use transom_core::{
@@ -39,6 +40,9 @@ pub struct Controller {
     command_tx: flume::Sender<AppCommand>,
     event_tx: flume::Sender<AppEvent>,
     event_rx: flume::Receiver<AppEvent>,
+    /// 控制平面主循环的退出通知：`shutdown` 限时等待它，确保远端断开与
+    /// 转发停止真正执行完，而不是随进程退出被粗暴取消。
+    shutdown_rx: mpsc::Receiver<()>,
 }
 
 impl Controller {
@@ -55,6 +59,7 @@ impl Controller {
         let (command_tx, command_rx) = flume::bounded::<AppCommand>(256);
         let (event_tx, event_rx) = flume::bounded::<AppEvent>(1024);
         let (internal_tx, internal_rx) = flume::bounded::<Internal>(64);
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -66,7 +71,7 @@ impl Controller {
         // 事件发送端留一份克隆给应用外壳：深链监听不在控制平面内，
         // 但唤起请求要走同一条事件总线。
         let outer_event_tx = event_tx.clone();
-        let root = runtime.spawn(run_controller(
+        let root = runtime.spawn(run_controller(ControlPlaneWiring {
             known_hosts,
             settings_store,
             command_rx,
@@ -74,7 +79,8 @@ impl Controller {
             internal_rx,
             event_tx,
             cloud_sync,
-        ));
+            shutdown_tx,
+        }));
         // 根控制器是整个应用的控制平面：panic 后命令与事件全部停摆，
         // 必须可观察（日志上报）而不是静默失效。
         runtime.spawn(async move {
@@ -92,7 +98,45 @@ impl Controller {
             command_tx,
             event_tx: outer_event_tx,
             event_rx,
+            shutdown_rx,
         })
+    }
+
+    /// 优雅停机：驱动控制平面完成收尾，再限时关闭运行时。
+    ///
+    /// 设计原理（Why）：
+    /// - UI 退出时若直接丢弃控制器，运行时会把控制平面任务与全部连接粗暴
+    ///   取消：远端收不到 DISCONNECT、转发任务无人停止，"优雅停机"分支
+    ///   形同不存在。这里先投递 `Shutdown` 命令并等待主循环回报收尾完成
+    ///   （断开远端、停转发、限时等待收尾任务），再关运行时；
+    /// - `Runtime` 的默认析构会无限等待阻塞线程池，个别卡死的系统调用
+    ///   （串口/文件 IO）能把退出拖成假死，因此运行时用 2 秒上限关闭；
+    /// - 等待上限 5 秒：控制平面自身的收尾预算是 3 秒（`shutdown_all`），
+    ///   留 2 秒余量；超时只告警不阻塞，进程退出由内核回收残余线程。
+    pub fn shutdown(self) {
+        let Self {
+            _runtime,
+            command_tx,
+            shutdown_rx,
+            ..
+        } = self;
+        match command_tx.send_timeout(AppCommand::Shutdown, std::time::Duration::from_millis(500)) {
+            Ok(()) => {}
+            Err(flume::SendTimeoutError::Timeout(_)) => {
+                log::warn!("命令队列已满，停机命令未能投递，控制平面将随通道关闭退出");
+            }
+            Err(flume::SendTimeoutError::Disconnected(_)) => {
+                log::debug!("控制平面已停止接收命令，跳过停机命令投递");
+            }
+        }
+        // 关闭命令通道兜底：即使停机命令未投递成功，主循环也会因
+        // RecvError 走停机分支。
+        drop(command_tx);
+        match shutdown_rx.recv_timeout(std::time::Duration::from_secs(5)) {
+            Ok(()) => log::info!("控制平面已完成优雅停机，开始关闭运行时"),
+            Err(_) => log::warn!("等待控制平面停机超过 5 秒，直接关闭运行时"),
+        }
+        _runtime.shutdown_timeout(std::time::Duration::from_secs(2));
     }
 
     pub fn command_sender(&self) -> flume::Sender<AppCommand> {
@@ -183,7 +227,11 @@ fn zmodem_config(settings: &Arc<dyn SettingsStore>) -> ZmodemConfig {
     }
 }
 
-async fn run_controller(
+/// 控制平面主循环的输入装配：句柄一次性建立、随控制器存活。
+///
+/// 参数超过五个后收敛为结构体：平铺的八个参数让调用点难以核对顺序，
+/// 新增接线时也容易漏项。
+struct ControlPlaneWiring {
     known_hosts: Arc<dyn KnownHostsStore>,
     settings_store: Arc<dyn SettingsStore>,
     command_rx: flume::Receiver<AppCommand>,
@@ -191,7 +239,21 @@ async fn run_controller(
     internal_rx: flume::Receiver<Internal>,
     event_tx: flume::Sender<AppEvent>,
     cloud_sync: Arc<CloudSyncService>,
-) {
+    /// 主循环退出（含停机收尾完成）通知；`Controller::shutdown` 限时等待它。
+    shutdown_tx: mpsc::Sender<()>,
+}
+
+async fn run_controller(wiring: ControlPlaneWiring) {
+    let ControlPlaneWiring {
+        known_hosts,
+        settings_store,
+        command_rx,
+        internal_tx,
+        internal_rx,
+        event_tx,
+        cloud_sync,
+        shutdown_tx,
+    } = wiring;
     let mut current_connections: HashMap<TabId, ConnectionId> = HashMap::new();
     let mut remotes: HashMap<TabId, (ConnectionId, SshRemote)> = HashMap::new();
     let mut sftp_clients: HashMap<TabId, SftpClient> = HashMap::new();
@@ -535,6 +597,9 @@ async fn run_controller(
                 })
                 .await;
                 monitor_set.shutdown().await;
+                // 收尾完成再通知等待方：Controller::shutdown 限时等这个信号，
+                // 提前发送会让远断开会话随运行时关闭被取消。
+                let _ = shutdown_tx.send(());
                 break;
             }
             Incoming::Internal(Ok(Internal::Connected {
