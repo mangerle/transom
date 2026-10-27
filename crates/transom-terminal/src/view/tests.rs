@@ -38,12 +38,12 @@ fn invalid_custom_keys_are_skipped() {
 /// IME 定位折算：ASCII 单格、非 ASCII 双格近似，越界收敛到端点。
 #[test]
 fn ime_column_maps_cells_to_utf16_index() {
-    // "ab😀" 的格占用为 1+1+2；UTF-16 长度为 4（表情符号占两个单元）。
-    assert_eq!(ime_column_to_utf16_index("ab😀", 0), 0);
-    assert_eq!(ime_column_to_utf16_index("ab😀", 1), 1);
-    // 第 2 格已进入表情符号的区间，返回其起点下标 2
-    assert_eq!(ime_column_to_utf16_index("ab😀", 2), 2);
+    // "ab\u{20BB7}" 的格占用为 1+1+2；UTF-16 长度为 4（增补平面汉字占两个码元）。
+    assert_eq!(ime_column_to_utf16_index("ab\u{20BB7}", 0), 0);
+    assert_eq!(ime_column_to_utf16_index("ab\u{20BB7}", 1), 1);
+    // 第 2 格已进入增补汉字的区间，返回其起点下标 2
+    assert_eq!(ime_column_to_utf16_index("ab\u{20BB7}", 2), 2);
     // 越过组合文本末尾收敛到全长
-    assert_eq!(ime_column_to_utf16_index("ab😀", 9), 4);
+    assert_eq!(ime_column_to_utf16_index("ab\u{20BB7}", 9), 4);
     assert_eq!(ime_column_to_utf16_index("", 3), 0);
 }
