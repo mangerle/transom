@@ -1591,6 +1591,15 @@ settings:
   block_view_group:
     en: Semantic Blocks
     zh-CN: 语义块
+  key_bindings_group:
+    en: Custom Key Mappings
+    zh-CN: 自定义按键映射
+  key_bindings_desc:
+    en: One mapping per line as `keys = sequence`. App shortcuts take precedence when a combination conflicts.
+    zh-CN: 每行一条 `按键 = 转义序列`；与应用快捷键冲突时以应用快捷键为准。
+  key_bindings_hint:
+    en: "Example: ctrl-shift-left = \\e[1;6D. Supported escapes: \\e, \\x1b, \\n, \\r, \\t, \\\\, \\0, \\u{...}."
+    zh-CN: "示例：ctrl-shift-left = \\e[1;6D。支持转义：\\e、\\x1b、\\n、\\r、\\t、\\\\、\\0、\\u{...}。"
   block_view_enable:
     en: Enable semantic block view
     zh-CN: 启用语义块视图

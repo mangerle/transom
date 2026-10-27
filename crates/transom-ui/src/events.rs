@@ -51,6 +51,8 @@ impl AppShell {
                 // 分隔符同样没有会话级入口，且老会话文件里存的是内核默认值；
                 // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
                 profile.word_separators = self.settings.terminal_profile.word_separators.clone();
+                // 自定义按键映射属于全局终端偏好：会话文件里的旧副本不参与生效。
+                profile.key_bindings = self.settings.terminal_profile.key_bindings.clone();
                 profile.highlight = self.settings.terminal_profile.highlight.clone();
                 profile.alternate_scroll = self.settings.terminal_profile.alternate_scroll;
                 // 终端配色同理：会话文件里残留的旧调色板会压掉全局选择，

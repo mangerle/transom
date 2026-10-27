@@ -345,6 +345,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) notify_threshold: Entity<InputState>,
     /// 语义块自动折叠阈值（行数，0 表示不自动折叠）。
     pub(crate) block_collapse_rows: Entity<InputState>,
+    /// 自定义终端按键映射（多行文本，保存时解析）。
+    pub(crate) terminal_key_bindings: Entity<TextareaState>,
     pub(crate) highlight_keywords: Entity<InputState>,
     /// 窗口整体透明度滑块（百分比）。
     pub(crate) window_transparency: Entity<SliderState>,
@@ -723,6 +725,13 @@ impl AppShell {
                 .placeholder("10000")
                 .default_value(&scrollback_val)
         });
+        let key_bindings_text =
+            transom_core::TerminalKeyBinding::to_multiline(&settings.terminal_profile.key_bindings);
+        let settings_terminal_key_bindings = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .placeholder("ctrl-shift-left = \\e[1;6D")
+                .default_value(key_bindings_text)
+        });
         let (proxy_kind, proxy_host_val, proxy_port_val, proxy_user_val, proxy_pass_val) =
             match &settings.proxy {
                 transom_core::OutboundProxy::Direct => (
@@ -861,6 +870,7 @@ impl AppShell {
                 word_separators: settings_word_separators,
                 notify_threshold: settings_notify_threshold,
                 block_collapse_rows: settings_block_collapse_rows,
+                terminal_key_bindings: settings_terminal_key_bindings,
                 highlight_keywords: settings_highlight_keywords,
                 window_transparency: settings_window_transparency,
                 window_appearance_snapshot: None,

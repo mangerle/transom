@@ -198,6 +198,12 @@ impl AppShell {
         self.settings_modal.scrollback.update(cx, |input, cx| {
             input.set_value(&scrollback, window, cx);
         });
+        let key_bindings = transom_core::TerminalKeyBinding::to_multiline(
+            &self.settings.terminal_profile.key_bindings,
+        );
+        self.settings_modal
+            .terminal_key_bindings
+            .update(cx, |state, cx| state.set_value(key_bindings, window, cx));
         let block_rows = self.settings.block_view.auto_collapse_rows.to_string();
         self.settings_modal
             .block_collapse_rows
@@ -341,6 +347,23 @@ impl AppShell {
     }
 
     pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // 自定义按键映射先整体校验：一行写错就整份不落盘，并保持弹窗打开，
+        // 避免用户以为已保存、实际运行期静默跳过某条映射。
+        let raw_bindings = self
+            .settings_modal
+            .terminal_key_bindings
+            .read(cx)
+            .value()
+            .to_string();
+        let key_bindings = match crate::keymap::parse_terminal_key_bindings(&raw_bindings) {
+            Ok(bindings) => bindings,
+            Err(error) => {
+                self.error = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+        self.settings.terminal_profile.key_bindings = key_bindings;
         // 界面字体族：留空表示跟随主题。
         self.settings.appearance.ui_font_family =
             read_font_family(&self.settings_modal.ui_font_family, cx);

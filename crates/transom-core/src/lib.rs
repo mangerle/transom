@@ -109,8 +109,8 @@ pub use sync::{
 pub use system_stats::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo, StatsSamplerState};
 pub use terminal::{
     FOLLOW_UI_THEME, RightClickBehavior, TerminalControl, TerminalControlHandle,
-    TerminalCursorShape, TerminalInteraction, TerminalIo, TerminalPalette, TerminalProfile,
-    TerminalSize,
+    TerminalCursorShape, TerminalInteraction, TerminalIo, TerminalKeyBinding, TerminalPalette,
+    TerminalProfile, TerminalSize,
 };
 pub use theme::{PaletteMode, PresetTheme, preset_themes};
 pub use traffic::{NetworkTraffic, TrafficCounter};

@@ -6,7 +6,8 @@
 //! 仍能自动获得默认键位。
 
 use gpui_kit::*;
-use transom_core::ShortcutSettings;
+use std::collections::HashMap;
+use transom_core::{ShortcutSettings, TerminalKeyBinding};
 
 actions!(
     transom_ui,
@@ -319,6 +320,45 @@ pub(crate) fn suppression_bindings(keys: &[String]) -> Vec<KeyBinding> {
 }
 
 /// 提取需要从终端输入中截留的按键（首击即触发的工作区快捷键）。
+/// 解析并校验设置页里的自定义终端按键映射。
+///
+/// 校验分三层：核心层负责 `键 = 序列` 语法与转义字节；这里补上 gpui 键位
+/// 语法、重复绑定与"无修饰键单字符"拦截。最后一层是刻意加的：把 `a` 绑成
+/// 某个序列会直接吃掉正常输入，几乎一定是误配置。
+pub(crate) fn parse_terminal_key_bindings(text: &str) -> Result<Vec<TerminalKeyBinding>, String> {
+    let bindings = TerminalKeyBinding::parse_multiline(text)?;
+    let mut seen: HashMap<KeybindingKeystroke, String> = HashMap::with_capacity(bindings.len());
+    for binding in &bindings {
+        let keystroke = Keystroke::parse(&binding.keys).map_err(|_| {
+            format!(
+                "按键组合「{}」无法解析，请使用 ctrl-shift-left、alt-backspace、f1 这类写法",
+                binding.keys
+            )
+        })?;
+        let parsed = KeybindingKeystroke::from_keystroke(keystroke);
+        let modifiers = parsed.modifiers();
+        let has_modifier = modifiers.control
+            || modifiers.alt
+            || modifiers.shift
+            || modifiers.platform
+            || modifiers.function;
+        let key = parsed.key();
+        if !has_modifier && (key.chars().count() == 1 || key == "space") {
+            return Err(format!(
+                "按键组合「{}」没有修饰键，会覆盖正常字符输入，请加 ctrl/alt/shift",
+                binding.keys
+            ));
+        }
+        if let Some(previous) = seen.insert(parsed, binding.keys.clone()) {
+            return Err(format!(
+                "按键组合「{}」重复绑定（前一条为「{}」）",
+                binding.keys, previous
+            ));
+        }
+    }
+    Ok(bindings)
+}
+
 pub(crate) fn reserved_keystrokes(custom: &ShortcutSettings) -> Vec<KeybindingKeystroke> {
     let mut reserved = Vec::new();
     for binding in workspace_bindings(custom) {
@@ -499,5 +539,29 @@ mod tests {
         assert_eq!(format_captured(&ctrl).as_deref(), Ok("ctrl-shift-n"));
         let f11 = Keystroke::parse("f11").unwrap();
         assert_eq!(format_captured(&f11).as_deref(), Ok("f11"));
+    }
+}
+
+#[cfg(test)]
+mod terminal_binding_tests {
+    use super::parse_terminal_key_bindings;
+
+    #[test]
+    fn accepts_modifier_and_function_keys() {
+        let bindings = parse_terminal_key_bindings(
+            "ctrl-shift-left = \\e[1;6D\nf1 = \\eOP\nalt-backspace = \\x7f",
+        )
+        .unwrap();
+        assert_eq!(bindings.len(), 3);
+    }
+
+    #[test]
+    fn rejects_plain_typing_override_and_duplicates() {
+        let error = parse_terminal_key_bindings("a = \\e").unwrap_err();
+        assert!(error.contains("正常字符输入"), "错误: {error}");
+        let error = parse_terminal_key_bindings("space = \\e").unwrap_err();
+        assert!(error.contains("正常字符输入"), "错误: {error}");
+        let error = parse_terminal_key_bindings("ctrl-a = \\e\nctrl-a = \\x01").unwrap_err();
+        assert!(error.contains("重复绑定"), "错误: {error}");
     }
 }

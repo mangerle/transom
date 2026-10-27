@@ -6,6 +6,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::button::Button;
+use gpui_kit::component::input::Textarea;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::theme::{ThemeConfig, ThemeMode, ThemeRegistry, try_parse_color};
 use gpui_kit::component::{Icon, Sizable};
@@ -488,6 +489,34 @@ fn theme_color_dots(config: &ThemeConfig) -> AnyElement {
 }
 
 impl AppShell {
+    /// 自定义按键映射组：每行 `按键 = 转义序列`。
+    pub(crate) fn render_settings_key_bindings(
+        &mut self,
+        p: &Palette,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.key_bindings_desc").to_string()),
+            )
+            .child(
+                Textarea::new(&self.settings_modal.terminal_key_bindings)
+                    .h(px(120.0))
+                    .w_full(),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.key_bindings_hint").to_string()),
+            )
+            .into_any_element()
+    }
+
     /// 内置编辑器组：软换行与行号显示。
     pub(crate) fn render_settings_editor(
         &mut self,

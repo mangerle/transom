@@ -29,7 +29,7 @@ use std::thread;
 use std::time::Instant;
 use transom_core::{
     BlockViewSettings, Rgb as PaletteColor, RightClickBehavior, TerminalControlHandle,
-    TerminalInteraction, TerminalIo, TerminalProfile, TerminalSize,
+    TerminalInteraction, TerminalIo, TerminalKeyBinding, TerminalProfile, TerminalSize,
 };
 
 const CONTEXT: &str = "Terminal";
@@ -114,6 +114,8 @@ pub struct TerminalView {
     block_layout: Arc<Mutex<Option<Arc<BlockLayout>>>>,
     /// 当前悬浮的命令块与所在可见行；`None` 表示不在块上。
     hover_block: Option<(u64, usize)>,
+    /// 已解析的自定义按键映射；键盘热路径只做遍历匹配。
+    custom_keys: Vec<(KeybindingKeystroke, Vec<u8>)>,
     _reader_task: Task<()>,
     _blink_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
@@ -146,6 +148,7 @@ impl TerminalView {
             event_tx,
         )));
         let metrics = Arc::new(Mutex::new(LayoutMetrics::default()));
+        let custom_keys = build_custom_keys(&profile.key_bindings);
 
         let recorder = RecorderHandle::new();
         let recorder_for_reader = recorder.clone();
@@ -329,6 +332,7 @@ impl TerminalView {
             block_view: None,
             block_layout: Arc::new(Mutex::new(None)),
             hover_block: None,
+            custom_keys,
             _reader_task: reader_task,
             _blink_task: blink_task,
             _focus_subscriptions: vec![on_focus, on_blur],
@@ -454,10 +458,22 @@ impl TerminalView {
         // 不受此静态基线覆盖影响。
         self.profile.theme_name = profile.theme_name.clone();
         self.profile.palette = profile.palette.clone();
+        if self.profile.key_bindings != profile.key_bindings {
+            self.profile.key_bindings = profile.key_bindings.clone();
+            self.custom_keys = build_custom_keys(&self.profile.key_bindings);
+        }
         // 背景透明度参与渲染：折算成背景色的 alpha，透出下层应用背景。
         self.profile.background_transparency = profile.background_transparency;
         self.renderer_dirty.store(true, Ordering::Release);
         cx.notify();
+    }
+
+    /// 查找按键组合对应的自定义字节序列。
+    fn custom_key_sequence(&self, keystroke: &Keystroke) -> Option<Vec<u8>> {
+        self.custom_keys
+            .iter()
+            .find(|(binding, _)| keystroke.should_match(binding))
+            .map(|(_, bytes)| bytes.clone())
     }
 
     pub(crate) fn write_input(&mut self, bytes: &[u8]) -> bool {
@@ -847,6 +863,18 @@ impl TerminalView {
         }
 
         if !self.ime_text.is_empty() {
+            return;
+        }
+
+        // 自定义映射优先于终端默认编码，也允许覆盖 Ctrl+Shift+C/V；
+        // 应用级快捷键已在 key_filter 之前被保留，不会在这里被吃掉。
+        if let Some(bytes) = self.custom_key_sequence(&event.keystroke) {
+            if self.write_input(&bytes) {
+                self.engine.lock().scroll_to_bottom();
+                self.input_line.clear();
+                self.clear_suggestions();
+                cx.notify();
+            }
             return;
         }
 
@@ -1368,6 +1396,32 @@ impl Drop for TerminalView {
     }
 }
 
+/// 把设置里的映射解析成运行期查表结构；坏条目跳过并留日志。
+fn build_custom_keys(bindings: &[TerminalKeyBinding]) -> Vec<(KeybindingKeystroke, Vec<u8>)> {
+    let mut custom = Vec::with_capacity(bindings.len());
+    for binding in bindings {
+        let keystroke = match Keystroke::parse(&binding.keys) {
+            Ok(keystroke) => keystroke,
+            Err(error) => {
+                log::warn!("自定义按键映射无法解析，已忽略: {error}");
+                continue;
+            }
+        };
+        let bytes = match binding.decode_sequence() {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                log::warn!(
+                    "自定义按键映射的转义序列非法，已忽略，按键: {}，原因: {error}",
+                    binding.keys
+                );
+                continue;
+            }
+        };
+        custom.push((KeybindingKeystroke::from_keystroke(keystroke), bytes));
+    }
+    custom
+}
+
 fn is_control_or_function_key(key: &str) -> bool {
     matches!(
         key,
@@ -1402,7 +1456,42 @@ fn is_control_or_function_key(key: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::view::build_custom_keys;
     use crate::view_ime::ime_column_to_utf16_index;
+    use gpui_kit::Keystroke;
+    use transom_core::TerminalKeyBinding;
+
+    /// 自定义映射按 gpui 键位语法匹配，修饰键不同不得误命中。
+    #[test]
+    fn custom_keys_match_exact_modifiers_and_decode_bytes() {
+        let bindings = vec![TerminalKeyBinding {
+            keys: "ctrl-shift-left".into(),
+            sequence: "\\e[1;6D".into(),
+        }];
+        let custom = build_custom_keys(&bindings);
+        assert_eq!(custom.len(), 1);
+        assert_eq!(custom[0].1, b"\x1b[1;6D");
+        let exact = Keystroke::parse("ctrl-shift-left").unwrap();
+        assert!(exact.should_match(&custom[0].0));
+        let wrong = Keystroke::parse("ctrl-left").unwrap();
+        assert!(!wrong.should_match(&custom[0].0));
+    }
+
+    /// 坏映射在构造阶段被跳过，不能留下半解析状态。
+    #[test]
+    fn invalid_custom_keys_are_skipped() {
+        let bindings = vec![
+            TerminalKeyBinding {
+                keys: "not-a-real-key-".into(),
+                sequence: "\\e".into(),
+            },
+            TerminalKeyBinding {
+                keys: "ctrl-a".into(),
+                sequence: "\\q".into(),
+            },
+        ];
+        assert!(build_custom_keys(&bindings).is_empty());
+    }
 
     /// IME 定位折算：ASCII 单格、非 ASCII 双格近似，越界收敛到端点。
     #[test]
