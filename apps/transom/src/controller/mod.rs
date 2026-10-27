@@ -49,8 +49,9 @@ impl Controller {
     ) -> Result<Self, AppError> {
         // 三条通道的容量与背压策略（全工程禁止无界通道）：
         // - 命令 256：用户命令低频，UI 侧 try_send 快速失败并提示；
-        // - 事件 1024：进度节流后 10Hz/任务，controller 侧 send_async 反压——
-        //   UI 事件循环停滞时拖慢传输而非内存无限积压；
+        // - 事件 1024：可覆盖状态样本（流量/统计/进度）由生产者 try_send，
+        //   通道满即丢弃、不占位；状态迁移事件（连接、转发、失败）用
+        //   send_async 反压，UI 停滞时拖慢发送方而非内存无限积压；
         // - 内部 64：连接完成/断开通知，低频。
         let (command_tx, command_rx) = flume::bounded::<AppCommand>(256);
         let (event_tx, event_rx) = flume::bounded::<AppEvent>(1024);

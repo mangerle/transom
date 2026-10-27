@@ -13,6 +13,25 @@ use transom_net::SshRemote;
 /// 最近一次 df 结果的缓存形态：(已用字节, 总字节, 挂载点明细)。
 type CachedDisk = (u64, u64, Vec<FilesystemUsage>);
 
+/// 投递可覆盖状态事件：通道满时丢弃本条样本（下一轮会带最新值重来），
+/// 通道断开返回 `false` 让采样任务退出。
+///
+/// 设计原理（Why）：流量、系统统计都是可覆盖的单调状态量，样本丢失没有
+/// 一致性损失（终值由后续样本兜底）。若沿用 send_async 反压，UI 消费停滞
+/// 时这些样本会占满 1024 深的事件通道，把控制平面的状态迁移事件（连接
+/// 建立/断开、失败、转发表更）一并挤住——那才是不能丢的事件。
+/// 通道满按 debug 记录：UI 停滞属可自愈的异常，持续刷 warn 只会污染日志。
+fn send_overwritable(tx: &flume::Sender<AppEvent>, event: AppEvent, what: &str) -> bool {
+    match tx.try_send(event) {
+        Ok(()) => true,
+        Err(flume::TrySendError::Full(_)) => {
+            log::debug!("{what}样本被丢弃：事件队列已满，界面消费停滞");
+            true
+        }
+        Err(flume::TrySendError::Disconnected(_)) => false,
+    }
+}
+
 pub(super) fn spawn_traffic_sampler(
     traffic: Arc<TrafficCounter>,
     tab_id: TabId,
@@ -22,15 +41,16 @@ pub(super) fn spawn_traffic_sampler(
     tokio::spawn(async move {
         // 先交一个零样本，让网络徽标在连接建立后立刻出现；首个真实速率
         // 仍从完整的一秒窗口开始计算，避免瞬时大数字。
-        if event_tx
-            .send_async(AppEvent::NetworkTrafficUpdated {
+        // 零样本同样按可覆盖事件投递：丢它只影响徽标出现时机。
+        if !send_overwritable(
+            &event_tx,
+            AppEvent::NetworkTrafficUpdated {
                 tab_id,
                 connection_id,
                 traffic: NetworkTraffic::default(),
-            })
-            .await
-            .is_err()
-        {
+            },
+            "网络流量",
+        ) {
             return;
         }
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
@@ -47,15 +67,15 @@ pub(super) fn spawn_traffic_sampler(
             let current = traffic.totals();
             let sample = NetworkTraffic::from_delta(previous, current, elapsed);
             previous = current;
-            if event_tx
-                .send_async(AppEvent::NetworkTrafficUpdated {
+            if !send_overwritable(
+                &event_tx,
+                AppEvent::NetworkTrafficUpdated {
                     tab_id,
                     connection_id,
                     traffic: sample,
-                })
-                .await
-                .is_err()
-            {
+                },
+                "网络流量",
+            ) {
                 break;
             }
         }
@@ -113,15 +133,15 @@ pub(super) async fn run_local_traffic_sampler(
         let sample = NetworkTraffic::from_delta(previous_totals, current, elapsed);
         let mut channel_closed = false;
         for (tab_id, connection_id) in subscribers {
-            if event_tx
-                .send_async(AppEvent::NetworkTrafficUpdated {
+            if !send_overwritable(
+                &event_tx,
+                AppEvent::NetworkTrafficUpdated {
                     tab_id,
                     connection_id,
                     traffic: sample,
-                })
-                .await
-                .is_err()
-            {
+                },
+                "网络流量",
+            ) {
                 channel_closed = true;
                 break;
             }
@@ -219,15 +239,15 @@ pub(super) fn spawn_remote_stats_sampler(
                         stats.disk_total_bytes = *total;
                         stats.filesystems.clone_from(filesystems);
                     }
-                    if event_tx
-                        .send_async(AppEvent::SystemStatsUpdated {
+                    if !send_overwritable(
+                        &event_tx,
+                        AppEvent::SystemStatsUpdated {
                             tab_id,
                             connection_id,
                             stats,
-                        })
-                        .await
-                        .is_err()
-                    {
+                        },
+                        "系统统计",
+                    ) {
                         break;
                     }
                 }
@@ -339,15 +359,15 @@ pub(super) async fn run_local_stats_sampler(
             stats.filesystems.clone_from(filesystems);
         }
         for (tab_id, connection_id) in tabs {
-            if event_tx
-                .send_async(AppEvent::SystemStatsUpdated {
+            if !send_overwritable(
+                &event_tx,
+                AppEvent::SystemStatsUpdated {
                     tab_id,
                     connection_id,
                     stats: stats.clone(),
-                })
-                .await
-                .is_err()
-            {
+                },
+                "系统统计",
+            ) {
                 return;
             }
         }
