@@ -1,9 +1,11 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use transom_core::{
-    AppError, ErrorCode, HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host,
+    AppError, ErrorCode, HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore,
+    normalize_host, private_fs,
 };
 
 const SCHEMA_VERSION: u32 = 1;
@@ -68,7 +70,7 @@ impl JsonKnownHostsStore {
         let parent = self.path.parent().ok_or_else(|| {
             AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
         })?;
-        fs::create_dir_all(parent).map_err(AppError::from)?;
+        private_fs::ensure_private_dir(parent).map_err(AppError::from)?;
 
         let file = KnownHostsFile {
             version: SCHEMA_VERSION,
@@ -78,15 +80,19 @@ impl JsonKnownHostsStore {
             .map_err(|error| AppError::with_detail(ErrorCode::Configuration, error.to_string()))?;
 
         let temp = self.path.with_extension("json.tmp");
-        fs::write(&temp, data).map_err(AppError::from)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&temp, fs::Permissions::from_mode(0o600));
-        }
+        let mut temp_file = private_fs::open_private_truncate(&temp).map_err(AppError::from)?;
+        temp_file.write_all(&data).map_err(AppError::from)?;
+        temp_file.flush().map_err(AppError::from)?;
+        drop(temp_file);
         #[cfg(windows)]
         {
-            let _ = fs::remove_file(&self.path);
+            // Windows rename 不覆盖已存在文件；先删除旧记录。NotFound 表示首次写入，
+            // 其它删除失败必须上报，否则会直接 rename 失败、用户以为记录成功。
+            if let Err(error) = fs::remove_file(&self.path)
+                && error.kind() != std::io::ErrorKind::NotFound
+            {
+                return Err(AppError::from(error));
+            }
         }
         fs::rename(&temp, &self.path).map_err(AppError::from)?;
         Ok(())
@@ -145,6 +151,22 @@ mod tests {
 
     fn info(fingerprint: &str) -> HostKeyInfo {
         HostKeyInfo::new("ssh-ed25519", fingerprint, Some("ssh-ed25519 AAAA".into()))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn persisted_known_hosts_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts.json");
+        let store = JsonKnownHostsStore::new(&path).unwrap();
+        store
+            .record("example.com", 22, &info("SHA256:aaa"))
+            .unwrap();
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "主机密钥指纹不得被同机其它用户读取");
     }
 
     #[test]
