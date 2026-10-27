@@ -8194,8 +8194,10 @@ name = "transom-terminal"
 version = "1.0.0"
 dependencies = [
  "alacritty_terminal",
+ "base64 0.22.1",
  "flume",
  "gpui-kit",
+ "image",
  "log",
  "parking_lot",
  "portable-pty",

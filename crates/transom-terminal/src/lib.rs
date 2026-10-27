@@ -6,6 +6,7 @@ mod engine;
 mod event;
 mod history_popup;
 mod input;
+mod kitty_graphics;
 mod osc;
 pub mod record;
 mod renderer;

@@ -3,6 +3,7 @@ use crate::block::BlockLayout;
 use crate::engine::TerminalEngine;
 use crate::event::{HistoryProvider, TerminalEvent};
 use crate::input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
+use crate::kitty_graphics::GraphicsPlacement;
 use crate::osc::{CommandTracker, OscEvent};
 use crate::record::RecorderHandle;
 use crate::renderer::{PaintRequest, TerminalRenderer};
@@ -60,6 +61,8 @@ struct PreparedTerminal {
     damage: crate::renderer::DamageInfo,
     /// 本帧的语义块折叠映射；`None` 表示经典连续流。
     block_layout: Option<Arc<BlockLayout>>,
+    /// 本帧要绘制的 Kitty 图像放置。
+    graphics: Vec<GraphicsPlacement>,
 }
 
 pub struct TerminalView {
@@ -1260,10 +1263,12 @@ impl Render for TerminalView {
                             .build_block_layout(block_view.as_ref())
                             .map(Arc::new);
                         *block_layout_shared.lock() = layout.clone();
+                        let graphics = engine.graphics_placements();
                         PreparedTerminal {
                             search,
                             damage,
                             block_layout: layout,
+                            graphics,
                         }
                     },
                     move |bounds, prepared, window, cx| {
@@ -1289,6 +1294,7 @@ impl Render for TerminalView {
                                 search: prepared.search.as_ref(),
                                 block_layout: prepared.block_layout.as_deref(),
                                 block_style,
+                                graphics: &prepared.graphics,
                             },
                             &mut row_cache,
                             &prepared.damage,

@@ -3,6 +3,7 @@ mod scan;
 
 use crate::block::{BlockLayout, VisualSlot};
 use crate::event::TerminalEventProxy;
+use crate::kitty_graphics::GraphicsPlacement;
 use crate::search::SearchPaint;
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint};
@@ -43,6 +44,8 @@ pub(crate) struct PaintRequest<'a> {
     pub(crate) block_layout: Option<&'a BlockLayout>,
     /// 语义块外观样式（卡片/极简）。
     pub(crate) block_style: BlockViewStyle,
+    /// 本帧要绘制的 Kitty 图像放置。
+    pub(crate) graphics: &'a [GraphicsPlacement],
 }
 
 /// 本帧需要重建绘制缓存的行集合。
@@ -345,6 +348,7 @@ impl TerminalRenderer {
             search,
             block_layout,
             block_style,
+            graphics,
         } = request;
         let grid = term.grid();
         let rows = grid.screen_lines();
@@ -385,6 +389,48 @@ impl TerminalRenderer {
             && cursor_row.is_some_and(|row| (0..rows as i32).contains(&row))
             && ime.is_none();
         let block_cursor = cursor_visible && cursor_style.shape == CursorShape::Block;
+
+        // Kitty 图像画在默认底色之上、文本之下：图片不会遮住程序输出的字，
+        // 程序显式设置的单元格背景仍然覆盖图片，与主流终端一致。
+        for graphic in graphics {
+            let row = match block_layout {
+                Some(layout) => layout.row_of_line(graphic.line),
+                None => {
+                    let row = graphic.line.0 + display_offset;
+                    (0..rows as i32).contains(&row).then_some(row as usize)
+                }
+            };
+            let Some(row) = row else {
+                continue;
+            };
+            if graphic.col >= cols {
+                continue;
+            }
+            let image_cols = graphic.cols.unwrap_or_else(|| {
+                ((graphic.width as f32 / f32::from(self.cell_width)).ceil() as usize).max(1)
+            });
+            let image_rows = graphic.rows.unwrap_or_else(|| {
+                ((graphic.height as f32 / f32::from(self.cell_height)).ceil() as usize).max(1)
+            });
+            let image_bounds = Bounds {
+                origin: Point {
+                    x: origin.x + self.cell_width * graphic.col as f32 + px(graphic.x as f32),
+                    y: origin.y + self.cell_height * row as f32 + px(graphic.y as f32),
+                },
+                size: Size {
+                    width: self.cell_width * image_cols as f32,
+                    height: self.cell_height * image_rows as f32,
+                },
+            };
+            let _ = window.paint_image(
+                bounds,
+                image_bounds,
+                Corners::default(),
+                graphic.image.clone(),
+                0,
+                false,
+            );
+        }
 
         // 行缓存与网格行数对齐：resize 后长度不符即整体失效（内核 resize 也会
         // 报告 Full 损伤，两道保险互为冗余）。

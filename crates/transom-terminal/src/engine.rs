@@ -1,5 +1,6 @@
 use crate::block::{BlockLayout, BlockStore, CommandBlock};
 use crate::event::TerminalEventProxy;
+use crate::kitty_graphics::{GraphicsPlacement, GraphicsStore, KittyEvent, KittyParser};
 use crate::osc::{OscEvent, OscScanner};
 use crate::renderer::DamageInfo;
 use crate::search::SearchState;
@@ -65,6 +66,9 @@ pub struct TerminalEngine {
     scrollback_limit: usize,
     /// 滚动缓冲已写满：停止记录块，避免折叠到错误的行段。
     blocks_saturated: bool,
+    /// Kitty 图形协议解析器与已解码图像仓库。
+    kitty: KittyParser,
+    graphics: GraphicsStore,
     /// 最近一次收到字节流的时刻，用于把重扫推迟到输出停歇之后。
     pub(crate) last_write: Option<Instant>,
     /// 缓冲区纪元：任何新写入或网格重建都会推进，用于判定命中快照是否失效。
@@ -107,6 +111,8 @@ impl TerminalEngine {
             blocks: BlockStore::default(),
             scrollback_limit: profile.scrollback,
             blocks_saturated: profile.scrollback == 0,
+            kitty: KittyParser::default(),
+            graphics: GraphicsStore::default(),
             search: SearchState::default(),
             last_write: None,
             epoch: 0,
@@ -123,20 +129,35 @@ impl TerminalEngine {
         // 标记处停下取光标，块边界才能落在标记发生的那一行。扫描器不消费
         // 输入，畸形序列也只影响通知，不影响屏幕内容。
         let scanned = self.osc_scanner.feed_with_offsets(bytes);
+        let kitty = self.kitty.feed_with_offsets(bytes);
+        enum Marker {
+            Osc(OscEvent),
+            Kitty(KittyEvent),
+        }
+        let mut markers: Vec<(usize, Marker)> = Vec::with_capacity(scanned.len() + kitty.len());
+        markers.extend(scanned.into_iter().map(|(o, e)| (o, Marker::Osc(e))));
+        markers.extend(kitty.into_iter().map(|(o, e)| (o, Marker::Kitty(e))));
+        markers.sort_by_key(|(offset, _)| *offset);
         let mut consumed = 0usize;
-        for (offset, event) in &scanned {
-            let end = (*offset + 1).min(bytes.len());
+        let mut osc_events = Vec::with_capacity(markers.len());
+        for (offset, marker) in markers {
+            let end = (offset + 1).min(bytes.len());
             if end > consumed {
                 self.parser.advance(&mut self.term, &bytes[consumed..end]);
                 consumed = end;
             }
-            self.handle_marker(event);
+            match marker {
+                Marker::Osc(event) => {
+                    self.handle_marker(&event);
+                    osc_events.push(event);
+                }
+                Marker::Kitty(event) => self.apply_kitty(event),
+            }
         }
         if consumed < bytes.len() {
             self.parser.advance(&mut self.term, &bytes[consumed..]);
         }
-        self.osc_events
-            .extend(scanned.into_iter().map(|(_, event)| event));
+        self.osc_events.extend(osc_events);
         if self.osc_events.len() > MAX_PENDING_OSC_EVENTS {
             // 视图长时间没取走（例如标签被隐藏）时丢最旧的，绝不让队列无界增长。
             let drop = self.osc_events.len() - MAX_PENDING_OSC_EVENTS;
@@ -151,7 +172,64 @@ impl TerminalEngine {
             log::debug!("滚动缓冲已达上限，停止采集语义块并回退到经典视图");
             self.blocks_saturated = true;
             self.blocks.clear();
+            self.graphics.clear();
         }
+        let grid = self.term.grid();
+        self.graphics
+            .retain_in_buffer(grid.history_size(), grid.screen_lines());
+    }
+
+    /// 应用一条 Kitty 图像事件：存入仓库并按当前光标位置放置。
+    fn apply_kitty(&mut self, event: KittyEvent) {
+        let cursor = self.term.grid().cursor.point;
+        let absolute = self.absolute_line(cursor.line);
+        match event {
+            KittyEvent::Transmit {
+                id,
+                image,
+                width,
+                height,
+                cols,
+                rows,
+                display,
+                x,
+                y,
+            } => {
+                self.graphics.store(id, image, width, height);
+                if display {
+                    self.graphics.place(crate::kitty_graphics::PlaceRequest {
+                        image_id: id,
+                        absolute_line: absolute,
+                        col: cursor.column.0,
+                        cols,
+                        rows,
+                        x,
+                        y,
+                    });
+                }
+            }
+            KittyEvent::Place {
+                id,
+                cols,
+                rows,
+                x,
+                y,
+            } => self.graphics.place(crate::kitty_graphics::PlaceRequest {
+                image_id: id,
+                absolute_line: absolute,
+                col: cursor.column.0,
+                cols,
+                rows,
+                x,
+                y,
+            }),
+            KittyEvent::Delete { id } => self.graphics.delete(id),
+        }
+    }
+
+    /// 当前应绘制的图像放置列表；渲染器按行映射换算可见位置。
+    pub(crate) fn graphics_placements(&self) -> Vec<GraphicsPlacement> {
+        self.graphics.placements(self.term.grid().history_size())
     }
 
     /// 单条 OSC 133 标记：按当前位置更新命令块。
@@ -401,6 +479,7 @@ impl TerminalEngine {
         // 折行重排会让所有缓存行号失去意义，命令块一并清空。
         self.blocks.clear();
         self.blocks_saturated = self.scrollback_limit == 0;
+        self.graphics.clear();
         self.epoch = self.epoch.wrapping_add(1);
     }
 
@@ -626,6 +705,25 @@ mod tests {
             ..settings
         };
         assert!(engine.build_block_layout(Some(&disabled)).is_none());
+    }
+
+    /// Kitty 图像按当前光标位置锚定网格行，删除指令能清掉全部放置。
+    #[test]
+    fn kitty_image_is_stored_and_placed_at_cursor() {
+        let (mut engine, _events) = engine(20, 4);
+        // 光标移到第 2 行第 3 列（0 基）。
+        engine.process(b"\x1b[2;3H");
+        // 1x1 纯红 RGB，base64 为 /wAA。
+        engine.process(b"\x1b_Ga=T,f=24,s=1,v=1,i=5;/wAA\x1b\\");
+        let placements = engine.graphics_placements();
+        assert_eq!(placements.len(), 1, "图像应有一次放置");
+        assert_eq!(placements[0].line, Line(1));
+        assert_eq!(placements[0].col, 2);
+        assert_eq!((placements[0].width, placements[0].height), (1, 1));
+
+        // 删除全部图像后放置必须消失。
+        engine.process(b"\x1b_Ga=d,d=a;\x1b\\");
+        assert!(engine.graphics_placements().is_empty());
     }
 
     fn captured(engine: &TerminalEngine) -> Vec<String> {
