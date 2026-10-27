@@ -26,6 +26,7 @@ mod internal;
 mod lifecycle;
 mod pty;
 mod samplers;
+mod session_context;
 mod sftp_exec;
 mod sftp_finish;
 mod state;

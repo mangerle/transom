@@ -11,31 +11,20 @@
 use super::Internal;
 use super::lifecycle::ConnectingTab;
 use super::samplers::LocalTrafficTabs;
+use super::session_context::ManagedSessionContext;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use transom_core::{AppEvent, ConnectionId, ForwardId, KnownHostsStore, TabId, TransferId};
-use transom_net::{ForwardTask, SftpClient, SshRemote, ZmodemControl};
+use transom_core::{AppEvent, ConnectionId, KnownHostsStore, TabId, TransferId};
+use transom_net::SshRemote;
 use transom_sync::CloudSyncService;
 
 /// 控制平面的全部可变状态表。
 pub(super) struct ControllerState {
-    /// 当前连接表：标签 -> 生效的连接 id。
-    pub(super) current_connections: HashMap<TabId, ConnectionId>,
-    /// 远端句柄表：标签 -> (连接 id, SSH 远端)。
-    pub(super) remotes: HashMap<TabId, (ConnectionId, SshRemote)>,
-    /// SFTP 客户端缓存：按标签复用已打开的客户端。
-    pub(super) sftp_clients: HashMap<TabId, SftpClient>,
+    /// 统一托管的活动会话上下文表：按 TabId 索引其连接、远端、SFTP、转发与监控任务。
+    pub(super) sessions: HashMap<TabId, ManagedSessionContext>,
     /// 在途 SFTP 操作任务：取消或关机时中止。
     pub(super) sftp_tasks: HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
-    /// 端口转发表：标签 -> 规则 -> 转发任务。
-    pub(super) forwards: HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
-    /// 网络流量采样任务：按标签跟踪，断开/关闭时中止。
-    pub(super) traffic_tasks: HashMap<TabId, tokio::task::JoinHandle<()>>,
-    /// 公钥部署任务：按标签跟踪。
-    pub(super) key_deploy_tasks: HashMap<TabId, tokio::task::JoinHandle<()>>,
-    /// 远端系统统计采样任务：按标签跟踪，断开/关闭时中止，杜绝孤儿任务。
-    pub(super) stats_tasks: HashMap<TabId, tokio::task::JoinHandle<()>>,
     /// 云同步任务：全局同一时刻只允许一个在途，进行中时拒绝新命令。
     pub(super) sync_task: Option<tokio::task::JoinHandle<()>>,
     /// 收尾任务集合（断开远端、转发优雅停止）：集中纳管 JoinHandle，
@@ -51,10 +40,6 @@ pub(super) struct ControllerState {
     /// 本地网络流量同样是机器级属性：共享采样按机器计一份读取，逐标签广播。
     pub(super) local_traffic_tabs: LocalTrafficTabs,
     pub(super) local_traffic_task: Option<tokio::task::JoinHandle<()>>,
-    /// ZMODEM：每标签一个事件转发任务与一个控制句柄；连接接入时建立，
-    /// 断开/关标签/重连时随 stop_zmodem 回收。
-    pub(super) zmodem_tasks: HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) zmodem_controls: HashMap<TabId, ZmodemControl>,
     /// 主机动作（拨测/唤醒）批次任务：停机时统一等待。
     pub(super) host_action_tasks: JoinSet<()>,
     /// 进程面板的一次性采样/终止任务：与主机动作同样纳入 JoinSet，
@@ -66,14 +51,8 @@ impl ControllerState {
     /// 空状态：全部表为空，收尾与批次集合就位。
     pub(super) fn new() -> Self {
         Self {
-            current_connections: HashMap::new(),
-            remotes: HashMap::new(),
-            sftp_clients: HashMap::new(),
+            sessions: HashMap::new(),
             sftp_tasks: HashMap::new(),
-            forwards: HashMap::new(),
-            traffic_tasks: HashMap::new(),
-            key_deploy_tasks: HashMap::new(),
-            stats_tasks: HashMap::new(),
             sync_task: None,
             cleanup_set: JoinSet::new(),
             connecting: HashMap::new(),
@@ -81,10 +60,32 @@ impl ControllerState {
             local_stats_task: None,
             local_traffic_tabs: Arc::new(std::sync::Mutex::new(Vec::new())),
             local_traffic_task: None,
-            zmodem_tasks: HashMap::new(),
-            zmodem_controls: HashMap::new(),
             host_action_tasks: JoinSet::new(),
             monitor_set: JoinSet::new(),
+        }
+    }
+
+    /// 查询指定标签当前生效的连接 ID。
+    pub(super) fn current_connection(&self, tab_id: TabId) -> Option<ConnectionId> {
+        self.sessions.get(&tab_id).map(|s| s.connection_id)
+    }
+
+    /// 查询指定标签当前生效且连接 ID 匹配的 SSH 远端连接。
+    pub(super) fn current_remote(
+        &self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+    ) -> Option<SshRemote> {
+        self.sessions
+            .get(&tab_id)
+            .filter(|s| s.connection_id == connection_id)
+            .and_then(|s| s.remote.clone())
+    }
+
+    /// 销毁并安全清理指定标签的全部会话资源。
+    pub(super) fn terminate_session(&mut self, tab_id: TabId, reason: &str) {
+        if let Some(session) = self.sessions.remove(&tab_id) {
+            session.shutdown(&mut self.cleanup_set, reason);
         }
     }
 }

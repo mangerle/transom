@@ -8,8 +8,7 @@
 use super::Internal;
 use super::ReadyConnection;
 use super::lifecycle::{
-    Admission, AdoptConnection, TabCleanupTables, admit_connection, adopt_connection,
-    drop_local_stats, stop_forwards, stop_key_deploy, stop_stats, stop_traffic, stop_zmodem,
+    Admission, AdoptConnection, admit_connection, adopt_connection, drop_local_stats,
 };
 use super::samplers::{
     run_local_stats_sampler, run_local_traffic_sampler, spawn_remote_stats_sampler,
@@ -98,7 +97,9 @@ async fn handle_connected(state: &mut ControllerState, ctx: &ControllerCtx, inte
 
             let traffic_task =
                 spawn_traffic_sampler(traffic, tab_id, connection_id, ctx.event_tx.clone());
-            state.traffic_tasks.insert(tab_id, traffic_task);
+            if let Some(session) = state.sessions.get_mut(&tab_id) {
+                session.set_traffic_task(traffic_task);
+            }
 
             let stats_task = spawn_remote_stats_sampler(
                 remote_clone,
@@ -106,7 +107,9 @@ async fn handle_connected(state: &mut ControllerState, ctx: &ControllerCtx, inte
                 connection_id,
                 ctx.event_tx.clone(),
             );
-            state.stats_tasks.insert(tab_id, stats_task);
+            if let Some(session) = state.sessions.get_mut(&tab_id) {
+                session.set_stats_task(stats_task);
+            }
         }
         ReadyConnection::Local { io, join } => {
             adopt_stream_connection(
@@ -217,18 +220,8 @@ async fn adopt_stream_connection<J>(
         zmodem,
     } = setup;
     adopt_connection(
-        TabCleanupTables {
-            current_connections: &mut state.current_connections,
-            forwards: &mut state.forwards,
-            traffic_tasks: &mut state.traffic_tasks,
-            key_deploy_tasks: &mut state.key_deploy_tasks,
-            stats_tasks: &mut state.stats_tasks,
-            sftp_clients: &mut state.sftp_clients,
-            remotes: &mut state.remotes,
-            cleanup: &mut state.cleanup_set,
-            zmodem_tasks: &mut state.zmodem_tasks,
-            zmodem_controls: &mut state.zmodem_controls,
-        },
+        &mut state.sessions,
+        &mut state.cleanup_set,
         AdoptConnection {
             tab_id,
             connection_id,
@@ -290,26 +283,13 @@ async fn handle_disconnected(
     tab_id: TabId,
     connection_id: ConnectionId,
 ) {
-    let is_current = state.current_connections.get(&tab_id) == Some(&connection_id);
+    let is_current = state.current_connection(tab_id) == Some(connection_id);
     if !is_current {
         return;
     }
-    state.current_connections.remove(&tab_id);
-    stop_forwards(&mut state.forwards, &mut state.cleanup_set, tab_id);
-    stop_traffic(&mut state.traffic_tasks, tab_id);
-    stop_key_deploy(&mut state.key_deploy_tasks, tab_id);
-    stop_stats(&mut state.stats_tasks, tab_id);
+    state.terminate_session(tab_id, "connection lost");
     drop_local_stats(&state.local_stats_tabs, tab_id);
     drop_local_stats(&state.local_traffic_tabs, tab_id);
-    stop_zmodem(&mut state.zmodem_tasks, &mut state.zmodem_controls, tab_id);
-    // 优雅断开远端：直接丢弃 Handle 会跳过 disconnect 通知，
-    // 服务器侧要等 keepalive 超时才回收会话。
-    if let Some((_, remote)) = state.remotes.remove(&tab_id) {
-        state.cleanup_set.spawn(async move {
-            remote.disconnect("connection lost").await;
-        });
-    }
-    state.sftp_clients.remove(&tab_id);
     state.sftp_tasks.retain(|(t, _), handle| {
         if *t == tab_id {
             handle.abort();
@@ -345,9 +325,9 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
     };
     // 提交前校验归属：只要该连接仍在活跃连接表中即合法。
     let valid_owner = state
-        .current_connections
+        .sessions
         .iter()
-        .find(|(_, c)| **c == connection_id)
+        .find(|(_, s)| s.connection_id == connection_id)
         .map(|(t, _)| *t);
     let Some(owner_tab) = valid_owner else {
         drop(result);
@@ -355,7 +335,9 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
     };
     match result {
         Ok(client) => {
-            state.sftp_clients.insert(owner_tab, client.clone());
+            if let Some(session) = state.sessions.get_mut(&owner_tab) {
+                session.sftp_client = Some(client.clone());
+            }
             sftp_exec::spawn_sftp_op(
                 &mut state.sftp_tasks,
                 ctx.event_tx.clone(),
@@ -400,9 +382,9 @@ async fn handle_forward_ready(
         return;
     };
     let is_current = state
-        .remotes
+        .sessions
         .get(&tab_id)
-        .is_some_and(|(current, _)| *current == connection_id);
+        .is_some_and(|s| s.connection_id == connection_id && s.remote.is_some());
     let status = match (is_current, result) {
         (false, Ok(task)) => {
             // 连接已失效：立即停止刚建立的转发并释放。
@@ -418,11 +400,9 @@ async fn handle_forward_ready(
         (false, Err(_)) => return,
         (true, Ok(task)) => {
             let bound_port = task.bound_port;
-            state
-                .forwards
-                .entry(tab_id)
-                .or_default()
-                .insert(rule_id, task);
+            if let Some(session) = state.sessions.get_mut(&tab_id) {
+                session.forwards.insert(rule_id, task);
+            }
             ForwardStatus {
                 rule_id,
                 state: ForwardState::Active { bound_port },

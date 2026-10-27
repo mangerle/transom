@@ -3,16 +3,16 @@
 use super::ops::execute_sftp_op;
 use super::remote_transfer::{execute_remote_transfer_op, spawn_remote_transfer_op};
 use crate::controller::Internal;
+use crate::controller::session_context::ManagedSessionContext;
 use std::collections::HashMap;
 use transom_core::{
     AppError, AppEvent, ConnectionId, ErrorCode, SftpAppEvent, SftpOperation, TabId, TransferId,
 };
-use transom_net::{SftpClient, SshRemote};
+use transom_net::SftpClient;
 
 /// SFTP 命令的调度参数：主循环状态表的借用与命令载荷。
 pub(crate) struct SftpDispatch<'a> {
-    pub(crate) remotes: &'a HashMap<TabId, (ConnectionId, SshRemote)>,
-    pub(crate) sftp_clients: &'a mut HashMap<TabId, SftpClient>,
+    pub(crate) sessions: &'a mut HashMap<TabId, ManagedSessionContext>,
     pub(crate) sftp_tasks: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
     pub(crate) event_tx: flume::Sender<AppEvent>,
     pub(crate) internal_tx: flume::Sender<Internal>,
@@ -27,8 +27,7 @@ pub(crate) struct SftpDispatch<'a> {
 /// 回流提交，分发循环不为网络往返等待。
 pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
     let SftpDispatch {
-        remotes,
-        sftp_clients,
+        sessions,
         sftp_tasks,
         event_tx,
         internal_tx,
@@ -48,14 +47,14 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         preserve_attributes,
     } = op
     {
-        let source_remote = remotes
+        let source_remote = sessions
             .values()
-            .find(|(c, _)| *c == source_connection_id)
-            .map(|(_, r)| r.clone());
-        let target_remote = remotes
+            .find(|s| s.connection_id == source_connection_id)
+            .and_then(|s| s.remote.clone());
+        let target_remote = sessions
             .values()
-            .find(|(c, _)| *c == target_connection_id)
-            .map(|(_, r)| r.clone());
+            .find(|s| s.connection_id == target_connection_id)
+            .and_then(|s| s.remote.clone());
         let (Some(source_remote), Some(target_remote)) = (source_remote, target_remote) else {
             send_sftp_not_ready(
                 &event_tx,
@@ -67,17 +66,14 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
             return;
         };
 
-        let source_tab = remotes
-            .iter()
-            .find(|(_, (c, _))| *c == source_connection_id)
-            .map(|(t, _)| *t);
-        let target_tab = remotes
-            .iter()
-            .find(|(_, (c, _))| *c == target_connection_id)
-            .map(|(t, _)| *t);
-
-        let cached_source = source_tab.and_then(|t| sftp_clients.get(&t).cloned());
-        let cached_target = target_tab.and_then(|t| sftp_clients.get(&t).cloned());
+        let cached_source = sessions
+            .values()
+            .find(|s| s.connection_id == source_connection_id)
+            .and_then(|s| s.sftp_client.clone());
+        let cached_target = sessions
+            .values()
+            .find(|s| s.connection_id == target_connection_id)
+            .and_then(|s| s.sftp_client.clone());
 
         if let (Some(sc), Some(tc)) = (cached_source.clone(), cached_target.clone()) {
             spawn_remote_transfer_op(
@@ -143,14 +139,20 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         return;
     }
 
-    let (target_tab_id, remote) = if let Some((current_connection, remote)) = remotes.get(&tab_id)
-        && *current_connection == connection_id
+    let (_target_tab_id, remote, cached) = if let Some(session) = sessions.get(&tab_id)
+        && session.connection_id == connection_id
+        && let Some(ref remote) = session.remote
     {
-        (tab_id, remote.clone())
-    } else if let Some((owner_tab, (_, remote))) =
-        remotes.iter().find(|(_, (c, _))| *c == connection_id)
+        (tab_id, remote.clone(), session.sftp_client.clone())
+    } else if let Some((owner_tab, session)) = sessions
+        .iter()
+        .find(|(_, s)| s.connection_id == connection_id && s.remote.is_some())
     {
-        (*owner_tab, remote.clone())
+        (
+            *owner_tab,
+            session.remote.clone().unwrap(),
+            session.sftp_client.clone(),
+        )
     } else {
         send_sftp_not_ready(
             &event_tx,
@@ -162,7 +164,6 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         return;
     };
 
-    let cached = sftp_clients.get(&target_tab_id).cloned();
     match cached {
         Some(client) => spawn_sftp_op(
             sftp_tasks,

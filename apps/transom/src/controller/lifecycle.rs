@@ -4,12 +4,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use transom_core::{
-    AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, HostAppEvent, TabId, TerminalAppEvent,
-    TerminalIo, TransferId, ZmodemAppEvent, ZmodemEvent,
+    AppError, AppEvent, ConnectionId, ErrorCode, HostAppEvent, TabId, TerminalAppEvent, TerminalIo,
+    TransferId, ZmodemAppEvent, ZmodemEvent,
 };
-use transom_net::{ForwardTask, SftpClient, SshRemote, ZmodemConfig, ZmodemControl, attach_zmodem};
+use transom_net::{SshRemote, ZmodemConfig, attach_zmodem};
 
 use super::Internal;
+use super::session_context::ManagedSessionContext;
 
 /// 注销一个标签的本地统计订阅；订阅清空后采样器自行退出。
 pub(super) fn drop_local_stats(
@@ -19,74 +20,6 @@ pub(super) fn drop_local_stats(
     if let Ok(mut tabs) = local_stats_tabs.lock() {
         tabs.retain(|(tab, _)| *tab != tab_id);
     }
-}
-
-pub(super) fn stop_forwards(
-    forwards: &mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
-    cleanup: &mut JoinSet<()>,
-    tab_id: TabId,
-) {
-    if let Some(tasks) = forwards.remove(&tab_id) {
-        for (_, task) in tasks {
-            // 转发停止要等服务端确认拆除，纳入收尾集合等待而非丢弃句柄
-            cleanup.spawn(async move {
-                task.stop().await;
-            });
-        }
-    }
-}
-
-pub(super) fn stop_stats(
-    stats_tasks: &mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    tab_id: TabId,
-) {
-    if let Some(task) = stats_tasks.remove(&tab_id) {
-        task.abort();
-    }
-}
-
-pub(super) fn stop_traffic(
-    traffic_tasks: &mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    tab_id: TabId,
-) {
-    if let Some(task) = traffic_tasks.remove(&tab_id) {
-        task.abort();
-    }
-}
-
-pub(super) fn stop_key_deploy(
-    key_deploy_tasks: &mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    tab_id: TabId,
-) {
-    if let Some(task) = key_deploy_tasks.remove(&tab_id) {
-        task.abort();
-    }
-}
-
-pub(super) fn stop_zmodem(
-    zmodem_tasks: &mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    zmodem_controls: &mut HashMap<TabId, ZmodemControl>,
-    tab_id: TabId,
-) {
-    if let Some(task) = zmodem_tasks.remove(&tab_id) {
-        task.abort();
-    }
-    zmodem_controls.remove(&tab_id);
-}
-
-/// 连接接入时需要清理的各状态表借用集合，收敛参数个数（规范：超过
-/// 5 个参数必须参数对象化）。
-pub(super) struct TabCleanupTables<'a> {
-    pub(super) current_connections: &'a mut HashMap<TabId, ConnectionId>,
-    pub(super) forwards: &'a mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
-    pub(super) traffic_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) key_deploy_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) stats_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) sftp_clients: &'a mut HashMap<TabId, SftpClient>,
-    pub(super) remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
-    pub(super) cleanup: &'a mut JoinSet<()>,
-    pub(super) zmodem_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) zmodem_controls: &'a mut HashMap<TabId, ZmodemControl>,
 }
 
 /// 新连接接入的登记参数。
@@ -107,14 +40,14 @@ pub(super) struct AdoptConnection<J> {
     pub(super) zmodem_config: ZmodemConfig,
 }
 
-/// 三类连接（SSH/本地/串口）接入的公共路径：登记当前连接、停掉旧连接的
+/// 三类连接（SSH/本地/串口）接入的公共路径：登记当前会话、停掉旧会话的
 /// 全部后台任务、断开被顶掉的旧远端、广播 TerminalReady 并挂接退出监听。
 ///
-/// 设计原理（Why）：三个分支此前各自复制这段清理逻辑，新增连接种类或
-/// 清理项时极易漏改其中一处；分支里只保留各自的差异化收尾（流量采样、
-/// 系统统计）。
+/// 设计原理（Why）：通过 `ManagedSessionContext` 统一内聚管理会话资源，
+/// 接入时一键清理旧会话，消除原先散落在十几个字典表里的手动删除。
 pub(super) async fn adopt_connection<J>(
-    tables: TabCleanupTables<'_>,
+    sessions: &mut HashMap<TabId, ManagedSessionContext>,
+    cleanup: &mut JoinSet<()>,
     setup: AdoptConnection<J>,
     event_tx: &flume::Sender<AppEvent>,
     internal_tx: &flume::Sender<Internal>,
@@ -123,30 +56,22 @@ pub(super) async fn adopt_connection<J>(
 {
     let tab_id = setup.tab_id;
     let connection_id = setup.connection_id;
-    tables.current_connections.insert(tab_id, connection_id);
-    stop_forwards(tables.forwards, tables.cleanup, tab_id);
-    stop_traffic(tables.traffic_tasks, tab_id);
-    stop_key_deploy(tables.key_deploy_tasks, tab_id);
-    stop_stats(tables.stats_tasks, tab_id);
-    tables.sftp_clients.remove(&tab_id);
-    // SSH 重连用 insert 顶掉旧远端；切回本地/串口则移除旧远端并断开
-    let old = match setup.remote {
-        Some(remote) => tables.remotes.insert(tab_id, (connection_id, remote)),
-        None => tables.remotes.remove(&tab_id),
-    };
-    if let Some((_, old_remote)) = old {
-        let reason = setup.disconnect_reason.to_string();
-        tables.cleanup.spawn(async move {
-            old_remote.disconnect(&reason).await;
-        });
+
+    // 清理并停掉旧会话（断开旧远端与停止附属任务）
+    if let Some(old_session) = sessions.remove(&tab_id) {
+        old_session.shutdown(cleanup, setup.disconnect_reason);
     }
+
+    // 建立新会话上下文
+    let mut session = ManagedSessionContext::new(connection_id, setup.remote);
+
     // ZMODEM 监督层统一挂载：读过滤（发起标记扫描/协议字节接管）与写过滤
     // （激活期拦截键入）对所有传输一致生效。事件转发任务是独立句柄，
     // 断开/重连时随 stop_zmodem 中止，杜绝孤儿任务。
-    stop_zmodem(tables.zmodem_tasks, tables.zmodem_controls, tab_id);
     let (zmodem_tx, zmodem_rx) = flume::bounded::<ZmodemEvent>(64);
     let (io, control) = attach_zmodem(setup.io, setup.zmodem_config, zmodem_tx);
-    tables.zmodem_controls.insert(tab_id, control);
+    session.zmodem_control = Some(control);
+
     let event_tx_zmodem = event_tx.clone();
     let zmodem_task = tokio::spawn(async move {
         while let Ok(event) = zmodem_rx.recv_async().await {
@@ -166,7 +91,8 @@ pub(super) async fn adopt_connection<J>(
             }
         }
     });
-    tables.zmodem_tasks.insert(tab_id, zmodem_task);
+    session.zmodem_task = Some(zmodem_task);
+    sessions.insert(tab_id, session);
 
     let _ = event_tx
         .send_async(
@@ -193,16 +119,11 @@ pub(super) async fn adopt_connection<J>(
 /// 优雅停机的状态表借用集合。
 pub(super) struct ShutdownTables<'a> {
     pub(super) connecting: &'a mut HashMap<TabId, ConnectingTab>,
-    pub(super) forwards: &'a mut HashMap<TabId, HashMap<ForwardId, ForwardTask>>,
-    pub(super) traffic_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) key_deploy_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
-    pub(super) stats_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+    pub(super) sessions: &'a mut HashMap<TabId, ManagedSessionContext>,
     pub(super) sftp_tasks: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
-    pub(super) remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
     pub(super) cleanup: &'a mut JoinSet<()>,
     pub(super) local_stats_task: &'a mut Option<tokio::task::JoinHandle<()>>,
     pub(super) local_traffic_task: &'a mut Option<tokio::task::JoinHandle<()>>,
-    pub(super) zmodem_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
 }
 
 /// 优雅停机：停掉全部后台任务、断开全部远端并限时等待收尾，不再让任务
@@ -213,16 +134,11 @@ pub(super) struct ShutdownTables<'a> {
 pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
     let ShutdownTables {
         connecting,
-        forwards,
-        traffic_tasks,
-        key_deploy_tasks,
-        stats_tasks,
+        sessions,
         sftp_tasks,
-        remotes,
         cleanup,
         local_stats_task,
         local_traffic_task,
-        zmodem_tasks,
     } = tables;
     // 待连接任务：建连中的握手与认证随停机中止
     for (_, entry) in connecting.drain() {
@@ -231,34 +147,14 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
     for (_, handle) in sftp_tasks.drain() {
         handle.abort();
     }
-    for (_, handle) in traffic_tasks.drain() {
-        handle.abort();
-    }
-    for (_, handle) in key_deploy_tasks.drain() {
-        handle.abort();
-    }
-    for (_, handle) in stats_tasks.drain() {
-        handle.abort();
-    }
-    for (_, tasks) in forwards.drain() {
-        for (_, task) in tasks {
-            cleanup.spawn(async move {
-                task.stop().await;
-            });
-        }
-    }
-    for (_, (_, remote)) in remotes.drain() {
-        cleanup.spawn(async move {
-            remote.disconnect("application shutdown").await;
-        });
+    // 遍历活动会话上下文，一键释放所有会话资源
+    for (_, session) in sessions.drain() {
+        session.shutdown(cleanup, "application shutdown");
     }
     if let Some(task) = local_stats_task.take() {
         task.abort();
     }
     if let Some(task) = local_traffic_task.take() {
-        task.abort();
-    }
-    for (_, task) in zmodem_tasks.drain() {
         task.abort();
     }
     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {
@@ -269,8 +165,7 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
 
 /// 公钥部署的派发参数。
 pub(super) struct KeyDeployParams<'a> {
-    pub(super) remotes: &'a mut HashMap<TabId, (ConnectionId, SshRemote)>,
-    pub(super) key_deploy_tasks: &'a mut HashMap<TabId, tokio::task::JoinHandle<()>>,
+    pub(super) sessions: &'a mut HashMap<TabId, ManagedSessionContext>,
     pub(super) event_tx: &'a flume::Sender<AppEvent>,
     pub(super) tab_id: TabId,
     pub(super) connection_id: ConnectionId,
@@ -282,21 +177,19 @@ pub(super) struct KeyDeployParams<'a> {
 /// 连接未就绪时直接回失败事件。
 pub(super) async fn deploy_key(params: KeyDeployParams<'_>) {
     let KeyDeployParams {
-        remotes,
-        key_deploy_tasks,
+        sessions,
         event_tx,
         tab_id,
         connection_id,
         key_name,
         public_key,
     } = params;
-    let target = remotes
-        .get(&tab_id)
-        .filter(|(current, _)| *current == connection_id)
-        .map(|(_, remote)| remote.clone());
+    let target = sessions
+        .get_mut(&tab_id)
+        .filter(|s| s.connection_id == connection_id)
+        .and_then(|s| s.remote.clone().map(|r| (s, r)));
     match target {
-        Some(remote) => {
-            stop_key_deploy(key_deploy_tasks, tab_id);
+        Some((session, remote)) => {
             let event_tx = event_tx.clone();
             let handle = tokio::spawn(async move {
                 let error = transom_net::deploy_public_key(&remote, &public_key)
@@ -314,7 +207,7 @@ pub(super) async fn deploy_key(params: KeyDeployParams<'_>) {
                     )
                     .await;
             });
-            key_deploy_tasks.insert(tab_id, handle);
+            session.set_key_deploy_task(handle);
         }
         None => {
             let _ = event_tx

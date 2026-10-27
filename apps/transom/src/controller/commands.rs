@@ -8,7 +8,6 @@ use super::Internal;
 use super::host_exec::run_batch;
 use super::lifecycle::{
     ConnectingTab, KeyDeployParams, ShutdownTables, deploy_key, drop_local_stats, shutdown_all,
-    stop_forwards, stop_key_deploy, stop_stats, stop_traffic,
 };
 use super::pty::{ConnectDispatch, dispatch_connect};
 use super::samplers;
@@ -19,7 +18,7 @@ use transom_core::{
     AppCommand, AppError, ConnectionId, ErrorCode, ForwardAppEvent, ForwardId, ForwardRule,
     ForwardState, ForwardStatus, TabId,
 };
-use transom_net::{SshRemote, ZmodemConfig, start_forward};
+use transom_net::{ZmodemConfig, start_forward};
 
 /// 主循环的继续/停机判定。
 pub(super) enum LoopControl {
@@ -121,8 +120,7 @@ fn handle_sftp_command(
             op,
         } => {
             dispatch_sftp_op(SftpDispatch {
-                remotes: &state.remotes,
-                sftp_clients: &mut state.sftp_clients,
+                sessions: &mut state.sessions,
                 sftp_tasks: &mut state.sftp_tasks,
                 event_tx: ctx.event_tx.clone(),
                 internal_tx: ctx.internal_tx.clone(),
@@ -176,8 +174,7 @@ async fn handle_host_command(
             public_key,
         } => {
             deploy_key(KeyDeployParams {
-                remotes: &mut state.remotes,
-                key_deploy_tasks: &mut state.key_deploy_tasks,
+                sessions: &mut state.sessions,
                 event_tx: &ctx.event_tx,
                 tab_id,
                 connection_id,
@@ -200,7 +197,7 @@ async fn handle_host_command(
             state
                 .monitor_set
                 .spawn(samplers::run_process_sample(samplers::ProcessTarget {
-                    remote: current_remote(state, tab_id, connection_id),
+                    remote: state.current_remote(tab_id, connection_id),
                     tab_id,
                     connection_id,
                     event_tx: ctx.event_tx.clone(),
@@ -214,7 +211,7 @@ async fn handle_host_command(
         } => {
             state.monitor_set.spawn(samplers::run_process_kill(
                 samplers::ProcessTarget {
-                    remote: current_remote(state, tab_id, connection_id),
+                    remote: state.current_remote(tab_id, connection_id),
                     tab_id,
                     connection_id,
                     event_tx: ctx.event_tx.clone(),
@@ -265,14 +262,22 @@ async fn handle_sync_command(
 fn handle_zmodem_command(state: &mut ControllerState, command: transom_core::ZmodemCommand) {
     match command {
         transom_core::ZmodemCommand::ZmodemUpload { tab_id, files } => {
-            if let Some(control) = state.zmodem_controls.get(&tab_id)
+            let control = state
+                .sessions
+                .get(&tab_id)
+                .and_then(|s| s.zmodem_control.clone());
+            if let Some(control) = control
                 && !control.upload(files)
             {
                 log::warn!("ZMODEM 上传决策被丢弃，标签 {tab_id:?} 无等待中的传输会话");
             }
         }
         transom_core::ZmodemCommand::ZmodemCancel { tab_id } => {
-            if let Some(control) = state.zmodem_controls.get(&tab_id) {
+            let control = state
+                .sessions
+                .get(&tab_id)
+                .and_then(|s| s.zmodem_control.clone());
+            if let Some(control) = control {
                 control.cancel();
             }
         }
@@ -308,7 +313,13 @@ async fn handle_forward_start(
     connection_id: ConnectionId,
     rule: ForwardRule,
 ) {
-    let Some((current_connection, remote)) = state.remotes.get(&tab_id).cloned() else {
+    let remote = state
+        .sessions
+        .get(&tab_id)
+        .filter(|s| s.connection_id == connection_id)
+        .and_then(|s| s.remote.clone());
+
+    let Some(remote) = remote else {
         let _ = ctx
             .event_tx
             .send_async(
@@ -329,9 +340,7 @@ async fn handle_forward_start(
             .await;
         return;
     };
-    if current_connection != connection_id {
-        return;
-    }
+
     let internal_tx = ctx.internal_tx.clone();
     state.cleanup_set.spawn(async move {
         let result = start_forward(&remote, &rule).await;
@@ -354,15 +363,13 @@ async fn handle_forward_stop(
     connection_id: ConnectionId,
     rule_id: ForwardId,
 ) {
-    let Some((current_connection, _)) = state.remotes.get(&tab_id) else {
+    let Some(session) = state.sessions.get_mut(&tab_id) else {
         return;
     };
-    if *current_connection != connection_id {
+    if session.connection_id != connection_id {
         return;
     }
-    if let Some(tasks) = state.forwards.get_mut(&tab_id)
-        && let Some(task) = tasks.remove(&rule_id)
-    {
+    if let Some(task) = session.forwards.remove(&rule_id) {
         state.cleanup_set.spawn(async move {
             task.stop().await;
         });
@@ -386,19 +393,14 @@ async fn handle_forward_stop(
 
 /// 关闭标签：注销连接意图与全部附属任务，优雅断开远端。
 fn close_tab(state: &mut ControllerState, tab_id: TabId) {
-    state.current_connections.remove(&tab_id);
     // 关闭即注销连接意图并取消建连任务：DNS/握手/认证等待中的连接随任务
     // 中止，迟到的完成结果被接入裁决拒收。
     if let Some(entry) = state.connecting.remove(&tab_id) {
         entry.task.abort();
     }
     drop_local_stats(&state.local_traffic_tabs, tab_id);
-    stop_forwards(&mut state.forwards, &mut state.cleanup_set, tab_id);
-    stop_traffic(&mut state.traffic_tasks, tab_id);
-    stop_key_deploy(&mut state.key_deploy_tasks, tab_id);
-    stop_stats(&mut state.stats_tasks, tab_id);
     drop_local_stats(&state.local_stats_tabs, tab_id);
-    state.sftp_clients.remove(&tab_id);
+    state.terminate_session(tab_id, "tab closed");
     state.sftp_tasks.retain(|(t, _), handle| {
         if *t == tab_id {
             handle.abort();
@@ -407,11 +409,6 @@ fn close_tab(state: &mut ControllerState, tab_id: TabId) {
             true
         }
     });
-    if let Some((_, remote)) = state.remotes.remove(&tab_id) {
-        state.cleanup_set.spawn(async move {
-            remote.disconnect("tab closed").await;
-        });
-    }
 }
 
 /// 停机收尾：中止在途云同步、停全部后台任务、断开全部远端并限时等待。
@@ -428,31 +425,13 @@ pub(super) async fn shutdown(
     }
     shutdown_all(ShutdownTables {
         connecting: &mut state.connecting,
-        forwards: &mut state.forwards,
-        traffic_tasks: &mut state.traffic_tasks,
-        key_deploy_tasks: &mut state.key_deploy_tasks,
-        stats_tasks: &mut state.stats_tasks,
+        sessions: &mut state.sessions,
         sftp_tasks: &mut state.sftp_tasks,
-        remotes: &mut state.remotes,
         cleanup: &mut state.cleanup_set,
         local_stats_task: &mut state.local_stats_task,
         local_traffic_task: &mut state.local_traffic_task,
-        zmodem_tasks: &mut state.zmodem_tasks,
     })
     .await;
     state.monitor_set.shutdown().await;
     let _ = shutdown_tx.send(());
-}
-
-/// 取标签当前有效的远端句柄：连接已切换或不存在时返回 `None`。
-fn current_remote(
-    state: &ControllerState,
-    tab_id: TabId,
-    connection_id: ConnectionId,
-) -> Option<SshRemote> {
-    state
-        .remotes
-        .get(&tab_id)
-        .filter(|(current, _)| *current == connection_id)
-        .map(|(_, remote)| remote.clone())
 }
