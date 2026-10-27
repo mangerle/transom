@@ -28,8 +28,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
 use transom_core::{
-    BlockViewSettings, Rgb as PaletteColor, TerminalControlHandle, TerminalInteraction, TerminalIo,
-    TerminalProfile, TerminalSize,
+    BlockViewSettings, Rgb as PaletteColor, RightClickBehavior, TerminalControlHandle,
+    TerminalInteraction, TerminalIo, TerminalProfile, TerminalSize,
 };
 
 const CONTEXT: &str = "Terminal";
@@ -940,9 +940,9 @@ impl TerminalView {
 
         match event.button {
             MouseButton::Right => {
-                // 右键主语义是打开菜单；Shift+右键保留"快速粘贴"，
-                // 粘贴后仍可再从菜单切换块视图。
-                if self.interaction.right_click_paste && event.modifiers.shift {
+                // 三档语义：Paste 直接粘贴；Menu / MenuWithPaste 由
+                // ContextMenuExt 打开菜单，这里不再消费点击。
+                if self.interaction.right_click_behavior() == RightClickBehavior::Paste {
                     self.paste_from_clipboard(cx);
                 }
             }
@@ -1160,6 +1160,7 @@ impl Render for TerminalView {
             .map(|settings| settings.style)
             .unwrap_or_default();
         let block_layout_shared = self.block_layout.clone();
+        let right_click = self.interaction.right_click_behavior();
 
         let menu_entity = cx.entity();
         let layer = div()
@@ -1176,18 +1177,6 @@ impl Render for TerminalView {
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
-            .context_menu(move |menu, _window, _cx| {
-                let app = menu_entity.clone();
-                menu.item(
-                    PopupMenuItem::new("切换语义块视图 / 经典连续流")
-                        .icon(IconName::ListTree)
-                        .on_click(move |_, _, cx| {
-                            app.update(cx, |view, cx| {
-                                view.toggle_block_view(cx);
-                            });
-                        }),
-                )
-            })
             .child(
                 canvas(
                     move |bounds, window, cx| {
@@ -1305,6 +1294,42 @@ impl Render for TerminalView {
                 )
                 .size_full(),
             );
+        // 只有菜单档位才挂 ContextMenuExt：Paste 档位右键必须直接粘贴，
+        // 挂上菜单会让一次右键同时粘贴并弹出菜单。
+        let layer: AnyElement = if right_click == RightClickBehavior::Paste {
+            layer.into_any_element()
+        } else {
+            let menu_entity = menu_entity.clone();
+            layer
+                .context_menu(move |menu, _window, _cx| {
+                    let mut menu = menu;
+                    if right_click == RightClickBehavior::MenuWithPaste {
+                        let app = menu_entity.clone();
+                        menu = menu
+                            .item(
+                                PopupMenuItem::new("粘贴")
+                                    .icon(IconName::ClipboardPaste)
+                                    .on_click(move |_, _, cx| {
+                                        app.update(cx, |view, cx| {
+                                            view.paste_from_clipboard(cx);
+                                        });
+                                    }),
+                            )
+                            .item(PopupMenuItem::separator());
+                    }
+                    let app = menu_entity.clone();
+                    menu.item(
+                        PopupMenuItem::new("切换语义块视图 / 经典连续流")
+                            .icon(IconName::ListTree)
+                            .on_click(move |_, _, cx| {
+                                app.update(cx, |view, cx| {
+                                    view.toggle_block_view(cx);
+                                });
+                            }),
+                    )
+                })
+                .into_any_element()
+        };
 
         let search_bar = self.render_search_bar(cx);
         let block_actions = self.render_block_actions(cx);

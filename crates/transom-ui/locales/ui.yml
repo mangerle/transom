@@ -1667,8 +1667,8 @@ settings:
     en: Scroll back to the bottom automatically when you type.
     zh-CN: 输入时自动滚回底部，避免被历史输出留在上面。
   right_click_action_desc:
-    en: Right-click opens the context menu or pastes directly.
-    zh-CN: 右键打开上下文菜单，或直接粘贴剪贴板内容。
+    en: Paste directly, open the context menu, or open a menu whose first item pastes.
+    zh-CN: 右键可直接粘贴、弹出上下文菜单，或弹出菜单并将"粘贴"作为首项。
   middle_click_paste_desc:
     en: Paste the primary selection with the middle mouse button.
     zh-CN: 用鼠标中键粘贴主选区（Linux 惯例）。
@@ -1897,6 +1897,9 @@ settings:
   right_click_paste_action:
     en: Paste from Clipboard
     zh-CN: 快速粘贴
+  right_click_menu_paste:
+    en: Menu with Paste
+    zh-CN: 菜单含粘贴
   middle_click_paste:
     en: Paste on Middle Click
     zh-CN: 按下鼠标中键时粘贴

@@ -236,10 +236,30 @@ impl Default for TerminalProfile {
     }
 }
 
+/// 终端右键动作档位。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RightClickBehavior {
+    /// 右键直接粘贴剪贴板，不弹菜单（老配置 `right_click_paste = true`）。
+    #[default]
+    Paste,
+    /// 右键只弹上下文菜单（老配置 `right_click_paste = false`）。
+    Menu,
+    /// 右键弹菜单，菜单首项提供"粘贴"。
+    MenuWithPaste,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TerminalInteraction {
     pub copy_on_select: bool,
+    /// 旧版右键粘贴开关；仅为兼容老配置保留，读写以 `right_click` 为准。
+    ///
+    /// 反序列化后由 [`TerminalInteraction::right_click_behavior`] 迁移：
+    /// `true → Paste`、`false → Menu`，不丢失用户此前的选择。
     pub right_click_paste: bool,
+    /// 右键动作三档；老配置没有该字段时按旧开关迁移。
+    #[serde(default)]
+    pub right_click: Option<RightClickBehavior>,
     pub multiline_paste_confirm: bool,
     #[serde(default)]
     pub middle_click_paste: bool,
@@ -247,11 +267,29 @@ pub struct TerminalInteraction {
     pub trim_trailing_whitespace: bool,
 }
 
+impl TerminalInteraction {
+    /// 当前生效的右键动作；老配置按旧布尔开关迁移。
+    pub fn right_click_behavior(&self) -> RightClickBehavior {
+        self.right_click.unwrap_or(if self.right_click_paste {
+            RightClickBehavior::Paste
+        } else {
+            RightClickBehavior::Menu
+        })
+    }
+
+    /// 设置右键档位，并同步旧字段，避免降级版本读到相反语义。
+    pub fn set_right_click_behavior(&mut self, behavior: RightClickBehavior) {
+        self.right_click = Some(behavior);
+        self.right_click_paste = behavior == RightClickBehavior::Paste;
+    }
+}
+
 impl Default for TerminalInteraction {
     fn default() -> Self {
         Self {
             copy_on_select: true,
             right_click_paste: true,
+            right_click: Some(RightClickBehavior::Paste),
             multiline_paste_confirm: false,
             middle_click_paste: false,
             trim_trailing_whitespace: false,
@@ -262,6 +300,37 @@ impl Default for TerminalInteraction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 老配置没有 `right_click` 字段：必须按旧开关迁移，不能把用户此前的
+    /// "右键粘贴"悄悄改成弹菜单。
+    #[test]
+    fn legacy_right_click_flag_migrates_to_behavior() {
+        let paste: TerminalInteraction = serde_json::from_str(
+            r#"{"copy_on_select":true,"right_click_paste":true,"multiline_paste_confirm":false}"#,
+        )
+        .unwrap();
+        assert_eq!(paste.right_click_behavior(), RightClickBehavior::Paste);
+
+        let menu: TerminalInteraction = serde_json::from_str(
+            r#"{"copy_on_select":true,"right_click_paste":false,"multiline_paste_confirm":false}"#,
+        )
+        .unwrap();
+        assert_eq!(menu.right_click_behavior(), RightClickBehavior::Menu);
+    }
+
+    /// 新档位与旧布尔字段双向同步：老版本降级读取时语义不反转。
+    #[test]
+    fn setting_behavior_updates_legacy_flag() {
+        let mut interaction = TerminalInteraction::default();
+        interaction.set_right_click_behavior(RightClickBehavior::MenuWithPaste);
+        assert!(!interaction.right_click_paste);
+        assert_eq!(
+            interaction.right_click_behavior(),
+            RightClickBehavior::MenuWithPaste
+        );
+        interaction.set_right_click_behavior(RightClickBehavior::Paste);
+        assert!(interaction.right_click_paste);
+    }
 
     #[test]
     fn control_handle_delivers_messages() {
