@@ -19,10 +19,7 @@ serde_json.workspace = true
 parking_lot.workspace = true
 keyring.workspace = true
 zeroize.workspace = true
-argon2.workspace = true
-chacha20poly1305.workspace = true
-base64.workspace = true
-getrandom.workspace = true
+# 备份明文格式的 JSON/YAML 双解析（加解密信封本身已上提到 core）。
 serde_yaml_ng.workspace = true
 log.workspace = true
 

@@ -28,6 +28,14 @@ ssh-key.workspace = true
 rand.workspace = true
 # 云同步目标（WebDAV/S3）是异步契约，UI 测试与 net 实现要共用同一个 trait 形状。
 async-trait.workspace = true
+# 同步/备份信封（crypto 模块）：Argon2id 派生 + XChaCha20-Poly1305 加密。
+# 放在契约层是为了让网络层不再反向依赖存储层；工作区消费者本就经传递
+# 依赖编译这些 crate，不新增编译单元。
+argon2.workspace = true
+chacha20poly1305.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+serde_yaml_ng.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

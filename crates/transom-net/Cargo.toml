@@ -17,7 +17,6 @@ thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 transom-core.workspace = true
-transom-store.workspace = true
 tokio.workspace = true
 russh.workspace = true
 russh-sftp.workspace = true
@@ -43,5 +42,8 @@ chrono.workspace = true
 parking_lot.workspace = true
 ssh-key.workspace = true
 tempfile.workspace = true
+# 集成测试用真实 known_hosts 存储跑握手回环：仅测试依赖，生产依赖图
+# 不包含存储层（net 只依赖 transom-core 的契约与 crypto 信封）。
+transom-store.workspace = true
 # ZMODEM 真机互操作测试：起 lrzsz 的 sz/rz 子进程需要伪终端（工作区既有依赖）。
 portable-pty.workspace = true

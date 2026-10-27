@@ -12,10 +12,10 @@
 //! 代价与局限：每次同步都重新派生密钥（约 0.1~0.3 秒），换来的是不需要在
 //! 磁盘上缓存派生密钥；大文件同步前先整体读入内存，上限由调用方控制。
 
+use crate::{AppError, ErrorCode};
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use transom_core::{AppError, ErrorCode};
 use zeroize::Zeroizing;
 
 /// 信封魔数：`TSYN`（Transom Sync）。

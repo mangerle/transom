@@ -8126,13 +8126,18 @@ dependencies = [
 name = "transom-core"
 version = "1.1.0"
 dependencies = [
+ "argon2 0.5.3",
  "async-trait",
+ "base64 0.22.1",
+ "chacha20poly1305",
  "directories",
+ "getrandom 0.3.4",
  "globset",
  "log",
  "rand 0.10.3",
  "serde",
  "serde_json",
+ "serde_yaml_ng",
  "ssh-key",
  "tempfile",
  "thiserror 2.0.21",
@@ -8176,10 +8181,6 @@ dependencies = [
 name = "transom-store"
 version = "1.1.0"
 dependencies = [
- "argon2 0.5.3",
- "base64 0.22.1",
- "chacha20poly1305",
- "getrandom 0.3.4",
  "keyring",
  "log",
  "parking_lot",

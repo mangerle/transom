@@ -23,10 +23,10 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::Duration;
+use transom_core::crypto::envelope::{is_envelope, open, seal};
 use transom_core::{
     AppError, ErrorCode, GitSyncSettings, SessionCatalog, SyncMergeReport, merge_catalogs,
 };
-use transom_store::{is_envelope, open, seal};
 
 /// 仓库内保存加密信封的文件名。
 pub const GIT_SYNC_FILE: &str = "transom-sync.envelope";

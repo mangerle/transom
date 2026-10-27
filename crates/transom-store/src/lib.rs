@@ -5,20 +5,15 @@ mod history;
 
 pub mod backup;
 pub mod desktop;
-pub mod envelope;
 pub mod known_hosts;
 pub mod paths;
 pub mod secrets;
 pub mod sessions;
 pub mod settings;
 
-pub use backup::{
-    BackupFormat, CatalogBackupService, decrypt_document, encrypt_document, read_backup,
-    write_backup,
-};
-pub use envelope::{
-    ENVELOPE_HEADER_LEN, ENVELOPE_MAGIC, ENVELOPE_VERSION, is_envelope, open, seal,
-};
+// 备份/同步信封（BackupFormat、加解密入口）已上提到 `transom_core::crypto`：
+// 存储层只暴露"文件"侧能力。调用方（net、apps）统一从契约层引用。
+pub use backup::{CatalogBackupService, read_backup, write_backup};
 pub use history::JsonHistoryStore;
 pub use known_hosts::JsonKnownHostsStore;
 pub use secrets::KeyringSecretStore;

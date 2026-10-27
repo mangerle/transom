@@ -1,85 +1,26 @@
-//! 会话目录的备份文件读写：明文 JSON/YAML 或口令加密信封。
+//! 会话目录的备份文件读写：文件形态、钥匙串口令出入口与格式探测。
+//!
+//! 加解密（Argon2id 派生 + XChaCha20-Poly1305 信封）位于
+//! [`transom_core::crypto::backup`]：它同时被云同步复用，上提到契约层后
+//! 网络层不再依赖本存储层。本文件只负责"文件"：读写、体积上限、原子落盘
+//! 与钥匙串口令的导出/导入。
 //!
 //! 安全设计：
-//! - KDF 使用 Argon2id（64 MiB / 3 轮 / 单通道），固定参数写入代码而非
-//!   文件，攻击者无法通过篡改文件把 KDF 降级为低成本参数。
-//! - 加密使用 XChaCha20-Poly1305，24 字节随机 nonce 与 16 字节随机盐；
-//!   AAD 绑定格式标记，避免密文被挪作其他用途。
-//! - 明文备份默认不含系统钥匙串里的密码/口令，只有用户显式勾选才会写入。
+//! - 明文备份默认不含系统钥匙串里的密码/口令，只有用户显式勾选才会写入，
+//!   且包含口令时必须加密（见 `BackupService::export` 的入口校验）；
 //! - 文件以 0600 权限原子写入，导入前限制文件大小，防止恶意超大文件。
 
-use argon2::{Algorithm, Argon2, Params, Version};
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64;
-use chacha20poly1305::aead::{Aead, KeyInit, Payload};
-use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use transom_core::crypto::backup::{
+    BackupFormat, MAX_BACKUP_BYTES, decrypt_document, encrypt_document, is_encrypted_envelope,
+};
 use transom_core::{
     AppError, BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions,
     BackupSecret, BackupService, ErrorCode, SecretKey, SecretRestoreReport, SecretStore,
     SessionCatalog, collect_catalog_secrets,
 };
-use zeroize::Zeroizing;
-
-const MAGIC: &str = "transom-backup";
-const VERSION: u32 = 1;
-const AAD: &[u8] = b"transom-backup-v1";
-const SALT_LEN: usize = 16;
-const NONCE_LEN: usize = 24;
-/// 备份仅含配置文本，16 MiB 足以容纳数万条会话，同时限制恶意文件。
-const MAX_BACKUP_BYTES: u64 = 16 * 1024 * 1024;
-const ARGON_MEMORY_KIB: u32 = 64 * 1024;
-const ARGON_ITERATIONS: u32 = 3;
-const ARGON_PARALLELISM: u32 = 1;
-
-/// 备份文件的序列化格式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackupFormat {
-    Json,
-    Yaml,
-}
-
-impl BackupFormat {
-    /// 根据扩展名选择格式，未知扩展名默认 JSON。
-    pub fn from_path(path: &Path) -> Self {
-        match path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .map(str::to_ascii_lowercase)
-            .as_deref()
-        {
-            Some("yaml" | "yml") => Self::Yaml,
-            _ => Self::Json,
-        }
-    }
-}
-
-/// 加密信封：文件里只有随机参数与密文，看不出任何会话信息。
-#[derive(Serialize, Deserialize)]
-struct EncryptedBackup {
-    format: String,
-    version: u32,
-    salt: String,
-    nonce: String,
-    ciphertext: String,
-}
-
-/// 信封内的明文负载，按借用写出，避免为了加密再克隆一份口令。
-#[derive(Serialize)]
-struct EncryptedPayloadRef<'a> {
-    version: u32,
-    document: &'a BackupDocument,
-}
-
-/// 信封内的明文负载结构。
-#[derive(Deserialize)]
-struct EncryptedPayload {
-    version: u32,
-    document: BackupDocument,
-}
 
 /// 会话目录备份服务：文件格式、加密与钥匙串口令的出入口。
 ///
@@ -177,116 +118,6 @@ impl BackupService for CatalogBackupService {
     }
 }
 
-/// 加密备份文档并序列化为 JSON 或 YAML。
-///
-/// # Errors
-/// 口令为空、系统随机源不可用、序列化或加密失败时返回 `AppError`。
-pub fn encrypt_document(
-    document: &BackupDocument,
-    passphrase: &str,
-    format: BackupFormat,
-) -> Result<Vec<u8>, AppError> {
-    if passphrase.is_empty() {
-        return Err(AppError::with_detail(
-            ErrorCode::Configuration,
-            "备份口令不能为空",
-        ));
-    }
-    let payload = EncryptedPayloadRef {
-        version: VERSION,
-        document,
-    };
-    let plaintext = Zeroizing::new(serde_json::to_vec(&payload).map_err(|error| {
-        AppError::with_detail(
-            ErrorCode::Configuration,
-            format!("序列化备份内容失败: {error}"),
-        )
-    })?);
-
-    let mut salt = [0u8; SALT_LEN];
-    getrandom::fill(&mut salt).map_err(|error| {
-        AppError::with_detail(ErrorCode::Io, format!("生成备份随机盐失败: {error}"))
-    })?;
-    let mut nonce = [0u8; NONCE_LEN];
-    getrandom::fill(&mut nonce).map_err(|error| {
-        AppError::with_detail(ErrorCode::Io, format!("生成备份随机数失败: {error}"))
-    })?;
-
-    let key = derive_key(passphrase, &salt)?;
-    let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
-        .map_err(|_| AppError::with_detail(ErrorCode::Configuration, "初始化备份加密器失败"))?;
-    let ciphertext = cipher
-        .encrypt(
-            XNonce::from_slice(&nonce),
-            Payload {
-                msg: &plaintext,
-                aad: AAD,
-            },
-        )
-        .map_err(|_| AppError::with_detail(ErrorCode::Configuration, "加密备份内容失败"))?;
-
-    let envelope = EncryptedBackup {
-        format: MAGIC.to_string(),
-        version: VERSION,
-        salt: BASE64.encode(salt),
-        nonce: BASE64.encode(nonce),
-        ciphertext: BASE64.encode(ciphertext),
-    };
-    serialize_envelope(&envelope, format)
-}
-
-/// 解密备份并返回文档快照。
-///
-/// # Errors
-/// 文件格式、版本、口令或完整性校验失败时返回统一的中文错误，
-/// 不区分“口令错误”和“密文损坏”，避免为暴力破解提供额外信息。
-pub fn decrypt_document(bytes: &[u8], passphrase: &str) -> Result<BackupDocument, AppError> {
-    let envelope = parse_envelope(bytes)?;
-    if envelope.format != MAGIC || envelope.version > VERSION {
-        return Err(AppError::with_detail(
-            ErrorCode::Configuration,
-            "不是受支持的 Transom 备份文件或版本过新",
-        ));
-    }
-    let salt = BASE64
-        .decode(&envelope.salt)
-        .map_err(|_| invalid_backup())?;
-    let nonce = BASE64
-        .decode(&envelope.nonce)
-        .map_err(|_| invalid_backup())?;
-    let ciphertext = BASE64
-        .decode(&envelope.ciphertext)
-        .map_err(|_| invalid_backup())?;
-    if salt.len() != SALT_LEN || nonce.len() != NONCE_LEN {
-        return Err(invalid_backup());
-    }
-
-    let key = derive_key(passphrase, &salt)?;
-    let cipher = XChaCha20Poly1305::new_from_slice(&key[..]).map_err(|_| invalid_backup())?;
-    let plaintext = Zeroizing::new(
-        cipher
-            .decrypt(
-                XNonce::from_slice(&nonce),
-                Payload {
-                    msg: &ciphertext,
-                    aad: AAD,
-                },
-            )
-            .map_err(|_| invalid_backup())?,
-    );
-    let payload: EncryptedPayload =
-        serde_json::from_slice(&plaintext).map_err(|_| invalid_backup())?;
-    if payload.version > VERSION {
-        return Err(AppError::with_detail(
-            ErrorCode::Configuration,
-            "备份内容版本高于当前应用支持版本",
-        ));
-    }
-    let mut document = payload.document;
-    document.normalize();
-    Ok(document)
-}
-
 /// 写入备份文件：给了口令就加密，没给就写明文 JSON/YAML。
 ///
 /// 与存储文件共用同一套原子写：唯一临时名 + fsync + rename 覆盖，0600
@@ -354,14 +185,6 @@ fn read_backup_bytes(path: &Path) -> Result<Vec<u8>, AppError> {
     fs::read(path).map_err(AppError::from)
 }
 
-/// 判断文件是否是加密信封。
-///
-/// 明文文档没有 `format` 标记，按信封解析必然失败；因此这里只需确认
-/// "能按信封解析且标记匹配"，不必给明文格式另立一套字段。
-fn is_encrypted_envelope(bytes: &[u8]) -> bool {
-    parse_envelope(bytes).is_ok_and(|envelope| envelope.format == MAGIC)
-}
-
 /// 解析明文备份文档。
 fn parse_document(bytes: &[u8]) -> Result<BackupDocument, AppError> {
     serde_json::from_slice(bytes)
@@ -391,69 +214,12 @@ fn serialize_document(
     }
 }
 
-fn derive_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>, AppError> {
-    let params = Params::new(
-        ARGON_MEMORY_KIB,
-        ARGON_ITERATIONS,
-        ARGON_PARALLELISM,
-        Some(32),
-    )
-    .map_err(|error| {
-        AppError::with_detail(
-            ErrorCode::Configuration,
-            format!("初始化备份密钥派生参数失败: {error}"),
-        )
-    })?;
-    let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = Zeroizing::new([0u8; 32]);
-    argon
-        .hash_password_into(passphrase.as_bytes(), salt, &mut key[..])
-        .map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                format!("派生备份密钥失败: {error}"),
-            )
-        })?;
-    Ok(key)
-}
-
-fn serialize_envelope(
-    envelope: &EncryptedBackup,
-    format: BackupFormat,
-) -> Result<Vec<u8>, AppError> {
-    match format {
-        BackupFormat::Json => serde_json::to_vec_pretty(envelope).map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                format!("序列化加密备份失败: {error}"),
-            )
-        }),
-        BackupFormat::Yaml => serde_yaml_ng::to_string(envelope)
-            .map(String::into_bytes)
-            .map_err(|error| {
-                AppError::with_detail(
-                    ErrorCode::Configuration,
-                    format!("序列化加密备份失败: {error}"),
-                )
-            }),
-    }
-}
-
-fn parse_envelope(bytes: &[u8]) -> Result<EncryptedBackup, AppError> {
-    serde_json::from_slice(bytes)
-        .or_else(|_| serde_yaml_ng::from_slice(bytes))
-        .map_err(|_| invalid_backup())
-}
-
-fn invalid_backup() -> AppError {
-    AppError::with_detail(ErrorCode::Configuration, "备份口令错误或文件已损坏")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
     use transom_core::{AuthMethod, Connection, SecretKind, SecretOwner, Session, SshConnection};
+    use zeroize::Zeroizing;
 
     /// 构造一个仅含内存钥匙串的假存储，避免测试依赖系统 Secret Service。
     #[derive(Default)]
@@ -604,27 +370,6 @@ mod tests {
         let last = tampered.len() - 2;
         tampered[last] = if tampered[last] == b'A' { b'B' } else { b'A' };
         assert!(decrypt_document(&tampered, "secret").is_err());
-    }
-
-    #[test]
-    fn unknown_format_or_version_is_rejected() {
-        let envelope = EncryptedBackup {
-            format: "other".into(),
-            version: 1,
-            salt: BASE64.encode([0u8; SALT_LEN]),
-            nonce: BASE64.encode([0u8; NONCE_LEN]),
-            ciphertext: BASE64.encode([0u8; 8]),
-        };
-        let bytes = serde_json::to_vec(&envelope).unwrap();
-        assert!(decrypt_document(&bytes, "x").is_err());
-
-        let envelope = EncryptedBackup {
-            format: MAGIC.into(),
-            version: VERSION + 1,
-            ..envelope
-        };
-        let bytes = serde_json::to_vec(&envelope).unwrap();
-        assert!(decrypt_document(&bytes, "x").is_err());
     }
 
     #[test]

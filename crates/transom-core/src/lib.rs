@@ -4,6 +4,7 @@ pub mod backup;
 pub mod catalog;
 pub mod color;
 pub mod commands;
+pub mod crypto;
 pub mod error;
 pub mod forward;
 mod highlight;

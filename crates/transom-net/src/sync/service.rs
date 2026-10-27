@@ -10,11 +10,11 @@
 //!   统一放进 `spawn_blocking`，不占用异步工作线程。
 
 use std::sync::Arc;
+use transom_core::crypto::backup::{BackupFormat, decrypt_document, encrypt_document};
 use transom_core::{
     AppError, BackupDocument, ErrorCode, SecretKey, SecretStore, SessionCatalog, SyncEndpoint,
     SyncPushReport, SyncSettings, collect_catalog_secrets, is_sync_conflict, merge_catalogs,
 };
-use transom_store::{BackupFormat, decrypt_document, encrypt_document};
 use zeroize::Zeroizing;
 
 use super::git::{GitAuth, sync_git_blocking};
@@ -77,7 +77,7 @@ impl CloudSyncService {
             } else {
                 let passphrase = passphrase.clone();
                 tokio::task::spawn_blocking(move || {
-                    transom_store::decrypt_document(&remote_data, passphrase.as_str())
+                    decrypt_document(&remote_data, passphrase.as_str())
                 })
                 .await
                 .map_err(|error| {
