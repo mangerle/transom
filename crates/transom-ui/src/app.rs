@@ -468,6 +468,9 @@ pub struct AppShell {
     pub(crate) monitor: crate::monitor::MonitorState,
     /// 面板打开后负责每 3 秒拉取进程快照的常驻任务。
     pub(crate) monitor_task: Option<Task<()>>,
+    /// Git 定时同步的分钟节拍任务与已累计分钟数。
+    pub(crate) git_sync_task: Option<Task<()>>,
+    pub(crate) git_sync_minutes: u64,
     pub(crate) confirm_forward_any: Option<PendingForwardConfirm>,
     /// 已打开的远端文本编辑面板，Vec 顺序即叠放次序，末尾为最上层。
     pub(crate) editor_panels: Vec<EditorPanelState>,
@@ -840,6 +843,8 @@ impl AppShell {
             quick_open_state,
             monitor: crate::monitor::MonitorState::new(window, cx),
             monitor_task: None,
+            git_sync_task: None,
+            git_sync_minutes: 0,
             settings_modal: SettingsModalState {
                 open: false,
                 proxy: proxy_form,
@@ -993,7 +998,37 @@ impl AppShell {
             StartupTabs::NewLocalTerminal => this.open_local_terminal(window, cx),
         }
 
+        // Git 定时同步：每分钟检查一次，累计到配置间隔才真正发起，
+        // 设置里改间隔不需要重启任务。
+        this.git_sync_task = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_secs(60))
+                    .await;
+                if this.update(cx, |this, cx| this.tick_git_sync(cx)).is_err() {
+                    break;
+                }
+            }
+        }));
+
         this
+    }
+
+    /// 每分钟节拍：达到配置间隔时触发一次后台 Git 同步。
+    fn tick_git_sync(&mut self, cx: &mut Context<Self>) {
+        let Some(git) = &self.settings.sync.git else {
+            self.git_sync_minutes = 0;
+            return;
+        };
+        if git.interval_minutes == 0 {
+            self.git_sync_minutes = 0;
+            return;
+        }
+        self.git_sync_minutes = self.git_sync_minutes.saturating_add(1);
+        if self.git_sync_minutes >= git.interval_minutes {
+            self.git_sync_minutes = 0;
+            self.start_git_sync_scheduled(cx);
+        }
     }
 
     /// 持久化会话与文件夹目录。

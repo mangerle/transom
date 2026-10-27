@@ -127,8 +127,19 @@ impl WebDavTarget {
 #[async_trait::async_trait]
 impl CloudSyncTarget for WebDavTarget {
     async fn put_document(&self, data: &[u8]) -> Result<(), AppError> {
-        let mut response = self
-            .request(reqwest::Method::PUT, &self.object_url)
+        self.put_document_if_match(data, None).await
+    }
+
+    async fn put_document_if_match(
+        &self,
+        data: &[u8],
+        version: Option<&str>,
+    ) -> Result<(), AppError> {
+        let mut request = self.request(reqwest::Method::PUT, &self.object_url);
+        if let Some(version) = version {
+            request = request.header(reqwest::header::IF_MATCH, version);
+        }
+        let mut response = request
             .body(data.to_vec())
             .send()
             .await
@@ -139,7 +150,11 @@ impl CloudSyncTarget for WebDavTarget {
         {
             response = {
                 self.ensure_directories().await?;
-                self.request(reqwest::Method::PUT, &self.object_url)
+                let mut request = self.request(reqwest::Method::PUT, &self.object_url);
+                if let Some(version) = version {
+                    request = request.header(reqwest::header::IF_MATCH, version);
+                }
+                request
                     .body(data.to_vec())
                     .send()
                     .await
@@ -147,6 +162,15 @@ impl CloudSyncTarget for WebDavTarget {
             };
         }
         let status = response.status();
+        if status == reqwest::StatusCode::PRECONDITION_FAILED {
+            return Err(AppError::with_detail(
+                ErrorCode::CloudSyncFailed,
+                format!(
+                    "版本冲突：远端备份已被其他设备修改，服务器: {host}",
+                    host = self.host
+                ),
+            ));
+        }
         if !status.is_success() {
             return Err(AppError::with_detail(
                 ErrorCode::CloudSyncFailed,
@@ -160,6 +184,10 @@ impl CloudSyncTarget for WebDavTarget {
     }
 
     async fn get_document(&self) -> Result<Vec<u8>, AppError> {
+        self.get_document_versioned().await.map(|(data, _)| data)
+    }
+
+    async fn get_document_versioned(&self) -> Result<(Vec<u8>, Option<String>), AppError> {
         let response = self
             .request(reqwest::Method::GET, &self.object_url)
             .send()
@@ -184,7 +212,13 @@ impl CloudSyncTarget for WebDavTarget {
                 ),
             ));
         }
-        download_limited(response, &self.host).await
+        let version = response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let data = download_limited(response, &self.host).await?;
+        Ok((data, version))
     }
 }
 

@@ -64,6 +64,11 @@ pub enum AppCommand {
     CloudSyncPull {
         settings: SyncSettings,
     },
+    /// 执行一次私有 Git 仓库加密同步（拉取 -> 三路合并 -> 推送）。
+    GitSync {
+        settings: SyncSettings,
+        catalog: crate::catalog::SessionCatalog,
+    },
     /// 批量主机动作（TCP 拨测 / Wake-on-LAN）；动作已由界面侧从会话派生为
     /// 合法入参，控制器只负责并发执行并逐条回报结果。
     RunHostActions {
@@ -287,6 +292,10 @@ pub enum AppEvent {
         connection_id: ConnectionId,
         pid: u32,
         error: Option<AppError>,
+    },
+    /// Git 加密同步结束；成功时携带合并后的目录。
+    GitSynced {
+        result: Result<crate::sync::GitSyncResult, AppError>,
     },
 }
 

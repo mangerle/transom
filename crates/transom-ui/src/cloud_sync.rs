@@ -16,8 +16,8 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    AppCommand, AppError, BackupDocument, BackupExportOptions, SecretKey, SecretRestoreReport,
-    SessionCatalog, SyncEndpoint, SyncPushReport, SyncSettings,
+    AppCommand, AppError, BackupDocument, BackupExportOptions, GitSyncResult, GitSyncSettings,
+    SecretKey, SecretRestoreReport, SessionCatalog, SyncEndpoint, SyncPushReport, SyncSettings,
 };
 
 /// 设置弹窗里云同步组的全部输入框。
@@ -35,6 +35,10 @@ pub(crate) struct SyncFormInputs {
     pub(crate) s3_secret: Entity<InputState>,
     pub(crate) directory: Entity<InputState>,
     pub(crate) passphrase: Entity<InputState>,
+    pub(crate) git_remote: Entity<InputState>,
+    pub(crate) git_branch: Entity<InputState>,
+    pub(crate) git_interval: Entity<InputState>,
+    pub(crate) git_token: Entity<InputState>,
 }
 
 /// 备份对象在端点上的默认子目录。
@@ -67,6 +71,10 @@ impl SyncFormInputs {
             s3_secret: secret_field(window, cx, rust_i18n::t!("sync.secret_hint").as_ref()),
             directory: field(window, cx, DEFAULT_SYNC_DIRECTORY),
             passphrase: secret_field(window, cx, rust_i18n::t!("sync.passphrase_hint").as_ref()),
+            git_remote: field(window, cx, rust_i18n::t!("sync.git_remote_hint").as_ref()),
+            git_branch: field(window, cx, "transom-sync"),
+            git_interval: field(window, cx, "0"),
+            git_token: secret_field(window, cx, rust_i18n::t!("sync.git_token_hint").as_ref()),
         }
     }
 }
@@ -85,6 +93,14 @@ impl AppShell {
                 .map(|endpoint| endpoint.directory().to_string())
                 .unwrap_or_else(|| DEFAULT_SYNC_DIRECTORY.to_string())
         };
+        if let Some(git) = &sync.git {
+            set(&form.git_remote, &git.remote);
+            set(&form.git_branch, &git.branch);
+            set(&form.git_interval, &git.interval_minutes.to_string());
+        } else {
+            set(&form.git_branch, "transom-sync");
+            set(&form.git_interval, "0");
+        }
         match &sync.endpoint {
             Some(SyncEndpoint::Webdav {
                 url,
@@ -138,6 +154,20 @@ impl AppShell {
         };
         let mut sync = self.settings.sync.clone();
         sync.endpoint = endpoint.and_then(SyncEndpoint::sanitized);
+        let git_remote = read(&form.git_remote);
+        sync.git = if git_remote.is_empty() {
+            None
+        } else {
+            Some(
+                GitSyncSettings {
+                    remote: git_remote,
+                    branch: read(&form.git_branch),
+                    interval_minutes: read(&form.git_interval).parse::<u64>().unwrap_or(0),
+                }
+                .sanitized(),
+            )
+            .flatten()
+        };
         sync
     }
 
@@ -181,6 +211,19 @@ impl AppShell {
                 }
             }
         }
+        let git_token = form.git_token.read(cx).value().trim().to_string();
+        if !git_token.is_empty() {
+            let key = SecretKey::git_sync_token();
+            match self.services.secret_store.set(&key, &git_token) {
+                Ok(()) => form
+                    .git_token
+                    .update(cx, |state, cx| state.set_value("", window, cx)),
+                Err(error) => {
+                    self.error = Some(localized_error(&error));
+                    return false;
+                }
+            }
+        }
         if !passphrase.is_empty() {
             if passphrase.chars().count() < 8 {
                 self.error = Some(rust_i18n::t!("backup.error_short").to_string());
@@ -199,6 +242,73 @@ impl AppShell {
             }
         }
         true
+    }
+
+    /// 立即执行私有 Git 仓库同步：先落凭据，再把目录快照交给控制器。
+    pub(crate) fn start_git_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.persist_sync_credentials(window, cx) {
+            cx.notify();
+            return;
+        }
+        let settings = self.collect_sync_settings(cx);
+        if settings.git.is_none() {
+            self.error = Some(rust_i18n::t!("sync.git_no_config").to_string());
+            cx.notify();
+            return;
+        }
+        self.send_git_sync(settings, cx);
+    }
+
+    /// 定时同步入口：秘密已经在钥匙串里，不再触碰设置表单。
+    pub(crate) fn start_git_sync_scheduled(&mut self, cx: &mut Context<Self>) {
+        let settings = self.settings.sync.clone();
+        if settings.git.is_none() {
+            return;
+        }
+        self.send_git_sync(settings, cx);
+    }
+
+    fn send_git_sync(&mut self, settings: SyncSettings, cx: &mut Context<Self>) {
+        self.status = Some(rust_i18n::t!("sync.git_running").to_string());
+        if !self.send_command(AppCommand::GitSync {
+            settings,
+            catalog: self.catalog.clone(),
+        }) {
+            self.error = Some(rust_i18n::t!("sync.git_no_config").to_string());
+        }
+        cx.notify();
+    }
+
+    /// Git 同步完成：整体替换本地目录并刷新已打开标签。
+    pub(crate) fn handle_git_synced(
+        &mut self,
+        result: Result<GitSyncResult, AppError>,
+        cx: &mut Context<Self>,
+    ) {
+        match result {
+            Ok(result) => {
+                let report = result.report;
+                self.catalog = result.catalog;
+                self.catalog.normalize();
+                self.persist_catalog();
+                self.refresh_tab_sessions();
+                self.settings.sync.last_pull_at = Some(result.at);
+                self.status = Some(
+                    rust_i18n::t!(
+                        "sync.git_done",
+                        added = report.sessions_added,
+                        updated = report.sessions_updated,
+                        conflicts = report.conflicts
+                    )
+                    .to_string(),
+                );
+                self.error = None;
+            }
+            Err(error) => {
+                self.error = Some(localized_error(&error));
+            }
+        }
+        cx.notify();
     }
 
     /// 立即上传：先落凭据，再以输入框现状发起云端推送。

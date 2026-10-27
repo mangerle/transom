@@ -18,6 +18,11 @@ pub(super) enum CloudSyncJob {
     Pull {
         settings: SyncSettings,
     },
+    /// 私有 Git 仓库同步：拉取、三路合并并推送加密信封。
+    Git {
+        settings: SyncSettings,
+        catalog: SessionCatalog,
+    },
 }
 
 /// 派发云同步作业；在途任务完成后自动把结果事件送回界面。
@@ -37,6 +42,7 @@ pub(super) async fn dispatch_cloud_sync(
         let event = match job {
             CloudSyncJob::Push { .. } => AppEvent::CloudSyncPushed { result: Err(error) },
             CloudSyncJob::Pull { .. } => AppEvent::CloudSyncPulled { result: Err(error) },
+            CloudSyncJob::Git { .. } => AppEvent::GitSynced { result: Err(error) },
         };
         if event_tx.try_send(event).is_err() {
             log::warn!("云同步忙碌提示发送失败：事件通道已满");
@@ -60,6 +66,23 @@ pub(super) async fn dispatch_cloud_sync(
                 let _ = event_tx
                     .send_async(AppEvent::CloudSyncPulled { result })
                     .await;
+            }
+            CloudSyncJob::Git { settings, catalog } => {
+                // Git 子进程与 Argon2 派生都是阻塞操作，整段放进阻塞线程池。
+                let service = service.clone();
+                let cache_dir = transom_core::paths::config_dir().join("sync").join("git");
+                let result = tokio::task::spawn_blocking(move || {
+                    service.run_git_sync(&settings, &catalog, &cache_dir)
+                })
+                .await
+                .map_err(|error| {
+                    AppError::with_detail(
+                        ErrorCode::CloudSyncFailed,
+                        format!("Git 同步任务异常终止: {error}"),
+                    )
+                })
+                .and_then(|result| result);
+                let _ = event_tx.send_async(AppEvent::GitSynced { result }).await;
             }
         }
     }));

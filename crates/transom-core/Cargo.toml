@@ -19,6 +19,7 @@ directories.workspace = true
 log.workspace = true
 thiserror.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 uuid.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 zeroize.workspace = true
@@ -29,5 +30,4 @@ rand.workspace = true
 async-trait.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 tempfile.workspace = true

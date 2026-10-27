@@ -12,11 +12,12 @@
 use std::sync::Arc;
 use transom_core::{
     AppError, BackupDocument, ErrorCode, SecretKey, SecretStore, SessionCatalog, SyncEndpoint,
-    SyncPushReport, SyncSettings, collect_catalog_secrets,
+    SyncPushReport, SyncSettings, collect_catalog_secrets, is_sync_conflict, merge_catalogs,
 };
 use transom_store::{BackupFormat, decrypt_document, encrypt_document};
 use zeroize::Zeroizing;
 
+use super::git::{GitAuth, sync_git_blocking};
 use super::s3::S3Target;
 use super::webdav::WebDavTarget;
 
@@ -61,38 +62,89 @@ impl CloudSyncService {
         let passphrase = self.read_passphrase()?;
         let include_secrets = settings.include_secrets;
         let secrets = self.secrets.clone();
-        // 会话与文件夹数量在快照进入任务前取好：闭包按值接管快照，统计
-        // 不必为它保留第二份克隆。
-        let sessions = catalog.sessions.len();
-        let folders = catalog.folders.len();
-        let catalog = catalog.clone();
 
-        let (data, secret_count) = tokio::task::spawn_blocking(move || {
-            build_envelope(&catalog, include_secrets, secrets.as_ref(), &passphrase)
-        })
-        .await
-        .map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::CloudSyncFailed,
-                format!("加密备份任务失败: {error}"),
-            )
-        })??;
+        // 乐观锁：先读远端版本并合并，再带 If-Match 上传；并发设备抢先时
+        // 重新拉取合并，最多三次。远端缺失按空目录处理，首次推送不受阻。
+        let mut last_conflict = None;
+        for attempt in 0..3 {
+            let (remote_data, version) = match target.get_document_versioned().await {
+                Ok(result) => result,
+                Err(error) if error.code == ErrorCode::CloudSyncMissing => (Vec::new(), None),
+                Err(error) => return Err(error),
+            };
+            let remote_catalog = if remote_data.is_empty() {
+                SessionCatalog::default()
+            } else {
+                let passphrase = passphrase.clone();
+                tokio::task::spawn_blocking(move || {
+                    transom_store::decrypt_document(&remote_data, passphrase.as_str())
+                })
+                .await
+                .map_err(|error| {
+                    AppError::with_detail(
+                        ErrorCode::CloudSyncFailed,
+                        format!("解密远端备份任务失败: {error}"),
+                    )
+                })??
+                .into_parts()
+                .0
+            };
+            let (merged, _) = merge_catalogs(None, catalog, &remote_catalog);
+            let sessions = merged.sessions.len();
+            let folders = merged.folders.len();
+            let merged_for_build = merged.clone();
+            let secrets_for_build = secrets.clone();
+            let passphrase_for_build = passphrase.clone();
+            let (data, secret_count) = tokio::task::spawn_blocking(move || {
+                build_envelope(
+                    &merged_for_build,
+                    include_secrets,
+                    secrets_for_build.as_ref(),
+                    passphrase_for_build.as_str(),
+                )
+            })
+            .await
+            .map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::CloudSyncFailed,
+                    format!("加密备份任务失败: {error}"),
+                )
+            })??;
 
-        target.put_document(&data).await?;
-        let report = SyncPushReport {
-            sessions,
-            folders,
-            secrets: secret_count,
-            bytes: data.len() as u64,
-            at: chrono::Utc::now().timestamp(),
-        };
-        log::info!(
-            "云同步备份上传完成，会话数: {}，分组数: {}，字节数: {}",
-            report.sessions,
-            report.folders,
-            report.bytes
-        );
-        Ok(report)
+            match target
+                .put_document_if_match(&data, version.as_deref())
+                .await
+            {
+                Ok(()) => {
+                    let report = SyncPushReport {
+                        sessions,
+                        folders,
+                        secrets: secret_count,
+                        bytes: data.len() as u64,
+                        at: chrono::Utc::now().timestamp(),
+                    };
+                    log::info!(
+                        "云同步备份上传完成，尝试次数: {}，会话数: {}，分组数: {}，字节数: {}",
+                        attempt + 1,
+                        report.sessions,
+                        report.folders,
+                        report.bytes
+                    );
+                    return Ok(report);
+                }
+                Err(error) if is_sync_conflict(&error) => {
+                    log::warn!(
+                        "云同步版本冲突，将重新拉取合并后重试，第 {} 次",
+                        attempt + 1
+                    );
+                    last_conflict = Some(error);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(last_conflict.unwrap_or_else(|| {
+            AppError::with_detail(ErrorCode::CloudSyncFailed, "云同步连续版本冲突，请稍后重试")
+        }))
     }
 
     /// 从端点下载并解密备份文档；合并与口令写回由调用方编排。
@@ -160,6 +212,40 @@ impl CloudSyncService {
                 )?))
             }
         }
+    }
+
+    /// 执行一次私有 Git 仓库同步（阻塞，调用方必须放进 spawn_blocking）。
+    ///
+    /// 同步口令与 PAT 复用云同步的钥匙串槽位：用户只维护一份秘密，
+    /// Git 与 WebDAV/S3 的凭据不会因为两条通道而分裂。
+    pub fn run_git_sync(
+        &self,
+        settings: &SyncSettings,
+        catalog: &SessionCatalog,
+        cache_dir: &std::path::Path,
+    ) -> Result<transom_core::GitSyncResult, AppError> {
+        let git = settings.git.as_ref().ok_or_else(|| {
+            AppError::with_detail(ErrorCode::Configuration, "尚未配置 Git 同步仓库")
+        })?;
+        let passphrase = self.read_passphrase()?;
+        // Git 专用槽位优先；未单独保存 PAT 时回退云同步凭据槽位，
+        // 兼容"同一条令牌同时服务 S3 与 Git"的简单用法。
+        let token = self
+            .secrets
+            .get(&SecretKey::git_sync_token())?
+            .or(self.read_credential()?);
+        let auth = GitAuth {
+            token,
+            username: None,
+        };
+        let outcome = sync_git_blocking(git, catalog, passphrase.as_str(), cache_dir, &auth)?;
+        Ok(transom_core::GitSyncResult {
+            catalog: outcome.catalog,
+            report: outcome.report,
+            pushed: outcome.pushed,
+            bytes: outcome.bytes,
+            at: outcome.at,
+        })
     }
 
     fn read_credential(&self) -> Result<Option<Zeroizing<String>>, AppError> {

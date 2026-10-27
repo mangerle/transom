@@ -9,6 +9,7 @@
 //!   安全副本兜底，避免多端并发写入造成不可逆丢失。
 
 use crate::backup::BackupDocument;
+use crate::catalog::SessionCatalog;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 
@@ -137,6 +138,11 @@ pub struct SyncSettings {
     /// `None` 表示未启用云同步。
     #[serde(default)]
     pub endpoint: Option<SyncEndpoint>,
+    /// 私有 Git 仓库同步配置；`None` 表示未启用。
+    ///
+    /// 与 WebDAV/S3 端点互不排斥：用户可以同时配置两条通道，各自独立触发。
+    #[serde(default)]
+    pub git: Option<GitSyncSettings>,
     /// 是否把钥匙串里保存的会话口令一并加密上传。
     ///
     /// 默认开启：多设备同步的主要诉求就是"换机免重输密码"，关闭仅适合
@@ -155,11 +161,72 @@ impl Default for SyncSettings {
     fn default() -> Self {
         Self {
             endpoint: None,
+            git: None,
             include_secrets: true,
             last_push_at: None,
             last_pull_at: None,
         }
     }
+}
+
+/// 私有 Git 仓库同步配置。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GitSyncSettings {
+    /// 远端地址：SSH（`git@host:repo.git`）或 HTTPS。
+    pub remote: String,
+    /// 专用分支，默认 `transom-sync`；与用户自己的分支隔离。
+    #[serde(default = "default_git_branch")]
+    pub branch: String,
+    /// 自动同步间隔（分钟）；`0` 表示仅手动触发。
+    #[serde(default)]
+    pub interval_minutes: u64,
+}
+
+impl Default for GitSyncSettings {
+    fn default() -> Self {
+        Self {
+            remote: String::new(),
+            branch: default_git_branch(),
+            interval_minutes: 0,
+        }
+    }
+}
+
+fn default_git_branch() -> String {
+    "transom-sync".to_string()
+}
+
+impl GitSyncSettings {
+    /// 归一化并校验：远端为空或分支名非法时返回 `None`。
+    pub fn sanitized(self) -> Option<Self> {
+        let remote = self.remote.trim().to_string();
+        let branch = self.branch.trim().to_string();
+        let branch = if branch.is_empty() {
+            default_git_branch()
+        } else {
+            branch
+        };
+        let valid_branch = !branch.starts_with('-')
+            && branch
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '/' | '.'));
+        (!remote.is_empty() && valid_branch).then_some(Self {
+            remote,
+            branch,
+            interval_minutes: self.interval_minutes.min(7 * 24 * 60),
+        })
+    }
+}
+
+/// Git 同步完成后回传给界面的结果。
+#[derive(Debug, Clone)]
+pub struct GitSyncResult {
+    /// 合并后的完整目录，界面应整体替换本地目录。
+    pub catalog: SessionCatalog,
+    pub report: crate::merge::SyncMergeReport,
+    pub pushed: bool,
+    pub bytes: u64,
+    pub at: i64,
 }
 
 impl SyncSettings {
@@ -170,6 +237,9 @@ impl SyncSettings {
     pub fn normalize(&mut self) {
         if let Some(endpoint) = self.endpoint.take() {
             self.endpoint = endpoint.sanitized();
+        }
+        if let Some(git) = self.git.take() {
+            self.git = git.sanitized();
         }
     }
 }
@@ -209,6 +279,40 @@ pub trait CloudSyncTarget: Send + Sync {
     /// # Errors
     /// 对象不存在、网络失败、认证失败、响应超过大小上限时返回 `AppError`。
     async fn get_document(&self) -> Result<Vec<u8>, AppError>;
+
+    /// 下载内容并返回版本标识（WebDAV/S3 的 ETag）；不支持版本控制的
+    /// 实现复用普通下载并返回 `None`。
+    ///
+    /// # Errors
+    /// 与 [`Self::get_document`] 相同。
+    async fn get_document_versioned(&self) -> Result<(Vec<u8>, Option<String>), AppError> {
+        Ok((self.get_document().await?, None))
+    }
+
+    /// 带前置版本条件上传：远端版本不等于 `version` 时返回"版本冲突"错误。
+    ///
+    /// 不支持条件写入的实现退回普通上传；调用方仍能拿到加密备份，
+    /// 只是失去并发保护。
+    ///
+    /// # Errors
+    /// 版本冲突、网络失败、认证失败或远端拒绝写入时返回 `AppError`。
+    async fn put_document_if_match(
+        &self,
+        data: &[u8],
+        version: Option<&str>,
+    ) -> Result<(), AppError> {
+        let _ = version;
+        self.put_document(data).await
+    }
+}
+
+/// 判断错误是否为"远端已被其他设备修改"的版本冲突。
+pub fn is_sync_conflict(error: &AppError) -> bool {
+    error.code == crate::error::ErrorCode::CloudSyncFailed
+        && error
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("版本冲突"))
 }
 
 /// 供测试与"先合并后落盘"流程快速构造的文档别名，无附加字段。

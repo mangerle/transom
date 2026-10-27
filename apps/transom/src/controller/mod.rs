@@ -418,6 +418,15 @@ async fn run_controller(
                 )
                 .await;
             }
+            Incoming::Command(Ok(AppCommand::GitSync { settings, catalog })) => {
+                dispatch_cloud_sync(
+                    &cloud_sync,
+                    &event_tx,
+                    &mut sync_task,
+                    CloudSyncJob::Git { settings, catalog },
+                )
+                .await;
+            }
             Incoming::Command(Ok(AppCommand::RunHostActions { actions })) => {
                 host_action_tasks.spawn(run_batch(
                     actions,

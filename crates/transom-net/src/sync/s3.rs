@@ -111,6 +111,7 @@ impl S3Target {
         &self,
         method: reqwest::Method,
         data: Option<Vec<u8>>,
+        if_match: Option<&str>,
     ) -> Result<reqwest::Response, AppError> {
         let (url, canonical_uri) = self.object_url();
         let payload_hash = match &data {
@@ -118,10 +119,11 @@ impl S3Target {
             None => sigv4::EMPTY_PAYLOAD_SHA256.to_string(),
         };
         let amz_date = sigv4::amz_date_now();
-        let mut headers = HeaderMap::with_capacity(3);
+        let host_header = self.host_header();
+        let mut headers = HeaderMap::with_capacity(4);
         headers.insert(
             HOST,
-            HeaderValue::from_str(&self.host_header()).map_err(|_| {
+            HeaderValue::from_str(&host_header).map_err(|_| {
                 AppError::with_detail(ErrorCode::Configuration, "S3 端点主机名不合法")
             })?,
         );
@@ -135,16 +137,32 @@ impl S3Target {
             HeaderValue::from_str(&amz_date)
                 .map_err(|_| AppError::with_detail(ErrorCode::Configuration, "签名时间戳不合法"))?,
         );
-        // 签名头列表与发送头列表必须一致：host/x-amz-* 均已显式登记。
+        if let Some(version) = if_match {
+            headers.insert(
+                reqwest::header::IF_MATCH,
+                HeaderValue::from_str(version).map_err(|_| {
+                    AppError::with_detail(
+                        ErrorCode::Configuration,
+                        "远端版本标识包含非法字符，无法作为 If-Match 发送",
+                    )
+                })?,
+            );
+        }
+        // 签名头列表与发送头列表必须一致：If-Match 参与签名，否则代理可篡改
+        // 前置条件让并发写互相覆盖。
+        let mut signed: Vec<(&str, &str)> = vec![
+            ("host", host_header.as_str()),
+            ("x-amz-content-sha256", payload_hash.as_str()),
+            ("x-amz-date", amz_date.as_str()),
+        ];
+        if let Some(version) = if_match {
+            signed.push(("if-match", version));
+        }
         let authorization = sigv4::authorization_header(&sigv4::SignatureRequest {
             method: method.as_str(),
             canonical_uri: &canonical_uri,
             query: "",
-            headers: &[
-                ("host", &self.host_header()),
-                ("x-amz-content-sha256", &payload_hash),
-                ("x-amz-date", &amz_date),
-            ],
+            headers: &signed,
             payload_hash: &payload_hash,
             amz_date: &amz_date,
             region: &self.region,
@@ -170,10 +188,27 @@ impl S3Target {
 #[async_trait::async_trait]
 impl CloudSyncTarget for S3Target {
     async fn put_document(&self, data: &[u8]) -> Result<(), AppError> {
+        self.put_document_if_match(data, None).await
+    }
+
+    async fn put_document_if_match(
+        &self,
+        data: &[u8],
+        version: Option<&str>,
+    ) -> Result<(), AppError> {
         let response = self
-            .send_signed(reqwest::Method::PUT, Some(data.to_vec()))
+            .send_signed(reqwest::Method::PUT, Some(data.to_vec()), version)
             .await?;
         let status = response.status();
+        if status == reqwest::StatusCode::PRECONDITION_FAILED {
+            return Err(AppError::with_detail(
+                ErrorCode::CloudSyncFailed,
+                format!(
+                    "版本冲突：远端备份已被其他设备修改，服务器: {host}",
+                    host = self.host
+                ),
+            ));
+        }
         if !status.is_success() {
             return Err(AppError::with_detail(
                 ErrorCode::CloudSyncFailed,
@@ -187,7 +222,11 @@ impl CloudSyncTarget for S3Target {
     }
 
     async fn get_document(&self) -> Result<Vec<u8>, AppError> {
-        let response = self.send_signed(reqwest::Method::GET, None).await?;
+        self.get_document_versioned().await.map(|(data, _)| data)
+    }
+
+    async fn get_document_versioned(&self) -> Result<(Vec<u8>, Option<String>), AppError> {
+        let response = self.send_signed(reqwest::Method::GET, None, None).await?;
         if response.status() == reqwest::StatusCode::NOT_FOUND
             || response.status() == reqwest::StatusCode::NO_CONTENT
         {
@@ -206,7 +245,13 @@ impl CloudSyncTarget for S3Target {
                 ),
             ));
         }
-        download_limited(response, &self.host).await
+        let version = response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let data = download_limited(response, &self.host).await?;
+        Ok((data, version))
     }
 }
 

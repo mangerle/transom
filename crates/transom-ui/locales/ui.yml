@@ -2100,6 +2100,42 @@ sync:
   endpoint_desc:
     en: Upload or download the encrypted catalog through a WebDAV or S3-compatible endpoint you own.
     zh-CN: 通过自有的 WebDAV 或 S3 兼容端点上传下载加密备份，实现多设备同步。
+  git_group:
+    en: Private Git Repository
+    zh-CN: 私有 Git 仓库
+  git_remote:
+    en: Remote repository
+    zh-CN: 远端仓库
+  git_remote_hint:
+    en: git@host:team/transom.git
+    zh-CN: git@host:team/transom.git
+  git_branch:
+    en: Sync branch
+    zh-CN: 同步分支
+  git_token:
+    en: HTTPS access token (optional)
+    zh-CN: HTTPS 访问令牌（可选）
+  git_token_hint:
+    en: Leave blank to keep the saved token
+    zh-CN: 留空表示保留已保存的令牌
+  git_interval:
+    en: Auto sync interval (minutes, 0 = manual)
+    zh-CN: 自动同步间隔（分钟，0 为仅手动）
+  git_hint:
+    en: The repository only stores an encrypted envelope on the dedicated branch; SSH keys or the saved access token are used for authentication.
+    zh-CN: 仓库只保存专用分支上的加密信封；认证使用系统 SSH 密钥或已保存的访问令牌。
+  git_sync_now:
+    en: Sync now
+    zh-CN: 立即同步
+  git_no_config:
+    en: Configure a Git remote repository first
+    zh-CN: 请先配置 Git 远端仓库
+  git_running:
+    en: Git sync in progress…
+    zh-CN: Git 同步进行中…
+  git_done:
+    en: "Git sync finished: %{added} added, %{updated} updated, %{conflicts} conflicts"
+    zh-CN: "Git 同步完成：新增 %{added}，更新 %{updated}，冲突 %{conflicts}"
   endpoint_off:
     en: Off
     zh-CN: 关闭

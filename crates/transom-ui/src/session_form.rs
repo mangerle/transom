@@ -632,6 +632,8 @@ impl SessionForm {
         session.icon = self.icon;
         session.color = self.color;
         session.block_view = self.block_view;
+        // 表单保存是一次明确的用户修改：刷新时间戳供多端合并裁决。
+        session.touch();
         if self.base.is_none() {
             session.terminal = TerminalProfile::default();
         }

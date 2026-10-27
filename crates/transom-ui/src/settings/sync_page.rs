@@ -120,7 +120,11 @@ impl AppShell {
             _ => {}
         }
 
-        if current_kind.is_some() {
+        let has_git =
+            !form.git_remote.read(cx).value().trim().is_empty() || self.settings.sync.git.is_some();
+
+        // 同步口令是两种通道共用的：只要启用了任一通道就展示。
+        if current_kind.is_some() || has_git {
             content = content
                 .child(Self::form_field(
                     rust_i18n::t!("sync.passphrase").to_string(),
@@ -132,7 +136,11 @@ impl AppShell {
                         .text_xs()
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("sync.passphrase_hint").to_string()),
-                )
+                );
+        }
+
+        if current_kind.is_some() {
+            content = content
                 .child(Self::setting_row(
                     "sync.include_secrets",
                     Some("sync.include_secrets_desc"),
@@ -170,6 +178,55 @@ impl AppShell {
                         ),
                 );
         }
+
+        // 私有 Git 仓库：与 WebDAV/S3 相互独立，可只配置这一条通道。
+        content = content
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("sync.git_group").to_string()),
+            )
+            .child(Self::form_field(
+                rust_i18n::t!("sync.git_remote").to_string(),
+                form.git_remote.clone(),
+                p,
+            ))
+            .child(
+                h_flex()
+                    .gap_3()
+                    .items_end()
+                    .child(div().flex_1().child(Self::form_field(
+                        rust_i18n::t!("sync.git_branch").to_string(),
+                        form.git_branch.clone(),
+                        p,
+                    )))
+                    .child(div().w(px(160.0)).child(Self::form_field(
+                        rust_i18n::t!("sync.git_interval").to_string(),
+                        form.git_interval.clone(),
+                        p,
+                    ))),
+            )
+            .child(Self::secret_field(
+                rust_i18n::t!("sync.git_token").to_string(),
+                form.git_token.clone(),
+                p,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("sync.git_hint").to_string()),
+            )
+            .child(
+                Button::new("sync-git-now")
+                    .small()
+                    .icon(IconName::GitBranch)
+                    .label(rust_i18n::t!("sync.git_sync_now").to_string())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.start_git_sync(window, cx);
+                    })),
+            );
 
         content.into_any_element()
     }

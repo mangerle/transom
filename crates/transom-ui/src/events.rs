@@ -691,6 +691,10 @@ impl AppShell {
                 self.handle_zmodem_event(tab_id, event, cx);
                 return;
             }
+            AppEvent::GitSynced { result } => {
+                self.handle_git_synced(result, cx);
+                return;
+            }
             AppEvent::CloudSyncPulled { result } => {
                 match result {
                     Ok(document) => self.finish_cloud_sync_pull(document, window, cx),

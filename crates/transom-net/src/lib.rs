@@ -29,6 +29,6 @@ pub use host::{probe_tcp, send_wake_on_lan};
 pub use keys::deploy_public_key;
 pub use serial::{SerialSession, SystemSerialPortProvider, open_serial};
 pub use sftp::SftpClient;
-pub use sync::CloudSyncService;
+pub use sync::{CloudSyncService, GIT_SYNC_FILE, GitAuth, GitSyncOutcome, sync_git_blocking};
 pub use telnet::{TelnetSession, connect_telnet};
 pub use zmodem::{ZmodemConfig, ZmodemControl, attach_zmodem};

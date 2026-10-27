@@ -14,6 +14,8 @@ pub enum SecretKind {
     CloudSyncCredential,
     /// 云同步口令：加密备份内容的 Argon2id 派生源，跨设备必须一致。
     CloudSyncPassphrase,
+    /// 私有 Git 仓库的 HTTPS 访问令牌；SSH 远端不需要。
+    GitSyncToken,
 }
 
 /// 口令归属：某个会话，或某个可被多个会话引用的凭据模板。
@@ -68,6 +70,11 @@ impl SecretKey {
         Self::new(Self::nil_session(), SecretKind::CloudSyncPassphrase)
     }
 
+    /// Git HTTPS 访问令牌的固定槽位。
+    pub fn git_sync_token() -> Self {
+        Self::new(Self::nil_session(), SecretKind::GitSyncToken)
+    }
+
     fn nil_session() -> SessionId {
         SessionId::from(uuid::Uuid::nil())
     }
@@ -85,6 +92,7 @@ impl SecretKey {
             // 避免在钥匙串里暴露一串无意义的全零 UUID。
             SecretKind::CloudSyncCredential => return "cloud-sync/credential".to_string(),
             SecretKind::CloudSyncPassphrase => return "cloud-sync/passphrase".to_string(),
+            SecretKind::GitSyncToken => return "git-sync/token".to_string(),
         };
         match self.owner {
             SecretOwner::Session(id) => format!("{id}/{kind}"),

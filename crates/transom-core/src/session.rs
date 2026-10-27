@@ -43,9 +43,29 @@ pub struct Session {
     /// 语义块视图的会话级覆盖；老会话文件按跟随全局降级。
     #[serde(default)]
     pub block_view: BlockViewOverride,
+    /// 最后修改时间（Unix 毫秒），供多端三路合并判定谁更新。
+    ///
+    /// 老会话文件没有该字段时为 0：合并遇到 0 不做时间比较，退回"基于
+    /// 共同祖先的内容比较"，绝不因为缺时间戳就丢掉用户改动。
+    #[serde(default)]
+    pub updated_at: u64,
+}
+
+/// 当前 Unix 毫秒时间戳；时钟异常时按 0 处理。
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+        .unwrap_or(0)
 }
 
 impl Session {
+    /// 标记会话刚刚被修改；多端合并据此判断谁更新。
+    pub fn touch(&mut self) {
+        self.updated_at = now_millis();
+    }
+
     pub fn new(name: impl Into<String>, connection: Connection) -> Self {
         Self {
             id: SessionId::new(),
@@ -60,6 +80,7 @@ impl Session {
             color: SessionColor::default(),
             proxy: None,
             block_view: BlockViewOverride::default(),
+            updated_at: now_millis(),
         }
     }
 

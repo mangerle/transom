@@ -15,6 +15,7 @@ pub mod keys;
 pub mod known_hosts;
 pub mod layout;
 pub mod mac;
+pub mod merge;
 pub mod paths;
 pub mod prompt;
 pub mod proxy;
@@ -66,6 +67,7 @@ pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, StatusItemId};
 pub use mac::{MacAddress, MacParseError, normalize_mac};
+pub use merge::{SyncMergeReport, merge_catalogs};
 pub use prompt::{PromptInfo, PromptKind};
 pub use proxy::{OutboundProxy, ProxyAuth};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};
@@ -101,8 +103,8 @@ pub use ssh_url::{
 };
 pub use storage::{BackupService, HistoryStore, SecretStore, SessionStore, SettingsStore};
 pub use sync::{
-    CloudSyncTarget, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME, SyncEndpoint, SyncPushReport,
-    SyncSettings,
+    CloudSyncTarget, GitSyncResult, GitSyncSettings, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME,
+    SyncEndpoint, SyncPushReport, SyncSettings, is_sync_conflict,
 };
 pub use system_stats::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo, StatsSamplerState};
 pub use terminal::{
