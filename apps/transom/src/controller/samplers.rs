@@ -89,6 +89,9 @@ pub(super) async fn run_local_traffic_sampler(
     let mut previous: Option<(u64, u64)> = read_totals().await;
     let mut previous_at = std::time::Instant::now();
     loop {
+        // 采样节拍：每次迭代等待 1 秒。置于循环头部可统一步调，
+        // 确保正常广播与所有 continue 分支均按完整采样窗口等待，彻底杜绝无间隔热循环。
+        interval.tick().await;
         // 持锁只做纯内存克隆，不跨 await；订阅清空即退出，
         // 下一个本地连接会重新拉起本采样器。
         let subscribers = match tabs.lock() {
@@ -97,20 +100,14 @@ pub(super) async fn run_local_traffic_sampler(
             Err(_) => break,
         };
         let Some(current) = read_totals().await else {
-            // 读取失败本轮跳过并保留上一次有效样本；必须等待下一个采样窗口
-            // 再继续——/proc/net/dev 不可读（受限容器、隐藏 /proc）时会持续
-            // 失败，跳过 tick 立即重试会退化成无间隔热循环，白白占满一个
-            // 异步工作线程。
-            interval.tick().await;
+            // 读取失败本轮跳过并保留上一次有效样本，由循环头部统一等待下一个采样窗口。
             continue;
         };
         let now = std::time::Instant::now();
         let elapsed = now.saturating_duration_since(previous_at);
         previous_at = now;
         let Some(previous_totals) = previous.replace(current) else {
-            // 首轮没有可比较的基准样本：同样等待下一个采样窗口再计算速率，
-            // 与其它分支保持同一节奏，不做无间隔重试。
-            interval.tick().await;
+            // 首轮没有可比较的基准样本：同样由循环头部统一等待下一个采样窗口。
             continue;
         };
         let sample = NetworkTraffic::from_delta(previous_totals, current, elapsed);
