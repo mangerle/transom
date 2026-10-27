@@ -34,7 +34,7 @@ mod notify;
 mod palette;
 mod pane_tree;
 mod probe;
-mod record_view;
+mod record;
 mod session_appearance;
 mod session_form;
 mod session_serial;

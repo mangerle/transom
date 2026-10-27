@@ -64,7 +64,7 @@ pub struct AppShell {
     pub(crate) folder_form: Option<FolderForm>,
     pub(crate) audit_viewer: Option<crate::audit_viewer::AuditViewer>,
     /// 交互脚本回放弹窗状态。
-    pub(crate) replay_modal: Option<crate::record_view::ReplayModalState>,
+    pub(crate) replay_modal: Option<crate::record::ReplayModalState>,
     /// 认证阶段由 net 层发起的凭据询问；连接前不再拦截。
     pub(crate) auth_prompt: Option<AuthPromptState>,
     /// TOFU 首连主机指纹确认弹窗；同一时刻最多一个在等用户作答。
