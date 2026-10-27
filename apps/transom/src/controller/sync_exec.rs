@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 use transom_core::{AppError, AppEvent, ErrorCode, SessionCatalog, SyncSettings};
-use transom_net::CloudSyncService;
+use transom_sync::CloudSyncService;
 
 /// 一次云同步作业：上传目录快照或下载合并远端备份。
 pub(super) enum CloudSyncJob {

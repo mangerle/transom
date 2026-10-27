@@ -1,6 +1,6 @@
 [package]
 name = "transom-net"
-description = "russh SSH2 client, SFTP transfer, local/remote/SOCKS5 port forwarding, serial console, Telnet, cloud sync (WebDAV/S3) and PTY plumbing for Transom."
+description = "russh SSH2 client, SFTP transfer, local/remote/SOCKS5 port forwarding, serial console, Telnet, and PTY plumbing for Transom."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -29,14 +29,8 @@ sha2.workspace = true
 serialport.workspace = true
 # 编辑器非 UTF-8 文本的 GBK 兜底解码（锁内已有 0.8.42，无新增传递依赖树）。
 encoding_rs = "0.8"
-# 云同步的 WebDAV/S3 端点传输：rustls-only，Client 由同步服务单例持有复用。
-reqwest.workspace = true
-# S3 SigV4 请求签名；sha2/hex/chrono 均为树内既有依赖。
-hmac.workspace = true
-hex.workspace = true
-# Basic 认证头的编码。
+# HTTP CONNECT 代理 Basic 认证头的编码。
 base64.workspace = true
-chrono.workspace = true
 
 [dev-dependencies]
 parking_lot.workspace = true

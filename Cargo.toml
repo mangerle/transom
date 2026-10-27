@@ -4,6 +4,7 @@ members = [
     "crates/transom-core",
     "crates/transom-store",
     "crates/transom-net",
+    "crates/transom-sync",
     "crates/transom-terminal",
     "crates/transom-ui",
 ]
@@ -98,6 +99,7 @@ tempfile = "3"
 transom-core = { path = "crates/transom-core" }
 transom-store = { path = "crates/transom-store" }
 transom-net = { path = "crates/transom-net" }
+transom-sync = { path = "crates/transom-sync" }
 transom-terminal = { path = "crates/transom-terminal" }
 transom-ui = { path = "crates/transom-ui" }
 

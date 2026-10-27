@@ -8,8 +8,8 @@ use std::process::Command;
 use transom_core::{
     AuthMethod, Connection, GitSyncSettings, Session, SessionCatalog, SshConnection,
 };
-use transom_net::GitAuth;
-use transom_net::sync_git_blocking;
+use transom_sync::GitAuth;
+use transom_sync::sync_git_blocking;
 
 fn git_available() -> bool {
     Command::new("git")

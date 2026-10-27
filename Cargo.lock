@@ -8119,6 +8119,7 @@ dependencies = [
  "transom-core",
  "transom-net",
  "transom-store",
+ "transom-sync",
  "transom-ui",
 ]
 
@@ -8152,16 +8153,12 @@ version = "1.1.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "chrono",
  "encoding_rs",
  "flume",
  "futures",
- "hex",
- "hmac 0.12.1",
  "log",
  "parking_lot",
  "portable-pty",
- "reqwest",
  "russh",
  "russh-sftp",
  "serde",
@@ -8189,6 +8186,27 @@ dependencies = [
  "serde_yaml_ng",
  "tempfile",
  "transom-core",
+ "zeroize",
+]
+
+[[package]]
+name = "transom-sync"
+version = "1.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "hmac 0.12.1",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "transom-core",
+ "transom-store",
  "zeroize",
 ]
 

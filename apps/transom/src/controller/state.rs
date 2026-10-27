@@ -15,7 +15,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use transom_core::{AppEvent, ConnectionId, ForwardId, KnownHostsStore, TabId, TransferId};
-use transom_net::{CloudSyncService, ForwardTask, SftpClient, SshRemote, ZmodemControl};
+use transom_net::{ForwardTask, SftpClient, SshRemote, ZmodemControl};
+use transom_sync::CloudSyncService;
 
 /// 控制平面的全部可变状态表。
 pub(super) struct ControllerState {
