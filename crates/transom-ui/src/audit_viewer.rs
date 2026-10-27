@@ -13,6 +13,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::InputState;
+use gpui_kit::component::scroll::ScrollableElement;
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -191,6 +193,40 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 删除指定的审计日志文件。
+    pub(crate) fn delete_audit_log(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(viewer) = self.audit_viewer.as_mut() else {
+            return;
+        };
+        if index >= viewer.entries.len() {
+            return;
+        }
+
+        let entry = viewer.entries.remove(index);
+        let log_path = entry.path.clone();
+        if let Err(e) = std::fs::remove_file(&log_path) {
+            log::error!("删除审计日志文件失败，路径: {:?}，原因: {e}", log_path);
+            self.error = Some(rust_i18n::t!("audit_viewer.delete_failed").to_string());
+        } else {
+            self.status = Some(rust_i18n::t!("audit_viewer.deleted").to_string());
+        }
+
+        if viewer.entries.is_empty() {
+            viewer.selected_index = 0;
+            viewer.content.clear();
+            viewer.is_truncated = false;
+        } else {
+            if viewer.selected_index >= viewer.entries.len() {
+                viewer.selected_index = viewer.entries.len() - 1;
+            }
+            let path = viewer.entries[viewer.selected_index].path.clone();
+            let (content, is_truncated) = read_log_content(&path, MAX_AUDIT_LOG_BYTES);
+            viewer.content = content;
+            viewer.is_truncated = is_truncated;
+        }
+        cx.notify();
+    }
+
     /// 渲染审计日志查看器模态弹窗。
     pub(crate) fn render_audit_viewer(
         &mut self,
@@ -227,7 +263,10 @@ impl AppShell {
             );
         }
 
-        if let Some(path) = selected_path.clone() {
+        let has_selected = selected_path.is_some();
+        let selected_path_clone = selected_path.clone();
+
+        if let Some(path) = selected_path_clone {
             toolbar = toolbar.child(
                 Button::new("reveal-audit-file")
                     .outline()
@@ -237,11 +276,36 @@ impl AppShell {
                         crate::audit::reveal_in_file_manager(path.clone());
                     }),
             );
+        } else {
+            toolbar = toolbar.child(
+                Button::new("reveal-audit-file")
+                    .outline()
+                    .disabled(true)
+                    .icon(IconName::FolderOpen)
+                    .label(rust_i18n::t!("audit_viewer.reveal").to_string()),
+            );
         }
+
+        toolbar = toolbar.child(
+            Button::new("delete-current-audit-file")
+                .outline()
+                .disabled(!has_selected)
+                .icon(IconName::Trash)
+                .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let idx = this
+                        .audit_viewer
+                        .as_ref()
+                        .map(|v| v.selected_index)
+                        .unwrap_or(0);
+                    this.delete_audit_log(idx, cx);
+                })),
+        );
 
         toolbar = toolbar.child(
             Button::new("copy-audit-content")
                 .outline()
+                .disabled(!has_selected || viewer.content.is_empty())
                 .icon(IconName::Copy)
                 .label(rust_i18n::t!("audit_viewer.copy_content").to_string())
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -250,7 +314,12 @@ impl AppShell {
         );
 
         // 左侧文件列表
-        let mut file_list = v_flex().id("audit-file-list").gap_1().overflow_y_scroll();
+        let mut file_list = v_flex()
+            .id("audit-file-list")
+            .size_full()
+            .min_h_0()
+            .gap_1()
+            .overflow_y_scrollbar();
         if viewer.entries.is_empty() {
             file_list = file_list.child(
                 v_flex()
@@ -289,8 +358,9 @@ impl AppShell {
                     gpui::transparent_black()
                 };
 
+                let item_delete_idx = idx;
                 file_list = file_list.child(
-                    v_flex()
+                    h_flex()
                         .id(ElementId::Name(format!("audit-log-item-{idx}").into()))
                         .p_2()
                         .rounded(p.radius.sm)
@@ -299,24 +369,44 @@ impl AppShell {
                         .border_color(border_color)
                         .cursor_pointer()
                         .hover(|style| style.bg(p.muted.opacity(0.4)))
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.select_audit_log(idx, cx);
                         }))
                         .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.foreground)
-                                .truncate()
-                                .child(entry.file_name.clone()),
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.foreground)
+                                        .truncate()
+                                        .child(entry.file_name.clone()),
+                                )
+                                .child(
+                                    h_flex()
+                                        .justify_between()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(entry.modified_display.clone())
+                                        .child(format_file_size(entry.size_bytes)),
+                                ),
                         )
                         .child(
-                            h_flex()
-                                .justify_between()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(entry.modified_display.clone())
-                                .child(format_file_size(entry.size_bytes)),
+                            Button::new(ElementId::Name(format!("delete-audit-log-{idx}").into()))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Trash)
+                                .tooltip(rust_i18n::t!("common.delete").to_string())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.delete_audit_log(item_delete_idx, cx);
+                                })),
                         ),
                 );
             }
@@ -377,21 +467,27 @@ impl AppShell {
                     .child(content_text),
             );
 
+        let left_pane = v_flex()
+            .w(px(260.0))
+            .h_full()
+            .min_h_0()
+            .flex_none()
+            .overflow_hidden()
+            .border_r_1()
+            .border_color(p.border)
+            .pr_2()
+            .child(file_list);
+
         let body = h_flex()
             .gap_3()
-            .h(px(520.0))
-            .child(
-                div()
-                    .w(px(260.0))
-                    .h_full()
-                    .border_r_1()
-                    .border_color(p.border)
-                    .pr_2()
-                    .child(file_list),
-            )
+            .h(px(440.0))
+            .flex_none()
+            .child(left_pane)
             .child(right_pane);
 
         let footer = h_flex()
+            .w_full()
+            .flex_1()
             .justify_between()
             .items_center()
             .child(toolbar)

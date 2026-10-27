@@ -116,7 +116,7 @@ impl AppShell {
         v_flex()
             .id(id.into())
             .w(max_w)
-            .max_w(rems(size::DIALOG_MAX_WIDTH))
+            .max_w(max_w)
             .max_h(rems(size::DIALOG_MAX_HEIGHT))
             .gap_4()
             .p_6()
@@ -144,6 +144,7 @@ impl AppShell {
                 this.child(
                     h_flex()
                         .w_full()
+                        .flex_none()
                         .justify_end()
                         .gap_2()
                         .items_center()

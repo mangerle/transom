@@ -2223,6 +2223,15 @@ audit_viewer:
   open_viewer:
     en: Open Log Viewer
     zh-CN: 打开应用内日志查看器
+  delete_log:
+    en: Delete Log
+    zh-CN: 删除日志
+  deleted:
+    en: Audit log deleted
+    zh-CN: 审计日志已删除
+  delete_failed:
+    en: Failed to delete audit log
+    zh-CN: 删除审计日志失败
   menu_item:
     en: View Audit Logs
     zh-CN: 查看审计日志
