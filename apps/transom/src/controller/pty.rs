@@ -4,9 +4,12 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use transom_core::{
     AppError, AppEvent, Connection, ConnectionId, ConnectionSecrets, ErrorCode, KnownHostsStore,
-    PromptInfo, Session, TabId, TerminalAppEvent, TerminalIo, TerminalSize,
+    LocalConnection, OutboundProxy, PromptInfo, SerialConnection, Session, SshConnection, SshHop,
+    TabId, TelnetConnection, TerminalAppEvent, TerminalIo, TerminalSize,
 };
-use transom_net::{AuthPrompter, ZmodemConfig, connect_ssh, connect_telnet, open_serial};
+use transom_net::{
+    AuthPrompter, SshConnectParams, ZmodemConfig, connect_ssh, connect_telnet, open_serial,
+};
 
 use super::{Internal, ReadyConnection};
 
@@ -82,8 +85,8 @@ impl AuthPrompter for UiPrompter {
 }
 
 pub(super) fn open_local_pty(
-    local: &transom_core::LocalConnection,
-    size: transom_core::TerminalSize,
+    local: &LocalConnection,
+    size: TerminalSize,
 ) -> Result<(TerminalIo, tokio::sync::oneshot::Receiver<()>), AppError> {
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
     use transom_core::{TerminalControl, TerminalControlHandle};
@@ -184,9 +187,9 @@ pub(super) struct ConnectDispatch {
     pub(super) connection_id: ConnectionId,
     pub(super) session: Box<Session>,
     /// 已解析的跳板链（最外层到最内层），SSH 会话按序建链。
-    pub(super) jumps: Vec<transom_core::SshHop>,
+    pub(super) jumps: Vec<SshHop>,
     /// 实际生效的出站代理。
-    pub(super) proxy: transom_core::OutboundProxy,
+    pub(super) proxy: OutboundProxy,
     pub(super) size: TerminalSize,
     pub(super) secrets: ConnectionSecrets,
     /// ZMODEM 监督层配置（随命令携带，控制器不回读设置文件）。
@@ -242,14 +245,14 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
 
 async fn connect_ssh_task(
     dispatch: &ConnectDispatch,
-    ssh: &transom_core::SshConnection,
+    ssh: &SshConnection,
 ) -> Result<ReadyConnection, AppError> {
     let prompter = Arc::new(UiPrompter {
         tab_id: dispatch.tab_id,
         connection_id: dispatch.connection_id,
         event_tx: dispatch.event_tx.clone(),
     });
-    let params = transom_net::SshConnectParams {
+    let params = SshConnectParams {
         connection: ssh,
         jumps: &dispatch.jumps,
         size: dispatch.size,
@@ -264,7 +267,7 @@ async fn connect_ssh_task(
 }
 
 async fn connect_local_task(
-    local: transom_core::LocalConnection,
+    local: LocalConnection,
     size: TerminalSize,
 ) -> Result<ReadyConnection, AppError> {
     // PTY 创建与 Shell 启动是阻塞系统调用，禁止占用异步工作线程。
@@ -279,9 +282,7 @@ async fn connect_local_task(
         .map(|(io, join)| ReadyConnection::Local { io, join })
 }
 
-async fn connect_serial_task(
-    serial: transom_core::SerialConnection,
-) -> Result<ReadyConnection, AppError> {
+async fn connect_serial_task(serial: SerialConnection) -> Result<ReadyConnection, AppError> {
     // 串口打开是阻塞系统调用，禁止占用异步工作线程。
     tokio::task::spawn_blocking(move || open_serial(&serial))
         .await
@@ -295,7 +296,7 @@ async fn connect_serial_task(
 }
 
 async fn connect_telnet_task(
-    telnet: transom_core::TelnetConnection,
+    telnet: TelnetConnection,
     size: TerminalSize,
 ) -> Result<ReadyConnection, AppError> {
     // TCP 拨号与域名解析是阻塞系统调用，禁止占用异步工作线程。

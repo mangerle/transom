@@ -15,8 +15,9 @@ use super::sftp_exec::{SftpDispatch, dispatch_sftp_op};
 use super::state::{ControllerCtx, ControllerState};
 use super::sync_exec::{CloudSyncJob, dispatch_cloud_sync};
 use transom_core::{
-    AppCommand, AppError, ConnectionId, ErrorCode, ForwardAppEvent, ForwardId, ForwardRule,
-    ForwardState, ForwardStatus, TabId,
+    AppCommand, AppError, ConnectParams, ConnectionId, ErrorCode, ForwardAppEvent, ForwardCommand,
+    ForwardId, ForwardRule, ForwardState, ForwardStatus, HostCommand, SftpCommand, SyncCommand,
+    TabId, TerminalCommand, ZmodemCommand,
 };
 use transom_net::{ZmodemConfig, start_forward};
 
@@ -62,11 +63,11 @@ pub(super) async fn handle_command(
 async fn handle_terminal_command(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    command: transom_core::TerminalCommand,
+    command: TerminalCommand,
 ) -> LoopControl {
     match command {
-        transom_core::TerminalCommand::Connect(params) => {
-            let transom_core::ConnectParams {
+        TerminalCommand::Connect(params) => {
+            let ConnectParams {
                 tab_id,
                 connection_id,
                 session,
@@ -99,21 +100,17 @@ async fn handle_terminal_command(
             );
             LoopControl::Continue
         }
-        transom_core::TerminalCommand::CloseTab { tab_id } => {
+        TerminalCommand::CloseTab { tab_id } => {
             close_tab(state, tab_id);
             LoopControl::Continue
         }
-        transom_core::TerminalCommand::Shutdown => LoopControl::Shutdown,
+        TerminalCommand::Shutdown => LoopControl::Shutdown,
     }
 }
 
-fn handle_sftp_command(
-    state: &mut ControllerState,
-    ctx: &ControllerCtx,
-    command: transom_core::SftpCommand,
-) {
+fn handle_sftp_command(state: &mut ControllerState, ctx: &ControllerCtx, command: SftpCommand) {
     match command {
-        transom_core::SftpCommand::Sftp {
+        SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -130,7 +127,7 @@ fn handle_sftp_command(
                 op,
             });
         }
-        transom_core::SftpCommand::SftpCancel { tab_id, op_id } => {
+        SftpCommand::SftpCancel { tab_id, op_id } => {
             if let Some(handle) = state.sftp_tasks.remove(&(tab_id, op_id)) {
                 handle.abort();
             }
@@ -141,17 +138,17 @@ fn handle_sftp_command(
 async fn handle_forward_command(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    command: transom_core::ForwardCommand,
+    command: ForwardCommand,
 ) {
     match command {
-        transom_core::ForwardCommand::ForwardStart {
+        ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
         } => {
             handle_forward_start(state, ctx, tab_id, connection_id, rule).await;
         }
-        transom_core::ForwardCommand::ForwardStop {
+        ForwardCommand::ForwardStop {
             tab_id,
             connection_id,
             rule_id,
@@ -164,10 +161,10 @@ async fn handle_forward_command(
 async fn handle_host_command(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    command: transom_core::HostCommand,
+    command: HostCommand,
 ) {
     match command {
-        transom_core::HostCommand::DeployPublicKey {
+        HostCommand::DeployPublicKey {
             tab_id,
             connection_id,
             key_name,
@@ -183,14 +180,14 @@ async fn handle_host_command(
             })
             .await;
         }
-        transom_core::HostCommand::RunHostActions { actions } => {
+        HostCommand::RunHostActions { actions } => {
             state.host_action_tasks.spawn(run_batch(
                 actions,
                 ctx.event_tx.clone(),
                 ctx.action_permits.clone(),
             ));
         }
-        transom_core::HostCommand::SampleProcesses {
+        HostCommand::SampleProcesses {
             tab_id,
             connection_id,
         } => {
@@ -203,7 +200,7 @@ async fn handle_host_command(
                     event_tx: ctx.event_tx.clone(),
                 }));
         }
-        transom_core::HostCommand::KillProcess {
+        HostCommand::KillProcess {
             tab_id,
             connection_id,
             pid,
@@ -226,10 +223,10 @@ async fn handle_host_command(
 async fn handle_sync_command(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    command: transom_core::SyncCommand,
+    command: SyncCommand,
 ) {
     match command {
-        transom_core::SyncCommand::CloudSyncPush { settings, catalog } => {
+        SyncCommand::CloudSyncPush { settings, catalog } => {
             dispatch_cloud_sync(
                 &ctx.cloud_sync,
                 &ctx.event_tx,
@@ -238,7 +235,7 @@ async fn handle_sync_command(
             )
             .await;
         }
-        transom_core::SyncCommand::CloudSyncPull { settings } => {
+        SyncCommand::CloudSyncPull { settings } => {
             dispatch_cloud_sync(
                 &ctx.cloud_sync,
                 &ctx.event_tx,
@@ -247,7 +244,7 @@ async fn handle_sync_command(
             )
             .await;
         }
-        transom_core::SyncCommand::GitSync { settings, catalog } => {
+        SyncCommand::GitSync { settings, catalog } => {
             dispatch_cloud_sync(
                 &ctx.cloud_sync,
                 &ctx.event_tx,
@@ -259,9 +256,9 @@ async fn handle_sync_command(
     }
 }
 
-fn handle_zmodem_command(state: &mut ControllerState, command: transom_core::ZmodemCommand) {
+fn handle_zmodem_command(state: &mut ControllerState, command: ZmodemCommand) {
     match command {
-        transom_core::ZmodemCommand::ZmodemUpload { tab_id, files } => {
+        ZmodemCommand::ZmodemUpload { tab_id, files } => {
             let control = state
                 .sessions
                 .get(&tab_id)
@@ -272,7 +269,7 @@ fn handle_zmodem_command(state: &mut ControllerState, command: transom_core::Zmo
                 log::warn!("ZMODEM 上传决策被丢弃，标签 {tab_id:?} 无等待中的传输会话");
             }
         }
-        transom_core::ZmodemCommand::ZmodemCancel { tab_id } => {
+        ZmodemCommand::ZmodemCancel { tab_id } => {
             let control = state
                 .sessions
                 .get(&tab_id)

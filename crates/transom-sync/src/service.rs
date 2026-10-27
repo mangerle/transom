@@ -12,8 +12,9 @@
 use std::sync::Arc;
 use transom_core::crypto::backup::{BackupFormat, decrypt_document, encrypt_document};
 use transom_core::{
-    AppError, BackupDocument, ErrorCode, SecretKey, SecretStore, SessionCatalog, SyncEndpoint,
-    SyncPushReport, SyncSettings, collect_catalog_secrets, is_sync_conflict, merge_catalogs,
+    AppError, BackupDocument, CloudSyncTarget, ErrorCode, GitSyncResult, SecretKey, SecretStore,
+    SessionCatalog, SyncEndpoint, SyncPushReport, SyncSettings, collect_catalog_secrets,
+    is_sync_conflict, merge_catalogs,
 };
 use zeroize::Zeroizing;
 
@@ -169,10 +170,7 @@ impl CloudSyncService {
     }
 
     /// 按端点配置构造远端目标；端点凭据从钥匙串读取。
-    fn build_target(
-        &self,
-        endpoint: &SyncEndpoint,
-    ) -> Result<Box<dyn transom_core::CloudSyncTarget>, AppError> {
+    fn build_target(&self, endpoint: &SyncEndpoint) -> Result<Box<dyn CloudSyncTarget>, AppError> {
         match endpoint {
             SyncEndpoint::Webdav {
                 url,
@@ -223,7 +221,7 @@ impl CloudSyncService {
         settings: &SyncSettings,
         catalog: &SessionCatalog,
         cache_dir: &std::path::Path,
-    ) -> Result<transom_core::GitSyncResult, AppError> {
+    ) -> Result<GitSyncResult, AppError> {
         let git = settings.git.as_ref().ok_or_else(|| {
             AppError::with_detail(ErrorCode::Configuration, "尚未配置 Git 同步仓库")
         })?;
@@ -239,7 +237,7 @@ impl CloudSyncService {
             username: None,
         };
         let outcome = sync_git_blocking(git, catalog, passphrase.as_str(), cache_dir, &auth)?;
-        Ok(transom_core::GitSyncResult {
+        Ok(GitSyncResult {
             catalog: outcome.catalog,
             report: outcome.report,
             pushed: outcome.pushed,

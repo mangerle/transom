@@ -7,7 +7,9 @@ use russh::client::Handle;
 use russh::keys::agent::client::AgentClient;
 use russh::keys::{Algorithm, HashAlg, PrivateKeyWithHashAlg, load_secret_key};
 use std::sync::Arc;
-use transom_core::{AppError, ConnectionSecrets, ErrorCode, PromptInfo, PromptKind, SshConnection};
+use transom_core::{
+    AppError, AuthMethod, ConnectionSecrets, ErrorCode, PromptInfo, PromptKind, SshConnection,
+};
 use zeroize::Zeroizing;
 
 /// 密码认证的尝试上限，对齐 OpenSSH 给用户的三次机会。
@@ -22,7 +24,7 @@ pub(crate) async fn authenticate(
 ) -> Result<(), AppError> {
     let user = connection.username.clone();
     let authenticated = match &connection.auth {
-        transom_core::AuthMethod::Password { .. } => {
+        AuthMethod::Password { .. } => {
             password_flow(
                 session,
                 &user,
@@ -31,7 +33,7 @@ pub(crate) async fn authenticate(
             )
             .await?
         }
-        transom_core::AuthMethod::PrivateKey { .. } => {
+        AuthMethod::PrivateKey { .. } => {
             authenticate_private_key(
                 session,
                 connection,
@@ -41,7 +43,7 @@ pub(crate) async fn authenticate(
             )
             .await?
         }
-        transom_core::AuthMethod::Agent => authenticate_agent(session, &user).await?,
+        AuthMethod::Agent => authenticate_agent(session, &user).await?,
         _ => {
             return Err(NetError::Auth {
                 reason: "不支持的认证方式".to_string(),
@@ -106,7 +108,7 @@ async fn authenticate_private_key(
     prompter: &dyn AuthPrompter,
     allow_sha1_publickey_auth: bool,
 ) -> Result<bool, AppError> {
-    let transom_core::AuthMethod::PrivateKey {
+    let AuthMethod::PrivateKey {
         path, cert_path, ..
     } = &connection.auth
     else {

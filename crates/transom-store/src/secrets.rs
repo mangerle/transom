@@ -58,12 +58,12 @@ impl SecretStore for KeyringSecretStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use transom_core::{ErrorCode, SessionId};
+    use transom_core::{ErrorCode, SecretKind, SessionId};
 
     #[test]
     fn keychain_round_trip_when_available() {
         let store = KeyringSecretStore::new("transom-test");
-        let key = SecretKey::new(SessionId::new(), transom_core::SecretKind::Password);
+        let key = SecretKey::new(SessionId::new(), SecretKind::Password);
         match store.set(&key, "secret") {
             Ok(()) => {
                 let loaded = store.get(&key).unwrap().unwrap();

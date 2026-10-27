@@ -14,7 +14,7 @@ use crate::sftp::{SftpClient, sftp_error};
 use crate::sftp_dir::{join_remote_path, local_io_error, safe_component};
 use futures::stream::{self, StreamExt};
 use std::path::{Path, PathBuf};
-use transom_core::{AppError, DirEntryMeta, DirSnapshotEntry, TransferMatcher};
+use transom_core::{AppError, DirEntryMeta, DirSnapshotEntry, ErrorCode, TransferMatcher};
 
 /// 远端目录扫描的单批并发 read_dir 数。
 const REMOTE_SCAN_CONCURRENCY: usize = 8;
@@ -143,7 +143,7 @@ pub(crate) async fn scan_local_snapshot(
         .map_err(|error| local_io_error("读取本地目录失败", root, error))?;
     if !metadata.is_dir() {
         return Err(AppError::with_detail(
-            transom_core::ErrorCode::SftpFailed,
+            ErrorCode::SftpFailed,
             format!("本地路径不是目录: {}", root.display()),
         ));
     }

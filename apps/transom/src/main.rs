@@ -6,7 +6,7 @@ mod logging;
 use controller::Controller;
 use std::sync::Arc;
 use transom_core::{
-    AppEvent, BackupService, DeepLinkRequest, KnownHostsStore, LogLevel, SecretStore,
+    AppEvent, BackupService, DeepLinkRequest, HistoryStore, KnownHostsStore, LogLevel, SecretStore,
     SerialPortProvider, SessionStore, SettingsStore,
 };
 use transom_net::SystemSerialPortProvider;
@@ -48,8 +48,7 @@ fn main() -> anyhow::Result<()> {
     let secret_store: Arc<dyn SecretStore> = Arc::new(KeyringSecretStore::new("transom"));
     let serial_ports: Arc<dyn SerialPortProvider> = Arc::new(SystemSerialPortProvider);
     let backup: Arc<dyn BackupService> = Arc::new(CatalogBackupService::new(secret_store.clone()));
-    let history: Arc<dyn transom_core::HistoryStore> =
-        Arc::new(JsonHistoryStore::new(paths::history_path()));
+    let history: Arc<dyn HistoryStore> = Arc::new(JsonHistoryStore::new(paths::history_path()));
 
     let controller = Controller::start(known_hosts.clone(), secret_store.clone())?;
 

@@ -3,6 +3,7 @@
 use std::path::Path;
 use transom_core::{
     AppError, AppEvent, ConnectionId, ErrorCode, PreviewMode, SftpAppEvent, TabId, TransferId,
+    TransferSummary,
 };
 use transom_net::SftpClient;
 
@@ -64,7 +65,7 @@ pub(super) async fn finish_sftp_summary(
     tab_id: TabId,
     connection_id: ConnectionId,
     op_id: TransferId,
-    result: Result<transom_core::TransferSummary, AppError>,
+    result: Result<TransferSummary, AppError>,
 ) {
     match result {
         Ok(summary) => {
