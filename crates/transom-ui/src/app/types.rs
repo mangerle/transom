@@ -266,7 +266,7 @@ pub(crate) struct SettingsModalState {
     pub(crate) appearance_snapshot: Option<AppearanceSettings>,
     pub(crate) sync_form: SyncFormInputs,
     pub(crate) proxy: ProxyFormInputs,
-    pub(crate) identity_edit: Option<crate::identity_panel::IdentityEditState>,
+    pub(crate) identity_edit: Option<crate::identity::IdentityEditState>,
     pub(crate) trigger_edit: Option<crate::trigger_panel::TriggerEditState>,
 }
 

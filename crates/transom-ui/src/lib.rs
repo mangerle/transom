@@ -25,7 +25,7 @@ mod connection;
 mod event_handlers;
 mod events;
 mod forward;
-mod identity_panel;
+mod identity;
 mod keymap;
 mod keys;
 mod modals;
