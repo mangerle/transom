@@ -3,10 +3,10 @@
 //! Telnet 无内建认证，字段只有主机、端口、字符编码与连接选项；编码按钮组
 //! 与串口的选项行共用同一布局基元，保持表单视觉一致。
 
+use super::serial::serial_option_row;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::session_form::SessionForm;
-use crate::session_form_serial::serial_option_row;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
