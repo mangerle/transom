@@ -102,14 +102,6 @@ type StartupRequest = deep_link::LaunchRequest;
 #[derive(Default)]
 struct StartupRequest;
 
-#[cfg(not(unix))]
-impl StartupRequest {
-    /// 非 Unix 恒为空迭代：平台层负责 URL 事件，这里不重复产出。
-    fn into_events(self) -> Vec<AppEvent> {
-        Vec::new()
-    }
-}
-
 impl StartupRequest {
     /// 把冷启动请求按到达顺序展开成事件，与运行期唤起共用同一条投递路径：
     /// 界面事件泵启动后顺序消费，不必为"带参数启动"另开入口。
