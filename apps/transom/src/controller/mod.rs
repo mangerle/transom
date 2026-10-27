@@ -367,7 +367,9 @@ async fn run_controller(
                 if let Some(tasks) = forwards.get_mut(&tab_id)
                     && let Some(task) = tasks.remove(&rule_id)
                 {
-                    tokio::spawn(async move {
+                    // 停止动作纳入统一收尾集合：停机时限时等待，
+                    // 不再裸派生脱缰任务。
+                    cleanup_set.spawn(async move {
                         task.stop().await;
                     });
                 }
