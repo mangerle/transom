@@ -61,12 +61,49 @@ pub(crate) fn init(level: LogLevel) -> Result<(), log::SetLoggerError> {
 
     log::set_boxed_logger(Box::new(dispatch.into_log().1))?;
     log::set_max_level(level.to_filter());
+    // 崩溃兜底紧随日志装配：此后任何 panic 都要在日志里留下位置与原因。
+    install_panic_hook();
     log::info!(
         "日志系统就绪，级别: {}，文件: {}",
         level.as_str(),
         paths::log_file_path().display()
     );
     Ok(())
+}
+
+/// 安装 panic 兜底钩子：崩溃现场先落日志，再交给默认钩子。
+///
+/// 设计原理（Why）：
+/// - 桌面双击启动时 stderr 不可见，GPUI 主线程 panic 会让窗口"凭空消失"，
+///   日志文件是唯一能留下现场的地方，必须在钩子里转一手；
+/// - 先记日志再调用默认钩子：保留 rustc 默认的 stderr 输出与
+///   `RUST_BACKTRACE` 行为，终端场景的排查体验不变；
+/// - 代价与局限：若 panic 恰好发生在日志层持锁期间（例如格式化回调内部
+///   崩溃），这条记录可能无法落盘；默认钩子仍会把信息打到 stderr，
+///   信息不会彻底丢失。
+fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let location = info.location().map_or_else(
+            || "未知位置".to_string(),
+            |location| {
+                format!(
+                    "{}:{}:{}",
+                    location.file(),
+                    location.line(),
+                    location.column()
+                )
+            },
+        );
+        let payload = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|text| (*text).to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "非文本负载".to_string());
+        log::error!("线程发生 panic，位置: {location}，原因: {payload}");
+        default_hook(info);
+    }));
 }
 
 /// 解析启动级别：环境变量优先于设置项。
@@ -203,10 +240,18 @@ impl Write for RotatingLogFile {
 
 #[cfg(test)]
 mod tests {
-    use super::{RotatingLogFile, file_chain, format_line};
+    use super::{RotatingLogFile, file_chain, format_line, install_panic_hook};
     use log::Log as _;
     use std::io::Write;
     use std::path::{Path, PathBuf};
+
+    /// panic 钩子可安装且不放大崩溃：catch_unwind 仍能捕获 panic。
+    #[test]
+    fn panic_hook_installs_and_panic_stays_catchable() {
+        install_panic_hook();
+        let result = std::panic::catch_unwind(|| panic!("模拟崩溃"));
+        assert!(result.is_err(), "钩子不得吞掉 panic");
+    }
 
     /// 行格式必须带时间、级别与目标：排障时三样缺一件就没法把线索串起来。
     #[test]
