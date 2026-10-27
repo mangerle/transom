@@ -15,6 +15,20 @@ use transom_core::{
 /// 轮询，单句柄在高吞吐链路上会因此损失约 30% 吞吐。
 pub(crate) const TRANSFER_CHUNK: usize = 256 * 1024;
 
+/// 单次目录列举的条目上限。
+///
+/// 设计原理（Why）：列表整体读入内存并整体搬进界面，而远端是不可信输入
+/// 源——异常或恶意服务端可以让目录列出百万条目，把客户端内存吃光，UI 的
+/// 虚拟列表只能省渲染、省不了内存。20 万条足以覆盖真实的运维目录（含
+/// 构建产物目录），超出即中止并给出可操作的提示（过滤或进入子目录），
+/// 而不是把半份列表交给界面。
+const MAX_LIST_ENTRIES: usize = 200_000;
+
+/// 列表条目是否已达上限（抽成纯函数供单测钉住边界）。
+fn list_limit_reached(collected: usize) -> bool {
+    collected >= MAX_LIST_ENTRIES
+}
+
 /// 跨并发任务共享的进度通知：任一任务推进都汇报当前全局累计字节。
 pub(crate) fn notify_shared_progress<F>(
     progress: &Arc<std::sync::Mutex<F>>,
@@ -93,6 +107,16 @@ impl SftpClient {
             .map_err(sftp_error)?
         {
             let name = entry.file_name();
+            // 超限即中止：不把截断的目录视图交给界面（会误导删除/同步
+            // 这类破坏性操作），也不让异常目录吃光客户端内存。
+            if list_limit_reached(entries.len()) {
+                return Err(AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!(
+                        "目录条目超过 {MAX_LIST_ENTRIES} 上限，已中止读取，请使用过滤或进入子目录，目录: {canonical}"
+                    ),
+                ));
+            }
             // 服务端控制 filename，绝不能把它当成可信的单段路径：非法名字
             // 一旦进入 UI，下载时 join 到本地目录就会越界写文件。
             if !is_safe_file_name(&name) {
@@ -701,4 +725,17 @@ pub(crate) fn sftp_error(error: russh_sftp::client::error::Error) -> AppError {
 
 pub(crate) fn sftp_io_error(error: std::io::Error) -> AppError {
     AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_LIST_ENTRIES, list_limit_reached};
+
+    /// 上限边界：恰好等于上限即拒绝追加，留一条余量在限内放行。
+    #[test]
+    fn list_limit_boundary() {
+        assert!(!list_limit_reached(MAX_LIST_ENTRIES - 1));
+        assert!(list_limit_reached(MAX_LIST_ENTRIES));
+        assert!(list_limit_reached(MAX_LIST_ENTRIES + 1));
+    }
 }
