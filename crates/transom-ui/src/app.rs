@@ -14,6 +14,7 @@ use crate::sftp::{
     EditorPanelState, PendingEditorClose, SftpChmodModalState, SftpFilterModalState,
     SftpInputModalState, SftpPanelState, SftpPropertiesModalState, SftpSyncModalState,
 };
+use crate::sidebar::SidebarRow;
 use crate::snippets::SnippetFormState;
 use crate::tiling::TiledTabs;
 use gpui_kit::component::command::CommandState;
@@ -411,11 +412,26 @@ pub(crate) fn command_send_error_text(error: flume::TrySendError<AppCommand>) ->
     }
 }
 
+/// 侧栏行快照缓存：键为（目录版本, 搜索词）。
+///
+/// 设计原理（Why）：流量/统计事件触发的整壳重绘会重新执行侧栏渲染，
+/// 行构建是 O(会话数) 的分配与遍历；目录与搜索词都没变时复用同一份行表，
+/// 把这类重绘的侧栏成本降到一次 Rc clone。
+pub(crate) struct SidebarRowsCache {
+    pub(crate) revision: u64,
+    pub(crate) query: String,
+    pub(crate) rows: std::rc::Rc<Vec<SidebarRow>>,
+}
+
 pub struct AppShell {
     pub(crate) services: UiServices,
     pub(crate) settings: AppSettings,
     /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
     pub(crate) catalog: SessionCatalog,
+    /// 会话目录版本：每次持久化（= 目录被修改）递增，侧栏行缓存以此为失效键。
+    pub(crate) catalog_revision: u64,
+    /// 侧栏行快照缓存：目录与搜索词不变时复用，避免整壳重绘反复构建行表。
+    pub(crate) sidebar_rows_cache: Option<SidebarRowsCache>,
     pub(crate) tabs: Vec<TerminalTab>,
     /// 标签栏条目：每项持有一棵分割树，树里的叶子才是 `tabs` 中的窗格。
     pub(crate) groups: Vec<TabGroup>,
@@ -677,6 +693,8 @@ impl AppShell {
             services,
             settings,
             catalog,
+            catalog_revision: 0,
+            sidebar_rows_cache: None,
             tabs: Vec::new(),
             groups: Vec::new(),
             tiled_sets: Vec::new(),
@@ -885,6 +903,9 @@ impl AppShell {
     /// 统一入口避免各操作点漏存文件夹表；返回是否成功，调用方决定是否
     /// 继续后续动作（如选中项清理）。
     pub(crate) fn persist_catalog(&mut self) -> bool {
+        // 目录的任何修改都以持久化为终点（见字段注释）：版本号在这里推进，
+        // 侧栏行缓存据此失效，不必在每个修改点各记一次脏标记。
+        self.catalog_revision = self.catalog_revision.wrapping_add(1);
         match self.services.session_store.save(&self.catalog) {
             Ok(()) => true,
             Err(error) => {

@@ -317,6 +317,10 @@ impl AppShell {
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
         {
+            if tab.system_stats.as_ref() == Some(&stats) {
+                // 与上一轮样本完全一致：不更新也不重绘。
+                return false;
+            }
             tab.system_stats = Some(stats);
             applied = true;
         }
@@ -343,6 +347,11 @@ impl AppShell {
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
         {
+            if tab.network_traffic == Some(traffic) {
+                // 速率与上一帧相同（空闲连接恒为 0/0）：数据无需更新，也不
+                // 触发整壳重绘——否则空闲标签会以 1 Hz 持续整窗重建。
+                return false;
+            }
             tab.network_traffic = Some(traffic);
             applied = true;
         }

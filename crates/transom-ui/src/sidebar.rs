@@ -3,7 +3,7 @@
 mod folders;
 mod tree;
 
-use crate::app::AppShell;
+use crate::app::{AppShell, SidebarRowsCache};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -14,9 +14,32 @@ use gpui_kit::component::{Icon, Sizable, v_virtual_list};
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::SessionId;
-use tree::{SidebarDrag, SidebarRow, SidebarTarget, build_rows};
+pub(crate) use tree::SidebarRow;
+use tree::{SidebarDrag, SidebarTarget, build_rows};
 
 impl AppShell {
+    /// 侧栏行快照：目录版本与搜索词都没变时复用上次构建结果。
+    ///
+    /// 设计原理（Why）：render 在流量/统计事件触发时整壳重建，行构建是
+    /// O(会话数) 的分配与遍历；缓存把"数据没变"的重绘成本降到一次 Rc
+    /// clone。失效键用 persist_catalog 推进的目录版本——目录的每次修改
+    /// 都以持久化为终点（见 AppShell 字段注释）。
+    pub(crate) fn sidebar_rows(&mut self, query: &str) -> Rc<Vec<SidebarRow>> {
+        if let Some(cache) = &self.sidebar_rows_cache
+            && cache.revision == self.catalog_revision
+            && cache.query == query
+        {
+            return cache.rows.clone();
+        }
+        let rows = Rc::new(build_rows(&self.catalog, query));
+        self.sidebar_rows_cache = Some(SidebarRowsCache {
+            revision: self.catalog_revision,
+            query: query.to_string(),
+            rows: rows.clone(),
+        });
+        rows
+    }
+
     pub(crate) fn active_session_id(&self) -> Option<SessionId> {
         self.active_tab.and_then(|tab_id| {
             self.tabs
@@ -33,7 +56,8 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let query = self.search.read(cx).value().to_string();
-        let rows = build_rows(&self.catalog, &query);
+        // 目录与搜索词都没变时复用上次构建的行表（见 `sidebar_rows`）。
+        let rows = self.sidebar_rows(&query);
         let content = if rows.is_empty() {
             self.render_sidebar_empty(&query, p)
         } else {
@@ -42,7 +66,6 @@ impl AppShell {
                     .map(|row| size(px(0.0), row.height()))
                     .collect::<Vec<_>>(),
             );
-            let rows = Rc::new(rows);
             let p = p.clone();
             v_virtual_list(
                 cx.entity().clone(),
