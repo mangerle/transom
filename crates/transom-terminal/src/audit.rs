@@ -13,10 +13,11 @@
 //!   重试。理由是磁盘满/目录被删这类故障通常会持续，逐块重试只会刷满日志与
 //!   IO；终端可用性优先于审计完整性，这与"不阻断主流程"的既定原则一致。
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use transom_core::private_fs;
 
 /// 刷盘间隔：审计要的是"崩溃最多丢一秒"，而不是每块都同步落盘。
 const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
@@ -74,16 +75,12 @@ impl AuditSink {
     /// 打开（或创建追加）审计文件；失败时记录一次并返回 `false`。
     fn open(&mut self) -> bool {
         if let Some(parent) = self.path.parent()
-            && let Err(error) = std::fs::create_dir_all(parent)
+            && let Err(error) = private_fs::ensure_private_dir(parent)
         {
             log::warn!("创建审计目录失败，本会话不落盘，路径: {parent:?}，原因: {error}");
             return false;
         }
-        match OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-        {
+        match private_fs::open_private_append(&self.path) {
             Ok(file) => {
                 // 64 KiB 缓冲：单次 `cat` 大文件也不会每块一次系统调用。
                 self.writer = Some(BufWriter::with_capacity(64 * 1024, file));

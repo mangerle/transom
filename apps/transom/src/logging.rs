@@ -18,10 +18,10 @@
 //!   即永久停用并退回 stderr——日志坏了不能拖垮主流程，也不做"下次再试试"，
 //!   因为磁盘满与权限被改通常不会自己好，反复尝试只会把 stderr 刷满。
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use transom_core::{LogLevel, paths};
+use transom_core::{LogLevel, paths, private_fs};
 
 /// 单个日志文件的大小上限，到界即轮转。
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
@@ -129,9 +129,9 @@ impl RotatingLogFile {
     /// 打开（或创建）日志文件；目录不存在时逐级创建。
     fn open(path: &Path, max_bytes: u64, keep: usize) -> io::Result<Self> {
         if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir)?;
+            private_fs::ensure_private_dir(dir)?;
         }
-        let file = OpenOptions::new().create(true).append(true).open(path)?;
+        let file = private_fs::open_private_append(path)?;
         // 已有长度要如实记着：上次运行留下的尾巴也算在这份轮转窗口里。
         let written = file.metadata().map(|meta| meta.len()).unwrap_or(0);
         Ok(Self {
@@ -162,11 +162,7 @@ impl RotatingLogFile {
             self.file = None;
             return;
         }
-        self.file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .ok();
+        self.file = private_fs::open_private_append(&self.path).ok();
         self.written = 0;
     }
 }

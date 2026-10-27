@@ -17,6 +17,7 @@ pub mod layout;
 pub mod mac;
 pub mod merge;
 pub mod paths;
+pub mod private_fs;
 pub mod prompt;
 pub mod proxy;
 pub mod secrets;

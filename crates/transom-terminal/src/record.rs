@@ -14,12 +14,13 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+use transom_core::private_fs;
 
 /// asciinema v2 头部定义。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,13 +89,9 @@ impl SessionRecorder {
         title: Option<String>,
     ) -> std::io::Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            private_fs::ensure_private_dir(parent)?;
         }
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&path)?;
+        let file = private_fs::open_private_truncate(&path)?;
         let mut writer = BufWriter::new(file);
 
         let now_sec = std::time::SystemTime::now()
