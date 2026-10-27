@@ -1,4 +1,4 @@
-//! Domain models and application-facing contracts shared by the workspace.
+//! 工作区共享的领域模型、协议契约与跨平台抽象。
 //!
 //! 目录组织（Why）：模块按子域分治——`model`（领域模型与算法）、
 //! `protocol`（线格式与同步）、`platform`（平台路径与权限）、`crypto`

@@ -1,3 +1,8 @@
+//! 本地 PTY 终端嵌入演示样例。
+//!
+//! 演示如何通过 `portable-pty` 拉起本地 Shell 子进程，
+//! 并接入 `TerminalView` 虚拟终端视图进行键盘输入、屏幕渲染与大小重设。
+
 use gpui_kit::*;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use std::thread;
@@ -21,7 +26,7 @@ impl Demo {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .expect("failed to open pty");
+            .expect("创建本地伪终端配对失败");
 
         let mut command =
             CommandBuilder::new(std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string()));
@@ -30,17 +35,14 @@ impl Demo {
         let child = pair
             .slave
             .spawn_command(command)
-            .expect("failed to spawn shell");
+            .expect("拉起本地 Shell 子进程失败");
         drop(pair.slave);
 
         let reader = pair
             .master
             .try_clone_reader()
-            .expect("failed to clone pty reader");
-        let writer = pair
-            .master
-            .take_writer()
-            .expect("failed to take pty writer");
+            .expect("复制伪终端读取句柄失败");
+        let writer = pair.master.take_writer().expect("提取伪终端写入句柄失败");
         let (control, mut control_rx) = TerminalControlHandle::channel(16);
         let master = pair.master;
         thread::Builder::new()
@@ -60,7 +62,7 @@ impl Demo {
                     }
                 }
             })
-            .expect("failed to spawn pty control thread");
+            .expect("启动伪终端控制线程失败");
 
         let io = TerminalIo::new(reader, writer, control);
         let terminal = cx.new(|cx| {
@@ -96,6 +98,6 @@ fn main() {
         open_window(WindowOptions::default(), cx, |window, cx| {
             cx.new(|cx| Demo::new(window, cx))
         })
-        .expect("failed to open window");
+        .expect("创建并打开演示窗口失败");
     });
 }

@@ -56,7 +56,7 @@ pub async fn start_forward(
             if !matches!(socks.auth, SocksAuth::None) {
                 return Err(AppError::with_detail(
                     ErrorCode::ForwardFailed,
-                    "SOCKS authentication is not supported yet",
+                    "动态转发暂不支持 SOCKS 认证",
                 ));
             }
             start_dynamic(remote, bind).await
