@@ -58,6 +58,7 @@ mod workspace;
 mod zmodem;
 
 pub use app::AppShell;
+pub use workspace::WorkspaceState;
 
 use gpui_kit::component as gpui_component;
 use gpui_kit::*;

@@ -1,10 +1,13 @@
 //! 主工作区标签栏、分屏窗格、断线重连提示与底部硬件状态监控栏渲染模块。
 
 mod panes;
+pub(crate) mod state;
 mod tab_drag;
 mod tab_strip;
 mod tiled;
 mod tiling_menu;
+
+pub use self::state::WorkspaceState;
 
 use crate::app::{AppShell, TabStatus};
 use crate::palette::{Palette, localized_error};

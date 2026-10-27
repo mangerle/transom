@@ -114,8 +114,11 @@ impl AppShell {
                 connection_id,
                 status,
             } => {
-                if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
-                    && tab.connection_id == Some(connection_id)
+                if let Some(tab) = self
+                    .workspace
+                    .tabs
+                    .iter_mut()
+                    .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))
                 {
                     if let Some(error) = &status.error {
                         self.error = Some(localized_error(error));

@@ -121,7 +121,7 @@ impl AppShell {
 
     /// 将已打开标签的会话快照同步为目录中的最新配置。
     pub(crate) fn refresh_tab_sessions(&mut self) {
-        for tab in &mut self.tabs {
+        for tab in &mut self.workspace.tabs {
             if let Some(session) = self
                 .catalog
                 .sessions

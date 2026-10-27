@@ -10,7 +10,7 @@ use crate::palette::localized_error;
 use crate::probe::ProbeBadge;
 use crate::session_form::SessionForm;
 use crate::sftp::{EditorPanelState, PendingEditorClose};
-use crate::tiling::TiledTabs;
+use crate::workspace::WorkspaceState;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
@@ -19,8 +19,7 @@ use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppSettings, GroupId, PanelSide, SessionCatalog, SessionId, SplitId, StartupTabs,
-    TabId, UiThemeMode,
+    AppCommand, AppSettings, PanelSide, SessionCatalog, SessionId, StartupTabs, UiThemeMode,
 };
 
 pub(crate) use types::*;
@@ -44,21 +43,12 @@ pub struct AppShell {
     pub(crate) catalog_revision: u64,
     /// 侧栏行快照缓存：目录与搜索词不变时复用，避免整壳重绘反复构建行表。
     pub(crate) sidebar_rows_cache: Option<SidebarRowsCache>,
-    pub(crate) tabs: Vec<TerminalTab>,
-    /// 标签栏条目：每项持有一棵分割树，树里的叶子才是 `tabs` 中的窗格。
-    pub(crate) groups: Vec<TabGroup>,
-    /// 并排网格集合；每张网格在标签栏里合并成一个条目，同一窗口可并存多张，
-    /// 只有活动标签所在的那张显示在内容区。
-    pub(crate) tiled_sets: Vec<TiledTabs>,
-    /// Ctrl/Cmd+点击选中的标签组；用于多选后打开并排布局菜单。
-    pub(crate) tab_selection: HashSet<GroupId>,
-    /// 各分割节点的拖拽尺寸状态，由外壳持有以跨过不可见的帧。
-    pub(crate) pane_split_states: HashMap<SplitId, Entity<ResizableState>>,
+    /// 统一托管的工作区多标签与分屏网格核心状态。
+    pub(crate) workspace: WorkspaceState,
     /// 工作区分组（侧栏、主区、SFTP、转发）的列宽状态。
     pub(crate) workspace_panels: Entity<ResizableState>,
     /// 停靠左/右各自独立的列宽状态。
     pub(crate) workspace_panels_left: Entity<ResizableState>,
-    pub(crate) active_tab: Option<TabId>,
     pub(crate) search: Entity<InputState>,
     pub(crate) form: Option<SessionForm>,
     pub(crate) folder_form: Option<FolderForm>,
@@ -129,6 +119,20 @@ pub struct AppShell {
     /// 终端外观滑块的订阅句柄；随 AppShell 存活，drop 即退订。
     pub(crate) _terminal_appearance_subscriptions: Vec<Subscription>,
     pub(crate) _event_task: Task<()>,
+}
+
+impl std::ops::Deref for AppShell {
+    type Target = WorkspaceState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.workspace
+    }
+}
+
+impl std::ops::DerefMut for AppShell {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.workspace
+    }
 }
 
 impl AppShell {
@@ -272,14 +276,9 @@ impl AppShell {
             catalog,
             catalog_revision: 0,
             sidebar_rows_cache: None,
-            tabs: Vec::new(),
-            groups: Vec::new(),
-            tiled_sets: Vec::new(),
-            tab_selection: HashSet::new(),
-            pane_split_states: HashMap::new(),
+            workspace: WorkspaceState::new(),
             workspace_panels,
             workspace_panels_left,
-            active_tab: None,
             search,
             form: None,
             folder_form: None,

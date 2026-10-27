@@ -306,8 +306,10 @@ impl AppShell {
 
     /// 丢弃已经关闭的标签组，避免多选集合里残留死 ID。
     pub(crate) fn prune_tab_selection(&mut self) {
-        self.tab_selection
-            .retain(|group| self.groups.iter().any(|item| item.id == *group));
+        let groups = &self.workspace.groups;
+        self.workspace
+            .tab_selection
+            .retain(|group| groups.iter().any(|item| item.id == *group));
     }
 
     /// 按给定标签组与布局应用并排；由二级布局菜单点击后调用。
