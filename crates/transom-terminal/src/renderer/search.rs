@@ -3,7 +3,7 @@
 //! 与 `renderer` 拆开是因为这一层只在搜索栏展开的一帧里存在，绘制目标（网格列区间
 //! 而不是字符字形）和主渲染通路完全不同；放在一起会让主通路文件持续被可选叠加层稀释。
 
-use crate::renderer::TerminalRenderer;
+use super::TerminalRenderer;
 use crate::search::{RowPaint, SearchPaint};
 use gpui_kit::*;
 

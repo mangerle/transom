@@ -129,7 +129,7 @@ pub(super) fn cell_underline_kind(cell: &Cell) -> UnderlineKind {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub(super) struct RunStyle {
+pub(crate) struct RunStyle {
     pub(super) fg: Hsla,
     pub(super) bold: bool,
     pub(super) italic: bool,

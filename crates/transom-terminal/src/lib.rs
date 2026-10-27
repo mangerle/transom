@@ -10,7 +10,6 @@ mod kitty_graphics;
 mod osc;
 pub mod record;
 mod renderer;
-mod renderer_search;
 mod search;
 mod search_bar;
 mod search_ticks;

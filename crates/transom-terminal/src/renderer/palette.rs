@@ -66,3 +66,83 @@ pub(crate) fn palette_rgb(color: PaletteColor) -> Hsla {
         a: 1.0,
     })
 }
+
+impl TerminalRenderer {
+    pub(crate) fn color(&self, color: PaletteColor) -> Hsla {
+        palette_rgb(color)
+    }
+
+    pub(crate) fn resolve(&self, color: Color, colors: &Colors) -> Hsla {
+        match color {
+            Color::Spec(rgb) => self.color(PaletteColor::new(rgb.r, rgb.g, rgb.b)),
+            Color::Indexed(index) => self.resolve_indexed(index as usize, colors),
+            Color::Named(named) => self.resolve_named(named, colors),
+        }
+    }
+
+    fn resolve_named(&self, named: NamedColor, colors: &Colors) -> Hsla {
+        if let Some(rgb) = colors[named] {
+            return self.color(PaletteColor::new(rgb.r, rgb.g, rgb.b));
+        }
+        let cached = &self.palette_colors;
+        match named {
+            NamedColor::Black
+            | NamedColor::Red
+            | NamedColor::Green
+            | NamedColor::Yellow
+            | NamedColor::Blue
+            | NamedColor::Magenta
+            | NamedColor::Cyan
+            | NamedColor::White
+            | NamedColor::BrightBlack
+            | NamedColor::BrightRed
+            | NamedColor::BrightGreen
+            | NamedColor::BrightYellow
+            | NamedColor::BrightBlue
+            | NamedColor::BrightMagenta
+            | NamedColor::BrightCyan
+            | NamedColor::BrightWhite => cached.ansi[named as usize],
+            NamedColor::Foreground | NamedColor::BrightForeground => cached.foreground,
+            NamedColor::Background => cached.background,
+            NamedColor::Cursor => cached.cursor,
+            NamedColor::DimBlack
+            | NamedColor::DimRed
+            | NamedColor::DimGreen
+            | NamedColor::DimYellow
+            | NamedColor::DimBlue
+            | NamedColor::DimMagenta
+            | NamedColor::DimCyan
+            | NamedColor::DimWhite => {
+                cached.ansi_dim[named as usize - NamedColor::DimBlack as usize]
+            }
+            NamedColor::DimForeground => cached.dim_foreground,
+        }
+    }
+
+    fn resolve_indexed(&self, index: usize, colors: &Colors) -> Hsla {
+        if let Some(rgb) = colors[index] {
+            return self.color(PaletteColor::new(rgb.r, rgb.g, rgb.b));
+        }
+        if index < 16 {
+            return self.palette_colors.ansi[index];
+        }
+        // 256 色的立方与灰度回退不依赖运行期状态，直接查预计算表。
+        self.palette_colors
+            .indexed_fallback
+            .get(index - 16)
+            .copied()
+            .unwrap_or_else(|| self.palette_colors.indexed_fallback[240 - 1])
+    }
+
+    pub(crate) fn cell_colors(&self, cell: &Cell, colors: &Colors) -> (Hsla, Hsla) {
+        let mut fg = self.resolve(cell.fg, colors);
+        let mut bg = self.resolve(cell.bg, colors);
+        if cell.flags.contains(Flags::INVERSE) {
+            std::mem::swap(&mut fg, &mut bg);
+        }
+        if cell.flags.contains(Flags::DIM) {
+            fg.a *= 0.7;
+        }
+        (fg, bg)
+    }
+}
