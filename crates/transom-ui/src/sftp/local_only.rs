@@ -164,9 +164,10 @@ impl AppShell {
             p,
             cx,
         );
+        let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
         let header = self.render_sftp_panel_header(
             rust_i18n::t!("sftp.local_files_title").to_string(),
-            None,
+            Some(mount_btn),
             p,
             cx,
         );

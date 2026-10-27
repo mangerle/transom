@@ -70,7 +70,11 @@ impl AppShell {
         let Some(panel) = self.sftp_panel_mut_by_tab(target.tab_id) else {
             return;
         };
-        // 直接覆盖旧状态：旧延迟/解码任务随旧值析构而取消。
+        // 旧状态若已渲染卡片则需清理重绘，若仅为 Pending 则无需重绘
+        let need_notify = panel
+            .hover_preview
+            .as_ref()
+            .is_some_and(|p| !matches!(p.content, PreviewContent::Pending));
         panel.hover_preview = Some(SftpPreviewState {
             key: target.key,
             name: target.name,
@@ -81,7 +85,9 @@ impl AppShell {
             _delay_task: Some(delay_task),
             decode_task: None,
         });
-        cx.notify();
+        if need_notify {
+            cx.notify();
+        }
     }
 
     /// 清理指定目标的预览；当前预览不是该目标时保持不动。
@@ -101,7 +107,9 @@ impl AppShell {
         {
             return;
         }
-        if panel.hover_preview.take().is_some() {
+        if let Some(prev) = panel.hover_preview.take()
+            && !matches!(prev.content, PreviewContent::Pending)
+        {
             cx.notify();
         }
     }
@@ -111,7 +119,9 @@ impl AppShell {
         let Some(panel) = self.sftp_panel_mut_by_tab(tab_id) else {
             return;
         };
-        if panel.hover_preview.take().is_some() {
+        if let Some(prev) = panel.hover_preview.take()
+            && !matches!(prev.content, PreviewContent::Pending)
+        {
             cx.notify();
         }
     }

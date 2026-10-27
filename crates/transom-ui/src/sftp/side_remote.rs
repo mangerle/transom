@@ -475,6 +475,18 @@ impl AppShell {
         local_path: PathBuf,
         cx: &mut Context<Self>,
     ) {
+        self.sftp_enqueue_download_path_with_conn(tab_id, None, remote_path, local_path, cx);
+    }
+
+    /// 将单个下载路径加入传输队列，支持显式指定源远端连接 ID（用于并列远端与本地面板互通）。
+    pub(crate) fn sftp_enqueue_download_path_with_conn(
+        &mut self,
+        tab_id: TabId,
+        source_connection_id: Option<ConnectionId>,
+        remote_path: String,
+        local_path: PathBuf,
+        cx: &mut Context<Self>,
+    ) {
         let verify = self.settings.sftp.verify_after_transfer;
         let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
             return;
@@ -491,6 +503,7 @@ impl AppShell {
             None,
             mode,
         );
+        task.source_connection_id = source_connection_id;
         task.verify = verify;
         panel.queue.push(task);
         panel.status = Some(format!("已加入下载: {remote_path}"));

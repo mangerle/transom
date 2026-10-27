@@ -135,9 +135,7 @@ impl AppShell {
         let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
-        let Some(connection_id) = tab.connection_id else {
-            return;
-        };
+        let tab_conn_id = tab.connection_id;
         let Some(panel) = tab.sftp.as_mut() else {
             return;
         };
@@ -152,6 +150,18 @@ impl AppShell {
                 break;
             };
             let task = panel.queue[index].clone();
+            let target_conn = task
+                .target_connection_id
+                .or(task.source_connection_id)
+                .or(tab_conn_id)
+                .or_else(|| panel.side_remotes.first().map(|s| s.connection_id));
+
+            let Some(conn_id) = target_conn else {
+                panel.queue[index].status =
+                    TransferStatus::Failed("未找到可用的远端连接".to_string());
+                continue;
+            };
+
             let Some(op) = sftp_operation_for_task(&task, &filter) else {
                 panel.queue[index].status =
                     TransferStatus::Failed("不支持的传输任务类型组合".to_string());
@@ -159,7 +169,7 @@ impl AppShell {
             };
             panel.queue[index].status = TransferStatus::Transferring;
             panel.active_transfers.insert(task.id);
-            commands.push((task.id, op));
+            commands.push((task.id, conn_id, op));
         }
 
         if commands.is_empty() {
@@ -169,7 +179,7 @@ impl AppShell {
         }
         panel.error = None;
         panel.recompute_progress();
-        for (op_id, op) in commands {
+        for (op_id, connection_id, op) in commands {
             self.send_command(AppCommand::Sftp {
                 tab_id,
                 connection_id,

@@ -38,10 +38,11 @@ impl AppShell {
         let Some(panel) = tab.sftp.as_ref() else {
             return div().into_any_element();
         };
-        if panel.local_only {
+        if panel.local_only && panel.side_remotes.is_empty() {
             return self.render_local_only_panel(tab_id, p, cx);
         }
 
+        let is_local_only = panel.local_only;
         let show_filter = panel.show_filter;
         let show_hidden = panel.show_hidden;
         let sync_navigation = panel.sync_navigation;
@@ -1043,18 +1044,18 @@ impl AppShell {
         );
 
         let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
-        let header = self.render_sftp_panel_header(
-            rust_i18n::t!("sftp.title").to_string(),
-            Some(mount_btn),
-            p,
-            cx,
-        );
+        let title_text = if is_local_only {
+            rust_i18n::t!("sftp.local_files_title").to_string()
+        } else {
+            rust_i18n::t!("sftp.title").to_string()
+        };
+        let header = self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx);
 
         let mut expanded_panels: Vec<AnyElement> = Vec::new();
         if !local_collapsed {
             expanded_panels.push(local_pane);
         }
-        if !remote_collapsed {
+        if !is_local_only && !remote_collapsed {
             expanded_panels.push(remote_pane);
         }
         for (side_index, is_collapsed, _) in &side_remotes_info {
@@ -1093,7 +1094,7 @@ impl AppShell {
             columns_container =
                 columns_container.child(self.render_sftp_local_collapsed_bar(tab_id, p, cx));
         }
-        if remote_collapsed {
+        if !is_local_only && remote_collapsed {
             columns_container =
                 columns_container.child(self.render_sftp_remote_collapsed_bar(tab_id, p, cx));
         }
