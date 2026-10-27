@@ -15,7 +15,7 @@ use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use transom_core::{
     AppError, BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions,
@@ -289,10 +289,11 @@ pub fn decrypt_document(bytes: &[u8], passphrase: &str) -> Result<BackupDocument
 
 /// 写入备份文件：给了口令就加密，没给就写明文 JSON/YAML。
 ///
-/// 文件以 0600 权限原子落盘，Unix 下临时文件同样受限。
+/// 与存储文件共用同一套原子写：唯一临时名 + fsync + rename 覆盖，0600
+/// 权限由私有句柄在打开临时文件时收紧；导出后立即断电也不会得到空文件。
 ///
 /// # Errors
-/// 目录创建、序列化、写盘或权限设置失败时返回 `AppError`。
+/// 序列化/加密、父目录创建、写盘或重命名失败时返回 `AppError`。
 pub fn write_backup(
     path: &Path,
     document: &BackupDocument,
@@ -303,28 +304,7 @@ pub fn write_backup(
         Some(passphrase) => encrypt_document(document, passphrase, format)?,
         None => serialize_document(document, format)?,
     };
-    let parent = path
-        .parent()
-        .ok_or_else(|| AppError::with_detail(ErrorCode::Configuration, "备份文件路径无效"))?;
-    fs::create_dir_all(parent).map_err(AppError::from)?;
-    let temporary = temporary_path(path);
-    fs::write(&temporary, data).map_err(AppError::from)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600))
-            .map_err(AppError::from)?;
-    }
-    #[cfg(windows)]
-    {
-        // Windows 的 rename 不会覆盖已存在文件；文件选择器已确认覆盖意图。
-        let _ = fs::remove_file(path);
-    }
-    if let Err(error) = fs::rename(&temporary, path) {
-        let _ = fs::remove_file(&temporary);
-        return Err(AppError::from(error));
-    }
-    Ok(())
+    crate::file_io::write_atomic(path, &data)
 }
 
 /// 读取备份文件：给了口令按加密文件解密，没给按明文文件解析。
@@ -467,17 +447,6 @@ fn parse_envelope(bytes: &[u8]) -> Result<EncryptedBackup, AppError> {
 
 fn invalid_backup() -> AppError {
     AppError::with_detail(ErrorCode::Configuration, "备份口令错误或文件已损坏")
-}
-
-fn temporary_path(path: &Path) -> PathBuf {
-    let mut temporary = path.to_path_buf();
-    let extension = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(|extension| format!("{extension}.tmp"))
-        .unwrap_or_else(|| "tmp".to_string());
-    temporary.set_extension(extension);
-    temporary
 }
 
 #[cfg(test)]

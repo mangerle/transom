@@ -1,11 +1,9 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use transom_core::{
-    AppError, ErrorCode, HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore,
-    normalize_host, private_fs,
+    AppError, ErrorCode, HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host,
 };
 
 const SCHEMA_VERSION: u32 = 1;
@@ -66,36 +64,18 @@ impl JsonKnownHostsStore {
         })
     }
 
+    /// 持久化：内存快照经存储层的原子写落盘（唯一临时名 + fsync + rename）。
+    ///
+    /// 与其它持久化文件共用 `file_io::write_atomic`：这是本文件曾自行复述过
+    /// 的一段流程，重复实现漏掉 fsync 时会在断电后留下空指纹库。
     fn persist(&self, hosts: &[HostKeyRecord]) -> Result<(), AppError> {
-        let parent = self.path.parent().ok_or_else(|| {
-            AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
-        })?;
-        private_fs::ensure_private_dir(parent).map_err(AppError::from)?;
-
         let file = KnownHostsFile {
             version: SCHEMA_VERSION,
             hosts: hosts.to_vec(),
         };
         let data = serde_json::to_vec_pretty(&file)
             .map_err(|error| AppError::with_detail(ErrorCode::Configuration, error.to_string()))?;
-
-        let temp = self.path.with_extension("json.tmp");
-        let mut temp_file = private_fs::open_private_truncate(&temp).map_err(AppError::from)?;
-        temp_file.write_all(&data).map_err(AppError::from)?;
-        temp_file.flush().map_err(AppError::from)?;
-        drop(temp_file);
-        #[cfg(windows)]
-        {
-            // Windows rename 不覆盖已存在文件；先删除旧记录。NotFound 表示首次写入，
-            // 其它删除失败必须上报，否则会直接 rename 失败、用户以为记录成功。
-            if let Err(error) = fs::remove_file(&self.path)
-                && error.kind() != std::io::ErrorKind::NotFound
-            {
-                return Err(AppError::from(error));
-            }
-        }
-        fs::rename(&temp, &self.path).map_err(AppError::from)?;
-        Ok(())
+        crate::file_io::write_atomic(&self.path, &data)
     }
 }
 

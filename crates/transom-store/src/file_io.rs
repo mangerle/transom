@@ -1,7 +1,15 @@
+//! 存储层基础文件读写：JSON 解码与「临时文件 + fsync + rename」原子写入。
+//!
+//! 设计原理（Why）：所有持久化文件（会话、设置、known_hosts、历史、备份导出）
+//! 都必须"要么旧内容、要么新内容"地原子更新，私有文件权限同时收紧到 0600。
+//! 这三处写入点曾各自复述整套流程，任何一处漏掉 fsync 都会在断电时产出空
+//! 文件或旧内容；收敛到本模块后只维护一份实现。
+
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use transom_core::{AppError, ErrorCode, private_fs};
 
 pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, AppError> {
@@ -23,23 +31,128 @@ pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, A
     }
 }
 
+/// 把 JSON 以私有文件形式原子写盘（临时文件 + fsync + rename）。
 pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), AppError> {
+    let data = serde_json::to_vec_pretty(value)
+        .map_err(|error| AppError::with_detail(ErrorCode::Configuration, error.to_string()))?;
+    write_atomic(path, &data)
+}
+
+/// 原子写入的完整流程：唯一临时名 -> 写入 -> fsync -> rename 覆盖目标。
+///
+/// 设计原理（Why）：
+/// - 为什么要 fsync：只 flush 是把数据交给内核页缓存，rename 之后断电仍
+///   可能得到空文件或旧内容——rename 的原子性只保证"要么旧要么新"，不
+///   保证新内容已持久化。会话目录与主机指纹丢一次就要用户重配或重新确认；
+/// - 为什么临时名带 pid 与序号：固定 `.tmp` 名在两个写者并发时互相覆盖，
+///   可能把交错内容 rename 成正式文件；pid 隔离同机多进程，进程内递增
+///   序号隔离同进程多线程；
+/// - 为什么显式关闭句柄再 rename：Windows 不允许重命名打开中的文件，
+///   提前关闭让两个平台行为一致；
+/// - 代价与局限：每次保存多一次 fsync（毫秒级），写频率低可接受；极端
+///   崩溃可能残留唯一命名的 `.tmp` 文件，属无害垃圾，不会被后续写入读到。
+///
+/// # Errors
+/// 父目录创建、临时文件打开、写入、同步或重命名失败时返回 `Io` 错误，
+/// 错误信息附带目标路径便于定位。
+pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> Result<(), AppError> {
     let parent = path.parent().ok_or_else(|| {
         AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
     })?;
-    private_fs::ensure_private_dir(parent).map_err(AppError::from)?;
+    private_fs::ensure_private_dir(parent).map_err(|error| write_error(path, error))?;
 
-    let data = serde_json::to_vec_pretty(value)
-        .map_err(|error| AppError::with_detail(ErrorCode::Configuration, error.to_string()))?;
-    let temp = path.with_extension("json.tmp");
-    let mut temp_file = private_fs::open_private_truncate(&temp).map_err(AppError::from)?;
-    temp_file.write_all(&data).map_err(AppError::from)?;
-    temp_file.flush().map_err(AppError::from)?;
-    // Windows 上必须先关闭句柄才能 rename，显式 drop 让两个平台行为一致。
+    let temp = temp_sibling(path);
+    let mut temp_file =
+        private_fs::open_private_truncate(&temp).map_err(|error| write_error(&temp, error))?;
+    temp_file
+        .write_all(data)
+        .map_err(|error| write_error(&temp, error))?;
+    // flush 把数据交给内核，sync_all 才保证数据与元数据落到介质。
+    temp_file
+        .flush()
+        .map_err(|error| write_error(&temp, error))?;
+    temp_file
+        .sync_all()
+        .map_err(|error| write_error(&temp, error))?;
     drop(temp_file);
     #[cfg(windows)]
     {
-        let _ = fs::remove_file(path);
+        // Windows rename 不覆盖已存在文件；先删除旧文件。NotFound 表示首次
+        // 写入，其它删除失败必须上报，否则 rename 必然失败、用户以为写成功。
+        if let Err(error) = fs::remove_file(path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(write_error(path, error));
+        }
     }
-    fs::rename(&temp, path).map_err(AppError::from)
+    fs::rename(&temp, path).map_err(|error| write_error(path, error))?;
+    Ok(())
+}
+
+/// 目标文件的唯一临时兄弟名：`<原名>.<pid>.<序号>.tmp`。
+fn temp_sibling(path: &Path) -> PathBuf {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let name = path.file_name().map_or_else(
+        || "store".to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    path.with_file_name(format!("{name}.{}.{seq}.tmp", std::process::id()))
+}
+
+/// 原子写路径上的统一 IO 错误描述：附带目标路径便于定位。
+fn write_error(path: &Path, error: std::io::Error) -> AppError {
+    AppError::with_detail(
+        ErrorCode::Io,
+        format!("写入文件失败，路径: {}，原因: {error}", path.display()),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    /// 临时名唯一：连续生成不重名，且带进程号（同机多进程不冲突）。
+    #[test]
+    fn temp_sibling_is_unique_per_call() {
+        let path = Path::new("/tmp/demo/settings.json");
+        let first = temp_sibling(path);
+        let second = temp_sibling(path);
+        assert_ne!(first, second, "同一目标的两次临时名不得相同");
+        let pid = std::process::id().to_string();
+        assert!(
+            first.to_string_lossy().contains(&pid),
+            "临时名必须携带进程号以隔离多进程"
+        );
+        assert_eq!(first.parent(), path.parent(), "临时文件必须与目标同目录");
+    }
+
+    /// 覆盖写：内容完整替换，成功路径不残留临时文件。
+    #[test]
+    fn write_atomic_replaces_content_without_leftovers() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        write_atomic(&path, b"first").unwrap();
+        write_atomic(&path, b"second").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"second");
+        let leftovers = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(leftovers, 0, "成功写入后不得残留临时文件");
+    }
+
+    /// Unix 下目标文件权限必须是 0600。
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_keeps_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("secret.json");
+        write_atomic(&path, b"{}").unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "私有文件必须仅属主可读写");
+    }
 }
