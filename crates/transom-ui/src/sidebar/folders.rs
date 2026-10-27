@@ -28,7 +28,7 @@ impl AppShell {
         });
         let default_key_path =
             cx.new(|cx| InputState::new(window, cx).placeholder("~/.ssh/id_ed25519".to_string()));
-        self.folder_form = Some(FolderForm {
+        self.modals.folder_form = Some(FolderForm {
             base: None,
             parent,
             name,
@@ -81,7 +81,7 @@ impl AppShell {
                 .default_value(key_text)
                 .placeholder("~/.ssh/id_ed25519".to_string())
         });
-        self.folder_form = Some(FolderForm {
+        self.modals.folder_form = Some(FolderForm {
             base: Some(folder_id),
             parent: None,
             name: input,
@@ -118,7 +118,7 @@ impl AppShell {
         if let Some(folder_path) = path {
             form.apply_folder_selection(&folder_path, &defaults, window, cx);
         }
-        self.form = Some(form);
+        self.modals.form = Some(form);
         cx.notify();
     }
 
@@ -127,7 +127,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(form) = self.folder_form.as_mut() else {
+        let Some(form) = self.modals.folder_form.as_mut() else {
             return;
         };
         let title = rust_i18n::t!("form.pick_key").to_string();
@@ -145,7 +145,7 @@ impl AppShell {
     }
 
     pub(crate) fn save_folder_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.folder_form.as_ref() else {
+        let Some(form) = self.modals.folder_form.as_ref() else {
             return;
         };
         let name = form.name.read(cx).value().trim().to_string();
@@ -201,7 +201,7 @@ impl AppShell {
         };
         match result {
             Ok(()) => {
-                self.folder_form = None;
+                self.modals.folder_form = None;
                 self.persist_catalog();
                 self.status = Some(if base.is_some() {
                     rust_i18n::t!("folder.renamed").to_string()
@@ -210,7 +210,7 @@ impl AppShell {
                 });
             }
             Err(error) => {
-                if let Some(form) = self.folder_form.as_mut() {
+                if let Some(form) = self.modals.folder_form.as_mut() {
                     form.error = Some(error.to_string());
                 }
             }
@@ -236,7 +236,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.folder_form.as_ref() else {
+        let Some(form) = self.modals.folder_form.as_ref() else {
             return div().into_any_element();
         };
         let editing = form.base.is_some();
@@ -323,7 +323,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.folder_form = None;
+                        this.modals.folder_form = None;
                         cx.notify();
                     })),
             )

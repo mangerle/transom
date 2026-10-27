@@ -51,7 +51,7 @@ impl AppShell {
                 .placeholder(rust_i18n::t!("audit_viewer.search_placeholder").to_string())
         });
 
-        self.audit_viewer = Some(AuditViewer {
+        self.modals.audit_viewer = Some(AuditViewer {
             target_title,
             session_name,
             host,
@@ -107,7 +107,7 @@ impl AppShell {
 
     /// 切换查看的审计日志文件。
     pub(crate) fn select_audit_log(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(viewer) = self.audit_viewer.as_mut() else {
+        let Some(viewer) = self.modals.audit_viewer.as_mut() else {
             return;
         };
         if index >= viewer.entries.len() {
@@ -123,7 +123,7 @@ impl AppShell {
 
     /// 切换“仅当前会话”与“全部会话”范围。
     pub(crate) fn toggle_audit_viewer_scope(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.audit_viewer.as_mut() else {
+        let Some(viewer) = self.modals.audit_viewer.as_mut() else {
             return;
         };
         viewer.show_all = !viewer.show_all;
@@ -147,7 +147,7 @@ impl AppShell {
 
     /// 复制当前审计日志内容到剪贴板。
     pub(crate) fn copy_audit_viewer_content(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.audit_viewer.as_ref() else {
+        let Some(viewer) = self.modals.audit_viewer.as_ref() else {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(viewer.content.clone()));
@@ -157,7 +157,7 @@ impl AppShell {
 
     /// 删除指定的审计日志文件。
     pub(crate) fn delete_audit_log(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(viewer) = self.audit_viewer.as_mut() else {
+        let Some(viewer) = self.modals.audit_viewer.as_mut() else {
             return;
         };
         if index >= viewer.entries.len() {

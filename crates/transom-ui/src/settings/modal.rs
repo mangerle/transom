@@ -355,7 +355,7 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::X)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings_modal.open = false;
+                                this.modals.settings.open = false;
                                 cx.notify();
                             })),
                     ),

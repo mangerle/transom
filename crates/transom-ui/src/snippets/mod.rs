@@ -51,7 +51,7 @@ impl AppShell {
         if self.immersive {
             return;
         }
-        self.snippet_panel.open = !self.snippet_panel.open;
+        self.modals.snippet_panel.open = !self.modals.snippet_panel.open;
         cx.notify();
     }
 
@@ -114,26 +114,26 @@ impl AppShell {
         });
         command_input.update(cx, |state, cx| state.set_value(command, window, cx));
         let focus = name_input.read(cx).focus_handle(cx);
-        self.snippet_panel.form = Some(SnippetFormState {
+        self.modals.snippet_panel.form = Some(SnippetFormState {
             id,
             name: name_input,
             command: command_input,
             error: None,
         });
         // 卡片先收起：编辑弹窗是独立浮层，不应该和卡片叠在一起。
-        self.snippet_panel.open = false;
+        self.modals.snippet_panel.open = false;
         window.focus(&focus, cx);
         cx.notify();
     }
 
     pub(crate) fn close_snippet_form(&mut self, cx: &mut Context<Self>) {
-        self.snippet_panel.form = None;
+        self.modals.snippet_panel.form = None;
         cx.notify();
     }
 
     /// 校验并保存单条命令。名称或命令不合法时保留弹窗并就地提示。
     pub(crate) fn save_snippet_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.snippet_panel.form.as_ref() else {
+        let Some(form) = self.modals.snippet_panel.form.as_ref() else {
             return;
         };
         let id = form.id;
@@ -145,14 +145,14 @@ impl AppShell {
             command,
         };
         if !candidate.is_valid() {
-            if let Some(form) = self.snippet_panel.form.as_mut() {
+            if let Some(form) = self.modals.snippet_panel.form.as_mut() {
                 form.error = Some(rust_i18n::t!("snippets.form_invalid").to_string());
             }
             cx.notify();
             return;
         }
         if id.is_none() && self.settings.snippets.items.len() >= SNIPPET_MAX_ITEMS {
-            if let Some(form) = self.snippet_panel.form.as_mut() {
+            if let Some(form) = self.modals.snippet_panel.form.as_mut() {
                 form.error = Some(rust_i18n::t!("snippets.too_many").to_string());
             }
             cx.notify();
@@ -170,13 +170,13 @@ impl AppShell {
             self.settings.snippets.items.push(candidate);
         }
         if let Err(error) = self.services.settings_store.save(&self.settings) {
-            if let Some(form) = self.snippet_panel.form.as_mut() {
+            if let Some(form) = self.modals.snippet_panel.form.as_mut() {
                 form.error = Some(localized_error(&error));
             }
             cx.notify();
             return;
         }
-        self.snippet_panel.form = None;
+        self.modals.snippet_panel.form = None;
         self.status = Some(rust_i18n::t!("snippets.saved").to_string());
         cx.notify();
     }
@@ -199,7 +199,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let open = self.snippet_panel.open;
+        let open = self.modals.snippet_panel.open;
         let items = self.settings.snippets.items.clone();
         let execute_directly = self.settings.snippets.execute_directly;
         let app = cx.entity().clone();
@@ -232,8 +232,8 @@ impl AppShell {
             .on_open_change(move |open, _window, cx| {
                 let open = *open;
                 app_open.update(cx, |this, cx| {
-                    if this.snippet_panel.open != open {
-                        this.snippet_panel.open = open;
+                    if this.modals.snippet_panel.open != open {
+                        this.modals.snippet_panel.open = open;
                         cx.notify();
                     }
                 });
@@ -251,7 +251,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(form) = self.snippet_panel.form.as_ref() else {
+        let Some(form) = self.modals.snippet_panel.form.as_ref() else {
             return div().into_any_element();
         };
         let title = if form.id.is_some() {

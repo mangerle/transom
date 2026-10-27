@@ -56,7 +56,7 @@ impl AppShell {
             .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.panel_hidden").to_string(),
-                self.settings_modal.panel_hidden_patterns.clone(),
+                self.modals.settings.panel_hidden_patterns.clone(),
                 p,
             ))
             .child(
@@ -78,7 +78,7 @@ impl AppShell {
             .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.max_concurrent_transfers").to_string(),
-                self.settings_modal.max_concurrent_transfers.clone(),
+                self.modals.settings.max_concurrent_transfers.clone(),
                 p,
             ))
             .child(Self::setting_row(

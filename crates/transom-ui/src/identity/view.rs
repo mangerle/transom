@@ -19,7 +19,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let identities = self.catalog.identities.clone();
-        let edit = self.settings_modal.identity_edit.clone();
+        let edit = self.modals.settings.identity_edit.clone();
 
         let mut list = v_flex().gap_1();
         if identities.is_empty() {
@@ -106,7 +106,7 @@ impl AppShell {
                 .label(label)
                 .selected(auth == choice)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(edit) = this.settings_modal.identity_edit.as_mut() {
+                    if let Some(edit) = this.modals.settings.identity_edit.as_mut() {
                         edit.auth = choice;
                     }
                     cx.notify();
@@ -171,7 +171,7 @@ impl AppShell {
                                     .checked(edit.save_password)
                                     .on_click(cx.listener(|this, &checked, _, cx| {
                                         if let Some(edit) =
-                                            this.settings_modal.identity_edit.as_mut()
+                                            this.modals.settings.identity_edit.as_mut()
                                         {
                                             edit.save_password = checked;
                                         }
@@ -207,7 +207,7 @@ impl AppShell {
                                     .checked(edit.save_passphrase)
                                     .on_click(cx.listener(|this, &checked, _, cx| {
                                         if let Some(edit) =
-                                            this.settings_modal.identity_edit.as_mut()
+                                            this.modals.settings.identity_edit.as_mut()
                                         {
                                             edit.save_passphrase = checked;
                                         }

@@ -44,7 +44,7 @@ impl AppShell {
         .collect::<Vec<_>>();
         let endpoint_buttons = h_flex().gap_1().children(endpoint_buttons);
 
-        let form = &self.settings_modal.sync_form;
+        let form = &self.modals.settings.sync_form;
         let mut content = v_flex()
             .gap_2()
             .child(Self::setting_row(

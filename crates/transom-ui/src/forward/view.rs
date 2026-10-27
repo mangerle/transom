@@ -333,7 +333,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(pending) = self.confirm_forward_any.as_ref() else {
+        let Some(pending) = self.modals.confirm_forward_any.as_ref() else {
             return div().into_any_element();
         };
         let rule_name = pending.rule.name.clone();

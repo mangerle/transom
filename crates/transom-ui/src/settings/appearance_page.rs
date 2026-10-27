@@ -218,7 +218,7 @@ impl AppShell {
             .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.ui_font_family").to_string(),
-                self.settings_modal.ui_font_family.clone(),
+                self.modals.settings.ui_font_family.clone(),
                 p,
             ))
             .child(
@@ -238,7 +238,7 @@ impl AppShell {
     ) -> AnyElement {
         let mode = self.settings.window.window_background;
         let transparency =
-            slider_percent(&self.settings_modal.window_transparency.read(cx).value());
+            slider_percent(&self.modals.settings.window_transparency.read(cx).value());
         let mode_buttons = h_flex()
             .gap_1()
             .children(
@@ -278,7 +278,7 @@ impl AppShell {
             .child(Self::setting_row(
                 "settings.window_transparency",
                 Some("settings.window_transparency_desc"),
-                Self::percent_slider(&self.settings_modal.window_transparency, transparency, p),
+                Self::percent_slider(&self.modals.settings.window_transparency, transparency, p),
                 p,
             ))
             .into_any_element()
@@ -325,7 +325,8 @@ impl AppShell {
         if mode != WindowBackgroundMode::Opaque && self.settings.window.window_transparency == 0 {
             self.settings.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY;
             let value = f32::from(DEFAULT_WINDOW_TRANSPARENCY);
-            self.settings_modal
+            self.modals
+                .settings
                 .window_transparency
                 .update(cx, |state, cx| {
                     state.set_value(value, window, cx);

@@ -81,7 +81,7 @@ impl AppShell {
                     .placeholder(rust_i18n::t!("backup.confirm").to_string())
             })
         });
-        self.backup_prompt = Some(BackupPromptState {
+        self.modals.backup_prompt = Some(BackupPromptState {
             action,
             passphrase: passphrase.clone(),
             confirm,
@@ -102,7 +102,7 @@ impl AppShell {
     /// Argon2 使用 64 MiB 内存，属于明显的阻塞计算；放到后台执行器避免
     /// 冻结窗口。任务句柄保存在 `_backup_task`，窗口关闭时自动取消。
     pub(crate) fn submit_backup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(prompt) = self.backup_prompt.as_ref() else {
+        let Some(prompt) = self.modals.backup_prompt.as_ref() else {
             return;
         };
         if prompt.busy {
@@ -147,7 +147,7 @@ impl AppShell {
 
         let path = prompt.action.path().to_path_buf();
         let backup = self.services.backup.clone();
-        if let Some(prompt) = self.backup_prompt.as_mut() {
+        if let Some(prompt) = self.modals.backup_prompt.as_mut() {
             prompt.busy = true;
             prompt.error = None;
         }
@@ -193,13 +193,13 @@ impl AppShell {
                 });
             })
         };
-        self._backup_task = Some(task);
+        self.tasks.backup = Some(task);
         cx.notify();
     }
 
     /// 在弹窗上显示一条错误，不关闭弹窗以便用户就地改正。
     fn set_backup_error(&mut self, message: String, cx: &mut Context<Self>) {
-        if let Some(prompt) = self.backup_prompt.as_mut() {
+        if let Some(prompt) = self.modals.backup_prompt.as_mut() {
             prompt.error = Some(message);
         }
         cx.notify();
@@ -211,13 +211,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.backup_prompt.as_ref() else {
+        let Some(prompt) = self.modals.backup_prompt.as_ref() else {
             return;
         };
         match result {
             Ok(BackupOutcome::Exported(report)) => {
                 let path = prompt.action.path().display().to_string();
-                self.backup_prompt = None;
+                self.modals.backup_prompt = None;
                 let mut message = rust_i18n::t!("backup.exported", path = path).to_string();
                 if report.secrets > 0 {
                     message.push(' ');
@@ -231,7 +231,7 @@ impl AppShell {
                 let summary = self.catalog.merge(catalog);
                 let saved = self.persist_catalog();
                 self.refresh_tab_sessions();
-                self.backup_prompt = None;
+                self.modals.backup_prompt = None;
                 let mut message = rust_i18n::t!(
                     "backup.imported",
                     added = summary.added_sessions,
@@ -246,7 +246,7 @@ impl AppShell {
             }
             Err(error) => {
                 let code = error.code;
-                if let Some(prompt) = self.backup_prompt.as_mut() {
+                if let Some(prompt) = self.modals.backup_prompt.as_mut() {
                     prompt.busy = false;
                     prompt.error = Some(localized_error(&error));
                     // 文件类型与勾选不符时自动纠正勾选，省得用户在同一错误上反复试。
@@ -257,7 +257,7 @@ impl AppShell {
                     }
                 }
                 if code == ErrorCode::BackupEncrypted
-                    && let Some(prompt) = self.backup_prompt.as_ref()
+                    && let Some(prompt) = self.modals.backup_prompt.as_ref()
                 {
                     let passphrase = prompt.passphrase.clone();
                     passphrase.update(cx, |state, cx| state.focus(window, cx));
@@ -274,7 +274,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(prompt) = self.backup_prompt.as_ref() else {
+        let Some(prompt) = self.modals.backup_prompt.as_ref() else {
             return div().into_any_element();
         };
         let is_export = prompt.action.is_export();
@@ -308,7 +308,7 @@ impl AppShell {
                                 .small()
                                 .checked(prompt.encrypt)
                                 .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(prompt) = this.backup_prompt.as_mut() {
+                                    if let Some(prompt) = this.modals.backup_prompt.as_mut() {
                                         prompt.encrypt = checked;
                                     }
                                     cx.notify();
@@ -329,7 +329,7 @@ impl AppShell {
                                 .small()
                                 .checked(prompt.include_secrets)
                                 .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(prompt) = this.backup_prompt.as_mut() {
+                                    if let Some(prompt) = this.modals.backup_prompt.as_mut() {
                                         prompt.include_secrets = checked;
                                         // 口令必须加密落盘：勾选包含口令时同步打开加密，
                                         // 用户仍可手动取消，但提交时会被明确拦下。
@@ -391,10 +391,11 @@ impl AppShell {
                             .small()
                             .checked(prompt.encrypted_file)
                             .on_click(cx.listener(|this, &checked, window, cx| {
-                                if let Some(prompt) = this.backup_prompt.as_mut() {
+                                if let Some(prompt) = this.modals.backup_prompt.as_mut() {
                                     prompt.encrypted_file = checked;
                                 }
-                                if checked && let Some(prompt) = this.backup_prompt.as_ref() {
+                                if checked && let Some(prompt) = this.modals.backup_prompt.as_ref()
+                                {
                                     let passphrase = prompt.passphrase.clone();
                                     passphrase.update(cx, |state, cx| state.focus(window, cx));
                                 }
@@ -436,7 +437,7 @@ impl AppShell {
                     .disabled(busy)
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.backup_prompt = None;
+                        this.modals.backup_prompt = None;
                         cx.notify();
                     })),
             )
@@ -488,12 +489,11 @@ pub(crate) fn secret_restore_note(secrets: Result<SecretRestoreReport, AppError>
 }
 
 fn ensure_backup_extension(path: PathBuf) -> PathBuf {
-    match path
+    let ext = path
         .extension()
-        .and_then(|extension| extension.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    match ext.as_deref() {
         Some("json" | "yaml" | "yml") => path,
         _ => path.with_extension("json"),
     }

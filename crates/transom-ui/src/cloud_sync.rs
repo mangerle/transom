@@ -83,7 +83,7 @@ impl AppShell {
     /// 打开设置弹窗时回填云同步表单；秘密一律留空。
     pub(crate) fn fill_sync_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let sync = self.settings.sync.clone();
-        let form = &self.settings_modal.sync_form;
+        let form = &self.modals.settings.sync_form;
         let mut set = |input: &Entity<InputState>, value: &str| {
             input.update(cx, |state, cx| state.set_value(value, window, cx));
         };
@@ -135,7 +135,7 @@ impl AppShell {
     /// 端点类型以设置内存态为准（用户在页上点选），字段值取输入框现状，
     /// 因此"填完直接点上传"无需先保存；汇总后再做一次清洗兜底。
     pub(crate) fn collect_sync_settings(&self, cx: &App) -> SyncSettings {
-        let form = &self.settings_modal.sync_form;
+        let form = &self.modals.settings.sync_form;
         let read = |input: &Entity<InputState>| input.read(cx).value().trim().to_string();
         let endpoint = match self.settings.sync.endpoint.clone() {
             Some(SyncEndpoint::Webdav { .. }) => Some(SyncEndpoint::Webdav {
@@ -182,7 +182,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let form = &self.settings_modal.sync_form;
+        let form = &self.modals.settings.sync_form;
         let is_webdav = matches!(
             self.settings.sync.endpoint,
             Some(SyncEndpoint::Webdav { .. })
@@ -406,7 +406,7 @@ impl AppShell {
                 this.apply_cloud_sync_pull(catalog, secrets, safety_path, cx);
             });
         });
-        self._sync_pull_task = Some(task);
+        self.tasks.sync_pull = Some(task);
     }
 
     /// 把合并前的本机目录导出为明文安全副本；失败不阻断合并，只记日志。
@@ -462,7 +462,7 @@ impl AppShell {
         if saved {
             self.status = Some(message);
         }
-        self._sync_pull_task = None;
+        self.tasks.sync_pull = None;
         cx.notify();
     }
 

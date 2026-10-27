@@ -31,7 +31,7 @@ pub(crate) fn render_serial_fields(
                 .label(label)
                 .selected(current_port == port_name)
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    if let Some(form) = this.form.as_mut() {
+                    if let Some(form) = this.modals.form.as_mut() {
                         let port_name = port_name.clone();
                         form.serial_port.update(cx, |state, cx| {
                             state.set_value(&port_name, window, cx);
@@ -58,7 +58,7 @@ pub(crate) fn render_serial_fields(
             .label(bits.bits().to_string())
             .selected(form.serial_data_bits == bits)
             .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(form) = this.form.as_mut() {
+                if let Some(form) = this.modals.form.as_mut() {
                     form.serial_data_bits = bits;
                 }
                 cx.notify();
@@ -77,7 +77,7 @@ pub(crate) fn render_serial_fields(
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_parity == parity)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.form.as_mut() {
+                    if let Some(form) = this.modals.form.as_mut() {
                         form.serial_parity = parity;
                     }
                     cx.notify();
@@ -96,7 +96,7 @@ pub(crate) fn render_serial_fields(
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_stop_bits == stop_bits)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.form.as_mut() {
+                    if let Some(form) = this.modals.form.as_mut() {
                         form.serial_stop_bits = stop_bits;
                     }
                     cx.notify();
@@ -116,7 +116,7 @@ pub(crate) fn render_serial_fields(
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_flow_control == flow)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.form.as_mut() {
+                    if let Some(form) = this.modals.form.as_mut() {
                         form.serial_flow_control = flow;
                     }
                     cx.notify();

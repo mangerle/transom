@@ -35,7 +35,7 @@ impl AppShell {
     /// `default_icon` 是"跟随连接类型"时显示的图标，由调用方按当前连接类型给出，
     /// 这样用户在按钮上就能看到最终会画成什么样。
     ///
-    /// 刻意做成不借用 `self` 的关联函数：表单视图此刻正持有 `self.form` 的
+    /// 刻意做成不借用 `self` 的关联函数：表单视图此刻正持有 `self.modals.form` 的
     /// 不可变借用，再借 `&mut self` 会与它冲突。
     pub(crate) fn render_session_appearance(
         default_icon: IconName,
@@ -53,7 +53,7 @@ impl AppShell {
                     .selected(icon == SessionIcon::Auto)
                     .tooltip(rust_i18n::t!("form.icon_auto").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.form.as_mut() {
+                        if let Some(form) = this.modals.form.as_mut() {
                             form.icon = SessionIcon::Auto;
                         }
                         cx.notify();
@@ -68,7 +68,7 @@ impl AppShell {
                     .icon(name)
                     .selected(icon == choice)
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(form) = this.form.as_mut() {
+                        if let Some(form) = this.modals.form.as_mut() {
                             form.icon = choice;
                         }
                         cx.notify();
@@ -95,7 +95,7 @@ impl AppShell {
                             .build(_window, cx)
                     })
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.form.as_mut() {
+                        if let Some(form) = this.modals.form.as_mut() {
                             form.color = SessionColor::None;
                         }
                         cx.notify();
@@ -119,7 +119,7 @@ impl AppShell {
                     })
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(form) = this.form.as_mut() {
+                        if let Some(form) = this.modals.form.as_mut() {
                             form.color = choice;
                         }
                         cx.notify();

@@ -18,7 +18,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(viewer) = self.audit_viewer.as_ref() else {
+        let Some(viewer) = self.modals.audit_viewer.as_ref() else {
             return div().into_any_element();
         };
 
@@ -78,6 +78,7 @@ impl AppShell {
                 .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     let idx = this
+                        .modals
                         .audit_viewer
                         .as_ref()
                         .map(|v| v.selected_index)
@@ -123,7 +124,7 @@ impl AppShell {
                             .outline()
                             .label(rust_i18n::t!("audit_viewer.open_settings").to_string())
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.audit_viewer = None;
+                                this.modals.audit_viewer = None;
                                 this.open_settings_modal(window, cx);
                             })),
                     ),
@@ -280,7 +281,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("audit_viewer.close").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.audit_viewer = None;
+                        this.modals.audit_viewer = None;
                         cx.notify();
                     })),
             );

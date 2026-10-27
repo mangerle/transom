@@ -88,7 +88,7 @@ impl AppShell {
             ))
             .child(Self::form_field(
                 rust_i18n::t!("notify.threshold").to_string(),
-                self.settings_modal.notify_threshold.clone(),
+                self.modals.settings.notify_threshold.clone(),
                 p,
             ))
             .child(
@@ -109,11 +109,11 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let kind = self.settings_modal.proxy.kind;
-        let host = self.settings_modal.proxy.host.clone();
-        let port = self.settings_modal.proxy.port.clone();
-        let username = self.settings_modal.proxy.username.clone();
-        let password = self.settings_modal.proxy.password.clone();
+        let kind = self.modals.settings.proxy.kind;
+        let host = self.modals.settings.proxy.host.clone();
+        let port = self.modals.settings.proxy.port.clone();
+        let username = self.modals.settings.proxy.username.clone();
+        let password = self.modals.settings.proxy.password.clone();
         let mut content = v_flex().gap_2().child(Self::setting_row(
             "settings.proxy_mode",
             Some("settings.proxy_mode_desc"),
@@ -140,7 +140,7 @@ impl AppShell {
                             .label(rust_i18n::t!(key).to_string())
                             .selected(kind == protocol)
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.settings_modal.proxy.kind = protocol;
+                                this.modals.settings.proxy.kind = protocol;
                                 cx.notify();
                             }))
                     }),
@@ -188,7 +188,7 @@ impl AppShell {
     ) -> AnyElement {
         let enabled = self.settings.block_view.enabled;
         let style = self.settings.block_view.style;
-        let rows_input = self.settings_modal.block_collapse_rows.clone();
+        let rows_input = self.modals.settings.block_collapse_rows.clone();
         v_flex()
             .gap_2()
             .child(Self::setting_row(

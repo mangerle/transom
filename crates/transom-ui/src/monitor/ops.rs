@@ -22,10 +22,10 @@ impl AppShell {
 
     /// 保证进程轮询任务已启动；任务常驻但在面板关闭时不发命令。
     fn ensure_monitor_task(&mut self, cx: &mut Context<Self>) {
-        if self.monitor_task.is_some() {
+        if self.tasks.monitor.is_some() {
             return;
         }
-        self.monitor_task = Some(cx.spawn(async move |this, cx| {
+        self.tasks.monitor = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(PROCESS_POLL_INTERVAL).await;
                 if this

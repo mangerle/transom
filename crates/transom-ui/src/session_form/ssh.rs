@@ -28,7 +28,7 @@ pub(crate) fn render_ssh_fields(
             .label(rust_i18n::t!("form.auth_password").to_string())
     }
     .on_click(cx.listener(|this, _, _, cx| {
-        if let Some(form) = this.form.as_mut() {
+        if let Some(form) = this.modals.form.as_mut() {
             form.auth = AuthChoice::Password;
         }
         cx.notify();
@@ -45,7 +45,7 @@ pub(crate) fn render_ssh_fields(
             .label(rust_i18n::t!("form.auth_key").to_string())
     }
     .on_click(cx.listener(|this, _, _, cx| {
-        if let Some(form) = this.form.as_mut() {
+        if let Some(form) = this.modals.form.as_mut() {
             form.auth = AuthChoice::PrivateKey;
         }
         cx.notify();
@@ -62,7 +62,7 @@ pub(crate) fn render_ssh_fields(
             .label(rust_i18n::t!("form.auth_agent").to_string())
     }
     .on_click(cx.listener(|this, _, _, cx| {
-        if let Some(form) = this.form.as_mut() {
+        if let Some(form) = this.modals.form.as_mut() {
             form.auth = AuthChoice::Agent;
         }
         cx.notify();
@@ -108,7 +108,7 @@ pub(crate) fn render_ssh_fields(
                                 .label(rust_i18n::t!("form.identity_none").to_string())
                                 .selected(form.identity_choice.is_none())
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(form) = this.form.as_mut() {
+                                    if let Some(form) = this.modals.form.as_mut() {
                                         form.identity_choice = None;
                                     }
                                     cx.notify();
@@ -122,7 +122,7 @@ pub(crate) fn render_ssh_fields(
                                 .label(option.name.clone())
                                 .selected(selected)
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(form) = this.form.as_mut() {
+                                    if let Some(form) = this.modals.form.as_mut() {
                                         form.identity_choice = Some(identity_id);
                                     }
                                     cx.notify();
@@ -173,7 +173,7 @@ pub(crate) fn render_ssh_fields(
                     .small()
                     .checked(form.auto_reconnect)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        if let Some(form) = this.form.as_mut() {
+                        if let Some(form) = this.modals.form.as_mut() {
                             form.auto_reconnect = checked;
                         }
                         cx.notify();
@@ -254,7 +254,7 @@ fn render_jump_section(form: &SessionForm, cx: &mut Context<AppShell>, p: &Palet
                                         let app = app.clone();
                                         move |_, _, cx| {
                                             app.update(cx, |this, cx| {
-                                                if let Some(form) = this.form.as_mut() {
+                                                if let Some(form) = this.modals.form.as_mut() {
                                                     form.jump_choice = None;
                                                 }
                                                 cx.notify();
@@ -276,7 +276,7 @@ fn render_jump_section(form: &SessionForm, cx: &mut Context<AppShell>, p: &Palet
                                         PopupMenuItem::new(label).icon(IconName::Route).on_click(
                                             move |_, _, cx| {
                                                 app.update(cx, |this, cx| {
-                                                    if let Some(form) = this.form.as_mut() {
+                                                    if let Some(form) = this.modals.form.as_mut() {
                                                         form.jump_choice = Some(id);
                                                     }
                                                     cx.notify();
@@ -329,7 +329,7 @@ fn render_auth_credential_fields(
                             .small()
                             .checked(form.save_password)
                             .on_click(cx.listener(|this, &checked, _, cx| {
-                                if let Some(form) = this.form.as_mut() {
+                                if let Some(form) = this.modals.form.as_mut() {
                                     form.save_password = checked;
                                 }
                                 cx.notify();
@@ -409,7 +409,7 @@ fn render_auth_credential_fields(
                                 .small()
                                 .checked(form.save_passphrase)
                                 .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(form) = this.form.as_mut() {
+                                    if let Some(form) = this.modals.form.as_mut() {
                                         form.save_passphrase = checked;
                                     }
                                     cx.notify();

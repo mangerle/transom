@@ -25,9 +25,9 @@ impl AppShell {
     }
 
     pub(crate) fn toggle_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_quick_open = !self.show_quick_open;
-        if self.show_quick_open {
-            self.quick_open_state.update(cx, |state, cx| {
+        self.modals.show_quick_open = !self.modals.show_quick_open;
+        if self.modals.show_quick_open {
+            self.modals.quick_open_state.update(cx, |state, cx| {
                 state.set_query("", window, cx);
                 state.focus(window, cx);
             });

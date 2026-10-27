@@ -112,14 +112,14 @@ impl AppShell {
             .find(|folder| self.catalog.folder_path(folder.id).as_deref() == Some(folder_path))
             .map(|folder| self.catalog.inherited_folder_defaults(folder.id))
             .unwrap_or_default();
-        if let Some(form) = self.form.as_mut() {
+        if let Some(form) = self.modals.form.as_mut() {
             form.apply_folder_selection(folder_path, &defaults, window, cx);
         }
     }
 
     /// 在会话表单中清除分组（选择根层级）。
     pub(crate) fn clear_form_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(form) = self.form.as_mut() {
+        if let Some(form) = self.modals.form.as_mut() {
             form.folder_path
                 .update(cx, |state, cx| state.set_value("", window, cx));
             cx.notify();
@@ -127,7 +127,7 @@ impl AppShell {
     }
 
     pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.form = Some(SessionForm::new(
+        self.modals.form = Some(SessionForm::new(
             window,
             cx,
             crate::session_form::SessionFormInit {
@@ -177,7 +177,7 @@ impl AppShell {
             },
         );
         self.prefill_secrets(&mut form, window, cx);
-        self.form = Some(form);
+        self.modals.form = Some(form);
         if is_serial {
             self.refresh_serial_ports(window, cx);
         }
@@ -237,7 +237,7 @@ impl AppShell {
 
     /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
     pub(crate) fn save_session_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.form.as_mut() else {
+        let Some(form) = self.modals.form.as_mut() else {
             return;
         };
         let editing = form.base.is_some();
@@ -251,7 +251,7 @@ impl AppShell {
                 return;
             }
         };
-        self.form = None;
+        self.modals.form = None;
 
         let mut built = built;
         built.session.folder_id = built
@@ -322,7 +322,7 @@ impl AppShell {
     }
 
     pub(crate) fn delete_session_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.form.take() else {
+        let Some(form) = self.modals.form.take() else {
             return;
         };
         let Some(base) = form.base else {

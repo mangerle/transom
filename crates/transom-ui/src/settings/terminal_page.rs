@@ -278,12 +278,12 @@ impl AppShell {
             .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_family").to_string(),
-                self.settings_modal.font_family.clone(),
+                self.modals.settings.font_family.clone(),
                 p,
             ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.cjk_font").to_string(),
-                self.settings_modal.cjk_font.clone(),
+                self.modals.settings.cjk_font.clone(),
                 p,
             ))
             .child(
@@ -294,12 +294,12 @@ impl AppShell {
             )
             .child(Self::form_field(
                 rust_i18n::t!("settings.font_size").to_string(),
-                self.settings_modal.font_size.clone(),
+                self.modals.settings.font_size.clone(),
                 p,
             ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.line_height").to_string(),
-                self.settings_modal.line_height.clone(),
+                self.modals.settings.line_height.clone(),
                 p,
             ))
             .into_any_element()
@@ -405,7 +405,7 @@ impl AppShell {
             ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.scrollback").to_string(),
-                self.settings_modal.scrollback.clone(),
+                self.modals.settings.scrollback.clone(),
                 p,
             ))
             .into_any_element()
@@ -433,7 +433,7 @@ impl AppShell {
             ))
             .child(Self::form_field(
                 rust_i18n::t!("settings.highlight_keywords").to_string(),
-                self.settings_modal.highlight_keywords.clone(),
+                self.modals.settings.highlight_keywords.clone(),
                 p,
             ))
             .child(
@@ -460,7 +460,7 @@ impl AppShell {
                     .child(rust_i18n::t!("settings.key_bindings_desc").to_string()),
             )
             .child(
-                Textarea::new(&self.settings_modal.terminal_key_bindings)
+                Textarea::new(&self.modals.settings.terminal_key_bindings)
                     .h(px(120.0))
                     .w_full(),
             )

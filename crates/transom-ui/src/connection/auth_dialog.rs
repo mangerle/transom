@@ -14,7 +14,7 @@ use zeroize::Zeroizing;
 
 impl AppShell {
     pub(crate) fn submit_auth_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.auth_prompt.take() else {
+        let Some(state) = self.modals.auth_prompt.take() else {
             return;
         };
         let answers: Vec<String> = state
@@ -26,7 +26,7 @@ impl AppShell {
             && state.save
             && let Some(value) = answers.first().filter(|value| !value.is_empty())
         {
-            self.pending_credential = Some(PendingCredential {
+            self.modals.pending_credential = Some(PendingCredential {
                 session_id: state.session_id,
                 owner: self.secret_owner_for(state.session_id),
                 connection_id: state.connection_id,
@@ -45,13 +45,17 @@ impl AppShell {
         connection_id: ConnectionId,
         cx: &mut Context<Self>,
     ) {
-        let matched = self.pending_credential.as_ref().is_some_and(|pending| {
-            pending.session_id == session_id && pending.connection_id == connection_id
-        });
+        let matched = self
+            .modals
+            .pending_credential
+            .as_ref()
+            .is_some_and(|pending| {
+                pending.session_id == session_id && pending.connection_id == connection_id
+            });
         if !matched {
             return;
         }
-        let Some(pending) = self.pending_credential.take() else {
+        let Some(pending) = self.modals.pending_credential.take() else {
             return;
         };
         let key = SecretKey::new(pending.owner, pending.kind);
@@ -80,11 +84,12 @@ impl AppShell {
     /// 连接失败时丢弃待保存凭据。
     pub(crate) fn discard_pending_credential(&mut self, connection_id: ConnectionId) {
         let matched = self
+            .modals
             .pending_credential
             .as_ref()
             .is_some_and(|pending| pending.connection_id == connection_id);
         if matched {
-            self.pending_credential = None;
+            self.modals.pending_credential = None;
         }
     }
 
@@ -127,12 +132,12 @@ impl AppShell {
     }
 
     pub(crate) fn cancel_auth_prompt(&mut self) {
-        self.auth_prompt = None;
+        self.modals.auth_prompt = None;
     }
 
     /// 用户信任首连主机指纹。
     pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.host_key_confirm.take() {
+        if let Some(state) = self.modals.host_key_confirm.take() {
             let _ = state.responder.try_send(true);
             cx.notify();
         }
@@ -140,7 +145,7 @@ impl AppShell {
 
     /// 用户拒绝首连主机指纹。
     pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.host_key_confirm.take() {
+        if let Some(state) = self.modals.host_key_confirm.take() {
             let _ = state.responder.try_send(false);
             cx.notify();
         }
@@ -152,7 +157,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(prompt) = self.auth_prompt.as_ref() else {
+        let Some(prompt) = self.modals.auth_prompt.as_ref() else {
             return div().into_any_element();
         };
         let client_generated = prompt
@@ -208,7 +213,7 @@ impl AppShell {
                             .small()
                             .checked(prompt.save)
                             .on_click(cx.listener(|this, &checked, _, cx| {
-                                if let Some(state) = this.auth_prompt.as_mut() {
+                                if let Some(state) = this.modals.auth_prompt.as_mut() {
                                     state.save = checked;
                                 }
                                 cx.notify();
@@ -265,7 +270,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(state) = self.host_key_confirm.as_ref() else {
+        let Some(state) = self.modals.host_key_confirm.as_ref() else {
             return div().into_any_element();
         };
         let body = rust_i18n::t!(

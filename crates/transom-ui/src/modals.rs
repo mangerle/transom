@@ -13,7 +13,7 @@ use transom_core::{Connection, SessionId};
 
 impl AppShell {
     pub(crate) fn refresh_known_hosts(&mut self) {
-        self.known_hosts_modal.records = self.services.known_hosts.list().unwrap_or_default();
+        self.modals.known_hosts.records = self.services.known_hosts.list().unwrap_or_default();
     }
 
     pub(crate) fn remove_known_host(&mut self, host: &str, port: u16, cx: &mut Context<Self>) {
@@ -32,9 +32,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let records = self.known_hosts_modal.records.clone();
+        let records = self.modals.known_hosts.records.clone();
         let search_query = self
-            .known_hosts_modal
+            .modals
+            .known_hosts
             .search
             .read(cx)
             .value()
@@ -125,7 +126,7 @@ impl AppShell {
 
         let content = v_flex()
             .gap_3()
-            .child(Input::new(&self.known_hosts_modal.search).w_full())
+            .child(Input::new(&self.modals.known_hosts.search).w_full())
             .child(
                 v_flex()
                     .id(ElementId::Name("known-hosts-list".into()))
@@ -138,7 +139,7 @@ impl AppShell {
             .ghost()
             .label(rust_i18n::t!("app.close").to_string())
             .on_click(cx.listener(|this, _, _, cx| {
-                this.known_hosts_modal.open = false;
+                this.modals.known_hosts.open = false;
                 cx.notify();
             }));
 
@@ -164,7 +165,13 @@ impl AppShell {
         let app_entity = cx.entity().clone();
         // 渲染期读取当前查询词：CommandState 在查询变化时会触发重渲染，
         // 虚拟直连项因此始终与输入框内容同步，无需额外的 on_query 状态回写。
-        let query = self.quick_open_state.read(cx).query(cx).trim().to_string();
+        let query = self
+            .modals
+            .quick_open_state
+            .read(cx)
+            .query(cx)
+            .trim()
+            .to_string();
 
         #[derive(Clone)]
         enum QuickOpenTarget {
@@ -248,7 +255,7 @@ impl AppShell {
         let targets = std::rc::Rc::new(targets);
         let targets_confirm = targets.clone();
 
-        let cmd = Command::new(&self.quick_open_state)
+        let cmd = Command::new(&self.modals.quick_open_state)
             .placeholder(rust_i18n::t!("app.quick_open_placeholder").to_string())
             .items(items)
             .on_confirm({
@@ -258,24 +265,29 @@ impl AppShell {
                         match target {
                             QuickOpenTarget::Local => {
                                 app.update(cx, |this, cx| {
-                                    this.show_quick_open = false;
+                                    this.modals.show_quick_open = false;
                                     this.open_local_terminal(window, cx);
                                 });
                             }
                             QuickOpenTarget::Session(session_id) => {
                                 let session_id = *session_id;
                                 app.update(cx, |this, cx| {
-                                    this.show_quick_open = false;
+                                    this.modals.show_quick_open = false;
                                     this.connect_session(session_id, window, cx);
                                 });
                             }
                             QuickOpenTarget::QuickConnect => {
                                 // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
                                 let host = app.read_with(cx, |this, cx| {
-                                    this.quick_open_state.read(cx).query(cx).trim().to_string()
+                                    this.modals
+                                        .quick_open_state
+                                        .read(cx)
+                                        .query(cx)
+                                        .trim()
+                                        .to_string()
                                 });
                                 app.update(cx, |this, cx| {
-                                    this.show_quick_open = false;
+                                    this.modals.show_quick_open = false;
                                     this.connect_quick_host(&host, cx);
                                 });
                             }
@@ -287,7 +299,7 @@ impl AppShell {
                 let app = app_entity.clone();
                 move |_window, cx| {
                     app.update(cx, |this, cx| {
-                        this.show_quick_open = false;
+                        this.modals.show_quick_open = false;
                         cx.notify();
                     });
                 }

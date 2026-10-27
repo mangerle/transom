@@ -88,7 +88,7 @@ impl AppShell {
             .gap_2()
             .child(Self::form_field(
                 rust_i18n::t!("settings.word_separators").to_string(),
-                self.settings_modal.word_separators.clone(),
+                self.modals.settings.word_separators.clone(),
                 p,
             ))
             .child(

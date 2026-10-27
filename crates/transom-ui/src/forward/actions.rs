@@ -251,7 +251,7 @@ impl AppShell {
         }
 
         if is_public_bind_address(&bind_host) {
-            self.confirm_forward_any = Some(PendingForwardConfirm {
+            self.modals.confirm_forward_any = Some(PendingForwardConfirm {
                 tab_id,
                 connection_id,
                 rule,
@@ -296,7 +296,7 @@ impl AppShell {
         let bind_host = forward_bind_host(&rule);
 
         if is_public_bind_address(bind_host) {
-            self.confirm_forward_any = Some(PendingForwardConfirm {
+            self.modals.confirm_forward_any = Some(PendingForwardConfirm {
                 tab_id,
                 connection_id,
                 rule,
@@ -325,7 +325,7 @@ impl AppShell {
     }
 
     pub(crate) fn confirm_forward_start(&mut self, cx: &mut Context<Self>) {
-        let Some(pending) = self.confirm_forward_any.take() else {
+        let Some(pending) = self.modals.confirm_forward_any.take() else {
             return;
         };
         let PendingForwardConfirm {
@@ -361,7 +361,7 @@ impl AppShell {
     }
 
     pub(crate) fn cancel_forward_confirm(&mut self, cx: &mut Context<Self>) {
-        self.confirm_forward_any = None;
+        self.modals.confirm_forward_any = None;
         cx.notify();
     }
 

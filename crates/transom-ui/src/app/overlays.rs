@@ -75,7 +75,7 @@ impl AppShell {
         self.immersive = !self.immersive;
         window.toggle_fullscreen();
         if self.immersive {
-            self.snippet_panel.open = false;
+            self.modals.snippet_panel.open = false;
         }
         if self.immersive
             && let Some(focus_handle) = self
@@ -101,46 +101,46 @@ impl AppShell {
         if let Some(preview) = self.render_sftp_hover_preview(window, &p) {
             overlays.push(preview);
         }
-        if self.form.is_some() {
+        if self.modals.form.is_some() {
             overlays.push(self.render_session_form(window, cx, &p));
         }
-        if self.audit_viewer.is_some() {
+        if self.modals.audit_viewer.is_some() {
             overlays.push(self.render_audit_viewer(window, cx, &p));
         }
-        if self.replay_modal.is_some() {
+        if self.modals.replay.is_some() {
             overlays.push(self.render_replay_modal(window, cx, &p));
         }
-        if self.folder_form.is_some() {
+        if self.modals.folder_form.is_some() {
             overlays.push(self.render_folder_form(window, cx, &p));
         }
-        if self.auth_prompt.is_some() {
+        if self.modals.auth_prompt.is_some() {
             overlays.push(self.render_auth_prompt(window, cx, &p));
         }
-        if self.host_key_confirm.is_some() {
+        if self.modals.host_key_confirm.is_some() {
             overlays.push(self.render_host_key_confirm(window, cx, &p));
         }
-        if self.known_hosts_modal.open {
+        if self.modals.known_hosts.open {
             overlays.push(self.render_known_hosts_modal(window, cx, &p));
         }
-        if self.confirm_forward_any.is_some() {
+        if self.modals.confirm_forward_any.is_some() {
             overlays.push(self.render_forward_confirm_modal(window, cx, &p));
         }
-        if self.show_quick_open {
+        if self.modals.show_quick_open {
             overlays.push(self.render_quick_open_modal(window, cx, &p));
         }
-        if self.settings_modal.open {
+        if self.modals.settings.open {
             overlays.push(self.render_settings_modal(window, cx, &p));
         }
         if self.shortcut_recording.capture.is_some() {
             overlays.push(self.render_shortcut_capture(cx, &p));
         }
-        if self.batch_edit.is_some() {
+        if self.modals.batch_edit.is_some() {
             overlays.push(self.render_batch_edit(window, cx, &p));
         }
-        if self.backup_prompt.is_some() {
+        if self.modals.backup_prompt.is_some() {
             overlays.push(self.render_backup_prompt(window, cx, &p));
         }
-        if self.settings_modal.key_wizard.is_some() {
+        if self.modals.settings.key_wizard.is_some() {
             overlays.push(self.render_key_wizard(window, cx, &p));
         }
         if self.sftp_modals.chmod.is_some() {
@@ -161,7 +161,7 @@ impl AppShell {
         if self.sftp_modals.goto_line.is_some() {
             overlays.push(self.render_editor_goto_line_modal(window, cx, &p));
         }
-        if self.snippet_panel.form.is_some() {
+        if self.modals.snippet_panel.form.is_some() {
             overlays.push(self.render_snippet_form(&p, cx));
         }
         overlays

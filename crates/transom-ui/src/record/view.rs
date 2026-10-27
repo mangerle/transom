@@ -122,7 +122,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.replay_modal.as_ref() else {
+        let Some(modal) = self.modals.replay.as_ref() else {
             return div().into_any_element();
         };
 
@@ -185,14 +185,14 @@ impl AppShell {
                         .hover(|s| s.bg(p.muted.opacity(0.4)))
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             if event.click_count() >= 2 {
-                                this.replay_modal = None;
+                                this.modals.replay = None;
                                 this.open_cast_player(
                                     entry_path.clone(),
                                     Some(entry_title.clone()),
                                     window,
                                     cx,
                                 );
-                            } else if let Some(m) = this.replay_modal.as_mut() {
+                            } else if let Some(m) = this.modals.replay.as_mut() {
                                 m.selected_index = idx;
                                 cx.notify();
                             }
@@ -220,7 +220,7 @@ impl AppShell {
                                     .tooltip(rust_i18n::t!("recorder.open_player").to_string())
                                     .on_click(cx.listener(
                                         move |this, _, window, cx| {
-                                            this.replay_modal = None;
+                                            this.modals.replay = None;
                                             this.open_cast_player(
                                                 item_play_path.clone(),
                                                 Some(item_play_title.clone()),
@@ -270,7 +270,7 @@ impl AppShell {
                                     .icon(IconName::Disc)
                                     .label(rust_i18n::t!("recorder.open_player").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.replay_modal = None;
+                                        this.modals.replay = None;
                                         this.pick_and_play_external_cast(window, cx);
                                     })),
                             )
@@ -281,7 +281,7 @@ impl AppShell {
                                     .icon(IconName::FolderOpen)
                                     .label(rust_i18n::t!("recorder.pick_external").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.replay_modal = None;
+                                        this.modals.replay = None;
                                         this.pick_and_replay_external_cast(
                                             target_tab_id,
                                             window,
@@ -311,7 +311,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.replay_modal = None;
+                        this.modals.replay = None;
                         cx.notify();
                     })),
             )
@@ -328,7 +328,7 @@ impl AppShell {
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if let Some(entry) = selected_entry.as_ref() {
                                     let path = entry.path.clone();
-                                    this.replay_modal = None;
+                                    this.modals.replay = None;
                                     this.execute_replay_file(target_tab_id, &path, cx);
                                 }
                             })),
@@ -343,7 +343,7 @@ impl AppShell {
                                 if let Some(entry) = play_entry.as_ref() {
                                     let path = entry.path.clone();
                                     let title = entry.title.clone();
-                                    this.replay_modal = None;
+                                    this.modals.replay = None;
                                     this.open_cast_player(path, Some(title), window, cx);
                                 }
                             })),

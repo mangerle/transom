@@ -32,7 +32,7 @@ pub(crate) fn render_telnet_fields(
                 .label(label)
                 .selected(form.telnet_encoding == encoding)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.form.as_mut() {
+                    if let Some(form) = this.modals.form.as_mut() {
                         form.telnet_encoding = encoding;
                     }
                     cx.notify();
@@ -77,7 +77,7 @@ pub(crate) fn render_telnet_fields(
                         .small()
                         .checked(form.auto_reconnect)
                         .on_click(cx.listener(|this, &checked, _, cx| {
-                            if let Some(form) = this.form.as_mut() {
+                            if let Some(form) = this.modals.form.as_mut() {
                                 form.auto_reconnect = checked;
                             }
                             cx.notify();

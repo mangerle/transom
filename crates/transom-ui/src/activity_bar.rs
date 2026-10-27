@@ -242,7 +242,7 @@ impl AppShell {
                 .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open)),
             ActivityItemId::Monitor => self.monitor.open,
-            ActivityItemId::Keys => self.settings_modal.key_wizard.is_some(),
+            ActivityItemId::Keys => self.modals.settings.key_wizard.is_some(),
             _ => false,
         }
     }
@@ -286,7 +286,7 @@ impl AppShell {
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
             ActivityItemId::KnownHosts => {
-                self.known_hosts_modal.open = true;
+                self.modals.known_hosts.open = true;
                 self.refresh_known_hosts();
                 cx.notify();
             }

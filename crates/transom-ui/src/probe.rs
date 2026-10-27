@@ -204,18 +204,18 @@ impl AppShell {
     ) {
         // 先摘掉旧的到期句柄：dropping `Task` 即取消任务，新一批结果必须活满
         // 自己的 TTL，不能被上一批的定时器抹掉。
-        self.probe_expiry_tasks.remove(&session_id);
+        self.tasks.probe_expiry.remove(&session_id);
         self.probe_badges.insert(session_id, badge);
         if let Some(ttl) = ttl {
             let task = cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(ttl).await;
                 let _ = this.update(cx, |this, cx| {
                     this.probe_badges.remove(&session_id);
-                    this.probe_expiry_tasks.remove(&session_id);
+                    this.tasks.probe_expiry.remove(&session_id);
                     cx.notify();
                 });
             });
-            self.probe_expiry_tasks.insert(session_id, task);
+            self.tasks.probe_expiry.insert(session_id, task);
         }
         cx.notify();
     }

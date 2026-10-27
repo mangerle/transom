@@ -77,7 +77,7 @@ impl AppShell {
             save_passphrase,
             error: None,
         };
-        self.settings_modal.identity_edit = Some(state);
+        self.modals.settings.identity_edit = Some(state);
         if let Some(owner) = owner {
             self.prefill_identity_secrets(owner, window, cx);
         }
@@ -91,7 +91,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(edit) = self.settings_modal.identity_edit.as_ref() else {
+        let Some(edit) = self.modals.settings.identity_edit.as_ref() else {
             return;
         };
         let fields = [
@@ -130,13 +130,13 @@ impl AppShell {
     }
 
     pub(crate) fn cancel_identity_edit(&mut self, cx: &mut Context<Self>) {
-        self.settings_modal.identity_edit = None;
+        self.modals.settings.identity_edit = None;
         cx.notify();
     }
 
     /// 保存模板：写目录并后台落口令。
     pub(crate) fn save_identity(&mut self, cx: &mut Context<Self>) {
-        let Some(edit) = self.settings_modal.identity_edit.as_ref() else {
+        let Some(edit) = self.modals.settings.identity_edit.as_ref() else {
             return;
         };
         let name = edit.name.read(cx).value().to_string();
@@ -159,7 +159,7 @@ impl AppShell {
         let built = match built {
             Ok(built) => built,
             Err(error) => {
-                if let Some(edit) = self.settings_modal.identity_edit.as_mut() {
+                if let Some(edit) = self.modals.settings.identity_edit.as_mut() {
                     edit.error = Some(error);
                 }
                 cx.notify();
@@ -183,7 +183,7 @@ impl AppShell {
         if !replaced {
             self.catalog.identities.push(identity);
         }
-        self.settings_modal.identity_edit = None;
+        self.modals.settings.identity_edit = None;
         self.refresh_tab_sessions();
         self.persist_catalog();
         self.status = Some(
@@ -242,12 +242,13 @@ impl AppShell {
             return;
         }
         if self
-            .settings_modal
+            .modals
+            .settings
             .identity_edit
             .as_ref()
             .is_some_and(|edit| edit.base == Some(id))
         {
-            self.settings_modal.identity_edit = None;
+            self.modals.settings.identity_edit = None;
         }
         self.status = Some(rust_i18n::t!("identity.deleted", name = name).to_string());
         self.persist_catalog();

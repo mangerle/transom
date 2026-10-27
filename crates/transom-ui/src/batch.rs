@@ -100,7 +100,7 @@ impl AppShell {
             cx.notify();
             return;
         }
-        self.batch_edit = Some(BatchEditForm {
+        self.modals.batch_edit = Some(BatchEditForm {
             selected_count,
             change_port: false,
             port: sftp_text_input(window, cx, "22", rust_i18n::t!("form.port").as_ref()),
@@ -116,11 +116,11 @@ impl AppShell {
     }
 
     pub(crate) fn save_batch_edit(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.batch_edit.as_ref() else {
+        let Some(form) = self.modals.batch_edit.as_ref() else {
             return;
         };
         if !form.change_port && !form.change_username && !form.change_auth {
-            if let Some(form) = self.batch_edit.as_mut() {
+            if let Some(form) = self.modals.batch_edit.as_mut() {
                 form.error = Some(rust_i18n::t!("batch.error_no_change").to_string());
             }
             cx.notify();
@@ -132,7 +132,7 @@ impl AppShell {
             match form.port.read(cx).value().trim().parse::<u16>() {
                 Ok(value) if value > 0 => port = Some(value),
                 _ => {
-                    if let Some(form) = self.batch_edit.as_mut() {
+                    if let Some(form) = self.modals.batch_edit.as_mut() {
                         form.error = Some(rust_i18n::t!("batch.error_port").to_string());
                     }
                     cx.notify();
@@ -144,7 +144,7 @@ impl AppShell {
         if form.change_username {
             let value = form.username.read(cx).value().trim().to_string();
             if value.is_empty() {
-                if let Some(form) = self.batch_edit.as_mut() {
+                if let Some(form) = self.modals.batch_edit.as_mut() {
                     form.error = Some(rust_i18n::t!("batch.error_username").to_string());
                 }
                 cx.notify();
@@ -158,7 +158,7 @@ impl AppShell {
                 AuthChoice::PrivateKey => {
                     let path = form.key_path.read(cx).value().trim().to_string();
                     if path.is_empty() {
-                        if let Some(form) = self.batch_edit.as_mut() {
+                        if let Some(form) = self.modals.batch_edit.as_mut() {
                             form.error = Some(rust_i18n::t!("batch.error_key").to_string());
                         }
                         cx.notify();
@@ -185,7 +185,7 @@ impl AppShell {
         };
         let selected = self.selected_sessions.clone();
         let (updated, skipped) = apply_batch_updates(&mut self.catalog, &selected, &updates);
-        self.batch_edit = None;
+        self.modals.batch_edit = None;
         let saved = self.persist_catalog();
         self.refresh_tab_sessions();
         self.selection_mode = false;
@@ -204,7 +204,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.batch_edit.as_ref() else {
+        let Some(form) = self.modals.batch_edit.as_ref() else {
             return div().into_any_element();
         };
         let selected_count = form.selected_count;
@@ -223,7 +223,7 @@ impl AppShell {
                     .small()
                     .checked(change_port)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        if let Some(form) = this.batch_edit.as_mut() {
+                        if let Some(form) = this.modals.batch_edit.as_mut() {
                             form.change_port = checked;
                         }
                         cx.notify();
@@ -245,7 +245,7 @@ impl AppShell {
                     .small()
                     .checked(change_username)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        if let Some(form) = this.batch_edit.as_mut() {
+                        if let Some(form) = this.modals.batch_edit.as_mut() {
                             form.change_username = checked;
                         }
                         cx.notify();
@@ -267,7 +267,7 @@ impl AppShell {
                     .label(rust_i18n::t!("form.auth_password").to_string())
                     .selected(auth == AuthChoice::Password)
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.batch_edit.as_mut() {
+                        if let Some(form) = this.modals.batch_edit.as_mut() {
                             form.auth = AuthChoice::Password;
                         }
                         cx.notify();
@@ -279,7 +279,7 @@ impl AppShell {
                     .label(rust_i18n::t!("form.auth_key").to_string())
                     .selected(auth == AuthChoice::PrivateKey)
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.batch_edit.as_mut() {
+                        if let Some(form) = this.modals.batch_edit.as_mut() {
                             form.auth = AuthChoice::PrivateKey;
                         }
                         cx.notify();
@@ -291,7 +291,7 @@ impl AppShell {
                     .label(rust_i18n::t!("form.auth_agent").to_string())
                     .selected(auth == AuthChoice::Agent)
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.batch_edit.as_mut() {
+                        if let Some(form) = this.modals.batch_edit.as_mut() {
                             form.auth = AuthChoice::Agent;
                         }
                         cx.notify();
@@ -307,7 +307,7 @@ impl AppShell {
                         .small()
                         .checked(change_auth)
                         .on_click(cx.listener(|this, &checked, _, cx| {
-                            if let Some(form) = this.batch_edit.as_mut() {
+                            if let Some(form) = this.modals.batch_edit.as_mut() {
                                 form.change_auth = checked;
                             }
                             cx.notify();
@@ -346,7 +346,7 @@ impl AppShell {
                                     .small()
                                     .checked(save_passphrase)
                                     .on_click(cx.listener(|this, &checked, _, cx| {
-                                        if let Some(form) = this.batch_edit.as_mut() {
+                                        if let Some(form) = this.modals.batch_edit.as_mut() {
                                             form.save_passphrase = checked;
                                         }
                                         cx.notify();
@@ -380,7 +380,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.batch_edit = None;
+                        this.modals.batch_edit = None;
                         cx.notify();
                     })),
             )

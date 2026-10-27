@@ -23,7 +23,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.form.as_ref() else {
+        let Some(form) = self.modals.form.as_ref() else {
             return div().into_any_element();
         };
         let title = if form.base.is_some() {
@@ -146,7 +146,7 @@ impl AppShell {
                                     .label("SSH")
                                     .selected(form.connection == ConnectionChoice::Ssh)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(form) = this.form.as_mut() {
+                                        if let Some(form) = this.modals.form.as_mut() {
                                             form.connection = ConnectionChoice::Ssh;
                                         }
                                         cx.notify();
@@ -158,7 +158,7 @@ impl AppShell {
                                     .label(rust_i18n::t!("form.conn_serial").to_string())
                                     .selected(form.connection == ConnectionChoice::Serial)
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        let needs_ports = if let Some(form) = this.form.as_mut() {
+                                        let needs_ports = if let Some(form) = this.modals.form.as_mut() {
                                             form.connection = ConnectionChoice::Serial;
                                             form.serial_ports.is_empty()
                                         } else {
@@ -176,7 +176,7 @@ impl AppShell {
                                     .label("Telnet")
                                     .selected(form.connection == ConnectionChoice::Telnet)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(form) = this.form.as_mut() {
+                                        if let Some(form) = this.modals.form.as_mut() {
                                             form.connection = ConnectionChoice::Telnet;
                                         }
                                         cx.notify();
@@ -252,7 +252,7 @@ impl AppShell {
                                 .label(rust_i18n::t!(key).to_string())
                                 .selected(block_choice == value)
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(form) = this.form.as_mut() {
+                                    if let Some(form) = this.modals.form.as_mut() {
                                         form.block_view = value;
                                     }
                                     cx.notify();
@@ -289,7 +289,7 @@ impl AppShell {
                         .icon(IconName::Trash)
                         .label(rust_i18n::t!("common.delete").to_string())
                         .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(form) = this.form.as_mut() {
+                            if let Some(form) = this.modals.form.as_mut() {
                                 form.confirm_delete = true;
                             }
                             cx.notify();
@@ -303,7 +303,7 @@ impl AppShell {
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.form = None;
+                        this.modals.form = None;
                         cx.notify();
                     })),
             )
@@ -336,7 +336,7 @@ impl AppShell {
 
     /// 用系统文件选择器挑选私钥，起始目录 `~/.ssh`。
     pub(crate) fn pick_private_key_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(form) = self.form.as_mut() else {
+        let Some(form) = self.modals.form.as_mut() else {
             return;
         };
         let title = rust_i18n::t!("form.pick_key").to_string();
@@ -355,7 +355,7 @@ impl AppShell {
 
     /// 选择 CA 签发的用户证书文件（OpenSSH 惯例是 `私钥名-cert.pub`）。
     pub(crate) fn pick_certificate_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(form) = self.form.as_mut() else {
+        let Some(form) = self.modals.form.as_mut() else {
             return;
         };
         let title = rust_i18n::t!("form.pick_cert").to_string();

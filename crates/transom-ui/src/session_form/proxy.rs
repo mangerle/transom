@@ -45,7 +45,7 @@ pub(crate) fn render_proxy_section(
                     .label(rust_i18n::t!(key).to_string())
                     .selected(proxy_choice == choice)
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(form) = this.form.as_mut() {
+                        if let Some(form) = this.modals.form.as_mut() {
                             form.proxy_choice = choice;
                         }
                         cx.notify();

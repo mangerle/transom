@@ -80,7 +80,7 @@ impl AppShell {
     ) {
         let dir = paths::recordings_dir();
         let entries = scan_recordings(&dir);
-        self.replay_modal = Some(ReplayModalState {
+        self.modals.replay = Some(ReplayModalState {
             target_tab_id: tab_id,
             entries,
             selected_index: 0,
