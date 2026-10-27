@@ -1,0 +1,9 @@
+transom (1.1.0) unstable; urgency=medium
+
+  * 首个 1.1.0 发行版：SSH、串口与 Telnet 及本地终端会话；嵌套分屏、
+    缓冲区检索与语义块视图；双栏 SFTP（传输队列、断点续传、SHA-256 校验、
+    远端编辑器、目录对比与单向同步）；本地/远端/SOCKS5 端口转发与
+    ProxyJump 跳板链；云同步与 Argon2id 加密备份；审计录制与回放；
+    中英双语界面。
+
+ -- wangle <wangle@agree.com.cn>  Tue, 27 Oct 2026 14:00:25 +0800

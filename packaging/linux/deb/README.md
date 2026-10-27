@@ -36,6 +36,19 @@ for f in $(ldd target/release/transom | awk '/=> \//{print $3}'); do echo "$f ->
   cargo-deb 只收录 `config`/`preinst`/`postinst`/`prerm`/`postrm`/`templates`
   这几个文件名，本 README 不会进包。
 
+## 包内资产与规范对齐
+
+除二进制、桌面条目与图标外，包内还携带 Debian 规范要求的文档资产：
+
+- `usr/share/doc/transom/copyright`：cargo-deb 依据 `copyright` 元数据与
+  `license-file` 自动生成，不手工维护；
+- `usr/share/doc/transom/changelog.Debian.gz`：由 `changelog` 字段指向的
+  纯文本自动压缩；发版时向 `packaging/linux/deb/changelog` 头部追加一条
+  记录，版本号必须与 workspace 版本一致；
+- `usr/share/man/man1/transom.1.gz`：手册页源文件 `transom.1` 自动压缩；
+- `usr/share/metainfo/com.github.mangerle.transom.metainfo.xml`：AppStream
+  元数据（软件中心展示用），id 与桌面条目、图标名逐字一致。
+
 ## 已知缺口
 
 - **包内没有 `md5sums` 控制成员**：`cargo-deb 3.8.0` 不生成它（源码内无
@@ -47,7 +60,10 @@ for f in $(ldd target/release/transom | awk '/=> \//{print $3}'); do echo "$f ->
 ## 核验命令
 
 ```bash
-dpkg-deb -I target/debian/transom_1.0.0_amd64.deb   # 控制字段与维护者脚本
-dpkg-deb -c target/debian/transom_1.0.0_amd64.deb   # 文件布局与权限位
+dpkg-deb -I target/debian/transom_*_amd64.deb   # 控制字段与维护者脚本
+dpkg-deb -c target/debian/transom_*_amd64.deb   # 文件布局与权限位
 desktop-file-validate packaging/linux/com.github.mangerle.transom.desktop
+appstreamcli validate packaging/linux/com.github.mangerle.transom.metainfo.xml
+# 手册页可被正常解析（无 roff 告警）
+man --warnings -l target/debian/transom_*_amd64.deb   # 或解包后指向 transom.1.gz
 ```

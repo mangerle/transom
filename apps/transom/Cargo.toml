@@ -51,6 +51,10 @@ priority = "optional"
 # 版本只出一次 GitHub Release 附件，版本号统一取自 workspace，产物名不应多
 # 出 -1 后缀；cargo-deb 默认会补 -1，必须显式清空。
 revision = ""
+# Debian 规范的 changelog：cargo-deb 读取纯文本、自动 gzip 为
+# /usr/share/doc/transom/changelog.Debian.gz，apt 与 lintian 都按它核对发行记录。
+# 发版时向文件头部追加一条记录，版本号必须与 workspace 版本一致。
+changelog = "../../packaging/linux/deb/changelog"
 # amd64 由构建机架构自动写入，无需在此固定以免交叉编译时出错。
 depends = "libc6, libgcc-s1, libxcb1, libxcb-xkb1, libxkbcommon0, libxkbcommon-x11-0, libxau6, libxdmcp6, hicolor-icon-theme"
 extended-description = """\
@@ -66,6 +70,12 @@ assets = [
     # Icon 键（com.github.mangerle.transom）逐字对应，桌面环境按目标尺寸
     # 矢量出图，任何 DPI 都不会出现放大颗粒感。
     ["../../logo/transom-logo.svg", "usr/share/icons/hicolor/scalable/apps/com.github.mangerle.transom.svg", "644"],
+    # 手册页：cargo-deb 会把 usr/share/man/ 下的资产自动 gzip 为 transom.1.gz
+    # （Debian 策略要求 man 页压缩存放），因此源文件保持纯文本即可。
+    ["../../packaging/linux/deb/transom.1", "usr/share/man/man1/transom.1", "644"],
+    # AppStream 元数据：软件中心据此展示应用；id 与桌面条目、图标名逐字一致，
+    # 校验命令记录在 packaging/linux/deb/README.md。
+    ["../../packaging/linux/com.github.mangerle.transom.metainfo.xml", "usr/share/metainfo/com.github.mangerle.transom.metainfo.xml", "644"],
     ["../../README.md", "usr/share/doc/transom/README.md", "644"],
 ]
 maintainer-scripts = "../../packaging/linux/deb"

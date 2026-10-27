@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream 元数据：软件中心（GNOME Software、KDE Discover 等）据此展示
+  应用信息。id 必须与桌面条目文件名及 hicolor 图标名逐字一致
+  （com.github.mangerle.transom），否则元数据无法与已安装的条目配对。
+  校验：appstreamcli validate packaging/linux/com.github.mangerle.transom.metainfo.xml
+-->
+<component type="desktop-application">
+  <id>com.github.mangerle.transom</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <name>Transom</name>
+  <summary>Native SSH, serial console and terminal workspace with integrated SFTP</summary>
+  <summary xml:lang="zh_CN">原生 SSH、串口控制台与终端工作台，内置 SFTP</summary>
+  <description>
+    <p>
+      Transom is a desktop operations client: SSH and serial-console sessions,
+      local shells and Telnet, with an SFTP file panel in one window. It renders
+      through GPUI for a real GPU-backed terminal grid rather than an embedded
+      web view, and every byte of the connection path is native Rust.
+    </p>
+    <p xml:lang="zh_CN">
+      Transom 是一个桌面运维客户端：SSH 与串口会话、本地终端与 Telnet，
+      与 SFTP 文件面板共处一个窗口。界面经 GPUI 原生渲染，不内嵌浏览器；
+      连接路径上的每一个字节都由原生 Rust 处理。
+    </p>
+    <ul>
+      <li>Nested split views, buffer search, semantic block view and OSC 133 / 777 notifications</li>
+      <li>Dual-pane SFTP with a transfer queue, resume, SHA-256 verification, remote editor and directory sync</li>
+      <li>Local, remote and SOCKS5 port forwarding, ProxyJump bastion chaining</li>
+      <li>Credentials stay in the OS keyring; catalog backup is plain JSON/YAML or an Argon2id-encrypted vault</li>
+      <li>Bilingual interface (English / 简体中文)</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.github.mangerle.transom.desktop</launchable>
+  <url type="homepage">https://github.com/mangerle/transom</url>
+  <url type="bugtracker">https://github.com/mangerle/transom/issues</url>
+  <developer id="com.github.mangerle">
+    <name>wangle</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>System</category>
+    <category>TerminalEmulator</category>
+  </categories>
+  <keywords>
+    <keyword>ssh</keyword>
+    <keyword>sftp</keyword>
+    <keyword>serial</keyword>
+    <keyword>terminal</keyword>
+    <keyword>remote</keyword>
+  </keywords>
+  <releases>
+    <release version="1.1.0" date="2026-10-27"/>
+  </releases>
+</component>

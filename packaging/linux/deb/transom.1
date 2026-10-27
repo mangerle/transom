@@ -1,0 +1,80 @@
+.\" Transom 手册页：安装包内的 usr/share/man/man1/transom.1。
+.\" 为什么用英文：桌面条目的 GenericName 与包控制字段同为系统级英文资产，
+.\" 与 README.md（英文主文件）口径一致；中文用户文档由 README_zh-CN.md 承担。
+.TH TRANSOM 1 "2026-10-27" "Transom 1.1.0" "User Commands"
+.SH NAME
+transom \- native SSH, serial console and terminal workspace with integrated SFTP
+.SH SYNOPSIS
+.B transom
+.RI [ ssh:// [ user@ ] host [ :port ]]...
+.RI [ \-\-dir= DIRECTORY ]
+.SH DESCRIPTION
+.B transom
+is a desktop operations client: SSH and serial\-console sessions, local shells
+and Telnet, with an SFTP file panel, port forwarding, snippet library, command
+history, and optional per\-connection audit logging, rendered natively on GPUI
+with no embedded web view.
+.PP
+Launching
+.B transom
+while an instance is already running does not start a second process: the
+request is handed to the running instance over a private socket
+.RB ( $XDG_RUNTIME_DIR/transom ,
+directory 0700, socket 0600) and new tabs open in the existing window.
+.SH ARGUMENTS
+.TP
+.BI ssh:// [user@]host[:port]
+Connect to
+.I host
+without saving a session, in a new tab. More than one URL may be given; each
+opens its own tab. The scheme is matched case\-insensitively.
+.TP
+.BI \-\-dir= DIRECTORY
+Open a new local terminal tab in
+.IR DIRECTORY .
+The directory must exist and be an absolute path; relative forms and
+non\-existent paths are ignored with a log entry. The two\-argument form
+.B \-\-dir
+.I DIRECTORY
+is also accepted.
+.TP
+.I DIRECTORY
+A bare absolute\-path positional argument is treated as a directory request,
+equivalent to
+.BR \-\-dir .
+.SH ENVIRONMENT
+.TP
+.B TRANSOM_LOG
+Log level override for this run
+.RB ( trace ", " debug ", " info ", " warn ", " error ).
+.B RUST_LOG
+is honoured as a fallback. Either variable wins over the level saved in
+settings; the default level is
+.BR info .
+.SH FILES
+.TP
+.I ~/.config/transom/sessions.json
+Session tree and connection settings.
+.TP
+.I ~/.config/transom/settings.json
+Preferences, theme, fonts, shortcuts, snippets.
+.TP
+.I ~/.config/transom/known_hosts.json
+Host key fingerprints (trust\-on\-first\-use).
+.TP
+.I ~/.config/transom/logs/
+Application log with size\-based rotation (5 MiB per file, four backups).
+.TP
+.I ~/.config/transom/audit/
+Optional per\-connection raw output capture; off by default.
+.TP
+.I OS keyring, service "transom"
+Passwords and key passphrases; never written to disk by Transom.
+.PP
+On macOS paths follow the platform conventions
+.RB ( "~/Library/Application Support/transom" ).
+.SH SEE ALSO
+.BR ssh (1),
+.BR ssh_config (5)
+.SH AUTHOR
+wangle <wangle@agree.com.cn>
