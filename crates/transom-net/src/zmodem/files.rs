@@ -11,6 +11,14 @@
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+/// 下载写盘的分块上限：攒够 64 KiB 再落盘，避免每个 1 KiB 子包一次系统调用。
+pub(crate) const DOWNLOAD_WRITE_CHUNK: usize = 64 * 1024;
+/// 两次 `sync_all` 之间允许累积的未同步字节数（1 MiB）。
+///
+/// 每个 64 KiB 块都 fsync 会让机械盘上的百兆传输被同步写放大拖慢；
+/// 1 MiB 是"崩溃最多丢一秒内数据"与"不拖垮吞吐"之间的折中。
+pub(crate) const DOWNLOAD_SYNC_INTERVAL: u64 = 1024 * 1024;
+
 /// 打开上传文件所需的最小元信息，一次 stat 取齐。
 pub(crate) struct UploadFile {
     pub(crate) file: std::fs::File,
@@ -21,34 +29,86 @@ pub(crate) struct UploadFile {
     pub(crate) name: String,
 }
 
-/// 在下载目录下创建待写入的文件，返回句柄与实际落点。
+/// 下载落盘写入器：流式分块 + 周期性同步。
 ///
-/// `name` 已由接收端净化为裸文件名；这里再挡一道带分隔符的输入，确保落点的父目录
-/// 恰为受控下载目录（AGENTS.md 路径防穿越红线），不让 `join` 直接放行了事。
+/// 设计原理（Why）：ZMODEM 子包只有 1 KiB，逐包 `write_all` 会把大文件传输
+/// 变成密集小写；先攒到 64 KiB 再落盘可显著减少系统调用。`sync_all` 按 1 MiB
+/// 节流，保证异常断电时最多丢失约一秒的数据，又不让每条 64 KiB 都等待磁盘。
 ///
-/// # Errors
-/// 目录不可写、名字越出目录、目标已存在为目录等文件系统错误原样返回。
-pub(crate) fn create_download_file(
-    dir: &Path,
-    name: &str,
-) -> std::io::Result<(std::fs::File, PathBuf)> {
-    let path = dir.join(name);
-    if path.parent() != Some(dir) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "下载文件名越出下载目录",
-        ));
-    }
-    let file = std::fs::File::create(&path)?;
-    Ok((file, path))
+/// 代价与局限：进程被强杀时缓冲区内的最后不足 64 KiB 会丢失；正常结束或
+/// 文件切换都会显式 [`Self::finish`] flushing，覆盖协议层的所有收尾路径。
+pub(crate) struct DownloadWriter {
+    file: std::fs::File,
+    path: PathBuf,
+    buffer: Vec<u8>,
+    unsynced: u64,
 }
 
-/// 追加写盘：调用方持有已创建的句柄。
-///
-/// # Errors
-/// 磁盘满、句柄失效等写盘错误原样返回，由状态机决定中止会话。
-pub(crate) fn append(file: &mut std::fs::File, data: &[u8]) -> std::io::Result<()> {
-    file.write_all(data)
+impl DownloadWriter {
+    /// 在下载目录下创建待写入的文件。
+    ///
+    /// `name` 已由接收端净化为裸文件名；这里再挡一道带分隔符的输入，确保落点的父
+    /// 目录恰为受控下载目录（AGENTS.md 路径防穿越红线），不让 `join` 直接放行。
+    ///
+    /// # Errors
+    /// 目录不可写、名字越出目录、目标已存在为目录等文件系统错误原样返回。
+    pub(crate) fn create(dir: &Path, name: &str) -> std::io::Result<Self> {
+        let path = dir.join(name);
+        if path.parent() != Some(dir) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "下载文件名越出下载目录",
+            ));
+        }
+        let file = std::fs::File::create(&path)?;
+        Ok(Self {
+            file,
+            path,
+            buffer: Vec::with_capacity(DOWNLOAD_WRITE_CHUNK),
+            unsynced: 0,
+        })
+    }
+
+    /// 实际落点，供日志与测试核对。
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// 追加一段数据；攒满 64 KiB 时落盘，并在累积 1 MiB 后同步。
+    ///
+    /// # Errors
+    /// 磁盘满、句柄失效等写盘错误原样返回，由状态机决定中止会话。
+    pub(crate) fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
+        self.buffer.extend_from_slice(data);
+        if self.buffer.len() >= DOWNLOAD_WRITE_CHUNK {
+            self.flush_buffer()?;
+        }
+        Ok(())
+    }
+
+    /// 收尾：冲刷缓冲并强制同步到磁盘。
+    ///
+    /// # Errors
+    /// 写入或同步失败原样返回；调用方只记录日志，不再重试。
+    pub(crate) fn finish(&mut self) -> std::io::Result<()> {
+        self.flush_buffer()?;
+        self.unsynced = 0;
+        self.file.sync_all()
+    }
+
+    fn flush_buffer(&mut self) -> std::io::Result<()> {
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+        self.file.write_all(&self.buffer)?;
+        self.unsynced = self.unsynced.saturating_add(self.buffer.len() as u64);
+        self.buffer.clear();
+        if self.unsynced >= DOWNLOAD_SYNC_INTERVAL {
+            self.file.sync_all()?;
+            self.unsynced = 0;
+        }
+        Ok(())
+    }
 }
 
 /// 打开待上传文件并一次取齐大小、时间与裸文件名。
@@ -99,11 +159,43 @@ mod tests {
     #[test]
     fn download_path_stays_inside_directory() {
         let dir = tempfile::tempdir().expect("临时目录创建");
-        let (file, path) = create_download_file(dir.path(), "ok.bin").expect("正常名字应可创建");
-        assert_eq!(path.parent(), Some(dir.path()));
-        drop(file);
-        assert!(create_download_file(dir.path(), "../escape.bin").is_err());
-        assert!(create_download_file(dir.path(), "a/b.bin").is_err());
+        let writer = DownloadWriter::create(dir.path(), "ok.bin").expect("正常名字应可创建");
+        assert_eq!(writer.path().parent(), Some(dir.path()));
+        assert!(DownloadWriter::create(dir.path(), "../escape.bin").is_err());
+        assert!(DownloadWriter::create(dir.path(), "a/b.bin").is_err());
+    }
+
+    /// 小于分块阈值的数据在 `finish` 前不落盘，收尾后必须完整可见。
+    #[test]
+    fn download_writer_flushes_on_finish() {
+        let dir = tempfile::tempdir().expect("临时目录创建");
+        let mut writer = DownloadWriter::create(dir.path(), "small.bin").expect("创建写入器");
+        writer.write(b"hello ").expect("写入第一段");
+        writer.write(b"world").expect("写入第二段");
+        assert_eq!(
+            std::fs::read(dir.path().join("small.bin")).expect("读取落盘文件"),
+            Vec::<u8>::new(),
+            "未到 64 KiB 且未 finish 前不应落盘"
+        );
+        writer.finish().expect("收尾同步");
+        assert_eq!(
+            std::fs::read(dir.path().join("small.bin")).expect("读取落盘文件"),
+            b"hello world"
+        );
+    }
+
+    /// 超过分块阈值必须及时落盘，而不是一直攒到文件结束。
+    #[test]
+    fn download_writer_flushes_at_chunk_boundary() {
+        let dir = tempfile::tempdir().expect("临时目录创建");
+        let mut writer = DownloadWriter::create(dir.path(), "big.bin").expect("创建写入器");
+        let chunk = vec![0x5Au8; DOWNLOAD_WRITE_CHUNK];
+        writer.write(&chunk).expect("写入整块");
+        let flushed = std::fs::metadata(dir.path().join("big.bin"))
+            .expect("读取元数据")
+            .len();
+        assert_eq!(flushed, DOWNLOAD_WRITE_CHUNK as u64);
+        writer.finish().expect("收尾同步");
     }
 
     /// 续传读取必须严格按偏移取块，保证坏包后的重传位置正确。

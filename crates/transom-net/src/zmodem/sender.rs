@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::frames::{
     CANFC32, CANOVIO, ZACK, ZCRCE, ZCRCG, ZCRCW, ZDATA, ZEOF, ZFILE, ZFIN, ZNAK, ZRINIT, ZRPOS,
@@ -25,6 +26,13 @@ use transom_core::ZmodemFinished;
 
 /// 单块数据大小：lrzsz sz 默认 1024 字节。
 pub(crate) const BLOCK_SIZE: usize = 1024;
+
+/// ZACK 等待窗口的初始退避时长；每次无应答翻倍。
+const ACK_BACKOFF_BASE: Duration = Duration::from_secs(2);
+/// 退避上限：无限翻倍会让弱网恢复后的等待失去意义。
+const ACK_BACKOFF_MAX: Duration = Duration::from_secs(30);
+/// 连续无应答的重试上限（不含最后一次判定失败）。
+const ACK_RETRY_LIMIT: usize = 5;
 
 /// 依 CRC-32 开关选择帧头格式构造（独立函数便于借用约束下复用）。
 fn build_header_of(use_crc32: bool, kind: u8, position: u32) -> Vec<u8> {
@@ -116,6 +124,15 @@ pub(crate) struct Sender {
     remote_flags: u8,
     /// 连续异常计数，超限中止。
     error_streak: usize,
+    /// ZACK/ZEOF/ZFIN 等确认窗口的连续超时次数，驱动指数退避。
+    retry_streak: usize,
+    /// 最近一次已发出的数据帧（含首块 ZDATA 头），用于确认超时后原样重传。
+    ///
+    /// 为什么要缓存：ZACK 丢失时唯一正确的恢复动作是重发"同一位移的同一子包"，
+    /// 从文件重新读取会引入与已发内容不一致的风险（文件在传输中被改写）。
+    last_frame: Option<Vec<u8>>,
+    /// 最近一次 ZEOF 帧，等待对端 ZRINIT 超时后原样重发。
+    last_eof_frame: Option<Vec<u8>>,
 }
 
 impl Sender {
@@ -127,6 +144,9 @@ impl Sender {
             current: None,
             remote_flags,
             error_streak: 0,
+            retry_streak: 0,
+            last_frame: None,
+            last_eof_frame: None,
         }
     }
 
@@ -156,6 +176,9 @@ impl Sender {
         current.data_header_sent = false;
         self.state = SendState::WaitRpos;
         self.error_streak = 0;
+        self.retry_streak = 0;
+        self.last_frame = None;
+        self.last_eof_frame = None;
         // ZMODEM 位置字段为 32 位：超限文件在发送 ZFILE 前直接跳过，
         // 保证后续偏移算术不截断（不变量由本拦截点维持）。
         if size > u64::from(u32::MAX) {
@@ -180,6 +203,8 @@ impl Sender {
 
     /// 处理帧头事件。
     pub(crate) fn on_header(&mut self, header: FrameHeader) -> Vec<SendAction> {
+        // 收到任何合法帧都说明对端仍然在线：确认窗口的退避计数归零。
+        self.retry_streak = 0;
         // 记录远端能力：部分 rz 在每轮轮询时重发 ZRINIT。
         if header.kind == ZRINIT {
             self.remote_flags = header.flags();
@@ -253,28 +278,29 @@ impl Sender {
         } else {
             ZCRCG
         };
-        let mut actions = Vec::with_capacity(4);
-        if first_block {
-            actions.push(SendAction::Write(build_header_of(
-                use_crc32,
-                ZDATA,
-                block_start as u32,
-            )));
+        let header = first_block.then(|| build_header_of(use_crc32, ZDATA, block_start as u32));
+        let packet = build_subpacket_of(use_crc32, chunk, terminator);
+        let mut frame = Vec::with_capacity(packet.len() + 24);
+        if let Some(header) = &header {
+            frame.extend_from_slice(header);
         }
-        actions.push(SendAction::Write(build_subpacket_of(
-            use_crc32, chunk, terminator,
-        )));
+        frame.extend_from_slice(&packet);
+        self.last_frame = Some(frame);
+
+        let mut actions = Vec::with_capacity(4);
+        if let Some(header) = header {
+            actions.push(SendAction::Write(header));
+        }
+        actions.push(SendAction::Write(packet));
         actions.push(SendAction::Progress {
             name,
             transferred: sent,
             total: size,
         });
         if is_last {
-            actions.push(SendAction::Write(build_header_of(
-                use_crc32,
-                ZEOF,
-                size as u32,
-            )));
+            let eof = build_header_of(use_crc32, ZEOF, size as u32);
+            self.last_eof_frame = Some(eof.clone());
+            actions.push(SendAction::Write(eof));
             self.state = SendState::WaitEofAck;
         } else if sync_mode {
             self.state = SendState::WaitAck;
@@ -296,15 +322,43 @@ impl Sender {
     }
 
     /// 远端无应答超时（attach 层触发）：在等待状态下重发关键帧。
+    ///
+    /// 设计原理（Why）：数据块发出后若 ZACK 丢失，必须重发同一帧而不是继续
+    /// 推进，否则对端会永久卡在缺口位置。退避由 [`Self::ack_timeout`] 按
+    /// 连续超时次数指数增长，避免弱网下高频重传放大拥塞；超过上限即判定
+    /// 对端失联，交给上层给出明确失败结局。
     pub(crate) fn on_timeout(&mut self) -> Vec<SendAction> {
-        self.error_streak += 1;
-        if self.error_streak >= 5 {
+        self.retry_streak += 1;
+        if self.retry_streak > ACK_RETRY_LIMIT {
             return self.abort("对端长时间无响应");
         }
         match self.state {
             SendState::WaitRpos => self.resend_file_info(),
+            SendState::WaitAck => self
+                .last_frame
+                .clone()
+                .map_or_else(Vec::new, |frame| vec![SendAction::Write(frame)]),
+            SendState::WaitEofAck => self
+                .last_eof_frame
+                .clone()
+                .map_or_else(Vec::new, |frame| vec![SendAction::Write(frame)]),
+            SendState::WaitFin => {
+                vec![SendAction::Write(build_hex_header(ZFIN, [0, 0, 0, 0]))]
+            }
             _ => Vec::new(),
         }
+    }
+
+    /// 当前确认窗口的下一次等待时长；仅 ZACK 窗口启用指数退避。
+    ///
+    /// 其它阶段沿用调用方的固定静默上限：首帧 offer 与收尾互答本就是
+    /// 秒级重试，不需要退避。
+    pub(crate) fn ack_timeout(&self) -> Option<Duration> {
+        if !matches!(self.state, SendState::WaitAck) {
+            return None;
+        }
+        let shift = self.retry_streak.min(4) as u32;
+        Some((ACK_BACKOFF_BASE * (1 << shift)).min(ACK_BACKOFF_MAX))
     }
 
     fn on_zrpos(&mut self, offset: u32) -> Vec<SendAction> {
@@ -316,8 +370,10 @@ impl Sender {
         if u64::from(offset) >= current.size {
             // 偏移已达文件末尾：直接宣告 EOF（0 字节文件同样走此分支）。
             let size = current.size as u32;
+            let eof = build_header_of(use_crc32, ZEOF, size);
+            self.last_eof_frame = Some(eof.clone());
             self.state = SendState::WaitEofAck;
-            return vec![SendAction::Write(build_header_of(use_crc32, ZEOF, size))];
+            return vec![SendAction::Write(eof)];
         }
         current.sent = u64::from(offset);
         current.data_header_sent = false;
@@ -662,13 +718,65 @@ mod tests {
         tx.begin(vec![PathBuf::from("/tmp/a")]);
         tx.set_current_file("a".to_string());
         tx.notify_file_ready(10, None);
-        for _ in 0..4 {
-            assert_eq!(tx.on_timeout().len(), 2, "前四次超时重发 ZFILE");
+        for _ in 0..5 {
+            assert_eq!(tx.on_timeout().len(), 2, "前五次超时重发 ZFILE");
         }
         let actions = tx.on_timeout();
         assert_eq!(
             actions[1],
             SendAction::Finished(ZmodemFinished::Failed("对端长时间无响应".to_string()))
         );
+    }
+
+    /// ZACK 丢失时必须原样重发同一帧（含首块 ZDATA 头），且等待窗口指数退避。
+    #[test]
+    fn ack_timeout_retransmits_last_frame_with_exponential_backoff() {
+        let mut tx = Sender::new(CANFDX);
+        tx.begin(vec![PathBuf::from("/tmp/a")]);
+        ready(&mut tx);
+        tx.on_header(rpos(0));
+        let actions = tx.push_data(&[0x5A; BLOCK_SIZE], false);
+        let SendAction::Write(header) = &actions[0] else {
+            panic!("首块应带 ZDATA 头");
+        };
+        let SendAction::Write(packet) = &actions[1] else {
+            panic!("应写入子包");
+        };
+        let mut expected = header.clone();
+        expected.extend_from_slice(packet);
+
+        let delay = tx.ack_timeout().expect("等待 ZACK 应有退避窗口");
+        assert!(delay >= Duration::from_secs(2));
+        let retry = tx.on_timeout();
+        assert_eq!(retry, vec![SendAction::Write(expected.clone())]);
+        let next = tx.ack_timeout().expect("仍在等待 ZACK");
+        assert!(
+            next > delay,
+            "重传后等待窗口必须变长: {next:?} <= {delay:?}"
+        );
+
+        // 其余四次重试仍重发同一帧，第六次超时判定失败。
+        for _ in 0..4 {
+            assert_eq!(tx.on_timeout(), vec![SendAction::Write(expected.clone())]);
+        }
+        let actions = tx.on_timeout();
+        assert!(matches!(
+            actions.last(),
+            Some(SendAction::Finished(ZmodemFinished::Failed(_)))
+        ));
+    }
+
+    /// 收到合法帧即说明对端在线，退避计数必须归零。
+    #[test]
+    fn receiving_any_header_resets_ack_backoff() {
+        let mut tx = Sender::new(CANFDX);
+        tx.begin(vec![PathBuf::from("/tmp/a")]);
+        ready(&mut tx);
+        tx.on_header(rpos(0));
+        tx.push_data(&[1; BLOCK_SIZE], false);
+        tx.on_timeout();
+        assert!(tx.ack_timeout().expect("等待窗口") > Duration::from_secs(2));
+        tx.on_header(plain(ZACK));
+        assert_eq!(tx.ack_timeout(), None, "确认后离开 ZACK 窗口");
     }
 }

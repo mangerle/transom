@@ -16,7 +16,7 @@ use std::time::Duration;
 use transom_core::{ZmodemDirection, ZmodemEvent, ZmodemFinished};
 
 use super::attach::{Shared, ZmodemConfig};
-use super::files::{self, UploadFile};
+use super::files::{self, DownloadWriter, UploadFile};
 use super::frames::{ZFILE, ZRINIT, ZRQINIT, ZSINIT, cancel_sequence};
 use super::receiver::{Receiver, RecvAction, RecvPhase};
 use super::scanner::{HeaderEvent, HeaderScanner, SubpacketEvent, SubpacketScanner};
@@ -62,8 +62,8 @@ pub(crate) struct Fsm {
     sender: Sender,
     header: HeaderScanner,
     subpacket: SubpacketScanner,
-    /// 下载方向当前写入的文件。
-    download_file: Option<std::fs::File>,
+    /// 下载方向当前写入的文件（64 KiB 分块 + 周期同步）。
+    download_file: Option<DownloadWriter>,
     /// 上传方向当前读取的文件句柄（按动作携带的偏移 seek）。
     upload_file: Option<std::fs::File>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
@@ -292,7 +292,7 @@ impl Fsm {
                 RecvAction::Write(wire) => self.write_wire(&wire),
                 RecvAction::CreateFile(name) => self.open_download_file(name),
                 RecvAction::WriteFile(data) => self.append_download_data(data),
-                RecvAction::CloseFile { .. } => self.download_file = None,
+                RecvAction::CloseFile { .. } => self.close_download_file(),
                 RecvAction::Progress {
                     name,
                     transferred,
@@ -362,10 +362,10 @@ impl Fsm {
 
     /// 打开下载文件；失败按 lrzsz 语义请求对端跳过当前文件。
     fn open_download_file(&mut self, name: String) {
-        match files::create_download_file(&self.config.download_dir, &name) {
-            Ok((file, path)) => {
-                log::info!("ZMODEM 下载开始写入文件: {}", path.display());
-                self.download_file = Some(file);
+        match DownloadWriter::create(&self.config.download_dir, &name) {
+            Ok(writer) => {
+                log::info!("ZMODEM 下载开始写入文件: {}", writer.path().display());
+                self.download_file = Some(writer);
             }
             Err(error) => {
                 log::warn!("ZMODEM 下载文件创建失败，将请求对端跳过: {name}，原因: {error}");
@@ -377,13 +377,28 @@ impl Fsm {
 
     /// 追加写盘；写失败即中止会话（磁盘满或句柄失效都无继续价值）。
     fn append_download_data(&mut self, data: Vec<u8>) {
-        let Some(file) = self.download_file.as_mut() else {
+        let Some(writer) = self.download_file.as_mut() else {
             return;
         };
-        if let Err(error) = files::append(file, &data) {
+        if let Err(error) = writer.write(&data) {
             log::error!("ZMODEM 下载数据写盘失败，传输中止: {error}");
             let actions = self.receiver.cancel();
             self.run_recv(actions);
+        }
+    }
+
+    /// 文件收尾：冲刷缓冲并强制同步，再释放句柄。
+    ///
+    /// 同步失败只告警不改变协议结局：数据已全部收到，磁盘层面的失败
+    /// 不应把一次成功的传输改判为失败，但必须留下排查线索。
+    fn close_download_file(&mut self) {
+        if let Some(mut writer) = self.download_file.take()
+            && let Err(error) = writer.finish()
+        {
+            log::warn!(
+                "ZMODEM 下载文件收尾同步失败: {}，原因: {error}",
+                writer.path().display()
+            );
         }
     }
 
@@ -454,7 +469,9 @@ impl Fsm {
         self.sender = Sender::new(0);
         self.header.reset();
         self.subpacket.reset();
-        self.download_file = None;
+        // 异常终止时把已收到的数据冲刷落盘：协议结局是失败，但用户手里
+        // 仍应保留中断前已确认的部分文件，而不是丢掉缓冲区里的最后一段。
+        self.close_download_file();
         self.upload_file = None;
         self.started = false;
         self.mode = Mode::Idle;
@@ -575,18 +592,22 @@ pub(crate) fn fsm_loop(mut fsm: Fsm) {
                 }
                 Err(flume::RecvTimeoutError::Disconnected) => false,
             },
-            Mode::Upload => match fsm.raw_rx.recv_timeout(TRANSFER_TIMEOUT) {
-                Ok(block) => {
-                    fsm.consume_block(block);
-                    true
+            Mode::Upload => {
+                // ZACK 确认窗口按发送端退避策略等待；其余阶段沿用固定静默上限。
+                let timeout = fsm.sender.ack_timeout().unwrap_or(TRANSFER_TIMEOUT);
+                match fsm.raw_rx.recv_timeout(timeout) {
+                    Ok(block) => {
+                        fsm.consume_block(block);
+                        true
+                    }
+                    Err(flume::RecvTimeoutError::Timeout) => {
+                        let actions = fsm.sender.on_timeout();
+                        fsm.run_send(actions);
+                        true
+                    }
+                    Err(flume::RecvTimeoutError::Disconnected) => false,
                 }
-                Err(flume::RecvTimeoutError::Timeout) => {
-                    let actions = fsm.sender.on_timeout();
-                    fsm.run_send(actions);
-                    true
-                }
-                Err(flume::RecvTimeoutError::Disconnected) => false,
-            },
+            }
         };
         if !alive {
             fsm.abort_in_flight();
