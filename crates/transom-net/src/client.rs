@@ -40,6 +40,24 @@ pub struct ClientError(pub AppError);
 /// 跨机房高延迟链路留余量，同时兜住"对端不可达导致任务永久泄漏"。
 const FORWARD_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// 单次远端命令允许捕获的输出总量上限（stdout 与 stderr 合计）。
+///
+/// 设计原理（Why）：`exec_command_capture` 的调用方全是小输出的只读命令
+/// （/proc 采样、ps、df、authorized_keys 追加），但远端是不可信输入源——
+/// 被攻陷或配置异常的服务端可以让命令持续回放大数据，无上限的累积缓冲
+/// 会把客户端内存吃光（OOM）。4 MiB 足以容纳数万行进程表，超出即按
+/// 协议异常中止读取，不把异常输出交给上层解析。
+const MAX_EXEC_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
+
+/// 单次远端命令的兜底超时。
+///
+/// 调用方按业务需要叠加更短的超时（如统计采样 10 秒，取更小者生效）；
+/// 这里只兜住"对端静默挂起导致通道永不返回"的协程泄漏。
+const EXEC_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// 错误信息中命令文本的最大字符数（截断点回退到字符边界）。
+const COMMAND_EXCERPT_BYTES: usize = 120;
+
 impl fmt::Display for ClientError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
@@ -246,9 +264,29 @@ impl SshRemote {
 
     /// 执行命令并完整捕获标准输出、错误输出与远端退出码。
     ///
+    /// 输出总量超过 [`MAX_EXEC_OUTPUT_BYTES`] 时中止读取并返回 `Protocol`
+    /// 错误，整体等待超过 [`EXEC_COMMAND_TIMEOUT`] 时返回 `Timeout`；调用方
+    /// 需要更短时限时自行叠加 `tokio::time::timeout` 即可（取更小者生效）。
+    ///
     /// # Errors
-    /// 打开通道或发送 exec 请求失败时返回 `ChannelFailed`。
+    /// 打开通道或发送 exec 请求失败时返回 `ChannelFailed`；对端回放超出
+    /// 上限的输出时返回 `Protocol`；挂起超过兜底时限时返回 `Timeout`。
     pub async fn exec_command_capture(&self, command: &str) -> Result<CommandOutput, AppError> {
+        match tokio::time::timeout(EXEC_COMMAND_TIMEOUT, self.exec_command_collect(command)).await {
+            Ok(result) => result,
+            Err(_) => Err(AppError::with_detail(
+                ErrorCode::Timeout,
+                format!(
+                    "远端命令执行超时，已等待 {} 秒，命令: {}",
+                    EXEC_COMMAND_TIMEOUT.as_secs(),
+                    command_excerpt(command)
+                ),
+            )),
+        }
+    }
+
+    /// 读取循环本体：逐块累积输出，累计超限即关闭通道并报错。
+    async fn exec_command_collect(&self, command: &str) -> Result<CommandOutput, AppError> {
         let mut channel = self.open_session().await?;
         channel
             .exec(true, command)
@@ -260,8 +298,18 @@ impl SshRemote {
         let mut exit_status = None;
         while let Some(msg) = channel.wait().await {
             match msg {
-                ChannelMsg::Data { data } => stdout.extend_from_slice(&data),
+                ChannelMsg::Data { data } => {
+                    if exec_output_exceeds(&stdout, &stderr, data.len()) {
+                        let _ = channel.close().await;
+                        return Err(exec_output_limit_error(command));
+                    }
+                    stdout.extend_from_slice(&data);
+                }
                 ChannelMsg::ExtendedData { data, ext: 1 } => {
+                    if exec_output_exceeds(&stdout, &stderr, data.len()) {
+                        let _ = channel.close().await;
+                        return Err(exec_output_limit_error(command));
+                    }
                     stderr.extend_from_slice(&data);
                 }
                 ChannelMsg::ExitStatus {
@@ -290,6 +338,45 @@ impl SshRemote {
                 .await;
         }
     }
+}
+
+/// 本次追加后输出总量是否超过上限（stdout 与 stderr 合计）。
+///
+/// 抽成纯函数供单测钉住边界：正好等于上限放行，超一字节即拒绝。
+fn exec_output_exceeds(stdout: &[u8], stderr: &[u8], incoming: usize) -> bool {
+    stdout
+        .len()
+        .saturating_add(stderr.len())
+        .saturating_add(incoming)
+        > MAX_EXEC_OUTPUT_BYTES
+}
+
+/// 输出超限的统一错误描述。
+fn exec_output_limit_error(command: &str) -> AppError {
+    AppError::with_detail(
+        ErrorCode::Protocol,
+        format!(
+            "远端命令输出超过 {} 字节上限，已中止读取，命令: {}",
+            MAX_EXEC_OUTPUT_BYTES,
+            command_excerpt(command)
+        ),
+    )
+}
+
+/// 取命令文本的排障摘要：过长时按字符边界截断。
+///
+/// 为什么截断：错误信息会进日志，命令可能是整段部署脚本（含公钥），
+/// 不截断会把日志行撑到不可读；截断点回退到字符边界，避免在多字节
+/// 字符中间切开产生乱码。
+fn command_excerpt(command: &str) -> String {
+    if command.len() <= COMMAND_EXCERPT_BYTES {
+        return command.to_string();
+    }
+    let mut end = COMMAND_EXCERPT_BYTES;
+    while !command.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &command[..end])
 }
 
 pub struct SshSession {
@@ -1281,5 +1368,41 @@ mod tests {
             !preferred.cipher.is_empty(),
             "过滤主机密钥不应连带清空加密套件列表"
         );
+    }
+
+    /// 输出上限的边界：stdout 与 stderr 合计恰好等于上限放行，超一字节即拒绝。
+    #[test]
+    fn exec_output_limit_counts_stdout_and_stderr_together() {
+        let half = MAX_EXEC_OUTPUT_BYTES / 2;
+        assert!(
+            !exec_output_exceeds(&vec![0u8; MAX_EXEC_OUTPUT_BYTES], &[], 0),
+            "恰好等于上限不应判定超限"
+        );
+        assert!(
+            exec_output_exceeds(&vec![0u8; MAX_EXEC_OUTPUT_BYTES], &[], 1),
+            "超出上限一字节必须拒绝"
+        );
+        assert!(
+            !exec_output_exceeds(&vec![0u8; half], &vec![0u8; half], 0),
+            "stdout 与 stderr 各半、合计等于上限不应判定超限"
+        );
+        assert!(
+            exec_output_exceeds(&vec![0u8; half], &vec![0u8; half], 1),
+            "合计超出上限一字节必须拒绝"
+        );
+    }
+
+    /// 命令摘要按字符边界截断：短命令原样返回，长命令带省略标记且不切开多字节字符。
+    #[test]
+    fn command_excerpt_truncates_on_char_boundary() {
+        assert_eq!(command_excerpt("kill -9 1234"), "kill -9 1234");
+        let long = "公钥部署命令".repeat(40);
+        let excerpt = command_excerpt(&long);
+        assert!(
+            excerpt.len() <= COMMAND_EXCERPT_BYTES + 3,
+            "截断后长度不得超过上限加省略标记"
+        );
+        assert!(excerpt.ends_with("..."), "截断必须带省略标记");
+        assert!(excerpt.starts_with("公钥部署命令"), "截断不得破坏首段文本");
     }
 }
