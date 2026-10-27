@@ -33,7 +33,6 @@ impl Default for WorkspaceState {
     }
 }
 
-#[allow(dead_code)]
 impl WorkspaceState {
     /// 构造空的工作区状态容器。
     pub fn new() -> Self {
@@ -46,65 +45,6 @@ impl WorkspaceState {
             active_tab: None,
         }
     }
-
-    /// 获取当前活动标签 ID。
-    pub(crate) fn active_tab(&self) -> Option<TabId> {
-        self.active_tab
-    }
-
-    /// 设置当前活动标签。
-    pub(crate) fn set_active_tab(&mut self, tab_id: Option<TabId>) {
-        self.active_tab = tab_id;
-    }
-
-    /// 根据标签 ID 查找不可变标签引用。
-    pub(crate) fn find_tab(&self, tab_id: TabId) -> Option<&TerminalTab> {
-        self.tabs.iter().find(|t| t.id == tab_id)
-    }
-
-    /// 根据标签 ID 查找可变标签引用。
-    pub(crate) fn find_tab_mut(&mut self, tab_id: TabId) -> Option<&mut TerminalTab> {
-        self.tabs.iter_mut().find(|t| t.id == tab_id)
-    }
-
-    /// 根据标签组 ID 查找不可变分组引用。
-    pub(crate) fn find_group(&self, group_id: GroupId) -> Option<&TabGroup> {
-        self.groups.iter().find(|g| g.id == group_id)
-    }
-
-    /// 根据标签组 ID 查找可变分组引用。
-    pub(crate) fn find_group_mut(&mut self, group_id: GroupId) -> Option<&mut TabGroup> {
-        self.groups.iter_mut().find(|g| g.id == group_id)
-    }
-
-    /// 查找包含指定窗格的分组。
-    pub(crate) fn find_group_by_pane(&self, pane: TabId) -> Option<&TabGroup> {
-        self.groups.iter().find(|g| g.contains(pane))
-    }
-
-    /// 查找包含指定窗格的可变分组。
-    pub(crate) fn find_group_by_pane_mut(&mut self, pane: TabId) -> Option<&mut TabGroup> {
-        self.groups.iter_mut().find(|g| g.contains(pane))
-    }
-
-    /// 移除指定标签，并返回被移除的标签实体。
-    pub(crate) fn remove_tab(&mut self, tab_id: TabId) -> Option<TerminalTab> {
-        if let Some(pos) = self.tabs.iter().position(|t| t.id == tab_id) {
-            Some(self.tabs.remove(pos))
-        } else {
-            None
-        }
-    }
-
-    /// 判断工作区是否为空（没有任何活动标签）。
-    pub(crate) fn is_empty(&self) -> bool {
-        self.tabs.is_empty()
-    }
-
-    /// 当前活动标签数量。
-    pub(crate) fn tab_count(&self) -> usize {
-        self.tabs.len()
-    }
 }
 
 #[cfg(test)]
@@ -112,23 +52,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn workspace_state_lifecycle_and_helpers() {
-        let mut ws = WorkspaceState::new();
-        assert!(ws.is_empty());
-        assert_eq!(ws.tab_count(), 0);
-        assert_eq!(ws.active_tab(), None);
-
-        let tab_id = TabId::new();
-        ws.set_active_tab(Some(tab_id));
-        assert_eq!(ws.active_tab(), Some(tab_id));
-        assert!(ws.find_tab(tab_id).is_none());
-        assert!(ws.find_tab_mut(tab_id).is_none());
-        assert!(ws.remove_tab(tab_id).is_none());
-
-        let group_id = GroupId::new();
-        assert!(ws.find_group(group_id).is_none());
-        assert!(ws.find_group_mut(group_id).is_none());
-        assert!(ws.find_group_by_pane(tab_id).is_none());
-        assert!(ws.find_group_by_pane_mut(tab_id).is_none());
+    fn workspace_state_lifecycle() {
+        let ws = WorkspaceState::new();
+        assert!(ws.tabs.is_empty());
+        assert!(ws.groups.is_empty());
+        assert_eq!(ws.active_tab, None);
     }
 }

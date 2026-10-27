@@ -13,8 +13,6 @@ mod types;
 mod view;
 
 pub(crate) use init::text_input;
-#[allow(unused_imports)]
-pub(crate) use types::BuiltSession;
 pub(crate) use types::{
     AuthChoice, ConnectionChoice, IdentityOption, JumpOption, SessionForm, SessionFormInit,
 };

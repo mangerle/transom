@@ -61,22 +61,4 @@ impl ModalHub {
             confirm_forward_any: None,
         }
     }
-
-    /// 判断是否有任意独占模态弹窗正在展示。
-    #[allow(dead_code)]
-    pub(crate) fn has_active_modal(&self) -> bool {
-        self.form.is_some()
-            || self.folder_form.is_some()
-            || self.batch_edit.is_some()
-            || self.auth_prompt.is_some()
-            || self.host_key_confirm.is_some()
-            || self.known_hosts.open
-            || self.settings.open
-            || self.replay.is_some()
-            || self.audit_viewer.is_some()
-            || self.backup_prompt.is_some()
-            || self.show_quick_open
-            || self.snippet_panel.form.is_some()
-            || self.confirm_forward_any.is_some()
-    }
 }

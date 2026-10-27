@@ -14,10 +14,6 @@
 //! 稳定 ID 对齐，重名条目不会被合并。
 
 use crate::catalog::SessionCatalog;
-use crate::catalog::SessionFolder;
-use crate::identity::Identity;
-use crate::ids::{FolderId, IdentityId, SessionId};
-use crate::session::Session;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -189,22 +185,24 @@ where
     }
 }
 
-// 让编译器确认键类型与目录条目字段一致（改字段时会在这里报错）。
-#[allow(dead_code)]
-fn _key_types(
-    _: SessionId,
-    _: FolderId,
-    _: IdentityId,
-    _: &Session,
-    _: &SessionFolder,
-    _: &Identity,
-) {
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::{AuthMethod, Connection, SshConnection};
+    use crate::catalog::SessionFolder;
+    use crate::identity::Identity;
+    use crate::ids::{FolderId, IdentityId, SessionId};
+    use crate::session::{AuthMethod, Connection, Session, SshConnection};
+
+    // 让编译器确认键类型与目录条目字段一致（改字段时会在这里报错）。
+    fn _key_types(
+        _: SessionId,
+        _: FolderId,
+        _: IdentityId,
+        _: &Session,
+        _: &SessionFolder,
+        _: &Identity,
+    ) {
+    }
 
     fn session(name: &str, host: &str, updated_at: u64) -> Session {
         let mut session = Session::new(
