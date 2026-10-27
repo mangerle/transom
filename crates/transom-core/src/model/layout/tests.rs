@@ -1,4 +1,3 @@
-
 use super::*;
 
 fn top(layout: &ActivityBarLayout) -> Vec<ActivityItemId> {
