@@ -9,28 +9,48 @@ use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::{GroupId, SplitAxis, TabId};
 
+/// 标签条目右键上下文菜单的配置参数对象。
+pub(super) struct TabContextMenuParams {
+    pub(super) active_pane: TabId,
+    pub(super) session_id: transom_core::SessionId,
+    pub(super) is_local: bool,
+    pub(super) pane_count: usize,
+    pub(super) tile_enabled: bool,
+    pub(super) group_id: GroupId,
+    pub(super) this_set_id: Option<TilingId>,
+    pub(super) show_add_to_tiling: bool,
+    pub(super) menu_selection: Vec<GroupId>,
+    pub(super) show_multi_tile: bool,
+    pub(super) palette: Palette,
+    pub(super) entry_selected: bool,
+    pub(super) touched_sets_count: usize,
+    pub(super) selected_singles_count: usize,
+}
+
 /// 构建标签条目的右键上下文菜单。
-#[allow(clippy::too_many_arguments)]
 pub(super) fn build_tab_context_menu(
     menu: PopupMenu,
     window: &mut Window,
     cx: &mut Context<PopupMenu>,
     app_entity: &Entity<AppShell>,
-    active_pane: TabId,
-    session_id: transom_core::SessionId,
-    is_local: bool,
-    pane_count: usize,
-    tile_enabled: bool,
-    group_id: GroupId,
-    this_set_id: Option<TilingId>,
-    show_add_to_tiling: bool,
-    menu_selection: Vec<GroupId>,
-    show_multi_tile: bool,
-    palette: Palette,
-    entry_selected: bool,
-    touched_sets_count: usize,
-    selected_singles_count: usize,
+    params: TabContextMenuParams,
 ) -> PopupMenu {
+    let TabContextMenuParams {
+        active_pane,
+        session_id,
+        is_local,
+        pane_count,
+        tile_enabled,
+        group_id,
+        this_set_id,
+        show_add_to_tiling,
+        menu_selection,
+        show_multi_tile,
+        palette,
+        entry_selected,
+        touched_sets_count,
+        selected_singles_count,
+    } = params;
     let app = app_entity.clone();
     let mut menu = menu
         .item(

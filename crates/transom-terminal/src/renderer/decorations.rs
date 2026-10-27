@@ -8,6 +8,17 @@ use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::*;
 use transom_core::BlockViewStyle;
 
+/// 折叠横幅绘制参数对象。
+pub(super) struct BlockBannerPaintParams<'a> {
+    pub(super) row: usize,
+    pub(super) y: Pixels,
+    pub(super) origin: Point<Pixels>,
+    pub(super) label: &'a str,
+    pub(super) failed: bool,
+    pub(super) style: BlockViewStyle,
+    pub(super) cols: usize,
+}
+
 impl TerminalRenderer {
     /// 自绘文本系统不支持下划线的种类（双线/点线/虚线），按单元格几何绘制。
     ///
@@ -227,19 +238,21 @@ impl TerminalRenderer {
     ///
     /// 横幅只占一个网格行，不创建 GPUI 子元素：终端是自绘 canvas，
     /// 保持"所有内容都在同一绘制管线里"才能让折叠/展开只有一次重绘。
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn paint_block_banner(
         &self,
-        row: usize,
-        y: Pixels,
-        origin: Point<Pixels>,
-        label: &str,
-        failed: bool,
-        style: BlockViewStyle,
-        cols: usize,
+        params: BlockBannerPaintParams<'_>,
         window: &mut Window,
         cx: &mut App,
     ) {
+        let BlockBannerPaintParams {
+            row,
+            y,
+            origin,
+            label,
+            failed,
+            style,
+            cols,
+        } = params;
         let status_color = if failed {
             self.palette_colors.ansi[1]
         } else {

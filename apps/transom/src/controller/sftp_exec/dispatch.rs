@@ -1,7 +1,9 @@
 //! SFTP 命令调度分发与客户端缓存处理。
 
 use super::ops::execute_sftp_op;
-use super::remote_transfer::{execute_remote_transfer_op, spawn_remote_transfer_op};
+use super::remote_transfer::{
+    RemoteTransferParams, execute_remote_transfer_op, spawn_remote_transfer_op,
+};
 use crate::controller::Internal;
 use crate::controller::session_context::ManagedSessionContext;
 use std::collections::HashMap;
@@ -79,16 +81,18 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
             spawn_remote_transfer_op(
                 sftp_tasks,
                 event_tx,
-                tab_id,
-                connection_id,
-                op_id,
-                sc,
-                tc,
-                source_path,
-                target_path,
-                is_dir,
-                filter,
-                preserve_attributes,
+                RemoteTransferParams {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    source_client: sc,
+                    target_client: tc,
+                    source_path,
+                    target_path,
+                    is_dir,
+                    filter,
+                    preserve_attributes,
+                },
             );
         } else {
             let event_tx_clone = event_tx.clone();
@@ -105,16 +109,18 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
                     (Ok(sc), Ok(tc)) => {
                         execute_remote_transfer_op(
                             event_tx_clone,
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            sc,
-                            tc,
-                            source_path,
-                            target_path,
-                            is_dir,
-                            filter,
-                            preserve_attributes,
+                            RemoteTransferParams {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                source_client: sc,
+                                target_client: tc,
+                                source_path,
+                                target_path,
+                                is_dir,
+                                filter,
+                                preserve_attributes,
+                            },
                         )
                         .await;
                     }

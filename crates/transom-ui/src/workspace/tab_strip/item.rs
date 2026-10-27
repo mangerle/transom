@@ -16,7 +16,7 @@ use transom_core::{Connection, GroupId, SplitAxis, TabId};
 use super::badges::{
     PaneRow, build_tab_tooltip, build_tiled_group_badge, calculate_dot_color, connection_icon,
 };
-use super::menu::build_tab_context_menu;
+use super::menu::{TabContextMenuParams, build_tab_context_menu};
 use crate::workspace::tab_drag::attach_tab_drag;
 
 /// 渲染标签栏中的单个条目（可以是单标签或并排组）。
@@ -197,20 +197,22 @@ pub(super) fn render_tab_entry(
                 window,
                 cx,
                 &menu_app_entity,
-                active_pane,
-                session_id,
-                is_local,
-                pane_count,
-                tile_enabled,
-                group_id,
-                this_set_id,
-                show_add_to_tiling,
-                menu_selection.clone(),
-                show_multi_tile,
-                palette.clone(),
-                entry_selected,
-                touched_sets_count,
-                selected_singles_count,
+                TabContextMenuParams {
+                    active_pane,
+                    session_id,
+                    is_local,
+                    pane_count,
+                    tile_enabled,
+                    group_id,
+                    this_set_id,
+                    show_add_to_tiling,
+                    menu_selection: menu_selection.clone(),
+                    show_multi_tile,
+                    palette: palette.clone(),
+                    entry_selected,
+                    touched_sets_count,
+                    selected_singles_count,
+                },
             )
         });
 

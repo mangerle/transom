@@ -5,6 +5,7 @@ mod scan;
 mod search;
 mod types;
 
+use decorations::BlockBannerPaintParams;
 use runs::RowScanInput;
 pub(crate) use types::{
     DamageInfo, ImePaintInput, PaintRequest, RowVisual, SELECTION_ALPHA, TextVisual,
@@ -347,13 +348,15 @@ impl TerminalRenderer {
                             layout.slots().get(row)
                         {
                             self.paint_block_banner(
-                                row,
-                                y,
-                                origin,
-                                label,
-                                *failed,
-                                block_style,
-                                cols,
+                                BlockBannerPaintParams {
+                                    row,
+                                    y,
+                                    origin,
+                                    label,
+                                    failed: *failed,
+                                    style: block_style,
+                                    cols,
+                                },
                                 window,
                                 cx,
                             );
