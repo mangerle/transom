@@ -1,0 +1,148 @@
+//! SFTP 本地文件目录导航与快速跳转。
+//!
+//! 设计原理（Why）：
+//! - 实现初衷：集中处理 SFTP 本地栏的路径跳转、双栏同步导航及在系统文件管理器中打开等操作；
+//! - 核心优势：纯粹的本地文件系统导航流，避免远端与本地混在一起。
+
+use crate::app::AppShell;
+use crate::sftp::parent_remote;
+use gpui_kit::*;
+use std::path::PathBuf;
+use transom_core::TabId;
+
+impl AppShell {
+    pub(crate) fn sftp_local_navigate_only(
+        &mut self,
+        tab_id: TabId,
+        target: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
+        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+            return;
+        };
+        let Some(panel) = tab.sftp.as_mut() else {
+            return;
+        };
+        panel.local_path = target.clone();
+        // 先清空旧目录内容给出即时反馈，实际条目由后台刷新回填
+        panel.local_entries = Vec::new();
+        panel.clear_local_selection();
+        panel.local_error = None;
+        let input = panel.local_path_input.clone();
+        input.update(cx, |state, cx| {
+            state.set_value(target.display().to_string(), window, cx);
+        });
+        cx.notify();
+        self.spawn_local_dir_refresh(tab_id, None, cx);
+    }
+
+    pub(crate) fn sftp_local_navigate(
+        &mut self,
+        tab_id: TabId,
+        target: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let sync_remote_target = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|panel| {
+                if !panel.sync_navigation {
+                    return None;
+                }
+                let child_name = target.file_name()?.to_str()?;
+                panel
+                    .entries
+                    .iter()
+                    .find(|e| e.is_dir && e.name == child_name)
+                    .map(|e| e.path.clone())
+            });
+        self.sftp_local_navigate_only(tab_id, target, window, cx);
+        if let Some(remote_path) = sync_remote_target {
+            self.request_sftp_list(tab_id, remote_path, cx);
+        }
+    }
+
+    pub(crate) fn sftp_local_go_up(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (parent, sync_remote_parent) = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_ref())
+            .map(|panel| {
+                let local_parent = panel.local_path.parent().map(|p| p.to_path_buf());
+                let remote_parent = if panel.sync_navigation {
+                    Some(parent_remote(&panel.path))
+                } else {
+                    None
+                };
+                (local_parent, remote_parent)
+            })
+            .unwrap_or((None, None));
+        if let Some(parent) = parent {
+            self.sftp_local_navigate_only(tab_id, parent, window, cx);
+            if let Some(remote_parent) = sync_remote_parent {
+                self.request_sftp_list(tab_id, remote_parent, cx);
+            }
+        }
+    }
+
+    pub(crate) fn sftp_local_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
+        self.spawn_local_dir_refresh(tab_id, None, cx);
+    }
+
+    pub(crate) fn sftp_local_enter_path(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let target = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_ref())
+            .map(|panel| PathBuf::from(panel.local_path_input.read(cx).value().trim()));
+        if let Some(target) = target
+            && target.is_dir()
+        {
+            self.sftp_local_navigate(tab_id, target, window, cx);
+        }
+    }
+
+    pub(crate) fn sftp_open_local_file_manager(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(local_path) = self
+            .tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_ref())
+            .map(|panel| panel.local_path.clone())
+        else {
+            return;
+        };
+        crate::audit::reveal_in_file_manager(local_path.clone());
+
+        if let Some(panel) = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.sftp.as_mut())
+        {
+            panel.status = Some(format!(
+                "已在系统文件管理器中打开: {}",
+                local_path.display()
+            ));
+            cx.notify();
+        }
+    }
+}
