@@ -382,6 +382,33 @@ impl SftpPanelState {
         }
         self.progress = Some((transferred, total_known.then_some(total)));
     }
+
+    /// 是否所有文件列均已处于折叠收起状态。
+    pub(crate) fn is_all_collapsed(&self) -> bool {
+        if !self.local_collapsed {
+            return false;
+        }
+        if !self.local_only && !self.remote_collapsed {
+            return false;
+        }
+        if self.side_remotes.iter().any(|s| !s.collapsed) {
+            return false;
+        }
+        true
+    }
+
+    /// 统计当前折叠为竖条的列数（用于全收起时动态计算紧凑侧边栏宽度）。
+    pub(crate) fn collapsed_columns_count(&self) -> usize {
+        let mut count = 0;
+        if self.local_collapsed {
+            count += 1;
+        }
+        if !self.local_only && self.remote_collapsed {
+            count += 1;
+        }
+        count += self.side_remotes.iter().filter(|s| s.collapsed).count();
+        count
+    }
 }
 
 pub(crate) fn local_home() -> PathBuf {

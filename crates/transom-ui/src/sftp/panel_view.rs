@@ -1043,14 +1043,6 @@ impl AppShell {
             cx,
         );
 
-        let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
-        let title_text = if is_local_only {
-            rust_i18n::t!("sftp.local_files_title").to_string()
-        } else {
-            rust_i18n::t!("sftp.title").to_string()
-        };
-        let header = self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx);
-
         let mut expanded_panels: Vec<AnyElement> = Vec::new();
         if !local_collapsed {
             expanded_panels.push(local_pane);
@@ -1064,32 +1056,67 @@ impl AppShell {
             }
         }
 
-        let center_content: AnyElement = match expanded_panels.len() {
-            0 => div()
-                .size_full()
+        let is_all_collapsed = expanded_panels.is_empty();
+
+        let header = if is_all_collapsed {
+            div()
+                .h(px(32.0))
+                .w_full()
                 .items_center()
                 .justify_center()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child("所有文件列均已收起")
-                .into_any_element(),
-            1 => div()
-                .size_full()
-                .overflow_hidden()
-                .child(expanded_panels.into_iter().next().unwrap())
-                .into_any_element(),
+                .border_b_1()
+                .border_color(p.sidebar_border)
+                .child(
+                    Button::new("sftp-close-all-collapsed")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::X)
+                        .tooltip(rust_i18n::t!("app.close").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(tab) = this.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+                                tab.sftp = None;
+                            }
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        } else {
+            let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
+            let title_text = if is_local_only {
+                rust_i18n::t!("sftp.local_files_title").to_string()
+            } else {
+                rust_i18n::t!("sftp.title").to_string()
+            };
+            self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx)
+        };
+
+        let center_content: Option<AnyElement> = match expanded_panels.len() {
+            0 => None,
+            1 => Some(
+                div()
+                    .size_full()
+                    .overflow_hidden()
+                    .child(expanded_panels.into_iter().next().unwrap())
+                    .into_any_element(),
+            ),
             _ => {
                 let mut resizable =
                     h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
                 for pane in expanded_panels {
                     resizable = resizable.child(resizable_panel().child(pane));
                 }
-                resizable.into_any_element()
+                Some(resizable.into_any_element())
             }
         };
 
         let mut columns_container = h_flex().size_full().overflow_hidden();
 
+        if let Some(content) = center_content {
+            columns_container =
+                columns_container.child(div().flex_1().h_full().overflow_hidden().child(content));
+        }
+
+        // 所有折叠竖条统一靠在右侧并排展示
         if local_collapsed {
             columns_container =
                 columns_container.child(self.render_sftp_local_collapsed_bar(tab_id, p, cx));
@@ -1098,15 +1125,6 @@ impl AppShell {
             columns_container =
                 columns_container.child(self.render_sftp_remote_collapsed_bar(tab_id, p, cx));
         }
-
-        columns_container = columns_container.child(
-            div()
-                .flex_1()
-                .h_full()
-                .overflow_hidden()
-                .child(center_content),
-        );
-
         for (side_index, is_collapsed, side_title) in &side_remotes_info {
             if *is_collapsed {
                 columns_container =
@@ -1158,22 +1176,24 @@ impl AppShell {
                     .w_full()
                     .overflow_hidden()
                     .child(columns_container),
-            )
-            .child(queue_pane);
+            );
 
-        if let Some(status_element) = status_bar_element {
-            let status_element = if queue_expanded {
-                status_element
-            } else {
-                // 队列收起时菜单与进度条之间没有列表行做分隔，补一条细线
-                div()
-                    .w_full()
-                    .border_t_1()
-                    .border_color(p.sidebar_border)
-                    .child(status_element)
-                    .into_any_element()
-            };
-            panel_element = panel_element.child(status_element);
+        if !is_all_collapsed {
+            panel_element = panel_element.child(queue_pane);
+            if let Some(status_element) = status_bar_element {
+                let status_element = if queue_expanded {
+                    status_element
+                } else {
+                    // 队列收起时菜单与进度条之间没有列表行做分隔，补一条细线
+                    div()
+                        .w_full()
+                        .border_t_1()
+                        .border_color(p.sidebar_border)
+                        .child(status_element)
+                        .into_any_element()
+                };
+                panel_element = panel_element.child(status_element);
+            }
         }
 
         panel_element.into_any_element()

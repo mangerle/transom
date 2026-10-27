@@ -43,24 +43,33 @@ impl Render for AppShell {
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open));
-        let sftp_local_only = self
+        let sftp_panel = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
-            .and_then(|tab| tab.sftp.as_ref())
-            .is_some_and(|panel| panel.local_only);
+            .and_then(|tab| tab.sftp.as_ref());
+        let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local_only);
+        let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
+        let collapsed_count = sftp_panel
+            .map(|panel| panel.collapsed_columns_count())
+            .unwrap_or(0);
+        let sftp_collapsed_width = (collapsed_count as f32 * 32.0).max(32.0);
+
         let show_forwards = self
             .active_tab
             .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.forwards_panel.is_some());
-        let sftp_width = if sftp_local_only {
-            rem_px(size::SFTP_LOCAL_PANEL_WIDTH, rem).as_f32()
+        let (sftp_width, sftp_min_width) = if sftp_all_collapsed {
+            (sftp_collapsed_width, sftp_collapsed_width)
+        } else if sftp_local_only && sftp_panel.is_some_and(|p| p.side_remotes.is_empty()) {
+            (
+                rem_px(size::SFTP_LOCAL_PANEL_WIDTH, rem).as_f32(),
+                rem_px(size::SFTP_LOCAL_MIN_WIDTH, rem).as_f32(),
+            )
         } else {
-            rem_px(size::SFTP_PANEL_WIDTH, rem).as_f32()
-        };
-        let sftp_min_width = if sftp_local_only {
-            rem_px(size::SFTP_LOCAL_MIN_WIDTH, rem).as_f32()
-        } else {
-            rem_px(size::SFTP_MIN_WIDTH, rem).as_f32()
+            (
+                rem_px(size::SFTP_PANEL_WIDTH, rem).as_f32(),
+                rem_px(size::SFTP_MIN_WIDTH, rem).as_f32(),
+            )
         };
         // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
         // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
@@ -87,7 +96,11 @@ impl Render for AppShell {
             - forward_width
             - 100.0
             - 8.0;
-        let sftp_max_width = available_width.max(sftp_min_width);
+        let sftp_max_width = if sftp_all_collapsed {
+            sftp_collapsed_width
+        } else {
+            available_width.max(sftp_min_width)
+        };
         // 两个方向各自持有列宽状态：面板顺序随停靠方向变化，共用一份按索引
         // 记录的尺寸会把宽度错位到别的面板上。
         let (side_left, panels_state) = if self.settings.window.sftp_panel_side.is_left() {
