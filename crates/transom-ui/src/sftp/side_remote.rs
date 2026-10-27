@@ -569,6 +569,6 @@ impl AppShell {
             op_id,
             op: SftpOperation::List { path },
         };
-        let _ = self.services.command_tx.send(cmd);
+        self.send_command(cmd);
     }
 }
