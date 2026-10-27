@@ -15,18 +15,16 @@ mod header;
 use self::context_menu::build_side_remote_context_menu;
 use self::header::render_side_remote_header;
 use super::side_remote::{SftpActivePane, SftpDragItem, SftpDragPreview, SftpRemoteCopyParams};
-use super::{format_size, fuzzy_match_name, sftp_file_icon};
+use super::{VfsRowRenderOptions, fuzzy_match_name, render_vfs_row_content};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable, v_virtual_list};
-use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::component::v_virtual_list;
 use gpui_kit::*;
 use std::rc::Rc;
-use transom_core::{RemoteFile, TabId, format_octal_permissions};
+use transom_core::{RemoteFile, TabId};
 
 impl AppShell {
     /// 渲染单个并列远端列（展开态）。
@@ -146,39 +144,14 @@ impl AppShell {
                                         .bg(p_row.sidebar_accent)
                                         .text_color(p_row.sidebar_accent_foreground)
                                 })
-                                .child(if is_parent_entry {
-                                    Icon::new(IconName::Folder)
-                                        .small()
-                                        .text_color(p_row.muted_foreground)
-                                        .into_any_element()
-                                } else {
-                                    sftp_file_icon(is_dir, &p_row)
-                                })
-                                .child(div().flex_1().text_sm().overflow_hidden().child(
-                                    if is_parent_entry {
-                                        ".. (返回上一级)".to_string()
-                                    } else {
-                                        entry.name.clone()
-                                    },
-                                ))
-                                .when_some(entry.permissions, |this, perms| {
-                                    this.child(
-                                        div()
-                                            .text_xs()
-                                            .px_1()
-                                            .rounded(p_row.radius.sm)
-                                            .bg(p_row.muted)
-                                            .text_color(p_row.muted_foreground)
-                                            .child(format_octal_permissions(perms)),
-                                    )
-                                })
-                                .child(div().text_xs().text_color(p_row.muted_foreground).child(
-                                    if is_dir {
-                                        String::new()
-                                    } else {
-                                        format_size(entry.size)
-                                    },
-                                ));
+                                .child(render_vfs_row_content(VfsRowRenderOptions {
+                                    name: &entry.name,
+                                    is_dir,
+                                    is_parent: is_parent_entry,
+                                    size: entry.size,
+                                    permissions: entry.permissions,
+                                    palette: &p_row,
+                                }));
 
                             // 双击与单击处理
                             let path_double = entry_path.clone();

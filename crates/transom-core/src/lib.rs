@@ -21,6 +21,7 @@ pub mod storage;
 
 // 历史路径别名：`crate::session`、`transom_core::sftp` 等全部继续解析到
 // 迁移后的模块；这是纯目录整理，不改调用方的任何一行。
+pub use async_trait::async_trait;
 pub use model::{
     catalog, color, forward, history, host, identity, keys, known_hosts, layout, mac, serial,
     session, session_appearance, settings, terminal, theme, trigger,
@@ -28,8 +29,9 @@ pub use model::{
 pub use platform::{paths, private_fs};
 pub use protocol::{
     merge, proxy, sftp, sftp_filter, sftp_sync, ssh_config, ssh_url, sync, system_stats, traffic,
-    zmodem,
+    vfs, zmodem,
 };
+pub use vfs::{VfsEntry, VirtualFileSystem, get_parent_path};
 
 pub use backup::{
     BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,

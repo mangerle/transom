@@ -8,16 +8,14 @@ mod context_menu;
 use self::context_menu::{RemoteContextMenuProps, build_remote_context_menu};
 use super::preview::{PreviewKey, SftpHoverTarget};
 use super::side_remote::{SftpDragItem, SftpDragPreview};
-use super::{format_size, sftp_file_icon};
+use super::{VfsRowRenderOptions, render_vfs_row_content};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
-use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
-use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
-use transom_core::{ConnectionId, RemoteFile, TabId, format_octal_permissions};
+use transom_core::{ConnectionId, RemoteFile, TabId};
 
 /// 远程内容区的渲染输入：条目、加载态、标签归属与滚动句柄。
 pub(crate) struct RemoteContentProps {
@@ -224,39 +222,14 @@ impl AppShell {
                                         cx.notify();
                                     }),
                                 )
-                                .child(if is_parent_entry {
-                                    Icon::new(IconName::Folder)
-                                        .small()
-                                        .text_color(p.muted_foreground)
-                                        .into_any_element()
-                                } else {
-                                    sftp_file_icon(entry_is_dir, &p)
-                                })
-                                .child(div().flex_1().text_sm().overflow_hidden().child(
-                                    if is_parent_entry {
-                                        ".. (返回上一级)".to_string()
-                                    } else {
-                                        entry.name.clone()
-                                    },
-                                ))
-                                .when_some(entry.permissions, |this, perms| {
-                                    this.child(
-                                        div()
-                                            .text_xs()
-                                            .px_1()
-                                            .rounded(p.radius.sm)
-                                            .bg(p.muted)
-                                            .text_color(p.muted_foreground)
-                                            .child(format_octal_permissions(perms)),
-                                    )
-                                })
-                                .child(div().text_xs().text_color(p.muted_foreground).child(
-                                    if entry_is_dir {
-                                        String::new()
-                                    } else {
-                                        format_size(entry.size)
-                                    },
-                                ));
+                                .child(render_vfs_row_content(VfsRowRenderOptions {
+                                    name: &entry.name,
+                                    is_dir: entry_is_dir,
+                                    is_parent: is_parent_entry,
+                                    size: entry.size,
+                                    permissions: entry.permissions,
+                                    palette: &p,
+                                }));
 
                             let row = if is_parent_entry {
                                 row

@@ -15,15 +15,14 @@ use self::context_menu::{LocalContextMenuProps, build_local_context_menu};
 use self::toolbar::{LocalToolbarProps, render_local_toolbar};
 use super::preview::{PreviewKey, SftpHoverTarget};
 use super::side_remote::{SftpDragItem, SftpDragPreview};
-use super::{LocalFileEntry, LocalQuickPaths, format_size, sftp_file_icon};
+use super::{LocalFileEntry, LocalQuickPaths, VfsRowRenderOptions, render_vfs_row_content};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
+use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
 use transom_core::TabId;
 
@@ -227,28 +226,14 @@ impl AppShell {
                                         cx.notify();
                                     }),
                                 )
-                                .child(if is_parent_entry {
-                                    Icon::new(IconName::Folder)
-                                        .small()
-                                        .text_color(p.muted_foreground)
-                                        .into_any_element()
-                                } else {
-                                    sftp_file_icon(is_dir, &p)
-                                })
-                                .child(div().flex_1().text_sm().overflow_hidden().child(
-                                    if is_parent_entry {
-                                        ".. (返回上一级)".to_string()
-                                    } else {
-                                        entry.name.clone()
-                                    },
-                                ))
-                                .child(div().text_xs().text_color(p.muted_foreground).child(
-                                    if is_dir {
-                                        String::new()
-                                    } else {
-                                        format_size(entry.size)
-                                    },
-                                ));
+                                .child(render_vfs_row_content(VfsRowRenderOptions {
+                                    name: &entry.name,
+                                    is_dir,
+                                    is_parent: is_parent_entry,
+                                    size: entry.size,
+                                    permissions: None,
+                                    palette: &p,
+                                }));
 
                             let row = if is_parent_entry {
                                 row

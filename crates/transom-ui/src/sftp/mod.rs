@@ -37,6 +37,8 @@ mod state;
 mod status;
 mod sync_actions;
 mod sync_modal;
+mod vfs_entry_view;
+mod vfs_provider;
 
 pub(crate) use self::editor_close::PendingEditorClose;
 pub(crate) use self::editor_drag_tracker::EditorDragTracker;
@@ -52,6 +54,8 @@ pub(crate) use self::state::{
     LocalFileEntry, SftpChmodModalState, SftpFilterModalState, SftpInputModalState,
     SftpInputTarget, SftpPanelState, SftpSyncModalState,
 };
+pub(crate) use self::vfs_entry_view::{VfsRowRenderOptions, render_vfs_row_content};
+pub(crate) use self::vfs_provider::LocalVfsProvider;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;
@@ -66,32 +70,16 @@ pub(crate) fn local_home() -> PathBuf {
 }
 
 pub(crate) fn list_local_dir(dir: &Path) -> Result<Vec<LocalFileEntry>, String> {
-    let read_dir = std::fs::read_dir(dir).map_err(|error| error.to_string())?;
-    let mut entries = Vec::new();
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
-        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
-        let size = if is_dir {
-            0
-        } else {
-            entry.metadata().map(|m| m.len()).unwrap_or(0)
-        };
-        entries.push(LocalFileEntry {
-            name,
-            path,
-            is_dir,
-            size,
-        });
-    }
-    entries.sort_by(|a, b| {
-        b.is_dir.cmp(&a.is_dir).then_with(|| {
-            a.name
-                .to_ascii_lowercase()
-                .cmp(&b.name.to_ascii_lowercase())
+    let entries = LocalVfsProvider::list_sync(dir).map_err(|e| e.to_string())?;
+    Ok(entries
+        .into_iter()
+        .map(|entry| LocalFileEntry {
+            name: entry.name,
+            path: PathBuf::from(entry.path),
+            is_dir: entry.is_dir,
+            size: entry.size,
         })
-    });
-    Ok(entries)
+        .collect())
 }
 
 pub(crate) fn join_remote(dir: &str, name: &str) -> String {

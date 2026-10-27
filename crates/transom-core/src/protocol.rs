@@ -14,4 +14,5 @@ pub mod ssh_url;
 pub mod sync;
 pub mod system_stats;
 pub mod traffic;
+pub mod vfs;
 pub mod zmodem;
