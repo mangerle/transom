@@ -46,7 +46,7 @@ impl TerminalView {
         // 应用级快捷键已在 key_filter 之前被保留，不会在这里被吃掉。
         if let Some(bytes) = self.custom_key_sequence(&event.keystroke) {
             if self.write_input(&bytes) {
-                self.engine.lock().scroll_to_bottom();
+                self.state.engine.lock().scroll_to_bottom();
                 self.input_line.clear();
                 self.clear_suggestions();
                 cx.notify();
@@ -86,11 +86,11 @@ impl TerminalView {
             return;
         }
 
-        let mode = self.engine.lock().mode();
+        let mode = self.state.engine.lock().mode();
         if let Some(bytes) = keystroke_to_bytes(&event.keystroke, mode)
             && self.write_input(&bytes)
         {
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             // 回车结算一行、退格删一格，其余控制键（方向键、Ctrl-R、Esc 序列）
             // 都可能让 shell 自己改这一行，本地跟踪只能作废。
             match key.as_str() {
@@ -118,7 +118,7 @@ impl TerminalView {
         cx: &mut Context<Self>,
     ) {
         if self.write_input(b"\t") {
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             cx.notify();
         }
     }
@@ -130,7 +130,7 @@ impl TerminalView {
         cx: &mut Context<Self>,
     ) {
         if self.write_input(b"\x1b[Z") {
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             cx.notify();
         }
     }
@@ -150,7 +150,7 @@ impl TerminalView {
             self.toggle_block(block_id, cx);
             return;
         }
-        let mode = self.engine.lock().mode();
+        let mode = self.state.engine.lock().mode();
 
         match event.button {
             MouseButton::Right => {
@@ -187,7 +187,10 @@ impl TerminalView {
                             _ => SelectionType::Simple,
                         }
                     };
-                    self.engine.lock().start_selection(ty, point, Side::Left);
+                    self.state
+                        .engine
+                        .lock()
+                        .start_selection(ty, point, Side::Left);
                     self.dragging_selection = true;
                     cx.notify();
                 }
@@ -208,7 +211,7 @@ impl TerminalView {
         let Some(point) = self.hit_test_grid_point(position) else {
             return false;
         };
-        let Some(uri) = self.engine.lock().hyperlink_at(point) else {
+        let Some(uri) = self.state.engine.lock().hyperlink_at(point) else {
             return false;
         };
         const ALLOWED_PREFIXES: [&str; 4] = ["http://", "https://", "mailto:", "ftp://"];
@@ -236,7 +239,7 @@ impl TerminalView {
         if event.button != MouseButton::Left {
             return;
         }
-        let mode = self.engine.lock().mode();
+        let mode = self.state.engine.lock().mode();
         if self.mouse_pressed {
             self.send_mouse_event(mode, MouseButtonCode::Left, false, false, event.position);
             self.mouse_pressed = false;
@@ -244,7 +247,10 @@ impl TerminalView {
         }
         if self.dragging_selection {
             if let Some(point) = self.hit_test_grid_point(event.position) {
-                self.engine.lock().update_selection(point, Side::Right);
+                self.state
+                    .engine
+                    .lock()
+                    .update_selection(point, Side::Right);
             }
             self.dragging_selection = false;
             if self.interaction.copy_on_select {
@@ -260,7 +266,7 @@ impl TerminalView {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mode = self.engine.lock().mode();
+        let mode = self.state.engine.lock().mode();
         if self.mouse_pressed && mode.intersects(TermMode::MOUSE_MODE) {
             let wants_motion = mode.contains(TermMode::MOUSE_MOTION)
                 || (mode.contains(TermMode::MOUSE_DRAG) && event.dragging());
@@ -273,7 +279,10 @@ impl TerminalView {
             // 指针在视口外（上方历史区）时 hit_test 落空，选区更新交给
             // 边缘自动滚动后的重映射完成
             if let Some(point) = self.hit_test_grid_point(event.position) {
-                self.engine.lock().update_selection(point, Side::Right);
+                self.state
+                    .engine
+                    .lock()
+                    .update_selection(point, Side::Right);
             }
             self.edge_scroll_during_drag(event.position, cx);
             cx.notify();
@@ -293,7 +302,7 @@ impl TerminalView {
         position: Point<Pixels>,
         cx: &mut Context<Self>,
     ) {
-        let metrics = *self.metrics.lock();
+        let metrics = *self.state.metrics.lock();
         let cell_height = f32::from(metrics.cell_height);
         if cell_height <= 0.0 {
             return;
@@ -309,9 +318,15 @@ impl TerminalView {
         } else {
             return;
         };
-        self.engine.lock().scroll_display(Scroll::Delta(delta));
+        self.state
+            .engine
+            .lock()
+            .scroll_display(Scroll::Delta(delta));
         if let Some(point) = self.hit_test_grid_point(position) {
-            self.engine.lock().update_selection(point, Side::Right);
+            self.state
+                .engine
+                .lock()
+                .update_selection(point, Side::Right);
         }
         cx.notify();
     }
@@ -325,7 +340,7 @@ impl TerminalView {
         let lines = match event.delta {
             ScrollDelta::Lines(delta) => delta.y.round() as i32,
             ScrollDelta::Pixels(delta) => {
-                let metrics = *self.metrics.lock();
+                let metrics = *self.state.metrics.lock();
                 let height = f32::from(metrics.cell_height);
                 if height <= 0.0 {
                     0
@@ -341,7 +356,7 @@ impl TerminalView {
             return;
         }
 
-        let mode = self.engine.lock().mode();
+        let mode = self.state.engine.lock().mode();
         if mode.intersects(TermMode::MOUSE_MODE) && !event.modifiers.shift {
             let button = if lines > 0 {
                 MouseButtonCode::WheelUp
@@ -359,7 +374,10 @@ impl TerminalView {
                 self.write_input(sequence);
             }
         } else {
-            self.engine.lock().scroll_display(Scroll::Delta(lines));
+            self.state
+                .engine
+                .lock()
+                .scroll_display(Scroll::Delta(lines));
             cx.notify();
         }
     }

@@ -55,7 +55,7 @@ impl EntityInputHandler for TerminalView {
         self.ime_text.clear();
         if !text.is_empty() {
             self.write_input(text.as_bytes());
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             // 可打印输入（含 IME 上屏）累积进本地输入行，随后刷新历史建议。
             self.input_line.push_str(text);
             self.note_input_changed(false, cx);
@@ -87,11 +87,11 @@ impl EntityInputHandler for TerminalView {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        let metrics = *self.metrics.lock();
+        let metrics = *self.state.metrics.lock();
         if metrics.cols == 0 || metrics.rows == 0 {
             return None;
         }
-        let engine = self.engine.lock();
+        let engine = self.state.engine.lock();
         let cursor = engine.cursor_point();
         let offset = engine.display_offset() as i32;
         let row = cursor.line.0 + offset;
@@ -123,11 +123,11 @@ impl EntityInputHandler for TerminalView {
         if utf16_len == 0 {
             return Some(0);
         }
-        let metrics = *self.metrics.lock();
+        let metrics = *self.state.metrics.lock();
         if metrics.cell_width <= px(0.0) || metrics.cell_height <= px(0.0) {
             return Some(0);
         }
-        let engine = self.engine.lock();
+        let engine = self.state.engine.lock();
         let cursor = engine.cursor_point();
         let row = cursor.line.0 + engine.display_offset() as i32;
         let row_y = f32::from(metrics.origin.y + metrics.cell_height * row.max(0) as f32);

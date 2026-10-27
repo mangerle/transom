@@ -11,10 +11,9 @@ pub(crate) use input::build_custom_keys;
 pub use types::KeyFilter;
 pub(crate) use types::{
     CONTEXT, LayoutMetrics, PreparedTerminal, READ_BUFFER_BYTES, READ_CHANNEL_CAPACITY,
-    SEARCH_TICK_PIXELS,
+    SEARCH_TICK_PIXELS, TerminalRenderState,
 };
 
-use crate::block::BlockLayout;
 use crate::engine::TerminalEngine;
 use crate::event::{HistoryProvider, TerminalEvent};
 use crate::input::{focus_bytes, paste_bytes};
@@ -29,10 +28,9 @@ use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
-use parking_lot::Mutex;
 use std::ops::Range;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use transom_core::{
     BlockViewSettings, TerminalControlHandle, TerminalInteraction, TerminalIo, TerminalProfile,
     TerminalSize,
@@ -41,14 +39,8 @@ use transom_core::{
 actions!(transom_terminal, [SendTab, SendBacktab]);
 
 pub struct TerminalView {
-    pub(crate) engine: Arc<Mutex<TerminalEngine>>,
-    pub(crate) metrics: Arc<Mutex<LayoutMetrics>>,
-    /// 长生命周期渲染器：字体度量、调色板预计算表与编译后的高亮规则都缓存于此。
-    renderer: Arc<parking_lot::RwLock<TerminalRenderer>>,
-    /// 外观变更脏标记：置位后由下一帧 prepaint 持窗口文本系统重建渲染器。
-    renderer_dirty: Arc<AtomicBool>,
-    /// 每行绘制产物缓存：脏行重建、帧间复用，见 `renderer::RowVisual`。
-    row_cache: Arc<Mutex<Vec<crate::renderer::RowVisual>>>,
+    /// 终端渲染与引擎核心状态聚合容器。
+    pub(crate) state: Arc<TerminalRenderState>,
     profile: TerminalProfile,
     interaction: TerminalInteraction,
     focus_handle: FocusHandle,
@@ -85,8 +77,6 @@ pub struct TerminalView {
     pub(crate) _search_subscription: Option<Subscription>,
     /// 语义块视图配置；`None` 或 `enabled == false` 时走经典连续流。
     block_view: Option<BlockViewSettings>,
-    /// 最近一帧的折叠行映射，鼠标命中与悬浮胶囊按它定位。
-    block_layout: Arc<Mutex<Option<Arc<BlockLayout>>>>,
     /// 当前悬浮的命令块与所在可见行；`None` 表示不在块上。
     hover_block: Option<(u64, usize)>,
     /// 已解析的自定义按键映射；键盘热路径只做遍历匹配。
@@ -95,7 +85,6 @@ pub struct TerminalView {
     _blink_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
     recorder: RecorderHandle,
-    trigger_engine: Arc<Mutex<crate::trigger::TriggerEngine>>,
 }
 
 impl TerminalView {
@@ -115,33 +104,22 @@ impl TerminalView {
 
         let focus_handle = cx.focus_handle().tab_stop(false);
         let (event_tx, event_rx) = flume::bounded(256);
-        let engine = Arc::new(Mutex::new(TerminalEngine::new(
-            TerminalSize::new(80, 24),
-            &profile,
-            event_tx.clone(),
-        )));
-        let metrics = Arc::new(Mutex::new(LayoutMetrics::default()));
+        let renderer = TerminalRenderer::new(&profile, window, cx);
+        let engine = TerminalEngine::new(TerminalSize::new(80, 24), &profile, event_tx.clone());
+        let state = Arc::new(TerminalRenderState::new(engine, renderer));
         let custom_keys = build_custom_keys(&profile.key_bindings);
 
         let recorder = RecorderHandle::new();
-        let trigger_engine = Arc::new(Mutex::new(crate::trigger::TriggerEngine::default()));
         let TerminalIo {
             reader,
             writer,
             control,
         } = io;
-        let (input_tx, reader_task) = Self::spawn_io_tasks(
-            reader,
-            writer,
-            audit_path,
-            &recorder,
-            &event_tx,
-            &trigger_engine,
-            cx,
-        );
+        let (input_tx, reader_task) =
+            Self::spawn_io_tasks(reader, writer, audit_path, &recorder, &event_tx, &state, cx);
 
         let on_focus = cx.on_focus(&focus_handle, window, |view, _, cx| {
-            let mode = view.engine.lock().mode();
+            let mode = view.state.engine.lock().mode();
             if let Some(bytes) = focus_bytes(mode, true) {
                 view.write_input(&bytes);
             }
@@ -149,7 +127,7 @@ impl TerminalView {
             cx.notify();
         });
         let on_blur = cx.on_blur(&focus_handle, window, |view, _, cx| {
-            let mode = view.engine.lock().mode();
+            let mode = view.state.engine.lock().mode();
             if let Some(bytes) = focus_bytes(mode, false) {
                 view.write_input(&bytes);
             }
@@ -172,21 +150,8 @@ impl TerminalView {
             }
         });
 
-        // 渲染器为长生命周期缓存：字体度量、预计算调色板与编译后的高亮规则
-        // 只依赖 profile，不随帧内容变化。外观变更经脏标记在下一帧 prepaint
-        // （持有窗口文本系统）重建，避免把文本整形探测与规则编译放进每帧热路径。
-        let renderer = Arc::new(parking_lot::RwLock::new(TerminalRenderer::new(
-            &profile, window, cx,
-        )));
-        let renderer_dirty = Arc::new(AtomicBool::new(false));
-        let row_cache = Arc::new(Mutex::new(Vec::new()));
-
         Self {
-            engine,
-            metrics,
-            renderer,
-            renderer_dirty,
-            row_cache,
+            state,
             profile,
             interaction,
             focus_handle,
@@ -211,25 +176,23 @@ impl TerminalView {
             search_regex_mode: false,
             _search_subscription: None,
             block_view: None,
-            block_layout: Arc::new(Mutex::new(None)),
             hover_block: None,
             custom_keys,
             _reader_task: reader_task,
             _blink_task: blink_task,
             _focus_subscriptions: vec![on_focus, on_blur],
             recorder,
-            trigger_engine,
         }
     }
 
     /// 从设置重载当前终端的触发器规则。
     pub fn reload_triggers(&mut self, settings: &transom_core::TriggerSettings) {
-        self.trigger_engine.lock().reload(settings);
+        self.state.trigger_engine.lock().reload(settings);
     }
 
     fn tick_cursor_blink(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let blinking = self.focus_handle.is_focused(window) && self.profile.cursor_blink && {
-            let engine = self.engine.lock();
+            let engine = self.state.engine.lock();
             let style = engine.term().cursor_style();
             style.blinking
                 && style.shape != CursorShape::Hidden
@@ -273,7 +236,7 @@ impl TerminalView {
         }
         // 背景透明度参与渲染：折算成背景色的 alpha，透出下层应用背景。
         self.profile.background_transparency = profile.background_transparency;
-        self.renderer_dirty.store(true, Ordering::Release);
+        self.state.renderer_dirty.store(true, Ordering::Release);
         cx.notify();
     }
 
@@ -320,7 +283,7 @@ impl TerminalView {
         path: std::path::PathBuf,
         title: Option<String>,
     ) -> std::io::Result<()> {
-        let term = self.engine.lock();
+        let term = self.state.engine.lock();
         let cols = term.term().grid().columns();
         let rows = term.term().grid().screen_lines();
         drop(term);
@@ -339,7 +302,7 @@ impl TerminalView {
     pub fn send_text(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
         let sent = self.write_input(text.as_bytes());
         if sent {
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             cx.notify();
         }
         sent
@@ -351,14 +314,14 @@ impl TerminalView {
     /// 粘贴，而不是每读到一行就提前执行；对端未开启括号粘贴时退回原始字节。
     /// 与键盘输入复用同一条有界队列，返回 `false` 表示终端写入线程已退出。
     pub fn send_paste(&mut self, text: &str, execute: bool, cx: &mut Context<Self>) -> bool {
-        let mode = self.engine.lock().mode();
+        let mode = self.state.engine.lock().mode();
         let mut bytes = paste_bytes(mode, text);
         if execute {
             bytes.push(b'\r');
         }
         let sent = self.write_input(&bytes);
         if sent {
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             cx.notify();
         }
         sent
@@ -372,7 +335,7 @@ impl TerminalView {
     }
 
     fn copy_selection(&mut self, cx: &mut Context<Self>) -> bool {
-        let text = self.engine.lock().selection_text();
+        let text = self.state.engine.lock().selection_text();
         if let Some(text) = text.filter(|text| !text.is_empty()) {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             cx.emit(TerminalEvent::ClipboardStored);
@@ -386,10 +349,10 @@ impl TerminalView {
         let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
             return false;
         };
-        let mode = self.engine.lock().mode();
+        let mode = self.state.engine.lock().mode();
         let bytes = paste_bytes(mode, &text);
         if self.write_input(&bytes) {
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             cx.notify();
             true
         } else {
@@ -398,7 +361,7 @@ impl TerminalView {
     }
 
     fn hit_test_screen_cell(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
-        let metrics = *self.metrics.lock();
+        let metrics = *self.state.metrics.lock();
         if metrics.cols == 0
             || metrics.rows == 0
             || metrics.cell_width <= px(0.0)
@@ -423,12 +386,12 @@ impl TerminalView {
         let (row, col) = self.hit_test_screen_cell(position)?;
         // 折叠模式下可见行与网格行不再一一对应：命中必须查行映射，
         // 否则选择会落到被隐藏的输出区或错位的行上。
-        if let Some(layout) = self.block_layout.lock().clone() {
+        if let Some(layout) = self.state.block_layout.lock().clone() {
             return layout
                 .line_at(row)
                 .map(|line| AlacPoint::new(line, Column(col)));
         }
-        let offset = self.engine.lock().display_offset() as i32;
+        let offset = self.state.engine.lock().display_offset() as i32;
         Some(AlacPoint::new(Line(row as i32 - offset), Column(col)))
     }
 }

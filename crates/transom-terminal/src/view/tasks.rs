@@ -22,7 +22,7 @@ impl TerminalView {
         audit_path: Option<std::path::PathBuf>,
         recorder: &RecorderHandle,
         event_tx: &flume::Sender<Event>,
-        trigger_engine: &Arc<parking_lot::Mutex<crate::trigger::TriggerEngine>>,
+        state: &Arc<super::TerminalRenderState>,
         cx: &mut Context<Self>,
     ) -> (flume::Sender<Vec<u8>>, Task<()>) {
         let recorder_for_reader = recorder.clone();
@@ -82,12 +82,12 @@ impl TerminalView {
             let _ = exit_tx.try_send(Event::Exit);
         }
 
-        let trigger_engine_for_reader = trigger_engine.clone();
+        let state_for_reader = state.clone();
         let reader_task = cx.spawn(async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
             while let Ok(bytes) = bytes_rx.recv_async().await {
-                let matches = trigger_engine_for_reader.lock().process_bytes(&bytes);
+                let matches = state_for_reader.trigger_engine.lock().process_bytes(&bytes);
                 let updated = this.update(cx, |view, cx| {
-                    view.engine.lock().process(&bytes);
+                    view.state.engine.lock().process(&bytes);
                     for m in matches {
                         match &m.action {
                             transom_core::TriggerAction::AutoResponse(reply) => {
@@ -148,8 +148,8 @@ impl TerminalView {
                     self.write_input(bytes.as_bytes());
                 }
                 Event::TextAreaSizeRequest(formatter) => {
-                    let metrics = *self.metrics.lock();
-                    let size = self.engine.lock().size();
+                    let metrics = *self.state.metrics.lock();
+                    let size = self.state.engine.lock().size();
                     let window_size = WindowSize {
                         num_lines: size.rows,
                         num_cols: size.cols,
@@ -170,7 +170,7 @@ impl TerminalView {
 
     /// 把旁路扫到的 OSC 序列翻成对外的终端事件。
     pub(super) fn process_osc_events(&mut self, cx: &mut Context<Self>) {
-        let events = self.engine.lock().take_osc_events();
+        let events = self.state.engine.lock().take_osc_events();
         if events.is_empty() {
             return;
         }
@@ -197,7 +197,7 @@ impl TerminalView {
 
     pub(super) fn ansi_rgb(&self, index: usize) -> AnsiRgb {
         let palette = &self.profile.palette;
-        let engine = self.engine.lock();
+        let engine = self.state.engine.lock();
         let colors = engine.term().colors();
         if index < 256
             && let Some(rgb) = colors[index]

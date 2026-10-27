@@ -41,3 +41,36 @@ pub(crate) struct PreparedTerminal {
     /// 本帧要绘制的 Kitty 图像放置。
     pub(crate) graphics: Vec<GraphicsPlacement>,
 }
+
+/// 终端视图共享的内部渲染与引擎状态容器。
+///
+/// 将原本散落在 `TerminalView` 各处的多个独立 `Arc<Mutex<...>>`、`Arc<RwLock<...>>`、
+/// `Arc<AtomicBool>` 内聚收敛至单一复合状态对象中。
+/// 既消除了绘制准备与提交阶段在闭包中一次性 clone 10+ 散乱智能指针的“闭包克隆风暴”，
+/// 又统一了终端引擎与渲染管线之间的数据归属与状态生命周期。
+pub(crate) struct TerminalRenderState {
+    pub(crate) engine: parking_lot::Mutex<crate::engine::TerminalEngine>,
+    pub(crate) metrics: parking_lot::Mutex<LayoutMetrics>,
+    pub(crate) renderer: parking_lot::RwLock<crate::renderer::TerminalRenderer>,
+    pub(crate) renderer_dirty: std::sync::atomic::AtomicBool,
+    pub(crate) row_cache: parking_lot::Mutex<Vec<crate::renderer::RowVisual>>,
+    pub(crate) block_layout: parking_lot::Mutex<Option<Arc<BlockLayout>>>,
+    pub(crate) trigger_engine: parking_lot::Mutex<crate::trigger::TriggerEngine>,
+}
+
+impl TerminalRenderState {
+    pub(crate) fn new(
+        engine: crate::engine::TerminalEngine,
+        renderer: crate::renderer::TerminalRenderer,
+    ) -> Self {
+        Self {
+            engine: parking_lot::Mutex::new(engine),
+            metrics: parking_lot::Mutex::new(LayoutMetrics::default()),
+            renderer: parking_lot::RwLock::new(renderer),
+            renderer_dirty: std::sync::atomic::AtomicBool::new(false),
+            row_cache: parking_lot::Mutex::new(Vec::new()),
+            block_layout: parking_lot::Mutex::new(None),
+            trigger_engine: parking_lot::Mutex::new(crate::trigger::TriggerEngine::default()),
+        }
+    }
+}

@@ -49,7 +49,7 @@ impl TerminalView {
         self.clear_suggestions();
         if !suffix.is_empty() {
             self.write_input(suffix.as_bytes());
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
         }
         cx.notify();
         true
@@ -103,7 +103,7 @@ impl TerminalView {
         // 像素换算统一在 f32 域里做完再一次性转 Pixels：Pixels 的加减与标量乘
         // 混写会让表达式到处是 `px(...)`/`.into()`，读起来找不到几何意图。
         let (origin_x, origin_y, cell_width, cell_height, rows) = {
-            let metrics = self.metrics.lock();
+            let metrics = self.state.metrics.lock();
             (
                 f32::from(metrics.origin.x),
                 f32::from(metrics.origin.y),
@@ -112,7 +112,7 @@ impl TerminalView {
                 metrics.rows,
             )
         };
-        let cursor = self.engine.lock().cursor_point();
+        let cursor = self.state.engine.lock().cursor_point();
         // 贴在光标所在行的下一行；已到最后一行时翻到上方，避免浮层跑出窗格。
         let below = (cursor.line.0 as usize) + 1 < rows;
         let top = if below {

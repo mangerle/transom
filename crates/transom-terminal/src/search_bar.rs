@@ -34,6 +34,7 @@ impl TerminalView {
     /// 打开检索栏；已有选区时预填成查询词，对齐"选中什么就找什么"的习惯。
     fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let prefill = self
+            .state
             .engine
             .lock()
             .selection_text()
@@ -66,7 +67,7 @@ impl TerminalView {
 
     fn close_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search_open = false;
-        self.engine.lock().clear_search();
+        self.state.engine.lock().clear_search();
         let focus = self.focus_handle().clone();
         window.focus(&focus, cx);
         cx.notify();
@@ -81,7 +82,8 @@ impl TerminalView {
             return;
         };
         let query = input.read(cx).value();
-        self.engine
+        self.state
+            .engine
             .lock()
             .set_search_query(query.as_ref(), self.search_regex_mode);
     }
@@ -96,7 +98,7 @@ impl TerminalView {
             return;
         }
         // Shift+Enter 反向查找，与多数编辑器查找栏的口径一致。
-        self.engine.lock().search_select(!action.shift);
+        self.state.engine.lock().search_select(!action.shift);
         cx.notify();
     }
 
@@ -123,7 +125,7 @@ impl TerminalView {
         if !self.search_open {
             return false;
         }
-        let Some(strip) = self.metrics.lock().search_strip else {
+        let Some(strip) = self.state.metrics.lock().search_strip else {
             return false;
         };
         if !strip.contains(&position) || f32::from(strip.size.height) <= 0.0 {
@@ -131,7 +133,7 @@ impl TerminalView {
         }
         let fraction =
             (f32::from(position.y) - f32::from(strip.origin.y)) / f32::from(strip.size.height);
-        self.engine.lock().search_select_by_fraction(fraction);
+        self.state.engine.lock().search_select_by_fraction(fraction);
         // 跳转后把焦点还给输入框，否则下一次回车会落回终端而不是继续查找。
         if let Some(input) = self.search_input.as_ref() {
             input.update(cx, |state, cx| state.focus(window, cx));
@@ -142,7 +144,7 @@ impl TerminalView {
 
     /// 按钮路径的上一个/下一个命中。
     fn search_step(&mut self, forward: bool, cx: &mut Context<Self>) {
-        self.engine.lock().search_select(forward);
+        self.state.engine.lock().search_select(forward);
         cx.notify();
     }
 
@@ -159,7 +161,7 @@ impl TerminalView {
             return None;
         }
         let input = self.search_input.clone()?;
-        let status = self.engine.lock().search_status();
+        let status = self.state.engine.lock().search_status();
         let label = search_status_text(&status);
         let theme = cx.theme();
         let muted = theme.muted_foreground;

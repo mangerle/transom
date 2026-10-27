@@ -15,14 +15,15 @@ impl TerminalView {
     /// 也不影响已建立的选择与历史缓冲。
     pub fn set_block_view(&mut self, settings: Option<BlockViewSettings>, cx: &mut Context<Self>) {
         if let Some(settings) = settings {
-            self.engine
+            self.state
+                .engine
                 .lock()
                 .set_block_auto_collapse(settings.auto_collapse_rows);
         }
         self.block_view = settings;
         if !self.block_view.is_some_and(|settings| settings.enabled) {
             self.hover_block = None;
-            *self.block_layout.lock() = None;
+            *self.state.block_layout.lock() = None;
         }
         cx.notify();
     }
@@ -42,13 +43,13 @@ impl TerminalView {
 
     /// 切换指定命令块的折叠状态（横幅点击与悬浮胶囊共用）。
     pub fn toggle_block(&mut self, id: u64, cx: &mut Context<Self>) {
-        if self.engine.lock().toggle_block(id) {
+        if self.state.engine.lock().toggle_block(id) {
             cx.notify();
         }
     }
 
     pub(super) fn copy_block_output(&mut self, id: u64, cx: &mut Context<Self>) {
-        let text = self.engine.lock().block_output_text(id);
+        let text = self.state.engine.lock().block_output_text(id);
         if let Some(text) = text.filter(|text| !text.is_empty()) {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             cx.emit(crate::event::TerminalEvent::ClipboardStored);
@@ -56,7 +57,7 @@ impl TerminalView {
     }
 
     pub(super) fn copy_block_markdown(&mut self, id: u64, cx: &mut Context<Self>) {
-        let text = self.engine.lock().block_markdown(id);
+        let text = self.state.engine.lock().block_markdown(id);
         if let Some(text) = text {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             cx.emit(crate::event::TerminalEvent::ClipboardStored);
@@ -65,7 +66,7 @@ impl TerminalView {
 
     /// 重新执行命令块：把命令写进当前窗格并回车。
     pub(super) fn rerun_block(&mut self, id: u64, cx: &mut Context<Self>) {
-        let Some(command) = self.engine.lock().block_command_text(id) else {
+        let Some(command) = self.state.engine.lock().block_command_text(id) else {
             return;
         };
         if command.trim().is_empty() {
@@ -74,7 +75,7 @@ impl TerminalView {
         let mut bytes = command.into_bytes();
         bytes.push(b'\r');
         if self.write_input(&bytes) {
-            self.engine.lock().scroll_to_bottom();
+            self.state.engine.lock().scroll_to_bottom();
             self.input_line.clear();
             self.clear_suggestions();
             cx.notify();
@@ -84,7 +85,7 @@ impl TerminalView {
     /// 命中折叠横幅时返回块 ID。
     pub(super) fn banner_at_position(&self, position: Point<Pixels>) -> Option<u64> {
         let (row, _) = self.hit_test_screen_cell(position)?;
-        self.block_layout.lock().as_ref()?.banner_at(row)
+        self.state.block_layout.lock().as_ref()?.banner_at(row)
     }
 
     /// 依据指针位置更新悬浮命令块；只在跨越块边界时请求重绘。
@@ -98,12 +99,12 @@ impl TerminalView {
 
     pub(super) fn hover_block_at_position(&self, position: Point<Pixels>) -> Option<(u64, usize)> {
         let (row, _) = self.hit_test_screen_cell(position)?;
-        let layout = self.block_layout.lock().clone()?;
+        let layout = self.state.block_layout.lock().clone()?;
         if let Some(id) = layout.banner_at(row) {
             return Some((id, row));
         }
         let line = layout.line_at(row)?;
-        let engine = self.engine.lock();
+        let engine = self.state.engine.lock();
         let absolute = engine.grid().history_size() as i64 + i64::from(line.0);
         engine
             .command_block_at(absolute)
@@ -113,13 +114,14 @@ impl TerminalView {
     /// 悬浮操作胶囊：复制输出、复制 Markdown、重跑与折叠切换。
     pub(super) fn render_block_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (block_id, row) = self.hover_block?;
-        let metrics = *self.metrics.lock();
+        let metrics = *self.state.metrics.lock();
         let bounds = metrics.bounds?;
         if metrics.cell_height <= px(0.0) {
             return None;
         }
         let top = metrics.origin.y - bounds.origin.y + metrics.cell_height * row as f32;
         let collapsed = self
+            .state
             .engine
             .lock()
             .command_block(block_id)

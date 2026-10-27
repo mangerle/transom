@@ -10,13 +10,8 @@ use transom_core::TerminalSize;
 impl TerminalView {
     /// 构造终端画布元素（包含 prepaint 计算网格与 paint 实际提交）。
     pub(super) fn render_canvas(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let engine_prepaint = self.engine.clone();
-        let engine_paint = self.engine.clone();
-        let metrics_prepaint = self.metrics.clone();
-        let renderer_prepaint = self.renderer.clone();
-        let renderer_paint = self.renderer.clone();
-        let row_cache_paint = self.row_cache.clone();
-        let renderer_dirty = self.renderer_dirty.clone();
+        let state_prepaint = self.state.clone();
+        let state_paint = self.state.clone();
         let control = self.control.clone();
         let profile = self.profile.clone();
         let focus_handle = self.focus_handle.clone();
@@ -29,21 +24,20 @@ impl TerminalView {
         let block_style = block_view
             .map(|settings| settings.style)
             .unwrap_or_default();
-        let block_layout_shared = self.block_layout.clone();
 
         canvas(
             move |bounds, window, cx| {
                 // 外观变更（脏标记）在此重建：只有 prepaint 阶段持有
                 // 窗口文本系统，度量（"M"/"中" 整形探测）必须在这里做。
                 let mut renderer_rebuilt = false;
-                if renderer_dirty.swap(false, Ordering::AcqRel) {
-                    *renderer_prepaint.write() = TerminalRenderer::new(&profile, window, cx);
+                if state_prepaint.renderer_dirty.swap(false, Ordering::AcqRel) {
+                    *state_prepaint.renderer.write() = TerminalRenderer::new(&profile, window, cx);
                     renderer_rebuilt = true;
                 }
-                let renderer = renderer_prepaint.read();
+                let renderer = state_prepaint.renderer.read();
                 let (cols, rows) = renderer.grid_size(bounds);
                 let size = TerminalSize::new(cols, rows);
-                let mut engine = engine_prepaint.lock();
+                let mut engine = state_prepaint.engine.lock();
                 let mut resized = false;
                 if engine.size() != size {
                     engine.resize(size);
@@ -98,11 +92,11 @@ impl TerminalView {
                     search_strip: strip,
                     bounds: Some(bounds),
                 };
-                *metrics_prepaint.lock() = metrics;
+                *state_prepaint.metrics.lock() = metrics;
                 let layout = engine
                     .build_block_layout(block_view.as_ref())
                     .map(Arc::new);
-                *block_layout_shared.lock() = layout.clone();
+                *state_prepaint.block_layout.lock() = layout.clone();
                 let graphics = engine.graphics_placements();
                 PreparedTerminal {
                     search,
@@ -117,9 +111,9 @@ impl TerminalView {
                     ElementInputHandler::new(bounds, entity.clone()),
                     cx,
                 );
-                let engine = engine_paint.lock();
-                let renderer = renderer_paint.read();
-                let mut row_cache = row_cache_paint.lock();
+                let engine = state_paint.engine.lock();
+                let renderer = state_paint.renderer.read();
+                let mut row_cache = state_paint.row_cache.lock();
                 let ime = if ime_text.is_empty() {
                     None
                 } else {
