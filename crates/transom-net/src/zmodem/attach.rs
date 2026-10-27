@@ -25,14 +25,19 @@ use super::frames::{ZBIN32, ZDLE, ZHEX};
 use super::fsm::{Fsm, FsmChannels, ZmodemCommand, fsm_loop};
 
 /// 读过滤层单次自底层读取的块大小。
-const READ_CHUNK: usize = 8192;
+///
+/// 与终端视图的读取缓冲对齐到 64 KiB：透传路径每次上层 read 恰好消费一整
+/// 块，若这里比上层小，上层缓冲再大也只能按本层块粒度逐个搬运，读块的
+/// 收益会被本层吃掉。
+const READ_CHUNK: usize = 64 * 1024;
 /// 发起标记长度：`*` `*` ZDLE 格式字节。
 const MARK_LEN: usize = 4;
 /// 转发块的等待窗口：驱动线程短暂无响应时重查会话状态，避免读线程
 /// 因无人消费而永久卡死。
 const FORWARD_WAIT: Duration = Duration::from_secs(1);
-/// 原始字节通道容量（块粒度）：约 2 MiB 缓冲，打满时读线程阻塞形成背压。
-const RAW_CAPACITY: usize = 256;
+/// 原始字节通道容量（块粒度）：64 KiB × 32 ≈ 2 MiB 上限，与原
+/// 8 KiB × 256 同量级，块增大不抬高内存上限；打满时读线程阻塞形成背压。
+const RAW_CAPACITY: usize = 32;
 /// 回注通道容量：会话结束后的终端残余字节（通常一两块）。
 const REPLAY_CAPACITY: usize = 64;
 /// 命令通道容量：上传决策与取消，低频命令。

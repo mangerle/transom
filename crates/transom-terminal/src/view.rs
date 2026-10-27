@@ -37,6 +37,18 @@ const CONTEXT: &str = "Terminal";
 /// 检索刻度带的分桶高度（像素）：命中再多也按像素合并，避免一帧画出上千个矩形。
 const SEARCH_TICK_PIXELS: f32 = 2.0;
 
+/// 终端读取线程单次读取的字节数。
+///
+/// 每个块要经过"ZMODEM 过滤层 -> 有界通道 -> 视图处理"三段，块越小
+/// 事件次数越多；高吞吐输出（刷屏日志、`cat` 大文件）下 8 KiB 意味着
+/// 每秒上千次通道收发与内存分配。提高到 64 KiB 后事件数降到约 1/8，
+/// 同时与 ZMODEM 过滤层的 READ_CHUNK 对齐（本层更大时才能整块消费）。
+const READ_BUFFER_BYTES: usize = 64 * 1024;
+
+/// 读取块通道深度：64 KiB × 32 ≈ 2 MiB 上限，与原 8 KiB × 128 同量级，
+/// 单个窗格的内存上限不随块增大而膨胀；打满时读线程阻塞形成背压。
+const READ_CHANNEL_CAPACITY: usize = 32;
+
 actions!(transom_terminal, [SendTab, SendBacktab]);
 
 pub type KeyFilter = Arc<dyn Fn(&Keystroke) -> bool + Send + Sync>;
@@ -152,7 +164,7 @@ impl TerminalView {
 
         let recorder = RecorderHandle::new();
         let recorder_for_reader = recorder.clone();
-        let (bytes_tx, bytes_rx) = flume::bounded::<Vec<u8>>(128);
+        let (bytes_tx, bytes_rx) = flume::bounded::<Vec<u8>>(READ_CHANNEL_CAPACITY);
         let mut reader = io.reader;
         // 线程 spawn 失败属资源耗尽类可恢复异常：不 panic 整个应用，按"终端已
         // 退出"降级，用户仍能关闭标签页或重连。
@@ -162,7 +174,7 @@ impl TerminalView {
                 // 审计落盘挂在这里：本线程已经是专用 OS 线程，同步写盘不会
                 // 影响 GPUI 主循环；文件也在此刻才创建，避免打开会话的UI路径上做 IO。
                 let mut audit = audit_path.map(AuditSink::new);
-                let mut buffer = [0u8; 8192];
+                let mut buffer = [0u8; READ_BUFFER_BYTES];
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => break,
