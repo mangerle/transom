@@ -228,6 +228,9 @@ async fn run_controller(
         host_exec::MAX_CONCURRENT_ACTIONS,
     ));
     let mut host_action_tasks: JoinSet<()> = JoinSet::new();
+    // 进程面板的一次性采样/终止任务：与主机动作同样纳入 JoinSet，
+    // 停机时统一等待，避免远端 exec 还在途时进程直接退出。
+    let mut monitor_set: JoinSet<()> = JoinSet::new();
 
     loop {
         let incoming = tokio::select! {
@@ -238,6 +241,12 @@ async fn run_controller(
                 // 批次任务内部已为每条动作补齐结果，这里只记录批次级异常。
                 if let Some(Err(error)) = joined {
                     log::error!("主机动作批次任务异常退出，本批结果可能不完整: {error}");
+                }
+                continue;
+            }
+            joined = monitor_set.join_next(), if !monitor_set.is_empty() => {
+                if let Some(Err(error)) = joined {
+                    log::error!("进程面板任务异常退出: {error}");
                 }
                 continue;
             }
@@ -416,6 +425,42 @@ async fn run_controller(
                     action_permits.clone(),
                 ));
             }
+            Incoming::Command(Ok(AppCommand::SampleProcesses {
+                tab_id,
+                connection_id,
+            })) => {
+                let remote = remotes
+                    .get(&tab_id)
+                    .filter(|(current, _)| *current == connection_id)
+                    .map(|(_, remote)| remote.clone());
+                monitor_set.spawn(samplers::run_process_sample(samplers::ProcessTarget {
+                    remote,
+                    tab_id,
+                    connection_id,
+                    event_tx: event_tx.clone(),
+                }));
+            }
+            Incoming::Command(Ok(AppCommand::KillProcess {
+                tab_id,
+                connection_id,
+                pid,
+                force,
+            })) => {
+                let remote = remotes
+                    .get(&tab_id)
+                    .filter(|(current, _)| *current == connection_id)
+                    .map(|(_, remote)| remote.clone());
+                monitor_set.spawn(samplers::run_process_kill(
+                    samplers::ProcessTarget {
+                        remote,
+                        tab_id,
+                        connection_id,
+                        event_tx: event_tx.clone(),
+                    },
+                    pid,
+                    force,
+                ));
+            }
             Incoming::Command(Ok(AppCommand::ZmodemUpload { tab_id, files })) => {
                 if let Some(control) = zmodem_controls.get(&tab_id)
                     && !control.upload(files)
@@ -478,6 +523,7 @@ async fn run_controller(
                     zmodem_tasks: &mut zmodem_tasks,
                 })
                 .await;
+                monitor_set.shutdown().await;
                 break;
             }
             Incoming::Internal(Ok(Internal::Connected {

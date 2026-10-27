@@ -154,6 +154,17 @@ impl Render for AppShell {
             }
         }
 
+        if !self.immersive && self.monitor.open {
+            // 监控抽屉固定在主面板右侧，关闭时完全不占宽度。
+            resizable_group = resizable_group.child(
+                resizable_panel()
+                    .size(px(380.0))
+                    .size_range(px(320.0)..px(720.0))
+                    .fixed()
+                    .child(self.render_monitor_panel(window, cx, &p)),
+            );
+        }
+
         let mut main_row = h_flex().flex_1().overflow_hidden();
         if !self.immersive {
             // 与顶栏、状态栏、活动栏的边框一起围合主内容区，补齐右侧轮廓；

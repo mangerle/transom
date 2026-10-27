@@ -28,6 +28,7 @@ mod identity_panel;
 mod keymap;
 mod keys;
 mod modals;
+mod monitor;
 mod notify;
 mod palette;
 mod pane_tree;

@@ -609,6 +609,10 @@ impl AppShell {
                 connection_id,
                 stats,
             } => {
+                // 看板打开时先把网卡快照推入波形历史，再移动 stats。
+                if self.monitor.open && self.active_tab == Some(tab_id) {
+                    self.monitor_record_network(tab_id, &stats.interfaces);
+                }
                 let mut applied = false;
                 if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
                     && tab.connection_id == Some(connection_id)
@@ -617,9 +621,37 @@ impl AppShell {
                     applied = true;
                 }
                 // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
-                if applied && self.active_tab == Some(tab_id) && !self.immersive {
+                if applied
+                    && self.active_tab == Some(tab_id)
+                    && (!self.immersive || self.monitor.open)
+                {
                     cx.notify();
                 }
+                return;
+            }
+            AppEvent::ProcessesSampled {
+                tab_id,
+                connection_id,
+                processes,
+            } => {
+                self.monitor_sampled(tab_id, connection_id, processes, cx);
+                return;
+            }
+            AppEvent::ProcessesSampleFailed {
+                tab_id,
+                connection_id,
+                error,
+            } => {
+                self.monitor_failed(tab_id, connection_id, error, cx);
+                return;
+            }
+            AppEvent::ProcessKilled {
+                tab_id,
+                connection_id,
+                pid,
+                error,
+            } => {
+                self.monitor_killed(tab_id, connection_id, pid, error, cx);
                 return;
             }
             AppEvent::NetworkTrafficUpdated {

@@ -104,6 +104,7 @@ pub use sync::{
     CloudSyncTarget, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME, SyncEndpoint, SyncPushReport,
     SyncSettings,
 };
+pub use system_stats::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo, StatsSamplerState};
 pub use terminal::{
     FOLLOW_UI_THEME, TerminalControl, TerminalControlHandle, TerminalCursorShape,
     TerminalInteraction, TerminalIo, TerminalPalette, TerminalProfile, TerminalSize,

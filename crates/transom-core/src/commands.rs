@@ -69,6 +69,18 @@ pub enum AppCommand {
     RunHostActions {
         actions: Vec<HostAction>,
     },
+    /// 进程面板拉取一次快照；面板打开期间由界面按周期重复下发。
+    SampleProcesses {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+    },
+    /// 向远端/本地进程发送终止信号；`force` 为真时发 SIGKILL，否则 SIGTERM。
+    KillProcess {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        pid: u32,
+        force: bool,
+    },
     /// ZMODEM 上传决策：用户从文件选择对话框确认后的文件列表。
     ZmodemUpload {
         tab_id: TabId,
@@ -257,6 +269,25 @@ pub enum AppEvent {
         session_id: SessionId,
         outcome: HostOutcome,
     },
+    /// 进程快照采集完成。
+    ProcessesSampled {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        processes: Vec<crate::system_stats::ProcessInfo>,
+    },
+    /// 进程快照采集失败（远端不可达、ps 不可用或超时）。
+    ProcessesSampleFailed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        error: AppError,
+    },
+    /// 终止进程的结果；`error` 为空表示命令成功执行。
+    ProcessKilled {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        pid: u32,
+        error: Option<AppError>,
+    },
 }
 
 /// 外部进程经单实例套接字转交的唤起请求语义。
@@ -280,8 +311,18 @@ pub struct SystemStats {
     pub cpu_percent: f32,
     pub mem_used_bytes: u64,
     pub mem_total_bytes: u64,
+    /// 根目录占用；多挂载点明细见 `filesystems`，该字段保留给状态栏。
     pub disk_used_bytes: u64,
     pub disk_total_bytes: u64,
     pub uptime_secs: u64,
     pub os_name: String,
+    /// 每个逻辑核心的使用率；旧配置或首轮采样时为空。
+    #[serde(default)]
+    pub cpu_cores: Vec<crate::system_stats::CoreUsage>,
+    /// 全部真实挂载点的占用明细。
+    #[serde(default)]
+    pub filesystems: Vec<crate::system_stats::FilesystemUsage>,
+    /// 每块非回环网卡的本轮速率。
+    #[serde(default)]
+    pub interfaces: Vec<crate::system_stats::InterfaceRate>,
 }

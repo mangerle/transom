@@ -2045,6 +2045,51 @@ monitor:
   disk:
     en: Disk
     zh-CN: 磁盘
+  title:
+    en: Host Monitor
+    zh-CN: 主机监控
+  network:
+    en: Network Interfaces
+    zh-CN: 网络接口
+  processes:
+    en: Processes
+    zh-CN: 进程
+  process_count:
+    en: "%{count} shown"
+    zh-CN: "共 %{count} 个"
+  sort_cpu:
+    en: By CPU
+    zh-CN: 按 CPU
+  sort_mem:
+    en: By Memory
+    zh-CN: 按内存
+  filter_placeholder:
+    en: Filter by name, user or PID
+    zh-CN: 按名称、用户或 PID 过滤
+  user:
+    en: User
+    zh-CN: 用户
+  command:
+    en: Command
+    zh-CN: 命令
+  waiting:
+    en: Waiting for the first sample…
+    zh-CN: 等待首轮采样…
+  no_data:
+    en: No data for this session
+    zh-CN: 当前会话暂无数据
+  kill_term:
+    en: Terminate (SIGTERM)
+    zh-CN: 终止进程 (SIGTERM)
+  kill_kill:
+    en: Force kill (SIGKILL)
+    zh-CN: 强制终止 (SIGKILL)
+  copy_command:
+    en: Copy command
+    zh-CN: 复制命令
+  kill_sent:
+    en: Sent termination signal to PID %{pid}
+    zh-CN: 已向 PID %{pid} 发送终止信号
 sync:
   group:
     en: Cloud Sync

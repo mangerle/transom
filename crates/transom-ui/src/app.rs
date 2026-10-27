@@ -464,6 +464,10 @@ pub struct AppShell {
     pub(crate) quick_open_state: Entity<CommandState>,
     /// 设置弹窗的聚合状态：开关、密钥向导与全部输入框实体。
     pub(crate) settings_modal: SettingsModalState,
+    /// 主机监控看板与进程管理器状态。
+    pub(crate) monitor: crate::monitor::MonitorState,
+    /// 面板打开后负责每 3 秒拉取进程快照的常驻任务。
+    pub(crate) monitor_task: Option<Task<()>>,
     pub(crate) confirm_forward_any: Option<PendingForwardConfirm>,
     /// 已打开的远端文本编辑面板，Vec 顺序即叠放次序，末尾为最上层。
     pub(crate) editor_panels: Vec<EditorPanelState>,
@@ -834,6 +838,8 @@ impl AppShell {
             probe_expiry_tasks: HashMap::new(),
             show_quick_open: false,
             quick_open_state,
+            monitor: crate::monitor::MonitorState::new(window, cx),
+            monitor_task: None,
             settings_modal: SettingsModalState {
                 open: false,
                 proxy: proxy_form,

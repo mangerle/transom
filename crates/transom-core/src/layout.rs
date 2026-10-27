@@ -210,6 +210,8 @@ pub enum ActivityItemId {
     QuickOpen,
     Forwards,
     Sftp,
+    /// 主机监控看板与进程管理器（Agentless，经 SSH exec 采样）。
+    Monitor,
     Language,
     ImportSshConfig,
     KnownHosts,
@@ -227,11 +229,12 @@ impl ActivityItemId {
     /// `ToggleSnippets` 快捷键上，活动栏再放一个是重复入口。旧设置文件里残留的
     /// `"snippets"` 条目会经 `#[serde(other)]` 归为 `Unknown` 并被 `normalize`
     /// 剔除，因此不需要数据迁移。
-    pub const DEFAULT_ORDER: [Self; 9] = [
+    pub const DEFAULT_ORDER: [Self; 10] = [
         Self::Sessions,
         Self::QuickOpen,
         Self::Forwards,
         Self::Sftp,
+        Self::Monitor,
         Self::Language,
         Self::ImportSshConfig,
         Self::KnownHosts,
@@ -240,7 +243,7 @@ impl ActivityItemId {
     ];
 
     /// 默认顶部条目数量，也是 `split_at` 的默认值。
-    pub const DEFAULT_SPLIT_AT: usize = 4;
+    pub const DEFAULT_SPLIT_AT: usize = 5;
 
     /// 供界面元素 ID 与设置项复用的稳定键名。
     ///
@@ -252,6 +255,7 @@ impl ActivityItemId {
             Self::QuickOpen => "quick_open",
             Self::Forwards => "forwards",
             Self::Sftp => "sftp",
+            Self::Monitor => "monitor",
             Self::Language => "language",
             Self::ImportSshConfig => "import_ssh_config",
             Self::KnownHosts => "known_hosts",
@@ -498,11 +502,11 @@ mod tests {
     }
 
     #[test]
-    fn default_layout_splits_four_and_five() {
+    fn default_layout_splits_five_and_five() {
         let layout = ActivityBarLayout::default();
-        assert_eq!(top(&layout), ActivityItemId::DEFAULT_ORDER[..4].to_vec());
-        assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[4..].to_vec());
-        assert_eq!(layout.split_at(), 4);
+        assert_eq!(top(&layout), ActivityItemId::DEFAULT_ORDER[..5].to_vec());
+        assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[5..].to_vec());
+        assert_eq!(layout.split_at(), 5);
     }
 
     #[test]
@@ -540,7 +544,7 @@ mod tests {
         layout.normalize();
         assert_eq!(layout.split_at(), 4);
         assert_eq!(top(&layout).len(), 4);
-        assert_eq!(bottom(&layout).len(), 5);
+        assert_eq!(bottom(&layout).len(), 6);
     }
 
     /// 快捷命令入口已从活动栏移除：旧设置文件里残留的 `"snippets"` 必须被安全剔除，
@@ -587,23 +591,25 @@ mod tests {
                 ActivityItemId::Sessions,
                 ActivityItemId::QuickOpen,
                 ActivityItemId::Forwards,
+                ActivityItemId::Monitor,
             ]
         );
-        assert_eq!(layout.split_at(), 4);
-        assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[4..].to_vec());
+        assert_eq!(layout.split_at(), 5);
+        assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[5..].to_vec());
     }
 
     #[test]
     fn moving_top_to_bottom_start_grows_bottom() {
         let mut layout = ActivityBarLayout::default();
         assert!(layout.move_to_bottom_start(ActivityItemId::Sessions));
-        assert_eq!(layout.split_at(), 3);
+        assert_eq!(layout.split_at(), 4);
         assert_eq!(
             top(&layout),
             vec![
                 ActivityItemId::QuickOpen,
                 ActivityItemId::Forwards,
                 ActivityItemId::Sftp,
+                ActivityItemId::Monitor,
             ]
         );
         assert_eq!(bottom(&layout)[0], ActivityItemId::Sessions);
@@ -613,8 +619,8 @@ mod tests {
     fn moving_bottom_to_top_end_grows_top() {
         let mut layout = ActivityBarLayout::default();
         assert!(layout.move_to_top_end(ActivityItemId::Settings));
-        assert_eq!(layout.split_at(), 5);
-        assert_eq!(top(&layout)[4], ActivityItemId::Settings);
+        assert_eq!(layout.split_at(), 6);
+        assert_eq!(top(&layout)[5], ActivityItemId::Settings);
         assert!(!bottom(&layout).contains(&ActivityItemId::Settings));
     }
 
@@ -622,7 +628,7 @@ mod tests {
     fn dropping_on_top_anchor_moves_item_into_top() {
         let mut layout = ActivityBarLayout::default();
         assert!(layout.move_relative_to(ActivityItemId::Keys, ActivityItemId::Sessions, true));
-        assert_eq!(layout.split_at(), 5);
+        assert_eq!(layout.split_at(), 6);
         let top = top(&layout);
         assert_eq!(top[0], ActivityItemId::Sessions);
         assert_eq!(top[1], ActivityItemId::Keys);
@@ -633,8 +639,8 @@ mod tests {
     fn dropping_on_bottom_anchor_moves_item_into_bottom() {
         let mut layout = ActivityBarLayout::default();
         assert!(layout.move_relative_to(ActivityItemId::Sessions, ActivityItemId::Language, true));
-        assert_eq!(layout.split_at(), 3);
-        assert_eq!(top(&layout).len(), 3);
+        assert_eq!(layout.split_at(), 4);
+        assert_eq!(top(&layout).len(), 4);
         let bottom = bottom(&layout);
         assert_eq!(bottom[0], ActivityItemId::Language);
         assert_eq!(bottom[1], ActivityItemId::Sessions);
@@ -643,7 +649,7 @@ mod tests {
     #[test]
     fn moving_to_current_boundary_is_a_no_op() {
         let mut layout = ActivityBarLayout::default();
-        assert!(!layout.move_to_top_end(ActivityItemId::Sftp));
+        assert!(!layout.move_to_top_end(ActivityItemId::Monitor));
         assert!(!layout.move_to_bottom_start(ActivityItemId::Language));
         assert!(!layout.move_relative_to(ActivityItemId::Sftp, ActivityItemId::Sftp, true));
         assert_eq!(layout, ActivityBarLayout::default());
@@ -657,7 +663,7 @@ mod tests {
         assert!(!layout.set_visible(ActivityItemId::Sftp, false));
         assert!(layout.set_visible(ActivityItemId::Sftp, true));
         assert!(layout.move_to_top_end(ActivityItemId::Settings));
-        assert_eq!(top(&layout)[4], ActivityItemId::Settings);
+        assert_eq!(top(&layout)[5], ActivityItemId::Settings);
     }
 
     #[test]
