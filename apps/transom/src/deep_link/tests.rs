@@ -80,8 +80,7 @@ fn request_from_args_rejects_stale_or_relative_dirs() {
         "--dir=/definitely/not/here-42".to_string(),
     ]);
     assert_eq!(request.dir, None);
-    let request =
-        request_from_args(vec!["prog".to_string(), "--dir=relative/path".to_string()]);
+    let request = request_from_args(vec!["prog".to_string(), "--dir=relative/path".to_string()]);
     assert_eq!(request.dir, None);
 }
 

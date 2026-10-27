@@ -1,11 +1,9 @@
 //! 审计日志查看器交互与 AppShell 状态流转操作。
 
-use super::types::{
-    AuditViewer, MAX_AUDIT_LOG_BYTES, find_session_audit_logs, read_log_content,
-};
+use super::types::{AuditViewer, MAX_AUDIT_LOG_BYTES, find_session_audit_logs, read_log_content};
 use crate::app::AppShell;
-use gpui_kit::*;
 use gpui_kit::component::input::InputState;
+use gpui_kit::*;
 use transom_core::{Connection, Session, SessionId, TabId, paths};
 
 impl AppShell {

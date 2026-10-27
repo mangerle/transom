@@ -1,6 +1,6 @@
 //! 凭据模板模块单元测试。
 
-use super::types::{build_identity, BuiltIdentity, IdentityForm};
+use super::types::{BuiltIdentity, IdentityForm, build_identity};
 use crate::session_form::AuthChoice;
 use std::path::Path;
 use transom_core::{AuthMethod, IdentityId, SecretKind, SecretOwner};

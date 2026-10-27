@@ -8,8 +8,8 @@ use crate::telnet_iac::{
 };
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use transom_core::{
     AppError, ErrorCode, TelnetConnection, TerminalControl, TerminalControlHandle, TerminalIo,

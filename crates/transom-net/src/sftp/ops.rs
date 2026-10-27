@@ -1,9 +1,7 @@
 //! SFTP 目录列表、元数据与常规文件系统操作。
 
 use super::client::{SftpClient, list_limit_reached, sftp_error};
-use transom_core::{
-    AppError, ErrorCode, RemoteFile, RemoteMetadata, is_safe_file_name,
-};
+use transom_core::{AppError, ErrorCode, RemoteFile, RemoteMetadata, is_safe_file_name};
 
 impl SftpClient {
     pub async fn list(&self, path: &str) -> Result<(String, Vec<RemoteFile>), AppError> {
