@@ -118,6 +118,7 @@ async fn password_auth_pty_and_tofu_roundtrip() {
             prompter: Arc::new(PasswordPrompter::new("secret")),
             known_hosts: known_hosts.clone(),
             proxy: transom_core::OutboundProxy::default(),
+            allow_sha1_publickey_auth: true,
         }),
     )
     .await

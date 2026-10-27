@@ -152,6 +152,7 @@ async fn connect(port: u16, dir: &tempfile::TempDir) -> SshSession {
             prompter: Arc::new(PasswordPrompter::new("secret")),
             known_hosts,
             proxy: transom_core::OutboundProxy::default(),
+            allow_sha1_publickey_auth: true,
         }),
     )
     .await

@@ -268,6 +268,7 @@ async fn connect_through(proxy: OutboundProxy, target_port: u16) -> Result<(), S
             prompter: Arc::new(PasswordPrompter::new("secret")),
             known_hosts,
             proxy,
+            allow_sha1_publickey_auth: true,
         }),
     )
     .await

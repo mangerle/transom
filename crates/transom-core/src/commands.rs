@@ -31,6 +31,9 @@ pub enum AppCommand {
         /// 快照，控制器在控制循环里同步读盘会阻塞整个控制平面（磁盘慢、
         /// 家目录在 NFS 上时尤其明显）。
         zmodem: crate::zmodem::ZmodemSettings,
+        /// 是否允许 SHA1（`ssh-rsa`）用户公钥认证；false 时遇到只支持
+        /// SHA1 的服务器直接拒绝（同样随命令携带，避免控制平面读盘）。
+        allow_sha1_publickey_auth: bool,
     },
     Sftp {
         tab_id: TabId,

@@ -557,6 +557,18 @@ pub struct AppSettings {
     /// OSC 133 语义块视图偏好；旧配置缺省为启用卡片样式。
     #[serde(default)]
     pub block_view: BlockViewSettings,
+    /// 允许用 SHA1（`ssh-rsa`）做用户公钥认证。
+    ///
+    /// 设计原理（Why）：OpenSSH 8.8+ 默认禁用 SHA1 用户签名，但工控设备、
+    /// 交换机管理口等运维靶机常只支持 ssh-rsa；默认保持兼容（true）并仅在
+    /// 实际使用时告警留痕，安全敏感的部署可改为 false 拒绝降级签名。
+    /// 细粒度策略不进设置界面，由设置文件承载。
+    #[serde(default = "default_allow_sha1_publickey_auth")]
+    pub allow_sha1_publickey_auth: bool,
+}
+
+fn default_allow_sha1_publickey_auth() -> bool {
+    true
 }
 
 /// 语义块外观样式。
@@ -914,6 +926,7 @@ impl Default for AppSettings {
             triggers: crate::trigger::TriggerSettings::default(),
             proxy: crate::proxy::OutboundProxy::default(),
             block_view: BlockViewSettings::default(),
+            allow_sha1_publickey_auth: default_allow_sha1_publickey_auth(),
         }
     }
 }

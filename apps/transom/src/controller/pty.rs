@@ -185,6 +185,8 @@ pub(super) struct ConnectDispatch {
     pub(super) secrets: ConnectionSecrets,
     /// ZMODEM 监督层配置（随命令携带，控制器不回读设置文件）。
     pub(super) zmodem: ZmodemConfig,
+    /// 是否允许 SHA1（`ssh-rsa`）用户公钥认证（随命令携带）。
+    pub(super) allow_sha1_publickey_auth: bool,
 }
 
 /// 按连接类型派发建连：SSH 走认证握手，本地开 PTY，串口走阻塞线程池打开。
@@ -203,6 +205,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
         size,
         secrets,
         zmodem,
+        allow_sha1_publickey_auth,
     } = dispatch;
     tokio::spawn(async move {
         match &session.connection {
@@ -220,6 +223,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                     prompter,
                     known_hosts,
                     proxy,
+                    allow_sha1_publickey_auth,
                 };
                 match connect_ssh(params).await {
                     Ok(session) => {

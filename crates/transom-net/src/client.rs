@@ -401,6 +401,9 @@ pub struct SshConnectParams<'a> {
     pub known_hosts: Arc<dyn KnownHostsStore>,
     /// 会话实际生效的出站代理（已按"会话优先于全局"解析）。
     pub proxy: OutboundProxy,
+    /// 是否允许 SHA1（`ssh-rsa`）做用户公钥认证：false 时遇到只支持
+    /// SHA1 的服务器直接拒绝；true 时按兼容模式继续并告警留痕。
+    pub allow_sha1_publickey_auth: bool,
 }
 
 pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, AppError> {
@@ -412,6 +415,7 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
         prompter,
         known_hosts,
         proxy,
+        allow_sha1_publickey_auth,
     } = params;
     if connection.host.trim().is_empty() {
         return Err(AppError::with_detail(
@@ -435,6 +439,7 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
         known_hosts,
         remote_forwards: remote_forwards.clone(),
         proxy,
+        allow_sha1_publickey_auth,
     })
     .await?;
 
@@ -503,6 +508,8 @@ struct ChainParams<'a> {
     remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
     /// 会话实际生效的出站代理；只作用于最外层物理连接。
     proxy: OutboundProxy,
+    /// 是否允许 SHA1（`ssh-rsa`）用户公钥认证；跳板机同样适用。
+    allow_sha1_publickey_auth: bool,
 }
 
 /// 单跳握手与认证的输入。
@@ -513,6 +520,8 @@ struct HandshakeParams<'a> {
     known_hosts: Arc<dyn KnownHostsStore>,
     config: Arc<client::Config>,
     remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    /// 是否允许 SHA1（`ssh-rsa`）用户公钥认证。
+    allow_sha1_publickey_auth: bool,
 }
 
 /// 逐跳建链过程中的累积状态。
@@ -612,6 +621,7 @@ async fn build_chain(
                 known_hosts,
                 remote_forwards,
                 proxy,
+                allow_sha1_publickey_auth,
             },
         config,
         traffic,
@@ -649,6 +659,7 @@ async fn build_chain(
                 known_hosts: known_hosts.clone(),
                 config: config.clone(),
                 remote_forwards: Arc::new(Mutex::new(HashMap::new())),
+                allow_sha1_publickey_auth,
             },
         )
         .await
@@ -710,6 +721,7 @@ async fn build_chain(
             known_hosts,
             config,
             remote_forwards,
+            allow_sha1_publickey_auth,
         },
     )
     .await;
@@ -769,6 +781,7 @@ where
         known_hosts,
         config,
         remote_forwards,
+        allow_sha1_publickey_auth,
     } = params;
     let handler = ClientHandler {
         host: connection.host.clone(),
@@ -781,7 +794,14 @@ where
     let mut session = client::connect_stream(config, transport, handler)
         .await
         .map_err(map_connect_error)?;
-    authenticate(&mut session, connection, credentials, prompter).await?;
+    authenticate(
+        &mut session,
+        connection,
+        credentials,
+        prompter,
+        allow_sha1_publickey_auth,
+    )
+    .await?;
     Ok(session)
 }
 
@@ -813,6 +833,7 @@ async fn authenticate(
     connection: &SshConnection,
     mut credentials: ConnectionSecrets,
     prompter: Arc<dyn AuthPrompter>,
+    allow_sha1_publickey_auth: bool,
 ) -> Result<(), AppError> {
     let user = connection.username.clone();
     let authenticated = match &connection.auth {
@@ -826,8 +847,14 @@ async fn authenticate(
             .await?
         }
         transom_core::AuthMethod::PrivateKey { .. } => {
-            authenticate_private_key(session, connection, &mut credentials, prompter.as_ref())
-                .await?
+            authenticate_private_key(
+                session,
+                connection,
+                &mut credentials,
+                prompter.as_ref(),
+                allow_sha1_publickey_auth,
+            )
+            .await?
         }
         transom_core::AuthMethod::Agent => authenticate_agent(session, &user).await?,
         _ => {
@@ -903,6 +930,7 @@ async fn authenticate_private_key(
     connection: &SshConnection,
     credentials: &mut ConnectionSecrets,
     prompter: &dyn AuthPrompter,
+    allow_sha1_publickey_auth: bool,
 ) -> Result<bool, AppError> {
     let transom_core::AuthMethod::PrivateKey {
         path, cert_path, ..
@@ -932,6 +960,9 @@ async fn authenticate_private_key(
         .await
         .map_err(auth_error)?
         .flatten();
+    // 服务器只提供 SHA1 用户签名时按设置准入：默认兼容继续并告警留痕，
+    // 收紧模式下拒绝并给出可操作提示。
+    ensure_rsa_signature_allowed(&key, hash_alg, &connection.host, allow_sha1_publickey_auth)?;
     let key = Arc::new(key);
     let Some(cert_path) = cert_path else {
         return pubkey_auth(session, &user, key, hash_alg).await;
@@ -975,6 +1006,47 @@ async fn pubkey_auth(
         .await
         .map_err(auth_error)
         .map(|result| result.success())
+}
+
+/// 服务器是否只提供 SHA1（`ssh-rsa`）用户签名。
+///
+/// `best_supported_rsa_hash` 的内层 `None` 即"将使用 SHA1"；非 RSA 私钥
+/// 与 SHA1 议题无关，直接放行。抽成纯函数供单测钉住判定组合。
+fn sha1_signature_required(key_algorithm: &Algorithm, hash_alg: Option<HashAlg>) -> bool {
+    hash_alg.is_none() && matches!(key_algorithm, Algorithm::Rsa { .. })
+}
+
+/// SHA1 用户签名的准入检查。
+///
+/// 设计原理（Why）：OpenSSH 8.8+ 默认禁用 SHA1 用户签名，但工控设备与
+/// 交换机管理口常只支持 `ssh-rsa`。默认（`allow_sha1 = true`）按兼容模式
+/// 继续并在日志留痕——弱签名是既成事实，静默使用才是问题；收紧模式下
+/// 拒绝连接并给出可操作的提示，把"是否接受弱签名"交给部署方决定，
+/// 而不是替用户选择。
+///
+/// # Errors
+/// 设置为禁止 SHA1 且服务器只支持 SHA1 时返回 `AuthFailed`。
+fn ensure_rsa_signature_allowed(
+    key: &russh::keys::PrivateKey,
+    hash_alg: Option<HashAlg>,
+    host: &str,
+    allow_sha1: bool,
+) -> Result<(), AppError> {
+    if !sha1_signature_required(&key.algorithm(), hash_alg) {
+        return Ok(());
+    }
+    if allow_sha1 {
+        log::warn!(
+            "服务器 {host} 只支持 SHA1 用户公钥签名（ssh-rsa），已按兼容模式继续；如需收紧，请在设置文件中关闭 allow_sha1_publickey_auth"
+        );
+        return Ok(());
+    }
+    Err(AppError::with_detail(
+        ErrorCode::AuthFailed,
+        format!(
+            "服务器 {host} 只支持 SHA1（ssh-rsa）用户公钥签名，当前设置已禁止；如确需连接该设备，请在设置文件中开启 allow_sha1_publickey_auth"
+        ),
+    ))
 }
 
 fn credential_ref(value: &Option<Zeroizing<String>>) -> Option<&str> {
@@ -1404,5 +1476,18 @@ mod tests {
         );
         assert!(excerpt.ends_with("..."), "截断必须带省略标记");
         assert!(excerpt.starts_with("公钥部署命令"), "截断不得破坏首段文本");
+    }
+
+    /// SHA1 判定的组合边界：只有"RSA 私钥 + 无 SHA2 哈希"才触发准入检查。
+    #[test]
+    fn sha1_signature_required_only_for_rsa_without_sha2() {
+        let rsa_sha1 = Algorithm::Rsa { hash: None };
+        assert!(sha1_signature_required(&rsa_sha1, None));
+        assert!(!sha1_signature_required(&rsa_sha1, Some(HashAlg::Sha256)));
+        assert!(!sha1_signature_required(&Algorithm::Ed25519, None));
+        assert!(!sha1_signature_required(
+            &Algorithm::Ed25519,
+            Some(HashAlg::Sha512)
+        ));
     }
 }

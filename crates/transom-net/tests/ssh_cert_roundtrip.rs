@@ -189,6 +189,7 @@ async fn run_case(
             prompter: Arc::new(PasswordPrompter::new("unused")),
             known_hosts,
             proxy: transom_core::OutboundProxy::default(),
+            allow_sha1_publickey_auth: true,
         }),
     )
     .await

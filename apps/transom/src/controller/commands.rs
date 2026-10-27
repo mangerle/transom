@@ -45,6 +45,7 @@ pub(super) async fn handle_command(
             size,
             secrets,
             zmodem,
+            allow_sha1_publickey_auth,
         } => {
             start_connect(
                 state,
@@ -65,6 +66,7 @@ pub(super) async fn handle_command(
                         download_dir: zmodem.resolved_download_dir(),
                         auto_receive: zmodem.auto_receive,
                     },
+                    allow_sha1_publickey_auth,
                 },
             );
         }

@@ -541,6 +541,7 @@ impl AppShell {
             size,
             // 携带设置快照：控制器不再为每次连接同步读一次设置文件。
             zmodem: self.settings.zmodem.clone(),
+            allow_sha1_publickey_auth: self.settings.allow_sha1_publickey_auth,
         };
         if !self.send_command(command) {
             self.remove_tab(tab_id);
