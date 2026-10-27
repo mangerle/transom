@@ -2,8 +2,10 @@
 //!
 //! 行元素拼装见 `render` 子模块，扁平化行构建见 `rows` 子模块。
 
-mod render;
+mod folder_row;
+mod reorder;
 mod rows;
+mod session_row;
 
 pub(crate) use rows::build_rows;
 
