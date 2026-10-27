@@ -38,7 +38,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return div().into_any_element();
         };
-        let Some(panel) = tab.sftp.as_ref() else {
+        let Some(panel) = tab.sftp() else {
             return div().into_any_element();
         };
         let Some(side) = panel.side_remotes.get(side_index) else {

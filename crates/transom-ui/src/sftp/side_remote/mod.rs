@@ -36,7 +36,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
         // 避免重复挂载相同连接
@@ -217,7 +217,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
     }
 
     /// 请求特定连接的远端目录列表（用于并列远端）。

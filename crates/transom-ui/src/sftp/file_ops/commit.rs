@@ -43,7 +43,7 @@ impl AppShell {
                 .tabs
                 .iter()
                 .find(|t| t.id == tab_id)
-                .and_then(|t| t.sftp.as_ref())
+                .and_then(|t| t.sftp())
                 .map(|panel| {
                     let path = join_remote(&panel.path, &name);
                     let is_dir = panel
@@ -78,7 +78,7 @@ impl AppShell {
                 let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
                     return;
                 };
-                let Some(panel) = tab.sftp.as_ref() else {
+                let Some(panel) = tab.sftp() else {
                     return;
                 };
                 let op = SftpOperation::Mkdir {
@@ -100,7 +100,7 @@ impl AppShell {
                 let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
                     return;
                 };
-                let Some(panel) = tab.sftp.as_ref() else {
+                let Some(panel) = tab.sftp() else {
                     return;
                 };
                 let op = SftpOperation::Symlink {
@@ -115,7 +115,7 @@ impl AppShell {
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp.as_mut())
+                    .and_then(|t| t.sftp_mut())
                 {
                     let new_dir = panel.local_path.join(&name);
                     if let Err(err) = std::fs::create_dir_all(&new_dir) {
@@ -133,7 +133,7 @@ impl AppShell {
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp.as_mut())
+                    .and_then(|t| t.sftp_mut())
                 {
                     if let Some(parent) = old_path.parent() {
                         let new_path = parent.join(&name);
@@ -175,7 +175,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_mut())
+            .and_then(|t| t.sftp_mut())
         else {
             return;
         };

@@ -77,7 +77,7 @@ pub(super) fn build_local_context_menu(
                         .tabs
                         .iter_mut()
                         .find(|t| t.id == tab_id)
-                        .and_then(|t| t.sftp.as_mut())
+                        .and_then(|t| t.sftp_mut())
                     {
                         if panel.local_selection.contains(&p_up) {
                             panel.set_local_primary(p_up.clone());
@@ -104,7 +104,7 @@ pub(super) fn build_local_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             panel.status = Some(format!("已复制本地路径: {}", p_cp.display()));
                         }
@@ -125,7 +125,7 @@ pub(super) fn build_local_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             panel.select_local(p_sym.clone());
                         }
@@ -170,7 +170,7 @@ pub(super) fn build_local_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             panel.select_local(p_ren.clone());
                         }
@@ -188,7 +188,7 @@ pub(super) fn build_local_context_menu(
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp.as_mut())
+                    .and_then(|t| t.sftp_mut())
                     && !panel.local_selection.contains(&p_del)
                 {
                     panel.select_local(p_del.clone());

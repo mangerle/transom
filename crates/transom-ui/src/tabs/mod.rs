@@ -7,7 +7,7 @@ mod session_ops;
 #[cfg(test)]
 mod tests;
 
-use crate::app::{AppShell, TabGroup, TabStatus, TerminalTab};
+use crate::app::{AppShell, TabContent, TabGroup, TabStatus, TerminalTab};
 use crate::pane_tree::LayoutNode;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SavedTabGroup, Session, SessionId, TabId};
@@ -169,12 +169,8 @@ impl AppShell {
             return;
         };
         let tab = &mut self.workspace.tabs[index];
-        tab.terminal = None;
-        tab.sftp = None;
-        tab._subscription = None;
+        tab.content = TabContent::Session(Box::default());
         tab.connection_id = None;
-        tab.forward_statuses.clear();
-        tab.network_traffic = None;
         tab.status = TabStatus::Connecting;
         tab.title = session.name.clone();
         self.workspace.active_tab = Some(tab_id);
@@ -218,7 +214,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.terminal.as_ref())
+            .and_then(|tab| tab.terminal())
         {
             let focus_handle = terminal.read(cx).focus_handle().clone();
             window.focus(&focus_handle, cx);

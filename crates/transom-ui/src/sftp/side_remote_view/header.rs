@@ -118,7 +118,7 @@ pub(super) fn render_side_remote_header(
                 .tabs
                 .iter()
                 .find(|t| t.id == tab_id)
-                .and_then(|t| t.sftp.as_ref())
+                .and_then(|t| t.sftp())
                 .map(|p| {
                     let paths = p
                         .side_remotes

@@ -131,8 +131,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)?
-            .sftp
-            .as_mut()
+            .sftp_mut()
     }
 
     fn schedule_preview_start(

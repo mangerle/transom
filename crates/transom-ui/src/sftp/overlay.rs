@@ -97,7 +97,7 @@ impl AppShell {
     fn panel_of(tabs: &mut [TerminalTab], tab_id: TabId) -> Option<&mut SftpPanelState> {
         tabs.iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
     }
 
     /// 拖入即显示：展开明细并撤掉待收起定时器。
@@ -190,8 +190,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)?
-            .sftp
-            .as_ref()?;
+            .sftp()?;
         if panel.open || !panel.overlay.visible || panel.queue.is_empty() {
             return None;
         }

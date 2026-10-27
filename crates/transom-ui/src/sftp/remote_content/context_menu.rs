@@ -77,7 +77,7 @@ pub(crate) fn build_remote_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             if panel.remote_selection.contains(&p_dl) {
                                 panel.set_remote_primary(p_dl.clone());
@@ -119,7 +119,7 @@ pub(crate) fn build_remote_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             panel.status = Some(format!("已复制远端路径: {p_cp}"));
                         }
@@ -140,7 +140,7 @@ pub(crate) fn build_remote_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             panel.select_remote(p_sym.clone());
                         }
@@ -173,7 +173,7 @@ pub(crate) fn build_remote_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             panel.select_remote(p_chmod.clone());
                         }
@@ -206,7 +206,7 @@ pub(crate) fn build_remote_context_menu(
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp.as_mut())
+                            .and_then(|t| t.sftp_mut())
                         {
                             panel.select_remote(p_ren.clone());
                         }
@@ -224,7 +224,7 @@ pub(crate) fn build_remote_context_menu(
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp.as_mut())
+                    .and_then(|t| t.sftp_mut())
                     && !panel.remote_selection.contains(&p_del)
                 {
                     panel.select_remote(p_del.clone());

@@ -144,7 +144,7 @@ impl AppShell {
     pub(crate) fn sync_triggers_to_live_panes(&self, cx: &mut Context<Self>) {
         let triggers = self.settings.triggers.clone();
         for tab in &self.workspace.tabs {
-            if let Some(term) = &tab.terminal {
+            if let Some(term) = tab.terminal() {
                 term.update(cx, |view, _| view.reload_triggers(&triggers));
             }
         }

@@ -21,7 +21,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
                 && task.status == TransferStatus::Transferring
@@ -54,7 +54,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
                 && (task.status == TransferStatus::Paused
@@ -81,7 +81,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
                 if task.status == TransferStatus::Transferring {
@@ -114,7 +114,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             panel.active_transfers.remove(&op_id);
             panel.queue.retain(|task| task.id != op_id);
@@ -135,7 +135,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             if panel.active_transfers.contains(&op_id)
                 && let Some(active_task) = panel.queue.iter_mut().find(|t| t.id == op_id)

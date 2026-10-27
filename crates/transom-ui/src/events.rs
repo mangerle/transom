@@ -123,7 +123,9 @@ impl AppShell {
                     if let Some(error) = &status.error {
                         self.error = Some(localized_error(error));
                     }
-                    tab.forward_statuses.insert(status.rule_id, status);
+                    if let Some(pane) = tab.session_pane_mut() {
+                        pane.forward_statuses.insert(status.rule_id, status);
+                    }
                 }
             }
         }

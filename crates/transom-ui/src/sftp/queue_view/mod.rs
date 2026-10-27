@@ -123,7 +123,7 @@ impl AppShell {
                                                     .tabs
                                                     .iter_mut()
                                                     .find(|tab| tab.id == tab_id)
-                                                    .and_then(|tab| tab.sftp.as_mut())
+                                                    .and_then(|tab| tab.sftp_mut())
                                                 {
                                                     panel.resume_enabled = checked;
                                                     cx.notify();
@@ -233,7 +233,7 @@ impl AppShell {
                                             .tabs
                                             .iter_mut()
                                             .find(|tab| tab.id == tab_id)
-                                            .and_then(|tab| tab.sftp.as_mut())
+                                            .and_then(|tab| tab.sftp_mut())
                                         {
                                             panel.queue_expanded = !panel.queue_expanded;
                                             cx.notify();

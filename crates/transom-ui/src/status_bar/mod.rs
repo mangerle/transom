@@ -51,8 +51,8 @@ impl<'a> StatusData<'a> {
     fn from_tab(tab: Option<&'a TerminalTab>) -> Self {
         match tab {
             Some(tab) => Self {
-                traffic: tab.network_traffic.as_ref(),
-                stats: tab.system_stats.as_ref(),
+                traffic: tab.network_traffic(),
+                stats: tab.system_stats(),
                 is_ssh: matches!(tab.session.connection, Connection::Ssh(_)),
             },
             None => Self {

@@ -82,7 +82,7 @@ impl AppShell {
                 .workspace
                 .active_tab
                 .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-                .and_then(|tab| tab.terminal.as_ref())
+                .and_then(|tab| tab.terminal())
                 .map(|terminal| terminal.read(cx).focus_handle().clone())
         {
             window.focus(&focus_handle, cx);

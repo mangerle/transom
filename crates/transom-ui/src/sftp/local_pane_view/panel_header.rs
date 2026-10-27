@@ -29,8 +29,9 @@ impl AppShell {
             .on_click(cx.listener(|this, _, _, cx| {
                 if let Some(tab_id) = this.workspace.active_tab
                     && let Some(tab) = this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                    && let Some(pane) = tab.session_pane_mut()
                 {
-                    tab.sftp = None;
+                    pane.sftp = None;
                 }
                 cx.notify();
             }));

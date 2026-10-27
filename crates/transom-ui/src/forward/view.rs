@@ -24,7 +24,10 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return div().into_any_element();
         };
-        let Some(panel) = tab.forwards_panel.as_ref() else {
+        let Some(pane) = tab.session_pane() else {
+            return div().into_any_element();
+        };
+        let Some(panel) = pane.forwards_panel.as_ref() else {
             return div().into_any_element();
         };
         let Some(session) = self
@@ -36,7 +39,7 @@ impl AppShell {
             return div().into_any_element();
         };
         let rules = session.forwards.clone();
-        let statuses = tab.forward_statuses.clone();
+        let statuses = pane.forward_statuses.clone();
         let kind = panel.kind;
         let panel_error = panel.error.clone();
         let name_input = panel.name_input.clone();
@@ -307,8 +310,9 @@ impl AppShell {
                                 if let Some(tab_id) = this.workspace.active_tab
                                     && let Some(tab) =
                                         this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                                    && let Some(pane) = tab.session_pane_mut()
                                 {
-                                    tab.forwards_panel = None;
+                                    pane.forwards_panel = None;
                                 }
                                 cx.notify();
                             })),

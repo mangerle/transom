@@ -1,7 +1,7 @@
 //! 终端录制启停、回放触发与独立播放器打开逻辑。
 
 use super::types::{ReplayModalState, scan_recordings};
-use crate::app::{AppShell, TabStatus, TerminalTab};
+use crate::app::{AppShell, TerminalTab};
 use crate::cast_player::CastPlayerView;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
@@ -32,7 +32,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
             return;
         };
-        let Some(terminal) = tab.terminal.as_ref() else {
+        let Some(terminal) = tab.terminal() else {
             return;
         };
 
@@ -149,10 +149,7 @@ impl AppShell {
         let session_id = dummy_session.id;
         dummy_session.terminal = self.settings.terminal_profile.clone();
 
-        let mut tab = TerminalTab::pending(tab_id, dummy_session);
-        tab.title = tab_title;
-        tab.status = TabStatus::Connected;
-        tab.player = Some(player);
+        let tab = TerminalTab::player_tab(tab_id, dummy_session, tab_title, player);
 
         self.create_group(tab_id, session_id);
         self.workspace.tabs.push(tab);
@@ -222,7 +219,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return;
         };
-        let Some(terminal) = tab.terminal.clone() else {
+        let Some(terminal) = tab.terminal() else {
             return;
         };
 

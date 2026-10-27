@@ -16,7 +16,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
         let paths = panel.selected_remote_paths();
@@ -50,7 +50,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             panel.status = Some(format!("正在删除 {count} 个远端项目"));
             cx.notify();
@@ -72,7 +72,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| panel.active_pane)
         else {
             return;
@@ -159,7 +159,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_ref() else {
+        let Some(panel) = tab.sftp() else {
             return;
         };
         let (title, prompt, initial_value, target) = if is_remote {
@@ -223,7 +223,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_ref() else {
+        let Some(panel) = tab.sftp() else {
             return;
         };
         let (title, prompt, initial_value, target) = if is_remote {

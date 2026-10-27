@@ -28,8 +28,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)?
-            .sftp
-            .as_ref()?
+            .sftp()?
             .hover_preview
             .as_ref()?;
         if matches!(preview.content, PreviewContent::Pending) {

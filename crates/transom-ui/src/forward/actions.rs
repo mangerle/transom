@@ -16,8 +16,14 @@ use transom_core::{
 
 impl AppShell {
     pub(crate) fn mark_forwards_stopped(&mut self, tab_id: TabId) {
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
-            for status in tab.forward_statuses.values_mut() {
+        if let Some(pane) = self
+            .workspace
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.session_pane_mut())
+        {
+            for status in pane.forward_statuses.values_mut() {
                 if !matches!(status.state, ForwardState::Stopped) {
                     status.state = ForwardState::Stopped;
                     status.error = None;
@@ -33,8 +39,14 @@ impl AppShell {
         state: ForwardState,
         error: Option<AppError>,
     ) {
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
-            tab.forward_statuses.insert(
+        if let Some(pane) = self
+            .workspace
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.session_pane_mut())
+        {
+            pane.forward_statuses.insert(
                 rule_id,
                 ForwardStatus {
                     rule_id,
@@ -89,7 +101,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.forwards_panel.as_mut())
+            .and_then(|tab| tab.forwards_panel_mut())
     }
 
     pub(crate) fn toggle_forward_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -99,8 +111,10 @@ impl AppShell {
         let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
             return;
         };
-        if self.workspace.tabs[index].forwards_panel.is_some() {
-            self.workspace.tabs[index].forwards_panel = None;
+        if self.workspace.tabs[index].forwards_panel().is_some() {
+            if let Some(pane) = self.workspace.tabs[index].session_pane_mut() {
+                pane.forwards_panel = None;
+            }
             cx.notify();
             return;
         }
@@ -142,15 +156,17 @@ impl AppShell {
             "80",
             rust_i18n::t!("forward.target_port").as_ref(),
         );
-        self.workspace.tabs[index].forwards_panel = Some(ForwardPanelState {
-            name_input: name,
-            bind_host_input: bind_host,
-            bind_port_input: bind_port,
-            target_host_input: target_host,
-            target_port_input: target_port,
-            kind: ForwardKindChoice::Local,
-            error: None,
-        });
+        if let Some(pane) = self.workspace.tabs[index].session_pane_mut() {
+            pane.forwards_panel = Some(ForwardPanelState {
+                name_input: name,
+                bind_host_input: bind_host,
+                bind_port_input: bind_port,
+                target_host_input: target_host,
+                target_port_input: target_port,
+                kind: ForwardKindChoice::Local,
+                error: None,
+            });
+        }
         cx.notify();
     }
 
@@ -162,7 +178,7 @@ impl AppShell {
             return;
         };
         let session_id = tab.session_id;
-        let Some(panel) = tab.forwards_panel.as_ref() else {
+        let Some(panel) = tab.forwards_panel() else {
             return;
         };
         let name = panel.name_input.read(cx).value().trim().to_string();
@@ -414,7 +430,8 @@ impl AppShell {
                 .tabs
                 .iter()
                 .find(|tab| tab.id == tab_id)
-                .and_then(|tab| tab.forward_statuses.get(&rule_id)),
+                .and_then(|tab| tab.session_pane())
+                .and_then(|pane| pane.forward_statuses.get(&rule_id)),
         ) && matches!(
             status.state,
             ForwardState::Active { .. } | ForwardState::Starting
@@ -425,8 +442,14 @@ impl AppShell {
                 rule_id,
             });
         }
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
-            tab.forward_statuses.remove(&rule_id);
+        if let Some(pane) = self
+            .workspace
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.session_pane_mut())
+        {
+            pane.forward_statuses.remove(&rule_id);
         }
         if let Some(session) = self
             .catalog

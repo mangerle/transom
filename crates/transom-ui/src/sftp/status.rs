@@ -37,7 +37,7 @@ impl AppShell {
                     .tabs
                     .iter_mut()
                     .find(|tab| tab.id == tab_id)
-                    .and_then(|tab| tab.sftp.as_mut())
+                    .and_then(|tab| tab.sftp_mut())
                 else {
                     return;
                 };

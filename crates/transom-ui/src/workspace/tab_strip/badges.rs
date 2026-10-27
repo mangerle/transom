@@ -236,7 +236,7 @@ pub(super) fn calculate_dot_color(tab: &crate::app::TerminalTab, p: &Palette) ->
         TabStatus::Connected => p.success,
         TabStatus::Failed(_) | TabStatus::Disconnected => p.danger,
     };
-    if tab.zmodem.is_some() {
+    if tab.zmodem().is_some() {
         p.primary
     } else {
         dot_color

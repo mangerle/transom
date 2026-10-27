@@ -33,7 +33,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| panel.local_path.clone())
         else {
             return;
@@ -50,7 +50,7 @@ impl AppShell {
                     .tabs
                     .iter_mut()
                     .find(|tab| tab.id == tab_id)
-                    .and_then(|tab| tab.sftp.as_mut())
+                    .and_then(|tab| tab.sftp_mut())
                 else {
                     return;
                 };
@@ -91,7 +91,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         else {
             return;
         };
@@ -121,7 +121,7 @@ impl AppShell {
                     .tabs
                     .iter_mut()
                     .find(|tab| tab.id == tab_id)
-                    .and_then(|tab| tab.sftp.as_mut())
+                    .and_then(|tab| tab.sftp_mut())
                 else {
                     return;
                 };

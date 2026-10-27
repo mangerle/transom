@@ -15,7 +15,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_ref() else {
+        let Some(panel) = tab.sftp() else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -137,7 +137,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             panel.queue.push(task);
             panel.status = Some(format!(

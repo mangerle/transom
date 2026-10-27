@@ -27,7 +27,7 @@ impl AppShell {
         let Some(connection_id) = tab.connection_id else {
             return;
         };
-        if let Some(panel) = tab.sftp.as_mut() {
+        if let Some(panel) = tab.sftp_mut() {
             panel.loading = true;
             panel.error = None;
         }
@@ -53,7 +53,7 @@ impl AppShell {
             return;
         };
         let op_id = TransferId::new();
-        if let Some(panel) = tab.sftp.as_mut() {
+        if let Some(panel) = tab.sftp_mut() {
             panel.active_op = Some(op_id);
             if panel.active_transfers.is_empty() {
                 panel.progress = None;
@@ -76,7 +76,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| panel.path.clone())
         else {
             return;
@@ -96,7 +96,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .and_then(|panel| {
                 if !panel.sync_navigation {
                     return None;
@@ -141,7 +141,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| {
                 let remote_parent = parent_remote(&panel.path);
                 let local_parent = if panel.sync_navigation {
@@ -166,7 +166,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| panel.path_input.read(cx).value().trim().to_string())
         else {
             return;
@@ -187,7 +187,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_mut())
+            .and_then(|t| t.sftp_mut())
         {
             panel.show_filter = !panel.show_filter;
             let remote_filter = panel.remote_filter_input.clone();
@@ -231,7 +231,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_mut())
+            .and_then(|t| t.sftp_mut())
         {
             panel.show_hidden = !panel.show_hidden;
             panel.status = Some(if panel.show_hidden {
@@ -263,7 +263,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
         if panel.local_only {
@@ -290,7 +290,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_mut())
+            .and_then(|t| t.sftp_mut())
         {
             panel.drag_start_y = Some(start_y);
             panel.drag_start_height = panel.queue_height;
@@ -309,7 +309,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_mut())
+            .and_then(|t| t.sftp_mut())
             && let Some(start_y) = panel.drag_start_y
         {
             let delta = start_y - current_y;
@@ -325,7 +325,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_mut())
+            .and_then(|t| t.sftp_mut())
             && panel.drag_start_y.is_some()
         {
             panel.drag_start_y = None;

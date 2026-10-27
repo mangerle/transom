@@ -104,14 +104,14 @@ pub(super) fn render_tab_entry(
         && (2..=MAX_TILING_SLOTS).contains(&selected_singles.len());
 
     let dot_color = calculate_dot_color(tab, p);
-    let base_tab_icon = if tab.player.is_some() {
+    let base_tab_icon = if tab.is_player() {
         IconName::Disc
     } else {
         connection_icon(&tab.session.connection)
     };
 
     let appearance = shell.session_appearance(tab);
-    let tab_icon = if tab.player.is_some() {
+    let tab_icon = if tab.is_player() {
         IconName::Disc
     } else {
         appearance.icon.unwrap_or(base_tab_icon)

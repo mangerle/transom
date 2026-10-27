@@ -368,7 +368,7 @@ impl AppShell {
                 .workspace
                 .tabs
                 .iter()
-                .filter_map(|tab| tab.terminal.clone())
+                .filter_map(|tab| tab.terminal())
                 .collect();
             for terminal in terminals {
                 terminal.update(cx, |view, _| view.reload_triggers(&triggers));

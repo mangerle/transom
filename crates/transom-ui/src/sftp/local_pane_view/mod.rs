@@ -77,7 +77,7 @@ impl AppShell {
                         .tabs
                         .iter()
                         .find(|tab| tab.id == tab_id)
-                        .and_then(|tab| tab.sftp.as_ref())
+                        .and_then(|tab| tab.sftp())
                         .map(|panel| (panel.local_selection.clone(), panel.local_selected.clone()))
                         .unwrap_or_default();
                     let app_entity = app_entity.clone();
@@ -140,7 +140,7 @@ impl AppShell {
                                             .tabs
                                             .iter()
                                             .find(|tab| tab.id == tab_id)
-                                            .and_then(|tab| tab.sftp.as_ref())
+                                            .and_then(|tab| tab.sftp())
                                         {
                                             window.focus(&panel.focus_handle, cx);
                                         }
@@ -165,7 +165,7 @@ impl AppShell {
                                             .tabs
                                             .iter_mut()
                                             .find(|tab| tab.id == tab_id)
-                                            .and_then(|tab| tab.sftp.as_mut())
+                                            .and_then(|tab| tab.sftp_mut())
                                         else {
                                             return;
                                         };
@@ -218,7 +218,7 @@ impl AppShell {
                                             .tabs
                                             .iter_mut()
                                             .find(|tab| tab.id == tab_id)
-                                            .and_then(|tab| tab.sftp.as_mut())
+                                            .and_then(|tab| tab.sftp_mut())
                                         {
                                             if panel.local_selection.contains(&entry_path_right) {
                                                 panel.set_local_primary(entry_path_right.clone());

@@ -57,7 +57,10 @@ impl AppShell {
             },
         );
 
-        self.workspace.tabs[index].sftp = Some(SftpPanelState {
+        let Some(pane) = self.workspace.tabs[index].session_pane_mut() else {
+            return;
+        };
+        pane.sftp = Some(SftpPanelState {
             open: true,
             overlay: super::DropOverlayState::default(),
             path: String::new(),
@@ -122,7 +125,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
         else {
             return div().into_any_element();
         };

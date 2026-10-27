@@ -32,7 +32,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp.as_ref())
+            .and_then(|t| t.sftp())
             .map(|p| {
                 let mounted: Vec<ConnectionId> =
                     p.side_remotes.iter().map(|s| s.connection_id).collect();
@@ -53,7 +53,7 @@ impl AppShell {
         let current_conn_id = current_tab.and_then(|t| t.connection_id);
         let current_session_id = current_tab.map(|t| t.session.id);
         let is_local_only = current_tab
-            .and_then(|t| t.sftp.as_ref())
+            .and_then(|t| t.sftp())
             .map(|p| p.local_only)
             .unwrap_or(false);
 
@@ -89,8 +89,7 @@ impl AppShell {
 
             let display_name = t.display_name();
             let initial_path = t
-                .sftp
-                .as_ref()
+                .sftp()
                 .map(|p| p.path.clone())
                 .filter(|p| !p.is_empty() && p != ".")
                 .or_else(|| extract_candidate_path(&t.title))

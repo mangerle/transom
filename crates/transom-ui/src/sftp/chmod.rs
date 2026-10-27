@@ -16,7 +16,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
         let Some(selected) = panel.selected.clone() else {

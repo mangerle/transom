@@ -17,7 +17,7 @@ impl AppShell {
             return;
         };
         let main_conn_id = tab.connection_id;
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
         let active_pane = panel.active_pane;
@@ -103,7 +103,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_ref() else {
+        let Some(panel) = tab.sftp() else {
             return;
         };
         let Some(clip) = panel.clipboard.clone() else {

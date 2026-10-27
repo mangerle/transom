@@ -48,7 +48,7 @@ impl AppShell {
                         }) else {
                             return false;
                         };
-                        let Some(terminal) = tab.terminal.clone() else {
+                        let Some(terminal) = tab.terminal() else {
                             return false;
                         };
                         terminal.update(cx, |view, cx| {
@@ -63,13 +63,14 @@ impl AppShell {
             }
         });
 
-        if let Some(tab) = self
+        if let Some(pane) = self
             .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))
+            .and_then(|tab| tab.session_pane_mut())
         {
-            tab._startup_task = Some(task);
+            pane._startup_task = Some(task);
         }
     }
 }

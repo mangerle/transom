@@ -119,17 +119,18 @@ impl AppShell {
             },
         );
         let tab = &mut self.workspace.tabs[index];
-        tab.terminal = Some(terminal);
         tab.status = TabStatus::Connected;
+        if let Some(pane) = tab.session_pane_mut() {
+            pane.terminal = Some(terminal);
+            pane.reconnect_attempts = 0;
+            pane.network_traffic = None;
+            pane._subscription = Some(subscription);
+        }
         log::info!(
             "连接建立完成，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
             tab.session.name,
             crate::connection::describe_target(&tab.session)
         );
-        // 连接成功后自动重连计数清零，下次断线重新享有完整退避序列。
-        tab.reconnect_attempts = 0;
-        tab.network_traffic = None;
-        tab._subscription = Some(subscription);
         // 连接建立期间用户可能已经切走：启动期的默认标签与深链目录标签
         // 会并发建连，晚完成者若无条件激活，会把焦点从后创建的深链标签
         // 抢回启动标签。只有该窗格仍是当前选中项时才切换组内焦点并聚焦。
@@ -165,7 +166,9 @@ impl AppShell {
             && tab.connection_id == Some(connection_id)
         {
             tab.status = TabStatus::Failed(error.clone());
-            tab.network_traffic = None;
+            if let Some(pane) = tab.session_pane_mut() {
+                pane.network_traffic = None;
+            }
             let message = localized_error(&error);
             log::error!(
                 "连接建立失败，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}，原因: {message}",
@@ -198,7 +201,9 @@ impl AppShell {
             && !matches!(tab.status, TabStatus::Failed(_))
         {
             tab.status = TabStatus::Disconnected;
-            tab.network_traffic = None;
+            if let Some(pane) = tab.session_pane_mut() {
+                pane.network_traffic = None;
+            }
             log::info!(
                 "连接已断开，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
                 tab.session.name,
@@ -324,12 +329,13 @@ impl AppShell {
         let mut applied = false;
         if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
+            && let Some(pane) = tab.session_pane_mut()
         {
-            if tab.system_stats.as_ref() == Some(&stats) {
+            if pane.system_stats.as_ref() == Some(&stats) {
                 // 与上一轮样本完全一致：不更新也不重绘。
                 return false;
             }
-            tab.system_stats = Some(stats);
+            pane.system_stats = Some(stats);
             applied = true;
         }
         // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
@@ -361,13 +367,14 @@ impl AppShell {
         let mut applied = false;
         if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
+            && let Some(pane) = tab.session_pane_mut()
         {
-            if tab.network_traffic == Some(traffic) {
+            if pane.network_traffic == Some(traffic) {
                 // 速率与上一帧相同（空闲连接恒为 0/0）：数据无需更新，也不
                 // 触发整壳重绘——否则空闲标签会以 1 Hz 持续整窗重建。
                 return false;
             }
-            tab.network_traffic = Some(traffic);
+            pane.network_traffic = Some(traffic);
             applied = true;
         }
         if applied && self.workspace.active_tab == Some(tab_id) && !self.immersive {

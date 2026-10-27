@@ -235,12 +235,12 @@ impl AppShell {
                 .workspace
                 .active_tab
                 .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-                .is_some_and(|tab| tab.forwards_panel.is_some()),
+                .is_some_and(|tab| tab.forwards_panel().is_some()),
             ActivityItemId::Sftp => self
                 .workspace
                 .active_tab
                 .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-                .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open)),
+                .is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open)),
             ActivityItemId::Monitor => self.monitor.open,
             ActivityItemId::Keys => self.modals.settings.key_wizard.is_some(),
             _ => false,

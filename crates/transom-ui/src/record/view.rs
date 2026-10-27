@@ -22,7 +22,7 @@ impl AppShell {
         let active_tab_id = self.workspace.active_tab;
         let active_is_recording = active_tab_id
             .and_then(|id| self.workspace.tabs.iter().find(|t| t.id == id))
-            .and_then(|t| t.terminal.as_ref())
+            .and_then(|t| t.terminal())
             .is_some_and(|term| term.read(cx).is_recording());
 
         let app_entity = cx.entity().clone();

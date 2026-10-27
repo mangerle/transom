@@ -149,7 +149,7 @@ impl AppShell {
                 failed += 1;
                 continue;
             };
-            let Some(terminal) = tab.terminal.as_ref() else {
+            let Some(terminal) = tab.terminal() else {
                 failed += 1;
                 continue;
             };
@@ -259,7 +259,7 @@ impl AppShell {
                     .workspace
                     .tabs
                     .iter()
-                    .any(|tab| tab.id == pane_id && tab.terminal.is_some())
+                    .any(|tab| tab.id == pane_id && tab.terminal().is_some())
                 {
                     targets.insert(pane_id);
                 }
@@ -288,7 +288,7 @@ impl AppShell {
                     .workspace
                     .tabs
                     .iter()
-                    .find(|tab| tab.id == *pane_id && tab.terminal.is_some())
+                    .find(|tab| tab.id == *pane_id && tab.terminal().is_some())
                 else {
                     continue;
                 };

@@ -22,7 +22,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
         panel.local_path = target.clone();
@@ -50,7 +50,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .and_then(|panel| {
                 if !panel.sync_navigation {
                     return None;
@@ -79,7 +79,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| {
                 let local_parent = panel.local_path.parent().map(|p| p.to_path_buf());
                 let remote_parent = if panel.sync_navigation {
@@ -114,7 +114,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| PathBuf::from(panel.local_path_input.read(cx).value().trim()));
         if let Some(target) = target
             && target.is_dir()
@@ -129,7 +129,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| panel.local_path.clone())
         else {
             return;
@@ -141,7 +141,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             panel.status = Some(format!(
                 "已在系统文件管理器中打开: {}",

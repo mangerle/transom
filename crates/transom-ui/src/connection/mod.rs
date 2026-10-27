@@ -65,11 +65,13 @@ impl AppShell {
         if !auto_reconnect {
             return;
         }
-        let attempt = tab.reconnect_attempts as usize;
+        let attempt = tab
+            .session_pane()
+            .map(|p| p.reconnect_attempts as usize)
+            .unwrap_or(0);
         let Some(delay_secs) = BACKOFF_SECS.get(attempt).copied() else {
             return;
         };
-        tab.reconnect_attempts += 1;
         let (code, reason) = match &tab.status {
             TabStatus::Failed(error) => (error.code, error.to_string()),
             _ => (ErrorCode::ConnectionFailed, "连接已断开".to_string()),
@@ -89,7 +91,11 @@ impl AppShell {
         let session = tab.session.clone();
         let session_id = tab.session_id;
         let executor = cx.background_executor().clone();
-        tab.reconnect_task = Some(cx.spawn(async move |this, cx| {
+        let Some(pane) = tab.session_pane_mut() else {
+            return;
+        };
+        pane.reconnect_attempts += 1;
+        pane.reconnect_task = Some(cx.spawn(async move |this, cx| {
             executor
                 .timer(std::time::Duration::from_secs(delay_secs))
                 .await;
@@ -120,10 +126,12 @@ impl AppShell {
         );
         if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
             tab.connection_id = Some(connection_id);
-            tab.sftp = None;
-            tab.forward_statuses.clear();
-            tab.network_traffic = None;
-            tab._startup_task = None;
+            if let Some(pane) = tab.session_pane_mut() {
+                pane.sftp = None;
+                pane.forward_statuses.clear();
+                pane.network_traffic = None;
+                pane._startup_task = None;
+            }
         }
         if !matches!(
             session.connection,

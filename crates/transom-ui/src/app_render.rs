@@ -43,12 +43,12 @@ impl Render for AppShell {
             .workspace
             .active_tab
             .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-            .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open));
+            .is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open));
         let sftp_panel = self
             .workspace
             .active_tab
             .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-            .and_then(|tab| tab.sftp.as_ref());
+            .and_then(|tab| tab.sftp());
         let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local_only);
         let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
         let collapsed_count = sftp_panel
@@ -60,7 +60,7 @@ impl Render for AppShell {
             .workspace
             .active_tab
             .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-            .is_some_and(|tab| tab.forwards_panel.is_some());
+            .is_some_and(|tab| tab.forwards_panel().is_some());
         let (sftp_width, sftp_min_width) = if sftp_all_collapsed {
             (sftp_collapsed_width, sftp_collapsed_width)
         } else if sftp_local_only && sftp_panel.is_some_and(|p| p.side_remotes.is_empty()) {

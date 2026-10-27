@@ -53,6 +53,6 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.terminal.clone())
+            .and_then(|tab| tab.terminal())
     }
 }

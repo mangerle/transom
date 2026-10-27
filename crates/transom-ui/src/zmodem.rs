@@ -32,12 +32,18 @@ impl AppShell {
         event: ZmodemEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(pane) = self
+            .workspace
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.session_pane_mut())
+        else {
             return;
         };
         match event {
             ZmodemEvent::Started { direction } => {
-                tab.zmodem = Some(ZmodemState {
+                pane.zmodem = Some(ZmodemState {
                     direction,
                     name: String::new(),
                     transferred: 0,
@@ -52,7 +58,7 @@ impl AppShell {
                 transferred,
                 total,
             } => {
-                tab.zmodem = Some(ZmodemState {
+                pane.zmodem = Some(ZmodemState {
                     direction,
                     name,
                     transferred,
@@ -69,7 +75,7 @@ impl AppShell {
                 return;
             }
             ZmodemEvent::Finished(outcome) => {
-                tab.zmodem = None;
+                pane.zmodem = None;
                 let text = match outcome {
                     ZmodemFinished::Completed { files } => {
                         send_zmodem_notification(true, files);
@@ -129,7 +135,7 @@ impl AppShell {
             .workspace
             .tabs
             .iter()
-            .any(|tab| tab.id == tab_id && tab.zmodem.is_some())
+            .any(|tab| tab.id == tab_id && tab.zmodem().is_some())
         {
             self.send_zmodem_cancel(tab_id);
         }
@@ -148,7 +154,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.zmodem.clone())?;
+            .and_then(|tab| tab.zmodem().cloned())?;
         let direction_label = match state.direction {
             ZmodemDirection::Upload => rust_i18n::t!("zmodem.upload").to_string(),
             ZmodemDirection::Download => rust_i18n::t!("zmodem.download").to_string(),

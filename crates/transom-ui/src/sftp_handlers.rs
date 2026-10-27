@@ -30,42 +30,43 @@ impl AppShell {
             return true;
         };
         let mut update_input = None;
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
-            && let Some(panel) = tab.sftp.as_mut()
-        {
-            if tab.connection_id == Some(connection_id) {
-                panel.path = path.clone();
-                panel.entries = entries;
-                panel.loading = false;
-                panel.error = None;
-                let valid_paths = panel
-                    .entries
-                    .iter()
-                    .map(|entry| entry.path.clone())
-                    .collect();
-                panel.sync_remote_selection(&valid_paths);
-                update_input = Some((panel.path_input.clone(), path));
-            } else if let Some(side) = panel
-                .side_remotes
-                .iter_mut()
-                .find(|s| s.connection_id == connection_id)
-            {
-                side.path = path.clone();
-                side.entries = entries;
-                side.loading = false;
-                side.error = None;
-                let valid_paths: std::collections::BTreeSet<String> = side
-                    .entries
-                    .iter()
-                    .map(|entry| entry.path.clone())
-                    .collect();
-                side.selection.retain(|p| valid_paths.contains(p));
-                if let Some(sel) = &side.selected
-                    && !valid_paths.contains(sel)
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+            let is_main_conn = tab.connection_id == Some(connection_id);
+            if let Some(panel) = tab.sftp_mut() {
+                if is_main_conn {
+                    panel.path = path.clone();
+                    panel.entries = entries;
+                    panel.loading = false;
+                    panel.error = None;
+                    let valid_paths = panel
+                        .entries
+                        .iter()
+                        .map(|entry| entry.path.clone())
+                        .collect();
+                    panel.sync_remote_selection(&valid_paths);
+                    update_input = Some((panel.path_input.clone(), path));
+                } else if let Some(side) = panel
+                    .side_remotes
+                    .iter_mut()
+                    .find(|s| s.connection_id == connection_id)
                 {
-                    side.selected = None;
+                    side.path = path.clone();
+                    side.entries = entries;
+                    side.loading = false;
+                    side.error = None;
+                    let valid_paths: std::collections::BTreeSet<String> = side
+                        .entries
+                        .iter()
+                        .map(|entry| entry.path.clone())
+                        .collect();
+                    side.selection.retain(|p| valid_paths.contains(p));
+                    if let Some(sel) = &side.selected
+                        && !valid_paths.contains(sel)
+                    {
+                        side.selected = None;
+                    }
+                    update_input = Some((side.path_input.clone(), path));
                 }
-                update_input = Some((side.path_input.clone(), path));
             }
         }
         if let Some((input, path)) = update_input {

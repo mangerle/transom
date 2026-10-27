@@ -165,7 +165,7 @@ impl AppShell {
             .workspace
             .tabs
             .iter()
-            .filter_map(|tab| tab.terminal.clone())
+            .filter_map(|tab| tab.terminal())
             .collect();
         for terminal in terminals {
             terminal.update(cx, |view, cx| view.apply_appearance(&profile, cx));
@@ -183,7 +183,7 @@ impl AppShell {
             .tabs
             .iter()
             .filter_map(|tab| {
-                let terminal = tab.terminal.clone()?;
+                let terminal = tab.terminal()?;
                 let override_ = self
                     .catalog
                     .sessions

@@ -190,7 +190,7 @@ impl AppShell {
         // 目录列表条目就地补丁：size/mtime 都来自写后 stat，与远端一致，
         // 无需为刷新列表再发一次目录请求。
         if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
-            && let Some(panel) = tab.sftp.as_mut()
+            && let Some(panel) = tab.sftp_mut()
             && let Some(entry) = panel
                 .entries
                 .iter_mut()
@@ -208,7 +208,7 @@ impl AppShell {
                 .tabs
                 .iter()
                 .find(|tab| tab.id == tab_id)
-                .and_then(|tab| tab.sftp.as_ref())
+                .and_then(|tab| tab.sftp())
                 .is_some_and(|panel| panel.path == parent)
         {
             self.request_sftp_list(tab_id, parent.to_string(), cx);
@@ -298,7 +298,7 @@ impl AppShell {
     /// 把编辑入口的拒绝原因写到该标签的远端栏错误位上。
     pub(crate) fn editor_reject(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
         if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
-            && let Some(panel) = tab.sftp.as_mut()
+            && let Some(panel) = tab.sftp_mut()
         {
             panel.error = Some(message);
         }

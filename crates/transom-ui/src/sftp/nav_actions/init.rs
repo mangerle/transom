@@ -30,8 +30,7 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)?;
         if tab.connection_id != Some(connection_id) {
             let is_side = tab
-                .sftp
-                .as_ref()
+                .sftp()
                 .map(|p| {
                     p.side_remotes
                         .iter()
@@ -42,7 +41,7 @@ impl AppShell {
                 return None;
             }
         }
-        tab.sftp.as_mut()
+        tab.sftp_mut()
     }
 
     /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
@@ -51,7 +50,7 @@ impl AppShell {
             .workspace
             .active_tab
             .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
         {
             window.focus(&panel.focus_handle, cx);
         }
@@ -66,23 +65,20 @@ impl AppShell {
         };
         // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，
         // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
-        match self.workspace.tabs[index]
-            .sftp
-            .as_ref()
-            .map(|panel| panel.open)
-        {
+        match self.workspace.tabs[index].sftp().map(|panel| panel.open) {
             Some(true) => {
-                self.workspace.tabs[index].sftp = None;
+                if let Some(pane) = self.workspace.tabs[index].session_pane_mut() {
+                    pane.sftp = None;
+                }
                 cx.notify();
                 return;
             }
             Some(false) => {
                 let path = self.workspace.tabs[index]
-                    .sftp
-                    .as_ref()
+                    .sftp()
                     .map(|panel| panel.path.clone())
                     .unwrap_or_else(|| ".".to_string());
-                if let Some(panel) = self.workspace.tabs[index].sftp.as_mut() {
+                if let Some(panel) = self.workspace.tabs[index].sftp_mut() {
                     panel.open = true;
                 }
                 // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。
@@ -170,7 +166,10 @@ impl AppShell {
         let remote_filter_input = sftp_text_input(window, cx, "", "过滤远程文件 (模糊匹配名称)...");
         let local_filter_input = sftp_text_input(window, cx, "", "过滤本地文件 (模糊匹配名称)...");
 
-        self.workspace.tabs[index].sftp = Some(SftpPanelState {
+        let Some(pane) = self.workspace.tabs[index].session_pane_mut() else {
+            return;
+        };
+        pane.sftp = Some(SftpPanelState {
             open,
             overlay: DropOverlayState::default(),
             path: initial_remote_path.clone(),

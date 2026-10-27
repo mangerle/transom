@@ -26,7 +26,7 @@ impl AppShell {
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_ref())
+            .and_then(|tab| tab.sftp())
             .map(|panel| panel.selected_local_paths())
             .unwrap_or_default();
         if let Err(message) = self.enqueue_uploads(tab_id, &paths, cx) {
@@ -48,7 +48,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
         let tasks = upload_tasks(paths, &panel.path, panel.resume_enabled, verify)?;
@@ -71,7 +71,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             panel.error = Some(message);
             cx.notify();
@@ -83,7 +83,7 @@ impl AppShell {
         let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
         let paths = panel.selected_remote_paths();
@@ -156,7 +156,7 @@ impl AppShell {
             return;
         };
         let tab_conn_id = tab.connection_id;
-        let Some(panel) = tab.sftp.as_mut() else {
+        let Some(panel) = tab.sftp_mut() else {
             return;
         };
 
@@ -216,7 +216,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             panel.queue.retain(|task| {
                 task.status != TransferStatus::Completed && task.status != TransferStatus::Cancelled
@@ -248,7 +248,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             let resume_enabled = panel.resume_enabled;
             for task in &mut panel.queue {
@@ -280,7 +280,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             active_ids = panel.active_transfers.iter().copied().collect();
             let mut paused = 0u32;
@@ -313,7 +313,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             for task in &mut panel.queue {
                 if task.status == TransferStatus::Paused {
@@ -341,7 +341,7 @@ impl AppShell {
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp.as_mut())
+            .and_then(|tab| tab.sftp_mut())
         {
             active_ids = panel.active_transfers.iter().copied().collect();
             let mut cancelled = 0u32;

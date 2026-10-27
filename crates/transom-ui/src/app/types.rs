@@ -67,13 +67,21 @@ impl TabGroup {
     }
 }
 
-pub(crate) struct TerminalTab {
-    pub(crate) id: TabId,
-    pub(crate) session_id: SessionId,
-    pub(crate) session: Session,
-    pub(crate) connection_id: Option<ConnectionId>,
-    pub(crate) title: String,
-    pub(crate) status: TabStatus,
+/// 终端标签窗格的具体内容形态。
+///
+/// 遵循“非法状态不可表示 (Make Illegal States Unrepresentable)”设计原则：
+/// 标签页要么是承载实时通信连接的会话窗格（终端视图、SFTP、端口转发等），
+/// 要么是独立的录像回放播放器，二者在类型系统中严格互斥。
+pub(crate) enum TabContent {
+    /// 实时通信会话窗格（包含终端引擎与伴随子面板）。
+    Session(Box<SessionPaneState>),
+    /// 录像回放播放器。
+    Player(Entity<crate::cast_player::CastPlayerView>),
+}
+
+/// 实时通信会话窗格关联的所有运行期状态。
+#[derive(Default)]
+pub(crate) struct SessionPaneState {
     pub(crate) terminal: Option<Entity<TerminalView>>,
     pub(crate) sftp: Option<SftpPanelState>,
     pub(crate) forwards_panel: Option<ForwardPanelState>,
@@ -85,12 +93,91 @@ pub(crate) struct TerminalTab {
     pub(crate) reconnect_attempts: u32,
     pub(crate) reconnect_task: Option<Task<()>>,
     pub(crate) zmodem: Option<crate::zmodem::ZmodemState>,
-    pub(crate) player: Option<Entity<crate::cast_player::CastPlayerView>>,
+}
+
+pub(crate) struct TerminalTab {
+    pub(crate) id: TabId,
+    pub(crate) session_id: SessionId,
+    pub(crate) session: Session,
+    pub(crate) connection_id: Option<ConnectionId>,
+    pub(crate) title: String,
+    pub(crate) status: TabStatus,
+    pub(crate) content: TabContent,
 }
 
 impl TerminalTab {
+    /// 是否为录像播放器标签。
+    pub(crate) fn is_player(&self) -> bool {
+        matches!(self.content, TabContent::Player(_))
+    }
+
+    /// 获取关联的录像播放器视图句柄（若存在）。
+    pub(crate) fn player(&self) -> Option<Entity<crate::cast_player::CastPlayerView>> {
+        match &self.content {
+            TabContent::Player(player) => Some(player.clone()),
+            TabContent::Session(_) => None,
+        }
+    }
+
+    /// 获取会话状态不可变引用（若当前为会话标签）。
+    pub(crate) fn session_pane(&self) -> Option<&SessionPaneState> {
+        match &self.content {
+            TabContent::Session(pane) => Some(pane),
+            TabContent::Player(_) => None,
+        }
+    }
+
+    /// 获取会话状态可变引用（若当前为会话标签）。
+    pub(crate) fn session_pane_mut(&mut self) -> Option<&mut SessionPaneState> {
+        match &mut self.content {
+            TabContent::Session(pane) => Some(pane),
+            TabContent::Player(_) => None,
+        }
+    }
+
+    /// 快捷访问终端视图引用。
+    pub(crate) fn terminal(&self) -> Option<Entity<TerminalView>> {
+        self.session_pane().and_then(|p| p.terminal.clone())
+    }
+
+    /// 快捷访问 SFTP 面板引用。
+    pub(crate) fn sftp(&self) -> Option<&SftpPanelState> {
+        self.session_pane().and_then(|p| p.sftp.as_ref())
+    }
+
+    /// 快捷访问 SFTP 面板可变引用。
+    pub(crate) fn sftp_mut(&mut self) -> Option<&mut SftpPanelState> {
+        self.session_pane_mut().and_then(|p| p.sftp.as_mut())
+    }
+
+    /// 快捷访问端口转发面板引用。
+    pub(crate) fn forwards_panel(&self) -> Option<&ForwardPanelState> {
+        self.session_pane().and_then(|p| p.forwards_panel.as_ref())
+    }
+
+    /// 快捷访问端口转发面板可变引用。
+    pub(crate) fn forwards_panel_mut(&mut self) -> Option<&mut ForwardPanelState> {
+        self.session_pane_mut()
+            .and_then(|p| p.forwards_panel.as_mut())
+    }
+
+    /// 快捷访问 Zmodem 传输状态。
+    pub(crate) fn zmodem(&self) -> Option<&crate::zmodem::ZmodemState> {
+        self.session_pane().and_then(|p| p.zmodem.as_ref())
+    }
+
+    /// 快捷访问系统资源监控数据。
+    pub(crate) fn system_stats(&self) -> Option<&SystemStats> {
+        self.session_pane().and_then(|p| p.system_stats.as_ref())
+    }
+
+    /// 快捷访问网络流量监控数据。
+    pub(crate) fn network_traffic(&self) -> Option<&NetworkTraffic> {
+        self.session_pane().and_then(|p| p.network_traffic.as_ref())
+    }
+
     pub(crate) fn display_name(&self) -> String {
-        if self.player.is_some() {
+        if self.is_player() {
             return self.title.clone();
         }
         let name = self.session.name.trim();
@@ -106,6 +193,7 @@ impl TerminalTab {
         }
     }
 
+    /// 构造处于连接等待中的实时通信终端标签。
     pub(crate) fn pending(id: TabId, session: Session) -> Self {
         let title = session.name.clone();
         Self {
@@ -115,18 +203,25 @@ impl TerminalTab {
             connection_id: None,
             title,
             status: TabStatus::Connecting,
-            terminal: None,
-            sftp: None,
-            forwards_panel: None,
-            forward_statuses: HashMap::new(),
-            system_stats: None,
-            network_traffic: None,
-            _startup_task: None,
-            _subscription: None,
-            reconnect_attempts: 0,
-            reconnect_task: None,
-            zmodem: None,
-            player: None,
+            content: TabContent::Session(Box::default()),
+        }
+    }
+
+    /// 构造已就绪的录像回放播放器标签。
+    pub(crate) fn player_tab(
+        id: TabId,
+        session: Session,
+        title: String,
+        player: Entity<crate::cast_player::CastPlayerView>,
+    ) -> Self {
+        Self {
+            id,
+            session_id: session.id,
+            session,
+            connection_id: None,
+            title,
+            status: TabStatus::Connected,
+            content: TabContent::Player(player),
         }
     }
 }

@@ -171,7 +171,7 @@ impl AppShell {
                                             .tabs
                                             .iter()
                                             .find(|t| t.id == tab_id)
-                                            .and_then(|t| t.sftp.as_ref())
+                                            .and_then(|t| t.sftp())
                                             .and_then(|p| p.selected.clone());
                                         if let Some(remote_path) = selected {
                                             this.sftp_edit_remote_file(
@@ -240,7 +240,7 @@ impl AppShell {
                                             .tabs
                                             .iter_mut()
                                             .find(|t| t.id == tab_id)
-                                            .and_then(|t| t.sftp.as_mut())
+                                            .and_then(|t| t.sftp_mut())
                                         {
                                             panel.sync_navigation = !panel.sync_navigation;
                                             panel.status = Some(
