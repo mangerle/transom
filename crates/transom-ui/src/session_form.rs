@@ -3,10 +3,10 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::{
-    AuthMethod, Connection, IdentityId, OutboundProxy, ProxyAuth, ProxyJumpConfig,
-    SerialConnection, SerialDataBits, SerialFlowControl, SerialParity, SerialPortDescriptor,
-    SerialStopBits, Session, SessionColor, SessionIcon, SessionId, SshConnection, StartupCommands,
-    TelnetConnection, TerminalProfile, TextEncoding,
+    AuthMethod, BlockViewOverride, Connection, IdentityId, OutboundProxy, ProxyAuth,
+    ProxyJumpConfig, SerialConnection, SerialDataBits, SerialFlowControl, SerialParity,
+    SerialPortDescriptor, SerialStopBits, Session, SessionColor, SessionIcon, SessionId,
+    SshConnection, StartupCommands, TelnetConnection, TerminalProfile, TextEncoding,
 };
 use zeroize::Zeroizing;
 
@@ -46,6 +46,8 @@ pub(crate) struct SessionFormInit {
     pub folder_options: Vec<String>,
     /// 全局出站代理，仅用于"跟随全局"的说明文字。
     pub global_proxy: OutboundProxy,
+    /// 语义块模式覆盖。
+    pub block_view: BlockViewOverride,
 }
 
 pub(crate) struct SessionForm {
@@ -102,6 +104,8 @@ pub(crate) struct SessionForm {
     pub proxy_password: Entity<InputState>,
     /// 全局代理快照，用于"跟随全局"的说明文字。
     pub global_proxy: OutboundProxy,
+    /// 语义块模式覆盖：跟随全局/强制开启/强制关闭。
+    pub block_view: BlockViewOverride,
     /// 会话专属图标；`Auto` 表示按连接类型自动取图标。
     pub icon: SessionIcon,
     /// 会话环境色；`None` 表示不染色。
@@ -174,6 +178,8 @@ struct SessionFormSeed {
     folder_options: Vec<String>,
     /// 全局代理快照。
     global_proxy: OutboundProxy,
+    /// 语义块模式覆盖。
+    block_view: BlockViewOverride,
 }
 
 impl SessionForm {
@@ -185,6 +191,7 @@ impl SessionForm {
             jump_options,
             folder_options,
             global_proxy,
+            block_view,
         } = init;
         let connection = match base.as_ref().map(|session| &session.connection) {
             Some(Connection::Serial(_)) => ConnectionChoice::Serial,
@@ -305,6 +312,7 @@ impl SessionForm {
                 jump_options,
                 folder_options,
                 global_proxy,
+                block_view,
             },
         )
     }
@@ -399,6 +407,7 @@ impl SessionForm {
             jump_options,
             folder_options,
             global_proxy,
+            block_view,
         } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
@@ -568,6 +577,7 @@ impl SessionForm {
                 &rust_i18n::t!("form.proxy_password_placeholder"),
             ),
             global_proxy,
+            block_view,
             icon,
             color,
             confirm_delete: false,
@@ -621,6 +631,7 @@ impl SessionForm {
         };
         session.icon = self.icon;
         session.color = self.color;
+        session.block_view = self.block_view;
         if self.base.is_none() {
             session.terminal = TerminalProfile::default();
         }

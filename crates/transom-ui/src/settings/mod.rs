@@ -198,6 +198,12 @@ impl AppShell {
         self.settings_modal.scrollback.update(cx, |input, cx| {
             input.set_value(&scrollback, window, cx);
         });
+        let block_rows = self.settings.block_view.auto_collapse_rows.to_string();
+        self.settings_modal
+            .block_collapse_rows
+            .update(cx, |input, cx| {
+                input.set_value(block_rows, window, cx);
+            });
         self.fill_sync_form(window, cx);
         self.fill_proxy_form(window, cx);
         self.settings_modal.open = true;
@@ -433,6 +439,17 @@ impl AppShell {
         }
         self.sync_terminal_palette(cx);
         self.commit_proxy_form(cx);
+        // 阈值越界回退存量；0 是"不自动折叠"的合法表达。
+        if let Ok(rows) = self
+            .settings_modal
+            .block_collapse_rows
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<usize>()
+        {
+            self.settings.block_view.auto_collapse_rows = rows;
+        }
         // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
         self.settings_modal.window_appearance_snapshot = None;
         if let Err(error) = self.services.settings_store.save(&self.settings) {
@@ -446,6 +463,7 @@ impl AppShell {
             );
             self.apply_appearance_to_live_panes(cx);
             self.apply_shortcut_settings(cx);
+            self.apply_block_view_settings(cx);
             // 实时下发最新触发器规则给所有运行中的终端窗格
             let triggers = self.settings.triggers.clone();
             let terminals: Vec<Entity<TerminalView>> = self
@@ -480,6 +498,31 @@ impl AppShell {
             .collect();
         for terminal in terminals {
             terminal.update(cx, |view, cx| view.apply_appearance(&profile, cx));
+        }
+    }
+
+    /// 把语义块偏好热下发给所有运行中的窗格。
+    ///
+    /// 每个窗格按自己会话的覆盖档位解析，不能统一吃全局值：生产构建机可能
+    /// 强制开启，而同一窗口里的交换机 Console 强制关闭。
+    pub(crate) fn apply_block_view_settings(&self, cx: &mut Context<Self>) {
+        let global = self.settings.block_view;
+        let terminals: Vec<(Entity<TerminalView>, transom_core::BlockViewSettings)> = self
+            .tabs
+            .iter()
+            .filter_map(|tab| {
+                let terminal = tab.terminal.clone()?;
+                let override_ = self
+                    .catalog
+                    .sessions
+                    .iter()
+                    .find(|session| session.id == tab.session_id)
+                    .map_or(tab.session.block_view, |session| session.block_view);
+                Some((terminal, global.resolved(override_)))
+            })
+            .collect();
+        for (terminal, settings) in terminals {
+            terminal.update(cx, |view, cx| view.set_block_view(Some(settings), cx));
         }
     }
 

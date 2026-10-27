@@ -1,3 +1,4 @@
+use crate::block::{BlockLayout, BlockStore, CommandBlock};
 use crate::event::TerminalEventProxy;
 use crate::osc::{OscEvent, OscScanner};
 use crate::renderer::DamageInfo;
@@ -6,7 +7,7 @@ use crate::search::SearchState;
 /// 视图来不及取走时允许暂存的 OSC 事件上限。
 const MAX_PENDING_OSC_EVENTS: usize = 64;
 use alacritty_terminal::grid::{Dimensions, Scroll};
-use alacritty_terminal::index::{Column, Point, Side};
+use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionRange, SelectionType};
 use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
@@ -14,7 +15,7 @@ use alacritty_terminal::vte::ansi::{
     CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle, Processor,
 };
 use std::time::Instant;
-use transom_core::{TerminalCursorShape, TerminalProfile, TerminalSize};
+use transom_core::{BlockViewSettings, TerminalCursorShape, TerminalProfile, TerminalSize};
 
 struct TermDimensions {
     cols: usize,
@@ -58,6 +59,12 @@ pub struct TerminalEngine {
     command_input_point: Option<Point>,
     /// 全文检索状态（查询、命中快照与游标），行为见 [`crate::search`]。
     pub(crate) search: SearchState,
+    /// OSC 133 命令块：采集、折叠状态与自动折叠阈值。
+    blocks: BlockStore,
+    /// 滚动缓冲容量；达到上限后旧行开始淘汰，块行号随之失去意义。
+    scrollback_limit: usize,
+    /// 滚动缓冲已写满：停止记录块，避免折叠到错误的行段。
+    blocks_saturated: bool,
     /// 最近一次收到字节流的时刻，用于把重扫推迟到输出停歇之后。
     pub(crate) last_write: Option<Instant>,
     /// 缓冲区纪元：任何新写入或网格重建都会推进，用于判定命中快照是否失效。
@@ -97,6 +104,9 @@ impl TerminalEngine {
             osc_scanner: OscScanner::default(),
             osc_events: Vec::new(),
             command_input_point: None,
+            blocks: BlockStore::default(),
+            scrollback_limit: profile.scrollback,
+            blocks_saturated: profile.scrollback == 0,
             search: SearchState::default(),
             last_write: None,
             epoch: 0,
@@ -104,57 +114,98 @@ impl TerminalEngine {
     }
 
     pub fn process(&mut self, bytes: &[u8]) {
-        let mut saw_input_start = false;
-        if !bytes.is_empty() {
-            self.last_write = Some(Instant::now());
-            self.epoch = self.epoch.wrapping_add(1);
-            // 先旁路扫 OSC，再把同一份字节交给内核解析器：扫描器不消费输入，
-            // 因此畸形序列也只影响通知，不影响屏幕内容。
-            let scanned = self.osc_scanner.feed(bytes);
-            // 只看这批新扫到的标记：队列里可能有视图还没取走的旧 CommandStart，
-            // 按队列判断会在后续每一批字节上反复重置起点，采到半条命令。
-            saw_input_start = scanned
-                .iter()
-                .any(|event| matches!(event, OscEvent::CommandStart));
-            // 采命令文本必须在内核消费这批字节**之前**：此刻网格里是"提示符 +
-            // 用户已敲并回显的整行"，而命令的输出还没进来。
-            self.collect_command_text(&scanned);
-            self.osc_events.extend(scanned);
-            if self.osc_events.len() > MAX_PENDING_OSC_EVENTS {
-                // 视图长时间没取走（例如标签被隐藏）时丢最旧的，绝不让队列无界增长。
-                let drop = self.osc_events.len() - MAX_PENDING_OSC_EVENTS;
-                self.osc_events.drain(..drop);
-            }
+        if bytes.is_empty() {
+            return;
         }
-        self.parser.advance(&mut self.term, bytes);
-        // 记录输入起点要在这批字节入屏**之后**：shell 把 `A`/`B` 嵌在 PS1 里，
-        // 提示符字形与本批字节同源，提前取光标会落在提示符之前，采到提示符文本。
-        if saw_input_start {
-            self.command_input_point = Some(self.term.grid().cursor.point);
+        self.last_write = Some(Instant::now());
+        self.epoch = self.epoch.wrapping_add(1);
+        // 先旁路扫 OSC，再把同一份字节切成若干段喂给内核：在每条 A/B/C/D
+        // 标记处停下取光标，块边界才能落在标记发生的那一行。扫描器不消费
+        // 输入，畸形序列也只影响通知，不影响屏幕内容。
+        let scanned = self.osc_scanner.feed_with_offsets(bytes);
+        let mut consumed = 0usize;
+        for (offset, event) in &scanned {
+            let end = (*offset + 1).min(bytes.len());
+            if end > consumed {
+                self.parser.advance(&mut self.term, &bytes[consumed..end]);
+                consumed = end;
+            }
+            self.handle_marker(event);
+        }
+        if consumed < bytes.len() {
+            self.parser.advance(&mut self.term, &bytes[consumed..]);
+        }
+        self.osc_events
+            .extend(scanned.into_iter().map(|(_, event)| event));
+        if self.osc_events.len() > MAX_PENDING_OSC_EVENTS {
+            // 视图长时间没取走（例如标签被隐藏）时丢最旧的，绝不让队列无界增长。
+            let drop = self.osc_events.len() - MAX_PENDING_OSC_EVENTS;
+            self.osc_events.drain(..drop);
+        }
+        // 滚动缓冲写满后旧行开始淘汰，绝对行号整体平移；从此不再采集块，
+        // 宁可退回经典视图，也不把错误行段标成某条命令的输出。
+        if self.scrollback_limit > 0
+            && self.term.grid().history_size() >= self.scrollback_limit
+            && !self.blocks_saturated
+        {
+            log::debug!("滚动缓冲已达上限，停止采集语义块并回退到经典视图");
+            self.blocks_saturated = true;
+            self.blocks.clear();
         }
     }
 
-    /// 按 OSC 133 的 `C`/`E` 采集命令文本，产出一条 `CommandRecorded`。
+    /// 单条 OSC 133 标记：按当前位置更新命令块。
     ///
-    /// 两条来源按优先级取：集成直接上报的命令文本最准（不受折行与重绘影响），
-    /// 没有参数时退回"提示符结束点到光标"的网格快照。两者都拿不到就不记录，
-    /// 绝不从滚动缓冲里猜——猜出来的历史命令比没有历史更糟。
-    fn collect_command_text(&mut self, scanned: &[OscEvent]) {
-        for event in scanned {
-            let OscEvent::PreExec { command } = event else {
-                continue;
-            };
-            let text = match command {
-                Some(text) => text.trim().to_string(),
-                None => self.grid_command_text().unwrap_or_default(),
-            };
-            // 空串、单字符与以空格开头的命令（HIST_IGNORE_SPACE 约定）都不记录。
-            if text.chars().count() < 2 || text.starts_with(' ') {
-                continue;
+    /// 调用时内核已消费到该标记所在字节，网格光标即标记发生时的位置。
+    fn handle_marker(&mut self, event: &OscEvent) {
+        match event {
+            OscEvent::PromptStart => {
+                let line = self.cursor_absolute_line();
+                if !self.blocks_saturated {
+                    self.blocks.on_prompt(line);
+                }
             }
-            self.osc_events
-                .push(OscEvent::CommandRecorded { command: text });
+            OscEvent::CommandStart => {
+                self.command_input_point = Some(self.term.grid().cursor.point);
+                if !self.blocks_saturated {
+                    self.blocks.on_command_start(self.cursor_absolute_line());
+                }
+            }
+            OscEvent::PreExec { command } => {
+                let text = match command {
+                    Some(text) => text.trim().to_string(),
+                    None => self.grid_command_text().unwrap_or_default(),
+                };
+                self.record_command(&text);
+                if !self.blocks_saturated {
+                    self.blocks.on_preexec(self.cursor_absolute_line(), text);
+                }
+            }
+            OscEvent::CommandFinish {
+                exit_code,
+                duration_ms,
+            } => {
+                if !self.blocks_saturated {
+                    self.blocks.on_finish(
+                        *exit_code,
+                        *duration_ms,
+                        self.cursor_absolute_line(),
+                        false,
+                    );
+                }
+            }
+            OscEvent::CommandRecorded { .. } | OscEvent::Notify { .. } => {}
         }
+    }
+
+    /// 记录一条可进入历史的命令；短行与刻意不留档的行跳过。
+    fn record_command(&mut self, text: &str) {
+        if text.chars().count() < 2 || text.starts_with(' ') {
+            return;
+        }
+        self.osc_events.push(OscEvent::CommandRecorded {
+            command: text.to_string(),
+        });
     }
 
     /// 从记录的输入起点读到当前光标，拼出用户敲下的那一行。
@@ -206,6 +257,134 @@ impl TerminalEngine {
         Some(text.trim_end().to_string())
     }
 
+    fn cursor_absolute_line(&self) -> i64 {
+        self.absolute_line(self.term.grid().cursor.point.line)
+    }
+
+    fn absolute_line(&self, line: Line) -> i64 {
+        self.term.grid().history_size() as i64 + i64::from(line.0)
+    }
+
+    /// 当前设置下构建折叠行映射；`None` 表示走经典连续流。
+    pub(crate) fn build_block_layout(
+        &self,
+        settings: Option<&BlockViewSettings>,
+    ) -> Option<BlockLayout> {
+        let settings = settings?;
+        if !settings.enabled || self.blocks_saturated {
+            return None;
+        }
+        // 备屏程序自己管理整屏坐标，重映射会破坏其鼠标与光标语义。
+        if self.term.mode().contains(TermMode::ALT_SCREEN) {
+            return None;
+        }
+        let grid = self.term.grid();
+        Some(crate::block::build_layout(
+            grid.history_size(),
+            grid.screen_lines(),
+            grid.display_offset(),
+            &self.blocks,
+            settings.style,
+        ))
+    }
+
+    /// 调整自动折叠阈值（全局设置热更新时调用）。
+    pub fn set_block_auto_collapse(&mut self, rows: usize) {
+        self.blocks.set_auto_collapse_rows(rows);
+    }
+
+    pub fn command_blocks(&self) -> impl Iterator<Item = &CommandBlock> {
+        self.blocks.blocks()
+    }
+
+    pub fn command_block(&self, id: u64) -> Option<&CommandBlock> {
+        self.blocks.block(id)
+    }
+
+    /// 切换指定块的折叠状态；返回是否命中。
+    pub fn toggle_block(&mut self, id: u64) -> bool {
+        self.blocks.toggle(id)
+    }
+
+    pub fn set_block_collapsed(&mut self, id: u64, collapsed: bool) {
+        self.blocks.set_collapsed(id, collapsed);
+    }
+
+    /// 覆盖某绝对行的命令块（供鼠标悬浮与右键菜单定位）。
+    pub fn command_block_at(&self, absolute_line: i64) -> Option<&CommandBlock> {
+        self.blocks.block_at(absolute_line)
+    }
+
+    /// 命令块的纯净输出文本；行尾空白已裁剪。
+    pub fn block_output_text(&self, id: u64) -> Option<String> {
+        let block = self.blocks.block(id)?;
+        self.read_absolute_lines(block.output_start_line, block.output_end_line)
+    }
+
+    /// 命令块对应的原始命令文本。
+    pub fn block_command_text(&self, id: u64) -> Option<String> {
+        self.blocks
+            .block(id)
+            .map(|block| block.command_text.clone())
+    }
+
+    /// 带耗时状态的 Markdown 代码块，供"复制为 Markdown"。
+    pub fn block_markdown(&self, id: u64) -> Option<String> {
+        let block = self.blocks.block(id)?;
+        let output = self
+            .read_absolute_lines(block.output_start_line, block.output_end_line)
+            .unwrap_or_default();
+        let command = if block.command_text.is_empty() {
+            "(未知命令)".to_string()
+        } else {
+            block.command_text.clone()
+        };
+        let status = match block.exit_code {
+            Some(code) => format!("退出码 {code}"),
+            None => "退出码未知".to_string(),
+        };
+        let duration = block
+            .duration_ms
+            .map(|ms| format!(" · 耗时 {}", crate::block::format_duration(ms)))
+            .unwrap_or_default();
+        Some(format!(
+            "```console\n$ {command}\n{output}```\n\n> {status}{duration}\n"
+        ))
+    }
+
+    /// 读取一段绝对行范围；越出 `[0, history + screen)` 的部分跳过。
+    fn read_absolute_lines(&self, start: i64, end: i64) -> Option<String> {
+        if end < start {
+            return Some(String::new());
+        }
+        let grid = self.term.grid();
+        let history = grid.history_size() as i64;
+        let screen = grid.screen_lines() as i64;
+        if start < 0 || end >= history + screen {
+            return None;
+        }
+        let cols = grid.columns();
+        let mut text = String::new();
+        for abs in start..=end {
+            let line = Line((abs - history) as i32);
+            let mut row = String::with_capacity(cols);
+            for col in 0..cols {
+                let cell = &grid[Point::new(line, Column(col))];
+                if cell
+                    .flags
+                    .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+                    || cell.c == '\0'
+                {
+                    continue;
+                }
+                row.push(cell.c);
+            }
+            text.push_str(row.trim_end());
+            text.push('\n');
+        }
+        Some(text)
+    }
+
     /// 取走并清空待处理的 OSC 事件。
     pub(crate) fn take_osc_events(&mut self) -> Vec<OscEvent> {
         std::mem::take(&mut self.osc_events)
@@ -219,7 +398,9 @@ impl TerminalEngine {
         }
         self.size = TerminalSize::new(width as u16, height as u16);
         self.term.resize(TermDimensions::new(width, height));
-        // 折行重排会让所有缓存行号失去意义。
+        // 折行重排会让所有缓存行号失去意义，命令块一并清空。
+        self.blocks.clear();
+        self.blocks_saturated = self.scrollback_limit == 0;
         self.epoch = self.epoch.wrapping_add(1);
     }
 
@@ -390,6 +571,61 @@ mod tests {
         let (mut engine, _events) = engine(40, 3);
         engine.process(b"plain output without integration\x1b]133;C\x1b\\");
         assert!(captured(&engine).is_empty());
+    }
+
+    /// 一秒钟内跑完的小命令与提示符常挤在同一批字节里：按 OSC 字节偏移
+    /// 分段推进后，命令文本、输出行与退出码都必须完整落在同一条块上。
+    #[test]
+    fn block_captures_fast_command_in_one_chunk() {
+        let (mut engine, _events) = engine(40, 10);
+        engine.process(
+            b"\x1b]133;A\x1b\\$ \x1b]133;B\x1b\\echo hi\r\n\x1b]133;C\x1b\\hi\r\n\x1b]133;D;0;12\x1b\\\x1b]133;A\x1b\\$ ",
+        );
+        let blocks: Vec<_> = engine.command_blocks().cloned().collect();
+        assert_eq!(blocks.len(), 1, "应采集到一条命令块");
+        let block = &blocks[0];
+        assert_eq!(block.command_text, "echo hi");
+        assert_eq!(block.exit_code, Some(0));
+        assert_eq!(block.duration_ms, Some(12));
+        assert!(block.output_rows() >= 1, "输出至少包含 hi 所在行");
+        let output = engine.block_output_text(block.id).expect("块输出应可读取");
+        assert!(output.contains("hi"), "输出: {output:?}");
+        let markdown = engine.block_markdown(block.id).expect("Markdown 应可生成");
+        assert!(markdown.starts_with("```console\n$ echo hi"));
+        assert!(markdown.contains("退出码 0"));
+    }
+
+    /// 自动折叠阈值在收尾结算时生效，布局把输出压成横幅。
+    #[test]
+    fn block_auto_collapses_and_layout_shows_banner() {
+        let (mut engine, _events) = engine(40, 10);
+        engine.set_block_auto_collapse(1);
+        engine.process(
+            b"\x1b]133;A\x1b\\$ \x1b]133;B\x1b\\seq 3\r\n\x1b]133;C\x1b\\1\r\n2\r\n3\r\n\x1b]133;D;0\x1b\\\x1b]133;A\x1b\\$ ",
+        );
+        let block = engine.command_blocks().next().cloned().expect("命令块");
+        assert!(block.collapsed, "3 行输出应超过阈值 1 自动折叠");
+        let settings = BlockViewSettings {
+            enabled: true,
+            style: transom_core::BlockViewStyle::Card,
+            auto_collapse_rows: 1,
+        };
+        let layout = engine
+            .build_block_layout(Some(&settings))
+            .expect("启用后应有布局");
+        assert!(
+            layout
+                .slots()
+                .iter()
+                .any(|slot| matches!(slot, crate::block::VisualSlot::Banner { .. })),
+            "折叠块必须渲染为横幅"
+        );
+        // 关闭块视图后回到经典连续流。
+        let disabled = BlockViewSettings {
+            enabled: false,
+            ..settings
+        };
+        assert!(engine.build_block_layout(Some(&disabled)).is_none());
     }
 
     fn captured(engine: &TerminalEngine) -> Vec<String> {

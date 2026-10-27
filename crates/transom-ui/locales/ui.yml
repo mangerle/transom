@@ -321,6 +321,21 @@ form:
   error_proxy_port:
     en: Proxy port must be a number between 1 and 65535
     zh-CN: 代理端口必须是 1 到 65535 之间的数字
+  block_view:
+    en: Semantic block view
+    zh-CN: 语义块视图
+  block_view_follow:
+    en: Follow global
+    zh-CN: 跟随全局
+  block_view_enabled:
+    en: Always on
+    zh-CN: 强制开启
+  block_view_disabled:
+    en: Always off
+    zh-CN: 强制关闭
+  block_view_hint:
+    en: Blocks are detected through OSC 133 shell integration; switching takes effect immediately without reconnecting.
+    zh-CN: 命令块依赖 Shell 的 OSC 133 集成识别；切换即时生效，无需重新连接。
   identity:
     en: Credential template
     zh-CN: 凭据模板
@@ -1573,6 +1588,30 @@ settings:
   proxy_group:
     en: Outbound Proxy
     zh-CN: 出站代理
+  block_view_group:
+    en: Semantic Blocks
+    zh-CN: 语义块
+  block_view_enable:
+    en: Enable semantic block view
+    zh-CN: 启用语义块视图
+  block_view_enable_desc:
+    en: Collapse long outputs into status banners based on OSC 133 markers; the underlying terminal grid is unchanged.
+    zh-CN: 依据 OSC 133 标记把长输出折叠为状态横幅；底层仍是标准字符网格，不影响 vim/tmux。
+  block_view_style:
+    en: Block appearance
+    zh-CN: 块外观样式
+  block_view_card:
+    en: Card
+    zh-CN: 现代卡片
+  block_view_minimal:
+    en: Minimal
+    zh-CN: 极简边缘线
+  block_view_rows:
+    en: Auto-collapse threshold (rows, 0 disables)
+    zh-CN: 自动折叠阈值（行数，0 表示不折叠）
+  block_view_rows_hint:
+    en: Outputs longer than this are folded into a banner. Changes apply to open panes immediately.
+    zh-CN: 输出超过该行数时自动折叠为横幅；保存后立即作用于已打开窗格。
   proxy_mode:
     en: Proxy protocol
     zh-CN: 代理协议
@@ -1942,6 +1981,9 @@ settings:
   shortcut_terminal_search:
     en: Search Terminal Buffer
     zh-CN: 搜索终端缓冲区
+  shortcut_toggle_block_view:
+    en: Toggle Semantic Block View
+    zh-CN: 切换语义块视图
   shortcut_zoom_pane:
     en: Maximize Focused Pane
     zh-CN: 最大化当前窗格
@@ -2467,3 +2509,11 @@ trigger:
     zh-CN: "触发器 '%{name}' 已自动应答: %{reply}"
 
 
+
+block_view_status:
+  enabled:
+    en: Switched to semantic block view
+    zh-CN: 已切换到语义块视图
+  disabled:
+    en: Switched to classic continuous view
+    zh-CN: 已切换到经典连续流

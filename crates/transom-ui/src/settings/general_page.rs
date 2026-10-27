@@ -9,7 +9,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
-use transom_core::BellStyle;
+use transom_core::{BellStyle, BlockViewStyle};
 
 impl AppShell {
     /// 语言组：界面语言切换。
@@ -178,6 +178,76 @@ impl AppShell {
                 );
         }
         content.into_any_element()
+    }
+
+    /// 语义块视图组：全局开关、外观样式与自动折叠阈值。
+    pub(crate) fn render_settings_block_view(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let enabled = self.settings.block_view.enabled;
+        let style = self.settings.block_view.style;
+        let rows_input = self.settings_modal.block_collapse_rows.clone();
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.block_view_enable",
+                Some("settings.block_view_enable_desc"),
+                Switch::new("toggle-block-view")
+                    .checked(enabled)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.block_view.enabled = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.block_view_style",
+                None,
+                h_flex()
+                    .gap_1()
+                    .children(
+                        [
+                            (
+                                "block-style-card",
+                                "settings.block_view_card",
+                                BlockViewStyle::Card,
+                            ),
+                            (
+                                "block-style-minimal",
+                                "settings.block_view_minimal",
+                                BlockViewStyle::Minimal,
+                            ),
+                        ]
+                        .into_iter()
+                        .map(|(id, key, value)| {
+                            Button::new(id)
+                                .small()
+                                .label(rust_i18n::t!(key).to_string())
+                                .selected(style == value)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.settings.block_view.style = value;
+                                    cx.notify();
+                                }))
+                        }),
+                    )
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::form_field(
+                rust_i18n::t!("settings.block_view_rows").to_string(),
+                rows_input,
+                p,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.block_view_rows_hint").to_string()),
+            )
+            .into_any_element()
     }
 
     /// 桌面集成组：默认终端注册开关（仅 Linux）。

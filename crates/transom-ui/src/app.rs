@@ -343,6 +343,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) scrollback: Entity<InputState>,
     pub(crate) word_separators: Entity<InputState>,
     pub(crate) notify_threshold: Entity<InputState>,
+    /// 语义块自动折叠阈值（行数，0 表示不自动折叠）。
+    pub(crate) block_collapse_rows: Entity<InputState>,
     pub(crate) highlight_keywords: Entity<InputState>,
     /// 窗口整体透明度滑块（百分比）。
     pub(crate) window_transparency: Entity<SliderState>,
@@ -702,6 +704,12 @@ impl AppShell {
                 .placeholder("10")
                 .default_value(notify_threshold_val)
         });
+        let block_collapse_rows_val = settings.block_view.auto_collapse_rows.to_string();
+        let settings_block_collapse_rows = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("150")
+                .default_value(block_collapse_rows_val)
+        });
         let scrollback_val = settings.terminal_profile.scrollback.to_string();
         let settings_scrollback = cx.new(|cx| {
             InputState::new(window, cx)
@@ -841,6 +849,7 @@ impl AppShell {
                 scrollback: settings_scrollback,
                 word_separators: settings_word_separators,
                 notify_threshold: settings_notify_threshold,
+                block_collapse_rows: settings_block_collapse_rows,
                 highlight_keywords: settings_highlight_keywords,
                 window_transparency: settings_window_transparency,
                 window_appearance_snapshot: None,

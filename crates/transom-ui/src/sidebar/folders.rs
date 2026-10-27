@@ -111,6 +111,7 @@ impl AppShell {
                 jump_options: self.jump_options(None),
                 folder_options: self.folder_paths(),
                 global_proxy: self.settings.proxy.clone(),
+                block_view: transom_core::BlockViewOverride::FollowGlobal,
             },
         );
         let defaults = self.catalog.inherited_folder_defaults(folder_id);

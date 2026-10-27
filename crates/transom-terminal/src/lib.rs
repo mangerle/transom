@@ -1,6 +1,7 @@
 //! Terminal emulation and GPUI rendering.
 
 mod audit;
+pub mod block;
 mod engine;
 mod event;
 mod history_popup;

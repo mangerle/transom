@@ -1,4 +1,5 @@
 use crate::audit::AuditSink;
+use crate::block::BlockLayout;
 use crate::engine::TerminalEngine;
 use crate::event::{HistoryProvider, TerminalEvent};
 use crate::input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
@@ -11,8 +12,12 @@ use alacritty_terminal::index::{Column, Line, Point as AlacPoint, Side};
 use alacritty_terminal::selection::SelectionType;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::{CursorShape, Rgb as AnsiRgb};
+use gpui_kit::assets::IconName;
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::InputState;
+use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::*;
 use parking_lot::Mutex;
 use std::io::{Read, Write};
@@ -22,8 +27,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
 use transom_core::{
-    Rgb as PaletteColor, TerminalControlHandle, TerminalInteraction, TerminalIo, TerminalProfile,
-    TerminalSize,
+    BlockViewSettings, Rgb as PaletteColor, TerminalControlHandle, TerminalInteraction, TerminalIo,
+    TerminalProfile, TerminalSize,
 };
 
 const CONTEXT: &str = "Terminal";
@@ -44,6 +49,8 @@ pub(crate) struct LayoutMetrics {
     pub(crate) rows: usize,
     /// 检索刻度带的矩形；仅在检索栏打开的一帧里有值，供鼠标跳转命中测试。
     pub(crate) search_strip: Option<Bounds<Pixels>>,
+    /// 终端画布在本帧占据的矩形；悬浮操作胶囊按它定位。
+    pub(crate) bounds: Option<Bounds<Pixels>>,
 }
 
 struct PreparedTerminal {
@@ -51,6 +58,8 @@ struct PreparedTerminal {
     search: Option<crate::search::SearchPaint>,
     /// 本帧需要重建行缓存的损伤集合。
     damage: crate::renderer::DamageInfo,
+    /// 本帧的语义块折叠映射；`None` 表示经典连续流。
+    block_layout: Option<Arc<BlockLayout>>,
 }
 
 pub struct TerminalView {
@@ -96,6 +105,12 @@ pub struct TerminalView {
     pub(crate) search_regex_mode: bool,
     /// 检索输入框的事件订阅；随实体存活，收起搜索栏也不释放（下次复用同一输入框）。
     pub(crate) _search_subscription: Option<Subscription>,
+    /// 语义块视图配置；`None` 或 `enabled == false` 时走经典连续流。
+    block_view: Option<BlockViewSettings>,
+    /// 最近一帧的折叠行映射，鼠标命中与悬浮胶囊按它定位。
+    block_layout: Arc<Mutex<Option<Arc<BlockLayout>>>>,
+    /// 当前悬浮的命令块与所在可见行；`None` 表示不在块上。
+    hover_block: Option<(u64, usize)>,
     _reader_task: Task<()>,
     _blink_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
@@ -308,6 +323,9 @@ impl TerminalView {
             search_input: None,
             search_regex_mode: false,
             _search_subscription: None,
+            block_view: None,
+            block_layout: Arc::new(Mutex::new(None)),
+            hover_block: None,
             _reader_task: reader_task,
             _blink_task: blink_task,
             _focus_subscriptions: vec![on_focus, on_blur],
@@ -319,6 +337,78 @@ impl TerminalView {
     /// 从设置重载当前终端的触发器规则。
     pub fn reload_triggers(&mut self, settings: &transom_core::TriggerSettings) {
         self.trigger_engine.lock().reload(settings);
+    }
+
+    /// 应用语义块视图配置；`None` 或 `enabled == false` 时回到经典连续流。
+    ///
+    /// 热切换只改下一帧的行映射与自动折叠阈值，不重建会话、不清屏，
+    /// 也不影响已建立的选择与历史缓冲。
+    pub fn set_block_view(&mut self, settings: Option<BlockViewSettings>, cx: &mut Context<Self>) {
+        if let Some(settings) = settings {
+            self.engine
+                .lock()
+                .set_block_auto_collapse(settings.auto_collapse_rows);
+        }
+        self.block_view = settings;
+        if !self.block_view.is_some_and(|settings| settings.enabled) {
+            self.hover_block = None;
+            *self.block_layout.lock() = None;
+        }
+        cx.notify();
+    }
+
+    /// 运行时一键切换语义块/经典连续流；返回切换后是否启用块视图。
+    pub fn toggle_block_view(&mut self, cx: &mut Context<Self>) -> bool {
+        let mut settings = self.block_view.unwrap_or_default();
+        settings.enabled = !settings.enabled;
+        let enabled = settings.enabled;
+        self.set_block_view(Some(settings), cx);
+        enabled
+    }
+
+    pub fn block_view_enabled(&self) -> bool {
+        self.block_view.is_some_and(|settings| settings.enabled)
+    }
+
+    /// 切换指定命令块的折叠状态（横幅点击与悬浮胶囊共用）。
+    pub fn toggle_block(&mut self, id: u64, cx: &mut Context<Self>) {
+        if self.engine.lock().toggle_block(id) {
+            cx.notify();
+        }
+    }
+
+    fn copy_block_output(&mut self, id: u64, cx: &mut Context<Self>) {
+        let text = self.engine.lock().block_output_text(id);
+        if let Some(text) = text.filter(|text| !text.is_empty()) {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+            cx.emit(TerminalEvent::ClipboardStored);
+        }
+    }
+
+    fn copy_block_markdown(&mut self, id: u64, cx: &mut Context<Self>) {
+        let text = self.engine.lock().block_markdown(id);
+        if let Some(text) = text {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+            cx.emit(TerminalEvent::ClipboardStored);
+        }
+    }
+
+    /// 重新执行命令块：把命令写进当前窗格并回车。
+    fn rerun_block(&mut self, id: u64, cx: &mut Context<Self>) {
+        let Some(command) = self.engine.lock().block_command_text(id) else {
+            return;
+        };
+        if command.trim().is_empty() {
+            return;
+        }
+        let mut bytes = command.into_bytes();
+        bytes.push(b'\r');
+        if self.write_input(&bytes) {
+            self.engine.lock().scroll_to_bottom();
+            self.input_line.clear();
+            self.clear_suggestions();
+            cx.notify();
+        }
     }
 
     fn tick_cursor_blink(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -619,8 +709,115 @@ impl TerminalView {
 
     fn hit_test_grid_point(&self, position: Point<Pixels>) -> Option<AlacPoint> {
         let (row, col) = self.hit_test_screen_cell(position)?;
+        // 折叠模式下可见行与网格行不再一一对应：命中必须查行映射，
+        // 否则选择会落到被隐藏的输出区或错位的行上。
+        if let Some(layout) = self.block_layout.lock().clone() {
+            return layout
+                .line_at(row)
+                .map(|line| AlacPoint::new(line, Column(col)));
+        }
         let offset = self.engine.lock().display_offset() as i32;
         Some(AlacPoint::new(Line(row as i32 - offset), Column(col)))
+    }
+
+    /// 命中折叠横幅时返回块 ID。
+    fn banner_at_position(&self, position: Point<Pixels>) -> Option<u64> {
+        let (row, _) = self.hit_test_screen_cell(position)?;
+        self.block_layout.lock().as_ref()?.banner_at(row)
+    }
+
+    /// 依据指针位置更新悬浮命令块；只在跨越块边界时请求重绘。
+    fn update_hover_block(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let next = self.hover_block_at_position(position);
+        if next != self.hover_block {
+            self.hover_block = next;
+            cx.notify();
+        }
+    }
+
+    fn hover_block_at_position(&self, position: Point<Pixels>) -> Option<(u64, usize)> {
+        let (row, _) = self.hit_test_screen_cell(position)?;
+        let layout = self.block_layout.lock().clone()?;
+        if let Some(id) = layout.banner_at(row) {
+            return Some((id, row));
+        }
+        let line = layout.line_at(row)?;
+        let engine = self.engine.lock();
+        let absolute = engine.grid().history_size() as i64 + i64::from(line.0);
+        engine
+            .command_block_at(absolute)
+            .map(|block| (block.id, row))
+    }
+
+    /// 悬浮操作胶囊：复制输出、复制 Markdown、重跑与折叠切换。
+    fn render_block_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (block_id, row) = self.hover_block?;
+        let metrics = *self.metrics.lock();
+        let bounds = metrics.bounds?;
+        if metrics.cell_height <= px(0.0) {
+            return None;
+        }
+        let top = metrics.origin.y - bounds.origin.y + metrics.cell_height * row as f32;
+        let collapsed = self
+            .engine
+            .lock()
+            .command_block(block_id)
+            .is_some_and(|block| block.collapsed);
+        let fold_icon = if collapsed {
+            IconName::UnfoldVertical
+        } else {
+            IconName::FoldVertical
+        };
+        let fold_id = ElementId::Name(format!("block-fold-{block_id}").into());
+        let copy_id = ElementId::Name(format!("block-copy-{block_id}").into());
+        let markdown_id = ElementId::Name(format!("block-markdown-{block_id}").into());
+        let rerun_id = ElementId::Name(format!("block-rerun-{block_id}").into());
+        Some(
+            div()
+                .id(ElementId::Name(format!("block-actions-{block_id}").into()))
+                .absolute()
+                .top(top)
+                .right(px(8.0))
+                .flex()
+                .gap_1()
+                .child(
+                    Button::new(copy_id)
+                        .ghost()
+                        .small()
+                        .icon(IconName::Copy)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.copy_block_output(block_id, cx);
+                        })),
+                )
+                .child(
+                    Button::new(markdown_id)
+                        .ghost()
+                        .small()
+                        .icon(IconName::FileText)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.copy_block_markdown(block_id, cx);
+                        })),
+                )
+                .child(
+                    Button::new(rerun_id)
+                        .ghost()
+                        .small()
+                        .icon(IconName::Play)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.rerun_block(block_id, cx);
+                        })),
+                )
+                .child(
+                    Button::new(fold_id)
+                        .ghost()
+                        .small()
+                        .icon(fold_icon)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.toggle_block(block_id, cx);
+                        })),
+                )
+                .into_any_element(),
+        )
     }
 
     fn send_mouse_event(
@@ -732,17 +929,18 @@ impl TerminalView {
             return;
         }
         window.focus(&self.focus_handle, cx);
+        if let Some(block_id) = self.banner_at_position(event.position) {
+            self.toggle_block(block_id, cx);
+            return;
+        }
         let mode = self.engine.lock().mode();
 
         match event.button {
             MouseButton::Right => {
-                if self.interaction.right_click_paste && !event.modifiers.shift {
+                // 右键主语义是打开菜单；Shift+右键保留"快速粘贴"，
+                // 粘贴后仍可再从菜单切换块视图。
+                if self.interaction.right_click_paste && event.modifiers.shift {
                     self.paste_from_clipboard(cx);
-                } else {
-                    cx.emit(TerminalEvent::ContextMenuRequested {
-                        x: f32::from(event.position.x),
-                        y: f32::from(event.position.y),
-                    });
                 }
             }
             MouseButton::Left => {
@@ -855,6 +1053,7 @@ impl TerminalView {
             self.edge_scroll_during_drag(event.position, cx);
             cx.notify();
         }
+        self.update_hover_block(event.position, cx);
     }
 
     /// 选区拖拽到视口上下边缘时的自动滚动。
@@ -953,7 +1152,13 @@ impl Render for TerminalView {
         let ime_marked_range = self.ime_marked_range.clone();
         let cursor_blink_on = self.cursor_blink_on;
         let search_open = self.search_open;
+        let block_view = self.block_view;
+        let block_style = block_view
+            .map(|settings| settings.style)
+            .unwrap_or_default();
+        let block_layout_shared = self.block_layout.clone();
 
+        let menu_entity = cx.entity();
         let layer = div()
             .size_full()
             .overflow_hidden()
@@ -968,6 +1173,18 @@ impl Render for TerminalView {
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
+            .context_menu(move |menu, _window, _cx| {
+                let app = menu_entity.clone();
+                menu.item(
+                    PopupMenuItem::new("切换语义块视图 / 经典连续流")
+                        .icon(IconName::ListTree)
+                        .on_click(move |_, _, cx| {
+                            app.update(cx, |view, cx| {
+                                view.toggle_block_view(cx);
+                            });
+                        }),
+                )
+            })
             .child(
                 canvas(
                     move |bounds, window, cx| {
@@ -1036,9 +1253,18 @@ impl Render for TerminalView {
                             cols: cols as usize,
                             rows: rows as usize,
                             search_strip: strip,
+                            bounds: Some(bounds),
                         };
                         *metrics_prepaint.lock() = metrics;
-                        PreparedTerminal { search, damage }
+                        let layout = engine
+                            .build_block_layout(block_view.as_ref())
+                            .map(Arc::new);
+                        *block_layout_shared.lock() = layout.clone();
+                        PreparedTerminal {
+                            search,
+                            damage,
+                            block_layout: layout,
+                        }
                     },
                     move |bounds, prepared, window, cx| {
                         window.handle_input(
@@ -1061,6 +1287,8 @@ impl Render for TerminalView {
                                 ime,
                                 blink_visible: cursor_blink_on,
                                 search: prepared.search.as_ref(),
+                                block_layout: prepared.block_layout.as_deref(),
+                                block_style,
                             },
                             &mut row_cache,
                             &prepared.damage,
@@ -1073,6 +1301,7 @@ impl Render for TerminalView {
             );
 
         let search_bar = self.render_search_bar(cx);
+        let block_actions = self.render_block_actions(cx);
         // 拖放高亮用主色调半透明蒙色：不改布局、不依赖主题里的具体色值，
         // 深浅色终端下都能看清"松手就落在这里"。
         let drop_tint = cx.theme().primary.opacity(0.12);
@@ -1096,6 +1325,7 @@ impl Render for TerminalView {
                 entity.update(cx, |_, cx| cx.emit(TerminalEvent::FilesDropped(dropped)));
             })
             .child(layer)
+            .children(block_actions)
             .children(self.render_suggestion_bar(cx))
             .children(search_bar)
     }

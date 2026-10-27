@@ -86,9 +86,19 @@ impl AppShell {
                 // 建议能力挂到视图：查询回调是全应用共享的一份内存快照。
                 let provider = self.history_provider.clone();
                 let triggers = self.settings.triggers.clone();
-                terminal.update(cx, |view, _| {
+                let block_override = self
+                    .catalog
+                    .sessions
+                    .iter()
+                    .find(|session| session.id == session_id)
+                    .map_or(transom_core::BlockViewOverride::FollowGlobal, |session| {
+                        session.block_view
+                    });
+                let block_view = self.settings.block_view.resolved(block_override);
+                terminal.update(cx, |view, cx| {
                     view.attach_history(provider);
                     view.reload_triggers(&triggers);
+                    view.set_block_view(Some(block_view), cx);
                 });
                 let focus_handle = terminal.read(cx).focus_handle().clone();
                 // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，

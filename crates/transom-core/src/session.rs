@@ -40,6 +40,9 @@ pub struct Session {
     /// 老会话文件没有该字段，按跟随全局降级。
     #[serde(default)]
     pub proxy: Option<crate::proxy::OutboundProxy>,
+    /// 语义块视图的会话级覆盖；老会话文件按跟随全局降级。
+    #[serde(default)]
+    pub block_view: BlockViewOverride,
 }
 
 impl Session {
@@ -56,6 +59,7 @@ impl Session {
             icon: SessionIcon::default(),
             color: SessionColor::default(),
             proxy: None,
+            block_view: BlockViewOverride::default(),
         }
     }
 
@@ -302,6 +306,19 @@ impl Default for TelnetOptions {
             auto_reconnect: false,
         }
     }
+}
+
+/// 会话级语义块模式覆盖：只影响开关，样式与折叠阈值仍跟随全局。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockViewOverride {
+    /// 跟随全局偏好（默认，老会话文件缺字段即此档）。
+    #[default]
+    FollowGlobal,
+    /// 强制开启，适合生产 Linux 虚拟机与构建机。
+    Enabled,
+    /// 强制关闭，适合交换机 Console 等纯字符设备。
+    Disabled,
 }
 
 /// ProxyJump 跳板机引用：目标会话经由哪一条已有 SSH 会话转发。

@@ -14,6 +14,7 @@ use gpui_kit::component::input::Textarea;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
+use transom_core::BlockViewOverride;
 
 impl AppShell {
     pub(crate) fn render_session_form(
@@ -703,6 +704,59 @@ impl AppShell {
                         .text_xs()
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("form.startup_hint").to_string()),
+                ),
+        );
+
+        // 语义块模式：跟随全局/强制开启/强制关闭，所有连接类型通用。
+        let block_choice = form.block_view;
+        content = content.child(
+            v_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("form.block_view").to_string()),
+                )
+                .child(
+                    h_flex().gap_2().children(
+                        [
+                            (
+                                "block-follow-global",
+                                "form.block_view_follow",
+                                BlockViewOverride::FollowGlobal,
+                            ),
+                            (
+                                "block-enabled",
+                                "form.block_view_enabled",
+                                BlockViewOverride::Enabled,
+                            ),
+                            (
+                                "block-disabled",
+                                "form.block_view_disabled",
+                                BlockViewOverride::Disabled,
+                            ),
+                        ]
+                        .into_iter()
+                        .map(|(id, key, value)| {
+                            Button::new(id)
+                                .small()
+                                .label(rust_i18n::t!(key).to_string())
+                                .selected(block_choice == value)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(form) = this.form.as_mut() {
+                                        form.block_view = value;
+                                    }
+                                    cx.notify();
+                                }))
+                        }),
+                    ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("form.block_view_hint").to_string()),
                 ),
         );
 

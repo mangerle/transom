@@ -24,6 +24,7 @@ actions!(
         ToggleImmersive,
         ToggleSnippets,
         SearchBuffer,
+        ToggleBlockView,
         SplitRight,
         SplitDown,
         ClosePane,
@@ -79,6 +80,7 @@ bind_fn!(bind_toggle_sftp, ToggleSftp);
 bind_fn!(bind_toggle_forward, ToggleForward);
 bind_fn!(bind_toggle_immersive, ToggleImmersive);
 bind_fn!(bind_search_buffer, SearchBuffer);
+bind_fn!(bind_toggle_block_view, ToggleBlockView);
 bind_fn!(bind_toggle_snippets, ToggleSnippets);
 bind_fn!(bind_split_right, SplitRight);
 bind_fn!(bind_split_down, SplitDown);
@@ -170,6 +172,14 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_terminal_search",
         defaults: &["$app-f"],
         bind: bind_search_buffer,
+    },
+    // 语义块/经典连续流热切换：默认 `$app-shift-b`（Linux 为 Ctrl+Shift+B），
+    // 与终端内 Ctrl+B（tmux 前缀）错开，不会误触复用器快捷键。
+    ShortcutSpec {
+        id: "toggle_block_view",
+        label_key: "settings.shortcut_toggle_block_view",
+        defaults: &["$app-shift-b"],
+        bind: bind_toggle_block_view,
     },
     ShortcutSpec {
         id: "split_right",

@@ -361,6 +361,7 @@ impl AppShell {
                 jump_options: self.jump_options(None),
                 folder_options: self.folder_paths(),
                 global_proxy: self.settings.proxy.clone(),
+                block_view: transom_core::BlockViewOverride::FollowGlobal,
             },
         ));
         cx.notify();
@@ -385,6 +386,7 @@ impl AppShell {
             .folder_id
             .and_then(|id| self.catalog.folder_path(id));
         let is_serial = matches!(session.connection, Connection::Serial(_));
+        let block_override = session.block_view;
         let mut form = SessionForm::new(
             window,
             cx,
@@ -395,6 +397,7 @@ impl AppShell {
                 jump_options: self.jump_options(Some(session_id)),
                 folder_options: self.folder_paths(),
                 global_proxy: self.settings.proxy.clone(),
+                block_view: block_override,
             },
         );
         self.prefill_secrets(&mut form, window, cx);

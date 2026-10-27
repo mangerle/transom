@@ -110,6 +110,12 @@ impl AppShell {
                 p,
                 "settings.trigger_group",
                 AppShell::render_settings_triggers,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.block_view_group",
+                AppShell::render_settings_block_view,
             ));
 
         let page_files = SettingPage::new(rust_i18n::t!("settings.tab_files").to_string())

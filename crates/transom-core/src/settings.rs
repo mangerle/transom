@@ -554,6 +554,62 @@ pub struct AppSettings {
     /// 全局出站代理；会话未显式指定代理时生效，旧配置缺省为直连。
     #[serde(default)]
     pub proxy: crate::proxy::OutboundProxy,
+    /// OSC 133 语义块视图偏好；旧配置缺省为启用卡片样式。
+    #[serde(default)]
+    pub block_view: BlockViewSettings,
+}
+
+/// 语义块外观样式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockViewStyle {
+    /// 现代卡片：块之间留呼吸间距、柔和背景。
+    #[default]
+    Card,
+    /// 极简边缘线：不额外占行，只在行号边缘画状态线。
+    Minimal,
+}
+
+/// OSC 133 语义块视图偏好。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockViewSettings {
+    /// 是否启用语义块视图；关闭时回落到经典连续流。
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// 块外观样式。
+    #[serde(default)]
+    pub style: BlockViewStyle,
+    /// 输出超过该行数时自动折叠；`0` 表示从不自动折叠。
+    #[serde(default = "default_block_collapse_rows")]
+    pub auto_collapse_rows: usize,
+}
+
+impl Default for BlockViewSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            style: BlockViewStyle::Card,
+            auto_collapse_rows: default_block_collapse_rows(),
+        }
+    }
+}
+
+impl BlockViewSettings {
+    /// 叠加会话级覆盖："强制开启/关闭"只改开关，样式与阈值仍取全局。
+    pub fn resolved(self, override_: crate::session::BlockViewOverride) -> Self {
+        let mut settings = self;
+        match override_ {
+            crate::session::BlockViewOverride::FollowGlobal => {}
+            crate::session::BlockViewOverride::Enabled => settings.enabled = true,
+            crate::session::BlockViewOverride::Disabled => settings.enabled = false,
+        }
+        settings
+    }
+}
+
+/// 自动折叠阈值的默认值：构建日志一两百行就该收起，普通命令输出不受影响。
+fn default_block_collapse_rows() -> usize {
+    150
 }
 
 /// 运行日志设置。
@@ -857,6 +913,7 @@ impl Default for AppSettings {
             logs: LogSettings::default(),
             triggers: crate::trigger::TriggerSettings::default(),
             proxy: crate::proxy::OutboundProxy::default(),
+            block_view: BlockViewSettings::default(),
         }
     }
 }

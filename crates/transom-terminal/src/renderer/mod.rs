@@ -1,6 +1,7 @@
 mod palette;
 mod scan;
 
+use crate::block::{BlockLayout, VisualSlot};
 use crate::event::TerminalEventProxy;
 use crate::search::SearchPaint;
 use alacritty_terminal::grid::Dimensions;
@@ -21,8 +22,8 @@ use scan::{
 };
 use std::ops::Range;
 use transom_core::{
-    CompiledHighlight, HighlightSpan, Rgb as PaletteColor, TerminalHighlight, TerminalPalette,
-    TerminalProfile,
+    BlockViewStyle, CompiledHighlight, HighlightSpan, Rgb as PaletteColor, TerminalHighlight,
+    TerminalPalette, TerminalProfile,
 };
 
 const SELECTION_ALPHA: f32 = 0.4;
@@ -38,6 +39,10 @@ pub(crate) struct PaintRequest<'a> {
     pub(crate) blink_visible: bool,
     /// 检索命中绘制数据；`None` 表示当前没有可用快照（未开启或已失效）。
     pub(crate) search: Option<&'a SearchPaint>,
+    /// 语义块折叠后的可见行映射；`None` 表示经典连续流。
+    pub(crate) block_layout: Option<&'a BlockLayout>,
+    /// 语义块外观样式（卡片/极简）。
+    pub(crate) block_style: BlockViewStyle,
 }
 
 /// 本帧需要重建绘制缓存的行集合。
@@ -338,6 +343,8 @@ impl TerminalRenderer {
             ime,
             blink_visible,
             search,
+            block_layout,
+            block_style,
         } = request;
         let grid = term.grid();
         let rows = grid.screen_lines();
@@ -363,14 +370,19 @@ impl TerminalRenderer {
             .as_ref()
             .and_then(|selection| selection.to_range(term));
         let cursor = grid.cursor.point;
-        let cursor_row = cursor.line.0 + display_offset;
+        // 折叠模式下光标行按可见行映射定位；落在被折叠区间内时直接隐藏。
+        let cursor_row = match block_layout {
+            Some(layout) => layout.row_of_line(cursor.line).map(|row| row as i32),
+            None => Some(cursor.line.0 + display_offset),
+        };
+        let cursor_row_raw = cursor_row.unwrap_or(-1);
         let cursor_col = cursor.column.0;
         let cursor_style = term.cursor_style();
         let cursor_color = self.resolve(Color::Named(NamedColor::Cursor), colors);
         let cursor_visible = blink_visible
             && term.mode().contains(TermMode::SHOW_CURSOR)
             && cursor_style.shape != CursorShape::Hidden
-            && (0..rows as i32).contains(&cursor_row)
+            && cursor_row.is_some_and(|row| (0..rows as i32).contains(&row))
             && ime.is_none();
         let block_cursor = cursor_visible && cursor_style.shape == CursorShape::Block;
 
@@ -383,13 +395,15 @@ impl TerminalRenderer {
 
         // 需要重建的行：内核损伤集合之外，强制加入光标行——闪烁相位翻转
         // 不产生网格损伤，但块光标的字符反色随相位变化。
-        let mut damaged_rows: Vec<usize> = match damage {
-            DamageInfo::Full => (0..rows).collect(),
-            DamageInfo::Rows(list) => {
+        let mut damaged_rows: Vec<usize> = match (block_layout.is_some(), damage) {
+            // 折叠改变了行映射本身：任何局部损伤都可能移动整屏内容，直接全量重建。
+            (true, _) => (0..rows).collect(),
+            (false, DamageInfo::Full) => (0..rows).collect(),
+            (false, DamageInfo::Rows(list)) => {
                 let mut rows_set = Vec::with_capacity(list.len() + 1);
                 rows_set.extend_from_slice(list);
-                if cursor_visible && (0..rows).contains(&(cursor_row.max(0) as usize)) {
-                    rows_set.push(cursor_row as usize);
+                if cursor_visible && (0..rows).contains(&(cursor_row_raw.max(0) as usize)) {
+                    rows_set.push(cursor_row_raw as usize);
                 }
                 rows_set
             }
@@ -399,7 +413,7 @@ impl TerminalRenderer {
 
         // 逐行扫描的缓冲在整批重建间复用，避免每行都重新分配字符串与列映射。
         let mut scratch = RowScratch::default();
-        let cursor_cell = block_cursor.then_some((cursor_row, cursor_col));
+        let cursor_cell = block_cursor.then_some((cursor_row_raw, cursor_col));
         for row in damaged_rows {
             if row >= rows {
                 continue;
@@ -433,7 +447,31 @@ impl TerminalRenderer {
 
         for (row, visual) in row_cache.iter().enumerate() {
             let y = origin.y + self.cell_height * row as f32;
-            let line = Line(row as i32 - display_offset);
+            let line = match block_layout {
+                Some(layout) => {
+                    if let Some(line) = layout.line_at(row) {
+                        line
+                    } else {
+                        if let Some(VisualSlot::Banner { label, failed, .. }) =
+                            layout.slots().get(row)
+                        {
+                            self.paint_block_banner(
+                                row,
+                                y,
+                                origin,
+                                label,
+                                *failed,
+                                block_style,
+                                cols,
+                                window,
+                                cx,
+                            );
+                        }
+                        continue;
+                    }
+                }
+                None => Line(row as i32 - display_offset),
+            };
 
             for (start, end, color) in &visual.background_runs {
                 if *color == default_bg {
@@ -453,7 +491,12 @@ impl TerminalRenderer {
             }
 
             if let Some(paint) = search {
-                self.paint_row_hits(paint.rows.get(row), y, origin, window);
+                // 检索快照按原始视口行编号；折叠后需要换回该行原本的行号。
+                let source_row = match block_layout {
+                    Some(_) => (display_offset + line.0).max(0) as usize,
+                    None => row,
+                };
+                self.paint_row_hits(paint.rows.get(source_row), y, origin, window);
             }
 
             if let Some(range) = &selection
@@ -474,7 +517,7 @@ impl TerminalRenderer {
                 window.paint_quad(fill(rect, color));
             }
 
-            if block_cursor && cursor_row == row as i32 && cursor_col < cols {
+            if block_cursor && cursor_row_raw == row as i32 && cursor_col < cols {
                 let rect = Bounds {
                     origin: Point {
                         x: origin.x + self.cell_width * cursor_col as f32,
@@ -492,7 +535,7 @@ impl TerminalRenderer {
                 self.paint_run_text(run, origin, row, window, cx);
             }
 
-            if cursor_visible && cursor_row == row as i32 && cursor_col < cols {
+            if cursor_visible && cursor_row_raw == row as i32 && cursor_col < cols {
                 self.paint_cursor(
                     origin,
                     y,
@@ -511,7 +554,7 @@ impl TerminalRenderer {
         if let Some((text, marked_range)) = ime.filter(|(text, _)| !text.is_empty()) {
             self.paint_ime(
                 ImePaintInput {
-                    cursor_row,
+                    cursor_row: cursor_row_raw,
                     cursor_col,
                     rows,
                     cols,
@@ -523,6 +566,69 @@ impl TerminalRenderer {
                 cx,
             );
         }
+    }
+
+    /// 绘制折叠横幅：柔和底色、失败态左侧状态线与一行摘要文本。
+    ///
+    /// 横幅只占一个网格行，不创建 GPUI 子元素：终端是自绘 canvas，
+    /// 保持"所有内容都在同一绘制管线里"才能让折叠/展开只有一次重绘。
+    #[allow(clippy::too_many_arguments)]
+    fn paint_block_banner(
+        &self,
+        row: usize,
+        y: Pixels,
+        origin: Point<Pixels>,
+        label: &str,
+        failed: bool,
+        style: BlockViewStyle,
+        cols: usize,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let status_color = if failed {
+            self.palette_colors.ansi[1]
+        } else {
+            self.palette_colors.dim_foreground
+        };
+        let mut background = if failed {
+            self.palette_colors.ansi[1]
+        } else {
+            self.palette_colors.foreground
+        };
+        background.a = if failed { 0.14 } else { 0.07 };
+        let rect = Bounds {
+            origin: Point { x: origin.x, y },
+            size: Size {
+                width: self.cell_width * cols as f32,
+                height: self.cell_height,
+            },
+        };
+        window.paint_quad(fill(rect, background));
+        if style == BlockViewStyle::Minimal {
+            window.paint_quad(fill(
+                Bounds {
+                    origin: Point { x: origin.x, y },
+                    size: Size {
+                        width: px(2.0),
+                        height: self.cell_height,
+                    },
+                },
+                status_color,
+            ));
+        }
+        let visual = TextVisual {
+            text: SharedString::from(label.to_string()),
+            start_col: 2,
+            end_col: 2 + label.chars().count(),
+            style: RunStyle {
+                fg: status_color,
+                bold: false,
+                italic: false,
+                underline: UnderlineKind::None,
+                wide: false,
+            },
+        };
+        self.paint_run_text(&visual, origin, row, window, cx);
     }
 
     /// 把一行网格扫描成绘制产物：单趟列扫描同时聚合背景区段与文本 run。

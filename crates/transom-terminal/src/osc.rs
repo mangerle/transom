@@ -61,15 +61,28 @@ pub(crate) struct OscScanner {
 
 impl OscScanner {
     /// 喂入一段字节流，返回其中识别到的事件。不消费输入，原样透传给内核解析器。
+    #[cfg(test)]
     pub(crate) fn feed(&mut self, bytes: &[u8]) -> Vec<OscEvent> {
+        self.feed_with_offsets(bytes)
+            .into_iter()
+            .map(|(_, event)| event)
+            .collect()
+    }
+
+    /// 与 [`Self::feed`] 相同，但附带序列末字节在本段中的下标。
+    ///
+    /// 引擎按偏移把整批字节切成若干段增量喂给内核，从而在每条 `A/B/C/D`
+    /// 标记处拿到准确的网格光标位置——一次性喂完整批再取光标，会把一秒钟内
+    /// 跑完的小命令与它的提示符压到同一行，块边界全部失真。
+    pub(crate) fn feed_with_offsets(&mut self, bytes: &[u8]) -> Vec<(usize, OscEvent)> {
         let mut events = Vec::new();
-        for &byte in bytes {
-            self.push(byte, &mut events);
+        for (offset, &byte) in bytes.iter().enumerate() {
+            self.push(byte, offset, &mut events);
         }
         events
     }
 
-    fn push(&mut self, byte: u8, events: &mut Vec<OscEvent>) {
+    fn push(&mut self, byte: u8, offset: usize, events: &mut Vec<(usize, OscEvent)>) {
         if !self.in_payload {
             self.push_idle(byte);
             return;
@@ -79,9 +92,9 @@ impl OscScanner {
             if byte == TERMINATOR_ST || byte == TERMINATOR_BEL {
                 // ST 之外的 `ESC` 后紧跟 BEL 也按结束处理：不能因为一个畸形前缀
                 // 让载荷永远闭合不了。
-                self.close(events);
+                self.close(offset, events);
             } else if byte == TERMINATOR_ST {
-                self.close(events);
+                self.close(offset, events);
             } else {
                 // `ESC` 后面不是 `\`：它本身就是载荷内容（例如载荷里出现的转义文本）。
                 self.collect(ESCAPE, events);
@@ -90,7 +103,7 @@ impl OscScanner {
             return;
         }
         match byte {
-            TERMINATOR_BEL => self.close(events),
+            TERMINATOR_BEL => self.close(offset, events),
             ESCAPE => self.awaiting_st = true,
             other => self.collect(other, events),
         }
@@ -113,7 +126,7 @@ impl OscScanner {
         }
     }
 
-    fn collect(&mut self, byte: u8, events: &mut Vec<OscEvent>) {
+    fn collect(&mut self, byte: u8, events: &mut Vec<(usize, OscEvent)>) {
         if self.overflow {
             return;
         }
@@ -126,7 +139,7 @@ impl OscScanner {
         }
     }
 
-    fn close(&mut self, events: &mut Vec<OscEvent>) {
+    fn close(&mut self, offset: usize, events: &mut Vec<(usize, OscEvent)>) {
         let overflowed = self.overflow;
         self.in_payload = false;
         self.awaiting_st = false;
@@ -136,13 +149,13 @@ impl OscScanner {
             return;
         }
         // 复用载荷缓冲而不是每序列重新分配：clear 保留容量，容量已被上限夹住。
-        emit(&self.payload, events);
+        emit(&self.payload, offset, events);
         self.payload.clear();
     }
 }
 
 /// 解析一条完整 OSC 载荷。
-fn emit(bytes: &[u8], events: &mut Vec<OscEvent>) {
+fn emit(bytes: &[u8], offset: usize, events: &mut Vec<(usize, OscEvent)>) {
     let Ok(text) = std::str::from_utf8(bytes) else {
         // 载荷不是 UTF-8（二进制 dump 之类）：不是我们要的序列。
         return;
@@ -150,10 +163,13 @@ fn emit(bytes: &[u8], events: &mut Vec<OscEvent>) {
     let Some((code, params)) = text.split_once(';') else {
         return;
     };
-    match code {
-        "133" => events.extend(parse_command_marker(params)),
-        "777" => events.extend(parse_notify(params)),
-        _ => {}
+    let parse = match code {
+        "133" => parse_command_marker(params),
+        "777" => parse_notify(params),
+        _ => None,
+    };
+    if let Some(event) = parse {
+        events.push((offset, event));
     }
 }
 
