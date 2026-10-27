@@ -4,8 +4,11 @@ use crate::error::NetError;
 use crate::traffic::CountingStream;
 use russh::client::{self, Handle, Msg};
 use russh::keys::agent::client::AgentClient;
-use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate, load_secret_key};
-use russh::{Channel, ChannelMsg, Disconnect};
+use russh::keys::{
+    Algorithm, HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate, load_secret_key,
+};
+use russh::{Channel, ChannelMsg, Disconnect, Preferred};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
@@ -432,6 +435,30 @@ struct ChainBuild<'a> {
     traffic: Arc<TrafficCounter>,
 }
 
+/// 协商偏好：保留 russh 的现代默认值，但不接受 SHA1 的 `ssh-rsa` 主机签名。
+///
+/// 设计原理（Why）：
+/// - russh 默认列表把 `Rsa { hash: None }` 放在末尾，遇到只提供旧签名的服务端
+///   会降级到 SHA-1；OpenSSH 8.0+ 早已支持 `rsa-sha2-256/512`，没有保留 SHA-1
+///   的必要。RSA 主机密钥仍可走 SHA2 变体，不会因为这次收紧而失效。
+/// - 只过滤主机密钥，保留 AES-CTR：嵌入式设备与交换机管理口的 SSH 实现常缺
+///   AES-GCM，而 CTR + EtM MAC 并未被实际攻破；为了兼容真实运维靶机，不把
+///   “只留 AEAD 套件”当成安全收益去破坏可用性。
+/// - 代价与局限：只支持 `ssh-rsa` SHA1 的远古服务端将无法连接；这是有意为之，
+///   错误会由 russh 协商阶段报出，便于用户升级设备而不是静默使用弱签名。
+fn ssh_preferred() -> Preferred {
+    let mut preferred = Preferred::DEFAULT;
+    preferred.key = Cow::Owned(
+        preferred
+            .key
+            .iter()
+            .filter(|algorithm| !matches!(algorithm, Algorithm::Rsa { hash: None }))
+            .cloned()
+            .collect(),
+    );
+    preferred
+}
+
 /// 建立"TCP（或代理）-> 各跳板机 SSH -> 目标 SSH"的完整链路。
 ///
 /// 每一跳都复用手头的 `prompter` 与 `known_hosts`：跳板机同样走 TOFU 指纹
@@ -457,6 +484,7 @@ async fn establish_chain(
         window_size: 16 * 1024 * 1024,
         keepalive_interval: keepalive_interval(&params.target.options),
         keepalive_max: 3,
+        preferred: ssh_preferred(),
         ..Default::default()
     });
     // 只统计目标 SSH 会话的密文吞吐：外层跳板机的密文包含整条隧道，
@@ -1226,6 +1254,32 @@ mod tests {
             request_secret(&cancelled, PromptKind::Password)
                 .await
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn ssh_preferred_drops_sha1_rsa_host_keys_but_keeps_modern_algorithms() {
+        let preferred = ssh_preferred();
+        assert!(
+            !preferred
+                .key
+                .iter()
+                .any(|algorithm| matches!(algorithm, Algorithm::Rsa { hash: None })),
+            "不能接受 SHA1 的 ssh-rsa 主机签名"
+        );
+        assert!(
+            preferred.key.contains(&Algorithm::Ed25519),
+            "Ed25519 主机密钥必须保留"
+        );
+        assert!(
+            preferred.key.contains(&Algorithm::Rsa {
+                hash: Some(HashAlg::Sha256)
+            }),
+            "RSA 主机密钥仍应可走 SHA2 签名"
+        );
+        assert!(
+            !preferred.cipher.is_empty(),
+            "过滤主机密钥不应连带清空加密套件列表"
         );
     }
 }
