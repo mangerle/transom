@@ -34,8 +34,9 @@ async fn download_limited(response: reqwest::Response, host: &str) -> Result<Vec
         .await
         .map_err(|error| http_error("从云端同步端点读取备份", host, error))?
     {
-        if (buffer.len() as u64).saturating_add(chunk.len() as u64) > SYNC_MAX_DOCUMENT_BYTES {
-            return Err(too_large(host, buffer.len() as u64 + chunk.len() as u64));
+        let total = (buffer.len() as u64).saturating_add(chunk.len() as u64);
+        if total > SYNC_MAX_DOCUMENT_BYTES {
+            return Err(too_large(host, total));
         }
         buffer.extend_from_slice(&chunk);
     }

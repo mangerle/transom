@@ -344,7 +344,10 @@ impl DirRemoteCopyTask {
                     let delta = current.saturating_sub(last_reported);
                     last_reported = current;
                     if delta > 0 {
-                        let done = self.transferred.fetch_add(delta, Ordering::Relaxed) + delta;
+                        let done = self
+                            .transferred
+                            .fetch_add(delta, Ordering::Relaxed)
+                            .saturating_add(delta);
                         notify_shared_progress(&self.progress, done, Some(self.total));
                     }
                 },
@@ -352,7 +355,10 @@ impl DirRemoteCopyTask {
             .await?;
         let tail = bytes.saturating_sub(last_reported);
         if tail > 0 {
-            let done = self.transferred.fetch_add(tail, Ordering::Relaxed) + tail;
+            let done = self
+                .transferred
+                .fetch_add(tail, Ordering::Relaxed)
+                .saturating_add(tail);
             notify_shared_progress(&self.progress, done, Some(self.total));
         }
         Ok(())
@@ -394,7 +400,10 @@ impl DirFileTask {
                     let delta = current.saturating_sub(last_reported);
                     last_reported = current;
                     if delta > 0 {
-                        let done = self.transferred.fetch_add(delta, Ordering::Relaxed) + delta;
+                        let done = self
+                            .transferred
+                            .fetch_add(delta, Ordering::Relaxed)
+                            .saturating_add(delta);
                         notify_shared_progress(&self.progress, done, Some(self.total));
                     }
                 },
@@ -408,7 +417,10 @@ impl DirFileTask {
         // 进度回调只覆盖到最近的块边界，剩余字节在完成后补齐
         let tail = bytes.saturating_sub(last_reported);
         if tail > 0 {
-            let done = self.transferred.fetch_add(tail, Ordering::Relaxed) + tail;
+            let done = self
+                .transferred
+                .fetch_add(tail, Ordering::Relaxed)
+                .saturating_add(tail);
             notify_shared_progress(&self.progress, done, Some(self.total));
         }
         Ok(())
@@ -432,7 +444,10 @@ impl DirFileTask {
                     let delta = current.saturating_sub(last_reported);
                     last_reported = current;
                     if delta > 0 {
-                        let done = self.transferred.fetch_add(delta, Ordering::Relaxed) + delta;
+                        let done = self
+                            .transferred
+                            .fetch_add(delta, Ordering::Relaxed)
+                            .saturating_add(delta);
                         notify_shared_progress(&self.progress, done, Some(self.total));
                     }
                 },
@@ -445,7 +460,10 @@ impl DirFileTask {
         }
         let tail = bytes.saturating_sub(last_reported);
         if tail > 0 {
-            let done = self.transferred.fetch_add(tail, Ordering::Relaxed) + tail;
+            let done = self
+                .transferred
+                .fetch_add(tail, Ordering::Relaxed)
+                .saturating_add(tail);
             notify_shared_progress(&self.progress, done, Some(self.total));
         }
         Ok(())

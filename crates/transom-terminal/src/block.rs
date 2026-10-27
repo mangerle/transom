@@ -43,7 +43,10 @@ pub struct CommandBlock {
 impl CommandBlock {
     /// 输出行数（含空白行），用于折叠横幅与自动折叠判定。
     pub fn output_rows(&self) -> usize {
-        let rows = self.output_end_line.saturating_sub(self.output_start_line) + 1;
+        let rows = self
+            .output_end_line
+            .saturating_sub(self.output_start_line)
+            .saturating_add(1);
         rows.max(0) as usize
     }
 }

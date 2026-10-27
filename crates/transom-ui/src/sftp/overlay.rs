@@ -67,7 +67,11 @@ impl DropOverlayState {
         let micros = now.duration_since(at).as_micros().max(1) as u64;
         let delta = done_bytes.saturating_sub(at_bytes);
         let instant = delta.saturating_mul(1_000_000) / micros;
-        self.rate_bytes_per_sec = (self.rate_bytes_per_sec * 3 + instant) / 4;
+        self.rate_bytes_per_sec = self
+            .rate_bytes_per_sec
+            .saturating_mul(3)
+            .saturating_add(instant)
+            / 4;
         self.rate_anchor = Some((now, done_bytes));
     }
 

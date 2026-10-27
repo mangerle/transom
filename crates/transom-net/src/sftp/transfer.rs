@@ -181,7 +181,7 @@ impl SftpClient {
                 .write_all(&buffer[..count])
                 .await
                 .map_err(sftp_io_error)?;
-            transferred += count as u64;
+            transferred = transferred.saturating_add(count as u64);
             progress(transferred, total);
         }
         local.flush().await.map_err(sftp_io_error)?;
@@ -305,7 +305,7 @@ impl SftpClient {
                 .write_all(&buffer[..count])
                 .await
                 .map_err(sftp_io_error)?;
-            transferred += count as u64;
+            transferred = transferred.saturating_add(count as u64);
             progress(transferred, total);
         }
         remote_file.shutdown().await.map_err(sftp_io_error)?;
@@ -363,7 +363,7 @@ impl SftpClient {
                 .write_all(&buffer[..count])
                 .await
                 .map_err(sftp_io_error)?;
-            transferred += count as u64;
+            transferred = transferred.saturating_add(count as u64);
             progress(transferred, total);
         }
 
