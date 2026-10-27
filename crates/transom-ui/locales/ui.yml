@@ -999,6 +999,9 @@ forward:
   failed:
     en: Failed
     zh-CN: 失败
+  needs_confirmation:
+    en: Needs confirmation
+    zh-CN: 待确认
   empty:
     en: No forwarding rules
     zh-CN: 还没有转发规则

@@ -85,6 +85,10 @@ impl AppShell {
                         p.success,
                     ),
                     ForwardState::Failed => (rust_i18n::t!("forward.failed").to_string(), p.danger),
+                    ForwardState::NeedsConfirmation => (
+                        rust_i18n::t!("forward.needs_confirmation").to_string(),
+                        p.warning,
+                    ),
                     _ => (String::new(), p.muted_foreground),
                 },
                 None => (

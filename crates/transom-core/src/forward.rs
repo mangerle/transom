@@ -84,8 +84,12 @@ pub enum SocksAuth {
 pub enum ForwardState {
     Stopped,
     Starting,
-    Active { bound_port: Option<u16> },
+    Active {
+        bound_port: Option<u16>,
+    },
     Failed,
+    /// 自动启动遇到公网监听地址，等待用户手动确认。
+    NeedsConfirmation,
 }
 
 #[derive(Debug, Clone)]

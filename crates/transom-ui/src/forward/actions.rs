@@ -1,12 +1,15 @@
 //! 端口转发规则管理与启停控制方法。
 
-use super::{ForwardKindChoice, ForwardPanelState, PendingForwardConfirm, is_public_bind_address};
+use super::{
+    ForwardKindChoice, ForwardPanelState, PendingForwardConfirm, forward_bind_host,
+    is_public_bind_address,
+};
 use crate::app::{AppShell, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, AppError, BindAddress, Connection, ConnectionId, ForwardId, ForwardKind,
+    AppCommand, AppError, BindAddress, Connection, ConnectionId, ErrorCode, ForwardId, ForwardKind,
     ForwardRule, ForwardState, ForwardStatus, SessionId, SocksOptions, TabId, TargetAddress,
 };
 
@@ -56,6 +59,20 @@ impl AppShell {
             .map(|session| session.forwards.clone())
             .unwrap_or_default();
         for rule in rules.into_iter().filter(|rule| rule.enabled) {
+            // 自动启动不能成为“导入会话后静默开放公网端口”的通道：
+            // 公网 bind 一律留待用户在转发面板手动启动并二次确认。
+            if is_public_bind_address(forward_bind_host(&rule)) {
+                self.set_forward_status(
+                    tab_id,
+                    rule.id,
+                    ForwardState::NeedsConfirmation,
+                    Some(AppError::with_detail(
+                        ErrorCode::ForwardFailed,
+                        "公网监听不会自动启动；请在转发面板手动启动并确认",
+                    )),
+                );
+                continue;
+            }
             self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
             self.send_command(AppCommand::ForwardStart {
                 tab_id,
@@ -271,12 +288,7 @@ impl AppShell {
             return;
         };
 
-        let bind_host = match &rule.kind {
-            ForwardKind::Local { bind, .. } => bind.host.as_str(),
-            ForwardKind::Remote { bind, .. } => bind.host.as_str(),
-            ForwardKind::Dynamic { bind, .. } => bind.host.as_str(),
-            _ => "",
-        };
+        let bind_host = forward_bind_host(&rule);
 
         if is_public_bind_address(bind_host) {
             self.confirm_forward_any = Some(PendingForwardConfirm {
