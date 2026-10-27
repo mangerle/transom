@@ -30,7 +30,7 @@ impl WebDavTarget {
     /// 构造 WebDAV 目标。
     ///
     /// # Errors
-    /// 根地址不是合法的 http(s) URL，或目录段无法拼接时返回 `AppError`。
+    /// 根地址不是合法的 https URL，或目录段无法拼接时返回 `AppError`。
     pub fn new(
         http: reqwest::Client,
         base_url: &str,
@@ -47,10 +47,12 @@ impl WebDavTarget {
         // 丢弃 base 上可能携带的查询与片段，仅保留 scheme://host/path 前缀。
         base.set_query(None);
         base.set_fragment(None);
-        if !matches!(base.scheme(), "http" | "https") {
+        if base.scheme() != "https" {
             return Err(AppError::with_detail(
                 ErrorCode::Configuration,
-                format!("WebDAV 地址必须以 http(s) 开头，当前为「{base_url}」"),
+                format!(
+                    "WebDAV 地址必须使用 https（http 会明文传输同步口令与备份内容），当前为「{base_url}」"
+                ),
             ));
         }
         let host = base
@@ -279,11 +281,11 @@ mod tests {
     }
 
     #[test]
-    fn non_http_scheme_is_rejected() {
-        let error = target("ftp://dav.example.com", "t")
-            .err()
-            .expect("预期构造失败");
-        assert_eq!(error.code, ErrorCode::Configuration);
+    fn insecure_and_non_https_schemes_are_rejected() {
+        for base in ["http://dav.example.com", "ftp://dav.example.com"] {
+            let error = target(base, "t").err().expect("预期构造失败");
+            assert_eq!(error.code, ErrorCode::Configuration);
+        }
     }
 
     #[test]

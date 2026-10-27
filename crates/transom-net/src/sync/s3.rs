@@ -35,7 +35,7 @@ impl S3Target {
     /// 构造 S3 目标。
     ///
     /// # Errors
-    /// 端点不是合法 http(s) URL 或目录键无法构造时返回 `AppError`。
+    /// 端点不是合法的 https URL，或目录键无法构造时返回 `AppError`。
     pub fn new(
         http: reqwest::Client,
         endpoint: &str,
@@ -53,10 +53,12 @@ impl S3Target {
         })?;
         url.set_query(None);
         url.set_fragment(None);
-        if !matches!(url.scheme(), "http" | "https") {
+        if url.scheme() != "https" {
             return Err(AppError::with_detail(
                 ErrorCode::Configuration,
-                format!("S3 端点必须以 http(s) 开头，当前为「{endpoint}」"),
+                format!(
+                    "S3 端点必须使用 https（http 会明文传输 Secret Key 与备份内容），当前为「{endpoint}」"
+                ),
             ));
         }
         let host = url
@@ -300,18 +302,20 @@ mod tests {
     }
 
     #[test]
-    fn non_http_endpoint_is_rejected() {
-        let error = S3Target::new(
-            reqwest::Client::new(),
-            "ftp://s3.example.com",
-            "us-east-1",
-            "bucket",
-            "AKID",
-            Zeroizing::new("secret".to_string()),
-            "t",
-        )
-        .err()
-        .expect("预期构造失败");
-        assert_eq!(error.code, ErrorCode::Configuration);
+    fn insecure_and_non_https_endpoints_are_rejected() {
+        for endpoint in ["http://s3.example.com", "ftp://s3.example.com"] {
+            let error = S3Target::new(
+                reqwest::Client::new(),
+                endpoint,
+                "us-east-1",
+                "bucket",
+                "AKID",
+                Zeroizing::new("secret".to_string()),
+                "t",
+            )
+            .err()
+            .expect("预期构造失败");
+            assert_eq!(error.code, ErrorCode::Configuration);
+        }
     }
 }
