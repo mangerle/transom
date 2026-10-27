@@ -1,9 +1,4 @@
-//! ZMODEM 会话状态机：由挂载层的驱动线程独占驱动。
-//!
-//! 设计原理：本文件只做"输入字节/定时器 → 动作（写线路、读写文件、上报进度）"
-//! 的纯转换，落盘与读取的系统调用交给 `super::files`，线程壳与读写过滤留给
-//! `super::attach`。这样状态机不持有真实 IO，可用合成字节流逐帧断言；相位流转、
-//! 超时与出错恢复策略均以 lrzsz 真机行为为准，依据写在各方法的文档注释里。
+//! ZMODEM 会话状态机核心执行逻辑与文件 I/O 驱动。
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -11,55 +6,22 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use transom_core::{ZmodemDirection, ZmodemEvent, ZmodemFinished};
 
-use super::attach::{Shared, ZmodemConfig};
-use super::files::{self, DownloadWriter, UploadFile};
-use super::frames::{ZFILE, ZRINIT, ZRQINIT, ZSINIT, cancel_sequence};
-use super::receiver::{Receiver, RecvAction, RecvPhase};
-use super::scanner::{HeaderEvent, HeaderScanner, SubpacketEvent, SubpacketScanner};
-use super::sender::{BLOCK_SIZE, SendAction, Sender};
-
-/// ZRQINIT 之后的分流等待窗口：sz 的 ZSINIT/ZFILE 紧随其后，静默则视为
-/// 非 lrzsz 的 rz 变体（直接等 ZFILE），转上传决策。
-const DECIDE_TIMEOUT: Duration = Duration::from_secs(2);
-/// 传输中的字节级静默上限：超过即视为对端假死。
-const TRANSFER_TIMEOUT: Duration = Duration::from_secs(15);
-/// 等待用户选择上传文件的窗口；超时放弃，对端 rz 轮询失败自行退出。
-///
-/// 界面用阻塞式系统文件对话框收集决策，用户可能在目录树里翻找，窗口必须
-/// 按"人手速"而不是"网络往返"量级取值；过期后仍会收到显式失败提示。
-const UPLOAD_WAIT: Duration = Duration::from_secs(300);
-
-/// 界面侧提交给状态机的控制命令。
-pub(crate) enum ZmodemCommand {
-    Upload(Vec<PathBuf>),
-    Cancel,
-}
-
-/// 状态机与过滤层之间的全部通道与共享件，一次装配避免长参数列表。
-pub(crate) struct FsmChannels {
-    /// 真实线路写出端（与写过滤层共享）。
-    pub(crate) writer: Arc<Mutex<Box<dyn Write + Send>>>,
-    /// 事件上报通道。
-    pub(crate) events: flume::Sender<ZmodemEvent>,
-    /// 会话结束后回注终端的残余字节通道。
-    pub(crate) replay_tx: flume::Sender<Vec<u8>>,
-    /// 读过滤层转入的协议原始字节。
-    pub(crate) raw_rx: flume::Receiver<Vec<u8>>,
-    /// 界面决策命令。
-    pub(crate) ctrl_rx: flume::Receiver<ZmodemCommand>,
-    /// 过滤层激活状态。
-    pub(crate) shared: Arc<Shared>,
-}
+use super::super::attach::{Shared, ZmodemConfig};
+use super::super::files::{self, DownloadWriter, UploadFile};
+use super::super::frames::{ZFILE, ZRINIT, ZRQINIT, ZSINIT, cancel_sequence};
+use super::super::receiver::{Receiver, RecvAction, RecvPhase};
+use super::super::scanner::{HeaderEvent, HeaderScanner, SubpacketEvent, SubpacketScanner};
+use super::super::sender::{BLOCK_SIZE, SendAction, Sender};
+use super::types::{FsmChannels, Mode, ZmodemCommand};
 
 /// 协议驱动线程的核心状态（与线程壳分离，便于用合成字节流直接测试）。
 pub(crate) struct Fsm {
     pub(crate) mode: Mode,
-    receiver: Receiver,
-    sender: Sender,
+    pub(crate) receiver: Receiver,
+    pub(crate) sender: Sender,
     header: HeaderScanner,
     subpacket: SubpacketScanner,
     /// 下载方向当前写入的文件（64 KiB 分块 + 周期同步）。
@@ -68,7 +30,7 @@ pub(crate) struct Fsm {
     upload_file: Option<std::fs::File>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub(crate) events: flume::Sender<ZmodemEvent>,
-    replay_tx: flume::Sender<Vec<u8>>,
+    pub(crate) replay_tx: flume::Sender<Vec<u8>>,
     pub(crate) raw_rx: flume::Receiver<Vec<u8>>,
     pub(crate) ctrl_rx: flume::Receiver<ZmodemCommand>,
     pub(crate) shared: Arc<Shared>,
@@ -77,7 +39,7 @@ pub(crate) struct Fsm {
 }
 
 impl Fsm {
-    /// 以空闲阶段装配状态机；调用方负责在驱动线程里跑 [`fsm_loop`]。
+    /// 以空闲阶段装配状态机；调用方负责在驱动线程里跑 [`super::driver::fsm_loop`]。
     pub(crate) fn new(channels: FsmChannels, config: ZmodemConfig) -> Self {
         Self {
             mode: Mode::Idle,
@@ -97,24 +59,7 @@ impl Fsm {
             started: false,
         }
     }
-}
 
-/// 驱动线程的会话阶段。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Mode {
-    /// 等待首块（对端发起标记已把过滤层激活）。
-    Idle,
-    /// 已见 ZRQINIT，等待 sz 的 ZSINIT/ZFILE 或超时转上传。
-    Deciding,
-    /// sz 下载中。
-    Download,
-    /// 等待用户选择上传文件。
-    AwaitUpload,
-    /// rz 上传中（含打开文件、等 ZRPOS、发数据、收尾全流程）。
-    Upload,
-}
-
-impl Fsm {
     pub(crate) fn consume_block(&mut self, block: Vec<u8>) {
         match self.mode {
             Mode::Idle | Mode::Deciding => self.consume_probe_block(&block),
@@ -197,7 +142,7 @@ impl Fsm {
         }
     }
 
-    fn enter_await_upload(&mut self, remote_flags: u8) {
+    pub(crate) fn enter_await_upload(&mut self, remote_flags: u8) {
         self.sender = Sender::new(remote_flags);
         self.started = false;
         self.mode = Mode::AwaitUpload;
@@ -286,7 +231,7 @@ impl Fsm {
         }
     }
 
-    fn run_recv(&mut self, actions: Vec<RecvAction>) {
+    pub(crate) fn run_recv(&mut self, actions: Vec<RecvAction>) {
         for action in actions {
             match action {
                 RecvAction::Write(wire) => self.write_wire(&wire),
@@ -314,7 +259,7 @@ impl Fsm {
         }
     }
 
-    fn run_send(&mut self, actions: Vec<SendAction>) {
+    pub(crate) fn run_send(&mut self, actions: Vec<SendAction>) {
         for action in actions {
             match action {
                 SendAction::Write(wire) => self.write_wire(&wire),
@@ -533,85 +478,6 @@ impl Fsm {
                 self.finish(ZmodemFinished::Cancelled);
             }
             Mode::Idle => {}
-        }
-    }
-}
-
-/// 驱动线程主循环：按会话阶段选择等待超时，超时行为见各分支。
-pub(crate) fn fsm_loop(mut fsm: Fsm) {
-    loop {
-        if let Ok(command) = fsm.ctrl_rx.try_recv() {
-            fsm.handle_command(command);
-        }
-        let alive = match fsm.mode {
-            // 待命期阻塞等待对端发起；通道断开（连接关闭）即退出线程。
-            Mode::Idle => match fsm.raw_rx.recv() {
-                Ok(block) => {
-                    fsm.consume_block(block);
-                    true
-                }
-                Err(_) => false,
-            },
-            Mode::Deciding => match fsm.raw_rx.recv_timeout(DECIDE_TIMEOUT) {
-                Ok(block) => {
-                    fsm.consume_block(block);
-                    true
-                }
-                Err(flume::RecvTimeoutError::Timeout) => {
-                    // sz 未跟进：视为等待 ZFILE 的 rz 变体，转上传决策。
-                    fsm.enter_await_upload(0);
-                    true
-                }
-                Err(flume::RecvTimeoutError::Disconnected) => false,
-            },
-            Mode::Download => match fsm.raw_rx.recv_timeout(TRANSFER_TIMEOUT) {
-                Ok(block) => {
-                    fsm.consume_block(block);
-                    true
-                }
-                Err(flume::RecvTimeoutError::Timeout) => {
-                    let actions = fsm.receiver.cancel();
-                    fsm.run_recv(actions);
-                    true
-                }
-                Err(flume::RecvTimeoutError::Disconnected) => false,
-            },
-            Mode::AwaitUpload => match fsm.raw_rx.recv_timeout(UPLOAD_WAIT) {
-                Ok(block) => {
-                    fsm.consume_block(block);
-                    true
-                }
-                Err(flume::RecvTimeoutError::Timeout) => {
-                    // 用户未响应：静默放弃，对端 rz 轮询超时自行退出。
-                    fsm.mode = Mode::Idle;
-                    fsm.shared.active.store(false, Ordering::Release);
-                    while let Ok(block) = fsm.raw_rx.try_recv() {
-                        let _ = fsm.replay_tx.try_send(block);
-                    }
-                    true
-                }
-                Err(flume::RecvTimeoutError::Disconnected) => false,
-            },
-            Mode::Upload => {
-                // ZACK 确认窗口按发送端退避策略等待；其余阶段沿用固定静默上限。
-                let timeout = fsm.sender.ack_timeout().unwrap_or(TRANSFER_TIMEOUT);
-                match fsm.raw_rx.recv_timeout(timeout) {
-                    Ok(block) => {
-                        fsm.consume_block(block);
-                        true
-                    }
-                    Err(flume::RecvTimeoutError::Timeout) => {
-                        let actions = fsm.sender.on_timeout();
-                        fsm.run_send(actions);
-                        true
-                    }
-                    Err(flume::RecvTimeoutError::Disconnected) => false,
-                }
-            }
-        };
-        if !alive {
-            fsm.abort_in_flight();
-            return;
         }
     }
 }
