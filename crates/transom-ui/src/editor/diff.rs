@@ -12,7 +12,7 @@
 //! - 代价与局限：diff 按"整份文本与基线比对"生成，几 MB 文件的双列比对
 //!   有可感知开销；预览实体在进入/离开视图时构建与丢弃，不做常驻缓存。
 
-use super::editor_panel::{EditorPanelState, EditorPhase};
+use super::panel::{EditorPanelState, EditorPhase};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;

@@ -12,7 +12,7 @@
 //! - 代价与局限：续行按意图标识重新解析受影响标签，挂起期间用户又把某面板改脏
 //!   会让续行继续等待——宁可多等一次确认，也不冒丢改动的险。
 
-use super::editor_panel::PanelConfirm;
+use super::panel::PanelConfirm;
 use crate::app::AppShell;
 use gpui_kit::*;
 use transom_core::{GroupId, SessionId, TabId};

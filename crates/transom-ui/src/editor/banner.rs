@@ -3,7 +3,7 @@
 //! 面板状态在 `editor_panel.rs`，窗体动作在 `editor_actions.rs`，
 //! 回传在 `editor_ops.rs`，渲染外壳与状态栏在 `editor_view.rs`。
 
-use super::editor_panel::PanelConfirm;
+use super::panel::PanelConfirm;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;

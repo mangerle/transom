@@ -7,13 +7,13 @@
 //! 若渲染方法按 `&mut self` 取面板再挂 `cx.listener`，同一帧内会对 `self`
 //! 既读又写而被借用检查拒绝。图标一律取组件库资产，不用字符拟态。
 
-use super::editor_banner::{render_confirm_banner, render_conflict_banner};
-use super::editor_diff::{diff_entry_allowed, render_diff_view};
-use super::editor_panel::{EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, clamp_axis};
-use super::format_size;
+use super::banner::{render_confirm_banner, render_conflict_banner};
+use super::diff::{diff_entry_allowed, render_diff_view};
+use super::panel::{EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, clamp_axis};
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::Palette;
+use crate::sftp::format_size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};

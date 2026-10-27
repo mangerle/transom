@@ -4,9 +4,9 @@
 //! "布局编排"与"行内交互"混为一体；拆到独立文件后，主函数只剩列的
 //! 组合，行渲染的输入以结构体显式传递。
 
-use super::editor_list::render_editor_list_popover;
 use super::side_remote::{SftpDragItem, SftpRemoteCopyParams};
 use crate::app::AppShell;
+use crate::editor::render_editor_list_popover;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};

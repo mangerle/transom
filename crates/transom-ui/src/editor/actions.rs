@@ -3,7 +3,7 @@
 //! 面板状态与几何换算在 `editor_panel.rs`，打开与读取在 `editor_open.rs`，
 //! 保存回传在 `editor_ops.rs`，关闭闸门在 `editor_close.rs`，渲染在 `editor_view.rs`。
 
-use super::editor_panel::{EditorPhase, PANEL_KEEP_VISIBLE, PanelConfirm, clamp_axis};
+use super::panel::{EditorPhase, PANEL_KEEP_VISIBLE, PanelConfirm, clamp_axis};
 use crate::app::AppShell;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;

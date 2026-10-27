@@ -16,12 +16,12 @@
 //! - 面板先于读取结果出现，处于 `Reading` 态：用户双击后立刻得到反馈，比"等整份
 //!   传输完成才弹窗"更符合编辑器的交互预期。
 
-use super::editor_panel::{
+use super::panel::{
     EditorPanelState, EditorPhase, PANEL_HEIGHT, PANEL_WIDTH, caret_of, cascade_origin,
     editor_language_token,
 };
-use super::format_size;
 use crate::app::AppShell;
+use crate::sftp::format_size;
 use gpui_kit::component::input::{EditorState, InputEvent};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};

@@ -2,17 +2,6 @@
 
 mod chmod;
 mod drop_upload;
-mod editor_actions;
-mod editor_banner;
-mod editor_close;
-mod editor_diff;
-mod editor_drag_tracker;
-mod editor_list;
-mod editor_navigate;
-mod editor_open;
-mod editor_ops;
-mod editor_panel;
-mod editor_view;
 mod file_ops;
 mod filter;
 mod local_async;
@@ -40,9 +29,6 @@ mod sync_modal;
 mod vfs_entry_view;
 mod vfs_provider;
 
-pub(crate) use self::editor_close::PendingEditorClose;
-pub(crate) use self::editor_drag_tracker::EditorDragTracker;
-pub(crate) use self::editor_panel::EditorPanelState;
 pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;
 pub(crate) use self::properties::{
@@ -56,6 +42,7 @@ pub(crate) use self::state::{
 };
 pub(crate) use self::vfs_entry_view::{VfsRowRenderOptions, render_vfs_row_content};
 pub(crate) use self::vfs_provider::LocalVfsProvider;
+pub(crate) use crate::editor::{EditorDragTracker, EditorPanelState, PendingEditorClose};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;

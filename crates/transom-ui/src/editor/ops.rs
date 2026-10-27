@@ -11,8 +11,8 @@
 //!   修改时 net 层拒绝覆盖并回报 `SftpTextConflict`，这里只置冲突横幅交用户
 //!   决策（重新载入 / 强制覆盖 / 继续编辑），杜绝静默丢失他人改动。
 
-use super::editor_open::parent_dir;
-use super::editor_panel::{EditorPanelState, EditorPhase};
+use super::open::parent_dir;
+use super::panel::{EditorPanelState, EditorPhase};
 use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::component::input::EditorState;
