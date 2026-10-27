@@ -119,6 +119,13 @@ impl AppShell {
             .map(|input| input.read(cx).value().to_string())
             .unwrap_or_default();
 
+        if is_export && include_secrets && !encrypt {
+            self.set_backup_error(
+                rust_i18n::t!("backup.error_secrets_require_encryption").to_string(),
+                cx,
+            );
+            return;
+        }
         if is_export && encrypt {
             if value.is_empty() {
                 self.set_backup_error(rust_i18n::t!("backup.error_empty").to_string(), cx);
@@ -324,6 +331,11 @@ impl AppShell {
                                 .on_click(cx.listener(|this, &checked, _, cx| {
                                     if let Some(prompt) = this.backup_prompt.as_mut() {
                                         prompt.include_secrets = checked;
+                                        // 口令必须加密落盘：勾选包含口令时同步打开加密，
+                                        // 用户仍可手动取消，但提交时会被明确拦下。
+                                        if checked {
+                                            prompt.encrypt = true;
+                                        }
                                     }
                                     cx.notify();
                                 })),

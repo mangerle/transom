@@ -2311,6 +2311,9 @@ backup:
   error_mismatch:
     en: The two passphrases do not match.
     zh-CN: 两次输入的口令不一致。
+  error_secrets_require_encryption:
+    en: A backup that includes stored passphrases must be encrypted. Set a passphrase or uncheck "Include stored passphrases".
+    zh-CN: 包含已保存口令的备份必须加密；请设置备份口令，或取消勾选“包含已保存的口令”。
   processing:
     en: Processing, please wait...
     zh-CN: 正在处理，请稍候...

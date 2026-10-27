@@ -103,6 +103,14 @@ impl BackupService for CatalogBackupService {
         catalog: &SessionCatalog,
         options: &BackupExportOptions,
     ) -> Result<BackupExportReport, AppError> {
+        // 口令明文落盘是不可接受的：包含口令就必须加密。UI 会联动开关，
+        // 但这里仍要拒绝，防止其它调用方或未来入口绕过界面约束。
+        if options.include_secrets && options.passphrase.is_none() {
+            return Err(AppError::with_detail(
+                ErrorCode::Configuration,
+                "包含会话口令的备份必须加密；请设置备份口令，或取消包含口令",
+            ));
+        }
         let mut document = BackupDocument::from_catalog(catalog);
         if options.include_secrets {
             document.secrets = Some(collect_catalog_secrets(self.secrets.as_ref(), catalog)?);
@@ -675,7 +683,26 @@ mod tests {
     }
 
     #[test]
-    fn export_includes_secrets_only_when_requested() {
+    fn plaintext_export_with_secrets_is_rejected() {
+        let store = Arc::new(FakeSecretStore::available());
+        let catalog = catalog();
+        let key = SecretKey::new(catalog.sessions[0].id, SecretKind::Password);
+        store.put(&key, "s3cret");
+        let service = service(store);
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("plain-with-secrets.json");
+        let options = BackupExportOptions {
+            include_secrets: true,
+            ..Default::default()
+        };
+        let error = service.export(&path, &catalog, &options).unwrap_err();
+        assert_eq!(error.code, ErrorCode::Configuration);
+        assert!(!path.exists(), "拒绝导出时不得留下半成品文件");
+    }
+
+    #[test]
+    fn export_includes_secrets_only_when_requested_and_encrypted() {
         let store = Arc::new(FakeSecretStore::available());
         let catalog = catalog();
         let key = SecretKey::new(catalog.sessions[0].id, SecretKind::Password);
@@ -686,15 +713,22 @@ mod tests {
         let path = dir.path().join("with-secrets.json");
         let options = BackupExportOptions {
             include_secrets: true,
-            ..Default::default()
+            passphrase: Some(Zeroizing::new("correct horse".to_string())),
         };
         let report = service
             .export(&path, &catalog, &options)
-            .expect("导出应当成功");
+            .expect("加密导出应当成功");
         assert_eq!(report.secrets, 1);
+        assert!(report.encrypted);
 
         let text = fs::read_to_string(&path).unwrap();
-        assert!(text.contains("s3cret"));
+        assert!(!text.contains("s3cret"), "加密后不得出现明文口令");
+        let loaded = read_backup(&path, Some("correct horse")).unwrap();
+        assert_eq!(
+            loaded.secrets.as_ref().map(Vec::len),
+            Some(1),
+            "解密后应恢复一条口令"
+        );
 
         let plain_path = dir.path().join("without-secrets.json");
         let report = service
@@ -712,7 +746,7 @@ mod tests {
         let path = dir.path().join("broken.json");
         let options = BackupExportOptions {
             include_secrets: true,
-            ..Default::default()
+            passphrase: Some(Zeroizing::new("correct horse".to_string())),
         };
         let error = service.export(&path, &catalog(), &options).unwrap_err();
         assert_eq!(error.code, ErrorCode::SecretStoreUnavailable);
