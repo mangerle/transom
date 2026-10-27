@@ -8,7 +8,7 @@ use transom_core::{
 };
 use transom_net::{AuthPrompter, connect_ssh, connect_telnet, open_serial};
 
-use super::Internal;
+use super::{Internal, ReadyConnection};
 
 pub(super) struct UiPrompter {
     pub(super) tab_id: TabId,
@@ -224,7 +224,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                             .send_async(Internal::Connected {
                                 tab_id,
                                 connection_id,
-                                session,
+                                kind: ReadyConnection::Ssh(session),
                             })
                             .await;
                     }
@@ -246,11 +246,10 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                 match tokio::task::spawn_blocking(move || open_local_pty(&local, size)).await {
                     Ok(Ok((io, join))) => {
                         let _ = internal_tx
-                            .send_async(Internal::LocalConnected {
+                            .send_async(Internal::Connected {
                                 tab_id,
                                 connection_id,
-                                io,
-                                join,
+                                kind: ReadyConnection::Local { io, join },
                             })
                             .await;
                     }
@@ -285,11 +284,13 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                 match tokio::task::spawn_blocking(move || open_serial(&serial)).await {
                     Ok(Ok(connected)) => {
                         let _ = internal_tx
-                            .send_async(Internal::SerialConnected {
+                            .send_async(Internal::Connected {
                                 tab_id,
                                 connection_id,
-                                io: connected.io,
-                                join: connected.exit,
+                                kind: ReadyConnection::Serial {
+                                    io: connected.io,
+                                    join: connected.exit,
+                                },
                             })
                             .await;
                     }
@@ -324,11 +325,13 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                 match tokio::task::spawn_blocking(move || connect_telnet(&telnet, size)).await {
                     Ok(Ok(connected)) => {
                         let _ = internal_tx
-                            .send_async(Internal::TelnetConnected {
+                            .send_async(Internal::Connected {
                                 tab_id,
                                 connection_id,
-                                io: connected.io,
-                                join: connected.exit,
+                                kind: ReadyConnection::Telnet {
+                                    io: connected.io,
+                                    join: connected.exit,
+                                },
                             })
                             .await;
                     }
