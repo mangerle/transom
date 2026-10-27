@@ -5,7 +5,7 @@ use crate::app::AppShell;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId, TransferTask,
+    SftpCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId, TransferTask,
 };
 
 impl AppShell {
@@ -24,7 +24,7 @@ impl AppShell {
         let local_root = panel.local_path.clone();
         let remote_root = panel.path.clone();
         let op_id = TransferId::new();
-        self.send_command(AppCommand::Sftp {
+        self.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,

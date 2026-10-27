@@ -133,8 +133,8 @@ pub struct AppShell {
 
 impl AppShell {
     /// 向控制器提交命令的统一入口：非阻塞 try_send，队列满时快速失败。
-    pub(crate) fn send_command(&mut self, command: AppCommand) -> bool {
-        match self.services.command_tx.try_send(command) {
+    pub(crate) fn send_command(&mut self, command: impl Into<AppCommand>) -> bool {
+        match self.services.command_tx.try_send(command.into()) {
             Ok(()) => true,
             Err(error) => {
                 self.error = Some(command_send_error_text(error));

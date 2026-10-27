@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
-use transom_core::{AppCommand, ZmodemDirection, ZmodemEvent, ZmodemFinished};
+use transom_core::{ZmodemCommand, ZmodemDirection, ZmodemEvent, ZmodemFinished};
 
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -89,8 +89,8 @@ impl AppShell {
 
     /// 提交上传决策；命令通道满时丢弃并提示（低频用户操作，不排队）。
     fn send_zmodem_upload(&mut self, tab_id: transom_core::TabId, files: Vec<PathBuf>) {
-        let command = AppCommand::ZmodemUpload { tab_id, files };
-        if let Err(error) = self.services.command_tx.try_send(command) {
+        let command = ZmodemCommand::ZmodemUpload { tab_id, files };
+        if let Err(error) = self.services.command_tx.try_send(command.into()) {
             log::warn!("ZMODEM 上传命令发送失败: {error}");
             self.status = Some(rust_i18n::t!("zmodem.command_busy").to_string());
         }
@@ -98,8 +98,8 @@ impl AppShell {
 
     /// 请求取消当前标签的 ZMODEM 传输。
     pub(crate) fn send_zmodem_cancel(&mut self, tab_id: transom_core::TabId) {
-        let command = AppCommand::ZmodemCancel { tab_id };
-        if let Err(error) = self.services.command_tx.try_send(command) {
+        let command = ZmodemCommand::ZmodemCancel { tab_id };
+        if let Err(error) = self.services.command_tx.try_send(command.into()) {
             log::warn!("ZMODEM 取消命令发送失败: {error}");
         }
     }

@@ -4,7 +4,9 @@ use super::ops::execute_sftp_op;
 use super::remote_transfer::{execute_remote_transfer_op, spawn_remote_transfer_op};
 use crate::controller::Internal;
 use std::collections::HashMap;
-use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, SftpOperation, TabId, TransferId};
+use transom_core::{
+    AppError, AppEvent, ConnectionId, ErrorCode, SftpAppEvent, SftpOperation, TabId, TransferId,
+};
 use transom_net::{SftpClient, SshRemote};
 
 /// SFTP 命令的调度参数：主循环状态表的借用与命令载荷。
@@ -122,12 +124,15 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
                     }
                     (Err(err), _) | (_, Err(err)) => {
                         let _ = event_tx_clone
-                            .send_async(AppEvent::SftpFailed {
-                                tab_id,
-                                connection_id,
-                                op_id,
-                                error: err,
-                            })
+                            .send_async(
+                                SftpAppEvent::SftpFailed {
+                                    tab_id,
+                                    connection_id,
+                                    op_id,
+                                    error: err,
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                 }
@@ -194,12 +199,15 @@ fn send_sftp_not_ready(
     op_id: TransferId,
     reason: &'static str,
 ) {
-    let _ = event_tx.try_send(AppEvent::SftpFailed {
-        tab_id,
-        connection_id,
-        op_id,
-        error: AppError::with_detail(ErrorCode::ChannelFailed, reason),
-    });
+    let _ = event_tx.try_send(
+        SftpAppEvent::SftpFailed {
+            tab_id,
+            connection_id,
+            op_id,
+            error: AppError::with_detail(ErrorCode::ChannelFailed, reason),
+        }
+        .into(),
+    );
 }
 
 /// 派发单个 SFTP 操作执行：全部操作纳入任务表跟踪，标签关闭与停机时可统一取消。

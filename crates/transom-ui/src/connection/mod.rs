@@ -11,8 +11,8 @@ use crate::palette::localized_error;
 use gpui_kit::*;
 use secrets::{ConnectPayload, collect_connection_secrets, collect_jump_hops};
 use transom_core::{
-    AppCommand, AppError, Connection, ConnectionId, ErrorCode, Session, SessionId, TabId,
-    TerminalSize,
+    AppError, ConnectParams, Connection, ConnectionId, ErrorCode, Session, SessionId, TabId,
+    TerminalCommand, TerminalSize,
 };
 
 impl AppShell {
@@ -210,17 +210,17 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let size = TerminalSize::new(120, 32);
-        let command = AppCommand::Connect {
+        let command = TerminalCommand::Connect(Box::new(ConnectParams {
             tab_id,
             connection_id,
-            session: Box::new(session),
+            session,
             jumps: payload.jumps,
             proxy: payload.proxy,
             secrets: payload.secrets,
             size,
             zmodem: self.settings.zmodem.clone(),
             allow_sha1_publickey_auth: self.settings.allow_sha1_publickey_auth,
-        };
+        }));
         if !self.send_command(command) {
             self.remove_tab(tab_id);
         }

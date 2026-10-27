@@ -3,7 +3,7 @@
 use super::types::PROCESS_POLL_INTERVAL;
 use crate::app::AppShell;
 use gpui_kit::{Context, Window};
-use transom_core::{AppCommand, AppError, ConnectionId, InterfaceRate, ProcessInfo, TabId};
+use transom_core::{AppError, ConnectionId, HostCommand, InterfaceRate, ProcessInfo, TabId};
 
 impl AppShell {
     /// 活动栏入口：打开/关闭监控抽屉，打开时立即拉取一轮进程快照。
@@ -49,7 +49,7 @@ impl AppShell {
         let Some((tab_id, connection_id)) = self.active_monitor_target() else {
             return;
         };
-        self.send_command(AppCommand::SampleProcesses {
+        self.send_command(HostCommand::SampleProcesses {
             tab_id,
             connection_id,
         });
@@ -73,7 +73,7 @@ impl AppShell {
         let Some((tab_id, connection_id)) = self.active_monitor_target() else {
             return;
         };
-        self.send_command(AppCommand::KillProcess {
+        self.send_command(HostCommand::KillProcess {
             tab_id,
             connection_id,
             pid,

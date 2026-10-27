@@ -15,7 +15,7 @@ use crate::palette::localized_error;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use transom_core::{AppCommand, PreviewMode, SftpOperation, TabId, TransferId};
+use transom_core::{PreviewMode, SftpCommand, SftpOperation, TabId, TransferId};
 
 /// 图片缩略图任务的输入来源。
 enum PreviewImageInput {
@@ -199,16 +199,19 @@ impl AppShell {
             preview.op_id = Some(op_id);
             // panel/preview 借用活跃，无法走 self.send_command：用预克隆的
             // 发送端 try_send，失败把原因写进预览气泡而不是静默丢弃
-            if let Err(error) = command_tx.try_send(AppCommand::Sftp {
-                tab_id: target.tab_id,
-                connection_id,
-                op_id,
-                op: SftpOperation::Preview {
-                    path: target.key.path,
-                    mode,
-                    max_bytes,
-                },
-            }) {
+            if let Err(error) = command_tx.try_send(
+                SftpCommand::Sftp {
+                    tab_id: target.tab_id,
+                    connection_id,
+                    op_id,
+                    op: SftpOperation::Preview {
+                        path: target.key.path,
+                        mode,
+                        max_bytes,
+                    },
+                }
+                .into(),
+            ) {
                 preview.content = PreviewContent::Error(command_send_error_text(error));
                 preview.op_id = None;
             }

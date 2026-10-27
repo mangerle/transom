@@ -4,7 +4,7 @@ use super::common::send_overwritable;
 use std::sync::Arc;
 use tokio::process::Command;
 use transom_core::system_stats::FilesystemUsage;
-use transom_core::{AppEvent, ConnectionId, StatsSamplerState, TabId};
+use transom_core::{AppEvent, ConnectionId, HostAppEvent, StatsSamplerState, TabId};
 use transom_net::SshRemote;
 
 /// 最近一次 df 结果的缓存形态：(已用字节, 总字节, 挂载点明细)。
@@ -103,11 +103,12 @@ pub(crate) fn spawn_remote_stats_sampler(
                     }
                     if !send_overwritable(
                         &event_tx,
-                        AppEvent::SystemStatsUpdated {
+                        HostAppEvent::SystemStatsUpdated {
                             tab_id,
                             connection_id,
                             stats,
-                        },
+                        }
+                        .into(),
                         "系统统计",
                     ) {
                         break;
@@ -223,11 +224,12 @@ pub(crate) async fn run_local_stats_sampler(
         for (tab_id, connection_id) in tabs {
             if !send_overwritable(
                 &event_tx,
-                AppEvent::SystemStatsUpdated {
+                HostAppEvent::SystemStatsUpdated {
                     tab_id,
                     connection_id,
                     stats: stats.clone(),
-                },
+                }
+                .into(),
                 "系统统计",
             ) {
                 return;

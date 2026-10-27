@@ -15,7 +15,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
-use transom_core::{AppError, AppEvent, ErrorCode, HostAction, HostOutcome, SessionId};
+use transom_core::{
+    AppError, AppEvent, ErrorCode, HostAction, HostAppEvent, HostOutcome, SessionId,
+};
 use transom_net::probe_tcp;
 
 /// 跨批次共享的在途动作上限。
@@ -71,11 +73,11 @@ pub(super) async fn run_batch(
 
 /// 把单条结果投到事件通道；通道满时反压等待，绝不丢弃。
 async fn report(event_tx: &flume::Sender<AppEvent>, session_id: SessionId, outcome: HostOutcome) {
-    let event = AppEvent::HostActionResult {
+    let event = HostAppEvent::HostActionResult {
         session_id,
         outcome,
     };
-    if let Err(error) = event_tx.send_async(event).await {
+    if let Err(error) = event_tx.send_async(event.into()).await {
         log::warn!("主机动作结果未能送达界面，事件通道已关闭: {error}");
     }
 }
@@ -148,10 +150,10 @@ mod tests {
         let mut reported: Vec<SessionId> = Vec::new();
         while let Ok(event) = rx.try_recv() {
             match event {
-                AppEvent::HostActionResult {
+                AppEvent::Host(HostAppEvent::HostActionResult {
                     session_id,
                     outcome,
-                } => {
+                }) => {
                     reported.push(session_id);
                     match outcome {
                         HostOutcome::Reachable { .. } => reachable += 1,

@@ -18,7 +18,7 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use std::time::Duration;
 use transom_core::{
-    AppCommand, FolderId, HostAction, HostOutcome, Session, SessionCatalog, SessionId,
+    FolderId, HostAction, HostCommand, HostOutcome, Session, SessionCatalog, SessionId,
 };
 
 /// 可达（绿点）停留时间：确认"通了"就够，不该长期占着行尾。
@@ -114,7 +114,7 @@ impl AppShell {
         }
         let dispatched: Vec<SessionId> = fresh.iter().map(HostAction::session_id).collect();
         log::info!("派发批量拨测，目标数: {}", dispatched.len());
-        if !self.send_command(AppCommand::RunHostActions { actions: fresh }) {
+        if !self.send_command(HostCommand::RunHostActions { actions: fresh }) {
             // 命令通道已关闭：不点亮状态点，否则在途态永远等不到回报。
             return;
         }

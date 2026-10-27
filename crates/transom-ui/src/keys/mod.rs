@@ -8,7 +8,7 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    AppCommand, AppError, Connection, ConnectionId, GeneratedKey, KeyAlgorithm, PublicKeyInfo,
+    AppError, Connection, ConnectionId, GeneratedKey, HostCommand, KeyAlgorithm, PublicKeyInfo,
     TabId,
 };
 use zeroize::Zeroizing;
@@ -265,7 +265,7 @@ impl AppShell {
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| "public_key".to_string());
-        let command = AppCommand::DeployPublicKey {
+        let command = HostCommand::DeployPublicKey {
             tab_id: target.tab_id,
             connection_id: target.connection_id,
             key_name: key_name.clone(),

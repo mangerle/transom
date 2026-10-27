@@ -1,7 +1,9 @@
 //! SFTP 操作结果的事件回传助手：单值、目录汇总与无返回值三类收尾。
 
 use std::path::Path;
-use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, PreviewMode, TabId, TransferId};
+use transom_core::{
+    AppError, AppEvent, ConnectionId, ErrorCode, PreviewMode, SftpAppEvent, TabId, TransferId,
+};
 use transom_net::SftpClient;
 
 pub(super) async fn verify_transfer_result(
@@ -28,24 +30,30 @@ pub(super) async fn finish_sftp(
     match result {
         Ok((transferred, verified)) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFinished {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    transferred: Some(transferred),
-                    skipped: 0,
-                    verified,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFinished {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        transferred: Some(transferred),
+                        skipped: 0,
+                        verified,
+                    }
+                    .into(),
+                )
                 .await;
         }
         Err(error) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    }
+                    .into(),
+                )
                 .await;
         }
     }
@@ -61,24 +69,30 @@ pub(super) async fn finish_sftp_summary(
     match result {
         Ok(summary) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFinished {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    transferred: Some(summary.transferred),
-                    skipped: summary.skipped,
-                    verified: summary.verified,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFinished {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        transferred: Some(summary.transferred),
+                        skipped: summary.skipped,
+                        verified: summary.verified,
+                    }
+                    .into(),
+                )
                 .await;
         }
         Err(error) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    }
+                    .into(),
+                )
                 .await;
         }
     }
@@ -94,24 +108,30 @@ pub(super) async fn finish_sftp_none(
     match result {
         Ok(()) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFinished {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    transferred: None,
-                    skipped: 0,
-                    verified: false,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFinished {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        transferred: None,
+                        skipped: 0,
+                        verified: false,
+                    }
+                    .into(),
+                )
                 .await;
         }
         Err(error) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    }
+                    .into(),
+                )
                 .await;
         }
     }
@@ -153,36 +173,45 @@ pub(super) async fn read_preview(request: PreviewRequest<'_>) {
     match result {
         Ok(Ok((bytes, truncated))) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpPreview {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    bytes,
-                    truncated,
-                })
+                .send_async(
+                    SftpAppEvent::SftpPreview {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        bytes,
+                        truncated,
+                    }
+                    .into(),
+                )
                 .await;
         }
         Ok(Err(error)) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    }
+                    .into(),
+                )
                 .await;
         }
         Err(_) => {
             let _ = event_tx
-                .send_async(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error: AppError::with_detail(
-                        ErrorCode::Timeout,
-                        format!("预览读取超时（超过 10 秒）: {path}"),
-                    ),
-                })
+                .send_async(
+                    SftpAppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error: AppError::with_detail(
+                            ErrorCode::Timeout,
+                            format!("预览读取超时（超过 10 秒）: {path}"),
+                        ),
+                    }
+                    .into(),
+                )
                 .await;
         }
     }

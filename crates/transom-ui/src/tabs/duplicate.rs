@@ -4,7 +4,7 @@ use crate::app::AppShell;
 use crate::palette::localized_error;
 use crate::sftp::PendingEditorClose;
 use gpui_kit::*;
-use transom_core::{AppCommand, ErrorCode, SecretKey, SecretKind, SessionId, TabId};
+use transom_core::{ErrorCode, SecretKey, SecretKind, SessionId, TabId, TerminalCommand};
 
 impl AppShell {
     pub(crate) fn delete_session_by_id(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
@@ -28,7 +28,7 @@ impl AppShell {
             .retain(|session| session.id != session_id);
         self.selected_sessions.remove(&session_id);
         for tab_id in &removed_tabs {
-            self.send_command(AppCommand::CloseTab { tab_id: *tab_id });
+            self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
         self.tabs.retain(|tab| tab.session_id != session_id);
         self.prune_editor_panels();

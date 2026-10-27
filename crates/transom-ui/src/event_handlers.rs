@@ -10,7 +10,7 @@ use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::sync::Arc;
-use transom_core::{AppEvent, PromptKind, SecretKind};
+use transom_core::{HostAppEvent, PromptKind, SecretKind, TerminalAppEvent};
 use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
 
 impl AppShell {
@@ -19,11 +19,11 @@ impl AppShell {
     /// 返回 `false` 表示标签或连接已过期（迟到的完成事件），不触发重绘。
     pub(crate) fn on_terminal_ready(
         &mut self,
-        event: AppEvent,
+        event: TerminalAppEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let AppEvent::TerminalReady {
+        let TerminalAppEvent::TerminalReady {
             tab_id,
             connection_id,
             io,
@@ -148,8 +148,12 @@ impl AppShell {
     }
 
     /// 连接建立失败：标记标签状态、回收未落盘凭据并安排自动重连。
-    pub(crate) fn on_connection_failed(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::ConnectionFailed {
+    pub(crate) fn on_connection_failed(
+        &mut self,
+        event: TerminalAppEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let TerminalAppEvent::ConnectionFailed {
             tab_id,
             connection_id,
             error,
@@ -177,8 +181,12 @@ impl AppShell {
     }
 
     /// 连接断开：仅在当前任连接生效时更新状态，并安排自动重连。
-    pub(crate) fn on_disconnected(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::Disconnected {
+    pub(crate) fn on_disconnected(
+        &mut self,
+        event: TerminalAppEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let TerminalAppEvent::Disconnected {
             tab_id,
             connection_id,
         } = event
@@ -207,11 +215,11 @@ impl AppShell {
     /// 返回 `false` 表示连接已过期（关闭标签/重连），不弹出提示。
     pub(crate) fn on_auth_prompt(
         &mut self,
-        event: AppEvent,
+        event: TerminalAppEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let AppEvent::AuthPrompt {
+        let TerminalAppEvent::AuthPrompt {
             tab_id,
             connection_id,
             name,
@@ -268,8 +276,8 @@ impl AppShell {
     /// 首连指纹确认：仅在连接仍现任时弹出核对窗口。
     ///
     /// 返回 `false` 表示连接已过期，不弹出提示。
-    pub(crate) fn on_host_key_confirm(&mut self, event: AppEvent) -> bool {
-        let AppEvent::HostKeyConfirm {
+    pub(crate) fn on_host_key_confirm(&mut self, event: TerminalAppEvent) -> bool {
+        let TerminalAppEvent::HostKeyConfirm {
             tab_id,
             connection_id,
             host,
@@ -300,8 +308,8 @@ impl AppShell {
     /// 系统统计样本：只更新数据；可见标签（或打开着看板）才重绘。
     ///
     /// 返回 `false`：重绘由本方法按可见性与沉浸模式条件决定。
-    pub(crate) fn on_system_stats(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::SystemStatsUpdated {
+    pub(crate) fn on_system_stats(&mut self, event: HostAppEvent, cx: &mut Context<Self>) -> bool {
+        let HostAppEvent::SystemStatsUpdated {
             tab_id,
             connection_id,
             stats,
@@ -334,8 +342,12 @@ impl AppShell {
     /// 网络速率样本：只更新数据；可见标签才重绘。
     ///
     /// 返回 `false`：重绘由本方法按可见性与沉浸模式条件决定。
-    pub(crate) fn on_network_traffic(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::NetworkTrafficUpdated {
+    pub(crate) fn on_network_traffic(
+        &mut self,
+        event: HostAppEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let HostAppEvent::NetworkTrafficUpdated {
             tab_id,
             connection_id,
             traffic,

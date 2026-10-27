@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use transom_core::{
     AppError, AppEvent, Connection, ConnectionId, ConnectionSecrets, ErrorCode, KnownHostsStore,
-    PromptInfo, Session, TabId, TerminalIo, TerminalSize,
+    PromptInfo, Session, TabId, TerminalAppEvent, TerminalIo, TerminalSize,
 };
 use transom_net::{AuthPrompter, ZmodemConfig, connect_ssh, connect_telnet, open_serial};
 
@@ -29,15 +29,18 @@ impl AuthPrompter for UiPrompter {
     ) -> Result<bool, AppError> {
         let (responder, mut answer) = tokio::sync::mpsc::channel(1);
         self.event_tx
-            .send_async(AppEvent::HostKeyConfirm {
-                tab_id: self.tab_id,
-                connection_id: self.connection_id,
-                host: host.to_string(),
-                port,
-                key_type: key_type.to_string(),
-                fingerprint: fingerprint.to_string(),
-                responder,
-            })
+            .send_async(
+                TerminalAppEvent::HostKeyConfirm {
+                    tab_id: self.tab_id,
+                    connection_id: self.connection_id,
+                    host: host.to_string(),
+                    port,
+                    key_type: key_type.to_string(),
+                    fingerprint: fingerprint.to_string(),
+                    responder,
+                }
+                .into(),
+            )
             .await
             .map_err(|_| {
                 AppError::with_detail(ErrorCode::Cancelled, "应用窗口已关闭，无法确认主机指纹")
@@ -58,14 +61,17 @@ impl AuthPrompter for UiPrompter {
         // AuthPrompt 是用户必须看到并作答的关键事件，队列满时等待 UI 消费
         // 而不是丢弃（认证本来就阻塞在此，等待即天然反压）。
         self.event_tx
-            .send_async(AppEvent::AuthPrompt {
-                tab_id: self.tab_id,
-                connection_id: self.connection_id,
-                name: name.to_string(),
-                instructions: instructions.to_string(),
-                prompts: prompts.to_vec(),
-                responder,
-            })
+            .send_async(
+                TerminalAppEvent::AuthPrompt {
+                    tab_id: self.tab_id,
+                    connection_id: self.connection_id,
+                    name: name.to_string(),
+                    instructions: instructions.to_string(),
+                    prompts: prompts.to_vec(),
+                    responder,
+                }
+                .into(),
+            )
             .await
             .map_err(|_| AppError::with_detail(ErrorCode::Cancelled, "应用窗口已关闭"))?;
         answers
@@ -238,11 +244,14 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                     }
                     Err(error) => {
                         let _ = event_tx
-                            .send_async(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error,
-                            })
+                            .send_async(
+                                TerminalAppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error,
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                 }
@@ -264,23 +273,29 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                     }
                     Ok(Err(error)) => {
                         let _ = event_tx
-                            .send_async(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error,
-                            })
+                            .send_async(
+                                TerminalAppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error,
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                     Err(error) => {
                         let _ = event_tx
-                            .send_async(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error: AppError::with_detail(
-                                    ErrorCode::Io,
-                                    format!("本地伪终端创建任务异常终止: {error}"),
-                                ),
-                            })
+                            .send_async(
+                                TerminalAppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error: AppError::with_detail(
+                                        ErrorCode::Io,
+                                        format!("本地伪终端创建任务异常终止: {error}"),
+                                    ),
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                 }
@@ -306,23 +321,29 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                     }
                     Ok(Err(error)) => {
                         let _ = event_tx
-                            .send_async(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error,
-                            })
+                            .send_async(
+                                TerminalAppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error,
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                     Err(error) => {
                         let _ = event_tx
-                            .send_async(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error: AppError::with_detail(
-                                    ErrorCode::Io,
-                                    format!("串口连接任务异常终止: {error}"),
-                                ),
-                            })
+                            .send_async(
+                                TerminalAppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error: AppError::with_detail(
+                                        ErrorCode::Io,
+                                        format!("串口连接任务异常终止: {error}"),
+                                    ),
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                 }
@@ -348,34 +369,46 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                     }
                     Ok(Err(error)) => {
                         let _ = event_tx
-                            .send_async(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error,
-                            })
+                            .send_async(
+                                TerminalAppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error,
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                     Err(error) => {
                         let _ = event_tx
-                            .send_async(AppEvent::ConnectionFailed {
-                                tab_id,
-                                connection_id,
-                                error: AppError::with_detail(
-                                    ErrorCode::Io,
-                                    format!("Telnet 连接任务异常终止: {error}"),
-                                ),
-                            })
+                            .send_async(
+                                TerminalAppEvent::ConnectionFailed {
+                                    tab_id,
+                                    connection_id,
+                                    error: AppError::with_detail(
+                                        ErrorCode::Io,
+                                        format!("Telnet 连接任务异常终止: {error}"),
+                                    ),
+                                }
+                                .into(),
+                            )
                             .await;
                     }
                 }
             }
             _ => {
                 let _ = event_tx
-                    .send_async(AppEvent::ConnectionFailed {
-                        tab_id,
-                        connection_id,
-                        error: AppError::with_detail(ErrorCode::Configuration, "不支持的连接类型"),
-                    })
+                    .send_async(
+                        TerminalAppEvent::ConnectionFailed {
+                            tab_id,
+                            connection_id,
+                            error: AppError::with_detail(
+                                ErrorCode::Configuration,
+                                "不支持的连接类型",
+                            ),
+                        }
+                        .into(),
+                    )
                     .await;
             }
         }

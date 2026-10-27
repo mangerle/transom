@@ -15,7 +15,7 @@ use std::sync::mpsc;
 use tokio::runtime::Runtime;
 use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, KnownHostsStore,
-    SecretStore, SftpOperation, TabId, TerminalIo, TransferId,
+    SecretStore, SftpOperation, TabId, TerminalCommand, TerminalIo, TransferId,
 };
 use transom_net::{ForwardTask, SftpClient, SshSession, ZmodemConfig};
 use transom_sync::CloudSyncService;
@@ -117,7 +117,10 @@ impl Controller {
             shutdown_rx,
             ..
         } = self;
-        match command_tx.send_timeout(AppCommand::Shutdown, std::time::Duration::from_millis(500)) {
+        match command_tx.send_timeout(
+            TerminalCommand::Shutdown.into(),
+            std::time::Duration::from_millis(500),
+        ) {
             Ok(()) => {}
             Err(flume::SendTimeoutError::Timeout(_)) => {
                 log::warn!("命令队列已满，停机命令未能投递，控制平面将随通道关闭退出");

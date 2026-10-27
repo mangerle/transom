@@ -3,10 +3,14 @@
 use crate::app::{AppShell, TabStatus};
 use crate::palette::localized_error;
 use gpui_kit::*;
-use transom_core::{AppEvent, TabId};
+use transom_core::{
+    AppEvent, ForwardAppEvent, HostAppEvent, SftpAppEvent, SyncAppEvent, TabId, TerminalAppEvent,
+    ZmodemAppEvent,
+};
 use transom_terminal::TerminalEvent;
 
 impl AppShell {
+    /// 应用顶层事件总线分发入口：按领域分发给对应的子系统处理器。
     pub(crate) fn handle_app_event(
         &mut self,
         event: AppEvent,
@@ -14,91 +18,98 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         match event {
-            AppEvent::TerminalReady { .. } => {
-                if !self.on_terminal_ready(event, window, cx) {
-                    return;
-                }
+            AppEvent::Terminal(terminal_event) => {
+                self.dispatch_terminal_event(terminal_event, window, cx);
             }
-            AppEvent::ConnectionFailed { .. } => {
-                if !self.on_connection_failed(event, cx) {
-                    return;
-                }
+            AppEvent::Sftp(sftp_event) => {
+                self.dispatch_sftp_event(sftp_event, window, cx);
             }
-            AppEvent::Disconnected { .. } => {
-                if !self.on_disconnected(event, cx) {
-                    return;
-                }
+            AppEvent::Forward(forward_event) => {
+                self.dispatch_forward_event(forward_event, cx);
             }
-            AppEvent::AuthPrompt { .. } => {
-                if !self.on_auth_prompt(event, window, cx) {
-                    return;
-                }
+            AppEvent::Host(host_event) => {
+                self.dispatch_host_event(host_event, cx);
             }
-            AppEvent::HostKeyConfirm { .. } => {
-                if !self.on_host_key_confirm(event) {
-                    return;
-                }
+            AppEvent::Sync(sync_event) => {
+                self.dispatch_sync_event(sync_event, window, cx);
             }
-            AppEvent::SftpListing { .. } => {
-                if !self.on_sftp_listing(event, window, cx) {
-                    return;
-                }
+            AppEvent::Zmodem(zmodem_event) => {
+                self.dispatch_zmodem_event(zmodem_event, cx);
             }
-            AppEvent::SftpProgress { .. } => {
-                if !self.on_sftp_progress(event, cx) {
-                    return;
-                }
+            AppEvent::DeepLink { request } => {
+                self.handle_deep_link(request, window, cx);
             }
-            AppEvent::SftpFinished { .. } => {
-                if !self.on_sftp_finished(event, cx) {
-                    return;
-                }
-            }
-            AppEvent::SftpMetadata { .. } => {
-                if !self.on_sftp_metadata(event, cx) {
-                    return;
-                }
-            }
-            AppEvent::SftpPreview { .. } => {
-                if !self.on_sftp_preview(event, cx) {
-                    return;
-                }
-            }
-            AppEvent::SftpPreviewFailed { .. } => {
-                if !self.on_sftp_preview_failed(event, cx) {
-                    return;
-                }
-            }
-            AppEvent::SftpTextRead {
+        }
+    }
+
+    /// 终端会话与连接事件分发。
+    fn dispatch_terminal_event(
+        &mut self,
+        event: TerminalAppEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let should_notify = match event {
+            TerminalAppEvent::TerminalReady { .. } => self.on_terminal_ready(event, window, cx),
+            TerminalAppEvent::ConnectionFailed { .. } => self.on_connection_failed(event, cx),
+            TerminalAppEvent::Disconnected { .. } => self.on_disconnected(event, cx),
+            TerminalAppEvent::AuthPrompt { .. } => self.on_auth_prompt(event, window, cx),
+            TerminalAppEvent::HostKeyConfirm { .. } => self.on_host_key_confirm(event),
+        };
+        if should_notify {
+            cx.notify();
+        }
+    }
+
+    /// SFTP 文件传输与文本编辑事件分发。
+    fn dispatch_sftp_event(
+        &mut self,
+        event: SftpAppEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let should_notify = match event {
+            SftpAppEvent::SftpListing { .. } => self.on_sftp_listing(event, window, cx),
+            SftpAppEvent::SftpProgress { .. } => self.on_sftp_progress(event, cx),
+            SftpAppEvent::SftpFinished { .. } => self.on_sftp_finished(event, cx),
+            SftpAppEvent::SftpMetadata { .. } => self.on_sftp_metadata(event, cx),
+            SftpAppEvent::SftpPreview { .. } => self.on_sftp_preview(event, cx),
+            SftpAppEvent::SftpPreviewFailed { .. } => self.on_sftp_preview_failed(event, cx),
+            SftpAppEvent::SftpTextRead {
                 op_id,
                 content,
                 meta,
                 ..
             } => {
                 self.apply_editor_text(op_id, content, meta, window, cx);
+                true
             }
-            AppEvent::SftpTextWritten { op_id, meta, .. } => {
+            SftpAppEvent::SftpTextWritten { op_id, meta, .. } => {
                 self.note_editor_text_written(op_id, meta, window, cx);
+                true
             }
-            AppEvent::SftpTextFailed { op_id, error, .. } => {
+            SftpAppEvent::SftpTextFailed { op_id, error, .. } => {
                 // 编辑读写失败只回到面板内显示，不写远端栏错误、不进传输队列统计。
                 self.note_editor_text_failed(op_id, localized_error(&error), cx);
+                true
             }
-            AppEvent::SftpTextConflict { op_id, error, .. } => {
+            SftpAppEvent::SftpTextConflict { op_id, error, .. } => {
                 // 版本指纹拦截不是普通失败：面板要弹出三选一冲突横幅。
                 self.note_editor_text_conflict(op_id, localized_error(&error), cx);
+                true
             }
-            AppEvent::SftpDirCompared { .. } => {
-                if !self.on_sftp_dir_compared(event) {
-                    return;
-                }
-            }
-            AppEvent::SftpFailed { .. } => {
-                if !self.on_sftp_failed(event, cx) {
-                    return;
-                }
-            }
-            AppEvent::ForwardChanged {
+            SftpAppEvent::SftpDirCompared { .. } => self.on_sftp_dir_compared(event),
+            SftpAppEvent::SftpFailed { .. } => self.on_sftp_failed(event, cx),
+        };
+        if should_notify {
+            cx.notify();
+        }
+    }
+
+    /// 端口转发事件分发。
+    fn dispatch_forward_event(&mut self, event: ForwardAppEvent, cx: &mut Context<Self>) {
+        match event {
+            ForwardAppEvent::ForwardChanged {
                 tab_id,
                 connection_id,
                 status,
@@ -112,90 +123,93 @@ impl AppShell {
                     tab.forward_statuses.insert(status.rule_id, status);
                 }
             }
-            AppEvent::SystemStatsUpdated { .. } => {
-                if !self.on_system_stats(event, cx) {
-                    return;
-                }
+        }
+        cx.notify();
+    }
+
+    /// 主机遥测、系统采样与运维动作事件分发。
+    fn dispatch_host_event(&mut self, event: HostAppEvent, cx: &mut Context<Self>) {
+        match event {
+            HostAppEvent::SystemStatsUpdated { .. } => {
+                self.on_system_stats(event, cx);
             }
-            AppEvent::ProcessesSampled {
+            HostAppEvent::NetworkTrafficUpdated { .. } => {
+                self.on_network_traffic(event, cx);
+            }
+            HostAppEvent::ProcessesSampled {
                 tab_id,
                 connection_id,
                 processes,
             } => {
                 self.monitor_sampled(tab_id, connection_id, processes, cx);
-                return;
             }
-            AppEvent::ProcessesSampleFailed {
+            HostAppEvent::ProcessesSampleFailed {
                 tab_id,
                 connection_id,
                 error,
             } => {
                 self.monitor_failed(tab_id, connection_id, error, cx);
-                return;
             }
-            AppEvent::ProcessKilled {
+            HostAppEvent::ProcessKilled {
                 tab_id,
                 connection_id,
                 pid,
                 error,
             } => {
                 self.monitor_killed(tab_id, connection_id, pid, error, cx);
-                return;
             }
-            AppEvent::NetworkTrafficUpdated { .. } => {
-                if !self.on_network_traffic(event, cx) {
-                    return;
-                }
-            }
-            AppEvent::PublicKeyDeployed {
+            HostAppEvent::PublicKeyDeployed {
                 tab_id: _,
                 connection_id: _,
                 key_name,
                 error,
             } => {
                 self.handle_public_key_deployed(key_name, error, cx);
+                cx.notify();
             }
-            AppEvent::CloudSyncPushed { result } => {
-                self.handle_cloud_sync_pushed(result, cx);
-                return;
-            }
-            AppEvent::Zmodem {
-                tab_id,
-                connection_id: _,
-                event,
-            } => {
-                self.handle_zmodem_event(tab_id, event, cx);
-                return;
-            }
-            AppEvent::GitSynced { result } => {
-                self.handle_git_synced(result, cx);
-                return;
-            }
-            AppEvent::CloudSyncPulled { result } => {
-                match result {
-                    Ok(document) => self.finish_cloud_sync_pull(document, window, cx),
-                    Err(error) if error.code == transom_core::ErrorCode::CloudSyncMissing => {
-                        self.handle_cloud_sync_missing(cx);
-                    }
-                    Err(error) => {
-                        self.error = Some(localized_error(&error));
-                    }
-                }
-                return;
-            }
-            AppEvent::HostActionResult {
+            HostAppEvent::HostActionResult {
                 session_id,
                 outcome,
             } => {
                 self.handle_probe_result(session_id, outcome, cx);
-                return;
-            }
-            AppEvent::DeepLink { request } => {
-                self.handle_deep_link(request, window, cx);
-                return;
             }
         }
-        cx.notify();
+    }
+
+    /// 云端备份与 Git 同步事件分发。
+    fn dispatch_sync_event(
+        &mut self,
+        event: SyncAppEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            SyncAppEvent::CloudSyncPushed { result } => {
+                self.handle_cloud_sync_pushed(result, cx);
+            }
+            SyncAppEvent::CloudSyncPulled { result } => match result {
+                Ok(document) => self.finish_cloud_sync_pull(document, window, cx),
+                Err(error) if error.code == transom_core::ErrorCode::CloudSyncMissing => {
+                    self.handle_cloud_sync_missing(cx);
+                }
+                Err(error) => {
+                    self.error = Some(localized_error(&error));
+                }
+            },
+            SyncAppEvent::GitSynced { result } => {
+                self.handle_git_synced(result, cx);
+            }
+        }
+    }
+
+    /// ZMODEM 传输事件分发。
+    fn dispatch_zmodem_event(&mut self, event: ZmodemAppEvent, cx: &mut Context<Self>) {
+        let ZmodemAppEvent::Zmodem {
+            tab_id,
+            connection_id: _,
+            event,
+        } = event;
+        self.handle_zmodem_event(tab_id, event, cx);
     }
 
     pub(crate) fn handle_terminal_event(

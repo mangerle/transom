@@ -2,7 +2,7 @@
 
 use super::stats::COMMAND_TIMEOUT;
 use tokio::process::Command;
-use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, TabId};
+use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, HostAppEvent, TabId};
 use transom_net::SshRemote;
 
 /// 进程采样/信号控制的目标：SSH 会话走远端 exec 通道，本地终端跑本机命令。
@@ -39,20 +39,22 @@ pub(crate) async fn run_process_sample(target: ProcessTarget) {
         }
         None => local_command_output(PROCESS_SAMPLE_COMMAND).await,
     };
-    let event = match result {
+    let event: AppEvent = match result {
         Ok(output) => {
             let processes = transom_core::system_stats::parse_processes(&output);
-            AppEvent::ProcessesSampled {
+            HostAppEvent::ProcessesSampled {
                 tab_id: target.tab_id,
                 connection_id: target.connection_id,
                 processes,
             }
+            .into()
         }
-        Err(error) => AppEvent::ProcessesSampleFailed {
+        Err(error) => HostAppEvent::ProcessesSampleFailed {
             tab_id: target.tab_id,
             connection_id: target.connection_id,
             error,
-        },
+        }
+        .into(),
     };
     let _ = target.event_tx.send_async(event).await;
 }
@@ -90,12 +92,15 @@ pub(crate) async fn run_process_kill(target: ProcessTarget, pid: u32, force: boo
     };
     let _ = target
         .event_tx
-        .send_async(AppEvent::ProcessKilled {
-            tab_id: target.tab_id,
-            connection_id: target.connection_id,
-            pid,
-            error,
-        })
+        .send_async(
+            HostAppEvent::ProcessKilled {
+                tab_id: target.tab_id,
+                connection_id: target.connection_id,
+                pid,
+                error,
+            }
+            .into(),
+        )
         .await;
 }
 

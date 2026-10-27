@@ -24,7 +24,7 @@ use super::format_size;
 use crate::app::AppShell;
 use gpui_kit::component::input::{EditorState, InputEvent};
 use gpui_kit::*;
-use transom_core::{AppCommand, ConnectionId, RemoteTextMeta, SftpOperation, TabId, TransferId};
+use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
 
 /// 编辑入口的准入判定结果。
 ///
@@ -168,7 +168,7 @@ impl AppShell {
             window,
             cx,
         );
-        if !self.send_command(AppCommand::Sftp {
+        if !self.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -431,7 +431,7 @@ impl AppShell {
             item.diff = None;
         }
         let max_bytes = self.settings.sftp.edit_max_bytes;
-        if !self.send_command(AppCommand::Sftp {
+        if !self.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,

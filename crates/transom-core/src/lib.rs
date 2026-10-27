@@ -40,7 +40,11 @@ pub use catalog::{
     SessionCatalog, SessionFolder,
 };
 pub use color::Rgb;
-pub use commands::{AppCommand, AppEvent, DeepLinkRequest, SystemStats};
+pub use commands::{
+    AppCommand, AppEvent, ConnectParams, DeepLinkRequest, ForwardAppEvent, ForwardCommand,
+    HostAppEvent, HostCommand, SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats,
+    TerminalAppEvent, TerminalCommand, ZmodemAppEvent, ZmodemCommand,
+};
 pub use error::{AppError, ErrorCode};
 pub use forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,

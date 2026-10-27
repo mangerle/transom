@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 use tokio::task::JoinHandle;
-use transom_core::{AppError, AppEvent, ErrorCode, SessionCatalog, SyncSettings};
+use transom_core::{AppError, AppEvent, ErrorCode, SessionCatalog, SyncAppEvent, SyncSettings};
 use transom_sync::CloudSyncService;
 
 /// 一次云同步作业：上传目录快照或下载合并远端备份。
@@ -39,10 +39,14 @@ pub(super) async fn dispatch_cloud_sync(
             ErrorCode::CloudSyncFailed,
             "已有一次云同步在进行中，请等它完成后重试",
         );
-        let event = match job {
-            CloudSyncJob::Push { .. } => AppEvent::CloudSyncPushed { result: Err(error) },
-            CloudSyncJob::Pull { .. } => AppEvent::CloudSyncPulled { result: Err(error) },
-            CloudSyncJob::Git { .. } => AppEvent::GitSynced { result: Err(error) },
+        let event: AppEvent = match job {
+            CloudSyncJob::Push { .. } => {
+                SyncAppEvent::CloudSyncPushed { result: Err(error) }.into()
+            }
+            CloudSyncJob::Pull { .. } => {
+                SyncAppEvent::CloudSyncPulled { result: Err(error) }.into()
+            }
+            CloudSyncJob::Git { .. } => SyncAppEvent::GitSynced { result: Err(error) }.into(),
         };
         if event_tx.try_send(event).is_err() {
             log::warn!("云同步忙碌提示发送失败：事件通道已满");
@@ -58,13 +62,13 @@ pub(super) async fn dispatch_cloud_sync(
             CloudSyncJob::Push { settings, catalog } => {
                 let result = service.push(&catalog, &settings).await;
                 let _ = event_tx
-                    .send_async(AppEvent::CloudSyncPushed { result })
+                    .send_async(SyncAppEvent::CloudSyncPushed { result }.into())
                     .await;
             }
             CloudSyncJob::Pull { settings } => {
                 let result = service.pull(&settings).await;
                 let _ = event_tx
-                    .send_async(AppEvent::CloudSyncPulled { result })
+                    .send_async(SyncAppEvent::CloudSyncPulled { result }.into())
                     .await;
             }
             CloudSyncJob::Git { settings, catalog } => {
@@ -82,7 +86,9 @@ pub(super) async fn dispatch_cloud_sync(
                     )
                 })
                 .and_then(|result| result);
-                let _ = event_tx.send_async(AppEvent::GitSynced { result }).await;
+                let _ = event_tx
+                    .send_async(SyncAppEvent::GitSynced { result }.into())
+                    .await;
             }
         }
     }));

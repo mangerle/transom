@@ -9,8 +9,9 @@ use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
 use transom_core::{
-    AppCommand, AppError, BindAddress, Connection, ConnectionId, ErrorCode, ForwardId, ForwardKind,
-    ForwardRule, ForwardState, ForwardStatus, SessionId, SocksOptions, TabId, TargetAddress,
+    AppError, BindAddress, Connection, ConnectionId, ErrorCode, ForwardCommand, ForwardId,
+    ForwardKind, ForwardRule, ForwardState, ForwardStatus, SessionId, SocksOptions, TabId,
+    TargetAddress,
 };
 
 impl AppShell {
@@ -74,7 +75,7 @@ impl AppShell {
                 continue;
             }
             self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-            self.send_command(AppCommand::ForwardStart {
+            self.send_command(ForwardCommand::ForwardStart {
                 tab_id,
                 connection_id,
                 rule,
@@ -256,7 +257,7 @@ impl AppShell {
         }
 
         self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-        self.send_command(AppCommand::ForwardStart {
+        self.send_command(ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -311,7 +312,7 @@ impl AppShell {
         }
         self.persist_catalog();
         self.set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
-        self.send_command(AppCommand::ForwardStart {
+        self.send_command(ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -346,7 +347,7 @@ impl AppShell {
             self.persist_catalog();
         }
         self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-        self.send_command(AppCommand::ForwardStart {
+        self.send_command(ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -383,7 +384,7 @@ impl AppShell {
         }
         self.persist_catalog();
         self.set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
-        self.send_command(AppCommand::ForwardStop {
+        self.send_command(ForwardCommand::ForwardStop {
             tab_id,
             connection_id,
             rule_id,
@@ -412,7 +413,7 @@ impl AppShell {
             status.state,
             ForwardState::Active { .. } | ForwardState::Starting
         ) {
-            self.send_command(AppCommand::ForwardStop {
+            self.send_command(ForwardCommand::ForwardStop {
                 tab_id,
                 connection_id,
                 rule_id,

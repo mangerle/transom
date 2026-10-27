@@ -6,7 +6,7 @@
 
 use crate::app::AppShell;
 use gpui_kit::*;
-use transom_core::{AppCommand, TabId, TransferId, TransferMode, TransferStatus};
+use transom_core::{SftpCommand, TabId, TransferId, TransferMode, TransferStatus};
 
 impl AppShell {
     pub(crate) fn sftp_pause_task(
@@ -37,7 +37,7 @@ impl AppShell {
         }
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if needs_cancel {
-            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
+            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }
@@ -95,7 +95,7 @@ impl AppShell {
         }
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if should_cancel {
-            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
+            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }
@@ -156,7 +156,7 @@ impl AppShell {
         }
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if needs_cancel {
-            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
+            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }

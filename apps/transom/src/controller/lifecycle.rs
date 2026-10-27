@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use transom_core::{
-    AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, TabId, TerminalIo, TransferId,
-    ZmodemEvent,
+    AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, HostAppEvent, TabId, TerminalAppEvent,
+    TerminalIo, TransferId, ZmodemAppEvent, ZmodemEvent,
 };
 use transom_net::{ForwardTask, SftpClient, SshRemote, ZmodemConfig, ZmodemControl, attach_zmodem};
 
@@ -151,11 +151,14 @@ pub(super) async fn adopt_connection<J>(
     let zmodem_task = tokio::spawn(async move {
         while let Ok(event) = zmodem_rx.recv_async().await {
             if event_tx_zmodem
-                .send_async(AppEvent::Zmodem {
-                    tab_id,
-                    connection_id,
-                    event,
-                })
+                .send_async(
+                    ZmodemAppEvent::Zmodem {
+                        tab_id,
+                        connection_id,
+                        event,
+                    }
+                    .into(),
+                )
                 .await
                 .is_err()
             {
@@ -166,11 +169,14 @@ pub(super) async fn adopt_connection<J>(
     tables.zmodem_tasks.insert(tab_id, zmodem_task);
 
     let _ = event_tx
-        .send_async(AppEvent::TerminalReady {
-            tab_id,
-            connection_id,
-            io,
-        })
+        .send_async(
+            TerminalAppEvent::TerminalReady {
+                tab_id,
+                connection_id,
+                io,
+            }
+            .into(),
+        )
         .await;
     let internal_tx = internal_tx.clone();
     tokio::spawn(async move {
@@ -297,27 +303,33 @@ pub(super) async fn deploy_key(params: KeyDeployParams<'_>) {
                     .await
                     .err();
                 let _ = event_tx
-                    .send_async(AppEvent::PublicKeyDeployed {
-                        tab_id,
-                        connection_id,
-                        key_name,
-                        error,
-                    })
+                    .send_async(
+                        HostAppEvent::PublicKeyDeployed {
+                            tab_id,
+                            connection_id,
+                            key_name,
+                            error,
+                        }
+                        .into(),
+                    )
                     .await;
             });
             key_deploy_tasks.insert(tab_id, handle);
         }
         None => {
             let _ = event_tx
-                .send_async(AppEvent::PublicKeyDeployed {
-                    tab_id,
-                    connection_id,
-                    key_name,
-                    error: Some(AppError::with_detail(
-                        ErrorCode::ChannelFailed,
-                        "SSH 连接尚未就绪，无法部署公钥",
-                    )),
-                })
+                .send_async(
+                    HostAppEvent::PublicKeyDeployed {
+                        tab_id,
+                        connection_id,
+                        key_name,
+                        error: Some(AppError::with_detail(
+                            ErrorCode::ChannelFailed,
+                            "SSH 连接尚未就绪，无法部署公钥",
+                        )),
+                    }
+                    .into(),
+                )
                 .await;
         }
     }

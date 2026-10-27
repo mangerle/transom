@@ -17,7 +17,7 @@ use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
-use transom_core::{AppCommand, RemoteTextMeta, SftpOperation, TabId, TransferId};
+use transom_core::{RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
 
 impl AppShell {
     /// 保存：把整份缓冲区连同版本指纹交给独立写回通道，面板保持打开等待结果。
@@ -105,18 +105,21 @@ impl AppShell {
         };
 
         let op_id = TransferId::new();
-        if let Err(error) = self.services.command_tx.try_send(AppCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id,
-            op: SftpOperation::WriteText {
-                path: remote_path,
-                content: content.as_bytes().to_vec(),
-                expected,
-                force,
-                backup,
-            },
-        }) {
+        if let Err(error) = self.services.command_tx.try_send(
+            SftpCommand::Sftp {
+                tab_id,
+                connection_id,
+                op_id,
+                op: SftpOperation::WriteText {
+                    path: remote_path,
+                    content: content.as_bytes().to_vec(),
+                    expected,
+                    force,
+                    backup,
+                },
+            }
+            .into(),
+        ) {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
                 item.close_after_write = false;

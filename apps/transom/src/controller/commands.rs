@@ -16,8 +16,8 @@ use super::sftp_exec::{SftpDispatch, dispatch_sftp_op};
 use super::state::{ControllerCtx, ControllerState};
 use super::sync_exec::{CloudSyncJob, dispatch_cloud_sync};
 use transom_core::{
-    AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, ForwardRule, ForwardState,
-    ForwardStatus, TabId,
+    AppCommand, AppError, ConnectionId, ErrorCode, ForwardAppEvent, ForwardId, ForwardRule,
+    ForwardState, ForwardStatus, TabId,
 };
 use transom_net::{SshRemote, ZmodemConfig, start_forward};
 
@@ -36,17 +36,48 @@ pub(super) async fn handle_command(
     command: AppCommand,
 ) -> LoopControl {
     match command {
-        AppCommand::Connect {
-            tab_id,
-            connection_id,
-            session,
-            jumps,
-            proxy,
-            size,
-            secrets,
-            zmodem,
-            allow_sha1_publickey_auth,
-        } => {
+        AppCommand::Terminal(cmd) => handle_terminal_command(state, ctx, cmd).await,
+        AppCommand::Sftp(cmd) => {
+            handle_sftp_command(state, ctx, cmd);
+            LoopControl::Continue
+        }
+        AppCommand::Forward(cmd) => {
+            handle_forward_command(state, ctx, cmd).await;
+            LoopControl::Continue
+        }
+        AppCommand::Host(cmd) => {
+            handle_host_command(state, ctx, cmd).await;
+            LoopControl::Continue
+        }
+        AppCommand::Sync(cmd) => {
+            handle_sync_command(state, ctx, cmd).await;
+            LoopControl::Continue
+        }
+        AppCommand::Zmodem(cmd) => {
+            handle_zmodem_command(state, cmd);
+            LoopControl::Continue
+        }
+    }
+}
+
+async fn handle_terminal_command(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: transom_core::TerminalCommand,
+) -> LoopControl {
+    match command {
+        transom_core::TerminalCommand::Connect(params) => {
+            let transom_core::ConnectParams {
+                tab_id,
+                connection_id,
+                session,
+                jumps,
+                proxy,
+                size,
+                secrets,
+                zmodem,
+                allow_sha1_publickey_auth,
+            } = *params;
             start_connect(
                 state,
                 ConnectDispatch {
@@ -55,13 +86,11 @@ pub(super) async fn handle_command(
                     internal_tx: ctx.internal_tx.clone(),
                     tab_id,
                     connection_id,
-                    session,
+                    session: Box::new(session),
                     jumps,
                     proxy,
                     size,
                     secrets,
-                    // 界面已持有设置快照：在这里解析下载目录后随派发携带，
-                    // 控制循环不再为每次连接同步读盘。
                     zmodem: ZmodemConfig {
                         download_dir: zmodem.resolved_download_dir(),
                         auto_receive: zmodem.auto_receive,
@@ -69,15 +98,28 @@ pub(super) async fn handle_command(
                     allow_sha1_publickey_auth,
                 },
             );
+            LoopControl::Continue
         }
-        AppCommand::Sftp {
+        transom_core::TerminalCommand::CloseTab { tab_id } => {
+            close_tab(state, tab_id);
+            LoopControl::Continue
+        }
+        transom_core::TerminalCommand::Shutdown => LoopControl::Shutdown,
+    }
+}
+
+fn handle_sftp_command(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: transom_core::SftpCommand,
+) {
+    match command {
+        transom_core::SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
             op,
         } => {
-            // 分发循环只做快查与派发：客户端初始化在任务内进行，
-            // 结果经 SftpReady 回流提交，慢打开不再阻塞其他标签。
             dispatch_sftp_op(SftpDispatch {
                 remotes: &state.remotes,
                 sftp_clients: &mut state.sftp_clients,
@@ -90,26 +132,44 @@ pub(super) async fn handle_command(
                 op,
             });
         }
-        AppCommand::SftpCancel { tab_id, op_id } => {
+        transom_core::SftpCommand::SftpCancel { tab_id, op_id } => {
             if let Some(handle) = state.sftp_tasks.remove(&(tab_id, op_id)) {
                 handle.abort();
             }
         }
-        AppCommand::ForwardStart {
+    }
+}
+
+async fn handle_forward_command(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: transom_core::ForwardCommand,
+) {
+    match command {
+        transom_core::ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
         } => {
             handle_forward_start(state, ctx, tab_id, connection_id, rule).await;
         }
-        AppCommand::ForwardStop {
+        transom_core::ForwardCommand::ForwardStop {
             tab_id,
             connection_id,
             rule_id,
         } => {
             handle_forward_stop(state, ctx, tab_id, connection_id, rule_id).await;
         }
-        AppCommand::DeployPublicKey {
+    }
+}
+
+async fn handle_host_command(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: transom_core::HostCommand,
+) {
+    match command {
+        transom_core::HostCommand::DeployPublicKey {
             tab_id,
             connection_id,
             key_name,
@@ -126,41 +186,14 @@ pub(super) async fn handle_command(
             })
             .await;
         }
-        AppCommand::CloudSyncPush { settings, catalog } => {
-            dispatch_cloud_sync(
-                &ctx.cloud_sync,
-                &ctx.event_tx,
-                &mut state.sync_task,
-                CloudSyncJob::Push { settings, catalog },
-            )
-            .await;
-        }
-        AppCommand::CloudSyncPull { settings } => {
-            dispatch_cloud_sync(
-                &ctx.cloud_sync,
-                &ctx.event_tx,
-                &mut state.sync_task,
-                CloudSyncJob::Pull { settings },
-            )
-            .await;
-        }
-        AppCommand::GitSync { settings, catalog } => {
-            dispatch_cloud_sync(
-                &ctx.cloud_sync,
-                &ctx.event_tx,
-                &mut state.sync_task,
-                CloudSyncJob::Git { settings, catalog },
-            )
-            .await;
-        }
-        AppCommand::RunHostActions { actions } => {
+        transom_core::HostCommand::RunHostActions { actions } => {
             state.host_action_tasks.spawn(run_batch(
                 actions,
                 ctx.event_tx.clone(),
                 ctx.action_permits.clone(),
             ));
         }
-        AppCommand::SampleProcesses {
+        transom_core::HostCommand::SampleProcesses {
             tab_id,
             connection_id,
         } => {
@@ -173,7 +206,7 @@ pub(super) async fn handle_command(
                     event_tx: ctx.event_tx.clone(),
                 }));
         }
-        AppCommand::KillProcess {
+        transom_core::HostCommand::KillProcess {
             tab_id,
             connection_id,
             pid,
@@ -190,23 +223,60 @@ pub(super) async fn handle_command(
                 force,
             ));
         }
-        AppCommand::ZmodemUpload { tab_id, files } => {
+    }
+}
+
+async fn handle_sync_command(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: transom_core::SyncCommand,
+) {
+    match command {
+        transom_core::SyncCommand::CloudSyncPush { settings, catalog } => {
+            dispatch_cloud_sync(
+                &ctx.cloud_sync,
+                &ctx.event_tx,
+                &mut state.sync_task,
+                CloudSyncJob::Push { settings, catalog },
+            )
+            .await;
+        }
+        transom_core::SyncCommand::CloudSyncPull { settings } => {
+            dispatch_cloud_sync(
+                &ctx.cloud_sync,
+                &ctx.event_tx,
+                &mut state.sync_task,
+                CloudSyncJob::Pull { settings },
+            )
+            .await;
+        }
+        transom_core::SyncCommand::GitSync { settings, catalog } => {
+            dispatch_cloud_sync(
+                &ctx.cloud_sync,
+                &ctx.event_tx,
+                &mut state.sync_task,
+                CloudSyncJob::Git { settings, catalog },
+            )
+            .await;
+        }
+    }
+}
+
+fn handle_zmodem_command(state: &mut ControllerState, command: transom_core::ZmodemCommand) {
+    match command {
+        transom_core::ZmodemCommand::ZmodemUpload { tab_id, files } => {
             if let Some(control) = state.zmodem_controls.get(&tab_id)
                 && !control.upload(files)
             {
-                // 通道满或无等待会话：丢弃并让界面提示重试。
                 log::warn!("ZMODEM 上传决策被丢弃，标签 {tab_id:?} 无等待中的传输会话");
             }
         }
-        AppCommand::ZmodemCancel { tab_id } => {
+        transom_core::ZmodemCommand::ZmodemCancel { tab_id } => {
             if let Some(control) = state.zmodem_controls.get(&tab_id) {
                 control.cancel();
             }
         }
-        AppCommand::CloseTab { tab_id } => close_tab(state, tab_id),
-        AppCommand::Shutdown => return LoopControl::Shutdown,
     }
-    LoopControl::Continue
 }
 
 /// 发起连接：登记最新意图并派发建连任务。
@@ -241,18 +311,21 @@ async fn handle_forward_start(
     let Some((current_connection, remote)) = state.remotes.get(&tab_id).cloned() else {
         let _ = ctx
             .event_tx
-            .send_async(AppEvent::ForwardChanged {
-                tab_id,
-                connection_id,
-                status: ForwardStatus {
-                    rule_id: rule.id,
-                    state: ForwardState::Failed,
-                    error: Some(AppError::with_detail(
-                        ErrorCode::ForwardFailed,
-                        "SSH connection is not ready",
-                    )),
-                },
-            })
+            .send_async(
+                ForwardAppEvent::ForwardChanged {
+                    tab_id,
+                    connection_id,
+                    status: ForwardStatus {
+                        rule_id: rule.id,
+                        state: ForwardState::Failed,
+                        error: Some(AppError::with_detail(
+                            ErrorCode::ForwardFailed,
+                            "SSH connection is not ready",
+                        )),
+                    },
+                }
+                .into(),
+            )
             .await;
         return;
     };
@@ -296,15 +369,18 @@ async fn handle_forward_stop(
     }
     let _ = ctx
         .event_tx
-        .send_async(AppEvent::ForwardChanged {
-            tab_id,
-            connection_id,
-            status: ForwardStatus {
-                rule_id,
-                state: ForwardState::Stopped,
-                error: None,
-            },
-        })
+        .send_async(
+            ForwardAppEvent::ForwardChanged {
+                tab_id,
+                connection_id,
+                status: ForwardStatus {
+                    rule_id,
+                    state: ForwardState::Stopped,
+                    error: None,
+                },
+            }
+            .into(),
+        )
         .await;
 }
 

@@ -3,7 +3,7 @@
 use super::common::send_overwritable;
 use std::sync::Arc;
 use transom_core::traffic::parse_net_dev_totals;
-use transom_core::{AppEvent, ConnectionId, NetworkTraffic, TabId, TrafficCounter};
+use transom_core::{AppEvent, ConnectionId, HostAppEvent, NetworkTraffic, TabId, TrafficCounter};
 
 pub(crate) fn spawn_traffic_sampler(
     traffic: Arc<TrafficCounter>,
@@ -17,11 +17,12 @@ pub(crate) fn spawn_traffic_sampler(
         // 零样本同样按可覆盖事件投递：丢它只影响徽标出现时机。
         if !send_overwritable(
             &event_tx,
-            AppEvent::NetworkTrafficUpdated {
+            HostAppEvent::NetworkTrafficUpdated {
                 tab_id,
                 connection_id,
                 traffic: NetworkTraffic::default(),
-            },
+            }
+            .into(),
             "网络流量",
         ) {
             return;
@@ -42,11 +43,12 @@ pub(crate) fn spawn_traffic_sampler(
             previous = current;
             if !send_overwritable(
                 &event_tx,
-                AppEvent::NetworkTrafficUpdated {
+                HostAppEvent::NetworkTrafficUpdated {
                     tab_id,
                     connection_id,
                     traffic: sample,
-                },
+                }
+                .into(),
                 "网络流量",
             ) {
                 break;
@@ -108,11 +110,12 @@ pub(crate) async fn run_local_traffic_sampler(
         for (tab_id, connection_id) in subscribers {
             if !send_overwritable(
                 &event_tx,
-                AppEvent::NetworkTrafficUpdated {
+                HostAppEvent::NetworkTrafficUpdated {
                     tab_id,
                     connection_id,
                     traffic: sample,
-                },
+                }
+                .into(),
                 "网络流量",
             ) {
                 channel_closed = true;

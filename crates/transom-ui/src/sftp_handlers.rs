@@ -10,17 +10,17 @@ use crate::sftp::{
     send_desktop_notification,
 };
 use gpui_kit::*;
-use transom_core::{AppEvent, TransferDirection, TransferStatus};
+use transom_core::{SftpAppEvent, TransferDirection, TransferStatus};
 
 impl AppShell {
     /// SFTP 目录列表回填：主面板或并排远端列按连接归属分别落位。
     pub(crate) fn on_sftp_listing(
         &mut self,
-        event: AppEvent,
+        event: SftpAppEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let AppEvent::SftpListing {
+        let SftpAppEvent::SftpListing {
             tab_id,
             connection_id,
             path,
@@ -77,8 +77,8 @@ impl AppShell {
     /// SFTP 进度：高频可覆盖样本，只更新数据；仅可见标签自行触发重绘。
     ///
     /// 返回 `false`：重绘由本方法条件决定（见内联注释），调用方不再统一 notify。
-    pub(crate) fn on_sftp_progress(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::SftpProgress {
+    pub(crate) fn on_sftp_progress(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
+        let SftpAppEvent::SftpProgress {
             tab_id,
             connection_id,
             op_id,
@@ -117,8 +117,8 @@ impl AppShell {
     }
 
     /// SFTP 传输完成：落定任务状态、刷新受影响的目录并派发桌面通知。
-    pub(crate) fn on_sftp_finished(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::SftpFinished {
+    pub(crate) fn on_sftp_finished(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
+        let SftpAppEvent::SftpFinished {
             tab_id,
             connection_id,
             op_id,
@@ -238,8 +238,8 @@ impl AppShell {
     }
 
     /// SFTP 属性响应：迟到的响应（标签已关闭）直接忽略且不重绘。
-    pub(crate) fn on_sftp_metadata(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::SftpMetadata {
+    pub(crate) fn on_sftp_metadata(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
+        let SftpAppEvent::SftpMetadata {
             tab_id,
             connection_id,
             op_id,
@@ -264,8 +264,8 @@ impl AppShell {
     }
 
     /// SFTP 预览成功：交给预览响应处理统一落位。
-    pub(crate) fn on_sftp_preview(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::SftpPreview {
+    pub(crate) fn on_sftp_preview(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
+        let SftpAppEvent::SftpPreview {
             tab_id,
             connection_id,
             op_id,
@@ -290,10 +290,10 @@ impl AppShell {
     /// SFTP 预览失败：与成功共用同一条响应处理路径。
     pub(crate) fn on_sftp_preview_failed(
         &mut self,
-        event: AppEvent,
+        event: SftpAppEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        let AppEvent::SftpPreviewFailed {
+        let SftpAppEvent::SftpPreviewFailed {
             tab_id,
             connection_id,
             op_id,
@@ -315,8 +315,8 @@ impl AppShell {
     }
 
     /// 目录对比完成：仅在同步模态仍匹配该操作时回填结果。
-    pub(crate) fn on_sftp_dir_compared(&mut self, event: AppEvent) -> bool {
-        let AppEvent::SftpDirCompared {
+    pub(crate) fn on_sftp_dir_compared(&mut self, event: SftpAppEvent) -> bool {
+        let SftpAppEvent::SftpDirCompared {
             connection_id,
             op_id,
             comparison,
@@ -343,8 +343,8 @@ impl AppShell {
     }
 
     /// SFTP 失败：同步模态失败自行重绘并返回；传输失败落定任务并通知。
-    pub(crate) fn on_sftp_failed(&mut self, event: AppEvent, cx: &mut Context<Self>) -> bool {
-        let AppEvent::SftpFailed {
+    pub(crate) fn on_sftp_failed(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
+        let SftpAppEvent::SftpFailed {
             tab_id,
             connection_id,
             op_id,

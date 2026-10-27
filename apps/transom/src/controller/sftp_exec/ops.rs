@@ -5,7 +5,9 @@ use crate::controller::sftp_finish::{
     PreviewRequest, finish_sftp, finish_sftp_none, finish_sftp_summary, read_preview,
     verify_transfer_result,
 };
-use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, SftpOperation, TabId, TransferId};
+use transom_core::{
+    AppError, AppEvent, ConnectionId, ErrorCode, SftpAppEvent, SftpOperation, TabId, TransferId,
+};
 use transom_net::SftpClient;
 
 /// 编辑器读取远端文本的最长等待时间。
@@ -31,22 +33,28 @@ pub(crate) async fn execute_sftp_op(
         SftpOperation::List { path } => match client.list(&path).await {
             Ok((path, entries)) => {
                 let _ = event_tx
-                    .send_async(AppEvent::SftpListing {
-                        tab_id,
-                        connection_id,
-                        path,
-                        entries,
-                    })
+                    .send_async(
+                        SftpAppEvent::SftpListing {
+                            tab_id,
+                            connection_id,
+                            path,
+                            entries,
+                        }
+                        .into(),
+                    )
                     .await;
             }
             Err(error) => {
                 let _ = event_tx
-                    .send_async(AppEvent::SftpFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error,
-                    })
+                    .send_async(
+                        SftpAppEvent::SftpFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error,
+                        }
+                        .into(),
+                    )
                     .await;
             }
         },
@@ -153,22 +161,28 @@ pub(crate) async fn execute_sftp_op(
         SftpOperation::Stat { path } => match client.stat(&path).await {
             Ok(metadata) => {
                 let _ = event_tx
-                    .send_async(AppEvent::SftpMetadata {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        metadata,
-                    })
+                    .send_async(
+                        SftpAppEvent::SftpMetadata {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            metadata,
+                        }
+                        .into(),
+                    )
                     .await;
             }
             Err(error) => {
                 let _ = event_tx
-                    .send_async(AppEvent::SftpFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error,
-                    })
+                    .send_async(
+                        SftpAppEvent::SftpFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error,
+                        }
+                        .into(),
+                    )
                     .await;
             }
         },
@@ -195,36 +209,48 @@ pub(crate) async fn execute_sftp_op(
             match result {
                 Ok(Ok((content, meta))) => {
                     let _ = event_tx
-                        .send_async(AppEvent::SftpTextRead {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            content,
-                            meta,
-                        })
+                        .send_async(
+                            SftpAppEvent::SftpTextRead {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                content,
+                                meta,
+                            }
+                            .into(),
+                        )
                         .await;
                 }
                 Ok(Err(error)) => {
                     let _ = event_tx
-                        .send_async(AppEvent::SftpTextFailed {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            error,
-                        })
+                        .send_async(
+                            SftpAppEvent::SftpTextFailed {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                error,
+                            }
+                            .into(),
+                        )
                         .await;
                 }
                 Err(_) => {
                     let _ = event_tx
-                        .send_async(AppEvent::SftpTextFailed {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            error: AppError::with_detail(
-                                ErrorCode::SftpFailed,
-                                format!("读取远端文本超时（{} 秒）", TEXT_READ_TIMEOUT.as_secs()),
-                            ),
-                        })
+                        .send_async(
+                            SftpAppEvent::SftpTextFailed {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                error: AppError::with_detail(
+                                    ErrorCode::SftpFailed,
+                                    format!(
+                                        "读取远端文本超时（{} 秒）",
+                                        TEXT_READ_TIMEOUT.as_secs()
+                                    ),
+                                ),
+                            }
+                            .into(),
+                        )
                         .await;
                 }
             }
@@ -244,45 +270,60 @@ pub(crate) async fn execute_sftp_op(
             match result {
                 Ok(Ok(meta)) => {
                     let _ = event_tx
-                        .send_async(AppEvent::SftpTextWritten {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            meta,
-                        })
+                        .send_async(
+                            SftpAppEvent::SftpTextWritten {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                meta,
+                            }
+                            .into(),
+                        )
                         .await;
                 }
                 Ok(Err(error)) if error.code == ErrorCode::SftpTextConflict => {
                     let _ = event_tx
-                        .send_async(AppEvent::SftpTextConflict {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            error,
-                        })
+                        .send_async(
+                            SftpAppEvent::SftpTextConflict {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                error,
+                            }
+                            .into(),
+                        )
                         .await;
                 }
                 Ok(Err(error)) => {
                     let _ = event_tx
-                        .send_async(AppEvent::SftpTextFailed {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            error,
-                        })
+                        .send_async(
+                            SftpAppEvent::SftpTextFailed {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                error,
+                            }
+                            .into(),
+                        )
                         .await;
                 }
                 Err(_) => {
                     let _ = event_tx
-                        .send_async(AppEvent::SftpTextFailed {
-                            tab_id,
-                            connection_id,
-                            op_id,
-                            error: AppError::with_detail(
-                                ErrorCode::SftpFailed,
-                                format!("回传远端文本超时（{} 秒）", TEXT_WRITE_TIMEOUT.as_secs()),
-                            ),
-                        })
+                        .send_async(
+                            SftpAppEvent::SftpTextFailed {
+                                tab_id,
+                                connection_id,
+                                op_id,
+                                error: AppError::with_detail(
+                                    ErrorCode::SftpFailed,
+                                    format!(
+                                        "回传远端文本超时（{} 秒）",
+                                        TEXT_WRITE_TIMEOUT.as_secs()
+                                    ),
+                                ),
+                            }
+                            .into(),
+                        )
                         .await;
                 }
             }
@@ -301,22 +342,28 @@ pub(crate) async fn execute_sftp_op(
         {
             Ok(comparison) => {
                 let _ = event_tx
-                    .send_async(AppEvent::SftpDirCompared {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        comparison,
-                    })
+                    .send_async(
+                        SftpAppEvent::SftpDirCompared {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            comparison,
+                        }
+                        .into(),
+                    )
                     .await;
             }
             Err(error) => {
                 let _ = event_tx
-                    .send_async(AppEvent::SftpFailed {
-                        tab_id,
-                        connection_id,
-                        op_id,
-                        error,
-                    })
+                    .send_async(
+                        SftpAppEvent::SftpFailed {
+                            tab_id,
+                            connection_id,
+                            op_id,
+                            error,
+                        }
+                        .into(),
+                    )
                     .await;
             }
         },

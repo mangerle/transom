@@ -1,6 +1,6 @@
 //! 传输进度节流回调与平滑速率估算。
 
-use transom_core::{AppEvent, ConnectionId, TabId, TransferId};
+use transom_core::{AppEvent, ConnectionId, SftpAppEvent, TabId, TransferId};
 
 /// 传输进度事件的最小发送间隔。
 ///
@@ -50,15 +50,18 @@ pub(crate) fn throttled_progress(
             last_transferred = transferred;
             // 回调运行在非 async 上下文：队列满时快速失败丢弃本条样本。
             // 这是显式背压——UI 消费停滞时宁可进度刷新变慢，也不阻塞传输线程。
-            let _ = progress_tx.try_send(AppEvent::SftpProgress {
-                tab_id,
-                connection_id,
-                op_id,
-                transferred,
-                total,
-                speed_bps,
-                eta_secs,
-            });
+            let _ = progress_tx.try_send(
+                SftpAppEvent::SftpProgress {
+                    tab_id,
+                    connection_id,
+                    op_id,
+                    transferred,
+                    total,
+                    speed_bps,
+                    eta_secs,
+                }
+                .into(),
+            );
         }
     }
 }

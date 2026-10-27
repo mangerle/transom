@@ -227,9 +227,9 @@ impl AppShell {
         path: String,
         _cx: &mut Context<Self>,
     ) {
-        use transom_core::{AppCommand, SftpOperation, TransferId};
+        use transom_core::{SftpCommand, SftpOperation, TransferId};
         let op_id = TransferId::new();
-        let cmd = AppCommand::Sftp {
+        let cmd = SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,

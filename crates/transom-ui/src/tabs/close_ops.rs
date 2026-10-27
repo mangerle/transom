@@ -7,7 +7,7 @@ use crate::sftp::PendingEditorClose;
 use crate::tiling::StripEntry;
 use gpui_kit::component::set_locale;
 use gpui_kit::*;
-use transom_core::{AppCommand, GroupId, TabId};
+use transom_core::{GroupId, TabId, TerminalCommand};
 
 impl AppShell {
     /// 该窗格此刻是否正被渲染：属于可见标签组、在分割树里，且没被"单窗格最大化"挡在后面。
@@ -120,7 +120,7 @@ impl AppShell {
             .and_then(|tiled| tiled.focused_group());
         self.groups.remove(index);
         for tab_id in &panes {
-            self.send_command(AppCommand::CloseTab { tab_id: *tab_id });
+            self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
         self.tabs.retain(|tab| !panes.contains(&tab.id));
         self.prune_pane_split_states();
@@ -178,7 +178,7 @@ impl AppShell {
             return;
         }
 
-        self.send_command(AppCommand::CloseTab { tab_id });
+        self.send_command(TerminalCommand::CloseTab { tab_id });
         self.tabs.retain(|tab| tab.id != tab_id);
         self.prune_editor_panels();
         let replacement = self.detach_pane_from_group(tab_id);

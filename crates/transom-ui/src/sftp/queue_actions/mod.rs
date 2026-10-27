@@ -15,7 +15,7 @@ use crate::palette::localized_error;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    AppCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId, TransferKind,
+    SftpCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId, TransferKind,
     TransferMode, TransferStatus, TransferTask,
 };
 
@@ -198,7 +198,7 @@ impl AppShell {
         panel.error = None;
         panel.recompute_progress();
         for (op_id, connection_id, op) in commands {
-            self.send_command(AppCommand::Sftp {
+            self.send_command(SftpCommand::Sftp {
                 tab_id,
                 connection_id,
                 op_id,
@@ -296,7 +296,7 @@ impl AppShell {
             cx.notify();
         }
         for op_id in active_ids {
-            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
+            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
     }
 
@@ -355,7 +355,7 @@ impl AppShell {
             cx.notify();
         }
         for op_id in active_ids {
-            self.send_command(AppCommand::SftpCancel { tab_id, op_id });
+            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
     }
 }

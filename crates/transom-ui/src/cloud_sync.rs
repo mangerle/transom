@@ -16,8 +16,8 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    AppCommand, AppError, BackupDocument, BackupExportOptions, GitSyncResult, GitSyncSettings,
-    SecretKey, SecretRestoreReport, SessionCatalog, SyncEndpoint, SyncPushReport, SyncSettings,
+    AppError, BackupDocument, BackupExportOptions, GitSyncResult, GitSyncSettings, SecretKey,
+    SecretRestoreReport, SessionCatalog, SyncCommand, SyncEndpoint, SyncPushReport, SyncSettings,
 };
 
 /// 设置弹窗里云同步组的全部输入框。
@@ -270,7 +270,7 @@ impl AppShell {
 
     fn send_git_sync(&mut self, settings: SyncSettings, cx: &mut Context<Self>) {
         self.status = Some(rust_i18n::t!("sync.git_running").to_string());
-        if !self.send_command(AppCommand::GitSync {
+        if !self.send_command(SyncCommand::GitSync {
             settings,
             catalog: self.catalog.clone(),
         }) {
@@ -324,7 +324,7 @@ impl AppShell {
             return;
         }
         let catalog = self.catalog.clone();
-        if !self.send_command(AppCommand::CloudSyncPush { settings, catalog }) {
+        if !self.send_command(SyncCommand::CloudSyncPush { settings, catalog }) {
             return;
         }
         self.status = Some(rust_i18n::t!("sync.push_started").to_string());
@@ -343,7 +343,7 @@ impl AppShell {
             cx.notify();
             return;
         }
-        if !self.send_command(AppCommand::CloudSyncPull { settings }) {
+        if !self.send_command(SyncCommand::CloudSyncPull { settings }) {
             return;
         }
         self.status = Some(rust_i18n::t!("sync.pull_started").to_string());

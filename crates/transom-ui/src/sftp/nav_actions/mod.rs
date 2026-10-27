@@ -11,7 +11,7 @@ use super::{extract_candidate_path, parent_remote};
 use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::*;
-use transom_core::{AppCommand, SftpOperation, TabId, TransferId};
+use transom_core::{SftpCommand, SftpOperation, TabId, TransferId};
 
 impl AppShell {
     pub(crate) fn request_sftp_list(
@@ -31,7 +31,7 @@ impl AppShell {
             panel.loading = true;
             panel.error = None;
         }
-        self.send_command(AppCommand::Sftp {
+        self.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id: TransferId::new(),
@@ -61,7 +61,7 @@ impl AppShell {
             panel.status = None;
             panel.error = None;
         }
-        self.send_command(AppCommand::Sftp {
+        self.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,

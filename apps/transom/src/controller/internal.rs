@@ -17,7 +17,10 @@ use super::samplers::{
 };
 use super::sftp_exec;
 use super::state::{ControllerCtx, ControllerState};
-use transom_core::{AppEvent, ConnectionId, ForwardState, ForwardStatus, TabId, TerminalIo};
+use transom_core::{
+    ConnectionId, ForwardAppEvent, ForwardState, ForwardStatus, SftpAppEvent, TabId,
+    TerminalAppEvent, TerminalIo,
+};
 use transom_net::{SshRemote, SshSession, ZmodemConfig};
 
 /// 分发一条内部完成事件。
@@ -317,10 +320,13 @@ async fn handle_disconnected(
     });
     let _ = ctx
         .event_tx
-        .send_async(AppEvent::Disconnected {
-            tab_id,
-            connection_id,
-        })
+        .send_async(
+            TerminalAppEvent::Disconnected {
+                tab_id,
+                connection_id,
+            }
+            .into(),
+        )
         .await;
 }
 
@@ -363,12 +369,15 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
         Err(error) => {
             let _ = ctx
                 .event_tx
-                .send_async(AppEvent::SftpFailed {
-                    tab_id,
-                    connection_id,
-                    op_id,
-                    error,
-                })
+                .send_async(
+                    SftpAppEvent::SftpFailed {
+                        tab_id,
+                        connection_id,
+                        op_id,
+                        error,
+                    }
+                    .into(),
+                )
                 .await;
         }
     }
@@ -428,10 +437,13 @@ async fn handle_forward_ready(
     };
     let _ = ctx
         .event_tx
-        .send_async(AppEvent::ForwardChanged {
-            tab_id,
-            connection_id,
-            status,
-        })
+        .send_async(
+            ForwardAppEvent::ForwardChanged {
+                tab_id,
+                connection_id,
+                status,
+            }
+            .into(),
+        )
         .await;
 }
