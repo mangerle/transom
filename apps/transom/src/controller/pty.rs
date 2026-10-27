@@ -199,213 +199,38 @@ pub(super) struct ConnectDispatch {
 /// 结果以 Internal::*Connected 回流主循环，失败直接广播 ConnectionFailed。
 /// 返回任务句柄供调用方登记意图、被取代时取消。
 pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHandle<()> {
-    let ConnectDispatch {
-        known_hosts,
-        event_tx,
-        internal_tx,
-        tab_id,
-        connection_id,
-        session,
-        jumps,
-        proxy,
-        size,
-        secrets,
-        zmodem,
-        allow_sha1_publickey_auth,
-    } = dispatch;
     tokio::spawn(async move {
-        match &session.connection {
-            Connection::Ssh(ssh) => {
-                let prompter = Arc::new(UiPrompter {
-                    tab_id,
-                    connection_id,
-                    event_tx: event_tx.clone(),
-                });
-                let params = transom_net::SshConnectParams {
-                    connection: ssh,
-                    jumps: &jumps,
-                    size,
-                    credentials: secrets,
-                    prompter,
-                    known_hosts,
-                    proxy,
-                    allow_sha1_publickey_auth,
-                };
-                match connect_ssh(params).await {
-                    Ok(session) => {
-                        let _ = internal_tx
-                            .send_async(Internal::Connected {
-                                tab_id,
-                                connection_id,
-                                kind: ReadyConnection::Ssh(session),
-                                zmodem,
-                            })
-                            .await;
-                    }
-                    Err(error) => {
-                        let _ = event_tx
-                            .send_async(
-                                TerminalAppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error,
-                                }
-                                .into(),
-                            )
-                            .await;
-                    }
-                }
+        let outcome = match &dispatch.session.connection {
+            Connection::Ssh(ssh) => connect_ssh_task(&dispatch, ssh).await,
+            Connection::Local(local) => connect_local_task(local.clone(), dispatch.size).await,
+            Connection::Serial(serial) => connect_serial_task(serial.clone()).await,
+            Connection::Telnet(telnet) => connect_telnet_task(telnet.clone(), dispatch.size).await,
+            _ => Err(AppError::with_detail(
+                ErrorCode::Configuration,
+                "不支持的连接类型",
+            )),
+        };
+
+        match outcome {
+            Ok(kind) => {
+                let _ = dispatch
+                    .internal_tx
+                    .send_async(Internal::Connected {
+                        tab_id: dispatch.tab_id,
+                        connection_id: dispatch.connection_id,
+                        kind,
+                        zmodem: dispatch.zmodem,
+                    })
+                    .await;
             }
-            Connection::Local(local) => {
-                let local = local.clone();
-                // PTY 创建与 Shell 启动是阻塞系统调用（与串口打开同口径），
-                // 禁止占用异步工作线程：多标签同时启动时会挤占网络任务调度。
-                match tokio::task::spawn_blocking(move || open_local_pty(&local, size)).await {
-                    Ok(Ok((io, join))) => {
-                        let _ = internal_tx
-                            .send_async(Internal::Connected {
-                                tab_id,
-                                connection_id,
-                                kind: ReadyConnection::Local { io, join },
-                                zmodem,
-                            })
-                            .await;
-                    }
-                    Ok(Err(error)) => {
-                        let _ = event_tx
-                            .send_async(
-                                TerminalAppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error,
-                                }
-                                .into(),
-                            )
-                            .await;
-                    }
-                    Err(error) => {
-                        let _ = event_tx
-                            .send_async(
-                                TerminalAppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error: AppError::with_detail(
-                                        ErrorCode::Io,
-                                        format!("本地伪终端创建任务异常终止: {error}"),
-                                    ),
-                                }
-                                .into(),
-                            )
-                            .await;
-                    }
-                }
-            }
-            Connection::Serial(serial) => {
-                let serial = serial.clone();
-                let internal_tx = internal_tx.clone();
-                let event_tx = event_tx.clone();
-                // 串口打开是阻塞系统调用，禁止占用异步工作线程。
-                match tokio::task::spawn_blocking(move || open_serial(&serial)).await {
-                    Ok(Ok(connected)) => {
-                        let _ = internal_tx
-                            .send_async(Internal::Connected {
-                                tab_id,
-                                connection_id,
-                                kind: ReadyConnection::Serial {
-                                    io: connected.io,
-                                    join: connected.exit,
-                                },
-                                zmodem,
-                            })
-                            .await;
-                    }
-                    Ok(Err(error)) => {
-                        let _ = event_tx
-                            .send_async(
-                                TerminalAppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error,
-                                }
-                                .into(),
-                            )
-                            .await;
-                    }
-                    Err(error) => {
-                        let _ = event_tx
-                            .send_async(
-                                TerminalAppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error: AppError::with_detail(
-                                        ErrorCode::Io,
-                                        format!("串口连接任务异常终止: {error}"),
-                                    ),
-                                }
-                                .into(),
-                            )
-                            .await;
-                    }
-                }
-            }
-            Connection::Telnet(telnet) => {
-                let telnet = telnet.clone();
-                let internal_tx = internal_tx.clone();
-                let event_tx = event_tx.clone();
-                // TCP 拨号与域名解析是阻塞系统调用，禁止占用异步工作线程。
-                match tokio::task::spawn_blocking(move || connect_telnet(&telnet, size)).await {
-                    Ok(Ok(connected)) => {
-                        let _ = internal_tx
-                            .send_async(Internal::Connected {
-                                tab_id,
-                                connection_id,
-                                kind: ReadyConnection::Telnet {
-                                    io: connected.io,
-                                    join: connected.exit,
-                                },
-                                zmodem,
-                            })
-                            .await;
-                    }
-                    Ok(Err(error)) => {
-                        let _ = event_tx
-                            .send_async(
-                                TerminalAppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error,
-                                }
-                                .into(),
-                            )
-                            .await;
-                    }
-                    Err(error) => {
-                        let _ = event_tx
-                            .send_async(
-                                TerminalAppEvent::ConnectionFailed {
-                                    tab_id,
-                                    connection_id,
-                                    error: AppError::with_detail(
-                                        ErrorCode::Io,
-                                        format!("Telnet 连接任务异常终止: {error}"),
-                                    ),
-                                }
-                                .into(),
-                            )
-                            .await;
-                    }
-                }
-            }
-            _ => {
-                let _ = event_tx
+            Err(error) => {
+                let _ = dispatch
+                    .event_tx
                     .send_async(
                         TerminalAppEvent::ConnectionFailed {
-                            tab_id,
-                            connection_id,
-                            error: AppError::with_detail(
-                                ErrorCode::Configuration,
-                                "不支持的连接类型",
-                            ),
+                            tab_id: dispatch.tab_id,
+                            connection_id: dispatch.connection_id,
+                            error,
                         }
                         .into(),
                     )
@@ -413,4 +238,74 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
             }
         }
     })
+}
+
+async fn connect_ssh_task(
+    dispatch: &ConnectDispatch,
+    ssh: &transom_core::SshConnection,
+) -> Result<ReadyConnection, AppError> {
+    let prompter = Arc::new(UiPrompter {
+        tab_id: dispatch.tab_id,
+        connection_id: dispatch.connection_id,
+        event_tx: dispatch.event_tx.clone(),
+    });
+    let params = transom_net::SshConnectParams {
+        connection: ssh,
+        jumps: &dispatch.jumps,
+        size: dispatch.size,
+        credentials: dispatch.secrets.clone(),
+        prompter,
+        known_hosts: dispatch.known_hosts.clone(),
+        proxy: dispatch.proxy.clone(),
+        allow_sha1_publickey_auth: dispatch.allow_sha1_publickey_auth,
+    };
+    let session = connect_ssh(params).await?;
+    Ok(ReadyConnection::Ssh(session))
+}
+
+async fn connect_local_task(
+    local: transom_core::LocalConnection,
+    size: TerminalSize,
+) -> Result<ReadyConnection, AppError> {
+    // PTY 创建与 Shell 启动是阻塞系统调用，禁止占用异步工作线程。
+    tokio::task::spawn_blocking(move || open_local_pty(&local, size))
+        .await
+        .map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::Io,
+                format!("本地伪终端创建任务异常终止: {error}"),
+            )
+        })?
+        .map(|(io, join)| ReadyConnection::Local { io, join })
+}
+
+async fn connect_serial_task(
+    serial: transom_core::SerialConnection,
+) -> Result<ReadyConnection, AppError> {
+    // 串口打开是阻塞系统调用，禁止占用异步工作线程。
+    tokio::task::spawn_blocking(move || open_serial(&serial))
+        .await
+        .map_err(|error| {
+            AppError::with_detail(ErrorCode::Io, format!("串口连接任务异常终止: {error}"))
+        })?
+        .map(|connected| ReadyConnection::Serial {
+            io: connected.io,
+            join: connected.exit,
+        })
+}
+
+async fn connect_telnet_task(
+    telnet: transom_core::TelnetConnection,
+    size: TerminalSize,
+) -> Result<ReadyConnection, AppError> {
+    // TCP 拨号与域名解析是阻塞系统调用，禁止占用异步工作线程。
+    tokio::task::spawn_blocking(move || connect_telnet(&telnet, size))
+        .await
+        .map_err(|error| {
+            AppError::with_detail(ErrorCode::Io, format!("Telnet 连接任务异常终止: {error}"))
+        })?
+        .map(|connected| ReadyConnection::Telnet {
+            io: connected.io,
+            join: connected.exit,
+        })
 }
