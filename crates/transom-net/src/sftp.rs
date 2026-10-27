@@ -4,7 +4,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use transom_core::{AppError, ErrorCode, PreviewMode, RemoteFile, RemoteMetadata};
+use transom_core::{
+    AppError, ErrorCode, PreviewMode, RemoteFile, RemoteMetadata, is_safe_file_name,
+};
 
 /// 顺序传输时单次读写缓冲的字节数。
 ///
@@ -83,15 +85,23 @@ impl SftpClient {
     pub async fn list(&self, path: &str) -> Result<(String, Vec<RemoteFile>), AppError> {
         let canonical = self.session.canonicalize(path).await.map_err(sftp_error)?;
         let mut entries = Vec::new();
+        let mut rejected = 0usize;
         for entry in self
             .session
             .read_dir(&canonical)
             .await
             .map_err(sftp_error)?
         {
+            let name = entry.file_name();
+            // 服务端控制 filename，绝不能把它当成可信的单段路径：非法名字
+            // 一旦进入 UI，下载时 join 到本地目录就会越界写文件。
+            if !is_safe_file_name(&name) {
+                rejected = rejected.saturating_add(1);
+                continue;
+            }
             let metadata = entry.metadata();
             entries.push(RemoteFile {
-                name: entry.file_name(),
+                name,
                 path: entry.path(),
                 is_dir: metadata.is_dir(),
                 is_symlink: metadata.is_symlink(),
@@ -99,6 +109,10 @@ impl SftpClient {
                 modified: metadata.mtime,
                 permissions: metadata.permissions,
             });
+        }
+        if rejected > 0 {
+            // 聚合为一条告警：恶意服务端可以返回大量非法名字，逐条记录会刷爆日志。
+            log::warn!("SFTP 目录列表包含 {rejected} 个非法文件名，已跳过，目录: {canonical}");
         }
         entries.sort_by(|a, b| {
             b.is_dir.cmp(&a.is_dir).then_with(|| {

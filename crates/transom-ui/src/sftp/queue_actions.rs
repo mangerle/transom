@@ -91,11 +91,19 @@ impl AppShell {
             TransferMode::Overwrite
         };
         let mut tasks = Vec::with_capacity(paths.len());
+        let mut invalid_name: Option<String> = None;
         for path in paths {
             let Some(remote_entry) = panel.entries.iter().find(|entry| entry.path == path) else {
                 continue;
             };
-            let local_path = panel.local_path.join(&remote_entry.name);
+            let local_path =
+                match transom_core::safe_local_join(&panel.local_path, &remote_entry.name) {
+                    Ok(path) => path,
+                    Err(error) => {
+                        invalid_name = Some(localized_error(&error));
+                        break;
+                    }
+                };
             let mut task = if remote_entry.is_dir {
                 TransferTask::new_directory(
                     TransferDirection::Download,
@@ -115,6 +123,11 @@ impl AppShell {
             };
             task.verify = verify;
             tasks.push(task);
+        }
+        if let Some(message) = invalid_name {
+            panel.error = Some(message);
+            cx.notify();
+            return;
         }
         if tasks.is_empty() {
             panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());

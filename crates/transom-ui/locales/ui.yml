@@ -844,6 +844,9 @@ sftp:
   select_file:
     en: Select a remote file first
     zh-CN: 请先选择一个远程文件
+  invalid_name:
+    en: "Invalid file name: use a single name without path separators, . or .."
+    zh-CN: "文件名非法：必须是单个名称，不能包含路径分隔符、. 或 .."
   transfer_done:
     en: Transfer complete
     zh-CN: 传输完成

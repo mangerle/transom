@@ -87,7 +87,8 @@ pub use settings::{
 pub use sftp::{
     PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SftpOperation,
     TransferDirection, TransferKind, TransferMode, TransferStatus, TransferSummary, TransferTask,
-    format_octal_permissions, format_rwx_permissions, parse_octal_permissions,
+    format_octal_permissions, format_rwx_permissions, is_safe_file_name, parse_octal_permissions,
+    safe_local_join,
 };
 pub use sftp_filter::{
     DEFAULT_TRANSFER_EXCLUDES, TransferFilter, TransferMatcher, validate_transfer_filter,

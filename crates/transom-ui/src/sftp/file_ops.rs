@@ -3,8 +3,8 @@ use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
-use std::path::Path;
-use transom_core::{RemoteDeleteTarget, SftpOperation, TabId};
+use std::path::{Component, Path};
+use transom_core::{RemoteDeleteTarget, SftpOperation, TabId, is_safe_file_name};
 
 impl AppShell {
     /// 批量删除远端选中项；目录按递归语义删除。
@@ -462,20 +462,25 @@ impl AppShell {
 ///   但同样拒绝绝对路径与 `..` 逃逸片段；其余目标严格要求单层名称，
 ///   重命名等场景不再支持输入含 `/` 的路径。
 fn name_validation_error(target: &SftpInputTarget, name: &str) -> Option<String> {
+    // 本地新建目录允许 "a/b" 这样的多级相对路径，但仍必须拒绝绝对路径、
+    // Windows 盘符与任何 .. 片段；反斜杠是否是分隔符由宿主平台决定，
+    // 交给 `Path::components` 判断，避免在 Unix 上误杀合法文件名。
     if matches!(target, SftpInputTarget::LocalMkdir) {
-        if name.starts_with('/') {
-            return Some("名称不能是绝对路径（仅支持当前目录内的相对多级路径）".to_string());
+        let path = Path::new(name);
+        if path.is_absolute()
+            || path.components().any(|component| {
+                matches!(
+                    component,
+                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                )
+            })
+        {
+            return Some("名称不能是绝对路径或包含 .. 路径片段（不允许逃逸当前目录）".to_string());
         }
-        return name
-            .split('/')
-            .any(|segment| segment == "..")
-            .then(|| "名称不能包含 .. 路径片段（不允许逃逸当前目录）".to_string());
+        return None;
     }
-    if name.contains('/') {
-        return Some("名称不能包含路径分隔符 /".to_string());
-    }
-    if name == "." || name == ".." {
-        return Some("名称不能为 . 或 ..".to_string());
+    if !is_safe_file_name(name) {
+        return Some("名称必须是单个文件名，不能包含路径分隔符、. 或 ..".to_string());
     }
     None
 }
@@ -502,7 +507,14 @@ mod tests {
             old_path: std::path::PathBuf::from("/tmp/old"),
         };
         assert!(name_validation_error(&local_rename, "..").is_some());
+        assert!(name_validation_error(&local_rename, "../escape").is_some());
+        #[cfg(windows)]
+        assert!(name_validation_error(&local_rename, "a\\b").is_some());
         assert!(name_validation_error(&local_rename, "new-name").is_none());
+
+        assert!(name_validation_error(&SftpInputTarget::RemoteMkdir, "/tmp/escape").is_some());
+        #[cfg(windows)]
+        assert!(name_validation_error(&SftpInputTarget::RemoteMkdir, "a\\b").is_some());
     }
 
     #[test]
@@ -511,5 +523,7 @@ mod tests {
         assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "a/../b").is_some());
         assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "..").is_some());
         assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "/tmp/escape").is_some());
+        #[cfg(windows)]
+        assert!(name_validation_error(&SftpInputTarget::LocalMkdir, "a\\..\\b").is_some());
     }
 }

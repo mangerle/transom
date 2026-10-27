@@ -1,11 +1,47 @@
+use crate::error::{AppError, ErrorCode};
 use crate::ids::{ConnectionId, TransferId};
 use crate::sftp_filter::TransferFilter;
 use crate::sftp_sync::SyncItem;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Component, Path, PathBuf};
 
 fn default_true() -> bool {
     true
+}
+
+/// 判断 SFTP 条目名是否是可安全拼接到本地目录的单个普通路径组件。
+///
+/// 设计原理（Why）：远端 `readdir` 返回的 `filename` 完全由服务端控制，
+/// 恶意或被控服务端可以返回 `"/etc/cron.d/x"`、`"../../.bashrc"` 这类名字。
+/// Rust 的 `Path::join` 遇到绝对路径会整体替换基目录，遇到 `..` 会向上逃逸，
+/// 因此本地写入前必须把信任边界前移到构造条目处。这里用宿主平台的
+/// `Path::components` 判定：Unix 上反斜杠是合法文件名字符，Windows 上则是
+/// 分隔符；同一套判断在两端都不会把非单段名字当成可信路径。
+pub fn is_safe_file_name(name: &str) -> bool {
+    if name.is_empty() || name.contains('\0') {
+        return false;
+    }
+    let mut components = Path::new(name).components();
+    let Some(Component::Normal(component)) = components.next() else {
+        return false;
+    };
+    component == OsStr::new(name) && components.next().is_none()
+}
+
+/// 把单个远端文件名安全地拼接到本地下载根目录。
+///
+/// # Errors
+/// 文件名为空、`.`、`..`、绝对路径或包含路径分隔符时返回
+/// [`ErrorCode::SftpFailed`]，错误信息保留原始文件名便于定位。
+pub fn safe_local_join(root: &Path, name: &str) -> Result<PathBuf, AppError> {
+    if !is_safe_file_name(name) {
+        return Err(AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("拒绝非法的远端文件名: {name:?}"),
+        ));
+    }
+    Ok(root.join(name))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -584,5 +620,37 @@ mod tests {
         assert!(deserialized.preserve_attributes);
         assert_eq!(deserialized.speed_bps, None);
         assert_eq!(deserialized.eta_secs, None);
+    }
+
+    #[test]
+    fn safe_file_name_rejects_path_traversal_and_separators() {
+        for name in ["", ".", "..", "/etc/passwd", "../escape", "a/b", "x\0y"] {
+            assert!(!is_safe_file_name(name), "应拒绝非法文件名: {name:?}");
+        }
+        for name in ["app.log", "目录", "a b", ".hidden", "a-b_c"] {
+            assert!(is_safe_file_name(name), "应接受普通文件名: {name:?}");
+        }
+        // 反斜杠是否是分隔符取决于宿主平台：Unix 允许它作为普通字符，
+        // Windows 必须拒绝，否则 "..\\escape" 会逃出下载目录。
+        #[cfg(unix)]
+        assert!(is_safe_file_name("a\\b"));
+        #[cfg(windows)]
+        {
+            assert!(!is_safe_file_name("a\\b"));
+            assert!(!is_safe_file_name("..\\escape"));
+            assert!(!is_safe_file_name("C:\\escape"));
+        }
+    }
+
+    #[test]
+    fn safe_local_join_stays_inside_download_root() {
+        let root = std::path::Path::new("/tmp/transom-download");
+        assert_eq!(
+            safe_local_join(root, "app.log").expect("普通文件名应可拼接"),
+            root.join("app.log")
+        );
+        assert!(safe_local_join(root, "/etc/passwd").is_err());
+        assert!(safe_local_join(root, "../escape").is_err());
+        assert!(safe_local_join(root, "a/b").is_err());
     }
 }

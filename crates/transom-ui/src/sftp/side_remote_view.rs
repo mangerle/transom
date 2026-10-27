@@ -491,7 +491,16 @@ impl AppShell {
 
                 for path in selected_paths {
                     let fname = path.rsplit('/').next().unwrap_or(&path);
-                    let local_target = local_path.join(fname);
+                    let local_target = match transom_core::safe_local_join(&local_path, fname) {
+                        Ok(path) => path,
+                        Err(_) => {
+                            if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
+                                panel.error = Some(rust_i18n::t!("sftp.invalid_name").to_string());
+                            }
+                            cx.notify();
+                            continue;
+                        }
+                    };
                     this.sftp_enqueue_download_path_with_conn(
                         tab_id,
                         Some(connection_id),
@@ -742,7 +751,22 @@ impl AppShell {
                                                         this.sftp_panel_mut_tab(tab_id)
                                                     {
                                                         let local_target =
-                                                            panel.local_path.join(&name_tr);
+                                                            match transom_core::safe_local_join(
+                                                                &panel.local_path,
+                                                                &name_tr,
+                                                            ) {
+                                                                Ok(path) => path,
+                                                                Err(_) => {
+                                                                    panel.error = Some(
+                                                                        rust_i18n::t!(
+                                                                            "sftp.invalid_name"
+                                                                        )
+                                                                        .to_string(),
+                                                                    );
+                                                                    cx.notify();
+                                                                    return;
+                                                                }
+                                                            };
                                                         this.sftp_enqueue_download_path(
                                                             tab_id,
                                                             path_tr.clone(),
