@@ -544,22 +544,27 @@ pub(super) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         return;
     }
 
-    let Some((current_connection, remote)) = remotes.get(&tab_id) else {
-        send_sftp_not_ready(&event_tx, tab_id, connection_id, op_id, "SSH 连接尚未就绪");
-        return;
-    };
-    if *current_connection != connection_id {
+    // 先检查当前 tab_id 对应的连接；若不匹配，则从全部 remotes 中按 connection_id 查找源会话
+    let (target_tab_id, remote) = if let Some((current_connection, remote)) = remotes.get(&tab_id)
+        && *current_connection == connection_id
+    {
+        (tab_id, remote.clone())
+    } else if let Some((owner_tab, (_, remote))) =
+        remotes.iter().find(|(_, (c, _))| *c == connection_id)
+    {
+        (*owner_tab, remote.clone())
+    } else {
         send_sftp_not_ready(
             &event_tx,
             tab_id,
             connection_id,
             op_id,
-            "SSH 连接已被新连接替换",
+            "SSH 连接尚未就绪或已断开",
         );
         return;
-    }
+    };
 
-    let cached = sftp_clients.get(&tab_id).cloned();
+    let cached = sftp_clients.get(&target_tab_id).cloned();
     match cached {
         Some(client) => spawn_sftp_op(
             sftp_tasks,

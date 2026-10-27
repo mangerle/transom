@@ -143,6 +143,7 @@ impl AppShell {
             .when_some(footer, |this, f| {
                 this.child(
                     h_flex()
+                        .w_full()
                         .justify_end()
                         .gap_2()
                         .items_center()

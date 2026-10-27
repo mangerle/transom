@@ -722,15 +722,18 @@ async fn run_controller(
                 op,
                 result,
             })) => {
-                // 提交前校验归属：标签关闭或连接已被替换时丢弃客户端，
-                // 迟到的初始化结果不得重新登记资源
-                if current_connections.get(&tab_id) != Some(&connection_id) {
+                // 提交前校验归属：只要该连接仍在活跃连接表中即合法
+                let valid_owner = current_connections
+                    .iter()
+                    .find(|(_, c)| **c == connection_id)
+                    .map(|(t, _)| *t);
+                let Some(owner_tab) = valid_owner else {
                     drop(result);
                     continue;
-                }
+                };
                 match result {
                     Ok(client) => {
-                        sftp_clients.insert(tab_id, client.clone());
+                        sftp_clients.insert(owner_tab, client.clone());
                         sftp_exec::spawn_sftp_op(
                             &mut sftp_tasks,
                             event_tx.clone(),

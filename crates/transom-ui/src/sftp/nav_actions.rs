@@ -178,6 +178,7 @@ impl AppShell {
             local_quick_paths: quick_paths,
             local_only: false,
             local_collapsed: false,
+            remote_collapsed: false,
             local_selected: None,
             local_selection: BTreeSet::new(),
             local_anchor: None,

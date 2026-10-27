@@ -16,7 +16,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Sizable, v_virtual_list};
+use gpui_kit::component::{Icon, Sizable, v_virtual_list};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{RemoteFile, TransferFilter, TransferStatus, format_octal_permissions};
@@ -73,7 +73,7 @@ impl AppShell {
                 .as_ref()
                 .is_some_and(|matcher| matcher.matches(name, false))
         };
-        let remote_entries: Vec<RemoteFile> = panel
+        let mut remote_entries: Vec<RemoteFile> = panel
             .entries
             .iter()
             .filter(|entry| {
@@ -84,6 +84,24 @@ impl AppShell {
             })
             .cloned()
             .collect();
+        if panel.path != "/"
+            && !panel.path.is_empty()
+            && (remote_filter_query.is_empty() || fuzzy_match_name("..", &remote_filter_query))
+        {
+            let parent = super::parent_remote(&panel.path);
+            remote_entries.insert(
+                0,
+                RemoteFile {
+                    name: "..".to_string(),
+                    path: parent,
+                    is_dir: true,
+                    is_symlink: false,
+                    size: 0,
+                    modified: None,
+                    permissions: None,
+                },
+            );
+        }
         let remote_path_input = panel.path_input.clone();
         let loading = panel.loading;
         let remote_error = panel.error.clone();
@@ -92,7 +110,7 @@ impl AppShell {
         let active_count = panel.active_transfers.len();
 
         let local_path_input = panel.local_path_input.clone();
-        let local_entries: Vec<LocalFileEntry> = panel
+        let mut local_entries: Vec<LocalFileEntry> = panel
             .local_entries
             .iter()
             .filter(|entry| {
@@ -102,10 +120,30 @@ impl AppShell {
             })
             .cloned()
             .collect();
+        if let Some(parent) = panel.local_path.parent()
+            && panel.local_path != parent
+            && (local_filter_query.is_empty() || fuzzy_match_name("..", &local_filter_query))
+        {
+            local_entries.insert(
+                0,
+                LocalFileEntry {
+                    name: "..".to_string(),
+                    path: parent.to_path_buf(),
+                    is_dir: true,
+                    size: 0,
+                },
+            );
+        }
         let local_error = panel.local_error.clone();
         let quick_paths = panel.local_quick_paths.clone();
         let local_collapsed = panel.local_collapsed;
-        let side_remotes_count = panel.side_remotes.len();
+        let remote_collapsed = panel.remote_collapsed;
+        let side_remotes_info = panel
+            .side_remotes
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (i, s.collapsed, s.title.clone()))
+            .collect::<Vec<_>>();
         let remote_current_dir = panel.path.clone();
 
         let queue = panel.queue.clone();
@@ -202,6 +240,7 @@ impl AppShell {
                             let entry_path = entry.path.clone();
                             let entry_name = entry.name.clone();
                             let entry_is_dir = entry.is_dir;
+                            let is_parent_entry = entry_name == "..";
                             let is_selected = remote_selection.contains(&entry.path)
                                 || remote_primary.as_ref() == Some(&entry.path);
                             let row = h_flex()
@@ -260,7 +299,9 @@ impl AppShell {
                                             window.focus(&panel.focus_handle, cx);
                                         }
                                         if event.click_count >= 2 {
-                                            if entry_is_dir {
+                                            if is_parent_entry {
+                                                this.sftp_go_up(tab_id, window, cx);
+                                            } else if entry_is_dir {
                                                 this.sftp_navigate(
                                                     tab_id,
                                                     entry_path.clone(),
@@ -275,6 +316,9 @@ impl AppShell {
                                                     cx,
                                                 );
                                             }
+                                            return;
+                                        }
+                                        if is_parent_entry {
                                             return;
                                         }
                                         let Some(panel) = this
@@ -346,14 +390,21 @@ impl AppShell {
                                         cx.notify();
                                     }),
                                 )
-                                .child(sftp_file_icon(entry_is_dir, &p))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .text_sm()
-                                        .overflow_hidden()
-                                        .child(entry.name.clone()),
-                                )
+                                .child(if is_parent_entry {
+                                    Icon::new(IconName::Folder)
+                                        .small()
+                                        .text_color(p.muted_foreground)
+                                        .into_any_element()
+                                } else {
+                                    sftp_file_icon(entry_is_dir, &p)
+                                })
+                                .child(div().flex_1().text_sm().overflow_hidden().child(
+                                    if is_parent_entry {
+                                        ".. (返回上一级)".to_string()
+                                    } else {
+                                        entry.name.clone()
+                                    },
+                                ))
                                 .when_some(entry.permissions, |this, perms| {
                                     this.child(
                                         div()
@@ -372,259 +423,275 @@ impl AppShell {
                                         format_size(entry.size)
                                     },
                                 ));
-                            let drag_payload = SftpDragItem {
-                                source_tab_id: tab_id,
-                                source_connection_id: tab_conn_id,
-                                paths: vec![entry.path.clone()],
-                                file_name: entry.name.clone(),
-                                is_dir: entry_is_dir,
-                            };
-                            let preview_name = entry.name.clone();
-                            let row = row
-                                .on_drag(drag_payload, move |_, _, _, cx| {
+
+                            let row = if is_parent_entry {
+                                row
+                            } else {
+                                let drag_payload = SftpDragItem {
+                                    source_tab_id: tab_id,
+                                    source_connection_id: tab_conn_id,
+                                    paths: vec![entry.path.clone()],
+                                    file_name: entry.name.clone(),
+                                    is_dir: entry_is_dir,
+                                };
+                                let preview_name = entry.name.clone();
+                                row.on_drag(drag_payload, move |_, _, _, cx| {
                                     cx.new(|_| SftpDragPreview::new(preview_name.clone(), 1))
                                 })
-                                .context_menu(move |menu, _window, _cx| {
-                                    let app = app_cm.clone();
-                                    let p_dl = entry_path_cm.clone();
-                                    let p_edit = entry_path_cm.clone();
-                                    let p_cp = entry_path_cm.clone();
-                                    let p_sym = entry_path_cm.clone();
-                                    let p_prop = entry_path_cm.clone();
-                                    let p_chmod = entry_path_cm.clone();
-                                    let p_ren = entry_path_cm.clone();
-                                    let p_del = entry_path_cm.clone();
-                                    let mut m = menu.item(
-                                        PopupMenuItem::new("下载")
-                                            .icon(IconName::Download)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, _, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        if let Some(panel) = this
-                                                            .tabs
-                                                            .iter_mut()
-                                                            .find(|t| t.id == tab_id)
-                                                            .and_then(|t| t.sftp.as_mut())
-                                                        {
-                                                            if panel
-                                                                .remote_selection
-                                                                .contains(&p_dl)
-                                                            {
-                                                                panel.set_remote_primary(
-                                                                    p_dl.clone(),
-                                                                );
-                                                            } else {
-                                                                panel.select_remote(p_dl.clone());
-                                                            }
-                                                        }
-                                                        this.sftp_queue_download(tab_id, cx);
-                                                    });
-                                                }
-                                            }),
-                                    );
-                                    if !entry_is_dir {
-                                        m = m.item(
-                                            PopupMenuItem::new("内置编辑")
-                                                .icon(IconName::FilePen)
+                            };
+
+                            let row = row.context_menu(move |menu, _window, _cx| {
+                                let app = app_cm.clone();
+                                if is_parent_entry {
+                                    return menu
+                                        .item(
+                                            PopupMenuItem::new("返回上一级")
+                                                .icon(IconName::ArrowUp)
                                                 .on_click({
                                                     let app = app.clone();
                                                     move |_, window, cx| {
                                                         app.update(cx, |this, cx| {
-                                                            this.sftp_edit_remote_file(
-                                                                tab_id,
-                                                                p_edit.clone(),
-                                                                window,
-                                                                cx,
-                                                            );
+                                                            this.sftp_go_up(tab_id, window, cx);
+                                                        });
+                                                    }
+                                                }),
+                                        )
+                                        .item(
+                                            PopupMenuItem::new("刷新")
+                                                .icon(IconName::RefreshCw)
+                                                .on_click({
+                                                    let app = app.clone();
+                                                    move |_, _, cx| {
+                                                        app.update(cx, |this, cx| {
+                                                            this.sftp_refresh(tab_id, cx);
                                                         });
                                                     }
                                                 }),
                                         );
-                                    }
-                                    m.item(
-                                        PopupMenuItem::new("复制绝对路径")
-                                            .icon(IconName::Copy)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, _, cx| {
-                                                    cx.write_to_clipboard(
-                                                        ClipboardItem::new_string(p_cp.clone()),
-                                                    );
-                                                    app.update(cx, |this, cx| {
-                                                        if let Some(panel) = this
-                                                            .tabs
-                                                            .iter_mut()
-                                                            .find(|t| t.id == tab_id)
-                                                            .and_then(|t| t.sftp.as_mut())
-                                                        {
-                                                            panel.status = Some(format!(
-                                                                "已复制远端路径: {p_cp}"
-                                                            ));
+                                }
+                                let p_dl = entry_path_cm.clone();
+                                let p_edit = entry_path_cm.clone();
+                                let p_cp = entry_path_cm.clone();
+                                let p_sym = entry_path_cm.clone();
+                                let p_prop = entry_path_cm.clone();
+                                let p_chmod = entry_path_cm.clone();
+                                let p_ren = entry_path_cm.clone();
+                                let p_del = entry_path_cm.clone();
+                                let mut m = menu.item(
+                                    PopupMenuItem::new("下载")
+                                        .icon(IconName::Download)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, _, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    if let Some(panel) = this
+                                                        .tabs
+                                                        .iter_mut()
+                                                        .find(|t| t.id == tab_id)
+                                                        .and_then(|t| t.sftp.as_mut())
+                                                    {
+                                                        if panel.remote_selection.contains(&p_dl) {
+                                                            panel.set_remote_primary(p_dl.clone());
+                                                        } else {
+                                                            panel.select_remote(p_dl.clone());
                                                         }
-                                                        cx.notify();
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("创建软链接")
-                                            .icon(IconName::Link2)
+                                                    }
+                                                    this.sftp_queue_download(tab_id, cx);
+                                                });
+                                            }
+                                        }),
+                                );
+                                if !entry_is_dir {
+                                    m = m.item(
+                                        PopupMenuItem::new("内置编辑")
+                                            .icon(IconName::FilePen)
                                             .on_click({
                                                 let app = app.clone();
                                                 move |_, window, cx| {
                                                     app.update(cx, |this, cx| {
-                                                        if let Some(panel) = this
-                                                            .tabs
-                                                            .iter_mut()
-                                                            .find(|t| t.id == tab_id)
-                                                            .and_then(|t| t.sftp.as_mut())
-                                                        {
-                                                            panel.select_remote(p_sym.clone());
-                                                        }
-                                                        this.sftp_open_symlink_modal(
-                                                            tab_id, true, window, cx,
-                                                        );
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("查看属性")
-                                            .icon(IconName::Info)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, _, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        this.sftp_request_remote_properties(
+                                                        this.sftp_edit_remote_file(
                                                             tab_id,
-                                                            p_prop.clone(),
+                                                            p_edit.clone(),
+                                                            window,
                                                             cx,
                                                         );
                                                     });
                                                 }
                                             }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("修改权限 (Chmod)")
-                                            .icon(IconName::Settings)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, window, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        if let Some(panel) = this
-                                                            .tabs
-                                                            .iter_mut()
-                                                            .find(|t| t.id == tab_id)
-                                                            .and_then(|t| t.sftp.as_mut())
-                                                        {
-                                                            panel.select_remote(p_chmod.clone());
-                                                        }
-                                                        this.sftp_open_chmod_modal(
-                                                            tab_id, window, cx,
-                                                        );
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("新建远端文件夹")
-                                            .icon(IconName::FolderPlus)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, window, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        this.sftp_open_mkdir_modal(
-                                                            tab_id, true, window, cx,
-                                                        );
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("重命名")
-                                            .icon(IconName::Pencil)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, window, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        if let Some(panel) = this
-                                                            .tabs
-                                                            .iter_mut()
-                                                            .find(|t| t.id == tab_id)
-                                                            .and_then(|t| t.sftp.as_mut())
-                                                        {
-                                                            panel.select_remote(p_ren.clone());
-                                                        }
-                                                        this.sftp_open_rename_modal(
-                                                            tab_id, true, window, cx,
-                                                        );
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("删除").icon(IconName::Trash).on_click(
+                                    );
+                                }
+                                m.item(
+                                    PopupMenuItem::new("复制绝对路径")
+                                        .icon(IconName::Copy)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, _, cx| {
+                                                cx.write_to_clipboard(ClipboardItem::new_string(
+                                                    p_cp.clone(),
+                                                ));
+                                                app.update(cx, |this, cx| {
+                                                    if let Some(panel) = this
+                                                        .tabs
+                                                        .iter_mut()
+                                                        .find(|t| t.id == tab_id)
+                                                        .and_then(|t| t.sftp.as_mut())
+                                                    {
+                                                        panel.status =
+                                                            Some(format!("已复制远端路径: {p_cp}"));
+                                                    }
+                                                    cx.notify();
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new("创建软链接")
+                                        .icon(IconName::Link2)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, window, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    if let Some(panel) = this
+                                                        .tabs
+                                                        .iter_mut()
+                                                        .find(|t| t.id == tab_id)
+                                                        .and_then(|t| t.sftp.as_mut())
+                                                    {
+                                                        panel.select_remote(p_sym.clone());
+                                                    }
+                                                    this.sftp_open_symlink_modal(
+                                                        tab_id, true, window, cx,
+                                                    );
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new("查看属性")
+                                        .icon(IconName::Info)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, _, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    this.sftp_request_remote_properties(
+                                                        tab_id,
+                                                        p_prop.clone(),
+                                                        cx,
+                                                    );
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new("修改权限 (Chmod)")
+                                        .icon(IconName::Settings)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, window, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    if let Some(panel) = this
+                                                        .tabs
+                                                        .iter_mut()
+                                                        .find(|t| t.id == tab_id)
+                                                        .and_then(|t| t.sftp.as_mut())
+                                                    {
+                                                        panel.select_remote(p_chmod.clone());
+                                                    }
+                                                    this.sftp_open_chmod_modal(tab_id, window, cx);
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new("新建远端文件夹")
+                                        .icon(IconName::FolderPlus)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, window, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    this.sftp_open_mkdir_modal(
+                                                        tab_id, true, window, cx,
+                                                    );
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new("重命名")
+                                        .icon(IconName::Pencil)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, window, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    if let Some(panel) = this
+                                                        .tabs
+                                                        .iter_mut()
+                                                        .find(|t| t.id == tab_id)
+                                                        .and_then(|t| t.sftp.as_mut())
+                                                    {
+                                                        panel.select_remote(p_ren.clone());
+                                                    }
+                                                    this.sftp_open_rename_modal(
+                                                        tab_id, true, window, cx,
+                                                    );
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(PopupMenuItem::new("删除").icon(IconName::Trash).on_click({
+                                    let app = app.clone();
+                                    move |_, _, cx| {
+                                        app.update(cx, |this, cx| {
+                                            if let Some(panel) = this
+                                                .tabs
+                                                .iter_mut()
+                                                .find(|t| t.id == tab_id)
+                                                .and_then(|t| t.sftp.as_mut())
+                                                && !panel.remote_selection.contains(&p_del)
                                             {
-                                                let app = app.clone();
-                                                move |_, _, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        if let Some(panel) = this
-                                                            .tabs
-                                                            .iter_mut()
-                                                            .find(|t| t.id == tab_id)
-                                                            .and_then(|t| t.sftp.as_mut())
-                                                            && !panel
-                                                                .remote_selection
-                                                                .contains(&p_del)
-                                                        {
-                                                            panel.select_remote(p_del.clone());
-                                                        }
-                                                        this.sftp_delete_selection(tab_id, cx);
-                                                    });
-                                                }
-                                            },
-                                        ),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("刷新")
-                                            .icon(IconName::RefreshCw)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, _, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        this.sftp_refresh(tab_id, cx);
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("复制条目 (Ctrl+C)")
-                                            .icon(IconName::Copy)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, _, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        this.sftp_copy_selection(tab_id, cx);
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
-                                            .icon(IconName::Clipboard)
-                                            .on_click({
-                                                let app = app.clone();
-                                                move |_, window, cx| {
-                                                    app.update(cx, |this, cx| {
-                                                        this.sftp_paste_clipboard(
-                                                            tab_id, window, cx,
-                                                        );
-                                                    });
-                                                }
-                                            }),
-                                    )
-                                });
+                                                panel.select_remote(p_del.clone());
+                                            }
+                                            this.sftp_delete_selection(tab_id, cx);
+                                        });
+                                    }
+                                }))
+                                .item(
+                                    PopupMenuItem::new("刷新")
+                                        .icon(IconName::RefreshCw)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, _, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    this.sftp_refresh(tab_id, cx);
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new("复制条目 (Ctrl+C)")
+                                        .icon(IconName::Copy)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, _, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    this.sftp_copy_selection(tab_id, cx);
+                                                });
+                                            }
+                                        }),
+                                )
+                                .item(
+                                    PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+                                        .icon(IconName::Clipboard)
+                                        .on_click({
+                                            let app = app.clone();
+                                            move |_, window, cx| {
+                                                app.update(cx, |this, cx| {
+                                                    this.sftp_paste_clipboard(tab_id, window, cx);
+                                                });
+                                            }
+                                        }),
+                                )
+                            });
                             Some(row.into_any_element())
                         })
                         .collect()
@@ -689,6 +756,16 @@ impl AppShell {
                                     .tooltip("进入路径")
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.sftp_enter_path(tab_id, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("sftp-collapse")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::PanelLeftClose)
+                                    .tooltip("收起主远端列")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.sftp_toggle_remote_collapse(tab_id, cx);
                                     })),
                             ),
                     )
@@ -973,19 +1050,73 @@ impl AppShell {
             cx,
         );
 
-        let mut multi_resizable =
-            h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
-        if local_collapsed {
-            multi_resizable = multi_resizable.child(
-                resizable_panel().child(self.render_sftp_local_collapsed_bar(tab_id, p, cx)),
-            );
-        } else {
-            multi_resizable = multi_resizable.child(resizable_panel().child(local_pane));
+        let mut expanded_panels: Vec<AnyElement> = Vec::new();
+        if !local_collapsed {
+            expanded_panels.push(local_pane);
         }
-        multi_resizable = multi_resizable.child(resizable_panel().child(remote_pane));
-        for side_index in 0..side_remotes_count {
-            let side_pane = self.render_sftp_side_remote_pane(tab_id, side_index, p, cx);
-            multi_resizable = multi_resizable.child(resizable_panel().child(side_pane));
+        if !remote_collapsed {
+            expanded_panels.push(remote_pane);
+        }
+        for (side_index, is_collapsed, _) in &side_remotes_info {
+            if !*is_collapsed {
+                expanded_panels.push(self.render_sftp_side_remote_pane(tab_id, *side_index, p, cx));
+            }
+        }
+
+        let center_content: AnyElement = match expanded_panels.len() {
+            0 => div()
+                .size_full()
+                .items_center()
+                .justify_center()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child("所有文件列均已收起")
+                .into_any_element(),
+            1 => div()
+                .size_full()
+                .overflow_hidden()
+                .child(expanded_panels.into_iter().next().unwrap())
+                .into_any_element(),
+            _ => {
+                let mut resizable =
+                    h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
+                for pane in expanded_panels {
+                    resizable = resizable.child(resizable_panel().child(pane));
+                }
+                resizable.into_any_element()
+            }
+        };
+
+        let mut columns_container = h_flex().size_full().overflow_hidden();
+
+        if local_collapsed {
+            columns_container =
+                columns_container.child(self.render_sftp_local_collapsed_bar(tab_id, p, cx));
+        }
+        if remote_collapsed {
+            columns_container =
+                columns_container.child(self.render_sftp_remote_collapsed_bar(tab_id, p, cx));
+        }
+
+        columns_container = columns_container.child(
+            div()
+                .flex_1()
+                .h_full()
+                .overflow_hidden()
+                .child(center_content),
+        );
+
+        for (side_index, is_collapsed, side_title) in &side_remotes_info {
+            if *is_collapsed {
+                columns_container =
+                    columns_container.child(self.render_sftp_side_remote_collapsed_bar(
+                        tab_id,
+                        *side_index,
+                        side_title,
+                        p,
+                        cx,
+                    ));
+            }
         }
 
         let mut panel_element = v_flex()
@@ -1025,7 +1156,7 @@ impl AppShell {
                     .flex_1()
                     .w_full()
                     .overflow_hidden()
-                    .child(multi_resizable),
+                    .child(columns_container),
             )
             .child(queue_pane);
 

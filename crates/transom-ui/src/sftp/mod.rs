@@ -155,6 +155,8 @@ pub(crate) struct SftpPanelState {
     pub(crate) local_only: bool,
     /// 本地栏是否折叠为竖条。
     pub(crate) local_collapsed: bool,
+    /// 主远端栏是否折叠为竖条。
+    pub(crate) remote_collapsed: bool,
     pub(crate) local_selected: Option<PathBuf>,
     /// 本地栏多选集合；`local_selected` 始终指向其中最近操作的主项。
     pub(crate) local_selection: BTreeSet<PathBuf>,

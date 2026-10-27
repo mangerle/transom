@@ -225,6 +225,14 @@ impl AppShell {
         }
     }
 
+    /// 切换主远端列的展开与折叠。
+    pub(crate) fn sftp_toggle_remote_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+            panel.remote_collapsed = !panel.remote_collapsed;
+            cx.notify();
+        }
+    }
+
     /// 触发剪贴板复制（Ctrl+C 或右键复制）。
     pub(crate) fn sftp_copy_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) else {

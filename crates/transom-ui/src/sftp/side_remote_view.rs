@@ -12,7 +12,7 @@ use super::side_remote::{
     SftpActivePane, SftpClipboardData, SftpClipboardSource, SftpDragItem, SftpDragPreview,
     SftpRemoteCopyParams,
 };
-use super::{format_size, fuzzy_match_name, sftp_file_icon};
+use super::{extract_candidate_path, format_size, fuzzy_match_name, sftp_file_icon};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -22,7 +22,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable, v_virtual_list};
+use gpui_kit::component::{Icon, Selectable, Sizable, v_virtual_list};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
@@ -36,32 +36,35 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let open = self
+        let (open, mounted_conn_ids) = self
             .tabs
             .iter()
             .find(|t| t.id == tab_id)
             .and_then(|t| t.sftp.as_ref())
-            .map(|p| p.mount_menu_open)
-            .unwrap_or(false);
+            .map(|p| {
+                let mounted: Vec<ConnectionId> =
+                    p.side_remotes.iter().map(|s| s.connection_id).collect();
+                (p.mount_menu_open, mounted)
+            })
+            .unwrap_or((false, Vec::new()));
 
         let app_open = cx.entity().clone();
         let trigger = Button::new("sftp-mount-side-remote-btn")
             .ghost()
             .xsmall()
             .icon(IconName::Plus)
-            .tooltip("并列挂载其他已连接会话")
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
-                    panel.mount_menu_open = !panel.mount_menu_open;
-                    cx.notify();
-                }
-            }));
+            .selected(open)
+            .tooltip("并列挂载其他已连接会话");
 
-        // 收集已建立连接的其他标签页
+        // 收集已建立连接的其他标签页，并排除已挂载的会话
         let active_candidates: Vec<(ConnectionId, String, String)> = self
             .tabs
             .iter()
-            .filter(|t| t.id != tab_id && t.connection_id.is_some())
+            .filter(|t| {
+                t.id != tab_id
+                    && t.connection_id.is_some()
+                    && !mounted_conn_ids.contains(&t.connection_id.unwrap())
+            })
             .filter_map(|t| {
                 let conn_id = t.connection_id?;
                 let title = t.title.clone();
@@ -69,7 +72,9 @@ impl AppShell {
                     .sftp
                     .as_ref()
                     .map(|p| p.path.clone())
-                    .unwrap_or_else(|| "/".to_string());
+                    .filter(|p| !p.is_empty() && p != ".")
+                    .or_else(|| extract_candidate_path(&t.title))
+                    .unwrap_or_else(|| ".".to_string());
                 Some((conn_id, title, initial_path))
             })
             .collect();
@@ -212,7 +217,101 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 渲染单个并列远端列（包括展开态与折叠态）。
+    /// 渲染主远端列折叠后的 32px 紧凑竖条。
+    pub(crate) fn render_sftp_remote_collapsed_bar(
+        &self,
+        tab_id: TabId,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let expand_btn = Button::new("expand-sftp-remote-btn")
+            .ghost()
+            .xsmall()
+            .icon(IconName::PanelLeftOpen)
+            .tooltip("展开主远端列")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.sftp_toggle_remote_collapse(tab_id, cx);
+            }));
+
+        v_flex()
+            .w(px(32.0))
+            .h_full()
+            .items_center()
+            .py_2()
+            .gap_2()
+            .bg(p.sidebar)
+            .border_r_1()
+            .border_color(p.sidebar_border)
+            .child(expand_btn)
+            .child(
+                Icon::new(IconName::Server)
+                    .small()
+                    .text_color(p.muted_foreground),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.muted_foreground)
+                    .child("远端"),
+            )
+            .into_any_element()
+    }
+
+    /// 渲染单个并列远端列折叠后的 32px 紧凑竖条。
+    pub(crate) fn render_sftp_side_remote_collapsed_bar(
+        &self,
+        tab_id: TabId,
+        side_index: usize,
+        title: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let expand_btn = Button::new(format!("expand-side-{side_index}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::PanelRightOpen)
+            .tooltip("展开远端列")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.sftp_toggle_side_remote_collapse(tab_id, side_index, cx);
+            }));
+
+        let close_btn = Button::new(format!("close-side-{side_index}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::X)
+            .tooltip("关闭并列远端")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.sftp_close_side_remote(tab_id, side_index, cx);
+            }));
+
+        v_flex()
+            .w(px(32.0))
+            .h_full()
+            .items_center()
+            .py_2()
+            .gap_2()
+            .bg(p.sidebar)
+            .border_r_1()
+            .border_color(p.sidebar_border)
+            .child(expand_btn)
+            .child(close_btn)
+            .child(
+                Icon::new(IconName::Server)
+                    .small()
+                    .text_color(p.muted_foreground),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.muted_foreground)
+                    .child(title.chars().take(2).collect::<String>()),
+            )
+            .into_any_element()
+    }
+
+    /// 渲染单个并列远端列（展开态）。
     pub(crate) fn render_sftp_side_remote_pane(
         &self,
         tab_id: TabId,
@@ -230,52 +329,6 @@ impl AppShell {
             return div().into_any_element();
         };
 
-        if side.collapsed {
-            // 渲染折叠竖条
-            let expand_btn = Button::new(format!("expand-side-{side_index}"))
-                .ghost()
-                .xsmall()
-                .icon(IconName::PanelRightOpen)
-                .tooltip("展开远端列")
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.sftp_toggle_side_remote_collapse(tab_id, side_index, cx);
-                }));
-
-            let close_btn = Button::new(format!("close-side-{side_index}"))
-                .ghost()
-                .xsmall()
-                .icon(IconName::X)
-                .tooltip("关闭并列远端")
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.sftp_close_side_remote(tab_id, side_index, cx);
-                }));
-
-            return v_flex()
-                .w(px(32.0))
-                .h_full()
-                .items_center()
-                .py_2()
-                .gap_2()
-                .bg(p.sidebar)
-                .border_r_1()
-                .border_color(p.sidebar_border)
-                .child(expand_btn)
-                .child(close_btn)
-                .child(
-                    Icon::new(IconName::Server)
-                        .small()
-                        .text_color(p.muted_foreground),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(p.muted_foreground)
-                        .child(side.title.chars().take(2).collect::<String>()),
-                )
-                .into_any_element();
-        }
-
         let connection_id = side.connection_id;
         let title = side.title.clone();
         let path = side.path.clone();
@@ -285,18 +338,37 @@ impl AppShell {
         let scroll_handle = side.scroll_handle.clone();
         let loading = side.loading;
 
-        let filtered_entries: Vec<RemoteFile> = side
+        let mut filtered_entries: Vec<RemoteFile> = side
             .entries
             .iter()
             .filter(|e| filter_query.is_empty() || fuzzy_match_name(&e.name, &filter_query))
             .cloned()
             .collect();
 
+        if path != "/"
+            && !path.is_empty()
+            && (filter_query.is_empty() || fuzzy_match_name("..", &filter_query))
+        {
+            let parent = super::parent_remote(&path);
+            filtered_entries.insert(
+                0,
+                RemoteFile {
+                    name: "..".to_string(),
+                    path: parent,
+                    is_dir: true,
+                    is_symlink: false,
+                    size: 0,
+                    modified: None,
+                    permissions: None,
+                },
+            );
+        }
+
         // 头部导航条
         let collapse_btn = Button::new(format!("collapse-side-{side_index}"))
             .ghost()
             .xsmall()
-            .icon(IconName::ChevronLeft)
+            .icon(IconName::PanelRightClose)
             .tooltip("收起此列")
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sftp_toggle_side_remote_collapse(tab_id, side_index, cx);
@@ -354,6 +426,44 @@ impl AppShell {
                 }
             }));
 
+        // 第二行工具栏按钮
+        let home_btn = Button::new(format!("side-home-{side_index}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::House)
+            .tooltip(rust_i18n::t!("sftp.home").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.request_sftp_list_for_connection(tab_id, connection_id, ".".to_string(), cx);
+            }));
+
+        let download_btn = Button::new(format!("side-download-{side_index}"))
+            .primary()
+            .xsmall()
+            .icon(IconName::Download)
+            .tooltip(rust_i18n::t!("sftp.download").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                let (selected_paths, local_path) = this
+                    .tabs
+                    .iter()
+                    .find(|t| t.id == tab_id)
+                    .and_then(|t| t.sftp.as_ref())
+                    .map(|p| {
+                        let paths = p
+                            .side_remotes
+                            .get(side_index)
+                            .map(|s| s.selection.iter().cloned().collect::<Vec<_>>())
+                            .unwrap_or_default();
+                        (paths, p.local_path.clone())
+                    })
+                    .unwrap_or_default();
+
+                for path in selected_paths {
+                    let fname = path.rsplit('/').next().unwrap_or(&path);
+                    let local_target = local_path.join(fname);
+                    this.sftp_enqueue_download_path(tab_id, path, local_target, cx);
+                }
+            }));
+
         let header = v_flex()
             .border_b_1()
             .border_color(p.sidebar_border)
@@ -381,6 +491,14 @@ impl AppShell {
                     .child(enter_btn)
                     .child(collapse_btn)
                     .child(close_btn),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(home_btn)
+                    .child(div().w(px(1.0)).h(px(14.0)).mx_1().bg(p.sidebar_border))
+                    .child(download_btn),
             );
 
         // 构建虚拟列表内容
@@ -396,6 +514,7 @@ impl AppShell {
             let row_sizes = Rc::new(vec![size(px(0.), px(28.)); filtered_entries.len()]);
             let entries_rc = Rc::new(filtered_entries);
             let p_item = p.clone();
+            let current_dir = path.clone();
 
             v_virtual_list(
                 cx.entity().clone(),
@@ -412,9 +531,11 @@ impl AppShell {
                             let entry_path = entry.path.clone();
                             let entry_name = entry.name.clone();
                             let is_dir = entry.is_dir;
+                            let is_parent_entry = entry_name == "..";
                             let app_click = app_ent.clone();
                             let app_cm = app_ent.clone();
                             let p_cm = entry_path.clone();
+                            let dir_cur = current_dir.clone();
 
                             let row = h_flex()
                                 .id(ElementId::Name(
@@ -431,14 +552,21 @@ impl AppShell {
                                         .bg(p_row.sidebar_accent)
                                         .text_color(p_row.sidebar_accent_foreground)
                                 })
-                                .child(sftp_file_icon(is_dir, &p_row))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .text_sm()
-                                        .overflow_hidden()
-                                        .child(entry.name.clone()),
-                                )
+                                .child(if is_parent_entry {
+                                    Icon::new(IconName::Folder)
+                                        .small()
+                                        .text_color(p_row.muted_foreground)
+                                        .into_any_element()
+                                } else {
+                                    sftp_file_icon(is_dir, &p_row)
+                                })
+                                .child(div().flex_1().text_sm().overflow_hidden().child(
+                                    if is_parent_entry {
+                                        ".. (返回上一级)".to_string()
+                                    } else {
+                                        entry.name.clone()
+                                    },
+                                ))
                                 .when_some(entry.permissions, |this, perms| {
                                     this.child(
                                         div()
@@ -472,7 +600,7 @@ impl AppShell {
                                                 panel.side_remotes.get_mut(side_index)
                                             {
                                                 if event.click_count >= 2 {
-                                                    if is_dir {
+                                                    if is_parent_entry || is_dir {
                                                         this.request_sftp_list_for_connection(
                                                             tab_id,
                                                             connection_id,
@@ -482,9 +610,11 @@ impl AppShell {
                                                     }
                                                     return;
                                                 }
-                                                side_state.selected = Some(path_d.clone());
-                                                side_state.selection.clear();
-                                                side_state.selection.insert(path_d);
+                                                if !is_parent_entry {
+                                                    side_state.selected = Some(path_d.clone());
+                                                    side_state.selection.clear();
+                                                    side_state.selection.insert(path_d);
+                                                }
                                             }
                                             cx.notify();
                                         }
@@ -492,18 +622,22 @@ impl AppShell {
                                 },
                             );
 
-                            // 拖拽源配置
-                            let drag_payload = SftpDragItem {
-                                source_tab_id: tab_id,
-                                source_connection_id: Some(connection_id),
-                                paths: vec![entry_path.clone()],
-                                file_name: entry_name.clone(),
-                                is_dir,
+                            // 拖拽源配置（非 .. 目录才可作为拖拽源）
+                            let row = if is_parent_entry {
+                                row
+                            } else {
+                                let drag_payload = SftpDragItem {
+                                    source_tab_id: tab_id,
+                                    source_connection_id: Some(connection_id),
+                                    paths: vec![entry_path.clone()],
+                                    file_name: entry_name.clone(),
+                                    is_dir,
+                                };
+                                let preview_name = entry_name.clone();
+                                row.on_drag(drag_payload, move |_, _, _, cx| {
+                                    cx.new(|_| SftpDragPreview::new(preview_name.clone(), 1))
+                                })
                             };
-                            let preview_name = entry_name.clone();
-                            let row = row.on_drag(drag_payload, move |_, _, _, cx| {
-                                cx.new(|_| SftpDragPreview::new(preview_name.clone(), 1))
-                            });
 
                             // 右键上下文菜单
                             let p_copy = p_cm.clone();
@@ -514,6 +648,48 @@ impl AppShell {
                                 let path_cp = p_copy.clone();
                                 let path_tr = p_transfer.clone();
                                 let name_tr = p_name.clone();
+
+                                if is_parent_entry {
+                                    let path_up = path_tr.clone();
+                                    let cur_dir = dir_cur.clone();
+                                    return menu
+                                        .item(
+                                            PopupMenuItem::new("返回上一级")
+                                                .icon(IconName::ArrowUp)
+                                                .on_click({
+                                                    let app = app.clone();
+                                                    let path_up = path_up.clone();
+                                                    move |_, _, cx| {
+                                                        app.update(cx, |this, cx| {
+                                                            this.request_sftp_list_for_connection(
+                                                                tab_id,
+                                                                connection_id,
+                                                                path_up.clone(),
+                                                                cx,
+                                                            );
+                                                        });
+                                                    }
+                                                }),
+                                        )
+                                        .item(
+                                            PopupMenuItem::new("刷新")
+                                                .icon(IconName::RefreshCw)
+                                                .on_click({
+                                                    let app = app.clone();
+                                                    let cur_dir = cur_dir.clone();
+                                                    move |_, _, cx| {
+                                                        app.update(cx, |this, cx| {
+                                                            this.request_sftp_list_for_connection(
+                                                                tab_id,
+                                                                connection_id,
+                                                                cur_dir.clone(),
+                                                                cx,
+                                                            );
+                                                        });
+                                                    }
+                                                }),
+                                        );
+                                }
 
                                 menu.item(
                                     PopupMenuItem::new("下载到本地")
