@@ -19,7 +19,7 @@ use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, ForwardRule, ForwardState,
     ForwardStatus, TabId,
 };
-use transom_net::{SshRemote, start_forward};
+use transom_net::{SshRemote, ZmodemConfig, start_forward};
 
 /// 主循环的继续/停机判定。
 pub(super) enum LoopControl {
@@ -44,6 +44,7 @@ pub(super) async fn handle_command(
             proxy,
             size,
             secrets,
+            zmodem,
         } => {
             start_connect(
                 state,
@@ -58,6 +59,12 @@ pub(super) async fn handle_command(
                     proxy,
                     size,
                     secrets,
+                    // 界面已持有设置快照：在这里解析下载目录后随派发携带，
+                    // 控制循环不再为每次连接同步读盘。
+                    zmodem: ZmodemConfig {
+                        download_dir: zmodem.resolved_download_dir(),
+                        auto_receive: zmodem.auto_receive,
+                    },
                 },
             );
         }

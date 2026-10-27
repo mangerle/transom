@@ -16,9 +16,9 @@ use super::samplers::{
     spawn_traffic_sampler,
 };
 use super::sftp_exec;
-use super::state::{ControllerCtx, ControllerState, zmodem_config};
+use super::state::{ControllerCtx, ControllerState};
 use transom_core::{AppEvent, ConnectionId, ForwardState, ForwardStatus, TabId, TerminalIo};
-use transom_net::{SshRemote, SshSession};
+use transom_net::{SshRemote, SshSession, ZmodemConfig};
 
 /// 分发一条内部完成事件。
 pub(super) async fn handle_internal(
@@ -27,11 +27,7 @@ pub(super) async fn handle_internal(
     internal: Internal,
 ) {
     match internal {
-        Internal::Connected {
-            tab_id,
-            connection_id,
-            kind,
-        } => handle_connected(state, ctx, tab_id, connection_id, kind).await,
+        Internal::Connected { .. } => handle_connected(state, ctx, internal).await,
         Internal::Disconnected {
             tab_id,
             connection_id,
@@ -42,13 +38,20 @@ pub(super) async fn handle_internal(
 }
 
 /// 连接接入：先按连接意图裁决，再走统一的落地路径。
-async fn handle_connected(
-    state: &mut ControllerState,
-    ctx: &ControllerCtx,
-    tab_id: TabId,
-    connection_id: ConnectionId,
-    kind: ReadyConnection,
-) {
+///
+/// 连接形态与 ZMODEM 配置随事件一起到达（配置由界面随命令携带），
+/// 控制器不再为每次连接同步读一次设置文件。
+async fn handle_connected(state: &mut ControllerState, ctx: &ControllerCtx, internal: Internal) {
+    let Internal::Connected {
+        tab_id,
+        connection_id,
+        kind,
+        zmodem,
+    } = internal
+    else {
+        // 调用方按变体精确调用，其它形态直接忽略（不可达路径）。
+        return;
+    };
     if matches!(
         admit_connection(&state.connecting, tab_id, connection_id),
         Admission::Reject
@@ -85,6 +88,7 @@ async fn handle_connected(
                     },
                     remote: Some(remote),
                     disconnect_reason: "reconnected",
+                    zmodem,
                 },
             )
             .await;
@@ -114,6 +118,7 @@ async fn handle_connected(
                     },
                     remote: None,
                     disconnect_reason: "reconnected to local",
+                    zmodem,
                 },
             )
             .await;
@@ -132,6 +137,7 @@ async fn handle_connected(
                     },
                     remote: None,
                     disconnect_reason: "reconnected to serial",
+                    zmodem,
                 },
             )
             .await;
@@ -149,6 +155,7 @@ async fn handle_connected(
                     },
                     remote: None,
                     disconnect_reason: "reconnected to telnet",
+                    zmodem,
                 },
             )
             .await;
@@ -184,6 +191,8 @@ struct StreamConnection<J> {
     remote: Option<SshRemote>,
     /// 顶掉旧连接时的断开说明，用于区分"SSH 重连"与"切回本地/串口"。
     disconnect_reason: &'static str,
+    /// ZMODEM 监督层配置（随连接命令携带，控制器不回读设置文件）。
+    zmodem: ZmodemConfig,
 }
 
 /// 三类"字节流"连接（含 SSH）的公共落地：登记当前连接、停旧任务、
@@ -202,6 +211,7 @@ async fn adopt_stream_connection<J>(
         join,
         remote,
         disconnect_reason,
+        zmodem,
     } = setup;
     adopt_connection(
         TabCleanupTables {
@@ -223,7 +233,7 @@ async fn adopt_stream_connection<J>(
             join,
             remote,
             disconnect_reason,
-            zmodem_config: zmodem_config(&ctx.settings_store),
+            zmodem_config: zmodem,
         },
         &ctx.event_tx,
         &ctx.internal_tx,

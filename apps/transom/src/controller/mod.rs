@@ -15,9 +15,9 @@ use std::sync::mpsc;
 use tokio::runtime::Runtime;
 use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, KnownHostsStore,
-    SecretStore, SettingsStore, SftpOperation, TabId, TerminalIo, TransferId,
+    SecretStore, SftpOperation, TabId, TerminalIo, TransferId,
 };
-use transom_net::{CloudSyncService, ForwardTask, SftpClient, SshSession};
+use transom_net::{CloudSyncService, ForwardTask, SftpClient, SshSession, ZmodemConfig};
 
 mod commands;
 mod host_exec;
@@ -46,7 +46,6 @@ impl Controller {
     pub fn start(
         known_hosts: Arc<dyn KnownHostsStore>,
         secrets: Arc<dyn SecretStore>,
-        settings_store: Arc<dyn SettingsStore>,
     ) -> Result<Self, AppError> {
         // 三条通道的容量与背压策略（全工程禁止无界通道）：
         // - 命令 256：用户命令低频，UI 侧 try_send 快速失败并提示；
@@ -70,7 +69,6 @@ impl Controller {
         let outer_event_tx = event_tx.clone();
         let root = runtime.spawn(run_controller(ControlPlaneWiring {
             known_hosts,
-            settings_store,
             command_rx,
             internal_tx,
             internal_rx,
@@ -165,6 +163,8 @@ enum Internal {
         tab_id: TabId,
         connection_id: ConnectionId,
         kind: ReadyConnection,
+        /// ZMODEM 监督层配置：随连接命令携带，控制器不回读设置文件。
+        zmodem: ZmodemConfig,
     },
     Disconnected {
         tab_id: TabId,
@@ -229,7 +229,6 @@ enum Incoming {
 /// 新增接线时也容易漏项。
 struct ControlPlaneWiring {
     known_hosts: Arc<dyn KnownHostsStore>,
-    settings_store: Arc<dyn SettingsStore>,
     command_rx: flume::Receiver<AppCommand>,
     internal_tx: flume::Sender<Internal>,
     internal_rx: flume::Receiver<Internal>,
@@ -242,7 +241,6 @@ struct ControlPlaneWiring {
 async fn run_controller(wiring: ControlPlaneWiring) {
     let ControlPlaneWiring {
         known_hosts,
-        settings_store,
         command_rx,
         internal_tx,
         internal_rx,
@@ -252,7 +250,6 @@ async fn run_controller(wiring: ControlPlaneWiring) {
     } = wiring;
     let ctx = ControllerCtx {
         known_hosts,
-        settings_store,
         event_tx,
         internal_tx,
         cloud_sync,

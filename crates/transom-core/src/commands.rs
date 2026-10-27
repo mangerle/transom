@@ -25,6 +25,12 @@ pub enum AppCommand {
         proxy: crate::proxy::OutboundProxy,
         size: TerminalSize,
         secrets: ConnectionSecrets,
+        /// ZMODEM 行为设置（下载目录与自动接收）。
+        ///
+        /// 随连接命令携带而不是由控制器回读设置文件：界面侧本就持有设置
+        /// 快照，控制器在控制循环里同步读盘会阻塞整个控制平面（磁盘慢、
+        /// 家目录在 NFS 上时尤其明显）。
+        zmodem: crate::zmodem::ZmodemSettings,
     },
     Sftp {
         tab_id: TabId,

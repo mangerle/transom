@@ -6,7 +6,7 @@ use transom_core::{
     AppError, AppEvent, Connection, ConnectionId, ConnectionSecrets, ErrorCode, KnownHostsStore,
     PromptInfo, Session, TabId, TerminalIo, TerminalSize,
 };
-use transom_net::{AuthPrompter, connect_ssh, connect_telnet, open_serial};
+use transom_net::{AuthPrompter, ZmodemConfig, connect_ssh, connect_telnet, open_serial};
 
 use super::{Internal, ReadyConnection};
 
@@ -183,6 +183,8 @@ pub(super) struct ConnectDispatch {
     pub(super) proxy: transom_core::OutboundProxy,
     pub(super) size: TerminalSize,
     pub(super) secrets: ConnectionSecrets,
+    /// ZMODEM 监督层配置（随命令携带，控制器不回读设置文件）。
+    pub(super) zmodem: ZmodemConfig,
 }
 
 /// 按连接类型派发建连：SSH 走认证握手，本地开 PTY，串口走阻塞线程池打开。
@@ -200,6 +202,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
         proxy,
         size,
         secrets,
+        zmodem,
     } = dispatch;
     tokio::spawn(async move {
         match &session.connection {
@@ -225,6 +228,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                                 tab_id,
                                 connection_id,
                                 kind: ReadyConnection::Ssh(session),
+                                zmodem,
                             })
                             .await;
                     }
@@ -250,6 +254,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                                 tab_id,
                                 connection_id,
                                 kind: ReadyConnection::Local { io, join },
+                                zmodem,
                             })
                             .await;
                     }
@@ -291,6 +296,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                                     io: connected.io,
                                     join: connected.exit,
                                 },
+                                zmodem,
                             })
                             .await;
                     }
@@ -332,6 +338,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                                     io: connected.io,
                                     join: connected.exit,
                                 },
+                                zmodem,
                             })
                             .await;
                     }

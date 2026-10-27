@@ -51,11 +51,7 @@ fn main() -> anyhow::Result<()> {
     let history: Arc<dyn transom_core::HistoryStore> =
         Arc::new(JsonHistoryStore::new(paths::history_path()));
 
-    let controller = Controller::start(
-        known_hosts.clone(),
-        secret_store.clone(),
-        settings_store.clone(),
-    )?;
+    let controller = Controller::start(known_hosts.clone(), secret_store.clone())?;
 
     // 监听句柄保留在此直到进程结束：随控制器停机，不做脱缰派生。
     #[cfg(unix)]

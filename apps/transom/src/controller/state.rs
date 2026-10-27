@@ -14,13 +14,8 @@ use super::samplers::LocalTrafficTabs;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use transom_core::{
-    AppEvent, AppSettings, ConnectionId, ForwardId, KnownHostsStore, SettingsStore, TabId,
-    TransferId,
-};
-use transom_net::{
-    CloudSyncService, ForwardTask, SftpClient, SshRemote, ZmodemConfig, ZmodemControl,
-};
+use transom_core::{AppEvent, ConnectionId, ForwardId, KnownHostsStore, TabId, TransferId};
+use transom_net::{CloudSyncService, ForwardTask, SftpClient, SshRemote, ZmodemControl};
 
 /// 控制平面的全部可变状态表。
 pub(super) struct ControllerState {
@@ -96,26 +91,9 @@ impl ControllerState {
 /// 控制平面随控制器一次性建立的共享句柄。
 pub(super) struct ControllerCtx {
     pub(super) known_hosts: Arc<dyn KnownHostsStore>,
-    pub(super) settings_store: Arc<dyn SettingsStore>,
     pub(super) event_tx: flume::Sender<AppEvent>,
     pub(super) internal_tx: flume::Sender<Internal>,
     pub(super) cloud_sync: Arc<CloudSyncService>,
     /// 主机动作的跨批次并发闸门：用户连点两次也不会翻倍占用在途连接数。
     pub(super) action_permits: Arc<tokio::sync::Semaphore>,
-}
-
-/// 连接接入时读取 ZMODEM 配置：每次连接取最新设置（改目录后新连接生效），
-/// 读取失败按默认值降级（下载目录退回系统下载目录、自动接收开启）。
-pub(super) fn zmodem_config(settings: &Arc<dyn SettingsStore>) -> ZmodemConfig {
-    let settings = match settings.load() {
-        Ok(settings) => settings,
-        Err(error) => {
-            log::warn!("读取设置失败，本次连接的 ZMODEM 按默认配置处理，原因: {error}");
-            AppSettings::default()
-        }
-    };
-    ZmodemConfig {
-        download_dir: settings.zmodem.resolved_download_dir(),
-        auto_receive: settings.zmodem.auto_receive,
-    }
 }
