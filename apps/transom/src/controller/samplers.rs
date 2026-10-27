@@ -151,14 +151,19 @@ pub(super) fn spawn_remote_stats_sampler(
         // OS 标识是静态信息：仅首轮附带 os-release，之后缓存复用，
         // 省掉每 3 秒一次重复读取静态文件的开销。
         let mut cached_os: Option<String> = None;
+        // 超时告警是否已留痕：持续超时时只在首次打 warn，避免刷屏。
+        let mut timeout_warned = false;
         loop {
             let cmd = if cached_os.is_none() {
                 "cat /proc/stat /proc/meminfo /proc/net/dev 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime 2>/dev/null; echo \"__DF__\"; df -P -k 2>/dev/null; echo \"__NET__\"; cat /proc/net/dev 2>/dev/null; echo \"__OS__\"; cat /etc/os-release 2>/dev/null"
             } else {
                 "cat /proc/stat /proc/meminfo /proc/net/dev 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime 2>/dev/null; echo \"__DF__\"; df -P -k 2>/dev/null; echo \"__NET__\"; cat /proc/net/dev 2>/dev/null"
             };
-            match remote.exec_command(cmd).await {
-                Ok(output) if !output.is_empty() => {
+            // 远端 exec 必须设限：df 撞上挂死的 NFS 挂载会长时间不返回，
+            // 采样任务随之挂起，直到 keepalive 断开前该标签的统计一直停更。
+            let exec = tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command(cmd)).await;
+            match exec {
+                Ok(Ok(output)) if !output.is_empty() => {
                     let mut stats = state.ingest(&output, std::time::Instant::now());
                     match &cached_os {
                         Some(cached) => stats.os_name = cached.clone(),
@@ -176,7 +181,21 @@ pub(super) fn spawn_remote_stats_sampler(
                         break;
                     }
                 }
-                _ => break,
+                // 空输出（远端命令整体失败）或通道错误：连接已不可用，停止采样。
+                Ok(_) => break,
+                // 超时：连接可能仍然健康，只跳过本轮并保留上一份数据；首次按
+                // warn 留痕，持续超时降为 debug，避免每 3 秒刷一条告警。
+                Err(_) => {
+                    if timeout_warned {
+                        log::debug!("远端系统统计采样再次超时，已跳过本轮，标签: {tab_id}");
+                    } else {
+                        timeout_warned = true;
+                        log::warn!(
+                            "远端系统统计采样超时，已跳过本轮并保留上一份数据，标签: {tab_id}，超时: {} 秒",
+                            COMMAND_TIMEOUT.as_secs()
+                        );
+                    }
+                }
             }
             interval.tick().await;
         }
@@ -283,14 +302,15 @@ pub(super) struct ProcessTarget {
 const PROCESS_SAMPLE_COMMAND: &str =
     "ps -eo pid,ppid,user,%cpu,%mem,rss,comm --sort=-%cpu | head -n 51";
 
-/// 单次采样与信号操作共用的超时：远端 `ps` 卡死不能拖住后续轮询。
-const PROCESS_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// 单次采样命令与信号操作共用的超时（远端 exec 与本地子进程同口径）：
+/// 远端 `ps`/`df` 或本地命令卡死不能拖住后续轮询与统计采样。
+const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 pub(super) async fn run_process_sample(target: ProcessTarget) {
     let result = match &target.remote {
         Some(remote) => {
             match tokio::time::timeout(
-                PROCESS_COMMAND_TIMEOUT,
+                COMMAND_TIMEOUT,
                 remote.exec_command_capture(PROCESS_SAMPLE_COMMAND),
             )
             .await
@@ -333,11 +353,8 @@ pub(super) async fn run_process_kill(target: ProcessTarget, pid: u32, force: boo
         match &target.remote {
             Some(remote) => {
                 let command = format!("kill {signal} {pid}");
-                match tokio::time::timeout(
-                    PROCESS_COMMAND_TIMEOUT,
-                    remote.exec_command_capture(&command),
-                )
-                .await
+                match tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command_capture(&command))
+                    .await
                 {
                     Ok(Ok(output)) if output.exit_status == Some(0) => None,
                     Ok(Ok(output)) => Some(AppError::with_detail(
@@ -368,17 +385,14 @@ pub(super) async fn run_process_kill(target: ProcessTarget, pid: u32, force: boo
 fn command_timeout(action: &str) -> AppError {
     AppError::with_detail(
         ErrorCode::Timeout,
-        format!(
-            "{action}超时，已等待 {} 秒",
-            PROCESS_COMMAND_TIMEOUT.as_secs()
-        ),
+        format!("{action}超时，已等待 {} 秒", COMMAND_TIMEOUT.as_secs()),
     )
 }
 
 async fn local_command_output(command: &str) -> Result<String, AppError> {
     let mut child = Command::new("sh");
     child.arg("-c").arg(command).kill_on_drop(true);
-    match tokio::time::timeout(PROCESS_COMMAND_TIMEOUT, child.output()).await {
+    match tokio::time::timeout(COMMAND_TIMEOUT, child.output()).await {
         Ok(Ok(output)) => Ok(String::from_utf8_lossy(&output.stdout).to_string()),
         Ok(Err(error)) => Err(AppError::with_detail(
             ErrorCode::Io,
@@ -391,7 +405,7 @@ async fn local_command_output(command: &str) -> Result<String, AppError> {
 async fn local_kill(pid: u32, signal: &str) -> Result<(), String> {
     let mut child = Command::new("kill");
     child.arg(signal).arg(pid.to_string()).kill_on_drop(true);
-    let status = tokio::time::timeout(PROCESS_COMMAND_TIMEOUT, child.status())
+    let status = tokio::time::timeout(COMMAND_TIMEOUT, child.status())
         .await
         .map_err(|_| "本地 kill 命令超时".to_string())?
         .map_err(|error| format!("执行本地 kill 失败: {error}"))?;
