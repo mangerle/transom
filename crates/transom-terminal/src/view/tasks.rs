@@ -1,0 +1,237 @@
+//! 终端内部后台事件处理与 I/O 驱动任务。
+
+use super::{READ_BUFFER_BYTES, READ_CHANNEL_CAPACITY, TerminalView};
+use crate::audit::AuditSink;
+use crate::event::TerminalEvent;
+use crate::osc::OscEvent;
+use crate::record::RecorderHandle;
+use alacritty_terminal::event::{Event, WindowSize};
+use alacritty_terminal::vte::ansi::Rgb as AnsiRgb;
+use gpui_kit::*;
+use std::io::{Read, Write};
+use std::sync::Arc;
+use std::thread;
+use std::time::Instant;
+use transom_core::Rgb as PaletteColor;
+
+impl TerminalView {
+    /// 启动后台读取线程与写入线程，返回通道发送端与任务句柄。
+    pub(super) fn spawn_io_tasks(
+        mut reader: Box<dyn Read + Send>,
+        mut writer: Box<dyn Write + Send>,
+        audit_path: Option<std::path::PathBuf>,
+        recorder: &RecorderHandle,
+        event_tx: &flume::Sender<Event>,
+        trigger_engine: &Arc<parking_lot::Mutex<crate::trigger::TriggerEngine>>,
+        cx: &mut Context<Self>,
+    ) -> (flume::Sender<Vec<u8>>, Task<()>) {
+        let recorder_for_reader = recorder.clone();
+        let (bytes_tx, bytes_rx) = flume::bounded::<Vec<u8>>(READ_CHANNEL_CAPACITY);
+        let exit_tx = event_tx.clone();
+
+        let reader_spawn = thread::Builder::new()
+            .name("transom-terminal-reader".into())
+            .spawn(move || {
+                let mut audit = audit_path.map(AuditSink::new);
+                let mut buffer = [0u8; READ_BUFFER_BYTES];
+                loop {
+                    match reader.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(count) => {
+                            let slice = &buffer[..count];
+                            if let Some(audit) = audit.as_mut() {
+                                audit.record(slice);
+                            }
+                            recorder_for_reader.record_output(slice);
+                            if bytes_tx.send(slice.to_vec()).is_err() {
+                                break;
+                            }
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(error) => {
+                            log::warn!("读取终端输出失败，按已退出处理，原因: {error}");
+                            break;
+                        }
+                    }
+                }
+                if let Some(audit) = audit.as_mut() {
+                    audit.finish();
+                }
+            });
+        if reader_spawn.is_err() {
+            log::error!("创建终端读取线程失败，该窗格按已退出降级处理");
+            let _ = exit_tx.try_send(Event::Exit);
+        }
+
+        let (input_tx, input_rx) = flume::bounded::<Vec<u8>>(256);
+        let writer_exit_tx = event_tx.clone();
+        let writer_spawn = thread::Builder::new()
+            .name("transom-terminal-writer".into())
+            .spawn(move || {
+                while let Ok(bytes) = input_rx.recv() {
+                    if let Err(error) = writer.write_all(&bytes) {
+                        log::warn!("写入终端输入失败，按已退出处理，原因: {error}");
+                        let _ = writer_exit_tx.try_send(Event::Exit);
+                        break;
+                    }
+                    let _ = writer.flush();
+                }
+            });
+        if writer_spawn.is_err() {
+            log::error!("创建终端写入线程失败，该窗格按已退出降级处理");
+            let _ = exit_tx.try_send(Event::Exit);
+        }
+
+        let trigger_engine_for_reader = trigger_engine.clone();
+        let reader_task = cx.spawn(async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
+            while let Ok(bytes) = bytes_rx.recv_async().await {
+                let matches = trigger_engine_for_reader.lock().process_bytes(&bytes);
+                let updated = this.update(cx, |view, cx| {
+                    view.engine.lock().process(&bytes);
+                    for m in matches {
+                        match &m.action {
+                            transom_core::TriggerAction::AutoResponse(reply) => {
+                                let mut to_send = reply.clone();
+                                if !to_send.ends_with('\r') && !to_send.ends_with('\n') {
+                                    to_send.push('\r');
+                                }
+                                view.write_input(to_send.as_bytes());
+                            }
+                            transom_core::TriggerAction::Bell => {
+                                cx.emit(TerminalEvent::Bell);
+                            }
+                            transom_core::TriggerAction::Notification(body) => {
+                                cx.emit(TerminalEvent::DesktopNotification {
+                                    title: m.name.clone(),
+                                    body: body.clone(),
+                                });
+                            }
+                            _ => {}
+                        }
+                        cx.emit(TerminalEvent::TriggerFired {
+                            rule_name: m.name,
+                            action: m.action,
+                        });
+                    }
+                    cx.notify();
+                });
+                if updated.is_err() {
+                    return;
+                }
+            }
+            let _ = this.update(cx, |view, cx| view.mark_exited(cx));
+        });
+
+        (input_tx, reader_task)
+    }
+
+    pub(super) fn process_events(&mut self, cx: &mut Context<Self>) {
+        self.process_osc_events(cx);
+        while let Ok(event) = self.event_rx.try_recv() {
+            match event {
+                Event::Title(title) => cx.emit(TerminalEvent::Title(title)),
+                Event::ResetTitle => cx.emit(TerminalEvent::ResetTitle),
+                Event::Bell => cx.emit(TerminalEvent::Bell),
+                Event::ClipboardStore(_, text) => {
+                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    cx.emit(TerminalEvent::ClipboardStored);
+                }
+                Event::ClipboardLoad(_, formatter) => {
+                    if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+                        let bytes = formatter(&text);
+                        self.write_input(bytes.as_bytes());
+                    }
+                }
+                Event::ColorRequest(index, formatter) => {
+                    let rgb = self.ansi_rgb(index);
+                    let bytes = formatter(rgb);
+                    self.write_input(bytes.as_bytes());
+                }
+                Event::TextAreaSizeRequest(formatter) => {
+                    let metrics = *self.metrics.lock();
+                    let size = self.engine.lock().size();
+                    let window_size = WindowSize {
+                        num_lines: size.rows,
+                        num_cols: size.cols,
+                        cell_width: f32::from(metrics.cell_width) as u16,
+                        cell_height: f32::from(metrics.cell_height) as u16,
+                    };
+                    let bytes = formatter(window_size);
+                    self.write_input(bytes.as_bytes());
+                }
+                Event::PtyWrite(text) => {
+                    self.write_input(text.as_bytes());
+                }
+                Event::Exit | Event::ChildExit(_) => self.mark_exited(cx),
+                Event::CursorBlinkingChange | Event::MouseCursorDirty | Event::Wakeup => {}
+            }
+        }
+    }
+
+    /// 把旁路扫到的 OSC 序列翻成对外的终端事件。
+    pub(super) fn process_osc_events(&mut self, cx: &mut Context<Self>) {
+        let events = self.engine.lock().take_osc_events();
+        if events.is_empty() {
+            return;
+        }
+        let now = Instant::now();
+        for event in events {
+            match event {
+                OscEvent::Notify { title, body } => {
+                    cx.emit(TerminalEvent::DesktopNotification { title, body });
+                }
+                OscEvent::CommandRecorded { command } => {
+                    cx.emit(TerminalEvent::CommandRecorded { command });
+                }
+                event => {
+                    if let Some(tracked) = self.command_tracker.on_event(&event, now) {
+                        cx.emit(TerminalEvent::CommandFinished {
+                            exit_code: tracked.exit_code,
+                            duration_ms: tracked.duration_ms,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    pub(super) fn ansi_rgb(&self, index: usize) -> AnsiRgb {
+        let palette = &self.profile.palette;
+        let engine = self.engine.lock();
+        let colors = engine.term().colors();
+        if index < 256
+            && let Some(rgb) = colors[index]
+        {
+            return AnsiRgb {
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+            };
+        }
+        let color = if index < 16 {
+            palette.ansi[index]
+        } else if index == 256 {
+            palette.foreground
+        } else if index == 257 {
+            palette.background
+        } else if index == 258 {
+            palette.cursor
+        } else if index < 232 {
+            let index = index - 16;
+            let r = (index / 36) as u8;
+            let g = ((index % 36) / 6) as u8;
+            let b = (index % 6) as u8;
+            let channel = |value: u8| if value == 0 { 0 } else { value * 40 + 55 };
+            PaletteColor::new(channel(r), channel(g), channel(b))
+        } else {
+            let shade = index.saturating_sub(232).min(23) as u8;
+            let level = 8 + shade * 10;
+            PaletteColor::new(level, level, level)
+        };
+        AnsiRgb {
+            r: color.r,
+            g: color.g,
+            b: color.b,
+        }
+    }
+}
