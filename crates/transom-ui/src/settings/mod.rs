@@ -5,6 +5,7 @@ mod general_page;
 mod layout_page;
 mod logs_page;
 mod modal;
+mod modal_state;
 mod pages;
 mod shortcuts_page;
 mod startup_page;
