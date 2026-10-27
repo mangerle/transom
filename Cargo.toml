@@ -24,6 +24,15 @@ readme = "README.md"
 publish = false
 
 [workspace.dependencies]
+# 依赖重复的处置口径（`cargo tree -d` 会列出上百条，先分类再决定动不动）：
+# - windows-* 的 0.4x/0.5x/0.6x 多版本只对非 Linux 目标生效，是平台库
+#   各自锁定的范围，不做人工收敛；
+# - RustCrypto 家族新旧两代并存：russh 0.64 与 ssh-key 0.7-rc 锁定了 RC 代
+#   （rsa 0.10-rc、ed25519-dalek 3.0、aead 0.6），与工作区直接依赖的稳定代
+#   （chacha20poly1305 0.10 / aead 0.5）跨 major 不可合并；只能随 russh /
+#   ssh-key 转正升级，禁止用 `cargo update` 强行跨 major 统一；
+# - GPUI 生态（gpui-pre/gpui-kit）内部的重复同样只能随上游。
+# 定期维护命令与升级后门禁见 docs/runbook.md 的「依赖升级」一节。
 # syntect 特性带来 gpui-component 的语法高亮后端（语法集由 two_face 随编译内置，
 # 无需注册资产）；编辑远程配置文件需要它，未开启时 EditorState 只会退化为纯文本着色。
 gpui-kit = { version = "0.8.0", features = ["syntect"] }
