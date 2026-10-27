@@ -111,13 +111,15 @@ impl AppShell {
             .and_then(|n| n.to_str())
             .unwrap_or("session.cast")
             .to_string();
-        let display_title = title.unwrap_or_else(|| {
-            if header.title.as_ref().is_some_and(|t| !t.trim().is_empty()) {
-                header.title.clone().unwrap()
-            } else {
-                file_name.clone()
-            }
-        });
+        let display_title = title
+            .or_else(|| {
+                header
+                    .title
+                    .as_deref()
+                    .filter(|t| !t.trim().is_empty())
+                    .map(ToString::to_string)
+            })
+            .unwrap_or(file_name);
 
         let tab_title =
             rust_i18n::t!("recorder.player_tab_title", name = display_title).to_string();

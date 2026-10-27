@@ -320,13 +320,13 @@ impl AppShell {
 
         let center_content: Option<AnyElement> = match expanded_panels.len() {
             0 => None,
-            1 => Some(
+            1 => expanded_panels.pop().map(|pane| {
                 div()
                     .size_full()
                     .overflow_hidden()
-                    .child(expanded_panels.into_iter().next().unwrap())
-                    .into_any_element(),
-            ),
+                    .child(pane)
+                    .into_any_element()
+            }),
             _ => {
                 let mut resizable =
                     h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));

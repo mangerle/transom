@@ -166,7 +166,7 @@ pub fn run(services: UiServices) {
             window.set_app_id(transom_core::paths::APP_ID);
             cx.new(|cx| AppShell::new(window, cx, services.clone(), settings.clone()))
         })
-        .expect("failed to open window");
+        .expect("创建并打开主应用窗口失败");
     });
 }
 

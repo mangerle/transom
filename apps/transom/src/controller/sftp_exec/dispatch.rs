@@ -144,15 +144,16 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         && let Some(ref remote) = session.remote
     {
         (tab_id, remote.clone(), session.sftp_client.clone())
-    } else if let Some((owner_tab, session)) = sessions
-        .iter()
-        .find(|(_, s)| s.connection_id == connection_id && s.remote.is_some())
-    {
-        (
-            *owner_tab,
-            session.remote.clone().unwrap(),
-            session.sftp_client.clone(),
-        )
+    } else if let Some((owner_tab, remote, client)) = sessions.iter().find_map(|(owner_tab, s)| {
+        if s.connection_id == connection_id
+            && let Some(ref remote) = s.remote
+        {
+            Some((*owner_tab, remote.clone(), s.sftp_client.clone()))
+        } else {
+            None
+        }
+    }) {
+        (owner_tab, remote, client)
     } else {
         send_sftp_not_ready(
             &event_tx,
