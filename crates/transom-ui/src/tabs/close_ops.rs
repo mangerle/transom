@@ -15,7 +15,7 @@ impl AppShell {
         let Some(group_index) = self.group_index_for_tab(tab_id) else {
             return false;
         };
-        let group = &self.groups[group_index];
+        let group = &self.workspace.groups[group_index];
         let visible = match self.active_tiling() {
             Some(tiled) => tiled.contains(group.id),
             None => self.active_group_index() == Some(group_index),
@@ -30,28 +30,30 @@ impl AppShell {
     }
 
     pub(crate) fn active_group_index(&self) -> Option<usize> {
-        self.active_tab
+        self.workspace
+            .active_tab
             .and_then(|tab_id| self.group_index_for_tab(tab_id))
     }
 
     /// 从所属标签组的分割树里摘除一个窗格，返回应接管的焦点窗格。
     pub(super) fn detach_pane_from_group(&mut self, tab_id: TabId) -> Option<TabId> {
         let group_index = self.group_index_for_tab(tab_id)?;
-        let was_active = self.active_tab == Some(tab_id);
-        let replacement = match self.groups[group_index].root.remove_leaf(tab_id) {
+        let was_active = self.workspace.active_tab == Some(tab_id);
+        let replacement = match self.workspace.groups[group_index].root.remove_leaf(tab_id) {
             RemoveOutcome::Empty => {
-                self.groups.remove(group_index);
+                self.workspace.groups.remove(group_index);
                 if was_active {
-                    self.groups
+                    self.workspace
+                        .groups
                         .get(group_index.saturating_sub(1))
-                        .or_else(|| self.groups.first())
+                        .or_else(|| self.workspace.groups.first())
                         .map(|group| group.active_pane)
                 } else {
                     None
                 }
             }
             RemoveOutcome::Removed { next_focus } => {
-                let group = &mut self.groups[group_index];
+                let group = &mut self.workspace.groups[group_index];
                 if group.active_pane == tab_id {
                     group.active_pane = next_focus;
                 }
@@ -74,12 +76,13 @@ impl AppShell {
         let Some(target_group) = self.group_index_for_tab(tab_id) else {
             return;
         };
-        let target_group_id = self.groups[target_group].id;
+        let target_group_id = self.workspace.groups[target_group].id;
         let mut keep = vec![target_group_id];
         if let Some(tiled) = self.tiling_of_group(target_group_id) {
             keep.extend(tiled.occupied_groups());
         }
         let others: Vec<GroupId> = self
+            .workspace
             .groups
             .iter()
             .filter(|group| !keep.contains(&group.id))
@@ -94,7 +97,7 @@ impl AppShell {
     pub(crate) fn close_tab(&mut self, tab_id: TabId, window: &mut Window, cx: &mut Context<Self>) {
         let Some(group_id) = self
             .group_index_for_tab(tab_id)
-            .map(|index| self.groups[index].id)
+            .map(|index| self.workspace.groups[index].id)
         else {
             return;
         };
@@ -108,47 +111,57 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.groups.iter().position(|group| group.id == group_id) else {
+        let Some(index) = self
+            .workspace
+            .groups
+            .iter()
+            .position(|group| group.id == group_id)
+        else {
             return;
         };
-        let panes = self.groups[index].pane_ids();
+        let panes = self.workspace.groups[index].pane_ids();
         if self.block_close_for_dirty_editors(&panes, PendingEditorClose::Group(group_id), cx) {
             return;
         }
         let tiled_focus = self
             .tiling_of_group(group_id)
             .and_then(|tiled| tiled.focused_group());
-        self.groups.remove(index);
+        self.workspace.groups.remove(index);
         for tab_id in &panes {
             self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
-        self.tabs.retain(|tab| !panes.contains(&tab.id));
+        self.workspace.tabs.retain(|tab| !panes.contains(&tab.id));
         self.prune_pane_split_states();
         self.prune_editor_panels();
-        self.tab_selection.remove(&group_id);
+        self.workspace.tab_selection.remove(&group_id);
         self.prune_tilings();
 
-        let active_removed = self.active_tab.is_some_and(|id| panes.contains(&id));
+        let active_removed = self
+            .workspace
+            .active_tab
+            .is_some_and(|id| panes.contains(&id));
         if active_removed {
             let tiled_return = self
                 .active_tiling()
                 .and_then(|tiled| tiled.focused_group())
                 .or(tiled_focus)
-                .and_then(|id| self.groups.iter().find(|group| group.id == id))
+                .and_then(|id| self.workspace.groups.iter().find(|group| group.id == id))
                 .map(|group| group.active_pane);
-            self.active_tab = tiled_return.or_else(|| {
-                self.groups
+            self.workspace.active_tab = tiled_return.or_else(|| {
+                self.workspace
+                    .groups
                     .get(index.saturating_sub(1))
-                    .or_else(|| self.groups.first())
+                    .or_else(|| self.workspace.groups.first())
                     .map(|group| group.active_pane)
             });
-            if let Some(active) = self.active_tab {
+            if let Some(active) = self.workspace.active_tab {
                 self.activate_tab(active, window, cx);
             }
         }
         self.prune_tab_selection();
         self.sync_broadcast_targets();
-        if self.groups.is_empty() && self.settings.window.close_window_on_all_tabs_closed {
+        if self.workspace.groups.is_empty() && self.settings.window.close_window_on_all_tabs_closed
+        {
             self.close_app(window, cx);
             return;
         }
@@ -165,8 +178,8 @@ impl AppShell {
         let Some(group_index) = self.group_index_for_tab(tab_id) else {
             return;
         };
-        if self.groups[group_index].pane_count() == 1 {
-            let group_id = self.groups[group_index].id;
+        if self.workspace.groups[group_index].pane_count() == 1 {
+            let group_id = self.workspace.groups[group_index].id;
             self.close_group(group_id, window, cx);
             return;
         }
@@ -179,7 +192,7 @@ impl AppShell {
         }
 
         self.send_command(TerminalCommand::CloseTab { tab_id });
-        self.tabs.retain(|tab| tab.id != tab_id);
+        self.workspace.tabs.retain(|tab| tab.id != tab_id);
         self.prune_editor_panels();
         let replacement = self.detach_pane_from_group(tab_id);
         self.prune_tilings();
@@ -191,24 +204,25 @@ impl AppShell {
 
     /// 连接尚未建立时的静默移除，不向控制器发送关闭命令。
     pub(crate) fn remove_tab(&mut self, tab_id: TabId) {
-        let was_active = self.active_tab == Some(tab_id);
+        let was_active = self.workspace.active_tab == Some(tab_id);
         let group_id = self
             .group_index_for_tab(tab_id)
-            .map(|index| self.groups[index].id);
+            .map(|index| self.workspace.groups[index].id);
         let tiled_focus = group_id
             .and_then(|group| self.tiling_of_group(group))
             .and_then(|tiled| tiled.focused_group());
-        self.tabs.retain(|tab| tab.id != tab_id);
+        self.workspace.tabs.retain(|tab| tab.id != tab_id);
         self.prune_editor_panels();
         let replacement = self.detach_pane_from_group(tab_id);
         self.prune_tilings();
         if was_active {
-            self.active_tab = replacement
+            self.workspace.active_tab = replacement
                 .or_else(|| {
                     self.active_tiling()
                         .and_then(|tiled| tiled.focused_group())
                         .and_then(|group| {
-                            self.groups
+                            self.workspace
+                                .groups
                                 .iter()
                                 .find(|item| item.id == group)
                                 .map(|item| item.active_pane)
@@ -216,13 +230,14 @@ impl AppShell {
                 })
                 .or_else(|| {
                     tiled_focus.and_then(|group| {
-                        self.groups
+                        self.workspace
+                            .groups
                             .iter()
                             .find(|item| item.id == group)
                             .map(|item| item.active_pane)
                     })
                 })
-                .or_else(|| self.groups.first().map(|group| group.active_pane));
+                .or_else(|| self.workspace.groups.first().map(|group| group.active_pane));
         }
         self.prune_tab_selection();
         self.sync_broadcast_targets();

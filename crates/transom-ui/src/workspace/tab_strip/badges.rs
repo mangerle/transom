@@ -89,10 +89,20 @@ pub(super) fn build_tiled_group_badge(
         let Some(group_id) = *group_id else {
             continue;
         };
-        let Some(group) = shell.groups.iter().find(|group| group.id == group_id) else {
+        let Some(group) = shell
+            .workspace
+            .groups
+            .iter()
+            .find(|group| group.id == group_id)
+        else {
             continue;
         };
-        let Some(tab) = shell.tabs.iter().find(|tab| tab.id == group.active_pane) else {
+        let Some(tab) = shell
+            .workspace
+            .tabs
+            .iter()
+            .find(|tab| tab.id == group.active_pane)
+        else {
             continue;
         };
         let (dot_color, _) = crate::workspace::pane_status_indicator(&tab.status, p);

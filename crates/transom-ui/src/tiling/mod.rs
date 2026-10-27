@@ -2,6 +2,7 @@
 
 mod layout;
 mod shell;
+mod strip;
 mod tabs;
 mod types;
 

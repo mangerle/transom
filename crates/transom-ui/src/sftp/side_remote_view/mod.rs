@@ -35,7 +35,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return div().into_any_element();
         };
         let Some(panel) = tab.sftp.as_ref() else {

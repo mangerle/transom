@@ -32,7 +32,7 @@ impl AppShell {
         event: ZmodemEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
         match event {
@@ -122,10 +122,11 @@ impl AppShell {
         if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
             return;
         }
-        let Some(tab_id) = self.active_tab else {
+        let Some(tab_id) = self.workspace.active_tab else {
             return;
         };
         if self
+            .workspace
             .tabs
             .iter()
             .any(|tab| tab.id == tab_id && tab.zmodem.is_some())
@@ -143,6 +144,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let state = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)

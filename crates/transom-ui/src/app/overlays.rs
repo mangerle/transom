@@ -21,7 +21,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.active_tab {
+        if let Some(tab_id) = self.workspace.active_tab {
             self.close_tab(tab_id, window, cx);
         }
     }
@@ -50,7 +50,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.active_tab {
+        if let Some(tab_id) = self.workspace.active_tab {
             self.reconnect_tab(tab_id, window, cx);
         }
     }
@@ -79,8 +79,9 @@ impl AppShell {
         }
         if self.immersive
             && let Some(focus_handle) = self
+                .workspace
                 .active_tab
-                .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+                .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
                 .and_then(|tab| tab.terminal.as_ref())
                 .map(|terminal| terminal.read(cx).focus_handle().clone())
         {

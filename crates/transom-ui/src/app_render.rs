@@ -40,12 +40,14 @@ impl Render for AppShell {
         }
         // 状态存在不等于面板展开：拖拽上传留下的隐藏状态不该把面板列撑出来。
         let show_sftp = self
+            .workspace
             .active_tab
-            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open));
         let sftp_panel = self
+            .workspace
             .active_tab
-            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
             .and_then(|tab| tab.sftp.as_ref());
         let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local_only);
         let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
@@ -55,8 +57,9 @@ impl Render for AppShell {
         let sftp_collapsed_width = (collapsed_count as f32 * 32.0).max(32.0);
 
         let show_forwards = self
+            .workspace
             .active_tab
-            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
             .is_some_and(|tab| tab.forwards_panel.is_some());
         let (sftp_width, sftp_min_width) = if sftp_all_collapsed {
             (sftp_collapsed_width, sftp_collapsed_width)

@@ -27,8 +27,8 @@ impl AppShell {
             .icon(IconName::X)
             .tooltip("关闭面板")
             .on_click(cx.listener(|this, _, _, cx| {
-                if let Some(tab_id) = this.active_tab
-                    && let Some(tab) = this.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                if let Some(tab_id) = this.workspace.active_tab
+                    && let Some(tab) = this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
                 {
                     tab.sftp = None;
                 }

@@ -17,6 +17,7 @@ impl AppShell {
     ) {
         let mut needs_cancel = false;
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -49,6 +50,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -75,6 +77,7 @@ impl AppShell {
         log::debug!("取消传输任务，窗格: {tab_id}，任务: {op_id}");
         let mut should_cancel = false;
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -107,6 +110,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -127,6 +131,7 @@ impl AppShell {
     ) {
         let mut needs_cancel = false;
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)

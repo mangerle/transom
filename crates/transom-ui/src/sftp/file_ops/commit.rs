@@ -39,6 +39,7 @@ impl AppShell {
         // 整条分支在 match 之前完成，避免部分移动的模态再被改写。
         if matches!(modal.target, SftpInputTarget::RemoteEditorNewFile) {
             let existing = self
+                .workspace
                 .tabs
                 .iter()
                 .find(|t| t.id == tab_id)
@@ -74,7 +75,7 @@ impl AppShell {
 
         match modal.target {
             SftpInputTarget::RemoteMkdir => {
-                let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
+                let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
                     return;
                 };
                 let Some(panel) = tab.sftp.as_ref() else {
@@ -96,7 +97,7 @@ impl AppShell {
                 self.send_sftp_op(tab_id, op, cx);
             }
             SftpInputTarget::RemoteSymlink { target } => {
-                let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
+                let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
                     return;
                 };
                 let Some(panel) = tab.sftp.as_ref() else {
@@ -110,6 +111,7 @@ impl AppShell {
             }
             SftpInputTarget::LocalMkdir => {
                 if let Some(panel) = self
+                    .workspace
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)
@@ -127,6 +129,7 @@ impl AppShell {
             }
             SftpInputTarget::LocalRename { old_path } => {
                 if let Some(panel) = self
+                    .workspace
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)
@@ -168,6 +171,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)

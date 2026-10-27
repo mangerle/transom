@@ -114,6 +114,7 @@ pub(super) fn render_side_remote_header(
         .tooltip(rust_i18n::t!("sftp.download").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
             let (selected_paths, local_path) = this
+                .workspace
                 .tabs
                 .iter()
                 .find(|t| t.id == tab_id)

@@ -121,20 +121,6 @@ pub struct AppShell {
     pub(crate) _event_task: Task<()>,
 }
 
-impl std::ops::Deref for AppShell {
-    type Target = WorkspaceState;
-
-    fn deref(&self) -> &Self::Target {
-        &self.workspace
-    }
-}
-
-impl std::ops::DerefMut for AppShell {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.workspace
-    }
-}
-
 impl AppShell {
     /// 向控制器提交命令的统一入口：非阻塞 try_send，队列满时快速失败。
     pub(crate) fn send_command(&mut self, command: impl Into<AppCommand>) -> bool {
@@ -408,9 +394,13 @@ impl AppShell {
                         }
                     }
                     if let Some(group) = focus
-                        && let Some(index) = self.groups.iter().position(|item| item.id == group)
+                        && let Some(index) = self
+                            .workspace
+                            .groups
+                            .iter()
+                            .position(|item| item.id == group)
                     {
-                        let pane = self.groups[index].active_pane;
+                        let pane = self.workspace.groups[index].active_pane;
                         self.activate_tab(pane, window, cx);
                     }
                 } else if !self.settings.window.previous_tab_sessions.is_empty() {

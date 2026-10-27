@@ -16,7 +16,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(active_id) = self.active_tab else {
+        let Some(active_id) = self.workspace.active_tab else {
             return;
         };
         self.toggle_recording(active_id, window, cx);
@@ -29,7 +29,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
             return;
         };
         let Some(terminal) = tab.terminal.as_ref() else {
@@ -155,7 +155,7 @@ impl AppShell {
         tab.player = Some(player);
 
         self.create_group(tab_id, session_id);
-        self.tabs.push(tab);
+        self.workspace.tabs.push(tab);
         self.activate_tab(tab_id, window, cx);
         cx.notify();
     }
@@ -219,7 +219,7 @@ impl AppShell {
             return;
         }
 
-        let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return;
         };
         let Some(terminal) = tab.terminal.clone() else {

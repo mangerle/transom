@@ -14,15 +14,16 @@ use crate::workspace::pane_status_indicator;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Selectable;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use std::collections::HashSet;
-use transom_core::{Connection, GroupId, TabId};
+mod rows;
+
+use rows::{BroadcastTargetRow, connection_icon, render_target_rows};
+use transom_core::{GroupId, TabId};
 
 /// 广播条的运行期状态。
 ///
@@ -37,15 +38,6 @@ pub(crate) struct BroadcastBarState {
     pub(crate) textarea: Entity<TextareaState>,
     pub(crate) targets: HashSet<TabId>,
     pub(crate) targets_scope: Vec<GroupId>,
-}
-
-/// 目标选择列表里的一行快照；下拉内容点开时才构建，闭包内不再借用 `AppShell`。
-struct BroadcastTargetRow {
-    tab_id: TabId,
-    title: String,
-    dot_color: Hsla,
-    icon: IconName,
-    selected: bool,
 }
 
 impl AppShell {
@@ -77,7 +69,7 @@ impl AppShell {
     fn close_broadcast_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.broadcast.open = false;
         self.broadcast.targets_open = false;
-        if let Some(active) = self.active_tab {
+        if let Some(active) = self.workspace.active_tab {
             self.activate_tab(active, window, cx);
         } else {
             cx.notify();
@@ -134,7 +126,12 @@ impl AppShell {
         let allowed: HashSet<TabId> = self
             .current_visual_groups()
             .into_iter()
-            .filter_map(|group_id| self.groups.iter().find(|group| group.id == group_id))
+            .filter_map(|group_id| {
+                self.workspace
+                    .groups
+                    .iter()
+                    .find(|group| group.id == group_id)
+            })
             .flat_map(|group| group.pane_ids())
             .collect();
         self.broadcast.targets.retain(|id| allowed.contains(id));
@@ -148,7 +145,7 @@ impl AppShell {
         let multiline = self.broadcast.multiline;
         let mut failed = 0usize;
         for tab_id in &targets {
-            let Some(tab) = self.tabs.iter().find(|tab| tab.id == *tab_id) else {
+            let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == *tab_id) else {
                 failed += 1;
                 continue;
             };
@@ -218,7 +215,7 @@ impl AppShell {
         let Some(active_index) = self.active_group_index() else {
             return Vec::new();
         };
-        let active_group = self.groups[active_index].id;
+        let active_group = self.workspace.groups[active_index].id;
         if let Some(tiled) = self.active_tiling() {
             return tiled.occupied_groups();
         }
@@ -247,13 +244,19 @@ impl AppShell {
 
     /// 按给定的视觉标签作用域收集默认目标：只取已有终端的窗格。
     fn default_broadcast_targets_for(&self, groups: &[GroupId]) -> HashSet<TabId> {
-        let mut targets = HashSet::with_capacity(self.tabs.len());
+        let mut targets = HashSet::with_capacity(self.workspace.tabs.len());
         for group_id in groups {
-            let Some(group) = self.groups.iter().find(|group| group.id == *group_id) else {
+            let Some(group) = self
+                .workspace
+                .groups
+                .iter()
+                .find(|group| group.id == *group_id)
+            else {
                 continue;
             };
             for pane_id in group.pane_ids() {
                 if self
+                    .workspace
                     .tabs
                     .iter()
                     .any(|tab| tab.id == pane_id && tab.terminal.is_some())
@@ -268,15 +271,21 @@ impl AppShell {
     /// 目标选择列表：只列当前视觉标签内的窗格，不跨标签。
     fn broadcast_target_rows(&self, p: &Palette) -> Vec<BroadcastTargetRow> {
         let groups = self.current_visual_groups();
-        let mut rows = Vec::with_capacity(self.tabs.len());
+        let mut rows = Vec::with_capacity(self.workspace.tabs.len());
         for group_id in groups {
-            let Some(group) = self.groups.iter().find(|group| group.id == group_id) else {
+            let Some(group) = self
+                .workspace
+                .groups
+                .iter()
+                .find(|group| group.id == group_id)
+            else {
                 continue;
             };
             let pane_ids = group.pane_ids();
             let multi = pane_ids.len() > 1;
             for (position, pane_id) in pane_ids.iter().enumerate() {
                 let Some(tab) = self
+                    .workspace
                     .tabs
                     .iter()
                     .find(|tab| tab.id == *pane_id && tab.terminal.is_some())
@@ -432,64 +441,5 @@ impl AppShell {
                 .child(toggle)
                 .into_any_element()
         }
-    }
-}
-
-/// 目标下拉列表：复选框常驻，点选后不关闭，方便连续多选。
-fn render_target_rows(
-    app: &Entity<AppShell>,
-    rows: Vec<BroadcastTargetRow>,
-    p: &Palette,
-) -> AnyElement {
-    let mut list = v_flex().min_w(px(240.0)).gap_1();
-    if rows.is_empty() {
-        list = list.child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("broadcast.no_targets").to_string()),
-        );
-    }
-    for row in rows {
-        let tab_id = row.tab_id;
-        let app = app.clone();
-        list = list.child(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .child(
-                    div()
-                        .size(px(7.0))
-                        .rounded_full()
-                        .flex_none()
-                        .bg(row.dot_color),
-                )
-                .child(Icon::new(row.icon).xsmall().text_color(p.muted_foreground))
-                .child(
-                    Checkbox::new(ElementId::Name(format!("broadcast-target-{tab_id}").into()))
-                        .small()
-                        .checked(row.selected)
-                        .label(row.title)
-                        .on_click(move |&checked, _window, cx| {
-                            app.update(cx, |this, cx| {
-                                this.set_broadcast_target(tab_id, checked, cx);
-                            });
-                        }),
-                ),
-        );
-    }
-    div()
-        .max_h(px(320.0))
-        .overflow_y_scrollbar()
-        .child(list)
-        .into_any_element()
-}
-
-fn connection_icon(connection: &Connection) -> IconName {
-    match connection {
-        Connection::Local(_) => IconName::Terminal,
-        Connection::Serial(_) => IconName::Cable,
-        Connection::Telnet(_) => IconName::Network,
-        _ => IconName::Server,
     }
 }

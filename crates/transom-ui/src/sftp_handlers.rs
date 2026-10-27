@@ -30,7 +30,7 @@ impl AppShell {
             return true;
         };
         let mut update_input = None;
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && let Some(panel) = tab.sftp.as_mut()
         {
             if tab.connection_id == Some(connection_id) {
@@ -110,7 +110,7 @@ impl AppShell {
             // 分屏里两个窗格可以同时显示各自的浮层。
             self.note_drop_overlay_progress(tab_id, cx);
         }
-        if applied && self.active_tab == Some(tab_id) && !self.immersive {
+        if applied && self.workspace.active_tab == Some(tab_id) && !self.immersive {
             cx.notify();
         }
         false

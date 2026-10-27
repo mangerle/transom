@@ -22,6 +22,7 @@ use transom_core::{
 impl AppShell {
     pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let paths = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -44,7 +45,7 @@ impl AppShell {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         }
         let verify = self.settings.sftp.verify_after_transfer;
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
         let Some(panel) = tab.sftp.as_mut() else {
@@ -66,6 +67,7 @@ impl AppShell {
 
     fn set_sftp_panel_error(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -78,7 +80,7 @@ impl AppShell {
 
     pub(crate) fn sftp_queue_download(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let verify = self.settings.sftp.verify_after_transfer;
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_mut() else {
@@ -150,7 +152,7 @@ impl AppShell {
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let filter = TransferFilter::from_text(&self.settings.sftp.transfer_filter);
         let max_concurrent = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
         let tab_conn_id = tab.connection_id;
@@ -210,6 +212,7 @@ impl AppShell {
 
     pub(crate) fn sftp_queue_clear_done(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -231,7 +234,7 @@ impl AppShell {
             self.error = Some(localized_error(&error));
         }
         self.status = Some(format!("并发传输数: {next}"));
-        if let Some(tab_id) = self.active_tab {
+        if let Some(tab_id) = self.workspace.active_tab {
             self.process_sftp_queue(tab_id, cx);
         }
         cx.notify();
@@ -241,6 +244,7 @@ impl AppShell {
     pub(crate) fn sftp_retry_all_failed(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let mut retried_count: usize = 0;
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -272,6 +276,7 @@ impl AppShell {
         log::debug!("暂停整列传输任务，窗格: {tab_id}");
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -304,6 +309,7 @@ impl AppShell {
     pub(crate) fn sftp_resume_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let mut resumed = 0u32;
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -331,6 +337,7 @@ impl AppShell {
         log::debug!("取消整列传输任务，窗格: {tab_id}");
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)

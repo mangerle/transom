@@ -33,7 +33,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_mut() else {
@@ -213,7 +213,8 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
     ) -> Option<&mut super::SftpPanelState> {
-        self.tabs
+        self.workspace
+            .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp.as_mut())

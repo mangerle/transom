@@ -73,6 +73,7 @@ pub(crate) fn build_remote_context_menu(
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this
+                            .workspace
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
@@ -114,6 +115,7 @@ pub(crate) fn build_remote_context_menu(
                     cx.write_to_clipboard(ClipboardItem::new_string(p_cp.clone()));
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this
+                            .workspace
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
@@ -134,6 +136,7 @@ pub(crate) fn build_remote_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this
+                            .workspace
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
@@ -166,6 +169,7 @@ pub(crate) fn build_remote_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this
+                            .workspace
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
@@ -198,6 +202,7 @@ pub(crate) fn build_remote_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this
+                            .workspace
                             .tabs
                             .iter_mut()
                             .find(|t| t.id == tab_id)
@@ -215,6 +220,7 @@ pub(crate) fn build_remote_context_menu(
         move |_, _, cx| {
             app.update(cx, |this, cx| {
                 if let Some(panel) = this
+                    .workspace
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)

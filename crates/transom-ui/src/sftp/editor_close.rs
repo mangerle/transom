@@ -106,6 +106,7 @@ impl AppShell {
     fn tabs_for_pending_close(&self, intent: &PendingEditorClose) -> Vec<TabId> {
         match intent {
             PendingEditorClose::Group(group_id) => self
+                .workspace
                 .groups
                 .iter()
                 .find(|group| group.id == *group_id)
@@ -113,6 +114,7 @@ impl AppShell {
                 .unwrap_or_default(),
             PendingEditorClose::Pane(tab_id) => Vec::from([*tab_id]),
             PendingEditorClose::Session(session_id) => self
+                .workspace
                 .tabs
                 .iter()
                 .filter(|tab| tab.session_id == *session_id)
@@ -120,7 +122,12 @@ impl AppShell {
                 .collect(),
             PendingEditorClose::Tiling(groups) => groups
                 .iter()
-                .filter_map(|group_id| self.groups.iter().find(|group| group.id == *group_id))
+                .filter_map(|group_id| {
+                    self.workspace
+                        .groups
+                        .iter()
+                        .find(|group| group.id == *group_id)
+                })
                 .flat_map(|group| group.pane_ids())
                 .collect(),
         }
@@ -135,7 +142,7 @@ impl AppShell {
         if self.editor_panels.is_empty() {
             return;
         }
-        let alive: Vec<TabId> = self.tabs.iter().map(|tab| tab.id).collect();
+        let alive: Vec<TabId> = self.workspace.tabs.iter().map(|tab| tab.id).collect();
         self.editor_panels
             .retain(|item| alive.contains(&item.tab_id));
     }

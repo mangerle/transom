@@ -11,6 +11,7 @@ impl AppShell {
         // 会话下任一标签存在未保存的编辑面板时，删除会被闸门挂起，
         // 待用户处理完毕后续行（同关闭标签组的保护水位）。
         let removed_tabs: Vec<TabId> = self
+            .workspace
             .tabs
             .iter()
             .filter(|tab| tab.session_id == session_id)
@@ -30,7 +31,9 @@ impl AppShell {
         for tab_id in &removed_tabs {
             self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
-        self.tabs.retain(|tab| tab.session_id != session_id);
+        self.workspace
+            .tabs
+            .retain(|tab| tab.session_id != session_id);
         self.prune_editor_panels();
         let tiled_focus = self.active_tiling().and_then(|tiled| tiled.focused_group());
         let mut replacement = None;
@@ -41,15 +44,17 @@ impl AppShell {
         }
         self.prune_tilings();
         if self
+            .workspace
             .active_tab
-            .is_none_or(|id| !self.tabs.iter().any(|tab| tab.id == id))
+            .is_none_or(|id| !self.workspace.tabs.iter().any(|tab| tab.id == id))
         {
-            self.active_tab = replacement
+            self.workspace.active_tab = replacement
                 .or_else(|| {
                     self.active_tiling()
                         .and_then(|tiled| tiled.focused_group())
                         .and_then(|group| {
-                            self.groups
+                            self.workspace
+                                .groups
                                 .iter()
                                 .find(|item| item.id == group)
                                 .map(|item| item.active_pane)
@@ -57,13 +62,14 @@ impl AppShell {
                 })
                 .or_else(|| {
                     tiled_focus.and_then(|group| {
-                        self.groups
+                        self.workspace
+                            .groups
                             .iter()
                             .find(|item| item.id == group)
                             .map(|item| item.active_pane)
                     })
                 })
-                .or_else(|| self.groups.first().map(|group| group.active_pane));
+                .or_else(|| self.workspace.groups.first().map(|group| group.active_pane));
         }
         self.prune_tab_selection();
         self.sync_broadcast_targets();

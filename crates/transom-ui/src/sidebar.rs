@@ -41,8 +41,9 @@ impl AppShell {
     }
 
     pub(crate) fn active_session_id(&self) -> Option<SessionId> {
-        self.active_tab.and_then(|tab_id| {
-            self.tabs
+        self.workspace.active_tab.and_then(|tab_id| {
+            self.workspace
+                .tabs
                 .iter()
                 .find(|tab| tab.id == tab_id)
                 .map(|tab| tab.session_id)

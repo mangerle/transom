@@ -22,8 +22,9 @@ impl AppShell {
         window: &Window,
         p: &Palette,
     ) -> Option<AnyElement> {
-        let tab_id = self.active_tab?;
+        let tab_id = self.workspace.active_tab?;
         let preview = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)?

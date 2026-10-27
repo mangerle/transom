@@ -23,10 +23,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(tab_id) = self.active_tab else {
+        let Some(tab_id) = self.workspace.active_tab else {
             return div().into_any_element();
         };
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return div().into_any_element();
         };
         let tab_conn_id = tab.connection_id;
@@ -295,7 +295,9 @@ impl AppShell {
                         .icon(IconName::X)
                         .tooltip(rust_i18n::t!("app.close").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(tab) = this.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+                            if let Some(tab) =
+                                this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                            {
                                 tab.sftp = None;
                             }
                             cx.notify();

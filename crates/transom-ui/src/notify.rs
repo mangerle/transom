@@ -22,7 +22,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let settings = &self.settings.window;
-        let pane_active = self.active_tab == Some(tab_id);
+        let pane_active = self.workspace.active_tab == Some(tab_id);
         if !should_notify(
             settings.desktop_notifications,
             duration_ms,
@@ -33,6 +33,7 @@ impl AppShell {
             return;
         }
         let pane_name = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)

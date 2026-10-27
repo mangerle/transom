@@ -217,8 +217,9 @@ impl AppShell {
             }
         } else if id == ActivityItemId::Sftp
             && self
+                .workspace
                 .active_tab
-                .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+                .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
         {
             rust_i18n::t!("sftp.local_files_title").to_string()
@@ -231,12 +232,14 @@ impl AppShell {
         match id {
             ActivityItemId::Sessions => self.sidebar_visible,
             ActivityItemId::Forwards => self
+                .workspace
                 .active_tab
-                .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+                .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| tab.forwards_panel.is_some()),
             ActivityItemId::Sftp => self
+                .workspace
                 .active_tab
-                .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+                .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
                 .is_some_and(|tab| tab.sftp.as_ref().is_some_and(|panel| panel.open)),
             ActivityItemId::Monitor => self.monitor.open,
             ActivityItemId::Keys => self.settings_modal.key_wizard.is_some(),
@@ -249,8 +252,9 @@ impl AppShell {
             return false;
         }
         let Some(tab) = self
+            .workspace
             .active_tab
-            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
         else {
             return true;
         };

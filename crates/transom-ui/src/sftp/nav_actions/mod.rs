@@ -21,7 +21,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -46,7 +46,7 @@ impl AppShell {
         op: SftpOperation,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -72,6 +72,7 @@ impl AppShell {
 
     pub(crate) fn sftp_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(path) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -91,6 +92,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let sync_local_target = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -135,6 +137,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((path, sync_local_parent)) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -159,6 +162,7 @@ impl AppShell {
 
     pub(crate) fn sftp_enter_path(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(path) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -179,6 +183,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
@@ -215,13 +220,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.active_tab {
+        if let Some(tab_id) = self.workspace.active_tab {
             self.sftp_toggle_filter(tab_id, window, cx);
         }
     }
 
     pub(crate) fn sftp_toggle_hidden(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
@@ -243,7 +249,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.active_tab {
+        if let Some(tab_id) = self.workspace.active_tab {
             self.sftp_toggle_hidden(tab_id, cx);
         }
     }
@@ -254,7 +260,7 @@ impl AppShell {
         title: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_mut() else {
@@ -280,6 +286,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
@@ -298,6 +305,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)
@@ -313,6 +321,7 @@ impl AppShell {
 
     pub(crate) fn sftp_stop_resize_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|t| t.id == tab_id)

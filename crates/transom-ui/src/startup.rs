@@ -28,6 +28,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(commands) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))
@@ -42,7 +43,7 @@ impl AppShell {
             for command in commands {
                 let delivered =
                     this.update_in(cx, |this, _window, cx| {
-                        let Some(tab) = this.tabs.iter().find(|tab| {
+                        let Some(tab) = this.workspace.tabs.iter().find(|tab| {
                             tab.id == tab_id && tab.connection_id == Some(connection_id)
                         }) else {
                             return false;
@@ -63,6 +64,7 @@ impl AppShell {
         });
 
         if let Some(tab) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))

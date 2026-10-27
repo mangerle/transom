@@ -98,7 +98,7 @@ fn tab_reorder_half(
     half.on_drop(move |drag: &TabDrag, window, cx| {
         let dragged = drag.0;
         app.update(cx, |this, cx| {
-            reorder_groups(&mut this.groups, dragged, anchor, !left);
+            reorder_groups(&mut this.workspace.groups, dragged, anchor, !left);
             cx.notify();
             window.refresh();
         });

@@ -53,7 +53,12 @@ impl AppShell {
         match node {
             TilingNode::Slot(slot) => match tiled.group_at(*slot) {
                 Some(group) => {
-                    let Some(index) = self.groups.iter().position(|item| item.id == group) else {
+                    let Some(index) = self
+                        .workspace
+                        .groups
+                        .iter()
+                        .position(|item| item.id == group)
+                    else {
                         return div().into_any_element();
                     };
                     self.render_tiled_zone(index, group, *slot == tiled.focused, window, cx, p)
@@ -92,26 +97,27 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let (pane_id, serial) = {
-            let group = &self.groups[group_index];
+            let group = &self.workspace.groups[group_index];
             (group.active_pane, group.serial)
         };
-        let (title, dot_color, tab_icon) = match self.tabs.iter().find(|tab| tab.id == pane_id) {
-            Some(tab) => {
-                let (dot_color, _) = super::pane_status_indicator(&tab.status, p);
-                let mut title = tab.display_name();
-                if serial > 0 {
-                    title = format!("{title} #{serial}");
+        let (title, dot_color, tab_icon) =
+            match self.workspace.tabs.iter().find(|tab| tab.id == pane_id) {
+                Some(tab) => {
+                    let (dot_color, _) = super::pane_status_indicator(&tab.status, p);
+                    let mut title = tab.display_name();
+                    if serial > 0 {
+                        title = format!("{title} #{serial}");
+                    }
+                    let tab_icon = match &tab.session.connection {
+                        Connection::Local(_) => IconName::Terminal,
+                        Connection::Serial(_) => IconName::Cable,
+                        Connection::Telnet(_) => IconName::Network,
+                        _ => IconName::Server,
+                    };
+                    (title, dot_color, tab_icon)
                 }
-                let tab_icon = match &tab.session.connection {
-                    Connection::Local(_) => IconName::Terminal,
-                    Connection::Serial(_) => IconName::Cable,
-                    Connection::Telnet(_) => IconName::Network,
-                    _ => IconName::Server,
-                };
-                (title, dot_color, tab_icon)
-            }
-            None => (String::new(), p.muted_foreground, IconName::Terminal),
-        };
+                None => (String::new(), p.muted_foreground, IconName::Terminal),
+            };
 
         let header = h_flex()
             .id(ElementId::Name(
@@ -198,10 +204,20 @@ impl AppShell {
     ) -> AnyElement {
         let mut rows: Vec<(GroupId, String)> = Vec::new();
         for group_id in self.available_tiling_groups() {
-            let Some(group) = self.groups.iter().find(|group| group.id == group_id) else {
+            let Some(group) = self
+                .workspace
+                .groups
+                .iter()
+                .find(|group| group.id == group_id)
+            else {
                 continue;
             };
-            let Some(tab) = self.tabs.iter().find(|tab| tab.id == group.active_pane) else {
+            let Some(tab) = self
+                .workspace
+                .tabs
+                .iter()
+                .find(|tab| tab.id == group.active_pane)
+            else {
                 continue;
             };
             let mut title = tab.display_name();

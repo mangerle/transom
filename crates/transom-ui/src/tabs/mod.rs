@@ -16,6 +16,7 @@ impl AppShell {
     /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
     pub(crate) fn create_group(&mut self, tab_id: TabId, session_id: SessionId) -> GroupId {
         let serial = self
+            .workspace
             .groups
             .iter()
             .filter(|group| group.session_id == session_id)
@@ -24,7 +25,7 @@ impl AppShell {
             .map_or(0, |max| max + 1);
         let group = TabGroup::new(tab_id, session_id, serial);
         let id = group.id;
-        self.groups.push(group);
+        self.workspace.groups.push(group);
         id
     }
 
@@ -36,10 +37,15 @@ impl AppShell {
         base_title: &str,
     ) -> GroupId {
         let serial = self
+            .workspace
             .groups
             .iter()
             .filter_map(|group| {
-                let tab = self.tabs.iter().find(|tab| tab.id == group.active_pane)?;
+                let tab = self
+                    .workspace
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.id == group.active_pane)?;
                 if !matches!(tab.session.connection, Connection::Local(_)) {
                     return None;
                 }
@@ -48,7 +54,12 @@ impl AppShell {
             .max()
             .map_or(0, |max| max + 1);
         let id = self.create_group(tab_id, session_id);
-        if let Some(group) = self.groups.iter_mut().find(|group| group.id == id) {
+        if let Some(group) = self
+            .workspace
+            .groups
+            .iter_mut()
+            .find(|group| group.id == id)
+        {
             group.serial = serial;
         }
         id
@@ -63,7 +74,7 @@ impl AppShell {
     ) -> Option<GroupId> {
         let pane_count = LayoutNode::saved_pane_count(&saved.layout).unwrap_or(1);
 
-        let groups_before = self.groups.len();
+        let groups_before = self.workspace.groups.len();
         if saved.session == "local" {
             self.open_local_terminal(window, cx);
         } else {
@@ -75,15 +86,15 @@ impl AppShell {
                 .cloned()?;
             self.connect_session(session.id, window, cx);
         }
-        if self.groups.len() <= groups_before {
+        if self.workspace.groups.len() <= groups_before {
             return None;
         }
-        let group_index = self.groups.len() - 1;
-        let group_id = self.groups[group_index].id;
+        let group_index = self.workspace.groups.len() - 1;
+        let group_id = self.workspace.groups[group_index].id;
         if pane_count < 2 {
             return Some(group_id);
         }
-        let first = self.groups[group_index].active_pane;
+        let first = self.workspace.groups[group_index].active_pane;
         let Some(session) = self.session_for_tab(first) else {
             return Some(group_id);
         };
@@ -95,9 +106,10 @@ impl AppShell {
         let Some(root) = LayoutNode::from_saved(&saved.layout, &mut ids) else {
             return Some(group_id);
         };
-        self.groups[group_index].root = root;
+        self.workspace.groups[group_index].root = root;
         for pane_id in extra {
-            self.tabs
+            self.workspace
+                .tabs
                 .push(TerminalTab::pending(pane_id, session.clone()));
             self.start_connection(pane_id, session.clone(), cx);
         }
@@ -107,15 +119,19 @@ impl AppShell {
 
     /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
     pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
-        let index = self.tabs.iter().position(|tab| tab.id == tab_id)?;
-        let session_id = self.tabs[index].session_id;
+        let index = self
+            .workspace
+            .tabs
+            .iter()
+            .position(|tab| tab.id == tab_id)?;
+        let session_id = self.workspace.tabs[index].session_id;
         Some(
             self.catalog
                 .sessions
                 .iter()
                 .find(|session| session.id == session_id)
                 .cloned()
-                .unwrap_or_else(|| self.tabs[index].session.clone()),
+                .unwrap_or_else(|| self.workspace.tabs[index].session.clone()),
         )
     }
 
@@ -134,7 +150,10 @@ impl AppShell {
     }
 
     pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
-        self.groups.iter().position(|group| group.contains(tab_id))
+        self.workspace
+            .groups
+            .iter()
+            .position(|group| group.contains(tab_id))
     }
 
     pub(crate) fn reconnect_tab(
@@ -143,13 +162,13 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(session) = self.session_for_tab(tab_id) else {
             return;
         };
-        let tab = &mut self.tabs[index];
+        let tab = &mut self.workspace.tabs[index];
         tab.terminal = None;
         tab.sftp = None;
         tab._subscription = None;
@@ -158,9 +177,9 @@ impl AppShell {
         tab.network_traffic = None;
         tab.status = TabStatus::Connecting;
         tab.title = session.name.clone();
-        self.active_tab = Some(tab_id);
+        self.workspace.active_tab = Some(tab_id);
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
-            self.groups[group_index].active_pane = tab_id;
+            self.workspace.groups[group_index].active_pane = tab_id;
         }
         self.present_active_group();
         self.start_connection(tab_id, session, cx);
@@ -172,16 +191,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(previous) = self.active_tab
+        if let Some(previous) = self.workspace.active_tab
             && previous != tab_id
         {
             self.dismiss_sftp_hover_preview(previous, cx);
         }
         let group_id = self
             .group_index_for_tab(tab_id)
-            .map(|index| self.groups[index].id);
+            .map(|index| self.workspace.groups[index].id);
         if let Some(group_id) = group_id
             && let Some(tiled) = self
+                .workspace
                 .tiled_sets
                 .iter_mut()
                 .find(|tiled| tiled.contains(group_id))
@@ -189,11 +209,12 @@ impl AppShell {
         {
             tiled.focused = slot;
         }
-        self.active_tab = Some(tab_id);
+        self.workspace.active_tab = Some(tab_id);
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
-            self.groups[group_index].active_pane = tab_id;
+            self.workspace.groups[group_index].active_pane = tab_id;
         }
         if let Some(terminal) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)

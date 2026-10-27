@@ -347,6 +347,7 @@ impl AppShell {
             // 实时下发最新触发器规则给所有运行中的终端窗格
             let triggers = self.settings.triggers.clone();
             let terminals: Vec<Entity<TerminalView>> = self
+                .workspace
                 .tabs
                 .iter()
                 .filter_map(|tab| tab.terminal.clone())

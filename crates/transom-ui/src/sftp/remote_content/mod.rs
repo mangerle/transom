@@ -59,6 +59,7 @@ impl AppShell {
                 remote_sizes,
                 move |this, range, _window, cx| {
                     let (remote_selection, remote_primary) = this
+                        .workspace
                         .tabs
                         .iter()
                         .find(|tab| tab.id == tab_id)
@@ -123,6 +124,7 @@ impl AppShell {
                                     cx.listener(move |this, event: &MouseDownEvent, window, cx| {
                                         this.dismiss_sftp_hover_preview(tab_id, cx);
                                         if let Some(panel) = this
+                                            .workspace
                                             .tabs
                                             .iter()
                                             .find(|tab| tab.id == tab_id)
@@ -154,6 +156,7 @@ impl AppShell {
                                             return;
                                         }
                                         let Some(panel) = this
+                                            .workspace
                                             .tabs
                                             .iter_mut()
                                             .find(|tab| tab.id == tab_id)
@@ -207,6 +210,7 @@ impl AppShell {
                                     cx.listener(move |this, _, window, cx| {
                                         this.dismiss_sftp_hover_preview(tab_id, cx);
                                         if let Some(panel) = this
+                                            .workspace
                                             .tabs
                                             .iter_mut()
                                             .find(|tab| tab.id == tab_id)

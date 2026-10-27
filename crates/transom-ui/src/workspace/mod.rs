@@ -25,8 +25,9 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let disconnected_tab = self.active_tab.and_then(|tab_id| {
-            self.tabs
+        let disconnected_tab = self.workspace.active_tab.and_then(|tab_id| {
+            self.workspace
+                .tabs
                 .iter()
                 .find(|tab| tab.id == tab_id && matches!(&tab.status, TabStatus::Disconnected))
                 .map(|tab| tab.id)
@@ -91,8 +92,8 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let tab_id = self.tabs[index].id;
-        let status = &self.tabs[index].status;
+        let tab_id = self.workspace.tabs[index].id;
+        let status = &self.workspace.tabs[index].status;
         let (label, detail) = match status {
             TabStatus::Connecting => (
                 rust_i18n::t!("tab.connecting").to_string(),

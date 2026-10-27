@@ -1,7 +1,7 @@
 //! tiling 模块单元测试。
 
 use super::layout::{best_grid, build_tiling_grid, expand_grid, tiling_layout_options};
-use super::shell::build_strip_entries;
+use super::strip::build_strip_entries;
 use super::tabs::TiledTabs;
 use super::types::{MAX_TILING_SLOTS, StripEntry, TilingNode};
 use crate::pane_tree::PaneDirection;

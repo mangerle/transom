@@ -18,10 +18,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(tab_id) = self.active_tab else {
+        let Some(tab_id) = self.workspace.active_tab else {
             return div().into_any_element();
         };
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return div().into_any_element();
         };
         let Some(panel) = tab.forwards_panel.as_ref() else {
@@ -182,7 +182,7 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.local").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.active_tab
+            if let Some(tab_id) = this.workspace.active_tab
                 && let Some(panel) = this.forward_panel_mut(tab_id)
             {
                 panel.kind = ForwardKindChoice::Local;
@@ -200,7 +200,7 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.remote").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.active_tab
+            if let Some(tab_id) = this.workspace.active_tab
                 && let Some(panel) = this.forward_panel_mut(tab_id)
             {
                 panel.kind = ForwardKindChoice::Remote;
@@ -218,7 +218,7 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.dynamic").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.active_tab
+            if let Some(tab_id) = this.workspace.active_tab
                 && let Some(panel) = this.forward_panel_mut(tab_id)
             {
                 panel.kind = ForwardKindChoice::Dynamic;
@@ -304,9 +304,9 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::X)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(tab_id) = this.active_tab
+                                if let Some(tab_id) = this.workspace.active_tab
                                     && let Some(tab) =
-                                        this.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                                        this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
                                 {
                                     tab.forwards_panel = None;
                                 }

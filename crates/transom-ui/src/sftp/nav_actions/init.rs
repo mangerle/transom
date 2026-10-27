@@ -23,7 +23,11 @@ impl AppShell {
         tab_id: TabId,
         connection_id: ConnectionId,
     ) -> Option<&mut SftpPanelState> {
-        let tab = self.tabs.iter_mut().find(|tab| tab.id == tab_id)?;
+        let tab = self
+            .workspace
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.id == tab_id)?;
         if tab.connection_id != Some(connection_id) {
             let is_side = tab
                 .sftp
@@ -44,8 +48,9 @@ impl AppShell {
     /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
     pub(crate) fn focus_active_sftp_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .workspace
             .active_tab
-            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
             .and_then(|tab| tab.sftp.as_ref())
         {
             window.focus(&panel.focus_handle, cx);
@@ -53,27 +58,31 @@ impl AppShell {
     }
 
     pub(crate) fn toggle_sftp(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(tab_id) = self.active_tab else {
+        let Some(tab_id) = self.workspace.active_tab else {
             return;
         };
-        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
             return;
         };
         // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，
         // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
-        match self.tabs[index].sftp.as_ref().map(|panel| panel.open) {
+        match self.workspace.tabs[index]
+            .sftp
+            .as_ref()
+            .map(|panel| panel.open)
+        {
             Some(true) => {
-                self.tabs[index].sftp = None;
+                self.workspace.tabs[index].sftp = None;
                 cx.notify();
                 return;
             }
             Some(false) => {
-                let path = self.tabs[index]
+                let path = self.workspace.tabs[index]
                     .sftp
                     .as_ref()
                     .map(|panel| panel.path.clone())
                     .unwrap_or_else(|| ".".to_string());
-                if let Some(panel) = self.tabs[index].sftp.as_mut() {
+                if let Some(panel) = self.workspace.tabs[index].sftp.as_mut() {
                     panel.open = true;
                 }
                 // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。
@@ -85,8 +94,14 @@ impl AppShell {
             }
             None => {}
         }
-        let is_local = matches!(&self.tabs[index].session.connection, Connection::Local(_));
-        let is_ssh = matches!(&self.tabs[index].session.connection, Connection::Ssh(_));
+        let is_local = matches!(
+            &self.workspace.tabs[index].session.connection,
+            Connection::Local(_)
+        );
+        let is_ssh = matches!(
+            &self.workspace.tabs[index].session.connection,
+            Connection::Ssh(_)
+        );
         if is_local {
             self.open_local_file_panel(index, window, cx);
             return;
@@ -96,7 +111,7 @@ impl AppShell {
             cx.notify();
             return;
         }
-        if !matches!(self.tabs[index].status, TabStatus::Connected) {
+        if !matches!(self.workspace.tabs[index].status, TabStatus::Connected) {
             self.error = Some(rust_i18n::t!("error.channel_failed").to_string());
             cx.notify();
             return;
@@ -119,8 +134,8 @@ impl AppShell {
             .clone()
             .or_else(|| quick_paths.home.clone())
             .unwrap_or_else(|| PathBuf::from("."));
-        let initial_remote_path =
-            extract_candidate_path(&self.tabs[index].title).unwrap_or_else(|| ".".to_string());
+        let initial_remote_path = extract_candidate_path(&self.workspace.tabs[index].title)
+            .unwrap_or_else(|| ".".to_string());
         let path_input = sftp_text_input(
             window,
             cx,
@@ -155,7 +170,7 @@ impl AppShell {
         let remote_filter_input = sftp_text_input(window, cx, "", "过滤远程文件 (模糊匹配名称)...");
         let local_filter_input = sftp_text_input(window, cx, "", "过滤本地文件 (模糊匹配名称)...");
 
-        self.tabs[index].sftp = Some(SftpPanelState {
+        self.workspace.tabs[index].sftp = Some(SftpPanelState {
             open,
             overlay: DropOverlayState::default(),
             path: initial_remote_path.clone(),

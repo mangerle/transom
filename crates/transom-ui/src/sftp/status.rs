@@ -33,6 +33,7 @@ impl AppShell {
             cx.background_executor().timer(STATUS_MESSAGE_TTL).await;
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
+                    .workspace
                     .tabs
                     .iter_mut()
                     .find(|tab| tab.id == tab_id)

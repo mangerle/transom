@@ -18,15 +18,21 @@ impl AppShell {
         // 崩溃后三者一起退到上次正常退出，不会出现标签组是旧的、侧栏是新的那种
         // 半新半旧；也不必为一次点击写一次配置文件。
         self.settings.window.last_sidebar_visible = self.sidebar_visible;
-        self.settings.window.previous_tab_sessions = self.tabs.iter().map(session_key).collect();
+        self.settings.window.previous_tab_sessions =
+            self.workspace.tabs.iter().map(session_key).collect();
         self.prune_tilings();
         // 先建立"组 ID → 落盘下标"的映射：并排快照用下标引用标签组，
         // 而组 ID 是运行期 UUID，不随设置文件保存。
         let saved_groups: Vec<_> = self
+            .workspace
             .groups
             .iter()
             .filter_map(|group| {
-                let tab = self.tabs.iter().find(|tab| tab.id == group.active_pane)?;
+                let tab = self
+                    .workspace
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.id == group.active_pane)?;
                 Some((
                     group.id,
                     SavedTabGroup {
@@ -39,6 +45,7 @@ impl AppShell {
         // 每张并排网格各自落盘：槽位按"组 ID → 落盘下标"引用标签组，
         // 而组 ID 是运行期 UUID，不随设置文件保存。
         self.settings.window.tab_tilings = self
+            .workspace
             .tiled_sets
             .iter()
             .filter_map(|tiled| {
@@ -75,8 +82,8 @@ impl AppShell {
     pub(crate) fn close_app(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         log::info!(
             "应用正在退出，窗格数: {}，标签组数: {}",
-            self.tabs.len(),
-            self.groups.len()
+            self.workspace.tabs.len(),
+            self.workspace.groups.len()
         );
         self.save_window_state(window);
         cx.quit();

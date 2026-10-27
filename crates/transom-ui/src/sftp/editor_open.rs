@@ -91,6 +91,7 @@ impl AppShell {
     ) {
         let max_bytes = self.settings.sftp.edit_max_bytes;
         let gate = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -408,6 +409,7 @@ impl AppShell {
         let tab_id = item.tab_id;
         let remote_path = item.remote_path.clone();
         let Some(connection_id) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)

@@ -124,6 +124,7 @@ pub(super) fn build_side_remote_context_menu(
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
                         let main_conn = this
+                            .workspace
                             .tabs
                             .iter()
                             .find(|t| t.id == tab_id)

@@ -206,7 +206,7 @@ pub(super) fn build_tab_context_menu(
                 app.update(cx, |this, cx| {
                     if let Some(group) = this.add_groups_to_tiling(set_id, groups.clone(), window) {
                         this.activate_group(group, window, cx);
-                        this.tab_selection.clear();
+                        this.workspace.tab_selection.clear();
                     } else {
                         this.error = Some(
                             rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string(),

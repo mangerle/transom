@@ -31,20 +31,20 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
             return false;
         };
-        if self.tabs[index].connection_id != Some(connection_id) {
+        if self.workspace.tabs[index].connection_id != Some(connection_id) {
             return false;
         }
-        let session_id = self.tabs[index].session_id;
+        let session_id = self.workspace.tabs[index].session_id;
         let mut profile = self
             .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
             .map(|session| session.terminal.clone())
-            .unwrap_or_else(|| self.tabs[index].session.terminal.clone());
+            .unwrap_or_else(|| self.workspace.tabs[index].session.terminal.clone());
         // 光标外观与外观偏好（字体族、中文字体、字号、行高、关键词高亮）属于全局设置，
         // 覆盖会话里可能残留的旧默认值：界面上没有任何会话级字体入口，
         // 若这里不覆盖，用户在设置里改的字体只会作用于已打开的窗格。
@@ -79,7 +79,7 @@ impl AppShell {
         });
         // 审计落盘按连接粒度开启：路径在派发前算好，读线程内才创建文件。
         let audit_path =
-            crate::audit::audit_path_for(&self.tabs[index], self.settings.audit.enabled);
+            crate::audit::audit_path_for(&self.workspace.tabs[index], self.settings.audit.enabled);
         let terminal = cx.new(|cx| {
             TerminalView::new(
                 window,
@@ -118,7 +118,7 @@ impl AppShell {
                 this.handle_terminal_event(tab_id, event, window, cx)
             },
         );
-        let tab = &mut self.tabs[index];
+        let tab = &mut self.workspace.tabs[index];
         tab.terminal = Some(terminal);
         tab.status = TabStatus::Connected;
         log::info!(
@@ -133,9 +133,9 @@ impl AppShell {
         // 连接建立期间用户可能已经切走：启动期的默认标签与深链目录标签
         // 会并发建连，晚完成者若无条件激活，会把焦点从后创建的深链标签
         // 抢回启动标签。只有该窗格仍是当前选中项时才切换组内焦点并聚焦。
-        let still_active = self.active_tab == Some(tab_id);
+        let still_active = self.workspace.active_tab == Some(tab_id);
         if still_active && let Some(group_index) = self.group_index_for_tab(tab_id) {
-            self.groups[group_index].active_pane = tab_id;
+            self.workspace.groups[group_index].active_pane = tab_id;
         }
         // 认证已确定通过，此刻才允许把用户勾选保存的凭据写入钥匙串。
         self.flush_pending_credential(session_id, connection_id, cx);
@@ -161,7 +161,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
         {
             tab.status = TabStatus::Failed(error.clone());
@@ -193,7 +193,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
             && !matches!(tab.status, TabStatus::Failed(_))
         {
@@ -230,7 +230,7 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return false;
         };
         if tab.connection_id != Some(connection_id) {
@@ -289,7 +289,7 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return false;
         };
         if tab.connection_id != Some(connection_id) {
@@ -318,11 +318,11 @@ impl AppShell {
             return true;
         };
         // 看板打开时先把网卡快照推入波形历史，再移动 stats。
-        if self.monitor.open && self.active_tab == Some(tab_id) {
+        if self.monitor.open && self.workspace.active_tab == Some(tab_id) {
             self.monitor_record_network(tab_id, &stats.interfaces);
         }
         let mut applied = false;
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
         {
             if tab.system_stats.as_ref() == Some(&stats) {
@@ -333,7 +333,10 @@ impl AppShell {
             applied = true;
         }
         // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
-        if applied && self.active_tab == Some(tab_id) && (!self.immersive || self.monitor.open) {
+        if applied
+            && self.workspace.active_tab == Some(tab_id)
+            && (!self.immersive || self.monitor.open)
+        {
             cx.notify();
         }
         false
@@ -356,7 +359,7 @@ impl AppShell {
             return true;
         };
         let mut applied = false;
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && tab.connection_id == Some(connection_id)
         {
             if tab.network_traffic == Some(traffic) {
@@ -367,7 +370,7 @@ impl AppShell {
             tab.network_traffic = Some(traffic);
             applied = true;
         }
-        if applied && self.active_tab == Some(tab_id) && !self.immersive {
+        if applied && self.workspace.active_tab == Some(tab_id) && !self.immersive {
             cx.notify();
         }
         false

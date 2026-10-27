@@ -119,6 +119,7 @@ impl AppShell {
                                             .checked(resume_enabled)
                                             .on_click(cx.listener(move |this, &checked, _, cx| {
                                                 if let Some(panel) = this
+                                                    .workspace
                                                     .tabs
                                                     .iter_mut()
                                                     .find(|tab| tab.id == tab_id)
@@ -228,6 +229,7 @@ impl AppShell {
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(panel) = this
+                                            .workspace
                                             .tabs
                                             .iter_mut()
                                             .find(|tab| tab.id == tab_id)

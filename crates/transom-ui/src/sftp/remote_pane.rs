@@ -167,6 +167,7 @@ impl AppShell {
                                     .tooltip("编辑")
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         let selected = this
+                                            .workspace
                                             .tabs
                                             .iter()
                                             .find(|t| t.id == tab_id)
@@ -235,6 +236,7 @@ impl AppShell {
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(panel) = this
+                                            .workspace
                                             .tabs
                                             .iter_mut()
                                             .find(|t| t.id == tab_id)
@@ -297,7 +299,8 @@ impl AppShell {
                         let item = drag.clone();
                         let dir = dir_drop.clone();
                         app_drop.update(cx, |this, cx| {
-                            let Some(tab) = this.tabs.iter().find(|t| t.id == tab_id) else {
+                            let Some(tab) = this.workspace.tabs.iter().find(|t| t.id == tab_id)
+                            else {
                                 return;
                             };
                             let Some(main_conn) = tab.connection_id else {

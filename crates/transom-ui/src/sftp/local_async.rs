@@ -29,6 +29,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(dir) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -45,6 +46,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
+                    .workspace
                     .tabs
                     .iter_mut()
                     .find(|tab| tab.id == tab_id)
@@ -85,6 +87,7 @@ impl AppShell {
     pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
         let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -114,6 +117,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
+                    .workspace
                     .tabs
                     .iter_mut()
                     .find(|tab| tab.id == tab_id)

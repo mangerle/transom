@@ -24,7 +24,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.get(index) else {
+        let Some(tab) = self.workspace.tabs.get(index) else {
             return;
         };
         let tab_id = tab.id;
@@ -57,7 +57,7 @@ impl AppShell {
             },
         );
 
-        self.tabs[index].sftp = Some(SftpPanelState {
+        self.workspace.tabs[index].sftp = Some(SftpPanelState {
             open: true,
             overlay: super::DropOverlayState::default(),
             path: String::new(),
@@ -118,6 +118,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let Some(panel) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)

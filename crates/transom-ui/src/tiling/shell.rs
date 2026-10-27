@@ -1,21 +1,23 @@
 //! AppShell 并排状态增删查改与条目装配实现。
 
 use super::layout::auto_tiling_grid;
+use super::strip::build_strip_entries;
 use super::tabs::TiledTabs;
 use super::types::{MAX_TILING_SLOTS, StripEntry, TilingId, TilingLayoutChoice};
 use crate::app::AppShell;
 use crate::pane_tree::PaneDirection;
 use crate::sftp::PendingEditorClose;
 use gpui_kit::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use transom_core::{GroupId, SavedTabTiling, SplitAxis, TabId};
 
 impl AppShell {
     /// 当前焦点标签所在的标签组；没有活动标签时为 `None`。
     pub(crate) fn active_group_id(&self) -> Option<GroupId> {
-        self.active_tab
+        self.workspace
+            .active_tab
             .and_then(|tab| self.group_index_for_tab(tab))
-            .map(|index| self.groups[index].id)
+            .map(|index| self.workspace.groups[index].id)
     }
 
     /// 当前活动标签所属的并排组；活动标签独立显示时为 `None`。
@@ -26,18 +28,24 @@ impl AppShell {
 
     /// 某个标签组所在的并排组；未并排时为 `None`。
     pub(crate) fn tiling_of_group(&self, group: GroupId) -> Option<&TiledTabs> {
-        self.tiled_sets.iter().find(|tiled| tiled.contains(group))
+        self.workspace
+            .tiled_sets
+            .iter()
+            .find(|tiled| tiled.contains(group))
     }
 
     /// 按并排组身份查找。
     pub(crate) fn tiling_by_id(&self, id: TilingId) -> Option<&TiledTabs> {
-        self.tiled_sets.iter().find(|tiled| tiled.id == id)
+        self.workspace
+            .tiled_sets
+            .iter()
+            .find(|tiled| tiled.id == id)
     }
 
     /// 标签栏的可见条目：每个并排组占一条，其余标签各占一条。
     pub(crate) fn strip_entries(&self) -> Vec<StripEntry> {
-        let groups: Vec<GroupId> = self.groups.iter().map(|group| group.id).collect();
-        build_strip_entries(&groups, &self.tiled_sets)
+        let groups: Vec<GroupId> = self.workspace.groups.iter().map(|group| group.id).collect();
+        build_strip_entries(&groups, &self.workspace.tiled_sets)
     }
 
     /// 条目是否包含指定标签组；并排条目按整组成员判断。
@@ -59,6 +67,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(target_pane) = self
+            .workspace
             .groups
             .iter()
             .find(|group| group.id == target)
@@ -91,7 +100,7 @@ impl AppShell {
                 let Some(tiled) = TiledTabs::new(vec![partner, target], rows, cols, false) else {
                     return;
                 };
-                self.tiled_sets.push(tiled);
+                self.workspace.tiled_sets.push(tiled);
                 self.prune_pane_split_states();
                 self.activate_tab(target_pane, window, cx);
             }
@@ -136,7 +145,12 @@ impl AppShell {
     ) {
         let panes: Vec<TabId> = groups
             .iter()
-            .filter_map(|group_id| self.groups.iter().find(|group| group.id == *group_id))
+            .filter_map(|group_id| {
+                self.workspace
+                    .groups
+                    .iter()
+                    .find(|group| group.id == *group_id)
+            })
             .flat_map(|group| group.pane_ids())
             .collect();
         if self.block_close_for_dirty_editors(
@@ -147,7 +161,12 @@ impl AppShell {
             return;
         }
         for group_id in groups {
-            if self.groups.iter().any(|group| group.id == group_id) {
+            if self
+                .workspace
+                .groups
+                .iter()
+                .any(|group| group.id == group_id)
+            {
                 self.close_group(group_id, window, cx);
             }
         }
@@ -155,9 +174,9 @@ impl AppShell {
 
     /// 退出指定并排组，只改变显示方式：组内标签都保持打开与连接。
     pub(crate) fn untile_tiling(&mut self, id: TilingId, cx: &mut Context<Self>) {
-        let before = self.tiled_sets.len();
-        self.tiled_sets.retain(|tiled| tiled.id != id);
-        if self.tiled_sets.len() != before {
+        let before = self.workspace.tiled_sets.len();
+        self.workspace.tiled_sets.retain(|tiled| tiled.id != id);
+        if self.workspace.tiled_sets.len() != before {
             self.prune_pane_split_states();
             self.sync_broadcast_targets();
             cx.notify();
@@ -171,10 +190,15 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.groups.iter().position(|item| item.id == group) else {
+        let Some(index) = self
+            .workspace
+            .groups
+            .iter()
+            .position(|item| item.id == group)
+        else {
             return;
         };
-        let pane = self.groups[index].active_pane;
+        let pane = self.workspace.groups[index].active_pane;
         self.activate_tab(pane, window, cx);
     }
 
@@ -182,6 +206,7 @@ impl AppShell {
     pub(crate) fn present_active_group(&mut self) {
         if let Some(active) = self.active_group_id()
             && let Some(tiled) = self
+                .workspace
                 .tiled_sets
                 .iter_mut()
                 .find(|tiled| tiled.contains(active))
@@ -194,9 +219,9 @@ impl AppShell {
 
     /// 校验所有并排绑定：摘掉已消失的标签组，有效槽位少于两个时解除该组。
     pub(crate) fn prune_tilings(&mut self) {
-        let alive: HashSet<GroupId> = self.groups.iter().map(|group| group.id).collect();
+        let alive: HashSet<GroupId> = self.workspace.groups.iter().map(|group| group.id).collect();
         let active = self.active_group_id();
-        self.tiled_sets.retain_mut(|tiled| {
+        self.workspace.tiled_sets.retain_mut(|tiled| {
             let dead: Vec<GroupId> = tiled
                 .occupied_groups()
                 .into_iter()
@@ -272,7 +297,7 @@ impl AppShell {
             return None;
         }
         let focus = tiled.focused_group();
-        self.tiled_sets.push(tiled);
+        self.workspace.tiled_sets.push(tiled);
         self.prune_pane_split_states();
         focus
     }
@@ -284,22 +309,22 @@ impl AppShell {
         }
         let all_selected = groups
             .iter()
-            .all(|group| self.tab_selection.contains(group));
+            .all(|group| self.workspace.tab_selection.contains(group));
         if all_selected {
             for group in groups {
-                self.tab_selection.remove(group);
+                self.workspace.tab_selection.remove(group);
             }
         } else {
             for group in groups {
-                self.tab_selection.insert(*group);
+                self.workspace.tab_selection.insert(*group);
             }
         }
         cx.notify();
     }
 
     pub(crate) fn clear_tab_selection(&mut self, cx: &mut Context<Self>) {
-        if !self.tab_selection.is_empty() {
-            self.tab_selection.clear();
+        if !self.workspace.tab_selection.is_empty() {
+            self.workspace.tab_selection.clear();
             cx.notify();
         }
     }
@@ -322,7 +347,7 @@ impl AppShell {
     ) {
         let groups: Vec<GroupId> = groups
             .into_iter()
-            .filter(|group| self.groups.iter().any(|item| item.id == *group))
+            .filter(|group| self.workspace.groups.iter().any(|item| item.id == *group))
             .collect();
         if groups.len() < 2 {
             return;
@@ -340,6 +365,7 @@ impl AppShell {
             TilingLayoutChoice::Grid { rows, cols } => (rows, cols, false),
         };
         let touched: Vec<TilingId> = self
+            .workspace
             .tiled_sets
             .iter()
             .filter(|tiled| groups.iter().any(|group| tiled.contains(*group)))
@@ -351,22 +377,27 @@ impl AppShell {
                     return;
                 };
                 let focus = tiled.focused_group();
-                self.tiled_sets.push(tiled);
-                self.tab_selection.clear();
+                self.workspace.tiled_sets.push(tiled);
+                self.workspace.tab_selection.clear();
                 self.prune_pane_split_states();
                 self.activate_group_by_id(focus, window, cx);
             }
             [id] => {
-                let Some(index) = self.tiled_sets.iter().position(|tiled| tiled.id == *id) else {
+                let Some(index) = self
+                    .workspace
+                    .tiled_sets
+                    .iter()
+                    .position(|tiled| tiled.id == *id)
+                else {
                     return;
                 };
                 if !groups
                     .iter()
-                    .all(|group| self.tiled_sets[index].contains(*group))
+                    .all(|group| self.workspace.tiled_sets[index].contains(*group))
                 {
                     return;
                 }
-                let focus = self.tiled_sets[index].focused_group();
+                let focus = self.workspace.tiled_sets[index].focused_group();
                 let Some(mut tiled) = TiledTabs::new(groups, rows, cols, auto) else {
                     return;
                 };
@@ -376,9 +407,9 @@ impl AppShell {
                 {
                     tiled.focused = slot;
                 }
-                self.tiled_sets[index] = tiled;
+                self.workspace.tiled_sets[index] = tiled;
                 self.prune_pane_split_states();
-                let focus = self.tiled_sets[index].focused_group();
+                let focus = self.workspace.tiled_sets[index].focused_group();
                 self.activate_group_by_id(focus, window, cx);
             }
             _ => return,
@@ -409,14 +440,18 @@ impl AppShell {
     ) -> Option<GroupId> {
         let groups: Vec<GroupId> = groups
             .into_iter()
-            .filter(|group| self.groups.iter().any(|item| item.id == *group))
+            .filter(|group| self.workspace.groups.iter().any(|item| item.id == *group))
             .filter(|group| self.tiling_of_group(*group).is_none())
             .collect();
         if groups.is_empty() {
             return None;
         }
         let first_group = {
-            let tiled = self.tiled_sets.iter_mut().find(|tiled| tiled.id == id)?;
+            let tiled = self
+                .workspace
+                .tiled_sets
+                .iter_mut()
+                .find(|tiled| tiled.id == id)?;
             let slot = tiled.add_groups(groups, window)?;
             tiled.group_at(slot)
         };
@@ -439,6 +474,7 @@ impl AppShell {
             return;
         }
         let filled = self
+            .workspace
             .tiled_sets
             .iter_mut()
             .find(|tiled| tiled.id == id)
@@ -452,49 +488,11 @@ impl AppShell {
 
     /// 可填进空槽的标签组：还没有属于任何并排组的独立标签。
     pub(crate) fn available_tiling_groups(&self) -> Vec<GroupId> {
-        self.groups
+        self.workspace
+            .groups
             .iter()
             .filter(|group| self.tiling_of_group(group.id).is_none())
             .map(|group| group.id)
             .collect()
     }
-}
-
-/// 标签栏的可见条目：每张并排网格占一条，其余标签各占一条。
-pub(super) fn build_strip_entries(groups: &[GroupId], sets: &[TiledTabs]) -> Vec<StripEntry> {
-    let mut hidden: HashSet<GroupId> = HashSet::with_capacity(groups.len());
-    let mut representatives: HashMap<usize, (TilingId, GroupId)> =
-        HashMap::with_capacity(sets.len());
-    for set in sets {
-        let alive: Vec<usize> = set
-            .occupied_groups()
-            .iter()
-            .filter_map(|group| groups.iter().position(|item| item == group))
-            .collect();
-        if alive.len() < 2 {
-            continue;
-        }
-        let Some(representative) = alive.iter().copied().min() else {
-            continue;
-        };
-        let focus = set
-            .focused_group()
-            .filter(|group| groups.iter().any(|item| item == group))
-            .unwrap_or(groups[representative]);
-        for index in &alive {
-            hidden.insert(groups[*index]);
-        }
-        representatives.insert(representative, (set.id, focus));
-    }
-    let mut entries = Vec::with_capacity(groups.len());
-    for (index, group) in groups.iter().enumerate() {
-        if let Some(&(id, focus)) = representatives.get(&index) {
-            entries.push(StripEntry::Tiled { id, focus });
-        } else if hidden.contains(group) {
-            continue;
-        } else {
-            entries.push(StripEntry::Single(*group));
-        }
-    }
-    entries
 }

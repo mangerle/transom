@@ -127,7 +127,8 @@ impl AppShell {
     }
 
     fn sftp_panel_mut_by_tab(&mut self, tab_id: TabId) -> Option<&mut SftpPanelState> {
-        self.tabs
+        self.workspace
+            .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)?
             .sftp
@@ -157,6 +158,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let connection_id = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == target.tab_id)

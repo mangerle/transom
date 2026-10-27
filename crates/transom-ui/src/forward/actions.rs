@@ -16,7 +16,7 @@ use transom_core::{
 
 impl AppShell {
     pub(crate) fn mark_forwards_stopped(&mut self, tab_id: TabId) {
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
             for status in tab.forward_statuses.values_mut() {
                 if !matches!(status.state, ForwardState::Stopped) {
                     status.state = ForwardState::Stopped;
@@ -33,7 +33,7 @@ impl AppShell {
         state: ForwardState,
         error: Option<AppError>,
     ) {
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
             tab.forward_statuses.insert(
                 rule_id,
                 ForwardStatus {
@@ -85,30 +85,34 @@ impl AppShell {
     }
 
     pub(crate) fn forward_panel_mut(&mut self, tab_id: TabId) -> Option<&mut ForwardPanelState> {
-        self.tabs
+        self.workspace
+            .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.forwards_panel.as_mut())
     }
 
     pub(crate) fn toggle_forward_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(tab_id) = self.active_tab else {
+        let Some(tab_id) = self.workspace.active_tab else {
             return;
         };
-        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
             return;
         };
-        if self.tabs[index].forwards_panel.is_some() {
-            self.tabs[index].forwards_panel = None;
+        if self.workspace.tabs[index].forwards_panel.is_some() {
+            self.workspace.tabs[index].forwards_panel = None;
             cx.notify();
             return;
         }
-        if !matches!(self.tabs[index].session.connection, Connection::Ssh(_)) {
+        if !matches!(
+            self.workspace.tabs[index].session.connection,
+            Connection::Ssh(_)
+        ) {
             self.error = Some(rust_i18n::t!("error.forward_requires_ssh").to_string());
             cx.notify();
             return;
         }
-        if !matches!(self.tabs[index].status, TabStatus::Connected) {
+        if !matches!(self.workspace.tabs[index].status, TabStatus::Connected) {
             self.error = Some(rust_i18n::t!("error.forward_failed").to_string());
             cx.notify();
             return;
@@ -138,7 +142,7 @@ impl AppShell {
             "80",
             rust_i18n::t!("forward.target_port").as_ref(),
         );
-        self.tabs[index].forwards_panel = Some(ForwardPanelState {
+        self.workspace.tabs[index].forwards_panel = Some(ForwardPanelState {
             name_input: name,
             bind_host_input: bind_host,
             bind_port_input: bind_port,
@@ -151,7 +155,7 @@ impl AppShell {
     }
 
     pub(crate) fn add_forward_rule(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -271,7 +275,7 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -330,6 +334,7 @@ impl AppShell {
             rule,
         } = pending;
         let session_id = self
+            .workspace
             .tabs
             .iter()
             .find(|t| t.id == tab_id)
@@ -366,7 +371,7 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -398,14 +403,15 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
         let connection_id = tab.connection_id;
         let session_id = tab.session_id;
         if let (Some(connection_id), Some(status)) = (
             connection_id,
-            self.tabs
+            self.workspace
+                .tabs
                 .iter()
                 .find(|tab| tab.id == tab_id)
                 .and_then(|tab| tab.forward_statuses.get(&rule_id)),
@@ -419,7 +425,7 @@ impl AppShell {
                 rule_id,
             });
         }
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
             tab.forward_statuses.remove(&rule_id);
         }
         if let Some(session) = self

@@ -335,7 +335,8 @@ impl AppShell {
 
     /// 收集当前已连接、可部署公钥的 SSH 标签页。
     pub(crate) fn key_targets(&self) -> Vec<KeyTarget> {
-        self.tabs
+        self.workspace
+            .tabs
             .iter()
             .filter(|tab| {
                 matches!(tab.status, TabStatus::Connected)

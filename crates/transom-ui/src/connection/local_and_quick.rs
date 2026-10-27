@@ -61,9 +61,10 @@ impl AppShell {
             }),
         );
         self.create_local_group(tab_id, session.id, &session.name);
-        self.tabs
+        self.workspace
+            .tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
-        self.active_tab = Some(tab_id);
+        self.workspace.active_tab = Some(tab_id);
         self.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
@@ -80,9 +81,10 @@ impl AppShell {
         };
         let tab_id = TabId::new();
         self.create_group(tab_id, session.id);
-        self.tabs
+        self.workspace
+            .tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
-        self.active_tab = Some(tab_id);
+        self.workspace.active_tab = Some(tab_id);
         self.present_active_group();
         self.start_connection(tab_id, session, cx);
     }

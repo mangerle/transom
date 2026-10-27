@@ -13,7 +13,7 @@ use transom_core::TabId;
 impl AppShell {
     /// 触发剪贴板复制（Ctrl+C 或右键复制）。
     pub(crate) fn sftp_copy_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.tabs.iter_mut().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
             return;
         };
         let main_conn_id = tab.connection_id;
@@ -100,7 +100,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_ref() else {

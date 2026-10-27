@@ -160,8 +160,9 @@ impl AppShell {
         // 终端背景随窗口整体透明：窗口半透明时，终端区要透出桌面，
         // 否则只有侧栏与标签栏变透明，终端仍是一块实色。
         profile.background_transparency = self.settings.window.window_transparency;
-        // 先收集实体再逐个更新：遍历 self.tabs 与逐条 update 会同时借用 self。
+        // 先收集实体再逐个更新：遍历 self.workspace.tabs 与逐条 update 会同时借用 self。
         let terminals: Vec<Entity<TerminalView>> = self
+            .workspace
             .tabs
             .iter()
             .filter_map(|tab| tab.terminal.clone())
@@ -178,6 +179,7 @@ impl AppShell {
     pub(crate) fn apply_block_view_settings(&self, cx: &mut Context<Self>) {
         let global = self.settings.block_view;
         let terminals: Vec<(Entity<TerminalView>, transom_core::BlockViewSettings)> = self
+            .workspace
             .tabs
             .iter()
             .filter_map(|tab| {

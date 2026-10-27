@@ -12,7 +12,7 @@ impl AppShell {
     /// 以当前双栏路径为根目录发起异步扫描对比。
     pub(crate) fn sftp_open_sync_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let filter_text = self.settings.sftp.transfer_filter.clone();
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_ref() else {
@@ -133,6 +133,7 @@ impl AppShell {
         );
         task.verify = verify;
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)

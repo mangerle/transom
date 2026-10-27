@@ -36,9 +36,17 @@ pub(super) fn render_tab_entry(
         }
     };
 
-    let group = shell.groups.iter().find(|item| item.id == group_id)?;
+    let group = shell
+        .workspace
+        .groups
+        .iter()
+        .find(|item| item.id == group_id)?;
     let tile_enabled = !composite && can_tile;
-    let tab = shell.tabs.iter().find(|tab| tab.id == group.active_pane)?;
+    let tab = shell
+        .workspace
+        .tabs
+        .iter()
+        .find(|tab| tab.id == group.active_pane)?;
 
     let palette = p.clone();
     let group_id = group.id;
@@ -50,7 +58,7 @@ pub(super) fn render_tab_entry(
     let serial = group.serial;
     let is_extra = serial > 0;
     let is_local = matches!(tab.session.connection, Connection::Local(_));
-    let active = shell.active_tab == Some(active_pane);
+    let active = shell.workspace.active_tab == Some(active_pane);
     let tiled_paired = composite;
 
     let selection_groups = match &tiled_set {
@@ -60,25 +68,28 @@ pub(super) fn render_tab_entry(
     let entry_selected = !selection_groups.is_empty()
         && selection_groups
             .iter()
-            .all(|group| shell.tab_selection.contains(group));
+            .all(|group| shell.workspace.tab_selection.contains(group));
 
     let selected_singles: Vec<GroupId> = shell
+        .workspace
         .groups
         .iter()
         .filter(|group| {
-            shell.tab_selection.contains(&group.id) && shell.tiling_of_group(group.id).is_none()
+            shell.workspace.tab_selection.contains(&group.id)
+                && shell.tiling_of_group(group.id).is_none()
         })
         .map(|group| group.id)
         .collect();
 
     let touched_sets: Vec<crate::tiling::TilingId> = shell
+        .workspace
         .tiled_sets
         .iter()
         .filter(|tiled| {
             tiled
                 .occupied_groups()
                 .iter()
-                .any(|group| shell.tab_selection.contains(group))
+                .any(|group| shell.workspace.tab_selection.contains(group))
         })
         .map(|tiled| tiled.id)
         .collect();
@@ -302,7 +313,7 @@ fn render_pane_badge(
         .into_iter()
         .enumerate()
         .filter_map(|(position, pane_id)| {
-            let tab = shell.tabs.iter().find(|tab| tab.id == pane_id)?;
+            let tab = shell.workspace.tabs.iter().find(|tab| tab.id == pane_id)?;
             let (dot_color, icon) = crate::workspace::pane_status_indicator(&tab.status, p);
             Some(PaneRow {
                 tab_id: pane_id,

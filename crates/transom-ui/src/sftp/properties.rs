@@ -36,6 +36,7 @@ impl AppShell {
             }
             Err(err) => {
                 if let Some(panel) = self
+                    .workspace
                     .tabs
                     .iter_mut()
                     .find(|t| t.id == tab_id)

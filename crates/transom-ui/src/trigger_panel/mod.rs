@@ -143,7 +143,7 @@ impl AppShell {
     /// 将触发器规则同步下发至当前所有活跃终端窗格。
     pub(crate) fn sync_triggers_to_live_panes(&self, cx: &mut Context<Self>) {
         let triggers = self.settings.triggers.clone();
-        for tab in &self.tabs {
+        for tab in &self.workspace.tabs {
             if let Some(term) = &tab.terminal {
                 term.update(cx, |view, _| view.reload_triggers(&triggers));
             }

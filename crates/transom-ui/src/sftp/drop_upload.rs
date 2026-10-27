@@ -45,10 +45,13 @@ impl AppShell {
         if paths.is_empty() {
             return;
         }
-        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
             return;
         };
-        if let Some(key) = drop_rejection(&self.tabs[index].session, &self.tabs[index].status) {
+        if let Some(key) = drop_rejection(
+            &self.workspace.tabs[index].session,
+            &self.workspace.tabs[index].status,
+        ) {
             let message = rust_i18n::t!(key).to_string();
             log::warn!(
                 "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
@@ -62,7 +65,7 @@ impl AppShell {
         // 面板已存在时沿用它当前的远端目录（用户看到哪儿就传到哪儿）；不存在则
         // 建一份隐藏状态：队列、续传与校验都照旧，只是进度改由终端右下角浮层呈现，
         // 不再为了传一个文件而弹开一整列文件管理器。
-        if self.tabs[index].sftp.is_none() {
+        if self.workspace.tabs[index].sftp.is_none() {
             self.build_sftp_panel(tab_id, index, false, window, cx);
         }
         if let Err(message) = self.enqueue_uploads(tab_id, paths, cx) {
@@ -73,7 +76,7 @@ impl AppShell {
         log::info!(
             "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
             paths.len(),
-            crate::connection::describe_target(&self.tabs[index].session)
+            crate::connection::describe_target(&self.workspace.tabs[index].session)
         );
         self.show_drop_overlay(tab_id, cx);
     }

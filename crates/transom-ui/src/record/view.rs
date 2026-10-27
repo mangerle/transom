@@ -19,9 +19,9 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let active_tab_id = self.active_tab;
+        let active_tab_id = self.workspace.active_tab;
         let active_is_recording = active_tab_id
-            .and_then(|id| self.tabs.iter().find(|t| t.id == id))
+            .and_then(|id| self.workspace.tabs.iter().find(|t| t.id == id))
             .and_then(|t| t.terminal.as_ref())
             .is_some_and(|term| term.read(cx).is_recording());
 

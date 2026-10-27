@@ -73,8 +73,9 @@ impl AppShell {
         divider_x: Pixels,
     ) -> AnyElement {
         let active_tab_info = self
+            .workspace
             .active_tab
-            .and_then(|tab_id| self.tabs.iter().find(|tab| tab.id == tab_id));
+            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id));
 
         let (status_dot_color, status_text) = if let Some(tab) = active_tab_info {
             let (color, text) = match &tab.status {
@@ -159,6 +160,7 @@ impl AppShell {
         let menu_app = app.clone();
         // ZMODEM 传输徽章优先于常规状态项：传输进行中用户最关心进度与取消。
         let zmodem_badge = self
+            .workspace
             .active_tab
             .and_then(|tab_id| self.render_zmodem_badge(tab_id, p, cx));
         let badges = h_flex()

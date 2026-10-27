@@ -19,7 +19,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_mut() else {
@@ -46,6 +46,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let sync_remote_target = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -74,6 +75,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let (parent, sync_remote_parent) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -108,6 +110,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let target = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -122,6 +125,7 @@ impl AppShell {
 
     pub(crate) fn sftp_open_local_file_manager(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(local_path) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -133,6 +137,7 @@ impl AppShell {
         crate::audit::reveal_in_file_manager(local_path.clone());
 
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)

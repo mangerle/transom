@@ -73,6 +73,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let session = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)

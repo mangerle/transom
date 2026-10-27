@@ -13,7 +13,7 @@ use transom_core::{RemoteDeleteTarget, SftpOperation, TabId};
 impl AppShell {
     /// 批量删除远端选中项；目录按递归语义删除。
     pub(crate) fn sftp_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_mut() else {
@@ -46,6 +46,7 @@ impl AppShell {
         let count = targets.len();
         self.send_sftp_op(tab_id, SftpOperation::DeleteMany { targets }, cx);
         if let Some(panel) = self
+            .workspace
             .tabs
             .iter_mut()
             .find(|tab| tab.id == tab_id)
@@ -67,6 +68,7 @@ impl AppShell {
     ///   为所有删除入口统一补确认机制。
     pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(active_pane) = self
+            .workspace
             .tabs
             .iter()
             .find(|tab| tab.id == tab_id)
@@ -88,7 +90,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.active_tab {
+        if let Some(tab_id) = self.workspace.active_tab {
             self.sftp_delete_selected(tab_id, cx);
         }
     }
@@ -154,7 +156,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_ref() else {
@@ -218,7 +220,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp.as_ref() else {
