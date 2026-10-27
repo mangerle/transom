@@ -1,0 +1,141 @@
+//! SFTP 跨列剪贴板、拖拽载荷与参数模型定义。
+//!
+//! 设计原理（Why）：
+//! - 实现初衷：定义跨栏拖拽载荷 SftpDragItem、拖拽浮层视觉 SftpDragPreview 与剪贴板状态 SftpClipboardData；
+//! - 核心优势：纯数据契约，供视图渲染与动作调度解耦引用。
+
+use crate::app::AppShell;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::h_flex;
+use gpui_kit::component::input::InputState;
+use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle};
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::*;
+use std::collections::BTreeSet;
+use transom_core::{ConnectionId, RemoteFile, TabId};
+
+/// 跨栏剪贴板数据来源。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SftpClipboardSource {
+    /// 来自本地文件系统
+    Local,
+    /// 来自远端文件系统（携带源连接 ID）
+    Remote(ConnectionId),
+}
+
+/// 跨栏剪贴板数据结构（供 Ctrl+C / Ctrl+V 使用）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SftpClipboardData {
+    pub(crate) source: SftpClipboardSource,
+    pub(crate) paths: Vec<String>,
+}
+
+/// 跨列文件拖拽载荷。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SftpDragItem {
+    pub(crate) source_tab_id: TabId,
+    pub(crate) source_connection_id: Option<ConnectionId>,
+    pub(crate) paths: Vec<String>,
+    pub(crate) file_name: String,
+    pub(crate) is_dir: bool,
+}
+
+/// 跨列文件拖拽视觉预览浮层。
+pub(crate) struct SftpDragPreview {
+    pub(crate) name: String,
+    pub(crate) count: usize,
+}
+
+impl SftpDragPreview {
+    pub(crate) fn new(name: String, count: usize) -> Self {
+        Self { name, count }
+    }
+}
+
+impl Render for SftpDragPreview {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
+            .px_2()
+            .py_1()
+            .gap_1p5()
+            .rounded(px(4.0))
+            .bg(hsla(0.0, 0.0, 0.15, 0.95))
+            .text_color(hsla(0.0, 0.0, 0.95, 1.0))
+            .text_xs()
+            .items_center()
+            .child(Icon::new(IconName::File).xsmall())
+            .child(self.name.clone())
+            .when(self.count > 1, |this| {
+                this.child(
+                    div()
+                        .px_1()
+                        .rounded(px(2.0))
+                        .bg(hsla(0.0, 0.0, 0.3, 0.9))
+                        .child(format!("+{}", self.count - 1)),
+                )
+            })
+    }
+}
+
+/// SFTP 激活的焦点栏位。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum SftpActivePane {
+    Local,
+    #[default]
+    Remote,
+    SideRemote(usize),
+}
+
+/// 跨远端互传任务参数对象。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SftpRemoteCopyParams {
+    pub(crate) source_connection_id: ConnectionId,
+    pub(crate) source_path: String,
+    pub(crate) target_connection_id: ConnectionId,
+    pub(crate) target_path: String,
+    pub(crate) is_dir: bool,
+}
+
+/// 并列借调的远端文件管理器状态。
+pub(crate) struct SftpSideRemoteState {
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) title: String,
+    pub(crate) path: String,
+    pub(crate) path_input: Entity<InputState>,
+    pub(crate) filter_input: Entity<InputState>,
+    pub(crate) entries: Vec<RemoteFile>,
+    pub(crate) selected: Option<String>,
+    pub(crate) selection: BTreeSet<String>,
+    pub(crate) scroll_handle: VirtualListScrollHandle,
+    pub(crate) loading: bool,
+    pub(crate) error: Option<String>,
+    pub(crate) collapsed: bool,
+}
+
+impl SftpSideRemoteState {
+    pub(crate) fn new(
+        connection_id: ConnectionId,
+        title: String,
+        path: String,
+        window: &mut Window,
+        cx: &mut Context<AppShell>,
+    ) -> Self {
+        let path_input = crate::palette::sftp_text_input(window, cx, &path, "远端路径...");
+        let filter_input =
+            crate::palette::sftp_text_input(window, cx, "", "过滤文件 (模糊匹配)...");
+        Self {
+            connection_id,
+            title,
+            path,
+            path_input,
+            filter_input,
+            entries: Vec::new(),
+            selected: None,
+            selection: BTreeSet::new(),
+            scroll_handle: VirtualListScrollHandle::new(),
+            loading: true,
+            error: None,
+            collapsed: false,
+        }
+    }
+}
