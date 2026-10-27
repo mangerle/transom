@@ -1,7 +1,7 @@
 //! 客户端握手、认证与输出限制单元测试。
 
 use super::auth::{request_secret, sha1_signature_required};
-use super::handler::ClientHandler;
+use super::handler::{ClientHandler, RemoteForwardTasks};
 use super::jump::ssh_preferred;
 use super::session::{
     COMMAND_EXCERPT_BYTES, MAX_EXEC_OUTPUT_BYTES, command_excerpt, exec_output_exceeds,
@@ -102,6 +102,7 @@ async fn handler_records_unknown_and_rejects_changed_keys() {
         port: 22,
         known_hosts: known_hosts.clone(),
         remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        forward_tasks: RemoteForwardTasks::new(),
         prompter: Arc::new(ScriptedPrompter {
             answers: Ok(Vec::new()),
             host_key: true,
@@ -130,6 +131,7 @@ async fn handler_rejected_host_key_is_not_recorded() {
         port: 22,
         known_hosts: known_hosts.clone(),
         remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        forward_tasks: RemoteForwardTasks::new(),
         prompter: Arc::new(ScriptedPrompter {
             answers: Ok(Vec::new()),
             host_key: false,
@@ -250,4 +252,43 @@ fn sha1_signature_required_only_for_rsa_without_sha2() {
         &Algorithm::Ed25519,
         Some(HashAlg::Sha512)
     ));
+}
+
+/// 远端转发任务生命周期管理：追踪句柄、自动回收已结束任务，支持定向与全量中止。
+#[tokio::test]
+async fn remote_forward_tasks_lifecycle_management() {
+    let tracker = RemoteForwardTasks::new();
+    assert_eq!(tracker.active_count(), 0);
+
+    // 压入长驻任务并验证计数
+    let task1 = tokio::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    });
+    let task2 = tokio::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    });
+    let task3 = tokio::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    });
+
+    tracker.track(8080, task1);
+    tracker.track(8080, task2);
+    tracker.track(9090, task3);
+    assert_eq!(tracker.active_count(), 3);
+
+    // 单端口中止：仅端口 8080 的任务被 abort，端口 9090 保持活跃
+    tracker.abort_port(8080);
+    assert_eq!(tracker.active_count(), 1);
+
+    // 压入一个立即完成的任务，验证后续 track 会自动清理结束的任务
+    let short_task = tokio::spawn(async {});
+    let _ = short_task.await;
+    let task4 = tokio::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    });
+    tracker.track(9090, task4);
+
+    // 全量中止：收割所有遗留任务
+    tracker.abort_all();
+    assert_eq!(tracker.active_count(), 0);
 }

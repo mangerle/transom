@@ -1,7 +1,7 @@
 //! 多跳 ProxyJump 隧道级联构建与出站代理穿透。
 
 use super::auth::authenticate;
-use super::handler::{AsyncStream, ClientError, ClientHandler};
+use super::handler::{AsyncStream, ClientError, ClientHandler, RemoteForwardTasks};
 use crate::auth::AuthPrompter;
 use crate::bridge::AsyncChannelStream;
 use crate::error::NetError;
@@ -29,6 +29,8 @@ pub(crate) struct ChainParams<'a> {
     pub(crate) known_hosts: Arc<dyn KnownHostsStore>,
     /// 目标会话的远端转发登记表；与 `ClientHandler` 共享同一个 Arc。
     pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    /// 远端转发任务追踪器；在会话断开或取消转发时收割任务。
+    pub(crate) forward_tasks: RemoteForwardTasks,
     /// 会话实际生效的出站代理；只作用于最外层物理连接。
     pub(crate) proxy: OutboundProxy,
     /// 是否允许 SHA1（`ssh-rsa`）用户公钥认证；跳板机同样适用。
@@ -43,6 +45,7 @@ pub(crate) struct HandshakeParams<'a> {
     pub(crate) known_hosts: Arc<dyn KnownHostsStore>,
     pub(crate) config: Arc<client::Config>,
     pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    pub(crate) forward_tasks: RemoteForwardTasks,
     pub(crate) allow_sha1_publickey_auth: bool,
 }
 
@@ -117,6 +120,7 @@ async fn build_chain(
                 prompter,
                 known_hosts,
                 remote_forwards,
+                forward_tasks,
                 proxy,
                 allow_sha1_publickey_auth,
             },
@@ -155,6 +159,7 @@ async fn build_chain(
                 known_hosts: known_hosts.clone(),
                 config: config.clone(),
                 remote_forwards: Arc::new(Mutex::new(HashMap::new())),
+                forward_tasks: RemoteForwardTasks::default(),
                 allow_sha1_publickey_auth,
             },
         )
@@ -216,6 +221,7 @@ async fn build_chain(
             known_hosts,
             config,
             remote_forwards,
+            forward_tasks,
             allow_sha1_publickey_auth,
         },
     )
@@ -272,6 +278,7 @@ where
         known_hosts,
         config,
         remote_forwards,
+        forward_tasks,
         allow_sha1_publickey_auth,
     } = params;
     let handler = ClientHandler {
@@ -279,6 +286,7 @@ where
         port: connection.port,
         known_hosts,
         remote_forwards,
+        forward_tasks,
         prompter: prompter.clone(),
     };
     let mut session = client::connect_stream(config, transport, handler)

@@ -1,6 +1,6 @@
 //! SSH 会话句柄、远端命令执行与伪终端协程。
 
-use super::handler::ClientHandler;
+use super::handler::{ClientHandler, RemoteForwardTasks};
 use russh::client::{Handle, Msg};
 use russh::{Channel, ChannelMsg, Disconnect};
 use std::collections::HashMap;
@@ -30,6 +30,7 @@ pub struct CommandOutput {
 pub struct SshRemote {
     pub(crate) inner: Arc<Handle<ClientHandler>>,
     pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    pub(crate) forward_tasks: RemoteForwardTasks,
     pub(crate) jump_handles: Vec<Arc<Handle<ClientHandler>>>,
 }
 
@@ -37,11 +38,13 @@ impl SshRemote {
     pub(crate) fn new(
         inner: Arc<Handle<ClientHandler>>,
         remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+        forward_tasks: RemoteForwardTasks,
         jump_handles: Vec<Arc<Handle<ClientHandler>>>,
     ) -> Self {
         Self {
             inner,
             remote_forwards,
+            forward_tasks,
             jump_handles,
         }
     }
@@ -72,6 +75,7 @@ impl SshRemote {
     }
 
     pub(crate) async fn cancel_tcpip_forward(&self, host: &str, port: u16) -> Result<(), AppError> {
+        self.unregister_remote_target(port);
         self.inner
             .cancel_tcpip_forward(host.to_string(), port as u32)
             .await
@@ -88,6 +92,7 @@ impl SshRemote {
         if let Ok(mut map) = self.remote_forwards.lock() {
             map.remove(&port);
         }
+        self.forward_tasks.abort_port(port);
     }
 
     /// 执行命令并返回标准输出，忽略退出码与错误输出。
@@ -151,6 +156,7 @@ impl SshRemote {
     }
 
     pub async fn disconnect(&self, description: &str) {
+        self.forward_tasks.abort_all();
         let _ = self
             .inner
             .disconnect(Disconnect::ByApplication, description, "en")

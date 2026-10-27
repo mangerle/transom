@@ -63,6 +63,7 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
     }
 
     let remote_forwards = Arc::new(Mutex::new(HashMap::new()));
+    let forward_tasks = handler::RemoteForwardTasks::new();
     let (session, traffic, jump_handles) = jump::establish_chain(jump::ChainParams {
         target: connection,
         jumps,
@@ -70,6 +71,7 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
         prompter: prompter.clone(),
         known_hosts,
         remote_forwards: remote_forwards.clone(),
+        forward_tasks: forward_tasks.clone(),
         proxy,
         allow_sha1_publickey_auth,
     })
@@ -101,7 +103,12 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
     let (input_tx, input_rx) = flume::bounded::<Vec<u8>>(64);
     let (output_tx, output_rx) = flume::bounded::<Vec<u8>>(128);
     let (control, control_rx) = TerminalControlHandle::channel(16);
-    let remote = SshRemote::new(Arc::new(session), remote_forwards, jump_handles);
+    let remote = SshRemote::new(
+        Arc::new(session),
+        remote_forwards,
+        forward_tasks,
+        jump_handles,
+    );
 
     let join = tokio::spawn(session::run_terminal_actor(
         remote.clone(),
