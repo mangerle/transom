@@ -21,6 +21,7 @@ parking_lot.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 portable-pty.workspace = true

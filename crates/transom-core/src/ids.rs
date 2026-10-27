@@ -51,3 +51,5 @@ id_type!(SnippetId);
 id_type!(TransferId);
 // 凭据模板标识：口令在钥匙串里按它归档，因此必须与会话 id 同为 UUID 新类型。
 id_type!(IdentityId);
+// 终端触发器规则标识：编辑/删除时唯一定位规则。
+id_type!(TriggerId);

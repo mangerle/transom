@@ -366,6 +366,16 @@ impl AppShell {
             );
             self.apply_appearance_to_live_panes(cx);
             self.apply_shortcut_settings(cx);
+            // 实时下发最新触发器规则给所有运行中的终端窗格
+            let triggers = self.settings.triggers.clone();
+            let terminals: Vec<Entity<TerminalView>> = self
+                .tabs
+                .iter()
+                .filter_map(|tab| tab.terminal.clone())
+                .collect();
+            for terminal in terminals {
+                terminal.update(cx, |view, _| view.reload_triggers(&triggers));
+            }
             self.status = Some(rust_i18n::t!("status.ready").to_string());
         }
         self.settings_modal.open = false;

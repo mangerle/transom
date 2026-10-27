@@ -1492,6 +1492,9 @@ settings:
   highlight_group:
     en: Keyword Highlight
     zh-CN: 关键词高亮
+  trigger_group:
+    en: Terminal Triggers & Auto-Responses
+    zh-CN: 终端触发器与自动应答
   mouse_group:
     en: Mouse
     zh-CN: 鼠标
@@ -2326,4 +2329,57 @@ recorder:
   double_click_play_hint:
     en: Double click to play in dedicated player tab
     zh-CN: 双击条目可直接在独立标签页中只读播放
+trigger:
+  master_switch:
+    en: Enable Triggers
+    zh-CN: 启用触发器系统
+  master_switch_desc:
+    en: Continuously monitor terminal output and automatically respond or alert when regex matches.
+    zh-CN: 持续监听终端输出流，当命中正则表达式规则时自动执行应答、响铃或通知。
+  rules_list:
+    en: Trigger Rules
+    zh-CN: 触发器规则列表
+  add_rule:
+    en: Add Rule
+    zh-CN: 新建规则
+  empty:
+    en: No trigger rules configured yet.
+    zh-CN: 暂无触发器规则，点击右上角新建一条规则。
+  action_bell:
+    en: Visual / Bell
+    zh-CN: 响铃 / 闪烁
+  action_notification:
+    en: Desktop Notification
+    zh-CN: 桌面通知
+  action_auto_response:
+    en: Auto Response
+    zh-CN: 自动应答
+  new_rule_title:
+    en: New Trigger Rule
+    zh-CN: 新建触发器规则
+  edit_rule_title:
+    en: Edit Trigger Rule
+    zh-CN: 编辑触发器规则
+  rule_name:
+    en: Rule Name
+    zh-CN: 规则名称
+  rule_pattern:
+    en: Regular Expression (Regex)
+    zh-CN: 正则表达式 (Regex)
+  case_sensitive:
+    en: Case sensitive
+    zh-CN: 区分大小写
+  action_kind:
+    en: Action
+    zh-CN: 触发动作
+  response_text:
+    en: Response Text (Supports $0, $1 captures)
+    zh-CN: 应答内容（自动提交换行，支持 $0, $1 捕获组）
+  notification_text:
+    en: Notification Body (Supports $0, $1 captures)
+    zh-CN: 通知正文（留空使用默认提示，支持 $0, $1 捕获组）
+  auto_response_notice:
+    en: "Trigger '%{name}' auto-responded: %{reply}"
+    zh-CN: "触发器 '%{name}' 已自动应答: %{reply}"
+
 

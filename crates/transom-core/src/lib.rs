@@ -33,6 +33,7 @@ pub mod system_stats;
 pub mod terminal;
 pub mod theme;
 pub mod traffic;
+pub mod trigger;
 pub mod zmodem;
 
 pub use backup::{
@@ -58,7 +59,7 @@ pub use host::{HostAction, HostOutcome};
 pub use identity::Identity;
 pub use ids::{
     ConnectionId, FolderId, ForwardId, GroupId, IdentityId, SessionId, SnippetId, SplitId, TabId,
-    TransferId,
+    TransferId, TriggerId,
 };
 pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
@@ -107,4 +108,5 @@ pub use terminal::{
 };
 pub use theme::{PaletteMode, PresetTheme, preset_themes};
 pub use traffic::{NetworkTraffic, TrafficCounter};
+pub use trigger::{TriggerAction, TriggerRule, TriggerSettings};
 pub use zmodem::{ZmodemDirection, ZmodemEvent, ZmodemFinished, ZmodemSettings};

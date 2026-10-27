@@ -548,6 +548,9 @@ pub struct AppSettings {
     /// 运行日志级别；旧配置缺少该字段时按默认 `info` 降级。
     #[serde(default)]
     pub logs: LogSettings,
+    /// 终端输出触发器与自动应答规则；旧配置缺少该字段时默认空。
+    #[serde(default)]
+    pub triggers: crate::trigger::TriggerSettings,
 }
 
 /// 运行日志设置。
@@ -849,6 +852,7 @@ impl Default for AppSettings {
             audit: AuditSettings::default(),
             history: HistorySettings::default(),
             logs: LogSettings::default(),
+            triggers: crate::trigger::TriggerSettings::default(),
         }
     }
 }

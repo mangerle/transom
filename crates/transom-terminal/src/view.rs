@@ -100,6 +100,7 @@ pub struct TerminalView {
     _blink_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
     recorder: RecorderHandle,
+    trigger_engine: Arc<Mutex<crate::trigger::TriggerEngine>>,
 }
 
 impl TerminalView {
@@ -194,11 +195,40 @@ impl TerminalView {
             let _ = exit_tx.try_send(Event::Exit);
         }
 
+        let trigger_engine = Arc::new(Mutex::new(crate::trigger::TriggerEngine::default()));
+        let trigger_engine_for_reader = trigger_engine.clone();
+
         let control = io.control;
         let reader_task = cx.spawn(async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
             while let Ok(bytes) = bytes_rx.recv_async().await {
+                let matches = trigger_engine_for_reader.lock().process_bytes(&bytes);
                 let updated = this.update(cx, |view, cx| {
                     view.engine.lock().process(&bytes);
+                    for m in matches {
+                        match &m.action {
+                            transom_core::TriggerAction::AutoResponse(reply) => {
+                                let mut to_send = reply.clone();
+                                if !to_send.ends_with('\r') && !to_send.ends_with('\n') {
+                                    to_send.push('\r');
+                                }
+                                view.write_input(to_send.as_bytes());
+                            }
+                            transom_core::TriggerAction::Bell => {
+                                cx.emit(TerminalEvent::Bell);
+                            }
+                            transom_core::TriggerAction::Notification(body) => {
+                                cx.emit(TerminalEvent::DesktopNotification {
+                                    title: m.name.clone(),
+                                    body: body.clone(),
+                                });
+                            }
+                            _ => {}
+                        }
+                        cx.emit(TerminalEvent::TriggerFired {
+                            rule_name: m.name,
+                            action: m.action,
+                        });
+                    }
                     cx.notify();
                 });
                 if updated.is_err() {
@@ -282,7 +312,13 @@ impl TerminalView {
             _blink_task: blink_task,
             _focus_subscriptions: vec![on_focus, on_blur],
             recorder,
+            trigger_engine,
         }
+    }
+
+    /// 从设置重载当前终端的触发器规则。
+    pub fn reload_triggers(&mut self, settings: &transom_core::TriggerSettings) {
+        self.trigger_engine.lock().reload(settings);
     }
 
     fn tick_cursor_blink(&mut self, window: &mut Window, cx: &mut Context<Self>) {

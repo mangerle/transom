@@ -337,6 +337,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) sync_form: SyncFormInputs,
     /// 凭据模板编辑器状态；`None` 表示当前未在编辑模板。
     pub(crate) identity_edit: Option<crate::identity_panel::IdentityEditState>,
+    /// 触发器规则编辑器状态；`None` 表示当前未在编辑规则。
+    pub(crate) trigger_edit: Option<crate::trigger_panel::TriggerEditState>,
 }
 
 /// SFTP 五类弹窗（权限、输入、属性、过滤、同步）与编辑器跳转行的聚合状态。
@@ -768,6 +770,7 @@ impl AppShell {
                 window_appearance_snapshot: None,
                 appearance_snapshot: None,
                 identity_edit: None,
+                trigger_edit: None,
                 sync_form,
             },
             confirm_forward_any: None,

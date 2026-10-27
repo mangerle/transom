@@ -43,6 +43,11 @@ pub enum TerminalEvent {
     /// 终端视图只负责"命中区域 = 网格"与事件投递：文件要不要接、传到哪台
     /// 主机的哪个目录，取决于会话类型与远端 cwd，属于应用层的策略。
     FilesDropped(Vec<std::path::PathBuf>),
+    /// 终端输出流命中预设触发器规则。
+    TriggerFired {
+        rule_name: String,
+        action: transom_core::TriggerAction,
+    },
 }
 
 /// Bridges alacritty terminal events into a bounded channel consumed by the view.

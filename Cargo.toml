@@ -41,6 +41,7 @@ flume = "0.12"
 directories = "6"
 keyring = "4.2"
 parking_lot = "0.12"
+regex = "1"
 # 日志统一走 log 门面：gpui/russh 等上游依赖本身就调用 log，接上门面后它们的内部
 # 日志也会落进同一份文件，排查时不必再猜是应用没打还是上游没打。
 log = "0.4"

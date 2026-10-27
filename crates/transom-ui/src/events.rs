@@ -85,7 +85,11 @@ impl AppShell {
                 });
                 // 建议能力挂到视图：查询回调是全应用共享的一份内存快照。
                 let provider = self.history_provider.clone();
-                terminal.update(cx, |view, _| view.attach_history(provider));
+                let triggers = self.settings.triggers.clone();
+                terminal.update(cx, |view, _| {
+                    view.attach_history(provider);
+                    view.reload_triggers(&triggers);
+                });
                 let focus_handle = terminal.read(cx).focus_handle().clone();
                 // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，
                 // 普通 subscribe 拿不到 Window。
@@ -716,6 +720,22 @@ impl AppShell {
             TerminalEvent::DesktopNotification { title, body } => {
                 self.on_desktop_notification(title, body, cx);
             }
+            TerminalEvent::TriggerFired { rule_name, action } => match action {
+                transom_core::TriggerAction::AutoResponse(reply) => {
+                    self.status = Some(
+                        rust_i18n::t!(
+                            "trigger.auto_response_notice",
+                            name = rule_name,
+                            reply = reply
+                        )
+                        .to_string(),
+                    );
+                }
+                transom_core::TriggerAction::Bell => {
+                    self.status = Some(rust_i18n::t!("status.bell").to_string());
+                }
+                _ => {}
+            },
         }
         cx.notify();
     }

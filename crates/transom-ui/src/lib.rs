@@ -52,6 +52,7 @@ mod tabs;
 mod terminal_search;
 mod theme;
 mod tiling;
+mod trigger_panel;
 mod window_appearance;
 mod window_state;
 mod workspace;

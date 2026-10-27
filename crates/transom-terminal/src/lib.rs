@@ -12,6 +12,7 @@ mod renderer_search;
 mod search;
 mod search_bar;
 mod search_ticks;
+pub mod trigger;
 mod view;
 mod view_ime;
 
@@ -22,4 +23,5 @@ pub use record::{
     CastEvent, CastEventType, CastHeader, RecorderHandle, ReplayInputStep, SessionRecorder,
     extract_replay_inputs, parse_cast_file,
 };
+pub use trigger::{CompiledTrigger, TriggerEngine, TriggerMatchResult};
 pub use view::{KeyFilter, TerminalView};
