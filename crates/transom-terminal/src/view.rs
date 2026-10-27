@@ -1035,9 +1035,7 @@ impl TerminalView {
         }
         log::info!("打开终端超链接: {uri}");
         #[cfg(unix)]
-        if let Err(error) = std::process::Command::new("xdg-open").arg(&uri).spawn() {
-            log::warn!("打开超链接失败: {error}");
-        }
+        open_external_uri(&uri);
         #[cfg(not(unix))]
         log::warn!("当前平台暂不支持打开终端超链接");
         true
@@ -1393,6 +1391,34 @@ impl Render for TerminalView {
 impl Drop for TerminalView {
     fn drop(&mut self) {
         self.control.close();
+    }
+}
+
+/// 交给系统默认程序打开 URI，并在专用线程里回收子进程。
+///
+/// 设计原理（Why）：spawn 本身在 UI 线程上是瞬时的，但丢弃 Child 会让
+/// 短命进程成为僵尸（父进程不 wait，要等自身退出才被统一回收，期间
+/// `ps` 里能看到 defunct 条目）。把 spawn 与 wait 一起放进具名线程：
+/// 界面不必等 xdg-open 几百毫秒的退出，也不会遗留僵尸。
+/// 代价与局限：连续点击会短暂多几个线程，属可忽略开销。
+///
+/// 安全约束：只接受调用方已按白名单过滤过的 URI（见 `open_hyperlink_at`），
+/// 本函数不做协议校验。
+#[cfg(unix)]
+fn open_external_uri(uri: &str) {
+    let uri = uri.to_string();
+    let spawned = thread::Builder::new()
+        .name("transom-open-uri".into())
+        .spawn(
+            move || match std::process::Command::new("xdg-open").arg(&uri).spawn() {
+                Ok(mut child) => {
+                    let _ = child.wait();
+                }
+                Err(error) => log::warn!("打开超链接失败，原因: {error}"),
+            },
+        );
+    if spawned.is_err() {
+        log::warn!("启动超链接打开线程失败，已忽略本次请求");
     }
 }
 
