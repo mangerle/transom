@@ -3,10 +3,10 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::{
-    AuthMethod, Connection, IdentityId, ProxyJumpConfig, SerialConnection, SerialDataBits,
-    SerialFlowControl, SerialParity, SerialPortDescriptor, SerialStopBits, Session, SessionColor,
-    SessionIcon, SessionId, SshConnection, StartupCommands, TelnetConnection, TerminalProfile,
-    TextEncoding,
+    AuthMethod, Connection, IdentityId, OutboundProxy, ProxyAuth, ProxyJumpConfig,
+    SerialConnection, SerialDataBits, SerialFlowControl, SerialParity, SerialPortDescriptor,
+    SerialStopBits, Session, SessionColor, SessionIcon, SessionId, SshConnection, StartupCommands,
+    TelnetConnection, TerminalProfile, TextEncoding,
 };
 use zeroize::Zeroizing;
 
@@ -22,6 +22,30 @@ pub(crate) enum ConnectionChoice {
     Ssh,
     Serial,
     Telnet,
+}
+
+/// 会话表单里的出站代理档位。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProxyChoice {
+    /// 跟随全局偏好设置（会话不落配置）。
+    FollowGlobal,
+    Direct,
+    Socks5,
+    Http,
+}
+
+/// 会话表单的构造输入。
+///
+/// 表单需要的目录快照（凭据模板、跳板候选、文件夹）与全局代理说明一起
+/// 传入，保证打开表单后不因目录变化而悄悄换选项。
+pub(crate) struct SessionFormInit {
+    pub base: Option<Session>,
+    pub folder_path: Option<String>,
+    pub identities: Vec<IdentityOption>,
+    pub jump_options: Vec<JumpOption>,
+    pub folder_options: Vec<String>,
+    /// 全局出站代理，仅用于"跟随全局"的说明文字。
+    pub global_proxy: OutboundProxy,
 }
 
 pub(crate) struct SessionForm {
@@ -70,6 +94,14 @@ pub(crate) struct SessionForm {
     pub jump_options: Vec<JumpOption>,
     /// 当前选用的跳板机；`None` 表示直连。
     pub jump_choice: Option<SessionId>,
+    /// 出站代理档位；跟随全局时会话不落代理配置。
+    pub proxy_choice: ProxyChoice,
+    pub proxy_host: Entity<InputState>,
+    pub proxy_port: Entity<InputState>,
+    pub proxy_username: Entity<InputState>,
+    pub proxy_password: Entity<InputState>,
+    /// 全局代理快照，用于"跟随全局"的说明文字。
+    pub global_proxy: OutboundProxy,
     /// 会话专属图标；`Auto` 表示按连接类型自动取图标。
     pub icon: SessionIcon,
     /// 会话环境色；`None` 表示不染色。
@@ -140,18 +172,20 @@ struct SessionFormSeed {
     /// 可选跳板机清单；同样只认快照。
     jump_options: Vec<JumpOption>,
     folder_options: Vec<String>,
+    /// 全局代理快照。
+    global_proxy: OutboundProxy,
 }
 
 impl SessionForm {
-    pub fn new(
-        window: &mut Window,
-        cx: &mut Context<impl Sized>,
-        base: Option<Session>,
-        folder_path: Option<String>,
-        identities: Vec<IdentityOption>,
-        jump_options: Vec<JumpOption>,
-        folder_options: Vec<String>,
-    ) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<impl Sized>, init: SessionFormInit) -> Self {
+        let SessionFormInit {
+            base,
+            folder_path,
+            identities,
+            jump_options,
+            folder_options,
+            global_proxy,
+        } = init;
         let connection = match base.as_ref().map(|session| &session.connection) {
             Some(Connection::Serial(_)) => ConnectionChoice::Serial,
             Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
@@ -270,6 +304,7 @@ impl SessionForm {
                 identities,
                 jump_options,
                 folder_options,
+                global_proxy,
             },
         )
     }
@@ -363,6 +398,7 @@ impl SessionForm {
             identities,
             jump_options,
             folder_options,
+            global_proxy,
         } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
             Connection::Ssh(ssh) => Some(ssh),
@@ -396,6 +432,46 @@ impl SessionForm {
         let jump_choice = ssh
             .and_then(|ssh| ssh.proxy_jump.as_ref())
             .map(|jump| jump.jump_session_id);
+        let (
+            proxy_choice,
+            proxy_host_text,
+            proxy_port_text,
+            proxy_username_text,
+            proxy_password_text,
+        ) = match base.as_ref().and_then(|session| session.proxy.as_ref()) {
+            None => (
+                ProxyChoice::FollowGlobal,
+                String::new(),
+                "1080".to_string(),
+                String::new(),
+                String::new(),
+            ),
+            Some(OutboundProxy::Direct) => (
+                ProxyChoice::Direct,
+                String::new(),
+                "1080".to_string(),
+                String::new(),
+                String::new(),
+            ),
+            Some(OutboundProxy::Socks5 { host, port, auth }) => (
+                ProxyChoice::Socks5,
+                host.clone(),
+                port.to_string(),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.username.clone()),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.password.clone()),
+            ),
+            Some(OutboundProxy::Http { host, port, auth }) => (
+                ProxyChoice::Http,
+                host.clone(),
+                port.to_string(),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.username.clone()),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.password.clone()),
+            ),
+        };
         let icon = base
             .as_ref()
             .map(|session| session.icon)
@@ -476,6 +552,22 @@ impl SessionForm {
             identity_choice,
             jump_options,
             jump_choice,
+            proxy_choice,
+            proxy_host: text_input(window, cx, &proxy_host_text, "127.0.0.1"),
+            proxy_port: text_input(window, cx, &proxy_port_text, "1080"),
+            proxy_username: text_input(
+                window,
+                cx,
+                &proxy_username_text,
+                &rust_i18n::t!("form.proxy_username_placeholder"),
+            ),
+            proxy_password: masked_input(
+                window,
+                cx,
+                &proxy_password_text,
+                &rust_i18n::t!("form.proxy_password_placeholder"),
+            ),
+            global_proxy,
             icon,
             color,
             confirm_delete: false,
@@ -522,6 +614,11 @@ impl SessionForm {
             ConnectionChoice::Ssh => self.identity_choice,
             _ => None,
         };
+        // 出站代理对网络型连接有意义；串口与本地终端没有网络出口。
+        session.proxy = match self.connection {
+            ConnectionChoice::Ssh | ConnectionChoice::Telnet => self.build_proxy(cx)?,
+            ConnectionChoice::Serial => None,
+        };
         session.icon = self.icon;
         session.color = self.color;
         if self.base.is_none() {
@@ -533,6 +630,34 @@ impl SessionForm {
             password,
             key_passphrase,
         })
+    }
+
+    /// 组装会话级出站代理：`None` 表示跟随全局。
+    fn build_proxy(&self, cx: &mut Context<impl Sized>) -> Result<Option<OutboundProxy>, String> {
+        let host = self.proxy_host.read(cx).value().trim().to_string();
+        let port_text = self.proxy_port.read(cx).value().trim().to_string();
+        let username = self.proxy_username.read(cx).value().trim().to_string();
+        let password = self.proxy_password.read(cx).value().to_string();
+        let auth = (!username.is_empty() || !password.is_empty())
+            .then_some(ProxyAuth { username, password });
+        let proxy = match self.proxy_choice {
+            ProxyChoice::FollowGlobal => return Ok(None),
+            ProxyChoice::Direct => OutboundProxy::Direct,
+            ProxyChoice::Socks5 => {
+                let port: u16 = port_text
+                    .parse()
+                    .map_err(|_| rust_i18n::t!("form.error_proxy_port").to_string())?;
+                OutboundProxy::Socks5 { host, port, auth }
+            }
+            ProxyChoice::Http => {
+                let port: u16 = port_text
+                    .parse()
+                    .map_err(|_| rust_i18n::t!("form.error_proxy_port").to_string())?;
+                OutboundProxy::Http { host, port, auth }
+            }
+        };
+        proxy.validate()?;
+        Ok(Some(proxy))
     }
 
     fn build_ssh_connection(
@@ -747,10 +872,22 @@ fn password_input(
     cx: &mut Context<impl Sized>,
     placeholder: &str,
 ) -> Entity<InputState> {
+    masked_input(window, cx, "", placeholder)
+}
+
+/// 带初值的掩码输入框；用于回填已保存在配置里的代理口令。
+fn masked_input(
+    window: &mut Window,
+    cx: &mut Context<impl Sized>,
+    value: &str,
+    placeholder: &str,
+) -> Entity<InputState> {
+    let value = value.to_string();
     let placeholder = placeholder.to_string();
     cx.new(|cx| {
         InputState::new(window, cx)
             .masked(true)
+            .default_value(value)
             .placeholder(placeholder)
     })
 }

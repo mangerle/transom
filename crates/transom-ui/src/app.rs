@@ -306,6 +306,26 @@ pub(crate) struct WindowAppearanceSnapshot {
 }
 
 /// 设置弹窗的聚合状态：开关、密钥向导与全部输入框实体。
+/// 设置页与全局代理使用的协议档位。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProxyProtocol {
+    Direct,
+    Socks5,
+    Http,
+}
+
+/// 全局出站代理的编辑缓冲。
+///
+/// 代理配置是多字段复合值，弹窗内逐字段编辑、保存时一次性组装并校验；
+/// 放在独立结构里，避免把四个输入框与协议档位散落到弹窗状态顶层。
+pub(crate) struct ProxyFormInputs {
+    pub(crate) kind: ProxyProtocol,
+    pub(crate) host: Entity<InputState>,
+    pub(crate) port: Entity<InputState>,
+    pub(crate) username: Entity<InputState>,
+    pub(crate) password: Entity<InputState>,
+}
+
 pub(crate) struct SettingsModalState {
     pub(crate) open: bool,
     pub(crate) key_wizard: Option<KeyWizardState>,
@@ -335,6 +355,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) appearance_snapshot: Option<AppearanceSettings>,
     /// 云同步端点与凭据输入框（凭据为掩码框，不回填钥匙串已有值）。
     pub(crate) sync_form: SyncFormInputs,
+    /// 全局出站代理的编辑缓冲。
+    pub(crate) proxy: ProxyFormInputs,
     /// 凭据模板编辑器状态；`None` 表示当前未在编辑模板。
     pub(crate) identity_edit: Option<crate::identity_panel::IdentityEditState>,
     /// 触发器规则编辑器状态；`None` 表示当前未在编辑规则。
@@ -686,6 +708,58 @@ impl AppShell {
                 .placeholder("10000")
                 .default_value(&scrollback_val)
         });
+        let (proxy_kind, proxy_host_val, proxy_port_val, proxy_user_val, proxy_pass_val) =
+            match &settings.proxy {
+                transom_core::OutboundProxy::Direct => (
+                    ProxyProtocol::Direct,
+                    String::new(),
+                    "1080".to_string(),
+                    String::new(),
+                    String::new(),
+                ),
+                transom_core::OutboundProxy::Socks5 { host, port, auth } => (
+                    ProxyProtocol::Socks5,
+                    host.clone(),
+                    port.to_string(),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.username.clone()),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.password.clone()),
+                ),
+                transom_core::OutboundProxy::Http { host, port, auth } => (
+                    ProxyProtocol::Http,
+                    host.clone(),
+                    port.to_string(),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.username.clone()),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.password.clone()),
+                ),
+            };
+        let proxy_form = ProxyFormInputs {
+            kind: proxy_kind,
+            host: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("127.0.0.1")
+                    .default_value(proxy_host_val)
+            }),
+            port: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("1080")
+                    .default_value(proxy_port_val)
+            }),
+            username: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder(rust_i18n::t!("settings.proxy_username_hint").to_string())
+                    .default_value(proxy_user_val)
+            }),
+            password: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .masked(true)
+                    .placeholder(rust_i18n::t!("settings.proxy_password_hint").to_string())
+                    .default_value(proxy_pass_val)
+            }),
+        };
         // 窗口整体透明度是连续量：滑块比输入框直观，拖动时还能即时预览。
         let settings_window_transparency = cx.new(|_| {
             SliderState::new()
@@ -754,6 +828,8 @@ impl AppShell {
             quick_open_state,
             settings_modal: SettingsModalState {
                 open: false,
+                proxy: proxy_form,
+
                 key_wizard: None,
                 font_family: settings_font_family,
                 ui_font_family: settings_ui_font_family,

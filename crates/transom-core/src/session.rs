@@ -35,6 +35,11 @@ pub struct Session {
     /// 会话环境色；`None` 表示不染色。
     #[serde(default)]
     pub color: SessionColor,
+    /// 该会话的出站代理；`None` 表示跟随全局偏好设置。
+    ///
+    /// 老会话文件没有该字段，按跟随全局降级。
+    #[serde(default)]
+    pub proxy: Option<crate::proxy::OutboundProxy>,
 }
 
 impl Session {
@@ -50,7 +55,19 @@ impl Session {
             identity_id: None,
             icon: SessionIcon::default(),
             color: SessionColor::default(),
+            proxy: None,
         }
+    }
+
+    /// 该会话实际生效的出站代理。
+    ///
+    /// 会话显式配置优先；未配置时跟随全局设置。解析发生在连接派发前，
+    /// net 层拿到的是最终结果，不需要理解"会话/全局"的优先级。
+    pub fn effective_proxy(
+        &self,
+        global: &crate::proxy::OutboundProxy,
+    ) -> crate::proxy::OutboundProxy {
+        self.proxy.clone().unwrap_or_else(|| global.clone())
     }
 
     /// 该会话口令在钥匙串里的归属。

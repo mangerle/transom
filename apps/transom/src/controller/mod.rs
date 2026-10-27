@@ -249,6 +249,7 @@ async fn run_controller(
                 connection_id,
                 session,
                 jumps,
+                proxy,
                 size,
                 secrets,
             })) => {
@@ -265,6 +266,7 @@ async fn run_controller(
                     connection_id,
                     session,
                     jumps,
+                    proxy,
                     size,
                     secrets,
                 });

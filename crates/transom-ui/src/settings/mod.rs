@@ -199,8 +199,87 @@ impl AppShell {
             input.set_value(&scrollback, window, cx);
         });
         self.fill_sync_form(window, cx);
+        self.fill_proxy_form(window, cx);
         self.settings_modal.open = true;
         cx.notify();
+    }
+
+    /// 把当前全局代理配置回填到设置弹窗的输入框。
+    ///
+    /// 口令同样回填（掩码显示）：代理口令随配置持久化，用户需要能核对和修改；
+    /// 日志与界面展示都不会输出明文。
+    fn fill_proxy_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (kind, host, port, username, password) = match &self.settings.proxy {
+            transom_core::OutboundProxy::Direct => (
+                crate::app::ProxyProtocol::Direct,
+                String::new(),
+                "1080".to_string(),
+                String::new(),
+                String::new(),
+            ),
+            transom_core::OutboundProxy::Socks5 { host, port, auth } => (
+                crate::app::ProxyProtocol::Socks5,
+                host.clone(),
+                port.to_string(),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.username.clone()),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.password.clone()),
+            ),
+            transom_core::OutboundProxy::Http { host, port, auth } => (
+                crate::app::ProxyProtocol::Http,
+                host.clone(),
+                port.to_string(),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.username.clone()),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.password.clone()),
+            ),
+        };
+        self.settings_modal.proxy.kind = kind;
+        let inputs = [
+            (&self.settings_modal.proxy.host, host),
+            (&self.settings_modal.proxy.port, port),
+            (&self.settings_modal.proxy.username, username),
+            (&self.settings_modal.proxy.password, password),
+        ];
+        for (input, value) in inputs {
+            input.clone().update(cx, |state, cx| {
+                state.set_value(value.clone(), window, cx);
+            });
+        }
+    }
+
+    /// 从设置弹窗的输入框组装全局代理配置。
+    ///
+    /// 非法配置保留原值并提示原因：静默退回直连会让用户以为代理已生效，
+    /// 在受限网络中表现为"设置改了却还是连不上"。
+    fn commit_proxy_form(&mut self, cx: &mut Context<Self>) {
+        use crate::app::ProxyProtocol;
+        let form = &self.settings_modal.proxy;
+        let host = form.host.read(cx).value().trim().to_string();
+        let port = form
+            .port
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<u16>()
+            .unwrap_or(0);
+        let username = form.username.read(cx).value().trim().to_string();
+        let password = form.password.read(cx).value().to_string();
+        let auth = (!username.is_empty() || !password.is_empty())
+            .then_some(transom_core::ProxyAuth { username, password });
+        let proxy = match form.kind {
+            ProxyProtocol::Direct => transom_core::OutboundProxy::Direct,
+            ProxyProtocol::Socks5 => transom_core::OutboundProxy::Socks5 { host, port, auth },
+            ProxyProtocol::Http => transom_core::OutboundProxy::Http { host, port, auth },
+        };
+        if let Err(reason) = proxy.validate() {
+            log::warn!("全局出站代理配置非法，保留原配置，原因: {reason}");
+            self.error = Some(reason);
+            return;
+        }
+        self.settings.proxy = proxy;
     }
 
     /// 更新界面外观偏好并即时应用：弹窗内改一档立刻全局预览。
@@ -353,6 +432,7 @@ impl AppShell {
             self.settings.terminal_profile.scrollback = scrollback;
         }
         self.sync_terminal_palette(cx);
+        self.commit_proxy_form(cx);
         // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
         self.settings_modal.window_appearance_snapshot = None;
         if let Err(error) = self.services.settings_store.save(&self.settings) {

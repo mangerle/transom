@@ -192,6 +192,7 @@ async fn jump_host_tunnels_terminal_session_to_target() {
             credentials: password_secret("secret"),
             prompter: Arc::new(PasswordPrompter::new("secret")),
             known_hosts: known_hosts.clone(),
+            proxy: transom_core::OutboundProxy::default(),
         }),
     )
     .await

@@ -17,6 +17,7 @@ pub mod layout;
 pub mod mac;
 pub mod paths;
 pub mod prompt;
+pub mod proxy;
 pub mod secrets;
 pub mod serial;
 pub mod session;
@@ -66,6 +67,7 @@ pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore
 pub use layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, StatusItemId};
 pub use mac::{MacAddress, MacParseError, normalize_mac};
 pub use prompt::{PromptInfo, PromptKind};
+pub use proxy::{OutboundProxy, ProxyAuth};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};
 pub use serial::{SerialPortDescriptor, SerialPortProvider};
 pub use session::{

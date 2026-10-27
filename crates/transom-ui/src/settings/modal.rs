@@ -237,6 +237,12 @@ impl AppShell {
                 p,
                 "settings.notify_group",
                 AppShell::render_settings_notify,
+            ))
+            .group(setting_group(
+                &app_entity,
+                p,
+                "settings.proxy_group",
+                AppShell::render_settings_proxy,
             ));
 
         // 桌面集成组仅 Linux：默认终端注册依赖 freedesktop 规范，macOS/Windows

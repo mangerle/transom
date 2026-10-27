@@ -1,6 +1,7 @@
 //! 偏好设置中的通用页：语言、通知与声音、桌面集成、数据备份。
 
 use crate::app::AppShell;
+use crate::app::ProxyProtocol;
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -97,6 +98,86 @@ impl AppShell {
                     .child(rust_i18n::t!("notify.threshold_note").to_string()),
             )
             .into_any_element()
+    }
+
+    /// 出站代理组：全局 SOCKS5 / HTTP CONNECT 出口。
+    ///
+    /// 会话未单独指定代理时跟随这里的配置；代理口令输入框为掩码，
+    /// 保存时随配置落盘，界面与日志都不会回显明文。
+    pub(crate) fn render_settings_proxy(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let kind = self.settings_modal.proxy.kind;
+        let host = self.settings_modal.proxy.host.clone();
+        let port = self.settings_modal.proxy.port.clone();
+        let username = self.settings_modal.proxy.username.clone();
+        let password = self.settings_modal.proxy.password.clone();
+        let mut content = v_flex().gap_2().child(Self::setting_row(
+            "settings.proxy_mode",
+            Some("settings.proxy_mode_desc"),
+            h_flex()
+                .gap_1()
+                .children(
+                    [
+                        (
+                            "proxy-direct",
+                            "settings.proxy_direct",
+                            ProxyProtocol::Direct,
+                        ),
+                        (
+                            "proxy-socks5",
+                            "settings.proxy_socks5",
+                            ProxyProtocol::Socks5,
+                        ),
+                        ("proxy-http", "settings.proxy_http", ProxyProtocol::Http),
+                    ]
+                    .into_iter()
+                    .map(|(id, key, protocol)| {
+                        Button::new(id)
+                            .small()
+                            .label(rust_i18n::t!(key).to_string())
+                            .selected(kind == protocol)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.settings_modal.proxy.kind = protocol;
+                                cx.notify();
+                            }))
+                    }),
+                )
+                .into_any_element(),
+            p,
+        ));
+        if kind != ProxyProtocol::Direct {
+            content = content
+                .child(Self::form_field(
+                    rust_i18n::t!("settings.proxy_host").to_string(),
+                    host,
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("settings.proxy_port").to_string(),
+                    port,
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("settings.proxy_username").to_string(),
+                    username,
+                    p,
+                ))
+                .child(Self::secret_field(
+                    rust_i18n::t!("settings.proxy_password").to_string(),
+                    password,
+                    p,
+                ))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("settings.proxy_auth_hint").to_string()),
+                );
+        }
+        content.into_any_element()
     }
 
     /// 桌面集成组：默认终端注册开关（仅 Linux）。

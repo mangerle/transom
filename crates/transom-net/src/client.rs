@@ -15,7 +15,7 @@ use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore,
-    PromptInfo, PromptKind, SessionOptions, SshConnection, SshHop, TerminalControl,
+    OutboundProxy, PromptInfo, PromptKind, SessionOptions, SshConnection, SshHop, TerminalControl,
     TerminalControlHandle, TerminalIo, TerminalSize, TrafficCounter,
 };
 use zeroize::Zeroizing;
@@ -309,6 +309,8 @@ pub struct SshConnectParams<'a> {
     pub credentials: ConnectionSecrets,
     pub prompter: Arc<dyn AuthPrompter>,
     pub known_hosts: Arc<dyn KnownHostsStore>,
+    /// 会话实际生效的出站代理（已按"会话优先于全局"解析）。
+    pub proxy: OutboundProxy,
 }
 
 pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, AppError> {
@@ -319,6 +321,7 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
         credentials,
         prompter,
         known_hosts,
+        proxy,
     } = params;
     if connection.host.trim().is_empty() {
         return Err(AppError::with_detail(
@@ -341,6 +344,7 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
         prompter: prompter.clone(),
         known_hosts,
         remote_forwards: remote_forwards.clone(),
+        proxy,
     })
     .await?;
 
@@ -407,6 +411,8 @@ struct ChainParams<'a> {
     known_hosts: Arc<dyn KnownHostsStore>,
     /// 目标会话的远端转发登记表；与 `ClientHandler` 共享同一个 Arc。
     remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    /// 会话实际生效的出站代理；只作用于最外层物理连接。
+    proxy: OutboundProxy,
 }
 
 /// 单跳握手与认证的输入。
@@ -490,6 +496,7 @@ async fn build_chain(
                 prompter,
                 known_hosts,
                 remote_forwards,
+                proxy,
             },
         config,
         traffic,
@@ -500,7 +507,7 @@ async fn build_chain(
     let outer_timeout = dial_target.options.connect_timeout_secs.max(1);
     let transport = match tokio::time::timeout(
         Duration::from_secs(outer_timeout),
-        open_direct_transport(dial_target),
+        open_transport(dial_target, &proxy),
     )
     .await
     {
@@ -594,18 +601,14 @@ async fn build_chain(
     (result, jump_handles)
 }
 
-/// 打开目标地址的物理 TCP 连接。
+/// 打开目标地址的物理连接；直连或经 SOCKS5/HTTP CONNECT 代理隧道。
 ///
-/// 后续出站代理（SOCKS5/HTTP CONNECT）在 M2 中替换这个函数，握手层与
-/// 跳板链不需要改动。
-async fn open_direct_transport(connection: &SshConnection) -> Result<TcpStream, AppError> {
-    let socket = TcpStream::connect((connection.host.as_str(), connection.port))
-        .await
-        .map_err(|source| NetError::Connect {
-            host: connection.host.clone(),
-            port: connection.port,
-            source,
-        })?;
+/// 代理只作用于最外层物理连接：内层跳板机都跑在同一条隧道里。
+async fn open_transport(
+    connection: &SshConnection,
+    proxy: &OutboundProxy,
+) -> Result<TcpStream, AppError> {
+    let socket = crate::proxy::connect_via_proxy(&connection.host, connection.port, proxy).await?;
     if let Err(error) = socket.set_nodelay(true) {
         log::debug!("设置 TCP_NODELAY 失败，将继续使用默认行为，原因: {error}");
     }

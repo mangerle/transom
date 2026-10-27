@@ -424,6 +424,7 @@ async fn sftp_list_upload_download_and_mutations() {
             },
             prompter: Arc::new(PasswordPrompter::new("secret")),
             known_hosts,
+            proxy: transom_core::OutboundProxy::default(),
         }),
     )
     .await

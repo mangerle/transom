@@ -7,6 +7,7 @@ mod error;
 mod forward;
 mod host;
 mod keys;
+mod proxy;
 mod serial;
 mod sftp;
 mod sftp_dir;

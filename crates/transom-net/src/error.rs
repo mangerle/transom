@@ -40,6 +40,13 @@ pub enum NetError {
     /// 认证失败：reason 描述具体环节（密码、私钥、agent、交互式）。
     #[error("SSH 认证失败: {reason}")]
     Auth { reason: String },
+    /// 出站代理握手失败：携带代理地址与目标，reason 为协议层原因（不含口令）。
+    #[error("经出站代理建立隧道失败，代理: {proxy}，目标: {target}，原因: {reason}")]
+    Proxy {
+        proxy: String,
+        target: String,
+        reason: String,
+    },
     /// 通道打开或子系统请求失败。
     #[error("打开 SSH 通道失败: {reason}")]
     Channel { reason: String },
@@ -62,7 +69,9 @@ impl NetError {
     /// 到全工程错误码的映射；与 UI 层本地化文案键一一对应。
     fn code(&self) -> ErrorCode {
         match self {
-            Self::Connect { .. } | Self::Handshake { .. } => ErrorCode::ConnectionFailed,
+            Self::Connect { .. } | Self::Handshake { .. } | Self::Proxy { .. } => {
+                ErrorCode::ConnectionFailed
+            }
             Self::HostKey { .. } => ErrorCode::HostKeyMismatch,
             Self::Auth { .. } => ErrorCode::AuthFailed,
             Self::Channel { .. } => ErrorCode::ChannelFailed,

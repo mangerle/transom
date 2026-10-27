@@ -81,6 +81,16 @@ fn collect_connection_secrets(
 /// 跳板机与目标会话走同一套钥匙串归属规则（引用凭据模板时归模板），
 /// 因此复用 [`collect_connection_secrets`]；单跳读数失败不阻断建链，
 /// 认证阶段会改为向用户索取。
+/// 连接派发时随会话一起下发的敏感与链路载荷。
+///
+/// 收敛为一个结构体：跳板链、生效代理与凭据总是同时产出、同时消费，
+/// 平铺会让 `send_connect` 的参数列表继续膨胀。
+pub(crate) struct ConnectPayload {
+    pub(crate) jumps: Vec<transom_core::SshHop>,
+    pub(crate) proxy: transom_core::OutboundProxy,
+    pub(crate) secrets: ConnectionSecrets,
+}
+
 fn collect_jump_hops(
     secret_store: &dyn SecretStore,
     chain: &[Session],
@@ -458,6 +468,23 @@ impl AppShell {
             }
         };
 
+        // 会话显式代理优先，否则跟随全局；配置非法时直接拦下，
+        // 避免带着一个连不通的代理去握手再报出误导性的连接错误。
+        let proxy = session.effective_proxy(&self.settings.proxy);
+        if let Err(reason) = proxy.validate() {
+            log::warn!(
+                "出站代理配置非法，窗格: {tab_id}，会话: {}，原因: {reason}",
+                session.name
+            );
+            let error = AppError::with_detail(ErrorCode::Configuration, reason);
+            self.error = Some(localized_error(&error));
+            if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+                tab.status = TabStatus::Failed(error);
+            }
+            cx.notify();
+            return;
+        }
+
         // 凭据只负责"有就带上"：缺失不在这里拦截，认证阶段由 net 层按需向界面索取。
         // 钥匙串走 D-Bus 可能挂起秒级：放到后台线程读取，避免冻结 UI。
         let secret_store = self.services.secret_store.clone();
@@ -479,7 +506,17 @@ impl AppShell {
                 if let Some(error) = error {
                     this.error = Some(error);
                 }
-                this.send_connect(tab_id, connection_id, session, hops, secrets, cx);
+                this.send_connect(
+                    tab_id,
+                    connection_id,
+                    session,
+                    ConnectPayload {
+                        jumps: hops,
+                        proxy,
+                        secrets,
+                    },
+                    cx,
+                );
             });
         })
         .detach();
@@ -490,8 +527,7 @@ impl AppShell {
         tab_id: TabId,
         connection_id: ConnectionId,
         session: Session,
-        jumps: Vec<transom_core::SshHop>,
-        secrets: ConnectionSecrets,
+        payload: ConnectPayload,
         cx: &mut Context<Self>,
     ) {
         let size = TerminalSize::new(120, 32);
@@ -499,8 +535,9 @@ impl AppShell {
             tab_id,
             connection_id,
             session: Box::new(session),
-            jumps,
-            secrets,
+            jumps: payload.jumps,
+            proxy: payload.proxy,
+            secrets: payload.secrets,
             size,
         };
         if !self.send_command(command) {

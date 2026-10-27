@@ -354,11 +354,14 @@ impl AppShell {
         self.form = Some(SessionForm::new(
             window,
             cx,
-            None,
-            None,
-            self.identity_options(),
-            self.jump_options(None),
-            self.folder_paths(),
+            crate::session_form::SessionFormInit {
+                base: None,
+                folder_path: None,
+                identities: self.identity_options(),
+                jump_options: self.jump_options(None),
+                folder_options: self.folder_paths(),
+                global_proxy: self.settings.proxy.clone(),
+            },
         ));
         cx.notify();
     }
@@ -385,11 +388,14 @@ impl AppShell {
         let mut form = SessionForm::new(
             window,
             cx,
-            Some(session),
-            folder_path,
-            self.identity_options(),
-            self.jump_options(Some(session_id)),
-            self.folder_paths(),
+            crate::session_form::SessionFormInit {
+                base: Some(session),
+                folder_path,
+                identities: self.identity_options(),
+                jump_options: self.jump_options(Some(session_id)),
+                folder_options: self.folder_paths(),
+                global_proxy: self.settings.proxy.clone(),
+            },
         );
         self.prefill_secrets(&mut form, window, cx);
         self.form = Some(form);

@@ -279,6 +279,48 @@ form:
   proxy_jump_hint:
     en: The target is reached through the selected SSH session; multi-hop chains follow each hop's own jump setting.
     zh-CN: 经由所选 SSH 会话连接目标；多层链路按各跳板机自身的跳板设置逐级展开。
+  proxy:
+    en: Outbound proxy
+    zh-CN: 出站代理
+  proxy_follow_global:
+    en: Use global
+    zh-CN: 跟随全局
+  proxy_direct:
+    en: Direct
+    zh-CN: 直连
+  proxy_socks5:
+    en: SOCKS5
+    zh-CN: SOCKS5
+  proxy_http:
+    en: HTTP CONNECT
+    zh-CN: HTTP CONNECT
+  proxy_global_hint:
+    en: "Current global proxy: %{proxy}"
+    zh-CN: "当前全局代理：%{proxy}"
+  proxy_host:
+    en: Proxy host
+    zh-CN: 代理地址
+  proxy_port:
+    en: Proxy port
+    zh-CN: 代理端口
+  proxy_username:
+    en: Proxy username (optional)
+    zh-CN: 代理用户名（可留空）
+  proxy_password:
+    en: Proxy password (optional)
+    zh-CN: 代理密码（可留空）
+  proxy_username_placeholder:
+    en: Leave blank for no authentication
+    zh-CN: 留空表示不启用认证
+  proxy_password_placeholder:
+    en: Leave blank for no authentication
+    zh-CN: 留空表示不启用认证
+  proxy_auth_hint:
+    en: Leave both username and password blank to connect without proxy authentication.
+    zh-CN: 用户名与密码都留空时不启用代理认证。
+  error_proxy_port:
+    en: Proxy port must be a number between 1 and 65535
+    zh-CN: 代理端口必须是 1 到 65535 之间的数字
   identity:
     en: Credential template
     zh-CN: 凭据模板
@@ -1528,6 +1570,36 @@ settings:
   notify_group:
     en: Notification & Sound
     zh-CN: 通知与声音
+  proxy_group:
+    en: Outbound Proxy
+    zh-CN: 出站代理
+  proxy_mode:
+    en: Proxy protocol
+    zh-CN: 代理协议
+  proxy_mode_desc:
+    en: Used by sessions that follow the global setting. SOCKS5 resolves target names remotely; HTTP uses CONNECT tunnels.
+    zh-CN: 供"跟随全局"的会话使用；SOCKS5 由代理远端解析目标域名，HTTP 走 CONNECT 隧道。
+  proxy_username_hint:
+    en: Leave blank for no authentication
+    zh-CN: 留空表示不启用认证
+  proxy_password_hint:
+    en: Leave blank for no authentication
+    zh-CN: 留空表示不启用认证
+  proxy_host:
+    en: Proxy host
+    zh-CN: 代理地址
+  proxy_port:
+    en: Proxy port
+    zh-CN: 代理端口
+  proxy_username:
+    en: Proxy username
+    zh-CN: 代理用户名
+  proxy_password:
+    en: Proxy password
+    zh-CN: 代理密码
+  proxy_auth_hint:
+    en: Leave username and password blank to connect without proxy authentication.
+    zh-CN: 用户名与密码都留空时不启用代理认证。
   desktop_integration_group:
     en: Desktop Integration
     zh-CN: 桌面集成

@@ -551,6 +551,9 @@ pub struct AppSettings {
     /// 终端输出触发器与自动应答规则；旧配置缺少该字段时默认空。
     #[serde(default)]
     pub triggers: crate::trigger::TriggerSettings,
+    /// 全局出站代理；会话未显式指定代理时生效，旧配置缺省为直连。
+    #[serde(default)]
+    pub proxy: crate::proxy::OutboundProxy,
 }
 
 /// 运行日志设置。
@@ -853,6 +856,7 @@ impl Default for AppSettings {
             history: HistorySettings::default(),
             logs: LogSettings::default(),
             triggers: crate::trigger::TriggerSettings::default(),
+            proxy: crate::proxy::OutboundProxy::default(),
         }
     }
 }

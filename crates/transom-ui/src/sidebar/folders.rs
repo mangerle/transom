@@ -104,11 +104,14 @@ impl AppShell {
         let mut form = SessionForm::new(
             window,
             cx,
-            None,
-            path.clone(),
-            self.identity_options(),
-            self.jump_options(None),
-            self.folder_paths(),
+            crate::session_form::SessionFormInit {
+                base: None,
+                folder_path: path.clone(),
+                identities: self.identity_options(),
+                jump_options: self.jump_options(None),
+                folder_options: self.folder_paths(),
+                global_proxy: self.settings.proxy.clone(),
+            },
         );
         let defaults = self.catalog.inherited_folder_defaults(folder_id);
         if let Some(folder_path) = path {

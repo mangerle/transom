@@ -21,6 +21,8 @@ pub enum AppCommand {
         /// 链路在界面侧按目录快照解析并取好各跳凭据，net 层只负责按序建链；
         /// 控制器据此在派发连接时原样下传，不再回查会话目录。
         jumps: Vec<crate::session::SshHop>,
+        /// 实际生效的出站代理（会话优先于全局），已由界面解析完成。
+        proxy: crate::proxy::OutboundProxy,
         size: TerminalSize,
         secrets: ConnectionSecrets,
     },
