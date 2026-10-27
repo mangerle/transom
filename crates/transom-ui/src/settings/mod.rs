@@ -1,15 +1,20 @@
 //! 偏好设置中心的动作入口与通用/渲染/快捷键配置页模块。
 
 mod about_page;
+mod appearance_page;
+mod files_page;
 mod general_page;
+mod input_page;
 mod layout_page;
 mod logs_page;
 mod modal;
 mod modal_state;
-mod pages;
+mod security_page;
 mod shortcuts_page;
 mod startup_page;
 mod sync_page;
+mod terminal_page;
+mod window_page;
 
 use crate::app::{AppShell, WindowAppearanceSnapshot};
 use crate::palette::{Palette, localized_error};
