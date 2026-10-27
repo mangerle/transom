@@ -284,6 +284,7 @@ mod tests {
                 username: "deploy".into(),
                 auth: crate::AuthMethod::Password { save: true },
                 options: Default::default(),
+                proxy_jump: None,
             }),
         )
     }
@@ -384,6 +385,7 @@ mod tests {
                     save_passphrase: true,
                 },
                 options: Default::default(),
+                proxy_jump: None,
             }),
         );
         assert_eq!(key.secret_kinds(), &[SecretKind::KeyPassphrase]);

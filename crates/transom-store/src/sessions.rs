@@ -128,6 +128,7 @@ mod tests {
                 username: "user".into(),
                 auth: AuthMethod::Password { save: true },
                 options: Default::default(),
+                proxy_jump: None,
             }),
         )
     }

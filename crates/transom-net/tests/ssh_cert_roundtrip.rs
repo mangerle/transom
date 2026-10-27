@@ -177,16 +177,18 @@ async fn run_case(
             auto_reconnect: false,
             wol_mac: None,
         },
+        proxy_jump: None,
     };
     let result = tokio::time::timeout(
         Duration::from_secs(8),
-        connect_ssh(
-            &connection,
-            TerminalSize::new(80, 24),
-            ConnectionSecrets::default(),
-            Arc::new(PasswordPrompter::new("unused")),
+        connect_ssh(transom_net::SshConnectParams {
+            connection: &connection,
+            jumps: &[],
+            size: TerminalSize::new(80, 24),
+            credentials: ConnectionSecrets::default(),
+            prompter: Arc::new(PasswordPrompter::new("unused")),
             known_hosts,
-        ),
+        }),
     )
     .await
     .expect("连接超时");

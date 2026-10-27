@@ -137,19 +137,21 @@ async fn connect(port: u16, dir: &tempfile::TempDir) -> SshSession {
             auto_reconnect: false,
             wol_mac: None,
         },
+        proxy_jump: None,
     };
     tokio::time::timeout(
         Duration::from_secs(8),
-        connect_ssh(
-            &connection,
-            TerminalSize::new(80, 24),
-            ConnectionSecrets {
+        connect_ssh(transom_net::SshConnectParams {
+            connection: &connection,
+            jumps: &[],
+            size: TerminalSize::new(80, 24),
+            credentials: ConnectionSecrets {
                 password: Some(zeroize::Zeroizing::new("secret".to_string())),
                 key_passphrase: None,
             },
-            Arc::new(PasswordPrompter::new("secret")),
+            prompter: Arc::new(PasswordPrompter::new("secret")),
             known_hosts,
-        ),
+        }),
     )
     .await
     .expect("connect timed out")

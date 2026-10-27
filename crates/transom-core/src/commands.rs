@@ -16,6 +16,11 @@ pub enum AppCommand {
         tab_id: TabId,
         connection_id: ConnectionId,
         session: Box<Session>,
+        /// 已解析的跳板链（最外层到最内层）；空表示直连。
+        ///
+        /// 链路在界面侧按目录快照解析并取好各跳凭据，net 层只负责按序建链；
+        /// 控制器据此在派发连接时原样下传，不再回查会话目录。
+        jumps: Vec<crate::session::SshHop>,
         size: TerminalSize,
         secrets: ConnectionSecrets,
     },

@@ -93,7 +93,7 @@ impl SecretKey {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ConnectionSecrets {
     pub password: Option<Zeroizing<String>>,
     pub key_passphrase: Option<Zeroizing<String>>,

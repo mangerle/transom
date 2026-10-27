@@ -1,5 +1,5 @@
 use crate::auth::AuthPrompter;
-use crate::bridge::{ChannelReader, ChannelWriter};
+use crate::bridge::{AsyncChannelStream, ChannelReader, ChannelWriter};
 use crate::error::NetError;
 use crate::traffic::CountingStream;
 use russh::client::{self, Handle, Msg};
@@ -10,15 +10,23 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore,
-    PromptInfo, PromptKind, SessionOptions, SshConnection, TerminalControl, TerminalControlHandle,
-    TerminalIo, TerminalSize, TrafficCounter,
+    PromptInfo, PromptKind, SessionOptions, SshConnection, SshHop, TerminalControl,
+    TerminalControlHandle, TerminalIo, TerminalSize, TrafficCounter,
 };
 use zeroize::Zeroizing;
+
+/// 传输流抽象：直连 TCP、跳板机通道与后续的出站代理都收敛到同一类型。
+///
+/// 为什么需要它：`russh::client::connect_stream` 只要求 `AsyncRead + AsyncWrite +
+/// Send + Unpin + 'static`，用 trait object 把"这一跳的字节从哪来"从握手逻辑里
+/// 解耦，裸 TCP 与隧道通道可以走同一段握手/认证代码。
+trait AsyncStream: AsyncRead + AsyncWrite + Send + Unpin {}
+impl<T: AsyncRead + AsyncWrite + Send + Unpin> AsyncStream for T {}
 
 #[derive(Debug)]
 pub struct ClientError(pub AppError);
@@ -172,6 +180,12 @@ pub struct SshRemote {
     /// 无谓串行化，因此直接共享 Arc<Handle>。
     inner: Arc<Handle<ClientHandler>>,
     remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    /// 跳板机链路上的会话句柄（最外层到最内层）。
+    ///
+    /// 这些句柄必须在主连接存续期间保活：目标节点的传输流是它们内部的
+    /// `direct-tcpip` 通道，提前释放会让整条链路断开。断开主连接时按
+    /// 由内向外的顺序一并关闭，避免残留 SSH 会话。
+    jump_handles: Vec<Arc<Handle<ClientHandler>>>,
 }
 
 impl SshRemote {
@@ -266,6 +280,12 @@ impl SshRemote {
             .inner
             .disconnect(Disconnect::ByApplication, description, "en")
             .await;
+        // 由内向外关闭跳板机：最内层离目标最近，先释放它再逐级退出外层会话。
+        for handle in self.jump_handles.iter().rev() {
+            let _ = handle
+                .disconnect(Disconnect::ByApplication, description, "en")
+                .await;
+        }
     }
 }
 
@@ -277,13 +297,29 @@ pub struct SshSession {
     pub traffic: Arc<TrafficCounter>,
 }
 
-pub async fn connect_ssh(
-    connection: &SshConnection,
-    size: TerminalSize,
-    credentials: ConnectionSecrets,
-    prompter: Arc<dyn AuthPrompter>,
-    known_hosts: Arc<dyn KnownHostsStore>,
-) -> Result<SshSession, AppError> {
+/// SSH 建连参数。
+///
+/// 参数超过五个后收敛为结构体：跳板链、凭据、提示器与 known_hosts 都是
+/// "本次连接一次性"的输入，平铺会让调用点难以核对顺序与遗漏。
+pub struct SshConnectParams<'a> {
+    pub connection: &'a SshConnection,
+    /// 已解析的跳板链，顺序为最外层到最内层；空表示直连。
+    pub jumps: &'a [SshHop],
+    pub size: TerminalSize,
+    pub credentials: ConnectionSecrets,
+    pub prompter: Arc<dyn AuthPrompter>,
+    pub known_hosts: Arc<dyn KnownHostsStore>,
+}
+
+pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, AppError> {
+    let SshConnectParams {
+        connection,
+        jumps,
+        size,
+        credentials,
+        prompter,
+        known_hosts,
+    } = params;
     if connection.host.trim().is_empty() {
         return Err(AppError::with_detail(
             ErrorCode::Configuration,
@@ -297,66 +333,16 @@ pub async fn connect_ssh(
         ));
     }
 
-    // 下载方向的吞吐上限约为「通道窗口 / RTT」。russh 默认 2 MiB 与 OpenSSH
-    // 一致，在百毫秒级链路上会把单通道压到约 20 MB/s；提高到 16 MiB 后，
-    // 与 SFTP 侧单句柄 64 个约 255 KiB 的预取请求正好匹配。窗口是通道级配置，
-    // 终端、SFTP 与端口转发共用同一个值；它只是流控额度，不会按窗口大小
-    // 预分配内存。
-    let config = client::Config {
-        nodelay: true,
-        window_size: 16 * 1024 * 1024,
-        keepalive_interval: keepalive_interval(&connection.options),
-        keepalive_max: 3,
-        ..Default::default()
-    };
-
     let remote_forwards = Arc::new(Mutex::new(HashMap::new()));
-    let handler = ClientHandler {
-        host: connection.host.clone(),
-        port: connection.port,
+    let (session, traffic, jump_handles) = establish_chain(ChainParams {
+        target: connection,
+        jumps,
+        credentials,
+        prompter: prompter.clone(),
         known_hosts,
         remote_forwards: remote_forwards.clone(),
-        // 同一个 Arc 稍后还要传给 authenticate 做凭据索取，这里只克隆引用
-        prompter: prompter.clone(),
-    };
-    let connect_timeout = Duration::from_secs(connection.options.connect_timeout_secs.max(1));
-    let host = connection.host.clone();
-    let port = connection.port;
-    let connect = async move {
-        let socket = TcpStream::connect((host.as_str(), port))
-            .await
-            .map_err(|error| NetError::Connect {
-                host: host.clone(),
-                port,
-                source: error,
-            })?;
-        if let Err(error) = socket.set_nodelay(true) {
-            log::debug!("设置 TCP_NODELAY 失败，将继续使用默认行为，原因: {error}");
-        }
-        let traffic = Arc::new(TrafficCounter::default());
-        let stream = CountingStream::new(socket, traffic.clone());
-        let session = client::connect_stream(Arc::new(config), stream, handler)
-            .await
-            .map_err(map_connect_error)?;
-        Ok::<_, AppError>((session, traffic))
-    };
-    let (mut session, traffic) = tokio::time::timeout(connect_timeout, connect)
-        .await
-        .map_err(|_| NetError::Handshake {
-            host: connection.host.clone(),
-            port: connection.port,
-            reason: format!(
-                "连接超时，已等待 {} 秒",
-                connection.options.connect_timeout_secs.max(1)
-            ),
-        })??;
-
-    if let Err(error) = authenticate(&mut session, connection, credentials, prompter).await {
-        let _ = session
-            .disconnect(Disconnect::ByApplication, "authentication failed", "en")
-            .await;
-        return Err(error);
-    }
+    })
+    .await?;
 
     let channel = session
         .channel_open_session()
@@ -387,6 +373,7 @@ pub async fn connect_ssh(
     let remote = SshRemote {
         inner: Arc::new(session),
         remote_forwards,
+        jump_handles,
     };
 
     let join = tokio::spawn(run_terminal_actor(
@@ -409,6 +396,283 @@ pub async fn connect_ssh(
         remote,
         traffic,
     })
+}
+
+/// 建连链路的完整输入：跳板链、目标、凭据与各跳共享的认证设施。
+struct ChainParams<'a> {
+    target: &'a SshConnection,
+    jumps: &'a [SshHop],
+    credentials: ConnectionSecrets,
+    prompter: Arc<dyn AuthPrompter>,
+    known_hosts: Arc<dyn KnownHostsStore>,
+    /// 目标会话的远端转发登记表；与 `ClientHandler` 共享同一个 Arc。
+    remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+}
+
+/// 单跳握手与认证的输入。
+struct HandshakeParams<'a> {
+    connection: &'a SshConnection,
+    credentials: ConnectionSecrets,
+    prompter: Arc<dyn AuthPrompter>,
+    known_hosts: Arc<dyn KnownHostsStore>,
+    config: Arc<client::Config>,
+    remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+}
+
+/// 逐跳建链过程中的累积状态。
+struct ChainBuild<'a> {
+    params: ChainParams<'a>,
+    config: Arc<client::Config>,
+    traffic: Arc<TrafficCounter>,
+}
+
+/// 建立"TCP（或代理）-> 各跳板机 SSH -> 目标 SSH"的完整链路。
+///
+/// 每一跳都复用手头的 `prompter` 与 `known_hosts`：跳板机同样走 TOFU 指纹
+/// 校验与按需索取凭据，安全口径与直连一致。中途失败会关闭已经建立的跳板
+/// 会话，不把半条链路留在后台。
+async fn establish_chain(
+    params: ChainParams<'_>,
+) -> Result<
+    (
+        Handle<ClientHandler>,
+        Arc<TrafficCounter>,
+        Vec<Arc<Handle<ClientHandler>>>,
+    ),
+    AppError,
+> {
+    // 下载方向的吞吐上限约为「通道窗口 / RTT」。russh 默认 2 MiB 与 OpenSSH
+    // 一致，在百毫秒级链路上会把单通道压到约 20 MB/s；提高到 16 MiB 后，
+    // 与 SFTP 侧单句柄 64 个约 255 KiB 的预取请求正好匹配。窗口是通道级配置，
+    // 终端、SFTP 与端口转发共用同一个值；它只是流控额度，不会按窗口大小
+    // 预分配内存。
+    let config = Arc::new(client::Config {
+        nodelay: true,
+        window_size: 16 * 1024 * 1024,
+        keepalive_interval: keepalive_interval(&params.target.options),
+        keepalive_max: 3,
+        ..Default::default()
+    });
+    // 只统计目标 SSH 会话的密文吞吐：外层跳板机的密文包含整条隧道，
+    // 两层都计会成倍虚高，状态栏显示的"本连接流量"应与直连时同口径。
+    let traffic = Arc::new(TrafficCounter::default());
+    let (result, jump_handles) = build_chain(ChainBuild {
+        params,
+        config,
+        traffic: traffic.clone(),
+    })
+    .await;
+    match result {
+        Ok(session) => Ok((session, traffic, jump_handles)),
+        Err(error) => {
+            disconnect_handles(&jump_handles, "跳板链建立失败").await;
+            Err(error)
+        }
+    }
+}
+
+/// 依次完成各跳握手并打通下一跳的 `direct-tcpip` 通道。
+///
+/// 无论成功与否都返回已建立的跳板句柄，交由调用方统一清理：中途失败时
+/// 已认证的跳板会话不能留在后台。
+async fn build_chain(
+    build: ChainBuild<'_>,
+) -> (
+    Result<Handle<ClientHandler>, AppError>,
+    Vec<Arc<Handle<ClientHandler>>>,
+) {
+    let ChainBuild {
+        params:
+            ChainParams {
+                target,
+                jumps,
+                credentials,
+                prompter,
+                known_hosts,
+                remote_forwards,
+            },
+        config,
+        traffic,
+    } = build;
+    let mut jump_handles = Vec::with_capacity(jumps.len());
+    // 第一段物理 TCP 永远连最外层跳板机；没有跳板时才直连目标。
+    let dial_target = jumps.first().map_or(target, |hop| &hop.connection);
+    let outer_timeout = dial_target.options.connect_timeout_secs.max(1);
+    let transport = match tokio::time::timeout(
+        Duration::from_secs(outer_timeout),
+        open_direct_transport(dial_target),
+    )
+    .await
+    {
+        Ok(Ok(transport)) => transport,
+        Ok(Err(error)) => return (Err(error), jump_handles),
+        Err(_) => {
+            let error = NetError::Connect {
+                host: dial_target.host.clone(),
+                port: dial_target.port,
+                source: std::io::Error::new(std::io::ErrorKind::TimedOut, "连接阶段超时"),
+            };
+            return (Err(error.into()), jump_handles);
+        }
+    };
+    let mut transport: Box<dyn AsyncStream> = Box::new(transport);
+
+    for (index, hop) in jumps.iter().enumerate() {
+        let handle = match timed_handshake(
+            transport,
+            HandshakeParams {
+                connection: &hop.connection,
+                credentials: hop.secrets.clone(),
+                prompter: prompter.clone(),
+                known_hosts: known_hosts.clone(),
+                config: config.clone(),
+                remote_forwards: Arc::new(Mutex::new(HashMap::new())),
+            },
+        )
+        .await
+        {
+            Ok(handle) => handle,
+            Err(error) => {
+                return (
+                    Err(AppError::with_detail(
+                        error.code,
+                        format!(
+                            "经跳板机 {}:{} 建连失败: {}",
+                            hop.connection.host,
+                            hop.connection.port,
+                            error.detail.as_deref().unwrap_or("未知原因")
+                        ),
+                    )),
+                    jump_handles,
+                );
+            }
+        };
+        let (next_host, next_port) = jumps
+            .get(index + 1)
+            .map_or((&target.host, target.port), |next| {
+                (&next.connection.host, next.connection.port)
+            });
+        let channel = handle
+            .channel_open_direct_tcpip(next_host.clone(), next_port as u32, "127.0.0.1", 0)
+            .await;
+        let channel = match channel {
+            Ok(channel) => channel,
+            Err(error) => {
+                // 当前这一跳可能已经完成认证；先登记再统一由外层清理。
+                jump_handles.push(Arc::new(handle));
+                let error = NetError::Channel {
+                    reason: format!(
+                        "经跳板机 {}:{} 打开到 {next_host}:{next_port} 的直连通道失败: {error}",
+                        hop.connection.host, hop.connection.port
+                    ),
+                };
+                return (Err(error.into()), jump_handles);
+            }
+        };
+        log::debug!(
+            "跳板机通道已建立，跳板机: {}:{}，下一跳: {next_host}:{next_port}",
+            hop.connection.host,
+            hop.connection.port
+        );
+        transport = Box::new(AsyncChannelStream::new(channel));
+        jump_handles.push(Arc::new(handle));
+    }
+
+    let final_transport = CountingStream::new(transport, traffic);
+    let result = timed_handshake(
+        final_transport,
+        HandshakeParams {
+            connection: target,
+            credentials,
+            prompter,
+            known_hosts,
+            config,
+            remote_forwards,
+        },
+    )
+    .await;
+    (result, jump_handles)
+}
+
+/// 打开目标地址的物理 TCP 连接。
+///
+/// 后续出站代理（SOCKS5/HTTP CONNECT）在 M2 中替换这个函数，握手层与
+/// 跳板链不需要改动。
+async fn open_direct_transport(connection: &SshConnection) -> Result<TcpStream, AppError> {
+    let socket = TcpStream::connect((connection.host.as_str(), connection.port))
+        .await
+        .map_err(|source| NetError::Connect {
+            host: connection.host.clone(),
+            port: connection.port,
+            source,
+        })?;
+    if let Err(error) = socket.set_nodelay(true) {
+        log::debug!("设置 TCP_NODELAY 失败，将继续使用默认行为，原因: {error}");
+    }
+    Ok(socket)
+}
+
+/// 在给定传输流上完成一次 SSH 握手与认证，超时按该节点自身的配置。
+async fn timed_handshake<S>(
+    transport: S,
+    params: HandshakeParams<'_>,
+) -> Result<Handle<ClientHandler>, AppError>
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    let timeout_secs = params.connection.options.connect_timeout_secs.max(1);
+    let host = params.connection.host.clone();
+    let port = params.connection.port;
+    tokio::time::timeout(
+        Duration::from_secs(timeout_secs),
+        handshake(transport, params),
+    )
+    .await
+    .map_err(|_| {
+        AppError::from(NetError::Handshake {
+            host,
+            port,
+            reason: format!("连接超时，已等待 {timeout_secs} 秒"),
+        })
+    })?
+}
+
+async fn handshake<S>(
+    transport: S,
+    params: HandshakeParams<'_>,
+) -> Result<Handle<ClientHandler>, AppError>
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    let HandshakeParams {
+        connection,
+        credentials,
+        prompter,
+        known_hosts,
+        config,
+        remote_forwards,
+    } = params;
+    let handler = ClientHandler {
+        host: connection.host.clone(),
+        port: connection.port,
+        known_hosts,
+        remote_forwards,
+        // 同一个 Arc 稍后还要传给 authenticate 做凭据索取，这里只克隆引用
+        prompter: prompter.clone(),
+    };
+    let mut session = client::connect_stream(config, transport, handler)
+        .await
+        .map_err(map_connect_error)?;
+    authenticate(&mut session, connection, credentials, prompter).await?;
+    Ok(session)
+}
+
+async fn disconnect_handles(handles: &[Arc<Handle<ClientHandler>>], reason: &str) {
+    for handle in handles.iter().rev() {
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, reason, "en")
+            .await;
+    }
 }
 
 fn keepalive_interval(options: &SessionOptions) -> Option<Duration> {

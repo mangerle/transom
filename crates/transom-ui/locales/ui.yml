@@ -267,6 +267,18 @@ form:
   auto_reconnect:
     en: Auto reconnect on unexpected drop
     zh-CN: 断线后自动重连
+  proxy_jump:
+    en: Jump host (ProxyJump)
+    zh-CN: 跳板机（ProxyJump）
+  proxy_jump_none:
+    en: Direct connection
+    zh-CN: 直连
+  proxy_jump_local:
+    en: Local
+    zh-CN: 本机
+  proxy_jump_hint:
+    en: The target is reached through the selected SSH session; multi-hop chains follow each hop's own jump setting.
+    zh-CN: 经由所选 SSH 会话连接目标；多层链路按各跳板机自身的跳板设置逐级展开。
   identity:
     en: Credential template
     zh-CN: 凭据模板

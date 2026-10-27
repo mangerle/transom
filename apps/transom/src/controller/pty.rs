@@ -177,6 +177,8 @@ pub(super) struct ConnectDispatch {
     pub(super) tab_id: TabId,
     pub(super) connection_id: ConnectionId,
     pub(super) session: Box<Session>,
+    /// 已解析的跳板链（最外层到最内层），SSH 会话按序建链。
+    pub(super) jumps: Vec<transom_core::SshHop>,
     pub(super) size: TerminalSize,
     pub(super) secrets: ConnectionSecrets,
 }
@@ -192,6 +194,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
         tab_id,
         connection_id,
         session,
+        jumps,
         size,
         secrets,
     } = dispatch;
@@ -203,7 +206,15 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
                     connection_id,
                     event_tx: event_tx.clone(),
                 });
-                match connect_ssh(ssh, size, secrets, prompter, known_hosts).await {
+                let params = transom_net::SshConnectParams {
+                    connection: ssh,
+                    jumps: &jumps,
+                    size,
+                    credentials: secrets,
+                    prompter,
+                    known_hosts,
+                };
+                match connect_ssh(params).await {
                     Ok(session) => {
                         let _ = internal_tx
                             .send_async(Internal::Connected {

@@ -163,6 +163,71 @@ impl AppShell {
             .collect()
     }
 
+    /// 目录里的跳板机候选：只列 SSH 会话，并排除会形成环的候选。
+    ///
+    /// `exclude` 是正在编辑的会话本身（新建时为 `None`）；候选若沿自身
+    /// 跳板链能回到该会话，选中它就会构成环，连接前必然被拒绝，因此不列出。
+    pub(crate) fn jump_options(
+        &self,
+        exclude: Option<SessionId>,
+    ) -> Vec<crate::session_form::JumpOption> {
+        let mut options = Vec::with_capacity(self.catalog.sessions.len());
+        for session in &self.catalog.sessions {
+            if Some(session.id) == exclude {
+                continue;
+            }
+            let Connection::Ssh(ssh) = &session.connection else {
+                continue;
+            };
+            if let Some(excluded) = exclude
+                && self.proxy_chain_reaches(session, excluded)
+            {
+                continue;
+            }
+            options.push(crate::session_form::JumpOption {
+                id: session.id,
+                name: session.name.clone(),
+                host: ssh.host.clone(),
+                port: ssh.port,
+                jump_session_id: ssh.proxy_jump.as_ref().map(|jump| jump.jump_session_id),
+            });
+        }
+        options
+    }
+
+    /// 候选会话的跳板链是否会回到 `target`（用于表单阶段的成环预防）。
+    fn proxy_chain_reaches(&self, session: &Session, target: SessionId) -> bool {
+        let Connection::Ssh(ssh) = &session.connection else {
+            return false;
+        };
+        let mut visited = std::collections::HashSet::with_capacity(4);
+        let mut cursor = ssh.proxy_jump.as_ref().map(|jump| jump.jump_session_id);
+        while let Some(id) = cursor {
+            if id == target {
+                return true;
+            }
+            if !visited.insert(id) {
+                return false;
+            }
+            let Some(next) = self
+                .catalog
+                .sessions
+                .iter()
+                .find(|candidate| candidate.id == id)
+            else {
+                return false;
+            };
+            let Connection::Ssh(next_ssh) = &next.connection else {
+                return false;
+            };
+            cursor = next_ssh
+                .proxy_jump
+                .as_ref()
+                .map(|jump| jump.jump_session_id);
+        }
+        false
+    }
+
     /// 获取目录中所有已存在的文件夹路径清单（排重且字典序）。
     pub(crate) fn folder_paths(&self) -> Vec<String> {
         let mut paths: Vec<String> = self
@@ -292,6 +357,7 @@ impl AppShell {
             None,
             None,
             self.identity_options(),
+            self.jump_options(None),
             self.folder_paths(),
         ));
         cx.notify();
@@ -322,6 +388,7 @@ impl AppShell {
             Some(session),
             folder_path,
             self.identity_options(),
+            self.jump_options(Some(session_id)),
             self.folder_paths(),
         );
         self.prefill_secrets(&mut form, window, cx);

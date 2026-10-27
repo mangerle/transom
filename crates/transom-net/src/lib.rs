@@ -21,7 +21,7 @@ mod traffic;
 mod zmodem;
 
 pub use auth::{AuthPrompter, PasswordPrompter};
-pub use client::{SshRemote, SshSession, connect_ssh};
+pub use client::{SshConnectParams, SshRemote, SshSession, connect_ssh};
 pub use error::NetError;
 pub use forward::{ForwardTask, start_forward};
 pub use host::{probe_tcp, send_wake_on_lan};

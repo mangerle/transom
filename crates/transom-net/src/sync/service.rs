@@ -289,6 +289,7 @@ mod tests {
                 username: "deploy".into(),
                 auth: AuthMethod::Password { save: true },
                 options: Default::default(),
+                proxy_jump: None,
             }),
         ));
         catalog

@@ -248,6 +248,7 @@ async fn run_controller(
                 tab_id,
                 connection_id,
                 session,
+                jumps,
                 size,
                 secrets,
             })) => {
@@ -263,6 +264,7 @@ async fn run_controller(
                     tab_id,
                     connection_id,
                     session,
+                    jumps,
                     size,
                     secrets,
                 });

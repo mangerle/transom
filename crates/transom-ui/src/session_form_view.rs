@@ -251,6 +251,112 @@ impl AppShell {
                             p,
                         ))),
                 );
+                // 跳板机选择：只列 SSH 会话；链路在表单里即时画出，
+                // 用户保存前就能确认"这一跳会经过哪些机器"。
+                let jump_label = form
+                    .jump_choice
+                    .and_then(|id| {
+                        form.jump_options
+                            .iter()
+                            .find(|option| option.id == id)
+                            .map(|option| option.name.clone())
+                    })
+                    .unwrap_or_else(|| rust_i18n::t!("form.proxy_jump_none").to_string());
+                let target_host = form.host.read(cx).value().trim().to_string();
+                let target_port = form.port.read(cx).value().trim().to_string();
+                let target_label = if target_port.is_empty() || target_port == "22" {
+                    target_host
+                } else {
+                    format!("{target_host}:{target_port}")
+                };
+                let topology = form.proxy_topology(&target_label);
+                content = content.child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("form.proxy_jump").to_string()),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .child(
+                                    Button::new("proxy-jump-dropdown")
+                                        .outline()
+                                        .small()
+                                        .icon(IconName::Route)
+                                        .label(jump_label)
+                                        .dropdown_menu({
+                                            let options = form.jump_options.clone();
+                                            let app_entity = cx.entity().clone();
+                                            move |menu, _window, _cx| {
+                                                let app = app_entity.clone();
+                                                let mut menu = menu.item(
+                                                    PopupMenuItem::new(
+                                                        rust_i18n::t!("form.proxy_jump_none")
+                                                            .to_string(),
+                                                    )
+                                                    .icon(IconName::Ban)
+                                                    .on_click({
+                                                        let app = app.clone();
+                                                        move |_, _, cx| {
+                                                            app.update(cx, |this, cx| {
+                                                                if let Some(form) =
+                                                                    this.form.as_mut()
+                                                                {
+                                                                    form.jump_choice = None;
+                                                                }
+                                                                cx.notify();
+                                                            });
+                                                        }
+                                                    }),
+                                                );
+                                                if !options.is_empty() {
+                                                    menu = menu.item(PopupMenuItem::separator());
+                                                }
+                                                for option in &options {
+                                                    let id = option.id;
+                                                    let label = format!(
+                                                        "{} ({}:{})",
+                                                        option.name, option.host, option.port
+                                                    );
+                                                    let app = app.clone();
+                                                    menu = menu.item(
+                                                        PopupMenuItem::new(label)
+                                                            .icon(IconName::Route)
+                                                            .on_click(move |_, _, cx| {
+                                                                app.update(cx, |this, cx| {
+                                                                    if let Some(form) =
+                                                                        this.form.as_mut()
+                                                                    {
+                                                                        form.jump_choice = Some(id);
+                                                                    }
+                                                                    cx.notify();
+                                                                });
+                                                            }),
+                                                    );
+                                                }
+                                                menu
+                                            }
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(topology),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("form.proxy_jump_hint").to_string()),
+                        ),
+                );
                 // 模板选择行只在真的有模板时出现：一个都没有时这行只有一个
                 // "不使用"按钮，等于噪声。
                 if !form.identities.is_empty() {

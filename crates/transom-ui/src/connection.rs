@@ -76,6 +76,33 @@ fn collect_connection_secrets(
     (secrets, error)
 }
 
+/// 按跳板链顺序收集每一跳的凭据。
+///
+/// 跳板机与目标会话走同一套钥匙串归属规则（引用凭据模板时归模板），
+/// 因此复用 [`collect_connection_secrets`]；单跳读数失败不阻断建链，
+/// 认证阶段会改为向用户索取。
+fn collect_jump_hops(
+    secret_store: &dyn SecretStore,
+    chain: &[Session],
+) -> (Vec<transom_core::SshHop>, Option<String>) {
+    let mut hops = Vec::with_capacity(chain.len());
+    let mut error = None;
+    for session in chain {
+        let Connection::Ssh(ssh) = &session.connection else {
+            continue;
+        };
+        let (secrets, hop_error) = collect_connection_secrets(secret_store, session);
+        if error.is_none() {
+            error = hop_error;
+        }
+        hops.push(transom_core::SshHop {
+            connection: ssh.clone(),
+            secrets,
+        });
+    }
+    (hops, error)
+}
+
 impl AppShell {
     pub(crate) fn on_new_local_terminal(
         &mut self,
@@ -413,22 +440,46 @@ impl AppShell {
             return;
         }
 
+        // 跳板链在派发前一次解析完成：环、悬空引用与非 SSH 跳板机在这里
+        // 直接拦下，把错误落在标签状态上，而不是让认证阶段莫名连错机器。
+        let chain = match self.catalog.proxy_jump_chain(&session) {
+            Ok(chain) => chain,
+            Err(error) => {
+                log::warn!(
+                    "跳板机链路解析失败，窗格: {tab_id}，会话: {}，原因: {error}",
+                    session.name
+                );
+                self.error = Some(localized_error(&error));
+                if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+                    tab.status = TabStatus::Failed(error);
+                }
+                cx.notify();
+                return;
+            }
+        };
+
         // 凭据只负责"有就带上"：缺失不在这里拦截，认证阶段由 net 层按需向界面索取。
         // 钥匙串走 D-Bus 可能挂起秒级：放到后台线程读取，避免冻结 UI。
         let secret_store = self.services.secret_store.clone();
         let load_session = session.clone();
         cx.spawn(async move |this, cx| {
-            let (secrets, error) = cx
+            let (secrets, hops, error) = cx
                 .background_executor()
-                .spawn(
-                    async move { collect_connection_secrets(secret_store.as_ref(), &load_session) },
-                )
+                .spawn(async move {
+                    let (secrets, mut error) =
+                        collect_connection_secrets(secret_store.as_ref(), &load_session);
+                    let (hops, hop_error) = collect_jump_hops(secret_store.as_ref(), &chain);
+                    if error.is_none() {
+                        error = hop_error;
+                    }
+                    (secrets, hops, error)
+                })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
                     this.error = Some(error);
                 }
-                this.send_connect(tab_id, connection_id, session, secrets, cx);
+                this.send_connect(tab_id, connection_id, session, hops, secrets, cx);
             });
         })
         .detach();
@@ -439,6 +490,7 @@ impl AppShell {
         tab_id: TabId,
         connection_id: ConnectionId,
         session: Session,
+        jumps: Vec<transom_core::SshHop>,
         secrets: ConnectionSecrets,
         cx: &mut Context<Self>,
     ) {
@@ -447,6 +499,7 @@ impl AppShell {
             tab_id,
             connection_id,
             session: Box::new(session),
+            jumps,
             secrets,
             size,
         };

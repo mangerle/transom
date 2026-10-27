@@ -107,6 +107,7 @@ impl AppShell {
             None,
             path.clone(),
             self.identity_options(),
+            self.jump_options(None),
             self.folder_paths(),
         );
         let defaults = self.catalog.inherited_folder_defaults(folder_id);

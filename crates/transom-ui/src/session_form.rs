@@ -1,10 +1,12 @@
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::{
-    AuthMethod, Connection, IdentityId, SerialConnection, SerialDataBits, SerialFlowControl,
-    SerialParity, SerialPortDescriptor, SerialStopBits, Session, SessionColor, SessionIcon,
-    SshConnection, StartupCommands, TelnetConnection, TerminalProfile, TextEncoding,
+    AuthMethod, Connection, IdentityId, ProxyJumpConfig, SerialConnection, SerialDataBits,
+    SerialFlowControl, SerialParity, SerialPortDescriptor, SerialStopBits, Session, SessionColor,
+    SessionIcon, SessionId, SshConnection, StartupCommands, TelnetConnection, TerminalProfile,
+    TextEncoding,
 };
 use zeroize::Zeroizing;
 
@@ -64,6 +66,10 @@ pub(crate) struct SessionForm {
     pub identities: Vec<IdentityOption>,
     /// 当前选用的凭据模板；`None` 表示用本会话自己的用户名与认证方式。
     pub identity_choice: Option<IdentityId>,
+    /// 可选的跳板机会话清单（仅 SSH，已排除自身与会成环的候选）。
+    pub jump_options: Vec<JumpOption>,
+    /// 当前选用的跳板机；`None` 表示直连。
+    pub jump_choice: Option<SessionId>,
     /// 会话专属图标；`Auto` 表示按连接类型自动取图标。
     pub icon: SessionIcon,
     /// 会话环境色；`None` 表示不染色。
@@ -80,6 +86,19 @@ pub(crate) struct IdentityOption {
     pub id: IdentityId,
     pub name: String,
     pub username: String,
+}
+
+/// 会话表单里的一个跳板机选项。
+///
+/// 带上主机、端口与自身的跳板引用，是为了在表单里就地渲染完整拓扑链
+/// （`本机 -> 堡垒机 -> 网关 -> 目标`）；表单不回查目录。
+#[derive(Clone)]
+pub(crate) struct JumpOption {
+    pub id: SessionId,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub jump_session_id: Option<SessionId>,
 }
 
 pub(crate) struct BuiltSession {
@@ -118,6 +137,8 @@ struct SessionFormSeed {
     telnet_encoding: TextEncoding,
     /// 可选凭据模板清单；表单只认这份快照，不回查目录。
     identities: Vec<IdentityOption>,
+    /// 可选跳板机清单；同样只认快照。
+    jump_options: Vec<JumpOption>,
     folder_options: Vec<String>,
 }
 
@@ -128,6 +149,7 @@ impl SessionForm {
         base: Option<Session>,
         folder_path: Option<String>,
         identities: Vec<IdentityOption>,
+        jump_options: Vec<JumpOption>,
         folder_options: Vec<String>,
     ) -> Self {
         let connection = match base.as_ref().map(|session| &session.connection) {
@@ -246,9 +268,40 @@ impl SessionForm {
                 serial_flow_control,
                 telnet_encoding,
                 identities,
+                jump_options,
                 folder_options,
             },
         )
+    }
+
+    /// 当前跳板链的拓扑展示文本：`本机 -> 外层 -> 内层 -> 目标`。
+    ///
+    /// 只做展示，不参与连接：真正的链路解析与成环校验在目录侧完成，
+    /// 这里按表单快照把用户即将保存的路线画出来，避免选错跳板而不自知。
+    pub(crate) fn proxy_topology(&self, target: &str) -> String {
+        let local = rust_i18n::t!("form.proxy_jump_local").to_string();
+        let Some(choice) = self.jump_choice else {
+            return format!("{local} -> {target}");
+        };
+        let mut names = Vec::with_capacity(4);
+        let mut visited = HashSet::with_capacity(4);
+        let mut cursor = Some(choice);
+        while let Some(id) = cursor {
+            if !visited.insert(id) {
+                break;
+            }
+            let Some(option) = self.jump_options.iter().find(|option| option.id == id) else {
+                break;
+            };
+            names.push(option.name.clone());
+            cursor = option.jump_session_id;
+        }
+        names.reverse();
+        if names.is_empty() {
+            format!("{local} -> {target}")
+        } else {
+            format!("{local} -> {} -> {target}", names.join(" -> "))
+        }
     }
 
     pub(crate) fn apply_folder_selection(
@@ -308,6 +361,7 @@ impl SessionForm {
             serial_flow_control,
             telnet_encoding,
             identities,
+            jump_options,
             folder_options,
         } = seed;
         let ssh = base.as_ref().and_then(|session| match &session.connection {
@@ -339,6 +393,9 @@ impl SessionForm {
             .unwrap_or_else(default_username);
         // Self 字面量会移走 base，需要读的字段先取出来。
         let identity_choice = base.as_ref().and_then(|session| session.identity_id);
+        let jump_choice = ssh
+            .and_then(|ssh| ssh.proxy_jump.as_ref())
+            .map(|jump| jump.jump_session_id);
         let icon = base
             .as_ref()
             .map(|session| session.icon)
@@ -417,6 +474,8 @@ impl SessionForm {
             ),
             identities,
             identity_choice,
+            jump_options,
+            jump_choice,
             icon,
             color,
             confirm_delete: false,
@@ -581,6 +640,9 @@ impl SessionForm {
                 username,
                 auth,
                 options,
+                proxy_jump: self
+                    .jump_choice
+                    .map(|jump_session_id| ProxyJumpConfig { jump_session_id }),
             }),
             password,
             key_passphrase,

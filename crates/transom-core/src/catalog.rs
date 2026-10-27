@@ -11,11 +11,15 @@
 //!   也避免序号重复导致的排序不稳定。代价是备份合并时新条目一律追加到末尾，
 //!   以及任何写入都必须显式保持数组顺序（不能依赖按名称字典序渲染）。
 
+use crate::error::{AppError, ErrorCode};
 use crate::ids::{FolderId, SessionId};
-use crate::session::Session;
+use crate::session::{Connection, Session};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+
+/// ProxyJump 链路的最大嵌套层数；超出即视为配置异常而非合法拓扑。
+pub const MAX_PROXY_JUMP_DEPTH: usize = 8;
 
 /// 文件夹配置的默认继承属性。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -654,6 +658,71 @@ impl SessionCatalog {
         resolved
     }
 
+    /// 解析 ProxyJump 链路，返回从最外层跳板机到最内层跳板机的有序会话副本。
+    ///
+    /// 设计原理（Why）：链路的每一环都可能是"叠加快照"之后的会话（文件夹继承
+    /// 端口/用户名、引用凭据模板），因此统一走 [`Self::resolved_session`] 产出
+    /// 副本；调用方拿到的顺序即建连顺序——先连最外层跳板机，再逐级向内打洞。
+    ///
+    /// 环检测使用已访问集合而不是固定深度：自引用（会话把自己设为跳板机）与
+    /// 任意长度的环都会在同一次遍历里被识别；另外设 `MAX_PROXY_JUMP_DEPTH`
+    /// 上限，防止外部文件构造出超长链路拖垮连接流程。
+    ///
+    /// # Errors
+    /// 引用的跳板会话不存在、指向非 SSH 会话、超过层数上限或存在环形依赖时，
+    /// 返回 `Configuration` 错误并附带中文现场。
+    pub fn proxy_jump_chain(&self, session: &Session) -> Result<Vec<Session>, AppError> {
+        let mut chain = Vec::new();
+        let Connection::Ssh(ssh) = &session.connection else {
+            return Ok(chain);
+        };
+        let mut visited: HashSet<SessionId> = HashSet::with_capacity(4);
+        visited.insert(session.id);
+        let mut cursor = ssh.proxy_jump.as_ref().map(|jump| jump.jump_session_id);
+        while let Some(id) = cursor {
+            if !visited.insert(id) {
+                return Err(AppError::with_detail(
+                    ErrorCode::Configuration,
+                    format!(
+                        "跳板机链路存在环形依赖，会话: {}，重复引用: {id}",
+                        session.name
+                    ),
+                ));
+            }
+            if chain.len() >= MAX_PROXY_JUMP_DEPTH {
+                return Err(AppError::with_detail(
+                    ErrorCode::Configuration,
+                    format!(
+                        "跳板机链路超过 {MAX_PROXY_JUMP_DEPTH} 层上限，会话: {}",
+                        session.name
+                    ),
+                ));
+            }
+            let Some(hop) = self.sessions.iter().find(|candidate| candidate.id == id) else {
+                return Err(AppError::with_detail(
+                    ErrorCode::Configuration,
+                    format!(
+                        "引用的跳板机会话已不存在，会话: {}，跳板机: {id}",
+                        session.name
+                    ),
+                ));
+            };
+            let Connection::Ssh(hop_ssh) = &hop.connection else {
+                return Err(AppError::with_detail(
+                    ErrorCode::Configuration,
+                    format!(
+                        "跳板机会话不是 SSH 连接，会话: {}，跳板机: {}",
+                        session.name, hop.name
+                    ),
+                ));
+            };
+            chain.push(self.resolved_session(hop));
+            cursor = hop_ssh.proxy_jump.as_ref().map(|jump| jump.jump_session_id);
+        }
+        chain.reverse();
+        Ok(chain)
+    }
+
     /// 修复外部文件中的损坏树结构，保证后续 UI 与移动操作安全。
     ///
     /// 处理内容：重复文件夹 ID、缺失/自引用父节点、父子环、指向不存在文件夹的会话。
@@ -994,6 +1063,129 @@ mod tests {
         id
     }
 
+    fn set_jump(catalog: &mut SessionCatalog, session: SessionId, jump: SessionId) {
+        let session = catalog
+            .sessions
+            .iter_mut()
+            .find(|candidate| candidate.id == session)
+            .unwrap();
+        let crate::session::Connection::Ssh(ssh) = &mut session.connection else {
+            panic!("测试会话必须是 SSH 连接");
+        };
+        ssh.proxy_jump = Some(crate::session::ProxyJumpConfig {
+            jump_session_id: jump,
+        });
+    }
+
+    /// 多层跳板链必须按"最外层 -> 最内层"返回，建连方按此顺序逐级打洞。
+    #[test]
+    fn proxy_jump_chain_is_ordered_outermost_first() {
+        let mut catalog = SessionCatalog::default();
+        let outer = ssh_session(&mut catalog, "outer");
+        let inner = ssh_session(&mut catalog, "inner");
+        let target = ssh_session(&mut catalog, "target");
+        set_jump(&mut catalog, inner, outer);
+        set_jump(&mut catalog, target, inner);
+
+        let session = catalog
+            .sessions
+            .iter()
+            .find(|candidate| candidate.id == target)
+            .unwrap();
+        let chain = catalog.proxy_jump_chain(session).unwrap();
+        let names: Vec<&str> = chain.iter().map(|hop| hop.name.as_str()).collect();
+        assert_eq!(names, vec!["outer", "inner"]);
+        // 链路副本同样叠加了模板/文件夹继承，与直连目标保持同一口径。
+        assert!(matches!(
+            chain[0].connection,
+            crate::session::Connection::Ssh(_)
+        ));
+    }
+
+    #[test]
+    fn direct_connection_has_empty_proxy_chain() {
+        let mut catalog = SessionCatalog::default();
+        let id = ssh_session(&mut catalog, "direct");
+        let session = catalog
+            .sessions
+            .iter()
+            .find(|candidate| candidate.id == id)
+            .unwrap();
+        assert!(catalog.proxy_jump_chain(session).unwrap().is_empty());
+    }
+
+    #[test]
+    fn proxy_jump_chain_rejects_self_cycle_and_dangling_references() {
+        let mut catalog = SessionCatalog::default();
+        let lone = ssh_session(&mut catalog, "lone");
+        set_jump(&mut catalog, lone, lone);
+        let session = catalog
+            .sessions
+            .iter()
+            .find(|candidate| candidate.id == lone)
+            .unwrap();
+        let error = catalog.proxy_jump_chain(session).unwrap_err();
+        assert_eq!(error.code, ErrorCode::Configuration);
+        assert!(error.detail.as_deref().unwrap_or_default().contains("环形"));
+
+        let mut catalog = SessionCatalog::default();
+        let first = ssh_session(&mut catalog, "first");
+        let second = ssh_session(&mut catalog, "second");
+        set_jump(&mut catalog, first, second);
+        set_jump(&mut catalog, second, first);
+        let session = catalog
+            .sessions
+            .iter()
+            .find(|candidate| candidate.id == first)
+            .unwrap();
+        assert!(catalog.proxy_jump_chain(session).is_err());
+
+        let mut catalog = SessionCatalog::default();
+        let dangling = ssh_session(&mut catalog, "dangling");
+        set_jump(&mut catalog, dangling, SessionId::new());
+        let session = catalog
+            .sessions
+            .iter()
+            .find(|candidate| candidate.id == dangling)
+            .unwrap();
+        let error = catalog.proxy_jump_chain(session).unwrap_err();
+        assert!(
+            error
+                .detail
+                .as_deref()
+                .unwrap_or_default()
+                .contains("不存在")
+        );
+    }
+
+    /// 跳板机只能是 SSH 会话：串口/本地终端没有可复用的加密隧道。
+    #[test]
+    fn proxy_jump_chain_rejects_non_ssh_jump() {
+        let mut catalog = SessionCatalog::default();
+        let local = Session::new(
+            "local",
+            crate::session::Connection::Local(crate::session::LocalConnection::default()),
+        );
+        let local_id = local.id;
+        catalog.sessions.push(local);
+        let target = ssh_session(&mut catalog, "target");
+        set_jump(&mut catalog, target, local_id);
+
+        let session = catalog
+            .sessions
+            .iter()
+            .find(|candidate| candidate.id == target)
+            .unwrap();
+        let error = catalog.proxy_jump_chain(session).unwrap_err();
+        assert!(
+            error
+                .detail
+                .as_deref()
+                .unwrap_or_default()
+                .contains("不是 SSH")
+        );
+    }
+
     /// 模板叠加只改身份（用户名 + 认证方式），主机、端口与机器级选项保持不变。
     #[test]
     fn resolved_session_overrides_identity_fields_only() {
@@ -1150,6 +1342,7 @@ mod tests {
                     save_passphrase: false,
                 },
                 options: crate::session::SessionOptions::default(),
+                proxy_jump: None,
             }),
         );
         session.folder_id = Some(sub);

@@ -1,6 +1,6 @@
 use crate::forward::ForwardRule;
 use crate::ids::{FolderId, SessionId};
-use crate::secrets::SecretKind;
+use crate::secrets::{ConnectionSecrets, SecretKind};
 use crate::session_appearance::{SessionColor, SessionIcon};
 use crate::terminal::TerminalProfile;
 use serde::{Deserialize, Serialize};
@@ -287,6 +287,16 @@ impl Default for TelnetOptions {
     }
 }
 
+/// ProxyJump 跳板机引用：目标会话经由哪一条已有 SSH 会话转发。
+///
+/// 只保存跳板会话的 ID 而不复制其连接参数：跳板机的地址、账号与凭据始终
+/// 以目录里的那条会话为准，改一处即对全部依赖它的目标生效。
+/// 老会话文件没有该字段，按直连降级。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProxyJumpConfig {
+    pub jump_session_id: SessionId,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshConnection {
     pub host: String,
@@ -295,6 +305,9 @@ pub struct SshConnection {
     pub auth: AuthMethod,
     #[serde(default)]
     pub options: SessionOptions,
+    /// 跳板机引用；`None` 表示直连。链路可多层嵌套，环检测在连接前完成。
+    #[serde(default)]
+    pub proxy_jump: Option<ProxyJumpConfig>,
 }
 
 impl SshConnection {
@@ -305,8 +318,18 @@ impl SshConnection {
             username: username.into(),
             auth: AuthMethod::Agent,
             options: SessionOptions::default(),
+            proxy_jump: None,
         }
     }
+}
+
+/// 跳板链中的一个已解析节点：连接参数与本次连接可用的凭据。
+///
+/// 凭据随节点一起传递而不在 net 层回查钥匙串：net 是纯网络层，不应理解
+/// 会话目录与钥匙串归属；界面侧在派发连接前已经按会话（或凭据模板）取好。
+pub struct SshHop {
+    pub connection: SshConnection,
+    pub secrets: ConnectionSecrets,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -412,6 +435,41 @@ mod tests {
         ));
     }
 
+    /// 跳板字段是后加的：老会话文件的 SSH 连接没有 `proxy_jump`，必须按直连降级。
+    #[test]
+    fn legacy_ssh_connection_loads_without_proxy_jump() {
+        let legacy = r#"{
+            "host": "10.0.0.9",
+            "port": 22,
+            "username": "deploy",
+            "auth": {"kind": "agent"},
+            "options": {"connect_timeout_secs": 15, "keepalive_secs": 30, "allow_keyboard_interactive": true}
+        }"#;
+        let ssh: SshConnection = serde_json::from_str(legacy).unwrap();
+        assert_eq!(ssh.proxy_jump, None);
+    }
+
+    #[test]
+    fn proxy_jump_round_trips_through_json() {
+        let jump_id = SessionId::new();
+        let connection = SshConnection {
+            host: "prod.internal".into(),
+            port: 22,
+            username: "deploy".into(),
+            auth: AuthMethod::Agent,
+            options: SessionOptions::default(),
+            proxy_jump: Some(ProxyJumpConfig {
+                jump_session_id: jump_id,
+            }),
+        };
+        let json = serde_json::to_string(&connection).unwrap();
+        let decoded: SshConnection = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            decoded.proxy_jump.map(|jump| jump.jump_session_id),
+            Some(jump_id)
+        );
+    }
+
     #[test]
     fn session_round_trips_through_json() {
         let mut session = Session::new(
@@ -426,6 +484,7 @@ mod tests {
                     save_passphrase: true,
                 },
                 options: SessionOptions::default(),
+                proxy_jump: None,
             }),
         );
         session.folder_id = Some(FolderId::new());

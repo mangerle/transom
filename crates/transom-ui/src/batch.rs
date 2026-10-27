@@ -423,6 +423,7 @@ mod tests {
                 username: "old".into(),
                 auth: AuthMethod::Agent,
                 options: Default::default(),
+                proxy_jump: None,
             }),
         )
     }

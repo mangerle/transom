@@ -102,20 +102,22 @@ async fn password_auth_pty_and_tofu_roundtrip() {
             auto_reconnect: false,
             wol_mac: None,
         },
+        proxy_jump: None,
     };
 
     let session = tokio::time::timeout(
         Duration::from_secs(8),
-        connect_ssh(
-            &connection,
-            TerminalSize::new(80, 24),
-            ConnectionSecrets {
+        connect_ssh(transom_net::SshConnectParams {
+            connection: &connection,
+            jumps: &[],
+            size: TerminalSize::new(80, 24),
+            credentials: ConnectionSecrets {
                 password: Some(zeroize::Zeroizing::new("secret".to_string())),
                 key_passphrase: None,
             },
-            Arc::new(PasswordPrompter::new("secret")),
-            known_hosts.clone(),
-        ),
+            prompter: Arc::new(PasswordPrompter::new("secret")),
+            known_hosts: known_hosts.clone(),
+        }),
     )
     .await
     .expect("connect timed out")

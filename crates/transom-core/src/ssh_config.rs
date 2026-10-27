@@ -56,6 +56,7 @@ pub fn parse_ssh_config_with_home(content: &str, home: Option<&Path>) -> Vec<Ses
                 username: target_user,
                 auth,
                 options: SessionOptions::default(),
+                proxy_jump: None,
             });
 
             // 文件夹归类由导入流程统一创建，解析器只负责连接参数。

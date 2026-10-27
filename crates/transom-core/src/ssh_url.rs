@@ -32,6 +32,7 @@ pub fn quick_connect_session(input: &str) -> Result<Session, String> {
         username,
         auth: AuthMethod::Agent,
         options: SessionOptions::default(),
+        proxy_jump: None,
     });
     Ok(Session::new(name, connection))
 }

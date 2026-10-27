@@ -41,8 +41,8 @@ pub use backup::{
     SecretRestoreReport, collect_catalog_secrets,
 };
 pub use catalog::{
-    CatalogError, CatalogMergeSummary, DropSide, FolderInheritedDefaults, SessionCatalog,
-    SessionFolder,
+    CatalogError, CatalogMergeSummary, DropSide, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH,
+    SessionCatalog, SessionFolder,
 };
 pub use color::Rgb;
 pub use commands::{AppCommand, AppEvent, DeepLinkRequest, SystemStats};
@@ -69,9 +69,9 @@ pub use prompt::{PromptInfo, PromptKind};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};
 pub use serial::{SerialPortDescriptor, SerialPortProvider};
 pub use session::{
-    AuthMethod, Connection, LocalConnection, SerialConnection, SerialDataBits, SerialFlowControl,
-    SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, StartupCommands,
-    TelnetConnection, TelnetOptions, TextEncoding,
+    AuthMethod, Connection, LocalConnection, ProxyJumpConfig, SerialConnection, SerialDataBits,
+    SerialFlowControl, SerialParity, SerialStopBits, Session, SessionOptions, SshConnection,
+    SshHop, StartupCommands, TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use session_appearance::{SessionColor, SessionIcon};
 pub use settings::{
