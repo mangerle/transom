@@ -90,20 +90,7 @@ pub(crate) fn parent_remote(path: &str) -> String {
     }
 }
 
-pub(crate) fn format_size(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit + 1 < UNITS.len() {
-        value /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} B")
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
-}
+pub(crate) use crate::format::format_size;
 
 pub(crate) fn sftp_file_icon(is_dir: bool, p: &Palette) -> AnyElement {
     if is_dir {

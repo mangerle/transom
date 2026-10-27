@@ -1,4 +1,4 @@
-//! GPUI application shell, views, localization, and key bindings.
+//! GPUI 桌面端应用程序外壳、视图组件、国际化与快捷键绑定。
 rust_i18n::i18n!("locales", fallback = "en");
 
 /// 应用展示元数据。构建期由 cargo 注入版本号，状态栏兜底文案与设置"关于"页共用
@@ -25,6 +25,7 @@ mod connection;
 mod editor;
 mod event_handlers;
 mod events;
+mod format;
 mod forward;
 mod identity;
 mod keymap;
