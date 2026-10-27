@@ -244,12 +244,9 @@ fn find_mark(data: &[u8]) -> Option<usize> {
     let last_start = data.len().checked_sub(MARK_LEN)?;
     let mut from = 0;
     while from <= last_start {
-        let Some(offset) = data[from..=last_start]
+        let offset = data[from..=last_start]
             .iter()
-            .position(|&byte| byte == b'*')
-        else {
-            return None;
-        };
+            .position(|&byte| byte == b'*')?;
         let start = from + offset;
         let window = &data[start..start + MARK_LEN];
         if window[1] == b'*' && window[2] == ZDLE && (window[3] == ZHEX || window[3] == ZBIN32) {
