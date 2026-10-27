@@ -1,44 +1,35 @@
 //! Domain models and application-facing contracts shared by the workspace.
+//!
+//! 目录组织（Why）：模块按子域分治——`model`（领域模型与算法）、
+//! `protocol`（线格式与同步）、`platform`（平台路径与权限）、`crypto`
+//! （加解密信封）；根模块只保留最基础的应用契约（命令/事件、错误、ID、
+//! 存储 trait、备份文档）。历史路径（`transom_core::session` 等）由别名
+//! re-export 保持可用，调用方与 crate 内引用都不需要跟随目录调整。
 
 pub mod backup;
-pub mod catalog;
-pub mod color;
 pub mod commands;
 pub mod crypto;
 pub mod error;
-pub mod forward;
 mod highlight;
-pub mod history;
-pub mod host;
-pub mod identity;
 pub mod ids;
-pub mod keys;
-pub mod known_hosts;
-pub mod layout;
-pub mod mac;
-pub mod merge;
-pub mod paths;
-pub mod private_fs;
+pub mod model;
+pub mod platform;
 pub mod prompt;
-pub mod proxy;
+pub mod protocol;
 pub mod secrets;
-pub mod serial;
-pub mod session;
-pub mod session_appearance;
-pub mod settings;
-pub mod sftp;
-pub mod sftp_filter;
-pub mod sftp_sync;
-pub mod ssh_config;
-pub mod ssh_url;
 pub mod storage;
-pub mod sync;
-pub mod system_stats;
-pub mod terminal;
-pub mod theme;
-pub mod traffic;
-pub mod trigger;
-pub mod zmodem;
+
+// 历史路径别名：`crate::session`、`transom_core::sftp` 等全部继续解析到
+// 迁移后的模块；这是纯目录整理，不改调用方的任何一行。
+pub use model::{
+    catalog, color, forward, history, host, identity, keys, known_hosts, layout, mac, serial,
+    session, session_appearance, settings, terminal, theme, trigger,
+};
+pub use platform::{paths, private_fs};
+pub use protocol::{
+    merge, proxy, sftp, sftp_filter, sftp_sync, ssh_config, ssh_url, sync, system_stats, traffic,
+    zmodem,
+};
 
 pub use backup::{
     BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,
