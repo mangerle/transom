@@ -67,6 +67,20 @@ impl S3Target {
             .trim_end_matches('/')
             .to_string();
 
+        // 桶名来自用户配置，不能假定它只含 URL 安全字符；先在构造期拒绝
+        // 会让对象地址拼不出合法 URL 的输入，避免运行期 panic 或静默改路径。
+        let bucket = bucket.trim();
+        if bucket.is_empty()
+            || !bucket
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '.' | '_'))
+        {
+            return Err(AppError::with_detail(
+                ErrorCode::Configuration,
+                format!("S3 存储桶名称非法: {bucket:?}，只允许字母、数字、-、.、_"),
+            ));
+        }
+
         let mut key_segments: Vec<String> = Vec::with_capacity(2);
         for segment in directory.split('/').filter(|segment| !segment.is_empty()) {
             key_segments.push(sigv4::uri_encode(segment, false));
@@ -78,7 +92,7 @@ impl S3Target {
             http,
             endpoint: url,
             region: region.to_string(),
-            bucket: bucket.trim_end_matches('/').to_string(),
+            bucket: bucket.to_string(),
             access_key: access_key.to_string(),
             secret_key,
             object_key,
@@ -87,7 +101,11 @@ impl S3Target {
     }
 
     /// 备份对象的完整请求地址与签名用规范 URI（两者共用同一次编码）。
-    fn object_url(&self) -> (reqwest::Url, String) {
+    ///
+    /// # Errors
+    /// 端点与对象键拼接后不是合法 URL 时返回 `Configuration` 错误；构造期
+    /// 已校验桶名，正常路径不会走到这里。
+    fn object_url(&self) -> Result<(reqwest::Url, String), AppError> {
         // 段已在构造时完成单次编码；此处仅做路径拼接。
         let canonical_uri = format!("/{}/{}", self.bucket, self.object_key);
         let url = format!(
@@ -95,8 +113,13 @@ impl S3Target {
             self.endpoint.as_str().trim_end_matches('/'),
             canonical_uri
         );
-        let url = reqwest::Url::parse(&url).expect("端点与键均为受控合法字符，拼接结果必然可解析");
-        (url, canonical_uri)
+        let url = reqwest::Url::parse(&url).map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::Configuration,
+                format!("S3 对象地址无法解析: {error}"),
+            )
+        })?;
+        Ok((url, canonical_uri))
     }
 
     /// 签名所需的 host 头取值：含非标准端口，不含路径。
@@ -115,7 +138,7 @@ impl S3Target {
         data: Option<Vec<u8>>,
         if_match: Option<&str>,
     ) -> Result<reqwest::Response, AppError> {
-        let (url, canonical_uri) = self.object_url();
+        let (url, canonical_uri) = self.object_url()?;
         let payload_hash = match &data {
             Some(data) => hex::encode(Sha256::digest(data)),
             None => sigv4::EMPTY_PAYLOAD_SHA256.to_string(),
@@ -276,12 +299,30 @@ mod tests {
 
     #[test]
     fn object_url_uses_path_style_addressing() {
-        let (url, canonical_uri) = target().object_url();
+        let (url, canonical_uri) = target().object_url().expect("对象地址应可解析");
         assert_eq!(
             url.as_str(),
             "https://s3.example.com:9000/transom-vault/backups/catalog.transombak"
         );
         assert_eq!(canonical_uri, "/transom-vault/backups/catalog.transombak");
+    }
+
+    #[test]
+    fn invalid_bucket_is_rejected_instead_of_panicking() {
+        for bucket in ["", "bad bucket", "bucket?x", "bucket#frag", "a/b"] {
+            let error = S3Target::new(
+                reqwest::Client::new(),
+                "https://s3.example.com",
+                "us-east-1",
+                bucket,
+                "AKID",
+                Zeroizing::new("secret".to_string()),
+                "t",
+            )
+            .err()
+            .expect("非法桶名应在构造期失败");
+            assert_eq!(error.code, ErrorCode::Configuration);
+        }
     }
 
     #[test]
