@@ -39,8 +39,12 @@ pub(crate) mod size {
     /// 活动栏图标边长（标准档 18px）；与会话树行图标尺寸保持一致，让左侧
     /// 两条竖栏的视觉分量对齐（树侧常量为模块私有，调整时两处必须同步）。
     pub const ACTIVITY_ICON_SIZE: f32 = 1.125;
+    /// 侧栏最小宽度（标准档 180px）。
+    pub const SIDEBAR_MIN_WIDTH: f32 = 11.25;
     /// 侧栏初始宽度（标准档 270px）；用户拖出的宽度存于 ResizableState。
     pub const SIDEBAR_WIDTH: f32 = 16.875;
+    /// 侧栏最大宽度（标准档 500px）。
+    pub const SIDEBAR_MAX_WIDTH: f32 = 31.25;
     /// 转发面板固定宽度（标准档 340px）。
     pub const FORWARD_PANEL_WIDTH: f32 = 21.25;
     /// SFTP 面板初始宽度（标准档 760px，双栏模式）。

@@ -6,9 +6,9 @@ use crate::palette::Palette;
 use crate::sftp::EditorDragTracker;
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
-use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
+use gpui_kit::component::WindowExt;
 use gpui_kit::*;
 
 impl Render for AppShell {
@@ -31,8 +31,11 @@ impl Render for AppShell {
         // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
         // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
         // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
+        let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
+        let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
         let mut sidebar_panel = resizable_panel()
             .size(rem_px(size::SIDEBAR_WIDTH, rem))
+            .size_range(sidebar_min_width..sidebar_max_width)
             .fixed()
             .visible(self.sidebar.visible);
         if self.sidebar.visible {
@@ -44,10 +47,18 @@ impl Render for AppShell {
         } else {
             &self.workspace_panels
         };
+
         let side_left = plan.side_left;
         let show_sftp = plan.show_sftp;
         let show_forwards = plan.show_forwards;
-        let mut resizable_group = h_resizable(resizable_id).with_state(panels_state);
+        let mut resizable_group = if self.immersive {
+            // 沉浸模式只保留主面板，使用独立分组与临时状态；
+            // 严禁复用 panels_state，否则主面板在全屏下会覆盖索引 0（侧栏）的尺寸记录，
+            // 导致退出沉浸模式后侧边栏继承全屏宽度并撑满窗口。
+            h_resizable(resizable_id)
+        } else {
+            h_resizable(resizable_id).with_state(panels_state)
+        };
         if !self.immersive {
             resizable_group = resizable_group.child(sidebar_panel);
         }
@@ -129,14 +140,13 @@ impl Render for AppShell {
         let status_bar = (!self.immersive).then(|| {
             let divider_x = if self.sidebar.visible {
                 // 侧栏折叠期间仍以空面板参与分组，拖动其他分隔线可能把它的记录
-                // 宽度同步成 0；小于最小宽度的值一律视为无效，回退到默认宽度。
-                let sidebar_width = self
-                    .workspace_panels
+                // 宽度同步成 0；小于最小宽度或大于最大宽度的值一律视为无效，回退到默认宽度。
+                let sidebar_width = panels_state
                     .read(cx)
                     .sizes()
                     .first()
                     .copied()
-                    .filter(|width| *width >= px(100.0))
+                    .filter(|width| *width >= sidebar_min_width && *width <= sidebar_max_width)
                     .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
                     .as_f32();
                 rem_px(size::ACTIVITY_BAR_WIDTH, rem) + px(sidebar_width)
@@ -257,13 +267,20 @@ impl AppShell {
         };
         // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
         // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
+        let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
+        let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
         let sidebar_width = if self.sidebar.visible {
-            self.workspace_panels
+            let panels_state = if self.settings.window.sftp_panel_side.is_left() {
+                &self.workspace_panels_left
+            } else {
+                &self.workspace_panels
+            };
+            panels_state
                 .read(cx)
                 .sizes()
                 .first()
                 .copied()
-                .filter(|width| *width >= px(100.0))
+                .filter(|width| *width >= sidebar_min_width && *width <= sidebar_max_width)
                 .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
                 .as_f32()
         } else {
