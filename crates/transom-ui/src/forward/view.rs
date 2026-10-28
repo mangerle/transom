@@ -38,16 +38,72 @@ impl AppShell {
         else {
             return div().into_any_element();
         };
-        let rules = session.forwards.clone();
-        let statuses = pane.forward_statuses.clone();
-        let kind = panel.kind;
-        let panel_error = panel.error.clone();
-        let name_input = panel.name_input.clone();
-        let bind_host_input = panel.bind_host_input.clone();
-        let bind_port_input = panel.bind_port_input.clone();
-        let target_host_input = panel.target_host_input.clone();
-        let target_port_input = panel.target_port_input.clone();
 
+        let header = Self::render_forward_header(cx, p);
+        let rules_list = Self::render_forward_rules_list(
+            tab_id,
+            &session.forwards,
+            &pane.forward_statuses,
+            cx,
+            p,
+        );
+        let add_form = Self::render_forward_add_form(tab_id, panel, cx, p);
+
+        v_flex()
+            .w(px(360.0))
+            .h_full()
+            .bg(p.sidebar)
+            .text_color(p.sidebar_foreground)
+            .border_l_1()
+            .border_color(p.sidebar_border)
+            .child(header)
+            .child(rules_list)
+            .child(add_form)
+            .into_any_element()
+    }
+
+    /// 端口转发面板顶栏标题与关闭按钮。
+    fn render_forward_header(cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+        h_flex()
+            .px_3()
+            .py_2()
+            .items_center()
+            .justify_between()
+            .border_b_1()
+            .border_color(p.sidebar_border)
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(rust_i18n::t!("forward.title").to_string()),
+            )
+            .child(
+                Button::new("close-forward")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::X)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(tab_id) = this.workspace.active_tab
+                            && let Some(tab) =
+                                this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                            && let Some(pane) = tab.session_pane_mut()
+                        {
+                            pane.forwards_panel = None;
+                        }
+                        cx.notify();
+                    })),
+            )
+            .into_any_element()
+    }
+
+    /// 端口转发规则列表渲染。
+    fn render_forward_rules_list(
+        tab_id: transom_core::TabId,
+        rules: &[transom_core::ForwardRule],
+        statuses: &std::collections::HashMap<transom_core::ForwardId, transom_core::ForwardStatus>,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
         let mut rule_rows: Vec<AnyElement> = Vec::new();
         if rules.is_empty() {
             rule_rows.push(
@@ -174,6 +230,31 @@ impl AppShell {
             rule_rows.push(row.into_any_element());
         }
 
+        v_flex()
+            .id(ElementId::Name("forward-rules".into()))
+            .flex_1()
+            .overflow_y_scroll()
+            .p_2()
+            .gap_2()
+            .children(rule_rows)
+            .into_any_element()
+    }
+
+    /// 端口转发新增规则表单渲染。
+    fn render_forward_add_form(
+        tab_id: transom_core::TabId,
+        panel: &super::ForwardPanelState,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let kind = panel.kind;
+        let panel_error = panel.error.clone();
+        let name_input = panel.name_input.clone();
+        let bind_host_input = panel.bind_host_input.clone();
+        let bind_port_input = panel.bind_port_input.clone();
+        let target_host_input = panel.target_host_input.clone();
+        let target_port_input = panel.target_port_input.clone();
+
         let local_button = if kind == ForwardKindChoice::Local {
             Button::new("forward-mode-local")
                 .primary()
@@ -192,6 +273,7 @@ impl AppShell {
             }
             cx.notify();
         }));
+
         let remote_button = if kind == ForwardKindChoice::Remote {
             Button::new("forward-mode-remote")
                 .primary()
@@ -210,6 +292,7 @@ impl AppShell {
             }
             cx.notify();
         }));
+
         let dynamic_button = if kind == ForwardKindChoice::Dynamic {
             Button::new("forward-mode-dynamic")
                 .primary()
@@ -280,55 +363,7 @@ impl AppShell {
             add_form = add_form.child(div().text_xs().text_color(p.danger).child(error));
         }
 
-        v_flex()
-            .w(px(360.0))
-            .h_full()
-            .bg(p.sidebar)
-            .text_color(p.sidebar_foreground)
-            .border_l_1()
-            .border_color(p.sidebar_border)
-            .child(
-                h_flex()
-                    .px_3()
-                    .py_2()
-                    .items_center()
-                    .justify_between()
-                    .border_b_1()
-                    .border_color(p.sidebar_border)
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(rust_i18n::t!("forward.title").to_string()),
-                    )
-                    .child(
-                        Button::new("close-forward")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::X)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(tab_id) = this.workspace.active_tab
-                                    && let Some(tab) =
-                                        this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
-                                    && let Some(pane) = tab.session_pane_mut()
-                                {
-                                    pane.forwards_panel = None;
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .id(ElementId::Name("forward-rules".into()))
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .p_2()
-                    .gap_2()
-                    .children(rule_rows),
-            )
-            .child(add_form)
-            .into_any_element()
+        add_form.into_any_element()
     }
 
     pub(crate) fn render_forward_confirm_modal(

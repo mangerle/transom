@@ -32,158 +32,16 @@ impl AppShell {
             rust_i18n::t!("form.new_title").to_string()
         };
 
-        // 内容区自带有限高度的滚动区：标题、错误提示与操作按钮由 `dialog_frame`
-        // 固定在外壳上，字段再多也不会把它们移出视野。
+        let basic_card = Self::render_session_basic_card(form, p, cx);
+        let connection_type_card = Self::render_session_connection_type_card(form, cx, p);
+
         let mut content = v_flex()
             .id(ElementId::Name("session-form-body".into()))
             .max_h(px(460.0))
             .overflow_y_scroll()
             .gap_3()
-            .child(
-                h_flex()
-                    .gap_3()
-                    .child(div().flex_1().child(Self::form_field(
-                        rust_i18n::t!("form.name").to_string(),
-                        form.name.clone(),
-                        p,
-                    )))
-                    .child(
-                        div().flex_1().child(
-                            v_flex()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(p.muted_foreground)
-                                        .child(rust_i18n::t!("form.folder").to_string()),
-                                )
-                                .child(
-                                    h_flex()
-                                        .gap_1p5()
-                                        .items_center()
-                                        .child(div().flex_1().child(form.folder_path.clone()))
-                                        .child(
-                                            Button::new("folder-select-dropdown")
-                                                .outline()
-                                                .icon(IconName::Folder)
-                                                .dropdown_menu({
-                                                    let options = form.folder_options.clone();
-                                                    let app_entity = cx.entity().clone();
-                                                    move |menu, _window, _cx| {
-                                                        let app = app_entity.clone();
-                                                        let mut menu = menu.item(
-                                                            PopupMenuItem::new(
-                                                                rust_i18n::t!("folder.root_level")
-                                                                    .to_string(),
-                                                            )
-                                                            .on_click({
-                                                                let app = app.clone();
-                                                                move |_, window, cx| {
-                                                                    app.update(cx, |this, cx| {
-                                                                        this.clear_form_folder(
-                                                                            window, cx,
-                                                                        );
-                                                                    });
-                                                                }
-                                                            }),
-                                                        );
-                                                        if !options.is_empty() {
-                                                            menu = menu
-                                                                .item(PopupMenuItem::separator());
-                                                            for opt in &options {
-                                                                let path = opt.clone();
-                                                                let app = app.clone();
-                                                                menu = menu.item(
-                                                                    PopupMenuItem::new(path.clone())
-                                                                        .icon(IconName::Folder)
-                                                                        .on_click(
-                                                                            move |_, window, cx| {
-                                                                                app.update(
-                                                                                    cx,
-                                                                                    |this, cx| {
-                                                                                        this.select_form_folder(
-                                                                                            &path,
-                                                                                            window,
-                                                                                            cx,
-                                                                                        );
-                                                                                    },
-                                                                                );
-                                                                            },
-                                                                        ),
-                                                                );
-                                                            }
-                                                        }
-                                                        menu
-                                                    }
-                                                }),
-                                        ),
-                                ),
-                        ),
-                    ),
-            )
-            .child(Self::render_session_appearance(
-                default_icon_for(form.connection),
-                form.icon,
-                form.color,
-                p,
-                cx,
-            ))
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("form.connection_type").to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("conn-ssh")
-                                    .small()
-                                    .label("SSH")
-                                    .selected(form.connection == ConnectionChoice::Ssh)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(form) = this.modals.form.as_mut() {
-                                            form.connection = ConnectionChoice::Ssh;
-                                        }
-                                        cx.notify();
-                                    })),
-                            )
-                            .child(
-                                Button::new("conn-serial")
-                                    .small()
-                                    .label(rust_i18n::t!("form.conn_serial").to_string())
-                                    .selected(form.connection == ConnectionChoice::Serial)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        let needs_ports = if let Some(form) = this.modals.form.as_mut() {
-                                            form.connection = ConnectionChoice::Serial;
-                                            form.serial_ports.is_empty()
-                                        } else {
-                                            false
-                                        };
-                                        if needs_ports {
-                                            this.refresh_serial_ports(window, cx);
-                                        }
-                                        cx.notify();
-                                    })),
-                            )
-                            .child(
-                                Button::new("conn-telnet")
-                                    .small()
-                                    .label("Telnet")
-                                    .selected(form.connection == ConnectionChoice::Telnet)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(form) = this.modals.form.as_mut() {
-                                            form.connection = ConnectionChoice::Telnet;
-                                        }
-                                        cx.notify();
-                                    })),
-                            ),
-                    ),
-            );
+            .child(basic_card)
+            .child(connection_type_card);
 
         match form.connection {
             ConnectionChoice::Ssh => {
@@ -197,76 +55,7 @@ impl AppShell {
             }
         }
 
-        content = content.child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("form.startup_commands").to_string()),
-                )
-                .child(Textarea::new(&form.startup_commands).h(px(88.0)).w_full())
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("form.startup_hint").to_string()),
-                ),
-        );
-
-        // 语义块模式：跟随全局/强制开启/强制关闭，所有连接类型通用。
-        let block_choice = form.block_view;
-        content = content.child(
-            v_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("form.block_view").to_string()),
-                )
-                .child(
-                    h_flex().gap_2().children(
-                        [
-                            (
-                                "block-follow-global",
-                                "form.block_view_follow",
-                                BlockViewOverride::FollowGlobal,
-                            ),
-                            (
-                                "block-enabled",
-                                "form.block_view_enabled",
-                                BlockViewOverride::Enabled,
-                            ),
-                            (
-                                "block-disabled",
-                                "form.block_view_disabled",
-                                BlockViewOverride::Disabled,
-                            ),
-                        ]
-                        .into_iter()
-                        .map(|(id, key, value)| {
-                            Button::new(id)
-                                .small()
-                                .label(rust_i18n::t!(key).to_string())
-                                .selected(block_choice == value)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(form) = this.modals.form.as_mut() {
-                                        form.block_view = value;
-                                    }
-                                    cx.notify();
-                                }))
-                        }),
-                    ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("form.block_view_hint").to_string()),
-                ),
-        );
+        content = content.child(Self::render_session_terminal_attributes_card(form, p, cx));
 
         let editing = form.base.is_some();
         let confirm_delete = form.confirm_delete;
@@ -371,5 +160,249 @@ impl AppShell {
         form.cert_path
             .update(cx, |state, cx| state.set_value(&text, window, cx));
         cx.notify();
+    }
+
+    /// 会话基本信息卡片（名称、所属文件夹、外观图标与颜色）。
+    fn render_session_basic_card(
+        form: &super::types::SessionForm,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let options = form.folder_options.clone();
+        let app_entity = cx.entity().clone();
+
+        v_flex()
+            .gap_3()
+            .child(
+                h_flex()
+                    .gap_3()
+                    .child(div().flex_1().child(Self::form_field(
+                        rust_i18n::t!("form.name").to_string(),
+                        form.name.clone(),
+                        p,
+                    )))
+                    .child(
+                        div().flex_1().child(
+                            v_flex()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(rust_i18n::t!("form.folder").to_string()),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_1p5()
+                                        .items_center()
+                                        .child(div().flex_1().child(form.folder_path.clone()))
+                                        .child(
+                                            Button::new("folder-select-dropdown")
+                                                .outline()
+                                                .icon(IconName::Folder)
+                                                .dropdown_menu({
+                                                    move |menu, _window, _cx| {
+                                                        let app = app_entity.clone();
+                                                        let mut menu = menu.item(
+                                                            PopupMenuItem::new(
+                                                                rust_i18n::t!("folder.root_level")
+                                                                    .to_string(),
+                                                            )
+                                                            .on_click({
+                                                                let app = app.clone();
+                                                                move |_, window, cx| {
+                                                                    app.update(cx, |this, cx| {
+                                                                        this.clear_form_folder(
+                                                                            window, cx,
+                                                                        );
+                                                                    });
+                                                                }
+                                                            }),
+                                                        );
+                                                        if !options.is_empty() {
+                                                            menu = menu
+                                                                .item(PopupMenuItem::separator());
+                                                            for opt in &options {
+                                                                let path = opt.clone();
+                                                                let app = app.clone();
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(path.clone())
+                                                                        .icon(IconName::Folder)
+                                                                        .on_click(
+                                                                            move |_, window, cx| {
+                                                                                app.update(
+                                                                                    cx,
+                                                                                    |this, cx| {
+                                                                                        this.select_form_folder(
+                                                                                            &path,
+                                                                                            window,
+                                                                                            cx,
+                                                                                        );
+                                                                                    },
+                                                                                );
+                                                                            },
+                                                                        ),
+                                                                );
+                                                            }
+                                                        }
+                                                        menu
+                                                    }
+                                                }),
+                                        ),
+                                ),
+                        ),
+                    ),
+            )
+            .child(Self::render_session_appearance(
+                default_icon_for(form.connection),
+                form.icon,
+                form.color,
+                p,
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    /// 会话连接类型切换卡片（SSH、串口、Telnet）。
+    fn render_session_connection_type_card(
+        form: &super::types::SessionForm,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("form.connection_type").to_string()),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new("conn-ssh")
+                            .small()
+                            .label("SSH")
+                            .selected(form.connection == ConnectionChoice::Ssh)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(form) = this.modals.form.as_mut() {
+                                    form.connection = ConnectionChoice::Ssh;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("conn-serial")
+                            .small()
+                            .label(rust_i18n::t!("form.conn_serial").to_string())
+                            .selected(form.connection == ConnectionChoice::Serial)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                let needs_ports = if let Some(form) = this.modals.form.as_mut() {
+                                    form.connection = ConnectionChoice::Serial;
+                                    form.serial_ports.is_empty()
+                                } else {
+                                    false
+                                };
+                                if needs_ports {
+                                    this.refresh_serial_ports(window, cx);
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("conn-telnet")
+                            .small()
+                            .label("Telnet")
+                            .selected(form.connection == ConnectionChoice::Telnet)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(form) = this.modals.form.as_mut() {
+                                    form.connection = ConnectionChoice::Telnet;
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// 终端通用属性卡片（启动命令、语义块模式）。
+    fn render_session_terminal_attributes_card(
+        form: &super::types::SessionForm,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let block_choice = form.block_view;
+
+        v_flex()
+            .gap_3()
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("form.startup_commands").to_string()),
+                    )
+                    .child(Textarea::new(&form.startup_commands).h(px(88.0)).w_full())
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("form.startup_hint").to_string()),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("form.block_view").to_string()),
+                    )
+                    .child(
+                        h_flex().gap_2().children(
+                            [
+                                (
+                                    "block-follow-global",
+                                    "form.block_view_follow",
+                                    BlockViewOverride::FollowGlobal,
+                                ),
+                                (
+                                    "block-enabled",
+                                    "form.block_view_enabled",
+                                    BlockViewOverride::Enabled,
+                                ),
+                                (
+                                    "block-disabled",
+                                    "form.block_view_disabled",
+                                    BlockViewOverride::Disabled,
+                                ),
+                            ]
+                            .into_iter()
+                            .map(|(id, key, value)| {
+                                Button::new(id)
+                                    .small()
+                                    .label(rust_i18n::t!(key).to_string())
+                                    .selected(block_choice == value)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if let Some(form) = this.modals.form.as_mut() {
+                                            form.block_view = value;
+                                        }
+                                        cx.notify();
+                                    }))
+                            }),
+                        ),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("form.block_view_hint").to_string()),
+                    ),
+            )
+            .into_any_element()
     }
 }

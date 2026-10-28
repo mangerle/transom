@@ -58,46 +58,13 @@ impl AppShell {
             .trim()
             .to_ascii_lowercase();
 
-        // 显示排除：与传输过滤共用 glob 语法，只影响可见性不拦截传输；
-        // 规则非法时静默跳过（与传输过滤的宽容语义一致）。
-        let hidden_matcher =
-            TransferFilter::from_text(&self.settings.sftp.panel_hidden_patterns.clone())
-                .matcher()
-                .ok();
-        let is_hidden = |name: &str| {
-            hidden_matcher
-                .as_ref()
-                .is_some_and(|matcher| matcher.matches(name, false))
-        };
-        let mut remote_entries: Vec<RemoteFile> = panel
-            .entries
-            .iter()
-            .filter(|entry| {
-                (show_hidden || !entry.name.starts_with('.'))
-                    && !is_hidden(&entry.name)
-                    && (remote_filter_query.is_empty()
-                        || fuzzy_match_name(&entry.name, &remote_filter_query))
-            })
-            .cloned()
-            .collect();
-        if panel.path != "/"
-            && !panel.path.is_empty()
-            && (remote_filter_query.is_empty() || fuzzy_match_name("..", &remote_filter_query))
-        {
-            let parent = super::parent_remote(&panel.path);
-            remote_entries.insert(
-                0,
-                RemoteFile {
-                    name: "..".to_string(),
-                    path: parent,
-                    is_dir: true,
-                    is_symlink: false,
-                    size: 0,
-                    modified: None,
-                    permissions: None,
-                },
-            );
-        }
+        let (remote_entries, local_entries) = Self::filter_sftp_panel_entries(
+            panel,
+            show_hidden,
+            &remote_filter_query,
+            &local_filter_query,
+            &self.settings.sftp.panel_hidden_patterns,
+        );
         let remote_path_input = panel.path_input.clone();
         let loading = panel.loading;
         let remote_error = panel.error.clone();
@@ -106,30 +73,6 @@ impl AppShell {
         let active_count = panel.active_transfers.len();
 
         let local_path_input = panel.local_path_input.clone();
-        let mut local_entries: Vec<LocalFileEntry> = panel
-            .local_entries
-            .iter()
-            .filter(|entry| {
-                (show_hidden || !entry.name.starts_with('.'))
-                    && (local_filter_query.is_empty()
-                        || fuzzy_match_name(&entry.name, &local_filter_query))
-            })
-            .cloned()
-            .collect();
-        if let Some(parent) = panel.local_path.parent()
-            && panel.local_path != parent
-            && (local_filter_query.is_empty() || fuzzy_match_name("..", &local_filter_query))
-        {
-            local_entries.insert(
-                0,
-                LocalFileEntry {
-                    name: "..".to_string(),
-                    path: parent.to_path_buf(),
-                    is_dir: true,
-                    size: 0,
-                },
-            );
-        }
         let local_error = panel.local_error.clone();
         let quick_paths = panel.local_quick_paths.clone();
         let local_collapsed = panel.local_collapsed;
@@ -279,92 +222,18 @@ impl AppShell {
         }
 
         let is_all_collapsed = expanded_panels.is_empty();
-
-        let header = if is_all_collapsed {
-            div()
-                .h(px(32.0))
-                .w_full()
-                .items_center()
-                .justify_center()
-                .border_b_1()
-                .border_color(p.sidebar_border)
-                .child(
-                    Button::new("sftp-close-all-collapsed")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::X)
-                        .tooltip(rust_i18n::t!("app.close").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(pane) = this
-                                .workspace
-                                .tabs
-                                .iter_mut()
-                                .find(|tab| tab.id == tab_id)
-                                .and_then(|tab| tab.session_pane_mut())
-                            {
-                                pane.sftp = None;
-                            }
-                            cx.notify();
-                        })),
-                )
-                .into_any_element()
-        } else {
-            let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
-            let title_text = if is_local_only {
-                rust_i18n::t!("sftp.local_files_title").to_string()
-            } else {
-                rust_i18n::t!("sftp.title").to_string()
-            };
-            self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx)
-        };
-
-        let center_content: Option<AnyElement> = match expanded_panels.len() {
-            0 => None,
-            1 => expanded_panels.pop().map(|pane| {
-                div()
-                    .size_full()
-                    .overflow_hidden()
-                    .child(pane)
-                    .into_any_element()
-            }),
-            _ => {
-                let mut resizable =
-                    h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
-                for pane in expanded_panels {
-                    resizable = resizable.child(resizable_panel().child(pane));
-                }
-                Some(resizable.into_any_element())
-            }
-        };
-
-        let mut columns_container = h_flex().size_full().overflow_hidden();
-
-        if let Some(content) = center_content {
-            columns_container =
-                columns_container.child(div().flex_1().h_full().overflow_hidden().child(content));
-        }
-
-        // 所有折叠竖条统一靠在右侧并排展示
-        if local_collapsed {
-            columns_container =
-                columns_container.child(self.render_sftp_local_collapsed_bar(tab_id, p, cx));
-        }
-        if !is_local_only && remote_collapsed {
-            columns_container =
-                columns_container.child(self.render_sftp_remote_collapsed_bar(tab_id, p, cx));
-        }
-        for (side_index, is_collapsed, side_title) in &side_remotes_info {
-            if *is_collapsed {
-                columns_container =
-                    columns_container.child(self.render_sftp_side_remote_collapsed_bar(
-                        tab_id,
-                        *side_index,
-                        side_title,
-                        p,
-                        cx,
-                    ));
-            }
-        }
+        let header =
+            self.render_sftp_panel_top_header(tab_id, is_all_collapsed, is_local_only, p, cx);
+        let columns_container = self.render_sftp_columns_container(
+            tab_id,
+            expanded_panels,
+            local_collapsed,
+            remote_collapsed,
+            is_local_only,
+            &side_remotes_info,
+            p,
+            cx,
+        );
 
         let mut panel_element = v_flex()
             .id(ElementId::Name("sftp-panel-container".into()))
@@ -425,5 +294,188 @@ impl AppShell {
         }
 
         panel_element.into_any_element()
+    }
+
+    /// 过滤并准备本地与远端 SFTP 面板展示文件列表。
+    fn filter_sftp_panel_entries(
+        panel: &super::SftpPanelState,
+        show_hidden: bool,
+        remote_filter_query: &str,
+        local_filter_query: &str,
+        hidden_patterns: &str,
+    ) -> (Vec<RemoteFile>, Vec<LocalFileEntry>) {
+        let hidden_matcher = TransferFilter::from_text(hidden_patterns).matcher().ok();
+        let is_hidden = |name: &str| {
+            hidden_matcher
+                .as_ref()
+                .is_some_and(|matcher| matcher.matches(name, false))
+        };
+        let mut remote_entries: Vec<RemoteFile> = panel
+            .entries
+            .iter()
+            .filter(|entry| {
+                (show_hidden || !entry.name.starts_with('.'))
+                    && !is_hidden(&entry.name)
+                    && (remote_filter_query.is_empty()
+                        || fuzzy_match_name(&entry.name, remote_filter_query))
+            })
+            .cloned()
+            .collect();
+        if panel.path != "/"
+            && !panel.path.is_empty()
+            && (remote_filter_query.is_empty() || fuzzy_match_name("..", remote_filter_query))
+        {
+            let parent = super::parent_remote(&panel.path);
+            remote_entries.insert(
+                0,
+                RemoteFile {
+                    name: "..".to_string(),
+                    path: parent,
+                    is_dir: true,
+                    is_symlink: false,
+                    size: 0,
+                    modified: None,
+                    permissions: None,
+                },
+            );
+        }
+
+        let mut local_entries: Vec<LocalFileEntry> = panel
+            .local_entries
+            .iter()
+            .filter(|entry| {
+                (show_hidden || !entry.name.starts_with('.'))
+                    && (local_filter_query.is_empty()
+                        || fuzzy_match_name(&entry.name, local_filter_query))
+            })
+            .cloned()
+            .collect();
+        if let Some(parent) = panel.local_path.parent()
+            && panel.local_path != parent
+            && (local_filter_query.is_empty() || fuzzy_match_name("..", local_filter_query))
+        {
+            local_entries.insert(
+                0,
+                LocalFileEntry {
+                    name: "..".to_string(),
+                    path: parent.to_path_buf(),
+                    is_dir: true,
+                    size: 0,
+                },
+            );
+        }
+
+        (remote_entries, local_entries)
+    }
+
+    /// 渲染 SFTP 顶栏标题与操作区。
+    fn render_sftp_panel_top_header(
+        &self,
+        tab_id: transom_core::TabId,
+        is_all_collapsed: bool,
+        is_local_only: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if is_all_collapsed {
+            div()
+                .h(px(32.0))
+                .w_full()
+                .items_center()
+                .justify_center()
+                .border_b_1()
+                .border_color(p.sidebar_border)
+                .child(
+                    Button::new("sftp-close-all-collapsed")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::X)
+                        .tooltip(rust_i18n::t!("app.close").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(pane) = this
+                                .workspace
+                                .tabs
+                                .iter_mut()
+                                .find(|tab| tab.id == tab_id)
+                                .and_then(|tab| tab.session_pane_mut())
+                            {
+                                pane.sftp = None;
+                            }
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        } else {
+            let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
+            let title_text = if is_local_only {
+                rust_i18n::t!("sftp.local_files_title").to_string()
+            } else {
+                rust_i18n::t!("sftp.title").to_string()
+            };
+            self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx)
+        }
+    }
+
+    /// 渲染 SFTP 双栏/多栏及其折叠条容器。
+    #[allow(clippy::too_many_arguments)]
+    fn render_sftp_columns_container(
+        &self,
+        tab_id: transom_core::TabId,
+        mut expanded_panels: Vec<AnyElement>,
+        local_collapsed: bool,
+        remote_collapsed: bool,
+        is_local_only: bool,
+        side_remotes_info: &[(usize, bool, String)],
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let center_content: Option<AnyElement> = match expanded_panels.len() {
+            0 => None,
+            1 => expanded_panels.pop().map(|pane| {
+                div()
+                    .size_full()
+                    .overflow_hidden()
+                    .child(pane)
+                    .into_any_element()
+            }),
+            _ => {
+                let mut resizable =
+                    h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
+                for pane in expanded_panels {
+                    resizable = resizable.child(resizable_panel().child(pane));
+                }
+                Some(resizable.into_any_element())
+            }
+        };
+
+        let mut columns_container = h_flex().size_full().overflow_hidden();
+
+        if let Some(content) = center_content {
+            columns_container =
+                columns_container.child(div().flex_1().h_full().overflow_hidden().child(content));
+        }
+
+        if local_collapsed {
+            columns_container =
+                columns_container.child(self.render_sftp_local_collapsed_bar(tab_id, p, cx));
+        }
+        if !is_local_only && remote_collapsed {
+            columns_container =
+                columns_container.child(self.render_sftp_remote_collapsed_bar(tab_id, p, cx));
+        }
+        for (side_index, is_collapsed, side_title) in side_remotes_info {
+            if *is_collapsed {
+                columns_container =
+                    columns_container.child(self.render_sftp_side_remote_collapsed_bar(
+                        tab_id,
+                        *side_index,
+                        side_title,
+                        p,
+                        cx,
+                    ));
+            }
+        }
+
+        columns_container.into_any_element()
     }
 }

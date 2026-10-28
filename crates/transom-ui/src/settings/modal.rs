@@ -55,259 +55,9 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let app_entity = cx.entity().clone();
-        // 页面结构对齐 Zed：外观（界面皮肤）与终端（终端一切）分立，
-        // 窗口与布局合并为一页。
-        let page_appearance =
-            SettingPage::new(rust_i18n::t!("settings.tab_appearance").to_string())
-                .icon(IconName::Palette)
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.ui_theme_group",
-                    AppShell::render_settings_ui_theme,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.ui_font_group",
-                    AppShell::render_settings_ui_font,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.window_appearance_group",
-                    AppShell::render_settings_window_appearance,
-                ));
-
-        let page_terminal = SettingPage::new(rust_i18n::t!("settings.tab_terminal").to_string())
-            .icon(IconName::Terminal)
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.terminal_font_group",
-                AppShell::render_settings_terminal_font,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.cursor_group",
-                AppShell::render_settings_cursor,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.terminal_theme_group",
-                AppShell::render_settings_themes,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.highlight_group",
-                AppShell::render_settings_highlight,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.trigger_group",
-                AppShell::render_settings_triggers,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.block_view_group",
-                AppShell::render_settings_block_view,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.key_bindings_group",
-                AppShell::render_settings_key_bindings,
-            ));
-
-        let page_files = SettingPage::new(rust_i18n::t!("settings.tab_files").to_string())
-            .icon(IconName::Folder)
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.editor_group",
-                AppShell::render_settings_editor,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.file_panel_group",
-                AppShell::render_settings_file_panel,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.transfer_group",
-                AppShell::render_settings_transfer,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.zmodem_group",
-                AppShell::render_settings_zmodem,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.audit_group",
-                AppShell::render_settings_audit,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.identity_group",
-                AppShell::render_settings_identities,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.history_group",
-                AppShell::render_settings_history,
-            ));
-
-        let page_mouse =
-            SettingPage::new(rust_i18n::t!("settings.tab_mouse_clipboard").to_string())
-                .icon(IconName::ArrowLeftRight)
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.mouse_group",
-                    AppShell::render_settings_mouse,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.selection_group",
-                    AppShell::render_settings_selection,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.clipboard_group",
-                    AppShell::render_settings_clipboard,
-                ));
-
-        let page_shortcuts = SettingPage::new(rust_i18n::t!("settings.tab_shortcuts").to_string())
-            .icon(IconName::Search)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app_entity.clone();
-                let p = p.clone();
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_shortcuts(&p, cx))
-                }
-            })));
-
-        // 窗口与布局合并：标签页、窗口与会话、活动栏、状态栏四组。
-        let page_window_layout =
-            SettingPage::new(rust_i18n::t!("settings.tab_window_layout").to_string())
-                .icon(IconName::PanelLeft)
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.tabs_group",
-                    AppShell::render_settings_tabs,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.window_group",
-                    AppShell::render_settings_window,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.activity_bar",
-                    AppShell::render_settings_activity_bar,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.status_bar",
-                    AppShell::render_settings_status_bar,
-                ))
-                .group(setting_group(
-                    &app_entity,
-                    p,
-                    "settings.startup_group",
-                    AppShell::render_settings_startup,
-                ));
-
-        let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
-            .icon(IconName::Globe)
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.language_group",
-                AppShell::render_settings_language,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.notify_group",
-                AppShell::render_settings_notify,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.proxy_group",
-                AppShell::render_settings_proxy,
-            ));
-
-        // 桌面集成组仅 Linux：默认终端注册依赖 freedesktop 规范，macOS/Windows
-        // 没有对应机制，展示只会误导。
-        #[cfg(target_os = "linux")]
-        let page_general = page_general.group(setting_group(
-            &app_entity,
-            p,
-            "settings.desktop_integration_group",
-            AppShell::render_settings_desktop_integration,
-        ));
-        let page_general = page_general
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.backup_group",
-                AppShell::render_settings_backup,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.sync_group",
-                AppShell::render_settings_cloud_sync,
-            ))
-            .group(setting_group(
-                &app_entity,
-                p,
-                "settings.log_group",
-                AppShell::render_settings_logs,
-            ));
-
-        // 关于页只读：呈现版本、许可与本机运行环境，不参与保存/取消语义。
-        let page_about = SettingPage::new(rust_i18n::t!("settings.tab_about").to_string())
-            .icon(IconName::Info)
-            .group(setting_group_with_window(
-                &app_entity,
-                p,
-                "settings.about_group",
-                AppShell::render_settings_about,
-            ));
-
         let settings_component = Settings::new("app-settings")
             .sidebar_width(px(220.0))
-            .pages(vec![
-                page_appearance,
-                page_terminal,
-                page_files,
-                page_mouse,
-                page_shortcuts,
-                page_window_layout,
-                page_general,
-                page_about,
-            ]);
+            .pages(Self::build_settings_pages(&app_entity, p));
 
         // 尺寸随密度档位缩放；max_w/max_h 以 overlay 全屏为上限，宽松档下小
         // 窗口弹窗贴边而不被裁切，内容区自身可滚动。
@@ -416,5 +166,254 @@ impl AppShell {
             );
 
         Self::overlay(panel, p)
+    }
+
+    /// 构建偏好设置所有分类页面。
+    fn build_settings_pages(app: &Entity<AppShell>, p: &Palette) -> Vec<SettingPage> {
+        let page_appearance =
+            SettingPage::new(rust_i18n::t!("settings.tab_appearance").to_string())
+                .icon(IconName::Palette)
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.ui_theme_group",
+                    AppShell::render_settings_ui_theme,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.ui_font_group",
+                    AppShell::render_settings_ui_font,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.window_appearance_group",
+                    AppShell::render_settings_window_appearance,
+                ));
+
+        let page_terminal = SettingPage::new(rust_i18n::t!("settings.tab_terminal").to_string())
+            .icon(IconName::Terminal)
+            .group(setting_group(
+                app,
+                p,
+                "settings.terminal_font_group",
+                AppShell::render_settings_terminal_font,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.cursor_group",
+                AppShell::render_settings_cursor,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.terminal_theme_group",
+                AppShell::render_settings_themes,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.highlight_group",
+                AppShell::render_settings_highlight,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.trigger_group",
+                AppShell::render_settings_triggers,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.block_view_group",
+                AppShell::render_settings_block_view,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.key_bindings_group",
+                AppShell::render_settings_key_bindings,
+            ));
+
+        let page_files = SettingPage::new(rust_i18n::t!("settings.tab_files").to_string())
+            .icon(IconName::Folder)
+            .group(setting_group(
+                app,
+                p,
+                "settings.editor_group",
+                AppShell::render_settings_editor,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.file_panel_group",
+                AppShell::render_settings_file_panel,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.transfer_group",
+                AppShell::render_settings_transfer,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.zmodem_group",
+                AppShell::render_settings_zmodem,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.audit_group",
+                AppShell::render_settings_audit,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.identity_group",
+                AppShell::render_settings_identities,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.history_group",
+                AppShell::render_settings_history,
+            ));
+
+        let page_mouse =
+            SettingPage::new(rust_i18n::t!("settings.tab_mouse_clipboard").to_string())
+                .icon(IconName::ArrowLeftRight)
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.mouse_group",
+                    AppShell::render_settings_mouse,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.selection_group",
+                    AppShell::render_settings_selection,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.clipboard_group",
+                    AppShell::render_settings_clipboard,
+                ));
+
+        let page_shortcuts = SettingPage::new(rust_i18n::t!("settings.tab_shortcuts").to_string())
+            .icon(IconName::Search)
+            .group(SettingGroup::new().item(SettingItem::render({
+                let app = app.clone();
+                let p = p.clone();
+                move |_options, _window, cx| {
+                    app.update(cx, |this, cx| this.render_settings_shortcuts(&p, cx))
+                }
+            })));
+
+        let page_window_layout =
+            SettingPage::new(rust_i18n::t!("settings.tab_window_layout").to_string())
+                .icon(IconName::PanelLeft)
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.tabs_group",
+                    AppShell::render_settings_tabs,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.window_group",
+                    AppShell::render_settings_window,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.activity_bar",
+                    AppShell::render_settings_activity_bar,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.status_bar",
+                    AppShell::render_settings_status_bar,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.startup_group",
+                    AppShell::render_settings_startup,
+                ));
+
+        let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
+            .icon(IconName::Globe)
+            .group(setting_group(
+                app,
+                p,
+                "settings.language_group",
+                AppShell::render_settings_language,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.notify_group",
+                AppShell::render_settings_notify,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.proxy_group",
+                AppShell::render_settings_proxy,
+            ));
+
+        #[cfg(target_os = "linux")]
+        let page_general = page_general.group(setting_group(
+            app,
+            p,
+            "settings.desktop_integration_group",
+            AppShell::render_settings_desktop_integration,
+        ));
+        let page_general = page_general
+            .group(setting_group(
+                app,
+                p,
+                "settings.backup_group",
+                AppShell::render_settings_backup,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.sync_group",
+                AppShell::render_settings_cloud_sync,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.log_group",
+                AppShell::render_settings_logs,
+            ));
+
+        let page_about = SettingPage::new(rust_i18n::t!("settings.tab_about").to_string())
+            .icon(IconName::Info)
+            .group(setting_group_with_window(
+                app,
+                p,
+                "settings.about_group",
+                AppShell::render_settings_about,
+            ));
+
+        vec![
+            page_appearance,
+            page_terminal,
+            page_files,
+            page_mouse,
+            page_shortcuts,
+            page_window_layout,
+            page_general,
+            page_about,
+        ]
     }
 }
