@@ -94,39 +94,17 @@ impl AppShell {
         let Some(edit) = self.modals.settings.identity_edit.as_ref() else {
             return;
         };
-        let fields = [
+        let fields = vec![
             (SecretKind::Password, edit.password.clone()),
             (SecretKind::KeyPassphrase, edit.passphrase.clone()),
         ];
-        let secret_store = self.services.secret_store.clone();
-        let executor = cx.background_executor().clone();
-        let read_fields = fields.clone();
-        window
-            .spawn(cx, async move |cx| {
-                let secrets = executor
-                    .spawn(async move {
-                        read_fields
-                            .iter()
-                            .map(|(kind, _)| {
-                                secret_store
-                                    .get(&SecretKey::new(owner, *kind))
-                                    .ok()
-                                    .flatten()
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .await;
-                let _ = cx.update(|window, cx| {
-                    for ((_, field), secret) in fields.into_iter().zip(secrets) {
-                        if let Some(secret) = secret {
-                            field.update(cx, |state, cx| {
-                                state.set_value(secret.as_str(), window, cx);
-                            });
-                        }
-                    }
-                });
-            })
-            .detach();
+        crate::app::prefill_secret_fields(
+            owner,
+            fields,
+            self.services.secret_store.clone(),
+            window,
+            cx,
+        );
     }
 
     pub(crate) fn cancel_identity_edit(&mut self, cx: &mut Context<Self>) {

@@ -149,6 +149,29 @@ impl AppShell {
         self.workspace.group_index_of(tab_id)
     }
 
+    /// 计算当前标签被移除或替换后应激活的窗格。
+    ///
+    /// 优先级：显式替换目标 → 并排网格当前焦点组 → 移除前的分组焦点 →
+    /// 第一个分组。关闭标签、删除会话与复制标签共用同一顺序，避免几处
+    /// 各写一条 `or_else` 链后逐渐漂移。
+    pub(crate) fn fallback_active_pane(
+        &self,
+        replacement: Option<TabId>,
+        previous_tiled_focus: Option<GroupId>,
+    ) -> Option<TabId> {
+        replacement
+            .or_else(|| {
+                self.active_tiling()
+                    .and_then(|tiled| tiled.focused_group())
+                    .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
+            })
+            .or_else(|| {
+                previous_tiled_focus
+                    .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
+            })
+            .or_else(|| self.workspace.groups.first().map(|group| group.active_pane))
+    }
+
     pub(crate) fn reconnect_tab(
         &mut self,
         tab_id: TabId,

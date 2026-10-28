@@ -2,10 +2,12 @@
 
 mod modal_hub;
 mod overlays;
+mod secret_prefill;
 mod task_hub;
 mod types;
 
 pub(crate) use modal_hub::ModalHub;
+pub(crate) use secret_prefill::prefill_secret_fields;
 pub(crate) use task_hub::TaskHub;
 
 use crate::UiServices;

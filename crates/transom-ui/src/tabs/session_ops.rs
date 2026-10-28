@@ -204,35 +204,13 @@ impl AppShell {
         if fields.is_empty() {
             return;
         }
-        let secret_store = self.services.secret_store.clone();
-        let executor = cx.background_executor().clone();
-        let read_fields = fields.clone();
-        window
-            .spawn(cx, async move |cx| {
-                let secrets = executor
-                    .spawn(async move {
-                        read_fields
-                            .iter()
-                            .map(|(kind, _)| {
-                                secret_store
-                                    .get(&SecretKey::new(session_id, *kind))
-                                    .ok()
-                                    .flatten()
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .await;
-                let _ = cx.update(|window, cx| {
-                    for ((_, field), secret) in fields.into_iter().zip(secrets) {
-                        if let Some(secret) = secret {
-                            field.update(cx, |state, cx| {
-                                state.set_value(secret.as_str(), window, cx);
-                            });
-                        }
-                    }
-                });
-            })
-            .detach();
+        crate::app::prefill_secret_fields(
+            session_id.into(),
+            fields,
+            self.services.secret_store.clone(),
+            window,
+            cx,
+        );
     }
 
     /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。

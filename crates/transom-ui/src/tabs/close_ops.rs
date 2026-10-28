@@ -211,17 +211,7 @@ impl AppShell {
         let replacement = self.detach_pane_from_group(tab_id);
         self.prune_tilings();
         if was_active {
-            self.workspace.active_tab = replacement
-                .or_else(|| {
-                    self.active_tiling()
-                        .and_then(|tiled| tiled.focused_group())
-                        .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
-                })
-                .or_else(|| {
-                    tiled_focus
-                        .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
-                })
-                .or_else(|| self.workspace.groups.first().map(|group| group.active_pane));
+            self.workspace.active_tab = self.fallback_active_pane(replacement, tiled_focus);
         }
         self.prune_tab_selection();
         self.sync_broadcast_targets();
