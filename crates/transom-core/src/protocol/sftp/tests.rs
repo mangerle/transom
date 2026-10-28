@@ -1,8 +1,5 @@
 use super::path::*;
-use super::task::*;
 use super::types::*;
-use crate::ids::ConnectionId;
-use std::path::PathBuf;
 
 #[test]
 fn test_octal_and_rwx_permissions() {
@@ -84,49 +81,6 @@ fn test_remote_text_meta_treats_missing_mtime_as_wildcard() {
         crlf: false,
         transcoded: false,
     }));
-}
-
-#[test]
-fn test_transfer_task_remote_copy() {
-    let conn_a = ConnectionId::new();
-    let conn_b = ConnectionId::new();
-    let task = TransferTask::new_remote_copy(
-        conn_a,
-        "/remote/a/file.txt".into(),
-        conn_b,
-        "/remote/b/file.txt".into(),
-        Some(1024),
-        false,
-    );
-    assert_eq!(task.direction, TransferDirection::RemoteCopy);
-    assert_eq!(task.kind, TransferKind::File);
-    assert_eq!(task.source_connection_id, Some(conn_a));
-    assert_eq!(task.target_connection_id, Some(conn_b));
-    assert_eq!(
-        task.target_remote_path.as_deref(),
-        Some("/remote/b/file.txt")
-    );
-    assert!(task.preserve_attributes);
-    assert_eq!(task.size, Some(1024));
-}
-
-#[test]
-fn test_transfer_task_serialization_compatibility() {
-    let task = TransferTask::new(
-        TransferDirection::Download,
-        PathBuf::from("/local/path"),
-        "/remote/path".into(),
-        Some(2048),
-        TransferMode::Auto,
-    );
-    let json = serde_json::to_string(&task).expect("序列化 TransferTask 失败");
-    let deserialized: TransferTask =
-        serde_json::from_str(&json).expect("反序列化 TransferTask 失败");
-    assert_eq!(deserialized.id, task.id);
-    assert_eq!(deserialized.direction, TransferDirection::Download);
-    assert!(deserialized.preserve_attributes);
-    assert_eq!(deserialized.speed_bps, None);
-    assert_eq!(deserialized.eta_secs, None);
 }
 
 #[test]

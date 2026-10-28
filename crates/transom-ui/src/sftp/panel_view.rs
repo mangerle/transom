@@ -1,5 +1,6 @@
 //! SFTP 双栏文件管理器主面板视图渲染。
 
+use super::TransferStatus;
 use super::file_row::{insert_parent_local_entry, insert_parent_remote_entry};
 use super::local_pane_view::SftpLocalPaneProps;
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
@@ -15,7 +16,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::*;
-use transom_core::{RemoteFile, TransferFilter, TransferStatus};
+use transom_core::{RemoteFile, TransferFilter};
 
 impl AppShell {
     pub(crate) fn render_sftp_panel(

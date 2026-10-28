@@ -5,12 +5,13 @@
 
 use crate::app::AppShell;
 use crate::palette::localized_error;
+use crate::sftp::TransferStatus;
 use crate::sftp::{
     SftpPreviewResponse, SftpPropertiesModalState, format_size, remote_file_properties,
     send_desktop_notification,
 };
 use gpui_kit::*;
-use transom_core::{SftpAppEvent, TransferDirection, TransferStatus};
+use transom_core::{SftpAppEvent, TransferDirection};
 
 impl AppShell {
     /// SFTP 目录列表回填：主面板或并排远端列按连接归属分别落位。

@@ -18,9 +18,10 @@ pub(crate) use self::types::{
 };
 
 use crate::app::AppShell;
+use crate::sftp::{TransferMode, TransferTask};
 use gpui_kit::*;
 use std::path::PathBuf;
-use transom_core::{ConnectionId, TabId, TransferDirection, TransferMode, TransferTask};
+use transom_core::{ConnectionId, TabId, TransferDirection};
 
 impl AppShell {
     /// 挂载并列远端会话到当前 SFTP 面板。

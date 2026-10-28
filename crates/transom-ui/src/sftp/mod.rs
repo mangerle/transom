@@ -27,6 +27,7 @@ mod state;
 mod status;
 mod sync_actions;
 mod sync_modal;
+mod task;
 mod transfer_presentation;
 mod vfs_entry_view;
 mod vfs_provider;
@@ -43,6 +44,7 @@ pub(crate) use self::state::{
     SftpInputTarget, SftpLocalPaneState, SftpPanelState, SftpQueueState, SftpRemotePaneState,
     SftpSyncModalState,
 };
+pub(crate) use self::task::{TransferKind, TransferMode, TransferStatus, TransferTask};
 pub(crate) use self::vfs_entry_view::{VfsRowRenderOptions, render_vfs_row_content};
 pub(crate) use self::vfs_provider::LocalVfsProvider;
 pub(crate) use crate::editor::{EditorDragTracker, PendingEditorClose};

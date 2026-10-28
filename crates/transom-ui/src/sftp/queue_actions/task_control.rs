@@ -5,8 +5,9 @@
 //! - 核心优势：集中管理状态流转与命令发送（SftpCancel），明确细粒度职责。
 
 use crate::app::AppShell;
+use crate::sftp::{TransferMode, TransferStatus};
 use gpui_kit::*;
-use transom_core::{SftpCommand, TabId, TransferId, TransferMode, TransferStatus};
+use transom_core::{SftpCommand, TabId, TransferId};
 
 impl AppShell {
     pub(crate) fn sftp_pause_task(

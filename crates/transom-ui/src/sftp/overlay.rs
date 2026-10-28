@@ -14,6 +14,7 @@
 use super::SftpPanelState;
 use super::format_size;
 use super::transfer_presentation::{display_name, is_busy, progress_percent, status_label};
+use super::{TransferStatus, TransferTask};
 use crate::app::{AppShell, TerminalTab};
 use crate::palette::Palette;
 use crate::status_bar::format_rate;
@@ -27,7 +28,7 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::time::{Duration, Instant};
-use transom_core::{TabId, TransferStatus, TransferTask};
+use transom_core::TabId;
 
 /// 队列全部结束到浮层自动收起之间的停留时间。
 const OVERLAY_LINGER: Duration = Duration::from_secs(5);

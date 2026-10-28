@@ -5,7 +5,8 @@
 //! 暂停/完成/取消在队列里是硬编码中文、在浮层里走翻译键，失败前缀也不一致。
 //! 这里只收敛与布局无关的纯计算，图标、颜色与按钮由各自视图决定。
 
-use transom_core::{TransferDirection, TransferStatus, TransferTask};
+use super::{TransferStatus, TransferTask};
+use transom_core::TransferDirection;
 
 /// 传输进度百分比（0..=100）；总大小未知或为零时返回 `None`。
 ///
@@ -70,8 +71,9 @@ pub(crate) fn is_busy(task: &TransferTask) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{display_name, is_busy, progress_percent};
+    use crate::sftp::{TransferMode, TransferStatus, TransferTask};
     use std::path::PathBuf;
-    use transom_core::{TransferDirection, TransferMode, TransferStatus, TransferTask};
+    use transom_core::TransferDirection;
 
     fn task(
         direction: TransferDirection,

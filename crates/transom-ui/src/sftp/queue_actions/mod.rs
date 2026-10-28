@@ -12,11 +12,11 @@ mod task_control;
 use self::enqueue::upload_tasks;
 use crate::app::AppShell;
 use crate::palette::localized_error;
+use crate::sftp::{TransferKind, TransferMode, TransferStatus, TransferTask};
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    SftpCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId, TransferKind,
-    TransferMode, TransferStatus, TransferTask,
+    SftpCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId,
 };
 
 impl AppShell {

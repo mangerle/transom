@@ -6,13 +6,14 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::{TransferKind, TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{TabId, TransferDirection, TransferKind, TransferStatus, TransferTask};
+use transom_core::{TabId, TransferDirection};
 
 use super::format::{format_eta, format_speed};
 use crate::sftp::format_size;

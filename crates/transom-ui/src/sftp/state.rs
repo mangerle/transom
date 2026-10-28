@@ -4,12 +4,13 @@ use super::overlay::DropOverlayState;
 use super::preview::SftpPreviewState;
 use super::quick_paths::LocalQuickPaths;
 use super::side_remote::{SftpActivePane, SftpClipboardData, SftpSideRemoteState};
+use super::task::TransferTask;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
-use transom_core::{ConnectionId, DirDiffEntry, RemoteFile, TabId, TransferId, TransferTask};
+use transom_core::{ConnectionId, DirDiffEntry, RemoteFile, TabId, TransferId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LocalFileEntry {

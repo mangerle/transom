@@ -15,6 +15,7 @@ pub(crate) use self::status_bar::SftpStatusBarProps;
 
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
+use crate::sftp::{TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -23,7 +24,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{TabId, TransferStatus, TransferTask};
+use transom_core::TabId;
 
 pub(crate) struct SftpQueuePaneProps<'a> {
     pub(crate) tab_id: TabId,

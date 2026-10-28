@@ -8,8 +8,9 @@
 //!   3. 方便编写单元测试验证路径映射。
 
 use crate::sftp::join_remote;
+use crate::sftp::{TransferMode, TransferTask};
 use std::path::PathBuf;
-use transom_core::{TransferDirection, TransferMode, TransferTask};
+use transom_core::TransferDirection;
 
 /// 把本地路径列表转成上传任务；目录与文件走不同的构造分支。
 pub(super) fn upload_tasks(

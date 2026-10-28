@@ -2,11 +2,10 @@
 
 use super::SftpSyncModalState;
 use crate::app::AppShell;
+use crate::sftp::TransferTask;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::*;
-use transom_core::{
-    SftpCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId, TransferTask,
-};
+use transom_core::{SftpCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId};
 
 impl AppShell {
     /// 以当前双栏路径为根目录发起异步扫描对比。

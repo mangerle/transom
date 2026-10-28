@@ -2,7 +2,7 @@
 
 mod ops;
 mod path;
-mod task;
+mod transfer;
 mod types;
 
 #[cfg(test)]
@@ -13,7 +13,5 @@ pub use path::{
     format_octal_permissions, format_rwx_permissions, is_safe_file_name, parse_octal_permissions,
     safe_local_join,
 };
-pub use task::{
-    TransferDirection, TransferKind, TransferMode, TransferStatus, TransferSummary, TransferTask,
-};
+pub use transfer::{TransferDirection, TransferSummary};
 pub use types::{RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta};
