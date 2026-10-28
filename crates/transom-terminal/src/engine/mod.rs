@@ -71,6 +71,8 @@ pub struct TerminalEngine {
     scrollback_limit: usize,
     /// 滚动缓冲已写满：停止记录块，避免折叠到错误的行段。
     blocks_saturated: bool,
+    /// 块折叠/展开或视图开关改变了可见行映射：下一帧必须全量重建行缓存。
+    block_layout_dirty: bool,
     /// Kitty 图形协议解析器与已解码图像仓库。
     kitty: KittyParser,
     graphics: GraphicsStore,
@@ -116,6 +118,7 @@ impl TerminalEngine {
             blocks: BlockStore::default(),
             scrollback_limit: profile.scrollback,
             blocks_saturated: profile.scrollback == 0,
+            block_layout_dirty: false,
             kitty: KittyParser::default(),
             graphics: GraphicsStore::default(),
             search: SearchState::default(),
@@ -387,6 +390,12 @@ impl TerminalEngine {
     /// 而本渲染器把选区画成独立覆盖层、不进行缓存，因此恰好不需要它参与。
     /// 必须在持有引擎锁的渲染准备阶段调用，保证"上次取走之后"的窗口完整。
     pub(crate) fn take_damage(&mut self) -> DamageInfo {
+        // 折叠/展开与块视图开关不改变网格内容，内核 damage 不会报告；若不
+        // 在此提升为全量，行缓存会沿用旧布局映射而画错行。
+        if std::mem::take(&mut self.block_layout_dirty) {
+            self.term.reset_damage();
+            return DamageInfo::Full;
+        }
         let damage = match self.term.damage() {
             TermDamage::Full => DamageInfo::Full,
             // 迭代器只产出已损伤行，且行号已换算为视口坐标（含 display_offset）。
@@ -396,6 +405,11 @@ impl TerminalEngine {
         // 不立即重置的话脏行跟踪退化为每帧全量，缓存形同虚设。
         self.term.reset_damage();
         damage
+    }
+
+    /// 标记块布局已变化：下一帧取损伤时提升为全量重建。
+    pub(crate) fn mark_block_layout_dirty(&mut self) {
+        self.block_layout_dirty = true;
     }
 
     pub fn mode(&self) -> TermMode {

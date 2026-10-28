@@ -107,10 +107,11 @@ impl TerminalRenderer {
             row_cache.resize_with(ctx.rows, RowVisual::default);
         }
 
-        let mut damaged_rows: Vec<usize> = match (ctx.request.block_layout.is_some(), damage) {
-            (true, _) => (0..ctx.rows).collect(),
-            (false, DamageInfo::Full) => (0..ctx.rows).collect(),
-            (false, DamageInfo::Rows(list)) => {
+        // 块视图只改变"视口行 -> 网格行"的映射，网格内容本身仍按内核损伤
+        // 增量变化；全量只在布局切换（引擎用 Full 报告）或内核要求时发生。
+        let mut damaged_rows: Vec<usize> = match damage {
+            DamageInfo::Full => (0..ctx.rows).collect(),
+            DamageInfo::Rows(list) => {
                 let mut rows_set = Vec::with_capacity(list.len() + 1);
                 rows_set.extend_from_slice(list);
                 if ctx.cursor_visible
@@ -135,7 +136,16 @@ impl TerminalRenderer {
             if row >= ctx.rows {
                 continue;
             }
-            let line = Line(row as i32 - ctx.display_offset);
+            // 重建与绘制必须用同一套映射：块视图下视口行对应的是布局里的
+            // 网格行，直接按 display_offset 反推会在折叠后画错行。
+            let line = match ctx.request.block_layout {
+                Some(layout) => match layout.line_at(row) {
+                    Some(line) => line,
+                    // 横幅与留白没有网格内容，缓存保持默认。
+                    None => continue,
+                },
+                None => Line(row as i32 - ctx.display_offset),
+            };
             scratch.fill(
                 grid,
                 line,

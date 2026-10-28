@@ -73,6 +73,42 @@ fn block_captures_fast_command_in_one_chunk() {
     assert!(markdown.contains("退出码 0"));
 }
 
+/// 折叠切换与视图开关不改变网格内容，但必须让下一帧全量重建行缓存；
+/// 否则块视图会沿用旧的行映射，把内容画到错误位置。
+#[test]
+fn block_layout_change_forces_full_damage() {
+    let (mut engine, _events) = engine(40, 10);
+    engine.process(
+            b"\x1b]133;A\x1b\\$ \x1b]133;B\x1b\\seq 3\r\n\x1b]133;C\x1b\\1\r\n2\r\n3\r\n\x1b]133;D;0\x1b\\\x1b]133;A\x1b\\$ ",
+        );
+    let id = engine
+        .command_blocks()
+        .next()
+        .map(|block| block.id)
+        .expect("命令块");
+    let _ = engine.take_damage();
+
+    engine.set_block_auto_collapse(1);
+    assert!(
+        matches!(engine.take_damage(), DamageInfo::Full),
+        "折叠阈值变化必须触发全量重建"
+    );
+
+    let _ = engine.take_damage();
+    assert!(engine.toggle_block(id));
+    assert!(
+        matches!(engine.take_damage(), DamageInfo::Full),
+        "折叠切换必须触发全量重建"
+    );
+
+    let _ = engine.take_damage();
+    engine.mark_block_layout_dirty();
+    assert!(
+        matches!(engine.take_damage(), DamageInfo::Full),
+        "视图开关必须触发全量重建"
+    );
+}
+
 /// 自动折叠阈值在收尾结算时生效，布局把输出压成横幅。
 #[test]
 fn block_auto_collapses_and_layout_shows_banner() {

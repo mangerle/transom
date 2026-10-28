@@ -35,6 +35,7 @@ impl TerminalEngine {
     /// 调整自动折叠阈值（全局设置热更新时调用）。
     pub fn set_block_auto_collapse(&mut self, rows: usize) {
         self.blocks.set_auto_collapse_rows(rows);
+        self.block_layout_dirty = true;
     }
 
     /// 获取所有命令块的迭代器。
@@ -49,12 +50,17 @@ impl TerminalEngine {
 
     /// 切换指定块的折叠状态；返回是否命中。
     pub fn toggle_block(&mut self, id: u64) -> bool {
-        self.blocks.toggle(id)
+        let changed = self.blocks.toggle(id);
+        if changed {
+            self.block_layout_dirty = true;
+        }
+        changed
     }
 
     /// 显式设置指定块的折叠状态。
     pub fn set_block_collapsed(&mut self, id: u64, collapsed: bool) {
         self.blocks.set_collapsed(id, collapsed);
+        self.block_layout_dirty = true;
     }
 
     /// 覆盖某绝对行的命令块（供鼠标悬浮与右键菜单定位）。

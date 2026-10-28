@@ -14,12 +14,13 @@ impl TerminalView {
     /// 热切换只改下一帧的行映射与自动折叠阈值，不重建会话、不清屏，
     /// 也不影响已建立的选择与历史缓冲。
     pub fn set_block_view(&mut self, settings: Option<BlockViewSettings>, cx: &mut Context<Self>) {
+        let mut engine = self.state.engine.lock();
         if let Some(settings) = settings {
-            self.state
-                .engine
-                .lock()
-                .set_block_auto_collapse(settings.auto_collapse_rows);
+            engine.set_block_auto_collapse(settings.auto_collapse_rows);
         }
+        // 开关本身也改变可见行映射，必须让下一帧重建整屏行缓存。
+        engine.mark_block_layout_dirty();
+        drop(engine);
         self.block_view = settings;
         if !self.block_view.is_some_and(|settings| settings.enabled) {
             self.hover_block = None;
