@@ -481,3 +481,52 @@
         harness.fsm.abort_in_flight();
         assert!(harness.collect_events().is_empty());
     }
+
+    /// 假标记激活后迟迟没有合法帧：超时必须释放过滤层并回注已吞字节，
+    /// 否则终端永久无输出、无输入，只能断线恢复。
+    #[test]
+    fn idle_timeout_restores_terminal_forwarding() {
+        let mut harness = harness(PathBuf::from("/tmp"), true);
+        harness
+            .reader
+            .shared
+            .active
+            .store(true, Ordering::Release);
+        harness
+            .reader
+            .raw_tx
+            .try_send(b"not a zmodem frame".to_vec())
+            .expect("原始通道有界可用");
+
+        harness.fsm.abandon_unstarted("测试超时");
+
+        assert!(!harness.reader.shared.active.load(Ordering::Acquire));
+        assert_eq!(
+            harness
+                .reader
+                .replay_rx
+                .try_recv()
+                .expect("未消费的块应回注终端"),
+            b"not a zmodem frame".to_vec()
+        );
+        assert!(
+            harness.collect_events().is_empty(),
+            "未开始的会话不应上报结局"
+        );
+    }
+
+    /// 待命期取消同样静默复位：用户没看到传输开始，不应出现失败徽章。
+    #[test]
+    fn cancel_while_idle_is_silent() {
+        let mut harness = harness(PathBuf::from("/tmp"), true);
+        harness
+            .reader
+            .shared
+            .active
+            .store(true, Ordering::Release);
+
+        assert!(harness.ctrl(ZmodemCommand::Cancel));
+
+        assert!(!harness.reader.shared.active.load(Ordering::Acquire));
+        assert!(harness.collect_events().is_empty());
+    }

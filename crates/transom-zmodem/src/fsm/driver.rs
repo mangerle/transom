@@ -3,7 +3,7 @@
 use std::sync::atomic::Ordering;
 
 use super::state::Fsm;
-use super::types::{DECIDE_TIMEOUT, Mode, TRANSFER_TIMEOUT, UPLOAD_WAIT};
+use super::types::{DECIDE_TIMEOUT, IDLE_TIMEOUT, Mode, TRANSFER_TIMEOUT, UPLOAD_WAIT};
 
 /// 驱动线程主循环：按会话阶段选择等待超时，超时行为见各分支。
 pub(crate) fn fsm_loop(mut fsm: Fsm) {
@@ -12,13 +12,18 @@ pub(crate) fn fsm_loop(mut fsm: Fsm) {
             fsm.handle_command(command);
         }
         let alive = match fsm.mode {
-            // 待命期阻塞等待对端发起；通道断开（连接关闭）即退出线程。
-            Mode::Idle => match fsm.raw_rx.recv() {
+            // 待命期等待对端首块；迟迟没有合法帧说明标记只是二进制噪声，
+            // 超时后静默退还过滤层，避免终端永久无输出无输入。
+            Mode::Idle => match fsm.raw_rx.recv_timeout(IDLE_TIMEOUT) {
                 Ok(block) => {
                     fsm.consume_block(block);
                     true
                 }
-                Err(_) => false,
+                Err(flume::RecvTimeoutError::Timeout) => {
+                    fsm.abandon_unstarted("等待对端首帧超时");
+                    true
+                }
+                Err(flume::RecvTimeoutError::Disconnected) => false,
             },
             Mode::Deciding => match fsm.raw_rx.recv_timeout(DECIDE_TIMEOUT) {
                 Ok(block) => {

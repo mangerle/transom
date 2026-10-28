@@ -12,6 +12,11 @@ use crate::attach::Shared;
 /// ZRQINIT 之后的分流等待窗口：sz 的 ZSINIT/ZFILE 紧随其后，静默则视为
 /// 非 lrzsz 的 rz 变体（直接等 ZFILE），转上传决策。
 pub(crate) const DECIDE_TIMEOUT: Duration = Duration::from_secs(2);
+/// 标记已激活过滤层后等待首个合法帧的上限。
+///
+/// 终端输出里的 `**` + ZDLE 可能只是二进制噪声的巧合；没有这个上限，
+/// 状态机会在待命期无限阻塞，过滤层持续吞掉输出与键入，只能断线恢复。
+pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 /// 传输中的字节级静默上限：超过即视为对端假死。
 pub(crate) const TRANSFER_TIMEOUT: Duration = Duration::from_secs(15);
 /// 等待用户选择上传文件的窗口；超时放弃，对端 rz 轮询失败自行退出。

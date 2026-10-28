@@ -406,6 +406,9 @@ impl Fsm {
 
     /// 会话收尾：上报结局、回注残余字节、复位过滤层并回到待命状态。
     fn finish(&mut self, outcome: ZmodemFinished) {
+        // 先停过滤层再排空通道：若顺序相反，读线程会在排空期间把新块塞回
+        // 通道，遗留到下一会话被误解析。
+        self.shared.active.store(false, Ordering::Release);
         let _ = self.events.send(ZmodemEvent::Finished(outcome));
         while let Ok(block) = self.raw_rx.try_recv() {
             let _ = self.replay_tx.try_send(block);
@@ -420,7 +423,24 @@ impl Fsm {
         self.upload_file = None;
         self.started = false;
         self.mode = Mode::Idle;
-        self.shared.active.store(false, Ordering::Release);
+    }
+
+    /// 未开始的会话静默退场：标记只是二进制噪声或用户取消时调用。
+    ///
+    /// 不上报 `Finished`——用户从未看到传输开始，凭空出现失败徽章反而误导；
+    /// 已进入扫描器的字节无法还原，但通道里尚未消费的块会回注终端，避免
+    /// 被过滤层吞掉的那段输出永久消失。
+    pub(crate) fn abandon_unstarted(&mut self, reason: &str) {
+        if !self.shared.active.swap(false, Ordering::AcqRel) {
+            return;
+        }
+        log::warn!("ZMODEM 会话未开始即结束，已恢复终端透传，原因: {reason}");
+        self.header.reset();
+        self.subpacket.reset();
+        self.mode = Mode::Idle;
+        while let Ok(block) = self.raw_rx.try_recv() {
+            let _ = self.replay_tx.try_send(block);
+        }
     }
 
     /// 连接断开时收尾在途会话：界面徽章必须有明确结局，否则会停在"传输中"，
@@ -477,7 +497,8 @@ impl Fsm {
                 self.write_wire(&cancel_sequence());
                 self.finish(ZmodemFinished::Cancelled);
             }
-            Mode::Idle => {}
+            // 待命期取消：传输尚未开始，静默退还过滤层，不产生结局事件。
+            Mode::Idle => self.abandon_unstarted("用户取消"),
         }
     }
 }
