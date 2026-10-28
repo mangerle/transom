@@ -162,6 +162,7 @@ impl AppShell {
             SftpLocalPaneProps {
                 tab_id,
                 show_filter,
+                show_hidden,
                 local_path_input,
                 local_filter_input,
                 local_entries,

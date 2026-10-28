@@ -7,7 +7,7 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -23,6 +23,7 @@ use super::LocalQuickPaths;
 pub(super) struct LocalToolbarProps<'a> {
     pub(super) tab_id: TabId,
     pub(super) show_filter: bool,
+    pub(super) show_hidden: bool,
     pub(super) local_path_input: &'a Entity<InputState>,
     pub(super) local_filter_input: &'a Entity<InputState>,
     pub(super) quick_paths: &'a LocalQuickPaths,
@@ -37,6 +38,7 @@ pub(super) fn render_local_toolbar(
 ) -> AnyElement {
     let tab_id = props.tab_id;
     let show_filter = props.show_filter;
+    let show_hidden = props.show_hidden;
     let local_path_input = props.local_path_input;
     let local_filter_input = props.local_filter_input;
     let quick_paths = props.quick_paths;
@@ -155,6 +157,16 @@ pub(super) fn render_local_toolbar(
                         })),
                 )
                 .child(
+                    Button::new("local-action-new-file")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::FilePlus)
+                        .tooltip("新建本地文件")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.sftp_open_local_new_file_modal(tab_id, window, cx);
+                        })),
+                )
+                .child(
                     Button::new("local-action-rename")
                         .ghost()
                         .xsmall()
@@ -162,6 +174,50 @@ pub(super) fn render_local_toolbar(
                         .tooltip("重命名")
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.sftp_open_rename_modal(tab_id, false, window, cx);
+                        })),
+                )
+                .child(
+                    Button::new("local-action-edit")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::FilePen)
+                        .tooltip("编辑")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            let selected = this
+                                .workspace
+                                .tab(tab_id)
+                                .and_then(|t| t.sftp())
+                                .and_then(|p| p.local.selected.clone());
+                            if let Some(target) = selected {
+                                this.sftp_edit_local_file(tab_id, target, cx);
+                            } else if let Some(panel) =
+                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                            {
+                                panel.set_local_error("请先选择一个本地文件进行编辑".to_string());
+                                cx.notify();
+                            }
+                        })),
+                )
+                .child(
+                    Button::new("local-action-properties")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Info)
+                        .tooltip("查看属性")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            let path =
+                                this.workspace
+                                    .tab(tab_id)
+                                    .and_then(|t| t.sftp())
+                                    .and_then(|p| {
+                                        p.local
+                                            .selected
+                                            .clone()
+                                            .or_else(|| Some(p.local.path.clone()))
+                                    });
+                            if let Some(target) = path {
+                                this.sftp_show_local_properties(tab_id, target, cx);
+                            }
                         })),
                 )
                 .child(
@@ -182,6 +238,36 @@ pub(super) fn render_local_toolbar(
                         .tooltip("打开文件管理器")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_open_local_file_manager(tab_id, cx);
+                        })),
+                )
+                .child(
+                    Button::new("local-toggle-hidden")
+                        .ghost()
+                        .xsmall()
+                        .icon(if show_hidden {
+                            IconName::Eye
+                        } else {
+                            IconName::EyeOff
+                        })
+                        .selected(show_hidden)
+                        .tooltip(if show_hidden {
+                            "隐藏点号文件 (Ctrl+H)"
+                        } else {
+                            "显示隐藏文件 (Ctrl+H)"
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.sftp_toggle_hidden(tab_id, cx);
+                        })),
+                )
+                .child(
+                    Button::new("local-toggle-filter")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Search)
+                        .selected(show_filter)
+                        .tooltip("目录内模糊过滤 (Ctrl+F)")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.sftp_toggle_filter(tab_id, window, cx);
                         })),
                 ),
         )

@@ -30,6 +30,7 @@ use transom_core::TransferDirection;
 pub(crate) struct SftpLocalPaneProps {
     pub(crate) tab_id: TabId,
     pub(crate) show_filter: bool,
+    pub(crate) show_hidden: bool,
     pub(crate) local_path_input: Entity<InputState>,
     pub(crate) local_filter_input: Entity<InputState>,
     pub(crate) local_entries: Vec<LocalFileEntry>,
@@ -49,6 +50,7 @@ impl AppShell {
     ) -> AnyElement {
         let tab_id = props.tab_id;
         let show_filter = props.show_filter;
+        let show_hidden = props.show_hidden;
         let local_path_input = props.local_path_input;
         let local_filter_input = props.local_filter_input;
         let local_entries = props.local_entries;
@@ -140,6 +142,7 @@ impl AppShell {
             LocalToolbarProps {
                 tab_id,
                 show_filter,
+                show_hidden,
                 local_path_input: &local_path_input,
                 local_filter_input: &local_filter_input,
                 quick_paths: &quick_paths,

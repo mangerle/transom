@@ -65,6 +65,8 @@ pub(crate) enum SftpInputTarget {
         target: String,
     },
     LocalMkdir,
+    /// 新建本地文件；提交后在当前本地目录下创建空文件并选中。
+    LocalNewFile,
     LocalRename {
         old_path: PathBuf,
     },

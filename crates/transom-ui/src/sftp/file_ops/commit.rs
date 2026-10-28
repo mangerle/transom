@@ -120,6 +120,30 @@ impl AppShell {
                     cx.notify();
                 }
             }
+            SftpInputTarget::LocalNewFile => {
+                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+                    let new_file = panel.local.path.join(&name);
+                    if new_file.exists() {
+                        panel.set_local_error(format!("本地文件已存在: {name}"));
+                    } else {
+                        match std::fs::OpenOptions::new()
+                            .write(true)
+                            .create_new(true)
+                            .open(&new_file)
+                        {
+                            Ok(_) => {
+                                panel.set_status(format!("已成功创建本地文件: {name}"));
+                                self.spawn_local_dir_refresh(tab_id, Some(new_file.clone()), cx);
+                                crate::audit::reveal_in_file_manager(new_file);
+                            }
+                            Err(err) => {
+                                panel.set_local_error(format!("新建本地文件失败: {err}"));
+                            }
+                        }
+                    }
+                    cx.notify();
+                }
+            }
             SftpInputTarget::LocalRename { old_path } => {
                 if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     if let Some(parent) = old_path.parent() {

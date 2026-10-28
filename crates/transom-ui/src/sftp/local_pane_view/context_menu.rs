@@ -60,12 +60,29 @@ pub(super) fn build_local_context_menu(
     }
 
     let p_up = entry_path.clone();
+    let p_edit = entry_path.clone();
+    let is_file = entry_path.is_file();
     let p_cp = entry_path.clone();
     let p_sym = entry_path.clone();
     let p_prop = entry_path.clone();
     let p_ren = entry_path.clone();
     let p_del = entry_path;
     let mut menu = menu;
+
+    if is_file {
+        menu = menu.item(
+            PopupMenuItem::new("编辑")
+                .icon(IconName::FilePen)
+                .on_click({
+                    let app = app_entity.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.sftp_edit_local_file(tab_id, p_edit.clone(), cx);
+                        });
+                    }
+                }),
+        );
+    }
 
     if remote_available {
         menu = menu.item(PopupMenuItem::new("上传").icon(IconName::Upload).on_click({
@@ -85,54 +102,58 @@ pub(super) fn build_local_context_menu(
         }));
     }
 
+    menu = menu
+        .item(
+            PopupMenuItem::new("复制绝对路径")
+                .icon(IconName::Copy)
+                .on_click({
+                    let app = app_entity.clone();
+                    move |_, _, cx| {
+                        cx.write_to_clipboard(ClipboardItem::new_string(
+                            p_cp.display().to_string(),
+                        ));
+                        app.update(cx, |this, cx| {
+                            if let Some(panel) =
+                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                            {
+                                panel.set_status(format!("已复制本地路径: {}", p_cp.display()));
+                            }
+                            cx.notify();
+                        });
+                    }
+                }),
+        )
+        .item(
+            PopupMenuItem::new("创建软链接")
+                .icon(IconName::Link2)
+                .on_click({
+                    let app = app_entity.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            if let Some(panel) =
+                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                            {
+                                panel.select_local(p_sym.clone());
+                            }
+                            this.sftp_open_symlink_modal(tab_id, false, window, cx);
+                        });
+                    }
+                }),
+        )
+        .item(
+            PopupMenuItem::new("查看属性")
+                .icon(IconName::Info)
+                .on_click({
+                    let app = app_entity.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.sftp_show_local_properties(tab_id, p_prop.clone(), cx);
+                        });
+                    }
+                }),
+        );
+
     menu.item(
-        PopupMenuItem::new("复制绝对路径")
-            .icon(IconName::Copy)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, _, cx| {
-                    cx.write_to_clipboard(ClipboardItem::new_string(p_cp.display().to_string()));
-                    app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            panel.set_status(format!("已复制本地路径: {}", p_cp.display()));
-                        }
-                        cx.notify();
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new("创建软链接")
-            .icon(IconName::Link2)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            panel.select_local(p_sym.clone());
-                        }
-                        this.sftp_open_symlink_modal(tab_id, false, window, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new("查看属性")
-            .icon(IconName::Info)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, _, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_show_local_properties(tab_id, p_prop.clone(), cx);
-                    });
-                }
-            }),
-    )
-    .item(
         PopupMenuItem::new("新建本地文件夹")
             .icon(IconName::FolderPlus)
             .on_click({
@@ -140,6 +161,18 @@ pub(super) fn build_local_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.sftp_open_mkdir_modal(tab_id, false, window, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("新建本地文件")
+            .icon(IconName::FilePlus)
+            .on_click({
+                let app = app_entity.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_open_local_new_file_modal(tab_id, window, cx);
                     });
                 }
             }),

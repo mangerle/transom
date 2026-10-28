@@ -141,4 +141,25 @@ impl AppShell {
             cx.notify();
         }
     }
+
+    /// 调用系统默认程序/关联编辑器打开指定的本地文件。
+    pub(crate) fn sftp_edit_local_file(
+        &mut self,
+        tab_id: TabId,
+        target: PathBuf,
+        cx: &mut Context<Self>,
+    ) {
+        if !target.is_file() {
+            if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+                panel.set_local_error("请先选择一个本地文件进行编辑".to_string());
+                cx.notify();
+            }
+            return;
+        }
+        crate::audit::reveal_in_file_manager(target.clone());
+        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+            panel.set_status(format!("已调用系统程序打开: {}", target.display()));
+            cx.notify();
+        }
+    }
 }

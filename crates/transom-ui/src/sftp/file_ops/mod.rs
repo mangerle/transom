@@ -178,6 +178,26 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 打开"新建本地文件"输入模态：提交后在本地当前目录下创建该空文件。
+    pub(crate) fn sftp_open_local_new_file_modal(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let input = sftp_text_input(window, cx, "", "新文件名称");
+        input.update(cx, |state, cx| state.focus(window, cx));
+        self.sftp_modals.input = Some(SftpInputModalState {
+            tab_id,
+            title: "新建本地文件".to_string(),
+            prompt: "输入新文件名称（在当前本地目录下创建）:".to_string(),
+            input,
+            target: SftpInputTarget::LocalNewFile,
+            error: None,
+        });
+        cx.notify();
+    }
+
     pub(crate) fn sftp_open_rename_modal(
         &mut self,
         tab_id: TabId,

@@ -187,6 +187,8 @@ impl AppShell {
                         && let Some(path) = row.path.local()
                     {
                         self.sftp_local_navigate(row.tab_id, path.to_path_buf(), window, cx);
+                    } else if let Some(path) = row.path.local() {
+                        self.sftp_edit_local_file(row.tab_id, path.to_path_buf(), cx);
                     }
                 }
                 SftpSide::Remote => {
