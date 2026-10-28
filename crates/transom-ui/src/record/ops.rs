@@ -2,7 +2,7 @@
 
 use super::types::{ReplayModalState, scan_recordings};
 use crate::app::{AppShell, TerminalTab};
-use crate::cast_player::CastPlayerView;
+use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -130,11 +130,13 @@ impl AppShell {
 
         let player = cx.new(|cx| {
             CastPlayerView::new(
-                path,
-                Some(display_title),
-                header,
-                events,
-                profile,
+                CastPlayerParams {
+                    path,
+                    title: Some(display_title),
+                    header,
+                    events,
+                    profile,
+                },
                 window,
                 cx,
             )

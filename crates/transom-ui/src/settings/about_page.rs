@@ -54,16 +54,29 @@ fn value_row(title_key: &'static str, value: String, p: &Palette) -> AnyElement 
     )
 }
 
-/// 值 + 打开按钮行：主页地址与配置目录共用（两者都是"看一眼 + 可能要点开"）。
-fn openable_row(
+/// 值 + 打开按钮配置参数。
+struct OpenableRowProps<F> {
     title_key: &'static str,
     description_key: Option<&'static str>,
     value: String,
     button_id: &'static str,
     button_key: &'static str,
-    on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_open: F,
+}
+
+/// 值 + 打开按钮行：主页地址与配置目录共用（两者都是"看一眼 + 可能要点开"）。
+fn openable_row(
+    props: OpenableRowProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     p: &Palette,
 ) -> AnyElement {
+    let OpenableRowProps {
+        title_key,
+        description_key,
+        value,
+        button_id,
+        button_key,
+        on_open,
+    } = props;
     AppShell::setting_row(
         title_key,
         description_key,
@@ -159,21 +172,25 @@ impl AppShell {
                 p,
             ))
             .child(openable_row(
-                "settings.about_homepage",
-                None,
-                crate::APP_REPOSITORY.into(),
-                "about-open-homepage",
-                "settings.about_homepage_open",
-                open_home,
+                OpenableRowProps {
+                    title_key: "settings.about_homepage",
+                    description_key: None,
+                    value: crate::APP_REPOSITORY.into(),
+                    button_id: "about-open-homepage",
+                    button_key: "settings.about_homepage_open",
+                    on_open: open_home,
+                },
                 p,
             ))
             .child(openable_row(
-                "settings.about_config_dir",
-                Some("settings.about_config_dir_desc"),
-                config_path_label,
-                "about-open-config-dir",
-                "settings.audit_dir_open",
-                open_config_dir,
+                OpenableRowProps {
+                    title_key: "settings.about_config_dir",
+                    description_key: Some("settings.about_config_dir_desc"),
+                    value: config_path_label,
+                    button_id: "about-open-config-dir",
+                    button_key: "settings.audit_dir_open",
+                    on_open: open_config_dir,
+                },
                 p,
             ))
             .into_any_element()

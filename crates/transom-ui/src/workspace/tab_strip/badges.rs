@@ -45,15 +45,27 @@ pub(super) fn connection_icon(connection: &Connection) -> IconName {
     }
 }
 
+/// 标签栏图标按钮参数属性。
+pub(super) struct TabStripButtonProps<F> {
+    pub(super) id: &'static str,
+    pub(super) icon: IconName,
+    pub(super) tooltip: String,
+    pub(super) enabled: bool,
+    pub(super) on_click: F,
+}
+
 /// 渲染标签栏普通图标按钮。
 pub(super) fn tab_strip_button(
-    id: &'static str,
-    icon: IconName,
-    tooltip: String,
-    enabled: bool,
+    props: TabStripButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     p: &Palette,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
+    let TabStripButtonProps {
+        id,
+        icon,
+        tooltip,
+        enabled,
+        on_click,
+    } = props;
     let mut button = div()
         .id(id)
         .size(px(22.0))

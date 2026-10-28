@@ -87,16 +87,24 @@ pub struct TerminalView {
     recorder: RecorderHandle,
 }
 
+/// 终端视图初始化参数结构体。
+pub struct TerminalViewParams {
+    pub io: TerminalIo,
+    pub profile: TerminalProfile,
+    pub interaction: TerminalInteraction,
+    pub key_filter: Option<KeyFilter>,
+    pub audit_path: Option<std::path::PathBuf>,
+}
+
 impl TerminalView {
-    pub fn new(
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        io: TerminalIo,
-        profile: TerminalProfile,
-        interaction: TerminalInteraction,
-        key_filter: Option<KeyFilter>,
-        audit_path: Option<std::path::PathBuf>,
-    ) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>, params: TerminalViewParams) -> Self {
+        let TerminalViewParams {
+            io,
+            profile,
+            interaction,
+            key_filter,
+            audit_path,
+        } = params;
         cx.bind_keys([
             KeyBinding::new("tab", SendTab, Some(CONTEXT)),
             KeyBinding::new("shift-tab", SendBacktab, Some(CONTEXT)),
@@ -115,8 +123,17 @@ impl TerminalView {
             writer,
             control,
         } = io;
-        let (input_tx, reader_task) =
-            Self::spawn_io_tasks(reader, writer, audit_path, &recorder, &event_tx, &state, cx);
+        let (input_tx, reader_task) = Self::spawn_io_tasks(
+            tasks::TerminalIoTaskParams {
+                reader,
+                writer,
+                audit_path,
+                recorder: &recorder,
+                event_tx: &event_tx,
+                state: &state,
+            },
+            cx,
+        );
 
         let on_focus = cx.on_focus(&focus_handle, window, |view, _, cx| {
             let mode = view.state.engine.lock().mode();

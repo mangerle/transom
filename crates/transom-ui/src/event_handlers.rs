@@ -84,11 +84,13 @@ impl AppShell {
             TerminalView::new(
                 window,
                 cx,
-                io,
-                profile,
-                interaction,
-                Some(key_filter),
-                audit_path,
+                transom_terminal::TerminalViewParams {
+                    io,
+                    profile,
+                    interaction,
+                    key_filter: Some(key_filter),
+                    audit_path,
+                },
             )
         });
         // 建议能力挂到视图：查询回调是全应用共享的一份内存快照。

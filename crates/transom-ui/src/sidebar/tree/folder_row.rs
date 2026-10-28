@@ -1,6 +1,8 @@
 //! 侧边栏文件夹树行渲染。
 
-use super::reorder::{SidebarDragPreview, reorder_overlay, row_action_button};
+use super::reorder::{
+    RowActionButtonProps, SidebarDragPreview, reorder_overlay, row_action_button,
+};
 use super::{
     BAND_HEIGHT, FolderRow, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SidebarDrag,
     SidebarTarget, TINT_FOLDER_IDLE, TINT_FOLDER_INTO, indent_padding,
@@ -160,16 +162,18 @@ impl AppShell {
         }
         // 表头这一个按钮拨测整组（含子文件夹）：分组巡检是本功能的主用法。
         band = band.child(row_action_button(
-            format!("folder-probe-{folder_id}"),
-            IconName::Radar,
-            rust_i18n::t!("probe.folder_tooltip").to_string(),
-            p.muted_foreground,
+            RowActionButtonProps {
+                element_id: format!("folder-probe-{folder_id}"),
+                icon: IconName::Radar,
+                tooltip: rust_i18n::t!("probe.folder_tooltip").to_string(),
+                idle_color: p.muted_foreground,
+                on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
+                    // 点按钮不该顺带折叠/展开这个分组。
+                    cx.stop_propagation();
+                    this.probe_folder(folder_id, cx);
+                }),
+            },
             p,
-            cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                // 点按钮不该顺带折叠/展开这个分组。
-                cx.stop_propagation();
-                this.probe_folder(folder_id, cx);
-            }),
         ));
         let anchor = SidebarDrag::Folder(folder_id);
         // 文件夹行保留中段作为“放入该分组”，上下各三分之一用于同级换序。

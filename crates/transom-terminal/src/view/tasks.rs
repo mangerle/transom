@@ -14,17 +14,30 @@ use std::thread;
 use std::time::Instant;
 use transom_core::Rgb as PaletteColor;
 
+/// 终端 I/O 线程派生任务参数结构体。
+pub(super) struct TerminalIoTaskParams<'a> {
+    pub(super) reader: Box<dyn Read + Send>,
+    pub(super) writer: Box<dyn Write + Send>,
+    pub(super) audit_path: Option<std::path::PathBuf>,
+    pub(super) recorder: &'a RecorderHandle,
+    pub(super) event_tx: &'a flume::Sender<Event>,
+    pub(super) state: &'a Arc<super::TerminalRenderState>,
+}
+
 impl TerminalView {
     /// 启动后台读取线程与写入线程，返回通道发送端与任务句柄。
     pub(super) fn spawn_io_tasks(
-        mut reader: Box<dyn Read + Send>,
-        mut writer: Box<dyn Write + Send>,
-        audit_path: Option<std::path::PathBuf>,
-        recorder: &RecorderHandle,
-        event_tx: &flume::Sender<Event>,
-        state: &Arc<super::TerminalRenderState>,
+        params: TerminalIoTaskParams<'_>,
         cx: &mut Context<Self>,
     ) -> (flume::Sender<Vec<u8>>, Task<()>) {
+        let TerminalIoTaskParams {
+            mut reader,
+            mut writer,
+            audit_path,
+            recorder,
+            event_tx,
+            state,
+        } = params;
         let recorder_for_reader = recorder.clone();
         let (bytes_tx, bytes_rx) = flume::bounded::<Vec<u8>>(READ_CHANNEL_CAPACITY);
         let exit_tx = event_tx.clone();

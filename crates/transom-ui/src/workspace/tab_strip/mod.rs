@@ -43,14 +43,16 @@ impl AppShell {
                     .flex()
                     .items_center()
                     .child(badges::tab_strip_button(
-                        "tab-strip-quick-new",
-                        IconName::Plus,
-                        rust_i18n::t!("app.new_local").to_string(),
-                        true,
+                        badges::TabStripButtonProps {
+                            id: "tab-strip-quick-new",
+                            icon: IconName::Plus,
+                            tooltip: rust_i18n::t!("app.new_local").to_string(),
+                            enabled: true,
+                            on_click: cx.listener(|this, _, window, cx| {
+                                this.open_local_terminal(window, cx);
+                            }),
+                        },
                         p,
-                        cx.listener(|this, _, window, cx| {
-                            this.open_local_terminal(window, cx);
-                        }),
                     )),
             )
             .into_any_element()

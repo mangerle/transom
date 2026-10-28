@@ -69,11 +69,13 @@ impl Demo {
             TerminalView::new(
                 window,
                 cx,
-                io,
-                TerminalProfile::default(),
-                TerminalInteraction::default(),
-                None,
-                None,
+                transom_terminal::TerminalViewParams {
+                    io,
+                    profile: TerminalProfile::default(),
+                    interaction: TerminalInteraction::default(),
+                    key_filter: None,
+                    audit_path: None,
+                },
             )
         });
         let focus_handle = terminal.read(cx).focus_handle().clone();

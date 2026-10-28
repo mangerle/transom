@@ -80,17 +80,29 @@ pub(crate) struct CastPlayerView {
     focus_handle: FocusHandle,
 }
 
+/// 录包回放器构造参数结构体。
+pub(crate) struct CastPlayerParams {
+    pub(crate) path: PathBuf,
+    pub(crate) title: Option<String>,
+    pub(crate) header: CastHeader,
+    pub(crate) events: Vec<CastEvent>,
+    pub(crate) profile: TerminalProfile,
+}
+
 impl CastPlayerView {
     /// 创建新的只读会话录像播放器。
     pub(crate) fn new(
-        path: PathBuf,
-        title: Option<String>,
-        header: CastHeader,
-        events: Vec<CastEvent>,
-        profile: TerminalProfile,
+        params: CastPlayerParams,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let CastPlayerParams {
+            path,
+            title,
+            header,
+            events,
+            profile,
+        } = params;
         let (data_tx, data_rx) = flume::bounded::<Vec<u8>>(256);
         let reader = Box::new(ChannelReader::new(data_rx));
         let writer = Box::new(sink());
@@ -101,11 +113,13 @@ impl CastPlayerView {
             TerminalView::new(
                 window,
                 cx,
-                io,
-                profile,
-                TerminalInteraction::default(),
-                None,
-                None,
+                transom_terminal::TerminalViewParams {
+                    io,
+                    profile,
+                    interaction: TerminalInteraction::default(),
+                    key_filter: None,
+                    audit_path: None,
+                },
             )
         });
 

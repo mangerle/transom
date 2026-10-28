@@ -15,6 +15,15 @@ const ROW_ACTION_SIZE: Pixels = px(20.0);
 /// 行内动作按钮的图标边长（px），与折叠箭头同级，避免抢过会话协议图标。
 const ROW_ACTION_ICON_SIZE: Pixels = px(14.0);
 
+/// 侧栏行快捷操作按钮配置属性。
+pub(super) struct RowActionButtonProps<F> {
+    pub(super) element_id: String,
+    pub(super) icon: IconName,
+    pub(super) tooltip: String,
+    pub(super) idle_color: Hsla,
+    pub(super) on_click: F,
+}
+
 /// 行内图标按钮：常驻但弱色，悬停时才加深并垫一层底色。
 ///
 /// 设计原理（Why）：
@@ -29,13 +38,16 @@ const ROW_ACTION_ICON_SIZE: Pixels = px(14.0);
 /// - 代价与局限：图标占据固定布局宽度（不是绝对定位叠加），行名可用宽度比没有
 ///   按钮时少 20px；不这么做的话悬停时行名会跟着抖动，比少 20px 更难接受。
 pub(super) fn row_action_button(
-    element_id: String,
-    icon: IconName,
-    tooltip: String,
-    idle_color: Hsla,
+    props: RowActionButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     p: &Palette,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
+    let RowActionButtonProps {
+        element_id,
+        icon,
+        tooltip,
+        idle_color,
+        on_click,
+    } = props;
     div()
         .id(ElementId::Name(element_id.into()))
         .flex_none()

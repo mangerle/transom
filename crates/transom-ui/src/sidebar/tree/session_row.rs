@@ -1,6 +1,8 @@
 //! 侧边栏会话树行渲染。
 
-use super::reorder::{SidebarDragPreview, reorder_overlay, row_action_button};
+use super::reorder::{
+    RowActionButtonProps, SidebarDragPreview, reorder_overlay, row_action_button,
+};
 use super::{
     BAND_HEIGHT, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget, TINT_IDLE,
     TINT_SELECTED, indent_padding,
@@ -281,20 +283,22 @@ impl AppShell {
         // "没有可拨测主机"，不如根本不给出这个动作。
         let probe_button = HostAction::probe_for(session).map(|_| {
             row_action_button(
-                format!("session-probe-{session_id}"),
-                IconName::Radar,
-                rust_i18n::t!("probe.session_tooltip").to_string(),
-                if is_active {
-                    p.sidebar_accent_foreground
-                } else {
-                    p.muted_foreground
+                RowActionButtonProps {
+                    element_id: format!("session-probe-{session_id}"),
+                    icon: IconName::Radar,
+                    tooltip: rust_i18n::t!("probe.session_tooltip").to_string(),
+                    idle_color: if is_active {
+                        p.sidebar_accent_foreground
+                    } else {
+                        p.muted_foreground
+                    },
+                    on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
+                        // 拨测这一台不该同时选中这一行，更不该触发双击连接。
+                        cx.stop_propagation();
+                        this.probe_session(session_id, cx);
+                    }),
                 },
                 p,
-                cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                    // 拨测这一台不该同时选中这一行，更不该触发双击连接。
-                    cx.stop_propagation();
-                    this.probe_session(session_id, cx);
-                }),
             )
         });
         let anchor = SidebarDrag::Session(session_id);

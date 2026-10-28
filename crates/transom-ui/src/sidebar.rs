@@ -6,6 +6,15 @@ mod tree;
 
 pub(crate) use state::SidebarState;
 
+/// 侧栏工具图标按钮配置属性。
+pub(crate) struct SidebarButtonProps<F> {
+    pub(crate) id: &'static str,
+    pub(crate) icon: IconName,
+    pub(crate) tooltip: String,
+    pub(crate) active: bool,
+    pub(crate) on_click: F,
+}
+
 use crate::app::{AppShell, SidebarRowsCache};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -113,34 +122,40 @@ impl AppShell {
                             .child(Input::new(&self.sidebar.search).w_full()),
                     )
                     .child(Self::sidebar_icon_button(
-                        "sidebar-select",
-                        IconName::ListChecks,
-                        rust_i18n::t!("batch.select_mode").to_string(),
-                        self.sidebar.selection_mode,
+                        SidebarButtonProps {
+                            id: "sidebar-select",
+                            icon: IconName::ListChecks,
+                            tooltip: rust_i18n::t!("batch.select_mode").to_string(),
+                            active: self.sidebar.selection_mode,
+                            on_click: cx.listener(|this, _, _, cx| {
+                                this.toggle_selection_mode(cx);
+                            }),
+                        },
                         p,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_selection_mode(cx);
-                        }),
                     ))
                     .child(Self::sidebar_icon_button(
-                        "sidebar-new-folder",
-                        IconName::FolderPlus,
-                        rust_i18n::t!("folder.new_title").to_string(),
-                        false,
+                        SidebarButtonProps {
+                            id: "sidebar-new-folder",
+                            icon: IconName::FolderPlus,
+                            tooltip: rust_i18n::t!("folder.new_title").to_string(),
+                            active: false,
+                            on_click: cx.listener(|this, _, window, cx| {
+                                this.open_new_folder(None, window, cx);
+                            }),
+                        },
                         p,
-                        cx.listener(|this, _, window, cx| {
-                            this.open_new_folder(None, window, cx);
-                        }),
                     ))
                     .child(Self::sidebar_icon_button(
-                        "sidebar-new",
-                        IconName::Plus,
-                        rust_i18n::t!("app.new_session").to_string(),
-                        false,
+                        SidebarButtonProps {
+                            id: "sidebar-new",
+                            icon: IconName::Plus,
+                            tooltip: rust_i18n::t!("app.new_session").to_string(),
+                            active: false,
+                            on_click: cx.listener(|this, _, window, cx| {
+                                this.open_new_session(window, cx);
+                            }),
+                        },
                         p,
-                        cx.listener(|this, _, window, cx| {
-                            this.open_new_session(window, cx);
-                        }),
                     )),
             );
         if self.sidebar.selection_mode {
@@ -205,13 +220,16 @@ impl AppShell {
     }
 
     fn sidebar_icon_button(
-        id: &'static str,
-        icon: IconName,
-        tooltip: String,
-        active: bool,
+        props: SidebarButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
         p: &Palette,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> AnyElement {
+        let SidebarButtonProps {
+            id,
+            icon,
+            tooltip,
+            active,
+            on_click,
+        } = props;
         let mut button = div()
             .id(id)
             .size(px(26.0))

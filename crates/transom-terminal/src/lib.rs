@@ -27,4 +27,4 @@ pub use record::{
     extract_replay_inputs, parse_cast_file,
 };
 pub use trigger::{CompiledTrigger, TriggerEngine, TriggerMatchResult};
-pub use view::{KeyFilter, TerminalView};
+pub use view::{KeyFilter, TerminalView, TerminalViewParams};
