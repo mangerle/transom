@@ -26,6 +26,8 @@ pub enum ErrorCode {
     ChannelFailed,
     /// SFTP 文件协议操作失败。
     SftpFailed,
+    /// SFTP 传输后完整性校验失败（大小不一致或哈希指纹不匹配）。
+    SftpVerifyFailed,
     /// 编辑回传前发现远端文件已被修改（版本指纹不一致），拒绝覆盖。
     SftpTextConflict,
     /// 本地、远端或动态端口转发失败。

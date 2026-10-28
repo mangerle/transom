@@ -255,9 +255,13 @@ impl AppShell {
         {
             let resume_enabled = panel.queue.resume_enabled;
             for task in &mut panel.queue.tasks {
-                if matches!(task.status, TransferStatus::Failed(_)) {
+                if let TransferStatus::Failed(ref reason) = task.status {
+                    let is_verify_failure = reason.contains("校验") || reason.contains("verify");
                     task.status = TransferStatus::Pending;
-                    if resume_enabled || task.transferred > 0 {
+                    if is_verify_failure {
+                        task.mode = TransferMode::Overwrite;
+                        task.transferred = 0;
+                    } else if resume_enabled || task.transferred > 0 {
                         task.mode = TransferMode::Resume;
                     }
                     retried_count = retried_count.saturating_add(1);

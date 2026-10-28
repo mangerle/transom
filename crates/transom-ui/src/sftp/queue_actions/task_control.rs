@@ -57,8 +57,21 @@ impl AppShell {
                 && (task.status == TransferStatus::Paused
                     || matches!(task.status, TransferStatus::Failed(_)))
             {
+                let is_verify_failure = match &task.status {
+                    TransferStatus::Failed(reason) => {
+                        reason.contains("校验") || reason.contains("verify")
+                    }
+                    _ => false,
+                };
                 task.status = TransferStatus::Pending;
-                task.mode = TransferMode::Resume;
+                // 校验失败说明两端数据不一致或损坏，断点续传可能在脏数据后追加导致二次损坏；
+                // 采用 Overwrite 强制截断从头传输以实现完全自愈。
+                if is_verify_failure {
+                    task.mode = TransferMode::Overwrite;
+                    task.transferred = 0;
+                } else {
+                    task.mode = TransferMode::Resume;
+                }
             }
             cx.notify();
         }

@@ -179,9 +179,9 @@ impl SftpClient {
                     Ok(())
                 } else {
                     Err(AppError::with_detail(
-                        ErrorCode::SftpFailed,
+                        ErrorCode::SftpVerifyFailed,
                         format!(
-                            "快速抽样校验不一致：本地 {}（{local_sample}），远端 {}（{remote_sample}）",
+                            "快速抽样指纹不一致：本地 {}（{local_sample}），远端 {}（{remote_sample}）。重传时将自动截断覆盖损坏文件",
                             local_path.display(),
                             remote_path
                         ),
@@ -198,13 +198,31 @@ impl SftpClient {
     /// （如断点续传 offset > 0），则安全回退到本地读盘计算。
     ///
     /// # Errors
-    /// 读取失败或两侧哈希不一致时返回 `ErrorCode::SftpFailed`。
+    /// 读取失败时返回 `ErrorCode::SftpFailed`；两侧哈希不一致时返回 `ErrorCode::SftpVerifyFailed`。
     pub async fn verify_file_with_known_local(
         &self,
         local_path: &Path,
         remote_path: &str,
         known_local: Option<&str>,
     ) -> Result<(), AppError> {
+        let (local_meta, remote_meta) = tokio::join!(
+            tokio::fs::metadata(local_path),
+            self.session.metadata(remote_path)
+        );
+        if let (Ok(lm), Ok(rm)) = (local_meta, remote_meta)
+            && let (local_len, Some(remote_len)) = (lm.len(), rm.size)
+            && local_len != remote_len
+        {
+            return Err(AppError::with_detail(
+                ErrorCode::SftpVerifyFailed,
+                format!(
+                    "两端文件大小不匹配：本地 {}（{local_len} 字节），远端 {}（{remote_len} 字节）。重传时将自动截断覆盖损坏文件",
+                    local_path.display(),
+                    remote_path
+                ),
+            ));
+        }
+
         let (local_hash, remote_hash) = match known_local {
             Some(known) => (Ok(known.to_string()), self.sha256_remote(remote_path).await),
             None => tokio::join!(sha256_local(local_path), self.sha256_remote(remote_path)),
@@ -215,9 +233,9 @@ impl SftpClient {
             Ok(())
         } else {
             Err(AppError::with_detail(
-                ErrorCode::SftpFailed,
+                ErrorCode::SftpVerifyFailed,
                 format!(
-                    "SHA256 校验不一致：本地 {}（{local_hash}），远端 {}（{remote_hash}）",
+                    "SHA256 哈希校验不匹配：本地 {}（{local_hash}），远端 {}（{remote_hash}）。重传时将自动截断覆盖损坏文件",
                     local_path.display(),
                     remote_path
                 ),

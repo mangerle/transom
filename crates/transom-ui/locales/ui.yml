@@ -762,6 +762,9 @@ error:
   sftp_failed:
     en: SFTP error
     zh-CN: SFTP 错误
+  sftp_verify_failed:
+    en: File verification mismatch
+    zh-CN: 文件传输完整性校验不一致
   forward_failed:
     en: Port forwarding error
     zh-CN: 端口转发错误
