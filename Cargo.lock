@@ -8118,9 +8118,11 @@ dependencies = [
  "tokio",
  "transom-core",
  "transom-net",
+ "transom-platform",
  "transom-store",
  "transom-sync",
  "transom-ui",
+ "transom-zmodem",
 ]
 
 [[package]]
@@ -8128,16 +8130,14 @@ name = "transom-core"
 version = "1.1.0"
 dependencies = [
  "async-trait",
- "directories",
  "globset",
  "log",
- "rand 0.10.3",
  "serde",
  "serde_json",
- "ssh-key",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "transom-platform",
  "uuid",
  "zeroize",
 ]
@@ -8168,7 +8168,6 @@ dependencies = [
  "futures",
  "log",
  "parking_lot",
- "portable-pty",
  "russh",
  "russh-sftp",
  "serde",
@@ -8185,6 +8184,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "transom-platform"
+version = "1.1.0"
+dependencies = [
+ "directories",
+ "tempfile",
+]
+
+[[package]]
 name = "transom-store"
 version = "1.1.0"
 dependencies = [
@@ -8197,6 +8204,7 @@ dependencies = [
  "tempfile",
  "transom-core",
  "transom-crypto",
+ "transom-platform",
  "zeroize",
 ]
 
@@ -8218,6 +8226,7 @@ dependencies = [
  "tokio",
  "transom-core",
  "transom-crypto",
+ "transom-platform",
  "transom-store",
  "zeroize",
 ]
@@ -8238,6 +8247,7 @@ dependencies = [
  "serde",
  "serde_json",
  "transom-core",
+ "transom-platform",
 ]
 
 [[package]]
@@ -8252,17 +8262,31 @@ dependencies = [
  "log",
  "notify-rust",
  "parking_lot",
+ "rand 0.10.3",
  "regex",
  "rfd",
  "rust-i18n",
  "serde_json",
  "similar",
+ "ssh-key",
  "tempfile",
  "tokio",
  "transom-core",
+ "transom-platform",
  "transom-store",
  "transom-terminal",
  "zeroize",
+]
+
+[[package]]
+name = "transom-zmodem"
+version = "1.1.0"
+dependencies = [
+ "flume",
+ "log",
+ "portable-pty",
+ "tempfile",
+ "transom-core",
 ]
 
 [[package]]
