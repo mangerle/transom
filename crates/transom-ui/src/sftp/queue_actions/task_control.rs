@@ -23,16 +23,16 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
+            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
                 && task.status == TransferStatus::Transferring
             {
                 task.status = TransferStatus::Paused;
                 needs_cancel = true;
             }
-            panel.active_transfers.remove(&op_id);
+            panel.queue.active_transfers.remove(&op_id);
             panel.recompute_progress();
-            if panel.active_transfers.is_empty() {
-                panel.status = Some("传输已暂停".to_string());
+            if panel.queue.active_transfers.is_empty() {
+                panel.set_status("传输已暂停".to_string());
             }
             cx.notify();
         }
@@ -56,7 +56,7 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
+            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
                 && (task.status == TransferStatus::Paused
                     || matches!(task.status, TransferStatus::Failed(_)))
             {
@@ -83,16 +83,16 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
+            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 if task.status == TransferStatus::Transferring {
                     should_cancel = true;
                 }
                 task.status = TransferStatus::Cancelled;
             }
-            panel.active_transfers.remove(&op_id);
+            panel.queue.active_transfers.remove(&op_id);
             panel.recompute_progress();
-            if panel.active_transfers.is_empty() {
-                panel.status = Some("已取消传输".to_string());
+            if panel.queue.active_transfers.is_empty() {
+                panel.set_status("已取消传输".to_string());
             }
             cx.notify();
         }
@@ -116,8 +116,8 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.active_transfers.remove(&op_id);
-            panel.queue.retain(|task| task.id != op_id);
+            panel.queue.active_transfers.remove(&op_id);
+            panel.queue.tasks.retain(|task| task.id != op_id);
             panel.recompute_progress();
             cx.notify();
         }
@@ -137,24 +137,24 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            if panel.active_transfers.contains(&op_id)
-                && let Some(active_task) = panel.queue.iter_mut().find(|t| t.id == op_id)
+            if panel.queue.active_transfers.contains(&op_id)
+                && let Some(active_task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
                 && active_task.status == TransferStatus::Transferring
             {
                 needs_cancel = true;
                 active_task.status = TransferStatus::Pending;
                 active_task.mode = TransferMode::Resume;
-                panel.active_transfers.remove(&op_id);
+                panel.queue.active_transfers.remove(&op_id);
             }
 
-            if let Some(pos) = panel.queue.iter().position(|t| t.id == op_id) {
-                let mut task = panel.queue.remove(pos);
+            if let Some(pos) = panel.queue.tasks.iter().position(|t| t.id == op_id) {
+                let mut task = panel.queue.tasks.remove(pos);
                 task.status = TransferStatus::Pending;
                 if task.transferred > 0 {
                     task.mode = TransferMode::Resume;
                 }
-                panel.queue.insert(0, task);
-                panel.status = Some("已将传输任务置顶并优先开始传输".to_string());
+                panel.queue.tasks.insert(0, task);
+                panel.set_status("已将传输任务置顶并优先开始传输".to_string());
             }
             panel.recompute_progress();
             cx.notify();

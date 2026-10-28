@@ -45,8 +45,9 @@ impl AppShell {
                 .find(|t| t.id == tab_id)
                 .and_then(|t| t.sftp())
                 .map(|panel| {
-                    let path = join_remote(&panel.path, &name);
+                    let path = join_remote(&panel.remote.path, &name);
                     let is_dir = panel
+                        .remote
                         .entries
                         .iter()
                         .find(|entry| entry.path == path)
@@ -82,7 +83,7 @@ impl AppShell {
                     return;
                 };
                 let op = SftpOperation::Mkdir {
-                    path: join_remote(&panel.path, &name),
+                    path: join_remote(&panel.remote.path, &name),
                 };
                 self.send_sftp_op(tab_id, op, cx);
             }
@@ -105,7 +106,7 @@ impl AppShell {
                 };
                 let op = SftpOperation::Symlink {
                     target,
-                    link_path: join_remote(&panel.path, &name),
+                    link_path: join_remote(&panel.remote.path, &name),
                 };
                 self.send_sftp_op(tab_id, op, cx);
             }
@@ -117,11 +118,11 @@ impl AppShell {
                     .find(|t| t.id == tab_id)
                     .and_then(|t| t.sftp_mut())
                 {
-                    let new_dir = panel.local_path.join(&name);
+                    let new_dir = panel.local.path.join(&name);
                     if let Err(err) = std::fs::create_dir_all(&new_dir) {
-                        panel.local_error = Some(format!("新建本地文件夹失败: {err}"));
+                        panel.set_local_error(format!("新建本地文件夹失败: {err}"));
                     } else {
-                        panel.status = Some(format!("已成功创建本地文件夹: {name}"));
+                        panel.set_status(format!("已成功创建本地文件夹: {name}"));
                         self.spawn_local_dir_refresh(tab_id, None, cx);
                     }
                     cx.notify();
@@ -138,9 +139,9 @@ impl AppShell {
                     if let Some(parent) = old_path.parent() {
                         let new_path = parent.join(&name);
                         if let Err(err) = std::fs::rename(&old_path, &new_path) {
-                            panel.local_error = Some(format!("重命名本地文件失败: {err}"));
+                            panel.set_local_error(format!("重命名本地文件失败: {err}"));
                         } else {
-                            panel.status = Some(format!("已重命名为: {name}"));
+                            panel.set_status(format!("已重命名为: {name}"));
                             self.spawn_local_dir_refresh(tab_id, Some(new_path), cx);
                         }
                     }
@@ -179,7 +180,7 @@ impl AppShell {
         else {
             return;
         };
-        let link_path = panel.local_path.join(name);
+        let link_path = panel.local.path.join(name);
         #[cfg(unix)]
         let result =
             std::os::unix::fs::symlink(target_path, &link_path).map_err(|error| error.to_string());
@@ -187,11 +188,11 @@ impl AppShell {
         let result = Err("当前平台暂不支持创建本地软链接".to_string());
         match result {
             Ok(()) => {
-                panel.status = Some(format!("已创建本地软链接: {name}"));
+                panel.set_status(format!("已创建本地软链接: {name}"));
                 self.spawn_local_dir_refresh(tab_id, Some(link_path), cx);
             }
             Err(err) => {
-                panel.local_error = Some(format!("创建本地软链接失败: {err}"));
+                panel.set_local_error(format!("创建本地软链接失败: {err}"));
             }
         }
         cx.notify();

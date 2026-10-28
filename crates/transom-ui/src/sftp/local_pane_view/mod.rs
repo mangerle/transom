@@ -78,7 +78,7 @@ impl AppShell {
                         .iter()
                         .find(|tab| tab.id == tab_id)
                         .and_then(|tab| tab.sftp())
-                        .map(|panel| (panel.local_selection.clone(), panel.local_selected.clone()))
+                        .map(|panel| (panel.local.selection.clone(), panel.local.selected.clone()))
                         .unwrap_or_default();
                     let app_entity = app_entity.clone();
                     range
@@ -171,7 +171,7 @@ impl AppShell {
                                         };
                                         if event.modifiers.shift {
                                             let anchor_index =
-                                                panel.local_anchor.as_ref().and_then(|anchor| {
+                                                panel.local.anchor.as_ref().and_then(|anchor| {
                                                     click_entries
                                                         .iter()
                                                         .position(|entry| &entry.path == anchor)
@@ -199,11 +199,11 @@ impl AppShell {
                                         }
                                         let selected_count = panel.selected_local_paths().len();
                                         if selected_count > 1 {
-                                            panel.status =
+                                            panel.queue.status =
                                                 Some(format!("已选择 {selected_count} 个本地项目"));
                                         }
                                         let name = entry_name.clone();
-                                        panel.name_input.update(cx, |state, cx| {
+                                        panel.remote.name_input.update(cx, |state, cx| {
                                             state.set_value(name, window, cx);
                                         });
                                         cx.notify();
@@ -220,7 +220,7 @@ impl AppShell {
                                             .find(|tab| tab.id == tab_id)
                                             .and_then(|tab| tab.sftp_mut())
                                         {
-                                            if panel.local_selection.contains(&entry_path_right) {
+                                            if panel.local.selection.contains(&entry_path_right) {
                                                 panel.set_local_primary(entry_path_right.clone());
                                             } else {
                                                 panel.select_local(entry_path_right.clone());
@@ -308,7 +308,7 @@ impl AppShell {
                         return;
                     }
                     if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
-                        let local_dir = panel.local_path.clone();
+                        let local_dir = panel.local.path.clone();
                         for path in &item.paths {
                             let fname = path.rsplit('/').next().unwrap_or(path);
                             let target_local = local_dir.join(fname);

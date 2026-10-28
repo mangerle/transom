@@ -113,9 +113,9 @@ impl AppShell {
         if panel.open {
             return;
         }
-        panel.overlay.visible = true;
-        panel.overlay.expanded = true;
-        panel.overlay.settle_task = None;
+        panel.queue.drop_overlay.visible = true;
+        panel.queue.drop_overlay.expanded = true;
+        panel.queue.drop_overlay.settle_task = None;
         cx.notify();
     }
 
@@ -126,19 +126,19 @@ impl AppShell {
         };
         // 面板展开时由面板的队列区呈现进度，浮层不再重复。
         if panel.open {
-            panel.overlay.visible = false;
-            panel.overlay.settle_task = None;
+            panel.queue.drop_overlay.visible = false;
+            panel.queue.drop_overlay.settle_task = None;
             return;
         }
-        if panel.queue.iter().any(is_busy) {
-            panel.overlay.visible = true;
-            panel.overlay.settle_task = None;
+        if panel.queue.tasks.iter().any(is_busy) {
+            panel.queue.drop_overlay.visible = true;
+            panel.queue.drop_overlay.settle_task = None;
             return;
         }
-        if !panel.overlay.visible || panel.overlay.settle_task.is_some() {
+        if !panel.queue.drop_overlay.visible || panel.queue.drop_overlay.settle_task.is_some() {
             return;
         }
-        panel.overlay.reset_rate();
+        panel.queue.drop_overlay.reset_rate();
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(OVERLAY_LINGER).await;
             let _ = this.update(cx, |this, cx| {
@@ -147,13 +147,13 @@ impl AppShell {
                 };
                 // 停留期间若又忙起来，`sync_drop_overlay` 已把本句柄换成 None；
                 // 能走到这里说明任务未被取消，直接收起。
-                panel.overlay.visible = false;
-                panel.overlay.expanded = true;
-                panel.overlay.settle_task = None;
+                panel.queue.drop_overlay.visible = false;
+                panel.queue.drop_overlay.expanded = true;
+                panel.queue.drop_overlay.settle_task = None;
                 cx.notify();
             });
         });
-        panel.overlay.settle_task = Some(task);
+        panel.queue.drop_overlay.settle_task = Some(task);
     }
 
     /// 进度事件驱动的刷新：更新速率，并且只在窗格正被渲染时触发重绘。
@@ -162,10 +162,10 @@ impl AppShell {
     pub(crate) fn note_drop_overlay_progress(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = Self::panel_of(&mut self.workspace.tabs, tab_id)
             && !panel.open
-            && panel.overlay.visible
+            && panel.queue.drop_overlay.visible
         {
-            let done_bytes = panel.progress.map_or(0, |(done, _)| done);
-            panel.overlay.sample_rate(done_bytes);
+            let done_bytes = panel.queue.progress.map_or(0, |(done, _)| done);
+            panel.queue.drop_overlay.sample_rate(done_bytes);
         }
         if self.is_rendered_pane(tab_id) {
             cx.notify();
@@ -175,9 +175,9 @@ impl AppShell {
     /// 用户点关闭：撤下浮层与定时器，下次拖入会重新出现。
     fn dismiss_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = Self::panel_of(&mut self.workspace.tabs, tab_id) {
-            panel.overlay.visible = false;
-            panel.overlay.settle_task = None;
-            panel.overlay.reset_rate();
+            panel.queue.drop_overlay.visible = false;
+            panel.queue.drop_overlay.settle_task = None;
+            panel.queue.drop_overlay.reset_rate();
         }
         cx.notify();
     }
@@ -195,16 +195,25 @@ impl AppShell {
             .iter()
             .find(|tab| tab.id == tab_id)?
             .sftp()?;
-        if panel.open || !panel.overlay.visible || panel.queue.is_empty() {
+        if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
             return None;
         }
-        let expanded = panel.overlay.expanded;
-        let total = panel.queue.len();
-        let busy = panel.queue.iter().filter(|task| is_busy(task)).count();
-        let speed = panel.overlay.rate_bytes_per_sec;
-        let (done_bytes, total_bytes) = panel.progress.unwrap_or((0, None));
+        let expanded = panel.queue.drop_overlay.expanded;
+        let total = panel.queue.tasks.len();
+        let busy = panel
+            .queue
+            .tasks
+            .iter()
+            .filter(|task| is_busy(task))
+            .count();
+        let speed = panel.queue.drop_overlay.rate_bytes_per_sec;
+        let (done_bytes, total_bytes) = panel.queue.progress.unwrap_or((0, None));
         // 目标目录挂在 tooltip 上：浮层面积有限，但"传到哪儿"必须能查到。
-        let target_tip = format!("{} · {}", rust_i18n::t!("sftp.overlay_target"), panel.path);
+        let target_tip = format!(
+            "{} · {}",
+            rust_i18n::t!("sftp.overlay_target"),
+            panel.remote.path
+        );
         let summary = rust_i18n::t!("sftp.overlay_summary", busy = busy, total = total).to_string();
         let counters = match total_bytes {
             Some(bytes) => format!(
@@ -249,7 +258,7 @@ impl AppShell {
                         let Some(panel) = Self::panel_of(&mut this.workspace.tabs, tab_id) else {
                             return;
                         };
-                        panel.overlay.expanded = !panel.overlay.expanded;
+                        panel.queue.drop_overlay.expanded = !panel.queue.drop_overlay.expanded;
                         cx.notify();
                     })),
             )
@@ -297,6 +306,7 @@ impl AppShell {
                 this.children(
                     panel
                         .queue
+                        .tasks
                         .iter()
                         .map(|task| overlay_row(tab_id, task, p, cx)),
                 )

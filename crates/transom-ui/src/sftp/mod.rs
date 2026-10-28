@@ -38,7 +38,8 @@ pub(crate) use self::quick_paths::LocalQuickPaths;
 pub(crate) use self::side_remote::SftpActivePane;
 pub(crate) use self::state::{
     LocalFileEntry, SftpChmodModalState, SftpFilterModalState, SftpInputModalState,
-    SftpInputTarget, SftpPanelState, SftpSyncModalState,
+    SftpInputTarget, SftpLocalPaneState, SftpPanelState, SftpQueueState, SftpRemotePaneState,
+    SftpSyncModalState,
 };
 pub(crate) use self::vfs_entry_view::{VfsRowRenderOptions, render_vfs_row_content};
 pub(crate) use self::vfs_provider::LocalVfsProvider;

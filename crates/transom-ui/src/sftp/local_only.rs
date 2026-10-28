@@ -5,7 +5,10 @@
 //! 过滤和快捷键仍走现有本地实现，行为与 SFTP 左栏一致。
 
 use super::local_pane_view::SftpLocalPaneProps;
-use super::{LocalQuickPaths, SftpActivePane, SftpPanelState, fuzzy_match_name};
+use super::{
+    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
+    SftpQueueState, SftpRemotePaneState, fuzzy_match_name,
+};
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::{Palette, sftp_text_input};
@@ -62,29 +65,48 @@ impl AppShell {
         };
         pane.sftp = Some(SftpPanelState {
             open: true,
-            overlay: super::DropOverlayState::default(),
-            path: String::new(),
-            path_input,
-            name_input,
-            remote_filter_input,
-            entries: Vec::new(),
-            selected: None,
-            remote_selection: BTreeSet::new(),
-            remote_anchor: None,
-            local_path,
-            local_path_input,
-            local_filter_input,
-            local_entries,
-            local_quick_paths: quick_paths,
-            local_only: true,
-            local_collapsed: false,
-            remote_collapsed: false,
-            local_selected: None,
-            local_selection: BTreeSet::new(),
-            local_anchor: None,
-            local_error,
-            local_scroll_handle: VirtualListScrollHandle::new(),
-            remote_scroll_handle: VirtualListScrollHandle::new(),
+            remote: SftpRemotePaneState {
+                path: String::new(),
+                path_input,
+                name_input,
+                filter_input: remote_filter_input,
+                entries: Vec::new(),
+                selected: None,
+                selection: BTreeSet::new(),
+                anchor: None,
+                scroll_handle: VirtualListScrollHandle::new(),
+                collapsed: false,
+                loading: false,
+            },
+            local: SftpLocalPaneState {
+                path: local_path,
+                path_input: local_path_input,
+                filter_input: local_filter_input,
+                entries: local_entries,
+                quick_paths,
+                only: true,
+                collapsed: false,
+                selected: None,
+                selection: BTreeSet::new(),
+                anchor: None,
+                error: local_error,
+                scroll_handle: VirtualListScrollHandle::new(),
+            },
+            queue: SftpQueueState {
+                tasks: Vec::new(),
+                active_transfers: HashSet::new(),
+                active_op: None,
+                progress: None,
+                resume_enabled: true,
+                expanded: false,
+                height: 160.0,
+                drag_start_y: None,
+                drag_start_height: 160.0,
+                status: None,
+                error: None,
+                status_task: None,
+                drop_overlay: DropOverlayState::default(),
+            },
             side_remotes: Vec::new(),
             clipboard: None,
             mount_menu_open: false,
@@ -92,20 +114,7 @@ impl AppShell {
             show_hidden: false,
             sync_navigation: false,
             active_pane: SftpActivePane::Local,
-            queue: Vec::new(),
-            resume_enabled: true,
-            queue_expanded: false,
-            queue_height: 160.0,
-            drag_start_y: None,
-            drag_start_height: 160.0,
             focus_handle: cx.focus_handle(),
-            active_op: None,
-            active_transfers: HashSet::new(),
-            progress: None,
-            status: None,
-            error: None,
-            loading: false,
-            status_task: None,
             hover_preview: None,
             _subscriptions: vec![local_enter_sub],
         });
@@ -129,22 +138,23 @@ impl AppShell {
         else {
             return div().into_any_element();
         };
-        let local_path_input = panel.local_path_input.clone();
-        let local_filter_input = panel.local_filter_input.clone();
-        let local_scroll_handle = panel.local_scroll_handle.clone();
-        let quick_paths = panel.local_quick_paths.clone();
+        let local_path_input = panel.local.path_input.clone();
+        let local_filter_input = panel.local.filter_input.clone();
+        let local_scroll_handle = panel.local.scroll_handle.clone();
+        let quick_paths = panel.local.quick_paths.clone();
         let show_filter = panel.show_filter;
         let show_hidden = panel.show_hidden;
         let focus_handle = panel.focus_handle.clone();
-        let local_error = panel.local_error.clone();
-        let status = panel.status.clone();
+        let local_error = panel.local.error.clone();
+        let status = panel.queue.status.clone();
         let local_filter_query = local_filter_input
             .read(cx)
             .value()
             .trim()
             .to_ascii_lowercase();
         let local_entries = panel
-            .local_entries
+            .local
+            .entries
             .iter()
             .filter(|entry| {
                 (show_hidden || !entry.name.starts_with('.'))

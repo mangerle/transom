@@ -21,7 +21,7 @@ impl AppShell {
         };
         let paths = panel.selected_remote_paths();
         if paths.is_empty() {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
             cx.notify();
             return;
         }
@@ -29,6 +29,7 @@ impl AppShell {
             .iter()
             .filter_map(|path| {
                 panel
+                    .remote
                     .entries
                     .iter()
                     .find(|entry| &entry.path == path)
@@ -39,7 +40,7 @@ impl AppShell {
             })
             .collect::<Vec<_>>();
         if targets.is_empty() {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
             cx.notify();
             return;
         }
@@ -52,7 +53,7 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.status = Some(format!("正在删除 {count} 个远端项目"));
+            panel.set_status(format!("正在删除 {count} 个远端项目"));
             cx.notify();
         }
     }
@@ -163,7 +164,7 @@ impl AppShell {
             return;
         };
         let (title, prompt, initial_value, target) = if is_remote {
-            let Some(selected) = panel.selected.clone() else {
+            let Some(selected) = panel.remote.selected.clone() else {
                 return;
             };
             let initial = selected
@@ -178,7 +179,7 @@ impl AppShell {
                 SftpInputTarget::RemoteRename { old_path: selected },
             )
         } else {
-            let Some(selected) = panel.local_selected.clone() else {
+            let Some(selected) = panel.local.selected.clone() else {
                 return;
             };
             let initial = selected
@@ -227,10 +228,15 @@ impl AppShell {
             return;
         };
         let (title, prompt, initial_value, target) = if is_remote {
-            let Some(selected) = panel.selected.clone() else {
+            let Some(selected) = panel.remote.selected.clone() else {
                 return;
             };
-            let Some(entry) = panel.entries.iter().find(|entry| entry.path == selected) else {
+            let Some(entry) = panel
+                .remote
+                .entries
+                .iter()
+                .find(|entry| entry.path == selected)
+            else {
                 return;
             };
             (
@@ -242,7 +248,7 @@ impl AppShell {
                 },
             )
         } else {
-            let Some(selected) = panel.local_selected.clone() else {
+            let Some(selected) = panel.local.selected.clone() else {
                 return;
             };
             let initial_name = selected

@@ -194,6 +194,7 @@ impl AppShell {
         if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && let Some(panel) = tab.sftp_mut()
             && let Some(entry) = panel
+                .remote
                 .entries
                 .iter_mut()
                 .find(|entry| entry.path == remote_path)
@@ -211,7 +212,7 @@ impl AppShell {
                 .iter()
                 .find(|tab| tab.id == tab_id)
                 .and_then(|tab| tab.sftp())
-                .is_some_and(|panel| panel.path == parent)
+                .is_some_and(|panel| panel.remote.path == parent)
         {
             self.request_sftp_list(tab_id, parent.to_string(), cx);
         }
@@ -305,7 +306,7 @@ impl AppShell {
         if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
             && let Some(panel) = tab.sftp_mut()
         {
-            panel.error = Some(message);
+            panel.set_error(message);
         }
         cx.notify();
     }

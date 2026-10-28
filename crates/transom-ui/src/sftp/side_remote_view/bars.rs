@@ -54,7 +54,7 @@ impl AppShell {
         let current_session_id = current_tab.map(|t| t.session.id);
         let is_local_only = current_tab
             .and_then(|t| t.sftp())
-            .map(|p| p.local_only)
+            .map(|p| p.local.only)
             .unwrap_or(false);
 
         let mut seen_sessions = HashSet::new();
@@ -90,7 +90,7 @@ impl AppShell {
             let display_name = t.display_name();
             let initial_path = t
                 .sftp()
-                .map(|p| p.path.clone())
+                .map(|p| p.remote.path.clone())
                 .filter(|p| !p.is_empty() && p != ".")
                 .or_else(|| extract_candidate_path(&t.title))
                 .unwrap_or_else(|| ".".to_string());

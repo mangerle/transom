@@ -19,13 +19,13 @@ impl AppShell {
         let Some(panel) = tab.sftp_mut() else {
             return;
         };
-        let Some(selected) = panel.selected.clone() else {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+        let Some(selected) = panel.remote.selected.clone() else {
+            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
             cx.notify();
             return;
         };
-        let Some(entry) = panel.entries.iter().find(|e| e.path == selected) else {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+        let Some(entry) = panel.remote.entries.iter().find(|e| e.path == selected) else {
+            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
             cx.notify();
             return;
         };

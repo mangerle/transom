@@ -125,7 +125,7 @@ impl AppShell {
                                                     .find(|tab| tab.id == tab_id)
                                                     .and_then(|tab| tab.sftp_mut())
                                                 {
-                                                    panel.resume_enabled = checked;
+                                                    panel.queue.resume_enabled = checked;
                                                     cx.notify();
                                                 }
                                             })),
@@ -235,7 +235,7 @@ impl AppShell {
                                             .find(|tab| tab.id == tab_id)
                                             .and_then(|tab| tab.sftp_mut())
                                         {
-                                            panel.queue_expanded = !panel.queue_expanded;
+                                            panel.queue.expanded = !panel.queue.expanded;
                                             cx.notify();
                                         }
                                     })),

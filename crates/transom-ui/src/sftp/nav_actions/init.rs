@@ -8,7 +8,8 @@ use crate::app::{AppShell, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
 use crate::sftp::{
-    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpPanelState, extract_candidate_path,
+    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
+    SftpQueueState, SftpRemotePaneState, extract_candidate_path,
 };
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
@@ -76,7 +77,7 @@ impl AppShell {
             Some(false) => {
                 let path = self.workspace.tabs[index]
                     .sftp()
-                    .map(|panel| panel.path.clone())
+                    .map(|panel| panel.remote.path.clone())
                     .unwrap_or_else(|| ".".to_string());
                 if let Some(panel) = self.workspace.tabs[index].sftp_mut() {
                     panel.open = true;
@@ -171,29 +172,48 @@ impl AppShell {
         };
         pane.sftp = Some(SftpPanelState {
             open,
-            overlay: DropOverlayState::default(),
-            path: initial_remote_path.clone(),
-            path_input,
-            name_input,
-            remote_filter_input,
-            entries: Vec::new(),
-            selected: None,
-            remote_selection: BTreeSet::new(),
-            remote_anchor: None,
-            local_path,
-            local_path_input,
-            local_filter_input,
-            local_entries: Vec::new(),
-            local_quick_paths: quick_paths,
-            local_only: false,
-            local_collapsed: false,
-            remote_collapsed: false,
-            local_selected: None,
-            local_selection: BTreeSet::new(),
-            local_anchor: None,
-            local_error: None,
-            local_scroll_handle: VirtualListScrollHandle::new(),
-            remote_scroll_handle: VirtualListScrollHandle::new(),
+            remote: SftpRemotePaneState {
+                path: initial_remote_path.clone(),
+                path_input,
+                name_input,
+                filter_input: remote_filter_input,
+                entries: Vec::new(),
+                selected: None,
+                selection: BTreeSet::new(),
+                anchor: None,
+                scroll_handle: VirtualListScrollHandle::new(),
+                collapsed: false,
+                loading: true,
+            },
+            local: SftpLocalPaneState {
+                path: local_path,
+                path_input: local_path_input,
+                filter_input: local_filter_input,
+                entries: Vec::new(),
+                quick_paths,
+                only: false,
+                collapsed: false,
+                selected: None,
+                selection: BTreeSet::new(),
+                anchor: None,
+                error: None,
+                scroll_handle: VirtualListScrollHandle::new(),
+            },
+            queue: SftpQueueState {
+                tasks: Vec::new(),
+                active_transfers: HashSet::new(),
+                active_op: None,
+                progress: None,
+                resume_enabled: true,
+                expanded: true,
+                height: 160.0,
+                drag_start_y: None,
+                drag_start_height: 160.0,
+                status: None,
+                error: None,
+                status_task: None,
+                drop_overlay: DropOverlayState::default(),
+            },
             side_remotes: Vec::new(),
             clipboard: None,
             mount_menu_open: false,
@@ -201,20 +221,7 @@ impl AppShell {
             show_hidden: false,
             sync_navigation: false,
             active_pane: SftpActivePane::default(),
-            queue: Vec::new(),
-            resume_enabled: true,
-            queue_expanded: true,
-            queue_height: 160.0,
-            drag_start_y: None,
-            drag_start_height: 160.0,
             focus_handle: cx.focus_handle(),
-            active_op: None,
-            active_transfers: HashSet::new(),
-            progress: None,
-            status: None,
-            error: None,
-            loading: true,
-            status_task: None,
             hover_preview: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         });

@@ -34,17 +34,18 @@ impl AppShell {
             let is_main_conn = tab.connection_id == Some(connection_id);
             if let Some(panel) = tab.sftp_mut() {
                 if is_main_conn {
-                    panel.path = path.clone();
-                    panel.entries = entries;
-                    panel.loading = false;
-                    panel.error = None;
+                    panel.remote.path = path.clone();
+                    panel.remote.entries = entries;
+                    panel.remote.loading = false;
+                    panel.clear_error();
                     let valid_paths = panel
+                        .remote
                         .entries
                         .iter()
                         .map(|entry| entry.path.clone())
                         .collect();
                     panel.sync_remote_selection(&valid_paths);
-                    update_input = Some((panel.path_input.clone(), path));
+                    update_input = Some((panel.remote.path_input.clone(), path));
                 } else if let Some(side) = panel
                     .side_remotes
                     .iter_mut()
@@ -93,7 +94,7 @@ impl AppShell {
         };
         let mut applied = false;
         if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id)
-            && let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id)
+            && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
         {
             task.transferred = transferred;
             if total.is_some() {
@@ -136,7 +137,7 @@ impl AppShell {
         let mut notify_info: Option<(TransferDirection, String, u64)> = None;
         if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
             let mut completed_transfer = false;
-            if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
+            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 completed_transfer = true;
                 task.status = TransferStatus::Completed;
                 task.speed_bps = None;
@@ -172,9 +173,9 @@ impl AppShell {
                 notify_info = Some((task.direction, file_name, task.transferred));
             }
             if completed_transfer {
-                panel.active_transfers.remove(&op_id);
+                panel.queue.active_transfers.remove(&op_id);
                 panel.recompute_progress();
-                if panel.active_transfers.is_empty() && panel.active_op.is_none() {
+                if panel.queue.active_transfers.is_empty() && panel.queue.active_op.is_none() {
                     let base = match transferred {
                         Some(bytes) => format!(
                             "{} ({})",
@@ -194,11 +195,11 @@ impl AppShell {
                         message.push_str(&format!(" | {}", rust_i18n::t!("sftp.sha256_verified")));
                     }
                     Self::set_sftp_transient_status(panel, tab_id, message, cx);
-                    panel.error = None;
-                    refresh = Some(panel.path.clone());
+                    panel.clear_error();
+                    refresh = Some(panel.remote.path.clone());
                 }
-            } else if panel.active_op == Some(op_id) {
-                panel.active_op = None;
+            } else if panel.queue.active_op == Some(op_id) {
+                panel.queue.active_op = None;
                 let base = match transferred {
                     Some(bytes) => format!(
                         "{} ({})",
@@ -208,7 +209,7 @@ impl AppShell {
                     None => rust_i18n::t!("sftp.operation_done").to_string(),
                 };
                 Self::set_sftp_transient_status(panel, tab_id, base, cx);
-                refresh = Some(panel.path.clone());
+                refresh = Some(panel.remote.path.clone());
             }
         }
         // 任务落定，浮层据此决定继续常驻还是进入 5 秒停留窗口。
@@ -253,8 +254,8 @@ impl AppShell {
             // 标签页已关闭（或连接已切换）：忽略迟到的属性响应，不再弹出属性窗
             return false;
         };
-        if panel.active_op == Some(op_id) {
-            panel.active_op = None;
+        if panel.queue.active_op == Some(op_id) {
+            panel.queue.active_op = None;
         }
         self.sftp_modals.properties = Some(SftpPropertiesModalState {
             scope: "远端".to_string(),
@@ -367,7 +368,7 @@ impl AppShell {
         if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
             let err_msg = localized_error(&error);
             let mut failed_transfer = false;
-            if let Some(task) = panel.queue.iter_mut().find(|t| t.id == op_id) {
+            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 failed_transfer = true;
                 task.status = TransferStatus::Failed(err_msg.clone());
                 let file_name = task
@@ -378,13 +379,13 @@ impl AppShell {
                 failed_notify = Some((file_name, err_msg.clone()));
             }
             if failed_transfer {
-                panel.active_transfers.remove(&op_id);
+                panel.queue.active_transfers.remove(&op_id);
                 panel.recompute_progress();
-                panel.error = Some(err_msg);
-            } else if panel.active_op == Some(op_id) || panel.active_op.is_none() {
-                panel.active_op = None;
-                panel.loading = false;
-                panel.error = Some(err_msg);
+                panel.set_error(err_msg);
+            } else if panel.queue.active_op == Some(op_id) || panel.queue.active_op.is_none() {
+                panel.queue.active_op = None;
+                panel.remote.loading = false;
+                panel.set_error(err_msg);
             }
         }
         self.sync_drop_overlay(tab_id, cx);

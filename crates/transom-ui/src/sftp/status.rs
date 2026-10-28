@@ -41,13 +41,13 @@ impl AppShell {
                 else {
                     return;
                 };
-                if panel.status.as_deref() == Some(expiry_message.as_str()) {
-                    panel.status = None;
+                if panel.queue.status.as_deref() == Some(expiry_message.as_str()) {
+                    panel.clear_status();
                     cx.notify();
                 }
             });
         });
-        panel.status = Some(message);
-        panel.status_task = Some(task);
+        panel.set_status(message);
+        panel.queue.status_task = Some(task);
     }
 }

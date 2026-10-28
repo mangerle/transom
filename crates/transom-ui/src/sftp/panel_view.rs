@@ -33,20 +33,20 @@ impl AppShell {
         let Some(panel) = tab.sftp() else {
             return div().into_any_element();
         };
-        if panel.local_only && panel.side_remotes.is_empty() {
+        if panel.local.only && panel.side_remotes.is_empty() {
             return self.render_local_only_panel(tab_id, p, cx);
         }
 
-        let is_local_only = panel.local_only;
+        let is_local_only = panel.local.only;
         let show_filter = panel.show_filter;
         let show_hidden = panel.show_hidden;
         let sync_navigation = panel.sync_navigation;
-        let queue_height = panel.queue_height;
+        let queue_height = panel.queue.height;
         let focus_handle = panel.focus_handle.clone();
-        let local_scroll_handle = panel.local_scroll_handle.clone();
-        let remote_scroll_handle = panel.remote_scroll_handle.clone();
-        let remote_filter_input = panel.remote_filter_input.clone();
-        let local_filter_input = panel.local_filter_input.clone();
+        let local_scroll_handle = panel.local.scroll_handle.clone();
+        let remote_scroll_handle = panel.remote.scroll_handle.clone();
+        let remote_filter_input = panel.remote.filter_input.clone();
+        let local_filter_input = panel.local.filter_input.clone();
         let remote_filter_query = remote_filter_input
             .read(cx)
             .value()
@@ -65,27 +65,27 @@ impl AppShell {
             &local_filter_query,
             &self.settings.sftp.panel_hidden_patterns,
         );
-        let remote_path_input = panel.path_input.clone();
-        let loading = panel.loading;
-        let remote_error = panel.error.clone();
-        let status = panel.status.clone();
-        let progress = panel.progress;
-        let active_count = panel.active_transfers.len();
+        let remote_path_input = panel.remote.path_input.clone();
+        let loading = panel.remote.loading;
+        let remote_error = panel.queue.error.clone();
+        let status = panel.queue.status.clone();
+        let progress = panel.queue.progress;
+        let active_count = panel.queue.active_transfers.len();
 
-        let local_path_input = panel.local_path_input.clone();
-        let local_error = panel.local_error.clone();
-        let quick_paths = panel.local_quick_paths.clone();
-        let local_collapsed = panel.local_collapsed;
-        let remote_collapsed = panel.remote_collapsed;
+        let local_path_input = panel.local.path_input.clone();
+        let local_error = panel.local.error.clone();
+        let quick_paths = panel.local.quick_paths.clone();
+        let local_collapsed = panel.local.collapsed;
+        let remote_collapsed = panel.remote.collapsed;
         let side_remotes_info = panel
             .side_remotes
             .iter()
             .enumerate()
             .map(|(i, s)| (i, s.collapsed, s.title.clone()))
             .collect::<Vec<_>>();
-        let remote_current_dir = panel.path.clone();
+        let remote_current_dir = panel.remote.path.clone();
 
-        let queue = panel.queue.clone();
+        let queue = panel.queue.tasks.clone();
         let total_speed: u64 = queue
             .iter()
             .filter(|t| t.status == TransferStatus::Transferring)
@@ -96,19 +96,21 @@ impl AppShell {
         } else {
             None
         };
-        let resume_enabled = panel.resume_enabled;
+        let resume_enabled = panel.queue.resume_enabled;
         let verify_after_transfer = self.settings.sftp.verify_after_transfer;
         let max_concurrent_transfers = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
-        let queue_expanded = panel.queue_expanded;
+        let queue_expanded = panel.queue.expanded;
         // 没有活动任务时回退汇总暂停任务进度，避免暂停后进度条消失
         let paused_count = panel
             .queue
+            .tasks
             .iter()
             .filter(|task| task.status == TransferStatus::Paused)
             .count();
         let paused_tasks = if active_count == 0 {
             panel
                 .queue
+                .tasks
                 .iter()
                 .filter(|task| task.status == TransferStatus::Paused)
                 .collect::<Vec<_>>()
@@ -311,6 +313,7 @@ impl AppShell {
                 .is_some_and(|matcher| matcher.matches(name, false))
         };
         let mut remote_entries: Vec<RemoteFile> = panel
+            .remote
             .entries
             .iter()
             .filter(|entry| {
@@ -321,11 +324,11 @@ impl AppShell {
             })
             .cloned()
             .collect();
-        if panel.path != "/"
-            && !panel.path.is_empty()
+        if panel.remote.path != "/"
+            && !panel.remote.path.is_empty()
             && (remote_filter_query.is_empty() || fuzzy_match_name("..", remote_filter_query))
         {
-            let parent = super::parent_remote(&panel.path);
+            let parent = super::parent_remote(&panel.remote.path);
             remote_entries.insert(
                 0,
                 RemoteFile {
@@ -341,7 +344,8 @@ impl AppShell {
         }
 
         let mut local_entries: Vec<LocalFileEntry> = panel
-            .local_entries
+            .local
+            .entries
             .iter()
             .filter(|entry| {
                 (show_hidden || !entry.name.starts_with('.'))
@@ -350,8 +354,8 @@ impl AppShell {
             })
             .cloned()
             .collect();
-        if let Some(parent) = panel.local_path.parent()
-            && panel.local_path != parent
+        if let Some(parent) = panel.local.path.parent()
+            && panel.local.path != parent
             && (local_filter_query.is_empty() || fuzzy_match_name("..", local_filter_query))
         {
             local_entries.insert(

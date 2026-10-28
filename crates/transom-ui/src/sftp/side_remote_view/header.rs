@@ -125,7 +125,7 @@ pub(super) fn render_side_remote_header(
                         .get(side_index)
                         .map(|s| s.selection.iter().cloned().collect::<Vec<_>>())
                         .unwrap_or_default();
-                    (paths, p.local_path.clone())
+                    (paths, p.local.path.clone())
                 })
                 .unwrap_or_default();
 
@@ -135,7 +135,7 @@ pub(super) fn render_side_remote_header(
                     Ok(path) => path,
                     Err(_) => {
                         if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
-                            panel.error = Some(rust_i18n::t!("sftp.invalid_name").to_string());
+                            panel.set_error(rust_i18n::t!("sftp.invalid_name").to_string());
                         }
                         cx.notify();
                         continue;

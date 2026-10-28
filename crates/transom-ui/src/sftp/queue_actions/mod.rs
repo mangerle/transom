@@ -51,15 +51,20 @@ impl AppShell {
         let Some(panel) = tab.sftp_mut() else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
-        let tasks = upload_tasks(paths, &panel.path, panel.resume_enabled, verify)?;
+        let tasks = upload_tasks(
+            paths,
+            &panel.remote.path,
+            panel.queue.resume_enabled,
+            verify,
+        )?;
         let count = tasks.len();
         log::info!(
             "上传任务入队，窗格: {tab_id}，新增 {count} 项，目标目录: {}，队列现有 {} 项，校验: {verify}",
-            panel.path,
-            panel.queue.len() + count
+            panel.remote.path,
+            panel.queue.tasks.len() + count
         );
-        panel.queue.extend(tasks);
-        panel.status = Some(rust_i18n::t!("sftp.upload_queued", count = count).to_string());
+        panel.queue.tasks.extend(tasks);
+        panel.set_status(rust_i18n::t!("sftp.upload_queued", count = count).to_string());
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
         Ok(count)
@@ -73,7 +78,7 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.error = Some(message);
+            panel.set_error(message);
             cx.notify();
         }
     }
@@ -88,11 +93,11 @@ impl AppShell {
         };
         let paths = panel.selected_remote_paths();
         if paths.is_empty() {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
             cx.notify();
             return;
         }
-        let mode = if panel.resume_enabled {
+        let mode = if panel.queue.resume_enabled {
             TransferMode::Resume
         } else {
             TransferMode::Overwrite
@@ -100,11 +105,12 @@ impl AppShell {
         let mut tasks = Vec::with_capacity(paths.len());
         let mut invalid_name: Option<String> = None;
         for path in paths {
-            let Some(remote_entry) = panel.entries.iter().find(|entry| entry.path == path) else {
+            let Some(remote_entry) = panel.remote.entries.iter().find(|entry| entry.path == path)
+            else {
                 continue;
             };
             let local_path =
-                match transom_core::safe_local_join(&panel.local_path, &remote_entry.name) {
+                match transom_core::safe_local_join(&panel.local.path, &remote_entry.name) {
                     Ok(path) => path,
                     Err(error) => {
                         invalid_name = Some(localized_error(&error));
@@ -132,18 +138,18 @@ impl AppShell {
             tasks.push(task);
         }
         if let Some(message) = invalid_name {
-            panel.error = Some(message);
+            panel.set_error(message);
             cx.notify();
             return;
         }
         if tasks.is_empty() {
-            panel.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
             cx.notify();
             return;
         }
         let count = tasks.len();
-        panel.queue.extend(tasks);
-        panel.status = Some(format!("已加入 {count} 个下载任务"));
+        panel.queue.tasks.extend(tasks);
+        panel.set_status(format!("已加入 {count} 个下载任务"));
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }
@@ -161,15 +167,16 @@ impl AppShell {
         };
 
         let mut commands = Vec::new();
-        while panel.active_transfers.len() < max_concurrent {
+        while panel.queue.active_transfers.len() < max_concurrent {
             let Some(index) = panel
                 .queue
+                .tasks
                 .iter()
                 .position(|task| task.status == TransferStatus::Pending)
             else {
                 break;
             };
-            let task = panel.queue[index].clone();
+            let task = panel.queue.tasks[index].clone();
             let target_conn = task
                 .target_connection_id
                 .or(task.source_connection_id)
@@ -177,18 +184,18 @@ impl AppShell {
                 .or_else(|| panel.side_remotes.first().map(|s| s.connection_id));
 
             let Some(conn_id) = target_conn else {
-                panel.queue[index].status =
+                panel.queue.tasks[index].status =
                     TransferStatus::Failed("未找到可用的远端连接".to_string());
                 continue;
             };
 
             let Some(op) = sftp_operation_for_task(&task, &filter) else {
-                panel.queue[index].status =
+                panel.queue.tasks[index].status =
                     TransferStatus::Failed("不支持的传输任务类型组合".to_string());
                 continue;
             };
-            panel.queue[index].status = TransferStatus::Transferring;
-            panel.active_transfers.insert(task.id);
+            panel.queue.tasks[index].status = TransferStatus::Transferring;
+            panel.queue.active_transfers.insert(task.id);
             commands.push((task.id, conn_id, op));
         }
 
@@ -197,7 +204,7 @@ impl AppShell {
             cx.notify();
             return;
         }
-        panel.error = None;
+        panel.clear_error();
         panel.recompute_progress();
         for (op_id, connection_id, op) in commands {
             self.send_command(SftpCommand::Sftp {
@@ -218,7 +225,7 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.queue.retain(|task| {
+            panel.queue.tasks.retain(|task| {
                 task.status != TransferStatus::Completed && task.status != TransferStatus::Cancelled
             });
             cx.notify();
@@ -250,8 +257,8 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            let resume_enabled = panel.resume_enabled;
-            for task in &mut panel.queue {
+            let resume_enabled = panel.queue.resume_enabled;
+            for task in &mut panel.queue.tasks {
                 if matches!(task.status, TransferStatus::Failed(_)) {
                     task.status = TransferStatus::Pending;
                     if resume_enabled || task.transferred > 0 {
@@ -261,8 +268,8 @@ impl AppShell {
                 }
             }
             if retried_count > 0 {
-                panel.error = None;
-                panel.status = Some(format!("已重新入队 {retried_count} 个失败传输任务"));
+                panel.clear_error();
+                panel.set_status(format!("已重新入队 {retried_count} 个失败传输任务"));
                 cx.notify();
             }
         }
@@ -282,9 +289,9 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            active_ids = panel.active_transfers.iter().copied().collect();
+            active_ids = panel.queue.active_transfers.iter().copied().collect();
             let mut paused = 0u32;
-            for task in &mut panel.queue {
+            for task in &mut panel.queue.tasks {
                 match task.status {
                     TransferStatus::Transferring | TransferStatus::Pending => {
                         task.status = TransferStatus::Paused;
@@ -293,10 +300,10 @@ impl AppShell {
                     _ => {}
                 }
             }
-            panel.active_transfers.clear();
+            panel.queue.active_transfers.clear();
             panel.recompute_progress();
             if paused > 0 {
-                panel.status = Some(format!("已暂停 {paused} 个传输任务"));
+                panel.set_status(format!("已暂停 {paused} 个传输任务"));
             }
             cx.notify();
         }
@@ -315,7 +322,7 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            for task in &mut panel.queue {
+            for task in &mut panel.queue.tasks {
                 if task.status == TransferStatus::Paused {
                     task.status = TransferStatus::Pending;
                     task.mode = TransferMode::Resume;
@@ -323,7 +330,7 @@ impl AppShell {
                 }
             }
             if resumed > 0 {
-                panel.status = Some(format!("已继续 {resumed} 个传输任务"));
+                panel.set_status(format!("已继续 {resumed} 个传输任务"));
             }
             cx.notify();
         }
@@ -343,9 +350,9 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            active_ids = panel.active_transfers.iter().copied().collect();
+            active_ids = panel.queue.active_transfers.iter().copied().collect();
             let mut cancelled = 0u32;
-            for task in &mut panel.queue {
+            for task in &mut panel.queue.tasks {
                 if matches!(
                     task.status,
                     TransferStatus::Transferring | TransferStatus::Pending | TransferStatus::Paused
@@ -354,10 +361,10 @@ impl AppShell {
                     cancelled = cancelled.saturating_add(1);
                 }
             }
-            panel.active_transfers.clear();
+            panel.queue.active_transfers.clear();
             panel.recompute_progress();
             if cancelled > 0 {
-                panel.status = Some(format!("已取消 {cancelled} 个传输任务"));
+                panel.set_status(format!("已取消 {cancelled} 个传输任务"));
             }
             cx.notify();
         }

@@ -64,7 +64,12 @@ impl AppShell {
                         .iter()
                         .find(|tab| tab.id == tab_id)
                         .and_then(|tab| tab.sftp())
-                        .map(|panel| (panel.remote_selection.clone(), panel.selected.clone()))
+                        .map(|panel| {
+                            (
+                                panel.remote.selection.clone(),
+                                panel.remote.selected.clone(),
+                            )
+                        })
                         .unwrap_or_default();
                     let app_entity = app_entity.clone();
                     range
@@ -166,7 +171,7 @@ impl AppShell {
                                         };
                                         if event.modifiers.shift {
                                             let anchor_index =
-                                                panel.remote_anchor.as_ref().and_then(|anchor| {
+                                                panel.remote.anchor.as_ref().and_then(|anchor| {
                                                     click_entries
                                                         .iter()
                                                         .position(|entry| &entry.path == anchor)
@@ -195,11 +200,11 @@ impl AppShell {
                                         }
                                         let selected_count = panel.selected_remote_paths().len();
                                         if selected_count > 1 {
-                                            panel.status =
+                                            panel.queue.status =
                                                 Some(format!("已选择 {selected_count} 个远端项目"));
                                         }
                                         let name = entry_name.clone();
-                                        panel.name_input.update(cx, |state, cx| {
+                                        panel.remote.name_input.update(cx, |state, cx| {
                                             state.set_value(name, window, cx);
                                         });
                                         cx.notify();
@@ -216,7 +221,7 @@ impl AppShell {
                                             .find(|tab| tab.id == tab_id)
                                             .and_then(|tab| tab.sftp_mut())
                                         {
-                                            if panel.remote_selection.contains(&entry_path_right) {
+                                            if panel.remote.selection.contains(&entry_path_right) {
                                                 panel.set_remote_primary(entry_path_right.clone());
                                             } else {
                                                 panel.select_remote(entry_path_right.clone());

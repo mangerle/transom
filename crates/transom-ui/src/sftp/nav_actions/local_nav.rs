@@ -25,12 +25,12 @@ impl AppShell {
         let Some(panel) = tab.sftp_mut() else {
             return;
         };
-        panel.local_path = target.clone();
+        panel.local.path = target.clone();
         // 先清空旧目录内容给出即时反馈，实际条目由后台刷新回填
-        panel.local_entries = Vec::new();
+        panel.local.entries = Vec::new();
         panel.clear_local_selection();
-        panel.local_error = None;
-        let input = panel.local_path_input.clone();
+        panel.clear_local_error();
+        let input = panel.local.path_input.clone();
         input.update(cx, |state, cx| {
             state.set_value(target.display().to_string(), window, cx);
         });
@@ -57,6 +57,7 @@ impl AppShell {
                 }
                 let child_name = target.file_name()?.to_str()?;
                 panel
+                    .remote
                     .entries
                     .iter()
                     .find(|e| e.is_dir && e.name == child_name)
@@ -81,9 +82,9 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| {
-                let local_parent = panel.local_path.parent().map(|p| p.to_path_buf());
+                let local_parent = panel.local.path.parent().map(|p| p.to_path_buf());
                 let remote_parent = if panel.sync_navigation {
-                    Some(parent_remote(&panel.path))
+                    Some(parent_remote(&panel.remote.path))
                 } else {
                     None
                 };
@@ -115,7 +116,7 @@ impl AppShell {
             .iter()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp())
-            .map(|panel| PathBuf::from(panel.local_path_input.read(cx).value().trim()));
+            .map(|panel| PathBuf::from(panel.local.path_input.read(cx).value().trim()));
         if let Some(target) = target
             && target.is_dir()
         {
@@ -130,7 +131,7 @@ impl AppShell {
             .iter()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp())
-            .map(|panel| panel.local_path.clone())
+            .map(|panel| panel.local.path.clone())
         else {
             return;
         };
@@ -143,7 +144,7 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.status = Some(format!(
+            panel.set_status(format!(
                 "已在系统文件管理器中打开: {}",
                 local_path.display()
             ));

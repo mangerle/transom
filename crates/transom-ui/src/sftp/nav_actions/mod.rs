@@ -28,8 +28,8 @@ impl AppShell {
             return;
         };
         if let Some(panel) = tab.sftp_mut() {
-            panel.loading = true;
-            panel.error = None;
+            panel.remote.loading = true;
+            panel.clear_error();
         }
         self.send_command(SftpCommand::Sftp {
             tab_id,
@@ -54,12 +54,12 @@ impl AppShell {
         };
         let op_id = TransferId::new();
         if let Some(panel) = tab.sftp_mut() {
-            panel.active_op = Some(op_id);
-            if panel.active_transfers.is_empty() {
-                panel.progress = None;
+            panel.queue.active_op = Some(op_id);
+            if panel.queue.active_transfers.is_empty() {
+                panel.queue.progress = None;
             }
-            panel.status = None;
-            panel.error = None;
+            panel.clear_status();
+            panel.clear_error();
         }
         self.send_command(SftpCommand::Sftp {
             tab_id,
@@ -77,7 +77,7 @@ impl AppShell {
             .iter()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp())
-            .map(|panel| panel.path.clone())
+            .map(|panel| panel.remote.path.clone())
         else {
             return;
         };
@@ -109,7 +109,8 @@ impl AppShell {
                     return None;
                 }
                 panel
-                    .local_entries
+                    .local
+                    .entries
                     .iter()
                     .find(|e| e.is_dir && e.name == child_name)
                     .map(|e| e.path.clone())
@@ -143,9 +144,9 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| {
-                let remote_parent = parent_remote(&panel.path);
+                let remote_parent = parent_remote(&panel.remote.path);
                 let local_parent = if panel.sync_navigation {
-                    panel.local_path.parent().map(|p| p.to_path_buf())
+                    panel.local.path.parent().map(|p| p.to_path_buf())
                 } else {
                     None
                 };
@@ -167,7 +168,7 @@ impl AppShell {
             .iter()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp())
-            .map(|panel| panel.path_input.read(cx).value().trim().to_string())
+            .map(|panel| panel.remote.path_input.read(cx).value().trim().to_string())
         else {
             return;
         };
@@ -190,9 +191,9 @@ impl AppShell {
             .and_then(|t| t.sftp_mut())
         {
             panel.show_filter = !panel.show_filter;
-            let remote_filter = panel.remote_filter_input.clone();
-            let local_filter = panel.local_filter_input.clone();
-            let local_only = panel.local_only;
+            let remote_filter = panel.remote.filter_input.clone();
+            let local_filter = panel.local.filter_input.clone();
+            let local_only = panel.local.only;
             if panel.show_filter {
                 let target = if local_only {
                     local_filter.clone()
@@ -234,7 +235,7 @@ impl AppShell {
             .and_then(|t| t.sftp_mut())
         {
             panel.show_hidden = !panel.show_hidden;
-            panel.status = Some(if panel.show_hidden {
+            panel.set_status(if panel.show_hidden {
                 "已显示隐藏文件".to_string()
             } else {
                 "已隐藏点号文件".to_string()
@@ -266,13 +267,13 @@ impl AppShell {
         let Some(panel) = tab.sftp_mut() else {
             return;
         };
-        if panel.local_only {
+        if panel.local.only {
             return;
         }
         if let Some(candidate) = extract_candidate_path(title)
-            && candidate != panel.path
+            && candidate != panel.remote.path
         {
-            panel.path = candidate.clone();
+            panel.remote.path = candidate.clone();
             panel.clear_remote_selection();
             self.request_sftp_list(tab_id, candidate, cx);
             cx.notify();
@@ -292,8 +293,8 @@ impl AppShell {
             .find(|t| t.id == tab_id)
             .and_then(|t| t.sftp_mut())
         {
-            panel.drag_start_y = Some(start_y);
-            panel.drag_start_height = panel.queue_height;
+            panel.queue.drag_start_y = Some(start_y);
+            panel.queue.drag_start_height = panel.queue.height;
             cx.notify();
         }
     }
@@ -310,11 +311,11 @@ impl AppShell {
             .iter_mut()
             .find(|t| t.id == tab_id)
             .and_then(|t| t.sftp_mut())
-            && let Some(start_y) = panel.drag_start_y
+            && let Some(start_y) = panel.queue.drag_start_y
         {
             let delta = start_y - current_y;
-            let new_height = (panel.drag_start_height + delta).clamp(80.0, 480.0);
-            panel.queue_height = new_height;
+            let new_height = (panel.queue.drag_start_height + delta).clamp(80.0, 480.0);
+            panel.queue.height = new_height;
             cx.notify();
         }
     }
@@ -326,9 +327,9 @@ impl AppShell {
             .iter_mut()
             .find(|t| t.id == tab_id)
             .and_then(|t| t.sftp_mut())
-            && panel.drag_start_y.is_some()
+            && panel.queue.drag_start_y.is_some()
         {
-            panel.drag_start_y = None;
+            panel.queue.drag_start_y = None;
             cx.notify();
         }
     }

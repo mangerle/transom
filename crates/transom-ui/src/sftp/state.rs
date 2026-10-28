@@ -81,6 +81,71 @@ pub(crate) struct SftpInputModalState {
 }
 
 /// SFTP 双栏中的活动栏位与主面板状态。
+/// 远端栏（主栏）的导航、条目与选择状态。
+pub(crate) struct SftpRemotePaneState {
+    pub(crate) path: String,
+    pub(crate) path_input: Entity<InputState>,
+    pub(crate) name_input: Entity<InputState>,
+    pub(crate) filter_input: Entity<InputState>,
+    pub(crate) entries: Vec<RemoteFile>,
+    pub(crate) selected: Option<String>,
+    /// 多选集合；`selected` 始终指向其中最近操作的主项。
+    pub(crate) selection: BTreeSet<String>,
+    /// Shift 连选的锚点路径。
+    pub(crate) anchor: Option<String>,
+    pub(crate) scroll_handle: VirtualListScrollHandle,
+    /// 是否折叠为竖条。
+    pub(crate) collapsed: bool,
+    pub(crate) loading: bool,
+}
+
+/// 本地栏的导航、条目与选择状态。
+pub(crate) struct SftpLocalPaneState {
+    pub(crate) path: PathBuf,
+    pub(crate) path_input: Entity<InputState>,
+    pub(crate) filter_input: Entity<InputState>,
+    pub(crate) entries: Vec<LocalFileEntry>,
+    /// 打开面板时解析一次的常用目录，避免逐帧读取 XDG 配置。
+    pub(crate) quick_paths: LocalQuickPaths,
+    /// 本地终端专用：只渲染本地栏，不包含远端、队列与上传入口。
+    pub(crate) only: bool,
+    /// 是否折叠为竖条。
+    pub(crate) collapsed: bool,
+    pub(crate) selected: Option<PathBuf>,
+    /// 多选集合；`selected` 始终指向其中最近操作的主项。
+    pub(crate) selection: BTreeSet<PathBuf>,
+    /// Shift 连选的锚点路径。
+    pub(crate) anchor: Option<PathBuf>,
+    pub(crate) error: Option<String>,
+    pub(crate) scroll_handle: VirtualListScrollHandle,
+}
+
+/// 传输队列与运行态：任务集合、并发控制、进度与瞬时消息。
+pub(crate) struct SftpQueueState {
+    pub(crate) tasks: Vec<TransferTask>,
+    /// 当前正在由队列执行的任务集合，支持并行传输。
+    pub(crate) active_transfers: HashSet<TransferId>,
+    pub(crate) active_op: Option<TransferId>,
+    pub(crate) progress: Option<(u64, Option<u64>)>,
+    pub(crate) resume_enabled: bool,
+    pub(crate) expanded: bool,
+    pub(crate) height: f32,
+    pub(crate) drag_start_y: Option<f32>,
+    pub(crate) drag_start_height: f32,
+    pub(crate) status: Option<String>,
+    pub(crate) error: Option<String>,
+    /// 瞬时状态消息的过期任务；替换消息时旧任务被取消。
+    pub(super) status_task: Option<Task<()>>,
+    /// 终端右下角上传浮层的状态（面板未展开时用它承接进度可见性）。
+    pub(crate) drop_overlay: DropOverlayState,
+}
+
+/// SFTP 双栏面板状态：远端栏、本地栏与传输队列三块内聚子状态，
+/// 外加并排远端、剪贴板与面板级交互标记。
+///
+/// 设计原理（Why）：此前 47 个字段平铺在同一个结构体里，路径、选择、队列
+/// 与展开状态互相穿插，任何模块都能直接改写任意字段；按"远端栏 / 本地栏 /
+/// 传输队列"分组后，字段归属一眼可见，读写落在各自的子结构上。
 pub(crate) struct SftpPanelState {
     /// 面板列是否展开显示。
     ///
@@ -89,38 +154,9 @@ pub(crate) struct SftpPanelState {
     /// 因此建出状态、把进度改由终端右下角浮层呈现。凡是决定"要不要渲染面板列/
     /// 活动栏是否高亮"的地方一律读本字段，而不是读 `Option` 本身。
     pub(crate) open: bool,
-    /// 终端右下角上传浮层的状态（面板未展开时用它承接进度可见性）。
-    pub(crate) overlay: DropOverlayState,
-    pub(crate) path: String,
-    pub(crate) path_input: Entity<InputState>,
-    pub(crate) name_input: Entity<InputState>,
-    pub(crate) remote_filter_input: Entity<InputState>,
-    pub(crate) entries: Vec<RemoteFile>,
-    pub(crate) selected: Option<String>,
-    /// 远端栏多选集合；`selected` 始终指向其中最近操作的主项。
-    pub(crate) remote_selection: BTreeSet<String>,
-    /// 远端 Shift 连选的锚点路径。
-    pub(crate) remote_anchor: Option<String>,
-    pub(crate) local_path: PathBuf,
-    pub(crate) local_path_input: Entity<InputState>,
-    pub(crate) local_filter_input: Entity<InputState>,
-    pub(crate) local_entries: Vec<LocalFileEntry>,
-    /// 打开面板时解析一次的常用目录，避免逐帧读取 XDG 配置。
-    pub(crate) local_quick_paths: LocalQuickPaths,
-    /// 本地终端专用：只渲染本地栏，不包含远端、队列与上传入口。
-    pub(crate) local_only: bool,
-    /// 本地栏是否折叠为竖条。
-    pub(crate) local_collapsed: bool,
-    /// 主远端栏是否折叠为竖条。
-    pub(crate) remote_collapsed: bool,
-    pub(crate) local_selected: Option<PathBuf>,
-    /// 本地栏多选集合；`local_selected` 始终指向其中最近操作的主项。
-    pub(crate) local_selection: BTreeSet<PathBuf>,
-    /// Shift 连选的锚点路径。
-    pub(crate) local_anchor: Option<PathBuf>,
-    pub(crate) local_error: Option<String>,
-    pub(crate) local_scroll_handle: VirtualListScrollHandle,
-    pub(crate) remote_scroll_handle: VirtualListScrollHandle,
+    pub(crate) remote: SftpRemotePaneState,
+    pub(crate) local: SftpLocalPaneState,
+    pub(crate) queue: SftpQueueState,
     /// 并列挂载的其他远端文件会话列表。
     pub(crate) side_remotes: Vec<SftpSideRemoteState>,
     /// 跨列文件剪贴板（Ctrl+C / Ctrl+V）。
@@ -131,25 +167,42 @@ pub(crate) struct SftpPanelState {
     pub(crate) show_hidden: bool,
     pub(crate) sync_navigation: bool,
     pub(crate) active_pane: SftpActivePane,
-    pub(crate) queue: Vec<TransferTask>,
-    pub(crate) resume_enabled: bool,
-    pub(crate) queue_expanded: bool,
-    pub(crate) queue_height: f32,
-    pub(crate) drag_start_y: Option<f32>,
-    pub(crate) drag_start_height: f32,
     pub(crate) focus_handle: FocusHandle,
-    pub(crate) active_op: Option<TransferId>,
-    /// 当前正在由队列执行的任务集合，支持并行传输。
-    pub(crate) active_transfers: HashSet<TransferId>,
-    pub(crate) progress: Option<(u64, Option<u64>)>,
-    pub(crate) status: Option<String>,
-    pub(crate) error: Option<String>,
-    pub(crate) loading: bool,
-    /// 瞬时状态消息的过期任务；替换消息时旧任务被取消。
-    pub(super) status_task: Option<Task<()>>,
     /// 当前悬停预览；同一时刻只保留一个目标，切换目标或离开行时整体释放。
     pub(crate) hover_preview: Option<SftpPreviewState>,
     pub(crate) _subscriptions: Vec<Subscription>,
+}
+
+impl SftpPanelState {
+    /// 设置面板级状态消息；后续消息会整体替换，不做自动过期。
+    pub(crate) fn set_status(&mut self, message: impl Into<String>) {
+        self.queue.status = Some(message.into());
+    }
+
+    /// 清除面板级状态消息。
+    pub(crate) fn clear_status(&mut self) {
+        self.queue.status = None;
+    }
+
+    /// 设置面板级错误消息；由错误浮层展示，成功路径负责清除。
+    pub(crate) fn set_error(&mut self, message: impl Into<String>) {
+        self.queue.error = Some(message.into());
+    }
+
+    /// 清除面板级错误消息。
+    pub(crate) fn clear_error(&mut self) {
+        self.queue.error = None;
+    }
+
+    /// 设置本地栏错误消息（本地文件系统操作专用）。
+    pub(crate) fn set_local_error(&mut self, message: impl Into<String>) {
+        self.local.error = Some(message.into());
+    }
+
+    /// 清除本地栏错误消息。
+    pub(crate) fn clear_local_error(&mut self) {
+        self.local.error = None;
+    }
 }
 
 impl SftpPanelState {
@@ -159,31 +212,31 @@ impl SftpPanelState {
     /// `selected` 字段，右键操作另一栏后会残留旧活动栏，导致快捷键删错栏位；
     /// 统一经本方法赋值可从机制上杜绝该失配。
     pub(crate) fn select_remote(&mut self, path: String) {
-        self.selected = Some(path.clone());
-        self.remote_anchor = Some(path.clone());
-        self.remote_selection.clear();
-        self.remote_selection.insert(path);
+        self.remote.selected = Some(path.clone());
+        self.remote.anchor = Some(path.clone());
+        self.remote.selection.clear();
+        self.remote.selection.insert(path);
         self.active_pane = SftpActivePane::Remote;
     }
 
     /// 设置远端主项但保留已有多选集合，供右键菜单定位单项操作。
     pub(crate) fn set_remote_primary(&mut self, path: String) {
-        self.selected = Some(path.clone());
-        self.remote_selection.insert(path);
+        self.remote.selected = Some(path.clone());
+        self.remote.selection.insert(path);
         self.active_pane = SftpActivePane::Remote;
     }
 
     /// Ctrl/Cmd 点击切换远端条目的选中状态。
     pub(crate) fn toggle_remote_selection(&mut self, path: String) {
-        if self.remote_selection.remove(&path) {
-            if self.selected.as_deref() == Some(path.as_str()) {
-                self.selected = self.remote_selection.iter().next_back().cloned();
+        if self.remote.selection.remove(&path) {
+            if self.remote.selected.as_deref() == Some(path.as_str()) {
+                self.remote.selected = self.remote.selection.iter().next_back().cloned();
             }
         } else {
-            self.remote_selection.insert(path.clone());
-            self.selected = Some(path.clone());
+            self.remote.selection.insert(path.clone());
+            self.remote.selected = Some(path.clone());
         }
-        self.remote_anchor = Some(path);
+        self.remote.anchor = Some(path);
         self.active_pane = SftpActivePane::Remote;
     }
 
@@ -193,77 +246,79 @@ impl SftpPanelState {
         paths: impl IntoIterator<Item = String>,
         primary: String,
     ) {
-        self.remote_selection = paths.into_iter().collect();
-        self.remote_selection.insert(primary.clone());
-        self.selected = Some(primary);
+        self.remote.selection = paths.into_iter().collect();
+        self.remote.selection.insert(primary.clone());
+        self.remote.selected = Some(primary);
         self.active_pane = SftpActivePane::Remote;
     }
 
     /// 返回当前需要批量操作的远端路径；无多选时退化为单选主项。
     pub(crate) fn selected_remote_paths(&self) -> Vec<String> {
-        if self.remote_selection.is_empty() {
-            self.selected.iter().cloned().collect()
+        if self.remote.selection.is_empty() {
+            self.remote.selected.iter().cloned().collect()
         } else {
-            self.remote_selection.iter().cloned().collect()
+            self.remote.selection.iter().cloned().collect()
         }
     }
 
     pub(crate) fn clear_remote_selection(&mut self) {
-        self.selected = None;
-        self.remote_selection.clear();
-        self.remote_anchor = None;
+        self.remote.selected = None;
+        self.remote.selection.clear();
+        self.remote.anchor = None;
     }
 
     /// 刷新远端列表后剔除已不存在的选中项，并修正主项与锚点。
     pub(crate) fn sync_remote_selection(&mut self, valid: &BTreeSet<String>) {
-        self.remote_selection.retain(|path| valid.contains(path));
+        self.remote.selection.retain(|path| valid.contains(path));
         if self
+            .remote
             .selected
             .as_ref()
             .is_some_and(|path| !valid.contains(path))
         {
-            self.selected = self.remote_selection.iter().next_back().cloned();
+            self.remote.selected = self.remote.selection.iter().next_back().cloned();
         }
         if self
-            .remote_anchor
+            .remote
+            .anchor
             .as_ref()
             .is_some_and(|path| !valid.contains(path))
         {
-            self.remote_anchor = self.selected.clone();
+            self.remote.anchor = self.remote.selected.clone();
         }
-        if self.remote_selection.is_empty() {
-            self.selected = None;
-            self.remote_anchor = None;
+        if self.remote.selection.is_empty() {
+            self.remote.selected = None;
+            self.remote.anchor = None;
         }
     }
 
     /// 单选一个本地条目，同时清空多选集合并重置 Shift 锚点。
     pub(crate) fn select_local(&mut self, path: PathBuf) {
-        self.local_selected = Some(path.clone());
-        self.local_anchor = Some(path.clone());
-        self.local_selection.clear();
-        self.local_selection.insert(path);
+        self.local.selected = Some(path.clone());
+        self.local.anchor = Some(path.clone());
+        self.local.selection.clear();
+        self.local.selection.insert(path);
         self.active_pane = SftpActivePane::Local;
     }
 
     /// 设置本地主项但保留已有多选集合，供右键菜单定位单项操作。
     pub(crate) fn set_local_primary(&mut self, path: PathBuf) {
-        self.local_selected = Some(path.clone());
-        self.local_selection.insert(path);
+        self.local.selected = Some(path.clone());
+        self.local.selection.insert(path);
         self.active_pane = SftpActivePane::Local;
     }
 
     /// Ctrl/Cmd 点击切换单个条目的选中状态。
     pub(crate) fn toggle_local_selection(&mut self, path: PathBuf) {
-        if self.local_selection.remove(&path) {
-            if self.local_selected.as_ref() == Some(&path) {
-                self.local_selected = self.local_selection.iter().next_back().cloned();
+        if self.local.selection.remove(&path) {
+            if self.local.selected.as_ref() == Some(&path) {
+                self.local.selected = self.local.selection.iter().next_back().cloned();
             }
         } else {
-            self.local_selection.insert(path.clone());
-            self.local_selected = Some(path.clone());
+            self.local.selection.insert(path.clone());
+            self.local.selected = Some(path.clone());
         }
-        self.local_anchor = Some(path);
+        self.local.anchor = Some(path);
         self.active_pane = SftpActivePane::Local;
     }
 
@@ -273,61 +328,63 @@ impl SftpPanelState {
         paths: impl IntoIterator<Item = PathBuf>,
         primary: PathBuf,
     ) {
-        self.local_selection = paths.into_iter().collect();
-        self.local_selection.insert(primary.clone());
-        self.local_selected = Some(primary);
+        self.local.selection = paths.into_iter().collect();
+        self.local.selection.insert(primary.clone());
+        self.local.selected = Some(primary);
         self.active_pane = SftpActivePane::Local;
     }
 
     /// 返回当前需要批量操作的本地路径；无多选时退化为单选主项。
     pub(crate) fn selected_local_paths(&self) -> Vec<PathBuf> {
-        if self.local_selection.is_empty() {
-            self.local_selected.iter().cloned().collect()
+        if self.local.selection.is_empty() {
+            self.local.selected.iter().cloned().collect()
         } else {
-            self.local_selection.iter().cloned().collect()
+            self.local.selection.iter().cloned().collect()
         }
     }
 
     pub(crate) fn clear_local_selection(&mut self) {
-        self.local_selected = None;
-        self.local_selection.clear();
-        self.local_anchor = None;
+        self.local.selected = None;
+        self.local.selection.clear();
+        self.local.anchor = None;
     }
 
     /// 刷新目录后剔除已不存在的选中项，并修正主项与锚点。
     pub(crate) fn sync_local_selection(&mut self, valid: &BTreeSet<PathBuf>) {
-        self.local_selection.retain(|path| valid.contains(path));
+        self.local.selection.retain(|path| valid.contains(path));
         if self
-            .local_selected
+            .local
+            .selected
             .as_ref()
             .is_some_and(|path| !valid.contains(path))
         {
-            self.local_selected = self.local_selection.iter().next_back().cloned();
+            self.local.selected = self.local.selection.iter().next_back().cloned();
         }
         if self
-            .local_anchor
+            .local
+            .anchor
             .as_ref()
             .is_some_and(|path| !valid.contains(path))
         {
-            self.local_anchor = self.local_selected.clone();
+            self.local.anchor = self.local.selected.clone();
         }
-        if self.local_selection.is_empty() {
-            self.local_selected = None;
-            self.local_anchor = None;
+        if self.local.selection.is_empty() {
+            self.local.selected = None;
+            self.local.anchor = None;
         }
     }
 
     /// 汇总所有活动任务的字节进度；无活动任务时清空进度。
     pub(crate) fn recompute_progress(&mut self) {
-        if self.active_transfers.is_empty() {
-            self.progress = None;
+        if self.queue.active_transfers.is_empty() {
+            self.queue.progress = None;
             return;
         }
         let mut transferred = 0u64;
         let mut total = 0u64;
         let mut total_known = true;
-        for task in &self.queue {
-            if !self.active_transfers.contains(&task.id) {
+        for task in &self.queue.tasks {
+            if !self.queue.active_transfers.contains(&task.id) {
                 continue;
             }
             transferred = transferred.saturating_add(task.transferred);
@@ -336,15 +393,15 @@ impl SftpPanelState {
                 None => total_known = false,
             }
         }
-        self.progress = Some((transferred, total_known.then_some(total)));
+        self.queue.progress = Some((transferred, total_known.then_some(total)));
     }
 
     /// 是否所有文件列均已处于折叠收起状态。
     pub(crate) fn is_all_collapsed(&self) -> bool {
-        if !self.local_collapsed {
+        if !self.local.collapsed {
             return false;
         }
-        if !self.local_only && !self.remote_collapsed {
+        if !self.local.only && !self.remote.collapsed {
             return false;
         }
         if self.side_remotes.iter().any(|s| !s.collapsed) {
@@ -356,10 +413,10 @@ impl SftpPanelState {
     /// 统计当前折叠为竖条的列数（用于全收起时动态计算紧凑侧边栏宽度）。
     pub(crate) fn collapsed_columns_count(&self) -> usize {
         let mut count = 0;
-        if self.local_collapsed {
+        if self.local.collapsed {
             count += 1;
         }
-        if !self.local_only && self.remote_collapsed {
+        if !self.local.only && self.remote.collapsed {
             count += 1;
         }
         count += self.side_remotes.iter().filter(|s| s.collapsed).count();

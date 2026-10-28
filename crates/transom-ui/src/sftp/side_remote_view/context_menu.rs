@@ -94,10 +94,10 @@ pub(super) fn build_side_remote_context_menu(
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
                             let local_target =
-                                match transom_core::safe_local_join(&panel.local_path, &name_tr) {
+                                match transom_core::safe_local_join(&panel.local.path, &name_tr) {
                                     Ok(path) => path,
                                     Err(_) => {
-                                        panel.error =
+                                        panel.queue.error =
                                             Some(rust_i18n::t!("sftp.invalid_name").to_string());
                                         cx.notify();
                                         return;
@@ -129,7 +129,9 @@ pub(super) fn build_side_remote_context_menu(
                             .iter()
                             .find(|t| t.id == tab_id)
                             .and_then(|t| t.connection_id);
-                        let main_path = this.sftp_panel_mut_tab(tab_id).map(|p| p.path.clone());
+                        let main_path = this
+                            .sftp_panel_mut_tab(tab_id)
+                            .map(|p| p.remote.path.clone());
                         if let (Some(target_conn), Some(target_dir)) = (main_conn, main_path) {
                             let target_file =
                                 format!("{}/{}", target_dir.trim_end_matches('/'), name_tr);
@@ -162,7 +164,7 @@ pub(super) fn build_side_remote_context_menu(
                                 source: SftpClipboardSource::Remote(connection_id),
                                 paths: vec![path_tr.clone()],
                             });
-                            panel.status = Some(format!("已复制条目: {path_tr}"));
+                            panel.set_status(format!("已复制条目: {path_tr}"));
                             cx.notify();
                         }
                     });
@@ -178,7 +180,7 @@ pub(super) fn build_side_remote_context_menu(
                     cx.write_to_clipboard(ClipboardItem::new_string(path_cp.clone()));
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
-                            panel.status = Some(format!("已复制远端路径: {path_cp}"));
+                            panel.set_status(format!("已复制远端路径: {path_cp}"));
                             cx.notify();
                         }
                     });

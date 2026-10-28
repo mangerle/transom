@@ -42,7 +42,7 @@ impl AppShell {
                     .find(|t| t.id == tab_id)
                     .and_then(|t| t.sftp_mut())
                 {
-                    panel.local_error = Some(format!("读取本地文件属性失败: {err}"));
+                    panel.set_local_error(format!("读取本地文件属性失败: {err}"));
                 }
             }
         }

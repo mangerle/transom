@@ -45,7 +45,7 @@ impl AppShell {
             .iter()
             .any(|s| s.connection_id == connection_id)
         {
-            panel.status = Some(format!("该远端会话已挂载: {title}"));
+            panel.set_status(format!("该远端会话已挂载: {title}"));
             cx.notify();
             return;
         }
@@ -94,7 +94,7 @@ impl AppShell {
     /// 切换本地列的展开与折叠。
     pub(crate) fn sftp_toggle_local_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
-            panel.local_collapsed = !panel.local_collapsed;
+            panel.local.collapsed = !panel.local.collapsed;
             cx.notify();
         }
     }
@@ -102,7 +102,7 @@ impl AppShell {
     /// 切换主远端列的展开与折叠。
     pub(crate) fn sftp_toggle_remote_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
-            panel.remote_collapsed = !panel.remote_collapsed;
+            panel.remote.collapsed = !panel.remote.collapsed;
             cx.notify();
         }
     }
@@ -127,8 +127,8 @@ impl AppShell {
             None,
             params.is_dir,
         );
-        panel.queue.push(task);
-        panel.status = Some(format!("已添加跨远端传输任务: {src_path} → {tgt_path}"));
+        panel.queue.tasks.push(task);
+        panel.set_status(format!("已添加跨远端传输任务: {src_path} → {tgt_path}"));
         self.process_sftp_queue(tab_id, cx);
         cx.notify();
     }
@@ -157,7 +157,7 @@ impl AppShell {
         let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
             return;
         };
-        let mode = if panel.resume_enabled {
+        let mode = if panel.queue.resume_enabled {
             TransferMode::Resume
         } else {
             TransferMode::Overwrite
@@ -171,8 +171,8 @@ impl AppShell {
         );
         task.source_connection_id = source_connection_id;
         task.verify = verify;
-        panel.queue.push(task);
-        panel.status = Some(format!("已加入下载: {remote_path}"));
+        panel.queue.tasks.push(task);
+        panel.set_status(format!("已加入下载: {remote_path}"));
         self.process_sftp_queue(tab_id, cx);
         cx.notify();
     }
@@ -189,7 +189,7 @@ impl AppShell {
         let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
             return;
         };
-        let mode = if panel.resume_enabled {
+        let mode = if panel.queue.resume_enabled {
             TransferMode::Resume
         } else {
             TransferMode::Overwrite
@@ -202,8 +202,8 @@ impl AppShell {
             mode,
         );
         task.verify = verify;
-        panel.queue.push(task);
-        panel.status = Some(format!("已加入上传: {}", local_path.display()));
+        panel.queue.tasks.push(task);
+        panel.set_status(format!("已加入上传: {}", local_path.display()));
         self.process_sftp_queue(tab_id, cx);
         cx.notify();
     }

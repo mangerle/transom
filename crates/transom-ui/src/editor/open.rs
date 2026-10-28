@@ -97,7 +97,11 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| {
                 let panel = tab.sftp()?;
-                let entry = panel.entries.iter().find(|item| item.path == remote_path)?;
+                let entry = panel
+                    .remote
+                    .entries
+                    .iter()
+                    .find(|item| item.path == remote_path)?;
                 if entry.is_dir {
                     return Some(EditGate::IsDir);
                 }

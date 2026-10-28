@@ -21,8 +21,8 @@ impl AppShell {
         let Some(connection_id) = tab.connection_id else {
             return;
         };
-        let local_root = panel.local_path.clone();
-        let remote_root = panel.path.clone();
+        let local_root = panel.local.path.clone();
+        let remote_root = panel.remote.path.clone();
         let op_id = TransferId::new();
         self.send_command(SftpCommand::Sftp {
             tab_id,
@@ -139,8 +139,8 @@ impl AppShell {
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.queue.push(task);
-            panel.status = Some(format!(
+            panel.queue.tasks.push(task);
+            panel.set_status(format!(
                 "已加入目录同步任务（上传 {upload_count} 项，下载 {download_count} 项）"
             ));
         }

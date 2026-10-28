@@ -49,7 +49,7 @@ impl Render for AppShell {
             .active_tab
             .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
             .and_then(|tab| tab.sftp());
-        let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local_only);
+        let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);
         let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
         let collapsed_count = sftp_panel
             .map(|panel| panel.collapsed_columns_count())

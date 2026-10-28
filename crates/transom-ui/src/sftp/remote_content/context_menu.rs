@@ -79,7 +79,7 @@ pub(crate) fn build_remote_context_menu(
                             .find(|t| t.id == tab_id)
                             .and_then(|t| t.sftp_mut())
                         {
-                            if panel.remote_selection.contains(&p_dl) {
+                            if panel.remote.selection.contains(&p_dl) {
                                 panel.set_remote_primary(p_dl.clone());
                             } else {
                                 panel.select_remote(p_dl.clone());
@@ -121,7 +121,7 @@ pub(crate) fn build_remote_context_menu(
                             .find(|t| t.id == tab_id)
                             .and_then(|t| t.sftp_mut())
                         {
-                            panel.status = Some(format!("已复制远端路径: {p_cp}"));
+                            panel.set_status(format!("已复制远端路径: {p_cp}"));
                         }
                         cx.notify();
                     });
@@ -225,7 +225,7 @@ pub(crate) fn build_remote_context_menu(
                     .iter_mut()
                     .find(|t| t.id == tab_id)
                     .and_then(|t| t.sftp_mut())
-                    && !panel.remote_selection.contains(&p_del)
+                    && !panel.remote.selection.contains(&p_del)
                 {
                     panel.select_remote(p_del.clone());
                 }

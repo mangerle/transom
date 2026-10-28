@@ -34,7 +34,7 @@ impl AppShell {
             .iter()
             .find(|tab| tab.id == tab_id)
             .and_then(|tab| tab.sftp())
-            .map(|panel| panel.local_path.clone())
+            .map(|panel| panel.local.path.clone())
         else {
             return;
         };
@@ -54,7 +54,7 @@ impl AppShell {
                 else {
                     return;
                 };
-                if panel.local_path != dir {
+                if panel.local.path != dir {
                     // 面板已导航到其他目录，丢弃过期结果
                     return;
                 }
@@ -62,16 +62,16 @@ impl AppShell {
                     Ok(entries) => {
                         let valid_paths: BTreeSet<PathBuf> =
                             entries.iter().map(|entry| entry.path.clone()).collect();
-                        panel.local_entries = entries;
+                        panel.local.entries = entries;
                         if let Some(path) = select_after {
                             panel.select_local(path);
                         } else {
                             panel.sync_local_selection(&valid_paths);
                         }
-                        panel.local_error = None;
+                        panel.clear_local_error();
                     }
                     Err(error) => {
-                        panel.local_error = Some(format!("读取本地目录失败: {error}"));
+                        panel.set_local_error(format!("读取本地目录失败: {error}"));
                     }
                 }
                 cx.notify();
@@ -97,13 +97,13 @@ impl AppShell {
         };
         let paths = panel.selected_local_paths();
         if paths.is_empty() {
-            panel.local_error = Some("请先选择一个本地项目".to_string());
+            panel.set_local_error("请先选择一个本地项目".to_string());
             cx.notify();
             return;
         }
-        panel.local_error = None;
-        panel.status = Some(format!("正在删除 {} 个本地项目...", paths.len()));
-        let dir = panel.local_path.clone();
+        panel.clear_local_error();
+        panel.set_status(format!("正在删除 {} 个本地项目...", paths.len()));
+        let dir = panel.local.path.clone();
         cx.notify();
         cx.spawn(async move |this, cx| {
             let (deleted, failed) = cx
@@ -126,18 +126,18 @@ impl AppShell {
                     return;
                 };
                 if failed > 0 {
-                    panel.local_error =
+                    panel.local.error =
                         Some(format!("已删除 {deleted} 个本地项目，{failed} 个删除失败"));
                 } else {
-                    panel.status = Some(format!("已删除 {deleted} 个本地项目"));
+                    panel.set_status(format!("已删除 {deleted} 个本地项目"));
                 }
                 // 删除期间用户可能已导航到其他目录：只在目录未变时回填刷新
-                if panel.local_path == dir
+                if panel.local.path == dir
                     && let Ok(entries) = entries
                 {
                     let valid_paths: BTreeSet<PathBuf> =
                         entries.iter().map(|entry| entry.path.clone()).collect();
-                    panel.local_entries = entries;
+                    panel.local.entries = entries;
                     panel.sync_local_selection(&valid_paths);
                 }
                 cx.notify();

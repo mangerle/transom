@@ -172,7 +172,7 @@ impl AppShell {
                                             .iter()
                                             .find(|t| t.id == tab_id)
                                             .and_then(|t| t.sftp())
-                                            .and_then(|p| p.selected.clone());
+                                            .and_then(|p| p.remote.selected.clone());
                                         if let Some(remote_path) = selected {
                                             this.sftp_edit_remote_file(
                                                 tab_id,
@@ -243,7 +243,7 @@ impl AppShell {
                                             .and_then(|t| t.sftp_mut())
                                         {
                                             panel.sync_navigation = !panel.sync_navigation;
-                                            panel.status = Some(
+                                            panel.set_status(
                                                 if panel.sync_navigation {
                                                     "已开启双栏同步导航联动"
                                                 } else {

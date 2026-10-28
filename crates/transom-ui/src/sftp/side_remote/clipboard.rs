@@ -23,13 +23,14 @@ impl AppShell {
         let active_pane = panel.active_pane;
         match active_pane {
             SftpActivePane::Local => {
-                let paths: Vec<String> = if !panel.local_selection.is_empty() {
+                let paths: Vec<String> = if !panel.local.selection.is_empty() {
                     panel
-                        .local_selection
+                        .local
+                        .selection
                         .iter()
                         .map(|p| p.to_string_lossy().to_string())
                         .collect()
-                } else if let Some(sel) = &panel.local_selected {
+                } else if let Some(sel) = &panel.local.selected {
                     vec![sel.to_string_lossy().to_string()]
                 } else {
                     Vec::new()
@@ -40,7 +41,7 @@ impl AppShell {
                         source: SftpClipboardSource::Local,
                         paths,
                     });
-                    panel.status = Some(format!("已复制本地 {count} 个条目，可粘贴至远端"));
+                    panel.set_status(format!("已复制本地 {count} 个条目，可粘贴至远端"));
                     cx.notify();
                 }
             }
@@ -48,9 +49,9 @@ impl AppShell {
                 let Some(conn_id) = main_conn_id else {
                     return;
                 };
-                let paths: Vec<String> = if !panel.remote_selection.is_empty() {
-                    panel.remote_selection.iter().cloned().collect()
-                } else if let Some(sel) = &panel.selected {
+                let paths: Vec<String> = if !panel.remote.selection.is_empty() {
+                    panel.remote.selection.iter().cloned().collect()
+                } else if let Some(sel) = &panel.remote.selected {
                     vec![sel.clone()]
                 } else {
                     Vec::new()
@@ -61,7 +62,7 @@ impl AppShell {
                         source: SftpClipboardSource::Remote(conn_id),
                         paths,
                     });
-                    panel.status = Some(format!(
+                    panel.set_status(format!(
                         "已复制主远端 {count} 个条目，可粘贴至本地或其他远端"
                     ));
                     cx.notify();
@@ -83,7 +84,7 @@ impl AppShell {
                             source: SftpClipboardSource::Remote(conn_id),
                             paths,
                         });
-                        panel.status = Some(format!(
+                        panel.set_status(format!(
                             "已复制并列远端 {count} 个条目，可粘贴至本地或其他远端"
                         ));
                         cx.notify();
@@ -120,7 +121,7 @@ impl AppShell {
                     }
                     SftpClipboardSource::Remote(_conn_id) => {
                         // 从远端下载至本地当前目录
-                        let local_dir = panel.local_path.clone();
+                        let local_dir = panel.local.path.clone();
                         for path in clip.paths {
                             let file_name = path.rsplit('/').next().unwrap_or(&path);
                             let target_path = local_dir.join(file_name);
@@ -133,7 +134,7 @@ impl AppShell {
                 let Some(target_conn) = tab_conn_id else {
                     return;
                 };
-                let remote_dir = panel.path.clone();
+                let remote_dir = panel.remote.path.clone();
                 match clip.source {
                     SftpClipboardSource::Local => {
                         // 从本地上传至主远端
