@@ -41,7 +41,7 @@ pub(crate) async fn run_process_sample(target: ProcessTarget) {
     };
     let event: AppEvent = match result {
         Ok(output) => {
-            let processes = transom_core::system_stats::parse_processes(&output);
+            let processes = transom_net::system_stats::parse_processes(&output);
             HostAppEvent::ProcessesSampled {
                 tab_id: target.tab_id,
                 connection_id: target.connection_id,

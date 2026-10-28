@@ -1,8 +1,7 @@
 //! 系统指标输出解析函数（CPU、内存、磁盘、系统启动时间与网卡速率）。
 
-use super::types::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo};
-use crate::commands::SystemStats;
 use std::time::{Duration, Instant};
+use transom_core::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo, SystemStats};
 
 /// 跨采样轮次的累计状态：CPU 总量、每个核心与网卡累计字节。
 ///

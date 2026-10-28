@@ -105,7 +105,7 @@ pub use sync::{
     CloudSyncTarget, GitSyncResult, GitSyncSettings, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME,
     SyncEndpoint, SyncPushReport, SyncSettings, is_sync_conflict,
 };
-pub use system_stats::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo, StatsSamplerState};
+pub use system_stats::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo};
 pub use terminal::{
     FOLLOW_UI_THEME, RightClickBehavior, TerminalControl, TerminalControlHandle,
     TerminalCursorShape, TerminalInteraction, TerminalIo, TerminalKeyBinding, TerminalPalette,

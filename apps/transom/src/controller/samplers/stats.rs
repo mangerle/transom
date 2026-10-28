@@ -4,8 +4,8 @@ use super::common::send_overwritable;
 use std::sync::Arc;
 use tokio::process::Command;
 use transom_core::system_stats::FilesystemUsage;
-use transom_core::{AppEvent, ConnectionId, HostAppEvent, StatsSamplerState, TabId};
-use transom_net::SshRemote;
+use transom_core::{AppEvent, ConnectionId, HostAppEvent, TabId};
+use transom_net::{SshRemote, StatsSamplerState};
 
 /// 最近一次 df 结果的缓存形态：(已用字节, 总字节, 挂载点明细)。
 pub(crate) type CachedDisk = (u64, u64, Vec<FilesystemUsage>);
