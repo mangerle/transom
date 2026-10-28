@@ -217,7 +217,7 @@ impl AppShell {
                     .await;
                 let _ = this.update(cx, |this, cx| {
                     if let Some(error) = error {
-                        this.error = Some(localized_error(&error));
+                        this.set_error(localized_error(&error));
                     }
                     cx.notify();
                 });
@@ -235,7 +235,7 @@ impl AppShell {
             .map(|identity| identity.name.clone())
             .unwrap_or_default();
         if let Err(error) = self.catalog.delete_identity(id) {
-            self.error = Some(
+            self.set_error(
                 AppError::with_detail(ErrorCode::Configuration, error.to_string()).to_string(),
             );
             cx.notify();
@@ -271,7 +271,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
-                    this.error = Some(localized_error(&error));
+                    this.set_error(localized_error(&error));
                 }
                 cx.notify();
             });

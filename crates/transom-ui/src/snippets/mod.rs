@@ -67,7 +67,7 @@ impl AppShell {
     ) {
         let Some(terminal) = self.active_pane_terminal() else {
             // 徽标在场时状态文字没有显示位置，这里改用错误通知，避免点了没反应。
-            self.error = Some(rust_i18n::t!("snippets.no_terminal").to_string());
+            self.set_error(rust_i18n::t!("snippets.no_terminal").to_string());
             cx.notify();
             return;
         };
@@ -78,7 +78,7 @@ impl AppShell {
         };
         let sent = terminal.update(cx, |view, cx| view.send_text(&text, cx));
         if !sent {
-            self.error = Some(rust_i18n::t!("snippets.send_failed").to_string());
+            self.set_error(rust_i18n::t!("snippets.send_failed").to_string());
         } else if !execute {
             self.status = Some(rust_i18n::t!("snippets.filled").to_string());
         }
@@ -96,7 +96,7 @@ impl AppShell {
         existing: Option<Snippet>,
     ) {
         if existing.is_none() && self.settings.snippets.items.len() >= SNIPPET_MAX_ITEMS {
-            self.error = Some(rust_i18n::t!("snippets.too_many").to_string());
+            self.set_error(rust_i18n::t!("snippets.too_many").to_string());
             cx.notify();
             return;
         }

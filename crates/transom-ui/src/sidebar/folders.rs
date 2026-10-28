@@ -225,7 +225,7 @@ impl AppShell {
                 self.persist_catalog();
                 self.status = Some(rust_i18n::t!("folder.deleted", name = name).to_string());
             }
-            Err(error) => self.error = Some(error.to_string()),
+            Err(error) => self.set_error(error.to_string()),
         }
         cx.notify();
     }

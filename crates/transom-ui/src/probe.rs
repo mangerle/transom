@@ -100,7 +100,7 @@ impl AppShell {
                 "批量拨测没有可探测的网络主机，请求会话数: {}",
                 requested.len()
             );
-            self.error = Some(rust_i18n::t!("probe.no_target").to_string());
+            self.set_error(rust_i18n::t!("probe.no_target").to_string());
             cx.notify();
             return;
         }

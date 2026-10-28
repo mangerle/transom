@@ -209,11 +209,14 @@ impl Render for AppShell {
             };
             self.render_status_bar(&p, cx, divider_x)
         });
-        // 错误横幅已移除：统一转成应用内通知。设置与触发点仍写 self.error，
-        // 这里取走并延迟到绘制结束后推送，避免在渲染期间修改通知层。
-        if let Some(message) = self.error.take() {
+        // 错误在写入时入队（见 AppShell::set_error），这里统一转成应用内通知。
+        // 延迟到绘制结束后推送，避免在渲染期间修改通知层。
+        let pending_errors = self.pending_notices.drain();
+        if !pending_errors.is_empty() {
             cx.defer_in(window, move |_, window, cx| {
-                window.push_notification(Notification::error(message).autohide(false), cx);
+                for message in pending_errors {
+                    window.push_notification(Notification::error(message).autohide(false), cx);
+                }
             });
         }
         // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现

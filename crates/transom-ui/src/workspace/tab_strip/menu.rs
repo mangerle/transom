@@ -228,7 +228,7 @@ pub(super) fn build_tab_context_menu(
                         this.activate_group(group, window, cx);
                         this.workspace.tab_selection.clear();
                     } else {
-                        this.error = Some(
+                        this.set_error(
                             rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string(),
                         );
                     }

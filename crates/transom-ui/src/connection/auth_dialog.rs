@@ -73,7 +73,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
-                    this.error = Some(localized_error(&error));
+                    this.set_error(localized_error(&error));
                 }
                 cx.notify();
             });

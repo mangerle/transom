@@ -114,18 +114,21 @@ impl AppShell {
                 connection_id,
                 status,
             } => {
+                let mut error_message = None;
                 if let Some(tab) = self
                     .workspace
                     .tabs
                     .iter_mut()
                     .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))
                 {
-                    if let Some(error) = &status.error {
-                        self.error = Some(localized_error(error));
-                    }
+                    error_message = status.error.as_ref().map(localized_error);
                     if let Some(pane) = tab.session_pane_mut() {
                         pane.forward_statuses.insert(status.rule_id, status);
                     }
+                }
+                // 先结束标签表的可变借用，再入队错误：set_error 需要 &mut self。
+                if let Some(message) = error_message {
+                    self.set_error(message);
                 }
             }
         }
@@ -198,7 +201,7 @@ impl AppShell {
                     self.handle_cloud_sync_missing(cx);
                 }
                 Err(error) => {
-                    self.error = Some(localized_error(&error));
+                    self.set_error(localized_error(&error));
                 }
             },
             SyncAppEvent::GitSynced { result } => {

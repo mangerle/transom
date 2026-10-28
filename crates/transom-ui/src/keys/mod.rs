@@ -306,7 +306,7 @@ impl AppShell {
             return;
         }
         match error {
-            Some(error) => self.error = Some(localized_error(&error)),
+            Some(error) => self.set_error(localized_error(&error)),
             None => self.status = Some(format!("公钥 {key_name} 已部署")),
         }
         cx.notify();

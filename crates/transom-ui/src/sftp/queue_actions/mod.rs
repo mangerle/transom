@@ -231,7 +231,7 @@ impl AppShell {
         let next = if current >= 4 { 1 } else { current + 1 };
         self.settings.sftp.max_concurrent_transfers = next;
         if let Err(error) = self.services.settings_store.save(&self.settings) {
-            self.error = Some(localized_error(&error));
+            self.set_error(localized_error(&error));
         }
         self.status = Some(format!("并发传输数: {next}"));
         if let Some(tab_id) = self.workspace.active_tab {

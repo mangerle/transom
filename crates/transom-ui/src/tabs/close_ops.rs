@@ -281,7 +281,7 @@ impl AppShell {
         };
         set_locale(&self.settings.language);
         if let Err(error) = self.services.settings_store.save(&self.settings) {
-            self.error = Some(localized_error(&error));
+            self.set_error(localized_error(&error));
         }
         cx.notify();
     }

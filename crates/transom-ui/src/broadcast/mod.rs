@@ -165,7 +165,7 @@ impl AppShell {
             }
         }
         if failed > 0 {
-            self.error = Some(rust_i18n::t!("broadcast.send_failed").to_string());
+            self.set_error(rust_i18n::t!("broadcast.send_failed").to_string());
         }
         // 命令内容可能含敏感信息，只记录目标数量与失败数，绝不落盘正文。
         log::info!(

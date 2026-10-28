@@ -177,7 +177,7 @@ impl AppShell {
                 tab.session.name,
                 crate::connection::describe_target(&tab.session)
             );
-            self.error = Some(message);
+            self.set_error(message);
         }
         self.discard_pending_credential(connection_id);
         self.mark_forwards_stopped(tab_id);

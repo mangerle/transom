@@ -27,12 +27,12 @@ impl AppShell {
             return;
         };
         if matches!(session.connection, Connection::Serial(_)) {
-            self.error = Some(rust_i18n::t!("error.serial_no_split").to_string());
+            self.set_error(rust_i18n::t!("error.serial_no_split").to_string());
             cx.notify();
             return;
         }
         if self.workspace.groups[group_index].pane_count() >= MAX_PANES {
-            self.error = Some(rust_i18n::t!("error.too_many_panes", max = MAX_PANES).to_string());
+            self.set_error(rust_i18n::t!("error.too_many_panes", max = MAX_PANES).to_string());
             cx.notify();
             return;
         }

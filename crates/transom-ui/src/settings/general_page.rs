@@ -284,7 +284,7 @@ impl AppShell {
                                     if checked { "注册" } else { "撤销" }
                                 );
                                 this.settings.window.default_terminal = previous;
-                                this.error = Some(localized_error(&error));
+                                this.set_error(localized_error(&error));
                             }
                         }
                         cx.notify();

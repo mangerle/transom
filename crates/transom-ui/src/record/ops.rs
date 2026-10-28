@@ -63,7 +63,7 @@ impl AppShell {
             let res = terminal.update(cx, |term, _| term.start_recording(path, title));
             if let Err(e) = res {
                 log::error!("启动终端录制失败: {e}");
-                self.error = Some(rust_i18n::t!("recorder.start_failed").to_string());
+                self.set_error(rust_i18n::t!("recorder.start_failed").to_string());
             } else {
                 self.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
             }
@@ -100,7 +100,7 @@ impl AppShell {
             Ok(res) => res,
             Err(e) => {
                 log::error!("解析会话录制文件失败，路径: {:?}，原因: {e}", path);
-                self.error = Some(rust_i18n::t!("recorder.parse_failed").to_string());
+                self.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
                 cx.notify();
                 return;
             }
@@ -207,7 +207,7 @@ impl AppShell {
             Ok(res) => res,
             Err(e) => {
                 log::error!("解析回放脚本失败: {e}");
-                self.error = Some(rust_i18n::t!("recorder.parse_failed").to_string());
+                self.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
                 cx.notify();
                 return;
             }

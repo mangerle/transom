@@ -169,7 +169,7 @@ impl AppShell {
                 | Connection::Serial(_)
                 | Connection::Telnet(_)
         ) {
-            self.error = Some(rust_i18n::t!("error.configuration").to_string());
+            self.set_error(rust_i18n::t!("error.configuration").to_string());
             return;
         }
 
@@ -180,7 +180,7 @@ impl AppShell {
                     "跳板机链路解析失败，窗格: {tab_id}，会话: {}，原因: {error}",
                     session.name
                 );
-                self.error = Some(localized_error(&error));
+                self.set_error(localized_error(&error));
                 if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
                     tab.status = TabStatus::Failed(error);
                 }
@@ -196,7 +196,7 @@ impl AppShell {
                 session.name
             );
             let error = AppError::with_detail(ErrorCode::Configuration, reason);
-            self.error = Some(localized_error(&error));
+            self.set_error(localized_error(&error));
             if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
                 tab.status = TabStatus::Failed(error);
             }
@@ -221,7 +221,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
-                    this.error = Some(error);
+                    this.set_error(error);
                 }
                 this.send_connect(
                     tab_id,

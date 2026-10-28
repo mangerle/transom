@@ -206,7 +206,7 @@ impl AppShell {
                     cleared.update(cx, |state, cx| state.set_value("", window, cx));
                 }
                 Err(error) => {
-                    self.error = Some(localized_error(&error));
+                    self.set_error(localized_error(&error));
                     return false;
                 }
             }
@@ -219,14 +219,14 @@ impl AppShell {
                     .git_token
                     .update(cx, |state, cx| state.set_value("", window, cx)),
                 Err(error) => {
-                    self.error = Some(localized_error(&error));
+                    self.set_error(localized_error(&error));
                     return false;
                 }
             }
         }
         if !passphrase.is_empty() {
             if passphrase.chars().count() < 8 {
-                self.error = Some(rust_i18n::t!("backup.error_short").to_string());
+                self.set_error(rust_i18n::t!("backup.error_short").to_string());
                 return false;
             }
             let key = SecretKey::cloud_sync_passphrase();
@@ -236,7 +236,7 @@ impl AppShell {
                         .update(cx, |state, cx| state.set_value("", window, cx));
                 }
                 Err(error) => {
-                    self.error = Some(localized_error(&error));
+                    self.set_error(localized_error(&error));
                     return false;
                 }
             }
@@ -252,7 +252,7 @@ impl AppShell {
         }
         let settings = self.collect_sync_settings(cx);
         if settings.git.is_none() {
-            self.error = Some(rust_i18n::t!("sync.git_no_config").to_string());
+            self.set_error(rust_i18n::t!("sync.git_no_config").to_string());
             cx.notify();
             return;
         }
@@ -274,7 +274,7 @@ impl AppShell {
             settings,
             catalog: self.catalog.clone(),
         }) {
-            self.error = Some(rust_i18n::t!("sync.git_no_config").to_string());
+            self.set_error(rust_i18n::t!("sync.git_no_config").to_string());
         }
         cx.notify();
     }
@@ -302,10 +302,9 @@ impl AppShell {
                     )
                     .to_string(),
                 );
-                self.error = None;
             }
             Err(error) => {
-                self.error = Some(localized_error(&error));
+                self.set_error(localized_error(&error));
             }
         }
         cx.notify();
@@ -319,7 +318,7 @@ impl AppShell {
         }
         let settings = self.collect_sync_settings(cx);
         if settings.endpoint.is_none() {
-            self.error = Some(rust_i18n::t!("sync.error_no_endpoint").to_string());
+            self.set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
             cx.notify();
             return;
         }
@@ -339,7 +338,7 @@ impl AppShell {
         }
         let settings = self.collect_sync_settings(cx);
         if settings.endpoint.is_none() {
-            self.error = Some(rust_i18n::t!("sync.error_no_endpoint").to_string());
+            self.set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
             cx.notify();
             return;
         }
@@ -360,7 +359,7 @@ impl AppShell {
             Ok(report) => {
                 self.settings.sync.last_push_at = Some(report.at);
                 if let Err(error) = self.services.settings_store.save(&self.settings) {
-                    self.error = Some(localized_error(&error));
+                    self.set_error(localized_error(&error));
                 }
                 self.status = Some(
                     rust_i18n::t!(
@@ -372,7 +371,7 @@ impl AppShell {
                 );
             }
             Err(error) => {
-                self.error = Some(localized_error(&error));
+                self.set_error(localized_error(&error));
             }
         }
         cx.notify();
@@ -440,7 +439,7 @@ impl AppShell {
         self.refresh_tab_sessions();
         self.settings.sync.last_pull_at = Some(chrono::Utc::now().timestamp());
         if let Err(error) = self.services.settings_store.save(&self.settings) {
-            self.error = Some(localized_error(&error));
+            self.set_error(localized_error(&error));
         }
 
         let mut message = rust_i18n::t!(

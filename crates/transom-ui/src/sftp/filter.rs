@@ -43,7 +43,7 @@ impl AppShell {
                 self.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());
             }
             Err(error) => {
-                self.error = Some(localized_error(&error));
+                self.set_error(localized_error(&error));
             }
         }
         self.focus_active_sftp_panel(window, cx);

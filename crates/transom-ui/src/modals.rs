@@ -18,7 +18,7 @@ impl AppShell {
 
     pub(crate) fn remove_known_host(&mut self, host: &str, port: u16, cx: &mut Context<Self>) {
         if let Err(error) = self.services.known_hosts.remove(host, port) {
-            self.error = Some(localized_error(&error));
+            self.set_error(localized_error(&error));
         } else {
             self.status = Some(rust_i18n::t!("known_hosts.deleted").to_string());
         }

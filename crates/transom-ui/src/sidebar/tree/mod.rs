@@ -121,7 +121,7 @@ impl AppShell {
                 }
                 self.persist_catalog();
             }
-            Err(error) => self.error = Some(error.to_string()),
+            Err(error) => self.set_error(error.to_string()),
         }
         cx.notify();
     }

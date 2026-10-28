@@ -134,12 +134,12 @@ impl AppShell {
                     if let Err(error) = self.services.secret_store.set(&target, &secret)
                         && error.code != ErrorCode::SecretStoreUnavailable
                     {
-                        self.error = Some(localized_error(&error));
+                        self.set_error(localized_error(&error));
                     }
                 }
                 Ok(None) => {}
                 Err(error) if error.code == ErrorCode::SecretStoreUnavailable => {}
-                Err(error) => self.error = Some(localized_error(&error)),
+                Err(error) => self.set_error(localized_error(&error)),
             }
         }
     }

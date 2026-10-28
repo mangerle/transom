@@ -87,8 +87,7 @@ impl AppShell {
                 if let Some(group) = self.add_groups_to_tiling(id, vec![target], window) {
                     self.activate_group(group, window, cx);
                 } else {
-                    self.error =
-                        Some(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string());
+                    self.set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS));
                     cx.notify();
                 }
             }
@@ -353,7 +352,7 @@ impl AppShell {
             return;
         }
         if groups.len() > MAX_TILING_SLOTS {
-            self.error = Some(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string());
+            self.set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string());
             cx.notify();
             return;
         }

@@ -122,12 +122,12 @@ impl AppShell {
             self.workspace.tabs[index].session.connection,
             Connection::Ssh(_)
         ) {
-            self.error = Some(rust_i18n::t!("error.forward_requires_ssh").to_string());
+            self.set_error(rust_i18n::t!("error.forward_requires_ssh").to_string());
             cx.notify();
             return;
         }
         if !matches!(self.workspace.tabs[index].status, TabStatus::Connected) {
-            self.error = Some(rust_i18n::t!("error.forward_failed").to_string());
+            self.set_error(rust_i18n::t!("error.forward_failed").to_string());
             cx.notify();
             return;
         }

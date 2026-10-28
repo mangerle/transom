@@ -14,7 +14,7 @@ impl AppShell {
     pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             log::error!("保存布局设置失败，界面仍是新值但下次启动会回退，原因: {error}");
-            self.error = Some(localized_error(&error));
+            self.set_error(localized_error(&error));
         }
         cx.notify();
     }
@@ -184,7 +184,7 @@ impl AppShell {
         };
         if let Err(reason) = proxy.validate() {
             log::warn!("全局出站代理配置非法，保留原配置，原因: {reason}");
-            self.error = Some(reason);
+            self.set_error(reason);
             return;
         }
         self.settings.proxy = proxy;
@@ -224,7 +224,7 @@ impl AppShell {
         let key_bindings = match crate::keymap::parse_terminal_key_bindings(&raw_bindings) {
             Ok(bindings) => bindings,
             Err(error) => {
-                self.error = Some(error);
+                self.set_error(error);
                 cx.notify();
                 return;
             }
@@ -352,7 +352,7 @@ impl AppShell {
         self.modals.settings.window_appearance_snapshot = None;
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             log::error!("保存偏好设置失败，界面仍是新值但下次启动会回退，原因: {error}");
-            self.error = Some(localized_error(&error));
+            self.set_error(localized_error(&error));
         } else {
             log::info!(
                 "偏好设置已保存，语言: {}，日志级别: {}",

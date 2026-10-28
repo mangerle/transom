@@ -166,12 +166,7 @@ impl AppShell {
 
         let entry = viewer.entries.remove(index);
         let log_path = entry.path.clone();
-        if let Err(e) = std::fs::remove_file(&log_path) {
-            log::error!("删除审计日志文件失败，路径: {:?}，原因: {e}", log_path);
-            self.error = Some(rust_i18n::t!("audit_viewer.delete_failed").to_string());
-        } else {
-            self.status = Some(rust_i18n::t!("audit_viewer.deleted").to_string());
-        }
+        let removed = std::fs::remove_file(&log_path);
 
         if viewer.entries.is_empty() {
             viewer.selected_index = 0;
@@ -185,6 +180,14 @@ impl AppShell {
             let (content, is_truncated) = read_log_content(&path, MAX_AUDIT_LOG_BYTES);
             viewer.content = content;
             viewer.is_truncated = is_truncated;
+        }
+        // 先结束审计面板的可变借用，再写应用级状态与错误。
+        match removed {
+            Ok(()) => self.status = Some(rust_i18n::t!("audit_viewer.deleted").to_string()),
+            Err(error) => {
+                log::error!("删除审计日志文件失败，路径: {:?}，原因: {error}", log_path);
+                self.set_error(rust_i18n::t!("audit_viewer.delete_failed"));
+            }
         }
         cx.notify();
     }

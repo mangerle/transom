@@ -160,7 +160,7 @@ impl AppShell {
                                                         );
                                                     }
                                                     Err(error) => {
-                                                        this.error = Some(localized_error(&error));
+                                                        this.set_error(localized_error(&error));
                                                     }
                                                 }
                                                 cx.notify();

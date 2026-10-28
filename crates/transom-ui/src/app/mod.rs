@@ -74,8 +74,8 @@ pub struct AppShell {
     pub(crate) broadcast: BroadcastBarState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
     pub(crate) status: Option<String>,
-    /// 全局错误缓冲。
-    pub(crate) error: Option<String>,
+    /// 应用级错误通知的待发队列：写入与渲染解耦，逐帧统一投递。
+    pub(crate) pending_notices: PendingNotices,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
     pub(crate) immersive: bool,
     /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
@@ -88,10 +88,19 @@ impl AppShell {
         match self.services.command_tx.try_send(command.into()) {
             Ok(()) => true,
             Err(error) => {
-                self.error = Some(command_send_error_text(error));
+                self.set_error(command_send_error_text(error));
                 false
             }
         }
+    }
+
+    /// 记录一条应用级错误，由下一次渲染统一转成通知。
+    ///
+    /// 设计原理（Why）：错误写入点多数不持有窗口句柄，无法在写入时推送通知；
+    /// 单槽暂存又会让同一帧内的多次失败互相覆盖。入队后由渲染统一投递，
+    /// 既保留每条错误，也让渲染只负责取队列、不再承担"暂存"职责。
+    pub(crate) fn set_error(&mut self, message: impl Into<String>) {
+        self.pending_notices.push(message);
     }
 
     /// 设置工具面板（SFTP/转发）停靠方向。
@@ -153,7 +162,7 @@ impl AppShell {
             .detach();
         cx.observe(&workspace_panels_left, |_, _, cx| cx.notify())
             .detach();
-        let (catalog, error) = match services.session_store.load() {
+        let (catalog, catalog_error) = match services.session_store.load() {
             Ok(catalog) => (catalog, None),
             Err(error) => {
                 log::error!(
@@ -163,6 +172,10 @@ impl AppShell {
                 (SessionCatalog::default(), Some(localized_error(&error)))
             }
         };
+        let mut pending_notices = PendingNotices::new();
+        if let Some(error) = catalog_error {
+            pending_notices.push(error);
+        }
         log::info!(
             "会话目录就绪，会话数: {}，分组数: {}，凭据模板数: {}",
             catalog.sessions.len(),
@@ -267,7 +280,7 @@ impl AppShell {
                 targets_scope: Vec::new(),
             },
             status: None,
-            error,
+            pending_notices,
             immersive: false,
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
@@ -389,7 +402,7 @@ impl AppShell {
         match self.services.session_store.save(&self.catalog) {
             Ok(()) => true,
             Err(error) => {
-                self.error = Some(localized_error(&error));
+                self.set_error(localized_error(&error));
                 false
             }
         }

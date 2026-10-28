@@ -69,7 +69,7 @@ impl AppShell {
             self.build_sftp_panel(tab_id, index, false, window, cx);
         }
         if let Err(message) = self.enqueue_uploads(tab_id, paths, cx) {
-            self.error = Some(message);
+            self.set_error(message);
             cx.notify();
             return;
         }

@@ -74,7 +74,7 @@ impl AppShell {
         let session = match transom_core::quick_connect_session(host) {
             Ok(session) => session,
             Err(error) => {
-                self.error = Some(error);
+                self.set_error(error);
                 cx.notify();
                 return;
             }
@@ -137,13 +137,13 @@ impl AppShell {
             directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));
 
         let Some(path) = ssh_config_path else {
-            self.error = Some(rust_i18n::t!("app.import_none").to_string());
+            self.set_error(rust_i18n::t!("app.import_none").to_string());
             cx.notify();
             return;
         };
 
         if !path.exists() {
-            self.error = Some(rust_i18n::t!("app.import_none").to_string());
+            self.set_error(rust_i18n::t!("app.import_none").to_string());
             cx.notify();
             return;
         }
@@ -151,7 +151,7 @@ impl AppShell {
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(e) => {
-                self.error = Some(e.to_string());
+                self.set_error(e.to_string());
                 cx.notify();
                 return;
             }
@@ -159,7 +159,7 @@ impl AppShell {
 
         let parsed = parse_ssh_config(&content);
         if parsed.is_empty() {
-            self.error = Some(rust_i18n::t!("app.import_none").to_string());
+            self.set_error(rust_i18n::t!("app.import_none").to_string());
             cx.notify();
             return;
         }
