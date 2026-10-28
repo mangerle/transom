@@ -74,7 +74,9 @@ pub(super) async fn dispatch_cloud_sync(
             CloudSyncJob::Git { settings, catalog } => {
                 // Git 子进程与 Argon2 派生都是阻塞操作，整段放进阻塞线程池。
                 let service = service.clone();
-                let cache_dir = transom_core::paths::config_dir().join("sync").join("git");
+                let cache_dir = transom_platform::paths::config_dir()
+                    .join("sync")
+                    .join("git");
                 let result = tokio::task::spawn_blocking(move || {
                     service.run_git_sync(&settings, &catalog, &cache_dir)
                 })

@@ -337,7 +337,7 @@ pub(crate) fn rebuild_terminal_bindings(cx: &mut App) {
             bindings.insert(name, palette);
         }
     }
-    let dir = transom_core::paths::themes_dir();
+    let dir = transom_platform::paths::themes_dir();
     if let Ok(entries) = std::fs::read_dir(&dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -415,7 +415,7 @@ fn ensure_builtin_theme_files(dir: &std::path::Path) {
 /// （reload 异步执行前首帧就要能解析到目标主题）、目录监听。目录创建失败
 /// 只损失自定义主题能力，按降级记录、不阻断启动。
 pub(crate) fn watch_user_dir(cx: &mut App) {
-    let dir = transom_core::paths::themes_dir();
+    let dir = transom_platform::paths::themes_dir();
     if let Err(error) = std::fs::create_dir_all(&dir) {
         log::warn!(
             "创建用户主题目录失败，自定义主题不可用，目录: {}，原因: {error}",

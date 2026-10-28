@@ -6,7 +6,8 @@ use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use transom_core::{Connection, Session, TabId, paths};
+use transom_core::{Connection, Session, TabId};
+use transom_platform::paths;
 use transom_terminal::{extract_replay_inputs, parse_cast_file};
 
 impl AppShell {

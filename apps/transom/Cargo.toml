@@ -17,6 +17,7 @@ readme.workspace = true
 publish.workspace = true
 
 [dependencies]
+transom-platform.workspace = true
 transom-core.workspace = true
 transom-net.workspace = true
 transom-sync.workspace = true

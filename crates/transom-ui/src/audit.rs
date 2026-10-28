@@ -12,7 +12,8 @@
 use crate::app::TerminalTab;
 use chrono::Local;
 use std::path::{Path, PathBuf};
-use transom_core::{Connection, Session, TabId, paths};
+use transom_core::{Connection, Session, TabId};
+use transom_platform::paths;
 
 /// 本会话的审计文件路径；未开启审计时返回 `None`。
 pub(crate) fn audit_path_for(tab: &TerminalTab, enabled: bool) -> Option<PathBuf> {

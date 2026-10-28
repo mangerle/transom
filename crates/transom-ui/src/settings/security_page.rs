@@ -47,7 +47,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let dir = transom_core::paths::audit_dir();
+        let dir = transom_platform::paths::audit_dir();
         let reveal_dir = dir.clone();
         let reveal = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(reveal_dir.clone());

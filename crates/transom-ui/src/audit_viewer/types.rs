@@ -4,7 +4,7 @@ use gpui_kit::Entity;
 use gpui_kit::component::input::InputState;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use transom_core::paths;
+use transom_platform::paths;
 
 /// 单次读取最大字节数（2 MiB），防止大文件撑爆 UI 线程。
 pub(crate) const MAX_AUDIT_LOG_BYTES: usize = 2 * 1024 * 1024;

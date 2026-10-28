@@ -164,7 +164,7 @@ pub fn run(services: UiServices) {
         open_window(options, cx, |window, cx| {
             // 桌面标识用于任务栏分组与 `ssh://` 处理程序回指本应用，必须与
             // packaging/linux 下 .desktop 的 StartupWMClass 保持一致。
-            window.set_app_id(transom_core::paths::APP_ID);
+            window.set_app_id(transom_platform::paths::APP_ID);
             cx.new(|cx| AppShell::new(window, cx, services.clone(), settings.clone()))
         })
         .expect("创建并打开主应用窗口失败");
@@ -188,7 +188,7 @@ fn reassert_default_terminal(settings: &AppSettings) {
         log::warn!("无法定位当前可执行文件，默认终端注册校验跳过");
         return;
     };
-    if transom_core::paths::is_dev_exe(&exe) {
+    if transom_platform::paths::is_dev_exe(&exe) {
         log::debug!(
             "当前运行于开发构建目录，跳过默认终端启动重言，路径: {}",
             exe.display()

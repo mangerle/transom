@@ -2,6 +2,7 @@
 members = [
     "apps/transom",
     "crates/transom-core",
+    "crates/transom-platform",
     "crates/transom-crypto",
     "crates/transom-store",
     "crates/transom-net",
@@ -98,6 +99,7 @@ rand = "0.10"
 tempfile = "3"
 
 transom-core = { path = "crates/transom-core" }
+transom-platform = { path = "crates/transom-platform" }
 transom-crypto = { path = "crates/transom-crypto" }
 transom-store = { path = "crates/transom-store" }
 transom-net = { path = "crates/transom-net" }

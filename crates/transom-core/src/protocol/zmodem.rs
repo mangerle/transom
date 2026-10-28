@@ -70,7 +70,7 @@ impl ZmodemSettings {
     pub fn resolved_download_dir(&self) -> PathBuf {
         self.download_dir
             .clone()
-            .unwrap_or_else(crate::paths::default_download_dir)
+            .unwrap_or_else(transom_platform::paths::default_download_dir)
     }
 }
 

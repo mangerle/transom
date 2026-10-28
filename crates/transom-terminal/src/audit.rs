@@ -17,7 +17,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use transom_core::private_fs;
+use transom_platform::private_fs;
 
 /// 刷盘间隔：审计要的是"崩溃最多丢一秒"，而不是每块都同步落盘。
 const FLUSH_INTERVAL: Duration = Duration::from_secs(1);

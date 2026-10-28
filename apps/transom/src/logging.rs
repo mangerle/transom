@@ -8,7 +8,7 @@
 //! - 为什么自写轮转而不是换 log4rs/flexi_logger：需求只有"到大小切开、留 N 份"，
 //!   一个几十行的 `Write` 实现就说完了；套完整框架等于把保留策略、文件命名与
 //!   清理语义交出去，而设置页的"清理历史日志"必须与命名规则逐字一致，否则删不掉
-//!   还以为删了。命名规则因此收进 `transom_core::paths`，两侧共用一个来源。
+//!   还以为删了。命名规则因此收进 `transom_platform::paths`，两侧共用一个来源。
 //! - 运行期可调：装配时把派发级别开到 `Trace`，真正的门槛交给
 //!   `log::set_max_level`——它是运行期可写的原子量，设置页改完立刻生效，不必重启。
 //!   stderr 链路单独压在 `Warn`：从终端拉起时把 `debug` 全量刷到屏幕上会淹掉交互，
@@ -21,7 +21,8 @@
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use transom_core::{LogLevel, paths, private_fs};
+use transom_core::LogLevel;
+use transom_platform::{paths, private_fs};
 
 /// 单个日志文件的大小上限，到界即轮转。
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;

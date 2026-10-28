@@ -111,7 +111,7 @@ impl AppShell {
         // 任意目标的问题。
         let open_home =
             cx.listener(|_, _, _, _| crate::audit::open_web_page(crate::APP_REPOSITORY));
-        let config_dir = transom_core::paths::config_dir();
+        let config_dir = transom_platform::paths::config_dir();
         let config_path_label = config_dir.display().to_string();
         let open_config_dir = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(config_dir.clone());

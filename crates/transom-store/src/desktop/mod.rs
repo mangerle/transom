@@ -116,7 +116,7 @@ pub fn apply_default_terminal(enabled: bool) -> Result<(), AppError> {
                 format!("无法定位当前可执行文件，无法注册默认终端，原因: {error}"),
             )
         })?;
-        if transom_core::paths::is_dev_exe(&exe) {
+        if transom_platform::paths::is_dev_exe(&exe) {
             log::warn!(
                 "当前运行于开发构建目录，跳过默认终端注册以保护宿主机桌面环境，路径: {}",
                 exe.display()

@@ -10,7 +10,8 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
-use transom_core::{AppEvent, DeepLinkRequest, is_ssh_url, paths};
+use transom_core::{AppEvent, DeepLinkRequest, is_ssh_url};
+use transom_platform::paths;
 
 /// 单条深链请求的字节上限：地址串远小于此，超限即视为异常输入截断丢弃，
 /// 避免对端用长报文撑大读取侧内存。

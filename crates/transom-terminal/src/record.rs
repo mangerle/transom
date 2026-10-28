@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
-use transom_core::private_fs;
+use transom_platform::private_fs;
 
 /// asciinema v2 头部定义。
 #[derive(Debug, Clone, Serialize, Deserialize)]

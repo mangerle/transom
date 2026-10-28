@@ -13,7 +13,7 @@ readme.workspace = true
 publish.workspace = true
 
 [dependencies]
-directories.workspace = true
+transom-platform.workspace = true
 # 日志门面：只为把设置里的级别映射成 `log::LevelFilter`，
 # 也让 core 在需要时能与上层打到同一条链路上。
 log.workspace = true

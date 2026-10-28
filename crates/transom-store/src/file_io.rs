@@ -10,7 +10,8 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use transom_core::{AppError, ErrorCode, private_fs};
+use transom_core::{AppError, ErrorCode};
+use transom_platform::private_fs;
 
 pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, AppError> {
     match fs::read_to_string(path) {

@@ -4,7 +4,8 @@ use super::types::{AuditViewer, MAX_AUDIT_LOG_BYTES, find_session_audit_logs, re
 use crate::app::AppShell;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
-use transom_core::{Connection, Session, SessionId, TabId, paths};
+use transom_core::{Connection, Session, SessionId, TabId};
+use transom_platform::paths;
 
 impl AppShell {
     /// 打开审计日志查看器。

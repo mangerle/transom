@@ -17,7 +17,8 @@ use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::*;
-use transom_core::{LogLevel, paths};
+use transom_core::LogLevel;
+use transom_platform::paths;
 
 /// 清理历史备份时扫描的份数上界。
 ///

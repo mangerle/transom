@@ -411,7 +411,8 @@ impl AppShell {
     /// 把合并前的本机目录导出为明文安全副本；失败不阻断合并，只记日志。
     fn write_sync_safety_copy(&self) -> Option<PathBuf> {
         let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-        let path = transom_core::paths::config_dir().join(format!("sync-safety-{timestamp}.json"));
+        let path =
+            transom_platform::paths::config_dir().join(format!("sync-safety-{timestamp}.json"));
         let options = BackupExportOptions::default();
         match self.services.backup.export(&path, &self.catalog, &options) {
             Ok(_) => Some(path),

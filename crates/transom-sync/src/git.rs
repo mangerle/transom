@@ -24,9 +24,10 @@ use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::Duration;
 use transom_core::{
-    AppError, ErrorCode, GitSyncResult, GitSyncSettings, SessionCatalog, merge_catalogs, private_fs,
+    AppError, ErrorCode, GitSyncResult, GitSyncSettings, SessionCatalog, merge_catalogs,
 };
 use transom_crypto::envelope::{is_envelope, open, seal};
+use transom_platform::private_fs;
 use transom_store::write_atomic;
 
 /// 仓库内保存加密信封的文件名。

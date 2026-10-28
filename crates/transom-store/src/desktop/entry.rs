@@ -4,13 +4,14 @@
 //! 路径，因此回归测试可以直接断言"置顶、去重、摘除后逐字节还原"这些最容易
 //! 出错的字面行为，不需要沙箱目录；副作用与 XDG 解析留在上级模块。
 
-use transom_core::{AppError, ErrorCode, paths::APP_ID};
+use transom_core::{AppError, ErrorCode};
+use transom_platform::paths::APP_ID;
 
 /// 偏好列表文件名（规范固定名）。
 const PREFERENCE_LIST: &str = "xdg-terminals.list";
 
 /// 桌面条目 ID：文件名必须与 WM_CLASS、`StartupWMClass` 逐字一致（见
-/// `transom_core::paths::APP_ID` 的契约），加 `.desktop` 后缀即规范名。
+/// `transom_platform::paths::APP_ID` 的契约），加 `.desktop` 后缀即规范名。
 pub fn desktop_entry_id() -> String {
     format!("{APP_ID}.desktop")
 }

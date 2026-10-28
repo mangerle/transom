@@ -11,7 +11,6 @@ pub mod commands;
 pub mod error;
 pub mod ids;
 pub mod model;
-pub mod platform;
 pub mod prompt;
 pub mod protocol;
 pub mod secrets;
@@ -24,7 +23,6 @@ pub use model::{
     catalog, color, forward, history, host, identity, keys, known_hosts, layout, mac, serial,
     session, session_appearance, settings, terminal, theme, trigger,
 };
-pub use platform::{paths, private_fs};
 pub use protocol::{
     merge, proxy, sftp, sftp_filter, sftp_sync, ssh_config, ssh_url, sync, system_stats, traffic,
     zmodem,
