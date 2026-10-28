@@ -1,9 +1,12 @@
 use crate::client::SshRemote;
+use crate::timeout::SOCKS5_HANDSHAKE_TIMEOUT;
+use russh::Channel;
+use russh::client::Msg;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::watch;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use transom_core::{
     AppError, BindAddress, ErrorCode, ForwardKind, ForwardRule, SocksAuth, TargetAddress,
 };
@@ -64,7 +67,7 @@ pub async fn start_forward(
         ForwardKind::Remote { bind, target } => start_remote(remote, bind, target).await,
         _ => Err(AppError::with_detail(
             ErrorCode::ForwardFailed,
-            "unsupported forwarding mode",
+            "不支持的转发模式",
         )),
     }
 }
@@ -82,24 +85,29 @@ async fn start_local(
     let target_port = target.port;
 
     let join = tokio::spawn(async move {
+        let mut connections = JoinSet::new();
         loop {
             tokio::select! {
                 _ = stop_rx.changed() => break,
+                // 及时回收已结束的连接任务，避免 JoinSet 随历史连接数增长。
+                _ = connections.join_next(), if !connections.is_empty() => {}
                 accepted = listener.accept() => {
-                    let Ok((mut tcp, _)) = accepted else {
+                    let Ok((tcp, _)) = accepted else {
                         continue;
                     };
-                    let remote = remote.clone();
-                    let target_host = target_host.clone();
-                    tokio::spawn(async move {
-                        if let Ok(channel) = remote.open_direct_tcpip(&target_host, target_port).await {
-                            let mut stream = channel.into_stream();
-                            let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
-                        }
-                    });
+                    connections.spawn(relay_local_connection(
+                        remote.clone(),
+                        tcp,
+                        target_host.clone(),
+                        target_port,
+                    ));
                 }
             }
         }
+        // 停止转发必须同时断开在途连接：abort 取消 copy_bidirectional 后，
+        // 本地套接字与 SSH 通道随 future 一起释放，客户端立即看到连接关闭。
+        connections.abort_all();
+        while connections.join_next().await.is_some() {}
     });
 
     Ok(ForwardTask {
@@ -117,15 +125,17 @@ async fn start_dynamic(remote: &SshRemote, bind: &BindAddress) -> Result<Forward
     let remote = remote.clone();
 
     let join = tokio::spawn(async move {
+        let mut connections = JoinSet::new();
         loop {
             tokio::select! {
                 _ = stop_rx.changed() => break,
+                _ = connections.join_next(), if !connections.is_empty() => {}
                 accepted = listener.accept() => {
                     let Ok((tcp, _)) = accepted else {
                         continue;
                     };
                     let remote = remote.clone();
-                    tokio::spawn(async move {
+                    connections.spawn(async move {
                         if let Err(error) = run_socks5(remote, tcp).await {
                             log::debug!("SOCKS5 转发连接处理失败，原因: {error}");
                         }
@@ -133,6 +143,9 @@ async fn start_dynamic(remote: &SshRemote, bind: &BindAddress) -> Result<Forward
                 }
             }
         }
+        // 与本地转发一致：停止时中止协商与中继任务，关闭全部在途连接。
+        connections.abort_all();
+        while connections.join_next().await.is_some() {}
     });
 
     Ok(ForwardTask {
@@ -175,7 +188,63 @@ fn forward_error(error: std::io::Error) -> AppError {
     AppError::with_detail(ErrorCode::ForwardFailed, error.to_string())
 }
 
+/// 本地转发单条连接：建立远端通道后双向复制，任一方向结束即关闭两端。
+async fn relay_local_connection(remote: SshRemote, mut tcp: TcpStream, host: String, port: u16) {
+    let channel = match remote.open_direct_tcpip(&host, port).await {
+        Ok(channel) => channel,
+        Err(error) => {
+            log::debug!("本地转发建立远端通道失败，目标: {host}:{port}，原因: {error}");
+            return;
+        }
+    };
+    let mut stream = channel.into_stream();
+    let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+}
+
+/// SOCKS5 协商完成后的转发形态。
+enum Socks5Route {
+    /// CONNECT：已建立到目标地址的 SSH 通道。
+    Connect(Channel<Msg>),
+    /// UDP ASSOCIATE：保留本地 UDP 套接字，交给中继循环。
+    Udp {
+        inbound: UdpSocket,
+        outbound: UdpSocket,
+    },
+}
+
+/// SOCKS5 入口：先限时完成协商，再进入不设总时限的数据中继。
 async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppError> {
+    let route = tokio::time::timeout(
+        SOCKS5_HANDSHAKE_TIMEOUT,
+        socks5_negotiate(&remote, &mut client),
+    )
+    .await
+    .map_err(|_| {
+        AppError::with_detail(
+            ErrorCode::Timeout,
+            format!(
+                "SOCKS5 握手超时，等待上限: {} 秒",
+                SOCKS5_HANDSHAKE_TIMEOUT.as_secs()
+            ),
+        )
+    })??;
+    match route {
+        Socks5Route::Connect(channel) => {
+            let mut stream = channel.into_stream();
+            let _ = tokio::io::copy_bidirectional(&mut client, &mut stream).await;
+            Ok(())
+        }
+        Socks5Route::Udp { inbound, outbound } => {
+            run_socks5_udp_relay(client, inbound, outbound).await
+        }
+    }
+}
+
+/// 读取客户端问候与请求：CONNECT 时顺带建立远端通道，UDP 时创建本地套接字。
+async fn socks5_negotiate(
+    remote: &SshRemote,
+    client: &mut TcpStream,
+) -> Result<Socks5Route, AppError> {
     let mut greeting = [0u8; 2];
     client
         .read_exact(&mut greeting)
@@ -184,7 +253,7 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
     if greeting[0] != 5 {
         return Err(AppError::with_detail(
             ErrorCode::ForwardFailed,
-            "unsupported SOCKS version",
+            format!("不支持的 SOCKS 版本: {}", greeting[0]),
         ));
     }
     let mut methods = vec![0u8; greeting[1] as usize];
@@ -196,7 +265,7 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
         client.write_all(&[5, 0xff]).await.map_err(forward_error)?;
         return Err(AppError::with_detail(
             ErrorCode::ForwardFailed,
-            "SOCKS client did not offer no-auth",
+            "SOCKS 客户端未提供免认证方式",
         ));
     }
     client.write_all(&[5, 0]).await.map_err(forward_error)?;
@@ -210,14 +279,13 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
         let _ = client.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await;
         return Err(AppError::with_detail(
             ErrorCode::ForwardFailed,
-            "unsupported SOCKS version",
+            format!("不支持的 SOCKS 版本: {}", request[0]),
         ));
     }
 
     match request[1] {
         1 => {
-            // SOCKS5 CONNECT
-            let (host, port) = read_socks5_address_and_port(&mut client, request[3]).await?;
+            let (host, port) = read_socks5_address_and_port(client, request[3]).await?;
             let channel = match remote.open_direct_tcpip(&host, port).await {
                 Ok(channel) => channel,
                 Err(error) => {
@@ -229,16 +297,11 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
                 .write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
                 .await
                 .map_err(forward_error)?;
-            let mut stream = channel.into_stream();
-            let _ = tokio::io::copy_bidirectional(&mut client, &mut stream).await;
-            Ok(())
+            Ok(Socks5Route::Connect(channel))
         }
         3 => {
-            // SOCKS5 UDP ASSOCIATE
             let (_client_bind_host, _client_bind_port) =
-                read_socks5_address_and_port(&mut client, request[3]).await?;
-
-            // 获取与客户端通信的本地 IP 地址
+                read_socks5_address_and_port(client, request[3]).await?;
             let local_ip = client
                 .local_addr()
                 .map(|addr| addr.ip())
@@ -260,13 +323,13 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
                 }
             };
 
-            // 监听客户端发送过来的 SOCKS5 UDP 数据报
+            // 监听客户端发送过来的 SOCKS5 UDP 数据报。
             let inbound_socket = UdpSocket::bind(SocketAddr::new(bind_ip, 0))
                 .await
                 .map_err(forward_error)?;
             let bound_addr = inbound_socket.local_addr().map_err(forward_error)?;
 
-            // 负责向外部实际目标转发并接收回包的 socket
+            // 负责向外部实际目标转发并接收回包的 socket。
             let outbound_bind_addr = match bound_addr {
                 SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
                 SocketAddr::V6(_) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
@@ -275,7 +338,7 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
                 .await
                 .map_err(forward_error)?;
 
-            // 返回成功的 SOCKS5 应答，告知客户端应向哪个 UDP 端口发送数据
+            // 返回成功应答，告知客户端应向哪个 UDP 端口发送数据。
             let mut response = vec![5, 0, 0];
             match bound_addr.ip() {
                 IpAddr::V4(v4) => {
@@ -290,13 +353,19 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
             response.extend_from_slice(&bound_addr.port().to_be_bytes());
             client.write_all(&response).await.map_err(forward_error)?;
 
-            run_socks5_udp_relay(client, inbound_socket, outbound_socket).await
+            Ok(Socks5Route::Udp {
+                inbound: inbound_socket,
+                outbound: outbound_socket,
+            })
         }
         _ => {
             let _ = client.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await;
             Err(AppError::with_detail(
                 ErrorCode::ForwardFailed,
-                "only SOCKS CONNECT and UDP ASSOCIATE are supported",
+                format!(
+                    "仅支持 SOCKS5 CONNECT 与 UDP ASSOCIATE，实际命令: {}",
+                    request[1]
+                ),
             ))
         }
     }
@@ -341,7 +410,7 @@ async fn read_socks5_address_and_port(
             let _ = client.write_all(&[5, 8, 0, 1, 0, 0, 0, 0, 0, 0]).await;
             return Err(AppError::with_detail(
                 ErrorCode::ForwardFailed,
-                "unsupported SOCKS address type",
+                format!("不支持的 SOCKS 地址类型: {}", atyp),
             ));
         }
     };

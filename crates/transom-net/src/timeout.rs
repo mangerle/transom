@@ -27,6 +27,10 @@ pub(crate) const FORWARD_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// SFTP 子系统初始化（协议版本交换与主目录查询）的上限。
 pub(crate) const SFTP_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
+/// SOCKS5 本机协商（问候、请求与目标通道建立）的上限。
+///
+/// 只约束握手阶段；CONNECT/UDP 中继是长连接，不能设置总时限。
+pub(crate) const SOCKS5_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 给单个外部等待套上超时，并统一中文错误描述。
 ///
