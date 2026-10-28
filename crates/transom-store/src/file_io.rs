@@ -55,7 +55,7 @@ pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), App
 /// # Errors
 /// 父目录创建、临时文件打开、写入、同步或重命名失败时返回 `Io` 错误，
 /// 错误信息附带目标路径便于定位。
-pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> Result<(), AppError> {
+pub fn write_atomic(path: &Path, data: &[u8]) -> Result<(), AppError> {
     let parent = path.parent().ok_or_else(|| {
         AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
     })?;

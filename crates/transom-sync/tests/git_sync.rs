@@ -73,6 +73,18 @@ fn git_sync_merges_two_devices_and_stores_only_ciphertext() {
         .expect("首次推送应成功");
     assert!(outcome.pushed);
     assert_eq!(outcome.catalog.sessions.len(), 1);
+    // 缓存里是会话拓扑密文与共同祖先，目录与文件都必须只对属主可见。
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&cache_a), 0o700, "同步缓存目录必须为 0700");
+        assert_eq!(
+            mode(&cache_a.join("transom-sync.envelope")),
+            0o600,
+            "同步缓存信封必须为 0600"
+        );
+    }
 
     let outcome = sync_git_blocking(
         &settings(&remote),

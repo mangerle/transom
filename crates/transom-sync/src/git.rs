@@ -25,8 +25,10 @@ use std::process::{Command, Output, Stdio};
 use std::time::Duration;
 use transom_core::{
     AppError, ErrorCode, GitSyncSettings, SessionCatalog, SyncMergeReport, merge_catalogs,
+    private_fs,
 };
 use transom_crypto::envelope::{is_envelope, open, seal};
+use transom_store::write_atomic;
 
 /// 仓库内保存加密信封的文件名。
 pub const GIT_SYNC_FILE: &str = "transom-sync.envelope";
@@ -116,7 +118,7 @@ fn attempt_sync(
     // 因此按 ID 集合比较，内容一致就不产生空提交。
     if remote_bytes.is_some() && catalogs_equivalent(&remote_catalog, &merged) {
         let envelope = seal(&plaintext, passphrase)?;
-        write_private(&cache_dir.join(GIT_BASE_FILE), &envelope)?;
+        write_atomic(&cache_dir.join(GIT_BASE_FILE), &envelope)?;
         return Ok(GitSyncOutcome {
             catalog: merged,
             report,
@@ -128,9 +130,9 @@ fn attempt_sync(
     let envelope = seal(&plaintext, passphrase)?;
 
     checkout_branch(cache_dir, &settings.branch, remote_bytes.is_some(), auth)?;
-    write_private(&cache_dir.join(GIT_SYNC_FILE), &envelope)?;
+    write_atomic(&cache_dir.join(GIT_SYNC_FILE), &envelope)?;
     commit_and_push(cache_dir, &settings.branch, auth)?;
-    write_private(&cache_dir.join(GIT_BASE_FILE), &envelope)?;
+    write_atomic(&cache_dir.join(GIT_BASE_FILE), &envelope)?;
     let bytes = envelope.len() as u64;
     log::info!(
         "Git 同步完成，分支: {}，会话数: {}，新增: {}，更新: {}，冲突: {}，字节数: {}",
@@ -198,7 +200,9 @@ fn load_base(cache_dir: &Path, passphrase: &str) -> Option<SessionCatalog> {
 }
 
 fn ensure_repo(cache_dir: &Path, remote: &str, auth: &GitAuth) -> Result<(), AppError> {
-    fs::create_dir_all(cache_dir).map_err(|error| {
+    // 缓存里是包含会话拓扑的密文与基线，目录必须只对属主可见；
+    // 已有目录不改权限，文件侧仍由原子写收紧到 0600。
+    private_fs::ensure_private_dir(cache_dir).map_err(|error| {
         AppError::with_detail(
             ErrorCode::CloudSyncFailed,
             format!("创建 Git 同步缓存目录失败: {error}"),
@@ -367,20 +371,4 @@ fn git_error(action: &str, stderr: &str) -> AppError {
         ErrorCode::CloudSyncFailed,
         format!("{action}失败: {detail}"),
     )
-}
-
-/// 写入 0600 私有文件；信封与基线都可能含会话拓扑。
-fn write_private(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
-    fs::write(path, bytes).map_err(|error| {
-        AppError::with_detail(
-            ErrorCode::CloudSyncFailed,
-            format!("写入同步缓存失败: {}: {error}", path.display()),
-        )
-    })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
 }
