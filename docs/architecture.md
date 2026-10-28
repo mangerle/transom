@@ -19,23 +19,29 @@ apps/transom (组合根 + 控制平面)
   │    ├─ transom-store (JSON 存储 / 钥匙串 / 备份文件读写 / 桌面集成)
   │    │    ├─ transom-crypto
   │    │    └─ transom-core
+  │    ├─ transom-platform (用户目录 / 私有文件权限 / 发行版识别)
   │    └─ transom-core
   ├─ transom-net (SSH / SFTP / 转发 / 串口 / Telnet / ZMODEM / 统计解析)
   │    └─ transom-core
   ├─ transom-sync (云同步 WebDAV / S3 / Git 编排)
   │    ├─ transom-crypto
   │    ├─ transom-store
+  │    ├─ transom-platform
   │    └─ transom-core
   ├─ transom-store
   │    ├─ transom-crypto
+  │    ├─ transom-platform
   │    └─ transom-core
+  ├─ transom-terminal
+  │    └─ transom-platform
   └─ transom-crypto (TSYN 二进制信封与 JSON/YAML 加密信封)
        └─ transom-core
 
-全部 crate ──> transom-core（纯粹契约层：领域模型、命令事件总线、错误定义）
+全部 crate ──> transom-core（契约层：领域模型、协议契约、命令事件总线、错误定义）
+需要本地目录或私有权限的 crate ──> transom-platform（宿主平台约定）
 ```
 
-规则：**依赖只向内**。`transom-net` 不依赖 `transom-store`；`transom-sync` 依赖 `transom-store` 与 `transom-crypto`；加解密信封由独立的 `transom-crypto` 提供；UI 不直接做网络协议。
+规则：**依赖只向内**。`transom-net` 不依赖 `transom-store`；`transom-sync` 依赖 `transom-store` 与 `transom-crypto`；加解密信封由独立的 `transom-crypto` 提供；UI 不直接做网络协议；与操作系统打交道的路径与权限只经 `transom-platform`。
 
 ## 数据流
 
@@ -98,11 +104,16 @@ AppCommand::Connect
 
 ```
 crates/transom-core/src/
-  model/     领域模型与算法：session / settings / catalog / appearance / keys ...
+  model/     领域模型与算法：session / settings / catalog / appearance ...
   protocol/  线格式与契约：ssh_config / ssh_url / sftp / sync / system_stats(types) ...
-  platform/  用户目录、os-release 与私有文件权限：paths / os_release / private_fs
   根        commands（命令/事件）、error、ids、prompt、secrets、storage、backup
-  注：历史路径（crate::session 等）经 lib.rs 别名 re-export 保持可用。
+  注：历史路径（crate::session 等）经 lib.rs 别名 re-export 保持可用；
+  仅界面队列使用的 TransferTask 系列模型在 transom-ui/sftp/task.rs。
+
+crates/transom-platform/src/
+  paths.rs       用户目录与文件命名约定
+  private_fs.rs  私有目录 0700 / 私有文件 0600 的创建与收紧
+  os_release.rs  /etc/os-release 发行版识别
 
 crates/transom-crypto/src/
   envelope.rs  TSYN 二进制端到端加密信封
@@ -120,7 +131,7 @@ apps/transom/src/controller/
   commands.rs  用户命令处理
   internal.rs  内部完成事件处理与单一接入路径
   lifecycle.rs 连接接入/清理/停机的公共流程
-  pty.rs / samplers.rs / sftp_exec.rs / sftp_finish.rs / sync_exec.rs / host_exec.rs
+  pty.rs / samplers/ / sftp_exec/（dispatch + 按域拆分的 ops）/ sftp_finish.rs / sync_exec.rs / host_exec.rs
 ```
 
 ## 关键决策记录
@@ -130,6 +141,7 @@ apps/transom/src/controller/
 | 终端字节绕开事件总线 | 高频字节流与低频控制事件隔离 | 终端视图自己管读取任务与背压 |
 | 可覆盖样本 try_send、迁移事件反压 | 样本丢了下一轮补，迁移事件不能丢 | UI 停滞时采样频率下降（可自愈） |
 | 加密信封独立为专用 crate（transom-crypto） | net/sync 不再反向依赖 store，同时 core 不再背负加解密重依赖 | 多维护一个轻量 crate |
+| 平台约定独立为 transom-platform | 路径与权限被存储/终端/同步/界面共同使用，留在 core 会把它变成 IO 实现层 | 多维护一个轻量 crate |
 | 连接参数随命令携带（ZMODEM/SHA1 策略） | 控制循环零同步 IO，磁盘慢不拖控制平面 | 命令载荷变宽，UI 有责任携带最新快照 |
 | known_hosts 异步落盘 | 握手路径不带写盘 IO | record 成功 ≠ 已落盘；极端崩溃丢最后若干条 |
 | 原子写必带 fsync | rename 只保证"旧或新"，不保证已持久 | 每次保存多一次 fsync（毫秒级） |

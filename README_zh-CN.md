@@ -144,13 +144,14 @@ Release 构建剥离符号表并启用 thin LTO。日志经 `log` 门面落到 `
 ```
 apps/transom            可执行入口：装配存储层与异步连接控制器
 crates/transom-core     存储契约、会话/设置模型、转发与高亮规则
+crates/transom-platform 用户目录、私有文件权限与发行版识别
 crates/transom-net      russh 客户端、SFTP、端口转发、串口与 PTY 链路
 crates/transom-store    JSON 存储、钥匙串、Argon2id/XChaCha20 加密备份、原子写
 crates/transom-terminal alacritty_terminal 网格、渲染器、检索与 OSC 解析
 crates/transom-ui       GPUI 应用、侧边栏、标签、分屏、SFTP 面板、设置与 i18n
 ```
 
-约 4.7 万行 Rust 代码，含 260+ 单元与集成测试。
+约 9 万行 Rust 代码，含 600+ 单元与集成测试。
 
 ## 开发
 

@@ -144,13 +144,14 @@ Generated key pairs default to `~/.ssh`.
 ```
 apps/transom            binary: wires stores and the async connection controller together
 crates/transom-core     storage traits, session/settings models, forward and highlight rules
+crates/transom-platform user directories, private file permissions, OS release detection
 crates/transom-net      russh client, SFTP, port forwarding, serial ports, PTY plumbing
 crates/transom-store    JSON stores, keyring, Argon2id/XChaCha20 backup vault, atomic writes
 crates/transom-terminal alacritty_terminal grid, renderer, search, OSC parsing
 crates/transom-ui       GPUI app, sidebar, tabs, splits, SFTP panes, settings, i18n
 ```
 
-Roughly 47k lines of Rust with 260+ unit and integration tests.
+Roughly 90k lines of Rust with 600+ unit and integration tests.
 
 ## Development
 
