@@ -118,6 +118,24 @@ pub struct SystemStats {
     pub disk_total_bytes: u64,
     pub uptime_secs: u64,
     pub os_name: String,
+    /// 系统平均负载：(1分钟, 5分钟, 15分钟)。
+    #[serde(default)]
+    pub load_avg: (f32, f32, f32),
+    /// CPU 等待 I/O 时间百分比。
+    #[serde(default)]
+    pub cpu_iowait_percent: f32,
+    /// CPU 系统态占用百分比。
+    #[serde(default)]
+    pub cpu_system_percent: f32,
+    /// CPU 用户态占用百分比。
+    #[serde(default)]
+    pub cpu_user_percent: f32,
+    /// 交换分区已用字节。
+    #[serde(default)]
+    pub swap_used_bytes: u64,
+    /// 交换分区总字节。
+    #[serde(default)]
+    pub swap_total_bytes: u64,
     /// 每个逻辑核心的使用率；旧配置或首轮采样时为空。
     #[serde(default)]
     pub cpu_cores: Vec<crate::protocol::system_stats::CoreUsage>,
@@ -127,4 +145,13 @@ pub struct SystemStats {
     /// 每块非回环网卡的本轮速率。
     #[serde(default)]
     pub interfaces: Vec<crate::protocol::system_stats::InterfaceRate>,
+    /// 监听端口明细。
+    #[serde(default)]
+    pub ports: Vec<crate::protocol::system_stats::PortListeningInfo>,
+    /// 异常崩溃的 Systemd 服务。
+    #[serde(default)]
+    pub failed_services: Vec<crate::protocol::system_stats::FailedServiceInfo>,
+    /// 近期内核 OOM 警报。
+    #[serde(default)]
+    pub recent_oom: Option<crate::protocol::system_stats::OomAlert>,
 }

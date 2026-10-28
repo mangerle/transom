@@ -61,10 +61,10 @@ pub use model::session::{
 pub use model::session_appearance::{SessionColor, SessionIcon};
 pub use model::settings::{
     AppSettings, AppearanceSettings, AuditSettings, BellStyle, BlockViewSettings, BlockViewStyle,
-    GitSyncSettings, HistorySettings, LogLevel, LogSettings, PanelSide, SavedLayout, SavedTabGroup,
-    SavedTabTiling, SftpSettings, ShortcutSettings, SidebarStartup, Snippet, SnippetSettings,
-    SplitAxis, StartupTabs, SyncEndpoint, SyncSettings, UiDensity, UiThemeMode,
-    WindowBackgroundMode, WindowSettings,
+    GitSyncSettings, HistorySettings, LogLevel, LogSettings, MonitorSettings, PanelSide,
+    SavedLayout, SavedTabGroup, SavedTabTiling, SftpSettings, ShortcutSettings, SidebarStartup,
+    Snippet, SnippetSettings, SplitAxis, StartupTabs, SyncEndpoint, SyncSettings, UiDensity,
+    UiThemeMode, WindowBackgroundMode, WindowSettings,
 };
 pub use model::terminal::TerminalHighlight;
 pub use model::terminal::{
@@ -96,7 +96,10 @@ pub use protocol::sync::{
     CloudSyncTarget, GitSyncResult, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME, SyncPushReport,
     is_sync_conflict,
 };
-pub use protocol::system_stats::{CoreUsage, FilesystemUsage, InterfaceRate, ProcessInfo};
+pub use protocol::system_stats::{
+    CoreUsage, FailedServiceInfo, FilesystemUsage, InterfaceRate, OomAlert, PortListeningInfo,
+    ProcessInfo, ProcessSort,
+};
 pub use protocol::traffic::{NetworkTraffic, TrafficCounter};
 pub use protocol::zmodem::{ZmodemDirection, ZmodemEvent, ZmodemFinished, ZmodemSettings};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};

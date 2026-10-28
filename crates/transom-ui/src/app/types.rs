@@ -63,6 +63,9 @@ pub(crate) enum TabContent {
     Session(Box<SessionPaneState>),
     /// 录像回放播放器。
     Player(Entity<crate::cast_player::CastPlayerView>),
+    /// 全屏独立主机监控看板（携带关联的主机会话 TabId）。
+    #[allow(dead_code)]
+    Monitor(TabId),
 }
 
 /// 实时通信会话窗格关联的所有运行期状态。
@@ -97,11 +100,17 @@ impl TerminalTab {
         matches!(self.content, TabContent::Player(_))
     }
 
+    /// 是否为全屏主机监控看板标签。
+    #[allow(dead_code)]
+    pub(crate) fn is_monitor(&self) -> bool {
+        matches!(self.content, TabContent::Monitor(_))
+    }
+
     /// 获取关联的录像播放器视图句柄（若存在）。
     pub(crate) fn player(&self) -> Option<Entity<crate::cast_player::CastPlayerView>> {
         match &self.content {
             TabContent::Player(player) => Some(player.clone()),
-            TabContent::Session(_) => None,
+            _ => None,
         }
     }
 
@@ -109,7 +118,7 @@ impl TerminalTab {
     pub(crate) fn session_pane(&self) -> Option<&SessionPaneState> {
         match &self.content {
             TabContent::Session(pane) => Some(pane),
-            TabContent::Player(_) => None,
+            _ => None,
         }
     }
 
@@ -117,7 +126,7 @@ impl TerminalTab {
     pub(crate) fn session_pane_mut(&mut self) -> Option<&mut SessionPaneState> {
         match &mut self.content {
             TabContent::Session(pane) => Some(pane),
-            TabContent::Player(_) => None,
+            _ => None,
         }
     }
 
@@ -208,6 +217,25 @@ impl TerminalTab {
             title,
             status: TabStatus::Connected,
             content: TabContent::Player(player),
+        }
+    }
+
+    /// 构造全屏主机监控看板独立标签页。
+    pub(crate) fn monitor_tab(
+        id: TabId,
+        session: Session,
+        title: String,
+        target_tab_id: TabId,
+        connection_id: Option<ConnectionId>,
+    ) -> Self {
+        Self {
+            id,
+            session_id: session.id,
+            session,
+            connection_id,
+            title,
+            status: TabStatus::Connected,
+            content: TabContent::Monitor(target_tab_id),
         }
     }
 }

@@ -1,15 +1,15 @@
-use super::types::{ProcessSort, format_size, usage_bar, usage_color};
+//! 监控抽屉容器视图与组装管道。
+
 use crate::app::AppShell;
+use crate::monitor::types::SampleIntervalMode;
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::Input;
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{ProcessInfo, SystemStats};
+use transom_core::TabId;
 
 impl AppShell {
     /// 渲染右侧监控抽屉。
@@ -24,13 +24,54 @@ impl AppShell {
             .active_tab
             .and_then(|tab_id| self.workspace.tab(tab_id))
             .and_then(|tab| tab.system_stats().cloned());
-        let mut body = v_flex().gap_4().p_3();
+
+        let mut body = v_flex().gap_2p5().p_2p5();
+
+        // 1. 异常前哨感知横幅（OOM 告警横幅）
+        if let Some(stats_ref) = &stats
+            && let Some(oom) = &stats_ref.recent_oom
+        {
+            body = body.child(
+                h_flex()
+                    .gap_2()
+                    .p_2()
+                    .rounded_md()
+                    .bg(p.danger.opacity(0.15))
+                    .border_1()
+                    .border_color(p.danger.opacity(0.4))
+                    .items_center()
+                    .child(
+                        Icon::new(IconName::TriangleAlert)
+                            .small()
+                            .text_color(p.danger),
+                    )
+                    .child(
+                        v_flex()
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(p.danger)
+                                    .child("内核触发 OOM Killer 告警"),
+                            )
+                            .child(div().text_xs().text_color(p.foreground).child(format!(
+                                "进程 [{}] (PID: {}) 已被强制终止",
+                                oom.process_name, oom.pid
+                            ))),
+                    ),
+            );
+        }
+
+        // 2. 各板块按需组装
         if let Some(stats) = &stats {
             body = body
-                .child(self.render_cpu_section(stats, p))
-                .child(self.render_memory_section(stats, p))
-                .child(self.render_filesystems_section(stats, p))
-                .child(self.render_network_section(p));
+                .child(self.render_cpu_section_card(stats, cx, p))
+                .child(self.render_memory_section_card(stats, cx, p))
+                .child(self.render_disk_section_card(stats, cx, p))
+                .child(self.render_network_section_card(stats, cx, p))
+                .child(self.render_ports_section_card(stats, cx, p))
+                .child(self.render_services_section_card(stats, cx, p));
         } else {
             body = body.child(
                 div()
@@ -39,441 +80,407 @@ impl AppShell {
                     .child(rust_i18n::t!("monitor.waiting").to_string()),
             );
         }
-        body = body.child(self.render_process_section(cx, p));
 
+        // 3. 进程管理板块
+        body = body.child(self.render_process_section_card(cx, p));
+
+        // 抽屉容器布局：尺寸由外部 resizable_panel 统一约束，内部填满并自适应。
+        let drawer_width = self.monitor.drawer_width.clamp(320.0, 750.0);
         let mut panel = v_flex()
             .id("monitor-panel")
             .size_full()
+            .overflow_hidden()
             .bg(p.background)
             .border_l_1()
             .border_color(p.border);
-        panel = panel.child(
-            h_flex()
-                .h(rems(size::TAB_BAR_HEIGHT))
-                .justify_between()
-                .items_center()
-                .px_3()
-                .border_b_1()
-                .border_color(p.border)
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .child(Icon::new(IconName::Gauge).small().text_color(p.primary))
-                        .child(
-                            div()
-                                .text_sm()
-                                .child(rust_i18n::t!("monitor.title").to_string()),
-                        ),
-                )
-                .child(
-                    h_flex()
-                        .gap_1()
-                        .child(
-                            Button::new("monitor-refresh")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::RefreshCw)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.sample_processes(cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("monitor-close")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Close)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.monitor.open = false;
-                                    this.monitor.processes.clear();
-                                    cx.notify();
-                                })),
-                        ),
-                ),
-        );
+
+        // 顶栏工具条：标题、采样档位芯片、刷新、关闭
+        let current_interval = self.monitor.interval_mode;
+        let header = h_flex()
+            .h(rems(size::TAB_BAR_HEIGHT))
+            .w_full()
+            .overflow_hidden()
+            .justify_between()
+            .items_center()
+            .px_3()
+            .border_b_1()
+            .border_color(p.border)
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .min_w_0()
+                    .flex_shrink_1()
+                    .child(Icon::new(IconName::Gauge).small().text_color(p.primary))
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::BOLD)
+                            .truncate()
+                            .child(rust_i18n::t!("monitor.title").to_string()),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
+                    .flex_shrink_0()
+                    // 采样频率档位切换
+                    .child(
+                        h_flex()
+                            .gap_0p5()
+                            .child(
+                                Button::new("sample-rate-fast")
+                                    .xsmall()
+                                    .label(SampleIntervalMode::Fast.label())
+                                    .selected(current_interval == SampleIntervalMode::Fast)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.set_monitor_interval_mode(
+                                            SampleIntervalMode::Fast,
+                                            cx,
+                                        );
+                                    })),
+                            )
+                            .child(
+                                Button::new("sample-rate-normal")
+                                    .xsmall()
+                                    .label(SampleIntervalMode::Normal.label())
+                                    .selected(current_interval == SampleIntervalMode::Normal)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.set_monitor_interval_mode(
+                                            SampleIntervalMode::Normal,
+                                            cx,
+                                        );
+                                    })),
+                            )
+                            .child(
+                                Button::new("sample-rate-eco")
+                                    .xsmall()
+                                    .label(SampleIntervalMode::Eco.label())
+                                    .selected(current_interval == SampleIntervalMode::Eco)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.set_monitor_interval_mode(SampleIntervalMode::Eco, cx);
+                                    })),
+                            ),
+                    )
+                    // 刷新按钮
+                    .child(
+                        Button::new("monitor-refresh")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::RefreshCw)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.sample_processes(cx);
+                            })),
+                    )
+                    // 宽度缩放切换芯片（快速切换 380px / 540px）
+                    .child(
+                        Button::new("monitor-toggle-width")
+                            .ghost()
+                            .xsmall()
+                            .icon(if drawer_width > 420.0 {
+                                IconName::Minimize2
+                            } else {
+                                IconName::Maximize2
+                            })
+                            .tooltip(if drawer_width > 420.0 {
+                                "紧凑宽度"
+                            } else {
+                                "宽幅视图"
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_monitor_drawer_width(window, cx);
+                            })),
+                    )
+                    // 脱离为独立标签页按钮
+                    .child(
+                        Button::new("monitor-maximize-to-tab")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::ArrowUpRight)
+                            .tooltip("脱离为独立监控标签页")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.maximize_monitor_to_tab(window, cx);
+                            })),
+                    )
+                    // 关闭抽屉按钮
+                    .child(
+                        Button::new("monitor-close")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Close)
+                            .tooltip("关闭监控抽屉")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.monitor.open = false;
+                                this.monitor.processes.clear();
+                                cx.notify();
+                            })),
+                    ),
+            );
+
+        panel = panel.child(header);
+
+        // 错误提示条
         if let Some(error) = &self.monitor.error {
             panel = panel.child(
                 div()
                     .px_3()
-                    .py_2()
+                    .py_1p5()
+                    .bg(p.danger.opacity(0.1))
                     .text_xs()
                     .text_color(p.danger)
                     .child(error.clone()),
             );
         }
+
+        // 可滚动卡片内容区
         panel
             .child(
                 div()
                     .id("monitor-body")
+                    .w_full()
                     .flex_1()
+                    .overflow_hidden()
                     .overflow_y_scroll()
                     .child(body),
             )
             .into_any_element()
     }
 
-    fn render_cpu_section(&self, stats: &SystemStats, p: &Palette) -> AnyElement {
-        let color = usage_color(stats.cpu_percent, p);
-        let mut section = v_flex()
-            .gap_2()
-            .child(self.metric_header(
-                "monitor.cpu",
-                format!("{:.0}%", stats.cpu_percent),
-                color,
-                p,
-            ))
-            .child(usage_bar(stats.cpu_percent / 100.0, color, p));
-        if !stats.cpu_cores.is_empty() {
-            section = section.child(h_flex().h(px(42.0)).items_end().gap_0p5().children(
-                stats.cpu_cores.iter().map(|core| {
-                    let fraction = (core.percent / 100.0).clamp(0.0, 1.0);
+    /// 渲染全屏独立的主机系统监控看板标签页内容。
+    pub(crate) fn render_monitor_tab_content(
+        &mut self,
+        tab_id: TabId,
+        target_tab_id: TabId,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let target_tab = self.workspace.tab(target_tab_id);
+        let target_title = target_tab
+            .map(|t| t.display_name())
+            .unwrap_or_else(|| "主机".to_string());
+        let stats = target_tab.and_then(|t| t.system_stats().cloned());
+
+        let current_interval = self.monitor.interval_mode;
+
+        // 顶栏宽幅工具条
+        let mut header = h_flex()
+            .h(rems(size::TAB_BAR_HEIGHT))
+            .w_full()
+            .justify_between()
+            .items_center()
+            .px_4()
+            .border_b_1()
+            .border_color(p.border)
+            .bg(p.background);
+
+        // 顶栏左侧：图标与标题、主机概要
+        let mut title_part = h_flex()
+            .gap_2p5()
+            .items_center()
+            .child(Icon::new(IconName::Gauge).text_color(p.primary))
+            .child(
+                h_flex().gap_2().items_baseline().child(
                     div()
-                        .flex_1()
-                        .h(px((42.0 * fraction).max(2.0)))
-                        .rounded_t_sm()
-                        .bg(usage_color(core.percent, p))
-                }),
-            ));
-        }
-        section.into_any_element()
-    }
-
-    fn render_memory_section(&self, stats: &SystemStats, p: &Palette) -> AnyElement {
-        let fraction = if stats.mem_total_bytes == 0 {
-            0.0
-        } else {
-            stats.mem_used_bytes as f32 / stats.mem_total_bytes as f32
-        };
-        v_flex()
-            .gap_2()
-            .child(self.metric_header(
-                "monitor.mem",
-                format!(
-                    "{} / {}",
-                    format_size(stats.mem_used_bytes),
-                    format_size(stats.mem_total_bytes)
+                        .text_sm()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(p.foreground)
+                        .child(format!("主机全景监控 · {target_title}")),
                 ),
-                p.primary,
-                p,
-            ))
-            .child(usage_bar(fraction, p.primary, p))
-            .into_any_element()
-    }
-
-    fn render_filesystems_section(&self, stats: &SystemStats, p: &Palette) -> AnyElement {
-        let mut section = v_flex()
-            .gap_2()
-            .child(self.section_title("monitor.disk", p));
-        if stats.filesystems.is_empty() {
-            section = section.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("monitor.no_data").to_string()),
             );
-        }
-        for filesystem in stats.filesystems.iter().take(8) {
-            let fraction = if filesystem.total_bytes == 0 {
-                0.0
+
+        if let Some(stats_ref) = &stats {
+            let cores = stats_ref.cpu_cores.len();
+            let mem_gb = stats_ref.mem_total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+            let days = stats_ref.uptime_secs / 86400;
+            let hours = (stats_ref.uptime_secs % 86400) / 3600;
+            let uptime_str = if days > 0 {
+                format!("运行 {days}天{hours}小时")
             } else {
-                filesystem.used_bytes as f32 / filesystem.total_bytes as f32
+                let mins = (stats_ref.uptime_secs % 3600) / 60;
+                format!("运行 {hours}小时{mins}分")
             };
-            let color = usage_color(fraction * 100.0, p);
-            section = section.child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .text_xs()
-                            .child(
-                                div()
-                                    .text_color(p.foreground)
-                                    .child(filesystem.mount.clone()),
-                            )
-                            .child(div().text_color(p.muted_foreground).child(format!(
-                                "{} / {}",
-                                format_size(filesystem.used_bytes),
-                                format_size(filesystem.total_bytes)
-                            ))),
-                    )
-                    .child(usage_bar(fraction, color, p)),
-            );
-        }
-        section.into_any_element()
-    }
 
-    fn render_network_section(&self, p: &Palette) -> AnyElement {
-        let mut section = v_flex()
-            .gap_2()
-            .child(self.section_title("monitor.network", p));
-        let latest = self
-            .monitor
-            .network_history
-            .back()
-            .cloned()
-            .unwrap_or_default();
-        if latest.is_empty() {
-            section = section.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("monitor.no_data").to_string()),
-            );
+            let mut info_flex = h_flex().gap_1p5().text_xs().text_color(p.muted_foreground);
+            if cores > 0 {
+                info_flex = info_flex.child("•").child(format!("{cores} 核心"));
+            }
+            if stats_ref.mem_total_bytes > 0 {
+                info_flex = info_flex.child("•").child(format!("{:.1} GB 内存", mem_gb));
+            }
+            if stats_ref.uptime_secs > 0 {
+                info_flex = info_flex.child("•").child(uptime_str);
+            }
+            title_part = title_part.child(info_flex);
         }
-        for interface in &latest {
-            let history: Vec<u64> = self
-                .monitor
-                .network_history
-                .iter()
-                .filter_map(|sample| {
-                    sample
-                        .iter()
-                        .find(|entry| entry.name == interface.name)
-                        .map(|entry| entry.rx_bytes_per_sec)
-                })
-                .collect();
-            let peak = history.iter().copied().max().unwrap_or(1).max(1);
-            section = section.child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .text_xs()
-                            .child(div().text_color(p.foreground).child(interface.name.clone()))
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .child(div().text_color(p.muted_foreground).child(format!(
-                                        "↓ {}/s",
-                                        format_size(interface.rx_bytes_per_sec)
-                                    )))
-                                    .child(div().text_color(p.muted_foreground).child(format!(
-                                        "↑ {}/s",
-                                        format_size(interface.tx_bytes_per_sec)
-                                    ))),
-                            ),
-                    )
-                    .child(h_flex().h(px(22.0)).items_end().gap_0p5().children(
-                        history.iter().map(|value| {
-                            let fraction = (*value as f32 / peak as f32).clamp(0.0, 1.0);
-                            div()
-                                .w(px(3.0))
-                                .h(px((22.0 * fraction).max(1.0)))
-                                .bg(p.primary.opacity(0.65))
-                        }),
-                    )),
-            );
-        }
-        section.into_any_element()
-    }
 
-    fn render_process_section(&mut self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
-        let filter = self.monitor.filter.read(cx).value().to_lowercase();
-        let mut processes: Vec<&ProcessInfo> = self
-            .monitor
-            .processes
-            .iter()
-            .filter(|process| {
-                filter.is_empty()
-                    || process.cmdline.to_lowercase().contains(&filter)
-                    || process.user.to_lowercase().contains(&filter)
-                    || process.pid.to_string().contains(&filter)
-            })
-            .collect();
-        match self.monitor.sort {
-            ProcessSort::Cpu => processes.sort_by(|a, b| {
-                b.cpu_percent
-                    .partial_cmp(&a.cpu_percent)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            }),
-            ProcessSort::Memory => processes.sort_by(|a, b| {
-                b.mem_percent
-                    .partial_cmp(&a.mem_percent)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            }),
-        }
-        let sort = self.monitor.sort;
-        let app_entity = cx.entity();
-        let mut section = v_flex()
+        header = header.child(title_part);
+
+        // 顶栏右侧：采样频率切换、刷新、停靠为抽屉、关闭
+        let actions = h_flex()
             .gap_2()
+            .items_center()
             .child(
                 h_flex()
-                    .justify_between()
+                    .gap_0p5()
+                    .child(
+                        Button::new("tab-sample-rate-fast")
+                            .xsmall()
+                            .label(SampleIntervalMode::Fast.label())
+                            .selected(current_interval == SampleIntervalMode::Fast)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_monitor_interval_mode(SampleIntervalMode::Fast, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("tab-sample-rate-normal")
+                            .xsmall()
+                            .label(SampleIntervalMode::Normal.label())
+                            .selected(current_interval == SampleIntervalMode::Normal)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_monitor_interval_mode(SampleIntervalMode::Normal, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("tab-sample-rate-eco")
+                            .xsmall()
+                            .label(SampleIntervalMode::Eco.label())
+                            .selected(current_interval == SampleIntervalMode::Eco)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_monitor_interval_mode(SampleIntervalMode::Eco, cx);
+                            })),
+                    ),
+            )
+            .child(
+                Button::new("tab-monitor-refresh")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::RefreshCw)
+                    .tooltip("立即采样刷新")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.sample_processes(cx);
+                    })),
+            )
+            .child(
+                Button::new("tab-monitor-dock-drawer")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::PanelRightOpen)
+                    .label("停靠为侧边抽屉")
+                    .tooltip("将监控面板停靠回右侧边栏抽屉")
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx);
+                    })),
+            )
+            .child(
+                Button::new("tab-monitor-close-btn")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close)
+                    .tooltip("关闭监控标签页")
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.close_pane(tab_id, window, cx);
+                    })),
+            );
+
+        header = header.child(actions);
+
+        // OOM 警报 Banner
+        let mut oom_banner = None;
+        if let Some(stats_ref) = &stats
+            && let Some(oom) = &stats_ref.recent_oom
+        {
+            oom_banner = Some(
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .p_2p5()
+                    .rounded_md()
+                    .bg(p.danger.opacity(0.15))
+                    .border_1()
+                    .border_color(p.danger.opacity(0.4))
                     .items_center()
                     .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(self.section_title("monitor.processes", p))
-                            .child(
-                                div().text_xs().text_color(p.muted_foreground).child(
-                                    rust_i18n::t!("monitor.process_count", count = processes.len())
-                                        .to_string(),
-                                ),
-                            ),
+                        Icon::new(IconName::TriangleAlert)
+                            .small()
+                            .text_color(p.danger),
                     )
                     .child(
-                        h_flex()
-                            .gap_1()
+                        v_flex()
+                            .gap_0p5()
                             .child(
-                                Button::new("sort-process-cpu")
-                                    .small()
-                                    .label(rust_i18n::t!("monitor.sort_cpu").to_string())
-                                    .selected(sort == ProcessSort::Cpu)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.monitor.sort = ProcessSort::Cpu;
-                                        cx.notify();
-                                    })),
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(p.danger)
+                                    .child("内核触发 OOM Killer 告警"),
                             )
-                            .child(
-                                Button::new("sort-process-mem")
-                                    .small()
-                                    .label(rust_i18n::t!("monitor.sort_mem").to_string())
-                                    .selected(sort == ProcessSort::Memory)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.monitor.sort = ProcessSort::Memory;
-                                        cx.notify();
-                                    })),
-                            ),
-                    ),
-            )
-            .child(Input::new(&self.monitor.filter).small())
-            .child(
-                h_flex()
-                    .gap_2()
-                    .px_1()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(div().w(px(54.0)).child("PID"))
-                    .child(
-                        div()
-                            .w(px(64.0))
-                            .child(rust_i18n::t!("monitor.user").to_string()),
-                    )
-                    .child(div().w(px(48.0)).child("CPU"))
-                    .child(div().w(px(48.0)).child("MEM"))
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(rust_i18n::t!("monitor.command").to_string()),
+                            .child(div().text_xs().text_color(p.foreground).child(format!(
+                                "进程 [{}] (PID: {}) 已被系统强制终止",
+                                oom.process_name, oom.pid
+                            ))),
                     ),
             );
-        for (index, process) in processes.iter().enumerate() {
-            section = section.child(Self::render_process_row(index, process, &app_entity, p));
         }
-        section.into_any_element()
-    }
 
-    /// 渲染一行进程：固定列宽 + 右键终止/复制菜单。
-    fn render_process_row(
-        index: usize,
-        process: &ProcessInfo,
-        app_entity: &Entity<AppShell>,
-        p: &Palette,
-    ) -> AnyElement {
-        let pid = process.pid;
-        let command = format!("{} {}", process.pid, process.cmdline);
-        let app = app_entity.clone();
-        let strong = app_entity.clone();
-        let mut row = h_flex()
-            .id(ElementId::Name(format!("process-row-{pid}").into()))
-            .gap_2()
-            .px_1()
-            .h(px(22.0))
-            .text_xs()
+        // 主体内容
+        let content = if let Some(stats) = &stats {
+            let left_col = v_flex()
+                .flex_1()
+                .min_w_0()
+                .gap_3()
+                .child(self.render_cpu_section_card(stats, cx, p))
+                .child(self.render_memory_section_card(stats, cx, p))
+                .child(self.render_disk_section_card(stats, cx, p));
+
+            let right_col = v_flex()
+                .flex_1()
+                .min_w_0()
+                .gap_3()
+                .child(self.render_network_section_card(stats, cx, p))
+                .child(self.render_ports_section_card(stats, cx, p))
+                .child(self.render_services_section_card(stats, cx, p));
+
+            let main_grid = h_flex().w_full().gap_3().child(left_col).child(right_col);
+            let process_card = self.render_process_section_card(cx, p);
+
+            v_flex()
+                .w_full()
+                .max_w(px(1800.0))
+                .mx_auto()
+                .gap_3()
+                .children(oom_banner)
+                .child(main_grid)
+                .child(process_card)
+        } else {
+            v_flex()
+                .size_full()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .child(Icon::new(IconName::Loader).text_color(p.muted_foreground))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("monitor.waiting").to_string()),
+                )
+        };
+
+        v_flex()
+            .size_full()
+            .bg(p.background)
+            .child(header)
             .child(
                 div()
-                    .w(px(54.0))
-                    .text_color(p.muted_foreground)
-                    .child(pid.to_string()),
-            )
-            .child(
-                div()
-                    .w(px(64.0))
-                    .truncate()
-                    .text_color(p.foreground)
-                    .child(process.user.clone()),
-            )
-            .child(
-                div()
-                    .w(px(48.0))
-                    .text_color(usage_color(process.cpu_percent, p))
-                    .child(format!("{:.1}", process.cpu_percent)),
-            )
-            .child(
-                div()
-                    .w(px(48.0))
-                    .text_color(p.muted_foreground)
-                    .child(format!("{:.1}", process.mem_percent)),
-            )
-            .child(
-                div()
+                    .id("monitor-tab-scroll-viewport")
+                    .size_full()
                     .flex_1()
-                    .truncate()
-                    .text_color(p.foreground)
-                    .child(process.cmdline.clone()),
+                    .overflow_y_scroll()
+                    .p_4()
+                    .child(content),
             )
-            .context_menu(move |menu, _window, _cx| {
-                let term = app.clone();
-                let kill = strong.clone();
-                let command_text = command.clone();
-                menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("monitor.kill_term").to_string())
-                        .icon(IconName::CircleX)
-                        .on_click(move |_, _, cx| {
-                            term.update(cx, |this, cx| this.send_kill_process(pid, false, cx));
-                        }),
-                )
-                .item(
-                    PopupMenuItem::new(rust_i18n::t!("monitor.kill_kill").to_string())
-                        .icon(IconName::Ban)
-                        .on_click(move |_, _, cx| {
-                            kill.update(cx, |this, cx| this.send_kill_process(pid, true, cx));
-                        }),
-                )
-                .item(
-                    PopupMenuItem::new(rust_i18n::t!("monitor.copy_command").to_string())
-                        .icon(IconName::Copy)
-                        .on_click(move |_, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(command_text.clone()));
-                        }),
-                )
-            });
-        if index % 2 == 1 {
-            row = row.bg(p.muted.opacity(0.35));
-        }
-        if index % 2 == 1 {
-            row = row.bg(p.muted.opacity(0.35));
-        }
-        row.into_any_element()
-    }
-
-    fn section_title(&self, key: &'static str, p: &Palette) -> AnyElement {
-        div()
-            .text_xs()
-            .text_color(p.muted_foreground)
-            .child(rust_i18n::t!(key).to_string())
-            .into_any_element()
-    }
-
-    fn metric_header(
-        &self,
-        key: &'static str,
-        value: String,
-        color: Hsla,
-        p: &Palette,
-    ) -> AnyElement {
-        h_flex()
-            .justify_between()
-            .text_xs()
-            .child(
-                div()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!(key).to_string()),
-            )
-            .child(div().text_color(color).child(value))
             .into_any_element()
     }
 }

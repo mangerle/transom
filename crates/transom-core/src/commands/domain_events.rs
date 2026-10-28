@@ -160,7 +160,7 @@ pub enum HostAppEvent {
     SystemStatsUpdated {
         tab_id: TabId,
         connection_id: ConnectionId,
-        stats: super::SystemStats,
+        stats: Box<super::SystemStats>,
     },
     NetworkTrafficUpdated {
         tab_id: TabId,

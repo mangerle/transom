@@ -102,6 +102,8 @@ pub(super) fn render_tab_entry(
     let dot_color = calculate_dot_color(tab, p);
     let base_tab_icon = if tab.is_player() {
         IconName::Disc
+    } else if tab.is_monitor() {
+        IconName::Gauge
     } else {
         connection_icon(&tab.session.connection)
     };
@@ -109,6 +111,8 @@ pub(super) fn render_tab_entry(
     let appearance = shell.session_appearance(tab);
     let tab_icon = if tab.is_player() {
         IconName::Disc
+    } else if tab.is_monitor() {
+        IconName::Gauge
     } else {
         appearance.icon.unwrap_or(base_tab_icon)
     };

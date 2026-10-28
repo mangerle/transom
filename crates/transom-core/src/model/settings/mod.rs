@@ -93,6 +93,9 @@ pub struct AppSettings {
     /// 细粒度策略不进设置界面，由设置文件承载。
     #[serde(default = "default_allow_sha1_publickey_auth")]
     pub allow_sha1_publickey_auth: bool,
+    /// 主机监控板块折叠/展开偏好设置；旧配置缺省时使用默认布局。
+    #[serde(default)]
+    pub monitor: MonitorSettings,
 }
 
 fn default_allow_sha1_publickey_auth() -> bool {
@@ -101,6 +104,54 @@ fn default_allow_sha1_publickey_auth() -> bool {
 
 fn default_language() -> String {
     "zh-CN".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+/// 主机监控面板各板块默认折叠/展开偏好设置。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonitorSettings {
+    /// CPU 板块是否默认展开（默认 true）
+    #[serde(default = "default_true")]
+    pub cpu_expanded: bool,
+    /// 内存板块是否默认展开（默认 true）
+    #[serde(default = "default_true")]
+    pub memory_expanded: bool,
+    /// 磁盘板块是否默认展开（默认 false）
+    #[serde(default = "default_false")]
+    pub disk_expanded: bool,
+    /// 网络板块是否默认展开（默认 true）
+    #[serde(default = "default_true")]
+    pub network_expanded: bool,
+    /// 端口板块是否默认展开（默认 false）
+    #[serde(default = "default_false")]
+    pub ports_expanded: bool,
+    /// 服务板块是否默认展开（默认 false）
+    #[serde(default = "default_false")]
+    pub services_expanded: bool,
+    /// 进程板块是否默认展开（默认 true）
+    #[serde(default = "default_true")]
+    pub processes_expanded: bool,
+}
+
+impl Default for MonitorSettings {
+    fn default() -> Self {
+        Self {
+            cpu_expanded: true,
+            memory_expanded: true,
+            disk_expanded: false,
+            network_expanded: true,
+            ports_expanded: false,
+            services_expanded: false,
+            processes_expanded: true,
+        }
+    }
 }
 
 impl Default for AppSettings {
@@ -126,6 +177,7 @@ impl Default for AppSettings {
             proxy: crate::protocol::proxy::OutboundProxy::default(),
             block_view: BlockViewSettings::default(),
             allow_sha1_publickey_auth: default_allow_sha1_publickey_auth(),
+            monitor: MonitorSettings::default(),
         }
     }
 }

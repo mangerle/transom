@@ -9,32 +9,30 @@ use transom_net::{SshRemote, StatsSamplerState};
 
 /// 最近一次 df 结果的缓存形态：(已用字节, 总字节, 挂载点明细)。
 pub(crate) type CachedDisk = (u64, u64, Vec<FilesystemUsage>);
+pub(crate) type CachedDiag = (
+    Vec<transom_core::PortListeningInfo>,
+    Vec<transom_core::FailedServiceInfo>,
+    Option<transom_core::OomAlert>,
+);
 
 /// 远端统计采样的周期。
-///
-/// 每轮在远端执行一组 /proc 读取（部分轮次附带 df 子进程），对低配远端
-/// 是可见负载；5 秒的刷新率对状态栏与看板足够，较 3 秒口径远端负载下降
-/// 约四成。
 pub(crate) const STATS_SAMPLE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
-/// 磁盘明细（df）在统计采样中的降频比例：每 N 轮携带一次 df。
-///
-/// 为什么单独降频：df 是子进程且会在挂死挂载点上阻塞（虽有超时兜底），
-/// 而磁盘占用是慢变量；其余轮次复用上一次结果，把子进程开销摊薄到 1/N。
-/// 本地采样器共用同一比例。
+/// 磁盘明细（df）与系统诊断数据在统计采样中的降频比例：每 N 轮携带一次。
 pub(crate) const DF_EVERY_N_ROUNDS: u64 = 3;
+pub(crate) const DIAG_EVERY_N_ROUNDS: u64 = 3;
 
-/// 单次采样命令与信号操作共用的超时（远端 exec 与本地子进程同口径）：
-/// 远端 `ps`/`df` 或本地命令卡死不能拖住后续轮询与统计采样。
+/// 单次采样命令与信号操作共用的超时。
 pub(crate) const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// 组装一轮统计采样的远端命令；OS 标识与 df 段按需附带。
-///
-/// `__DF__` 与 `__NET__` 分隔标记必须始终保留：解析器在缺标记时会回退到
-/// 全文扫描（兼容旧格式），省略标记会把 /proc 内容误当 df 行解析。
-pub(crate) fn stats_sample_command(include_os: bool, include_df: bool) -> String {
+/// 组装一轮统计采样的远端命令；OS 标识、df 与诊断段按需附带。
+pub(crate) fn stats_sample_command(
+    include_os: bool,
+    include_df: bool,
+    include_diag: bool,
+) -> String {
     let mut cmd = String::from(
-        "cat /proc/stat /proc/meminfo /proc/net/dev 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime 2>/dev/null; echo \"__DF__\"",
+        "cat /proc/stat /proc/meminfo /proc/net/dev 2>/dev/null; echo \"__UPTIME__\"; cat /proc/uptime /proc/loadavg 2>/dev/null; echo \"__DF__\"",
     );
     if include_df {
         cmd.push_str("; df -P -k 2>/dev/null");
@@ -43,13 +41,13 @@ pub(crate) fn stats_sample_command(include_os: bool, include_df: bool) -> String
     if include_os {
         cmd.push_str("; echo \"__OS__\"; cat /etc/os-release 2>/dev/null");
     }
+    if include_diag {
+        cmd.push_str("; echo \"__PORTS__\"; (ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null); echo \"__SERVICES__\"; systemctl list-units --type=service --state=failed --no-legend 2>/dev/null; echo \"__OOM__\"; (dmesg -T 2>/dev/null || dmesg 2>/dev/null) | grep -i \"oom-killer\" | tail -n 1");
+    }
     cmd
 }
 
-/// 远端系统统计采样：每 [`STATS_SAMPLE_INTERVAL`] exec 一组只读命令，
-/// OS 标识首轮后缓存复用，df 每 [`DF_EVERY_N_ROUNDS`] 轮执行一次（其余
-/// 轮次复用上一次的磁盘结果）。返回 JoinHandle 由调用方纳入 stats_tasks
-/// 跟踪，断开时中止。
+/// 远端系统统计采样：每 [`STATS_SAMPLE_INTERVAL`] exec 一组只读命令。
 pub(crate) fn spawn_remote_stats_sampler(
     remote: SshRemote,
     tab_id: TabId,
@@ -59,27 +57,20 @@ pub(crate) fn spawn_remote_stats_sampler(
     tokio::spawn(async move {
         let mut state = StatsSamplerState::default();
         let mut interval = tokio::time::interval(STATS_SAMPLE_INTERVAL);
-        // exec 耗时超过周期时不得连发补采：丢弃错过的 tick，保持完整采样窗口。
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        // 跳过 interval 的第一个瞬时 tick，保证首个采样窗口是完整的
-        // 5 秒；否则首个 tick 立即完成，前两次采样背靠背，CPU 占比失真。
         interval.tick().await;
-        // OS 标识是静态信息：仅首轮附带 os-release，之后缓存复用，
-        // 省掉每轮一次重复读取静态文件的开销。
+
         let mut cached_os: Option<String> = None;
-        // 最近一次 df 结果：无 df 的轮次用它回填，磁盘指标保持连续。
-        // 首轮必然带 df（round 从 0 起），因此缓存一定先被填上。
         let mut cached_disk: Option<CachedDisk> = None;
-        // 超时告警是否已留痕：持续超时时只在首次打 warn，避免刷屏。
+        let mut cached_diag: Option<CachedDiag> = None;
         let mut timeout_warned = false;
         let mut round: u64 = 0;
         loop {
             let include_df = round.is_multiple_of(DF_EVERY_N_ROUNDS);
+            let include_diag = round.is_multiple_of(DIAG_EVERY_N_ROUNDS);
             round = round.wrapping_add(1);
-            let cmd = stats_sample_command(cached_os.is_none(), include_df);
-            // 远端 exec 必须设限：df 撞上挂死的 NFS 挂载会长时间不返回，
-            // 采样任务随之挂起，直到 keepalive 断开前该标签的统计一直停更。
+            let cmd = stats_sample_command(cached_os.is_none(), include_df, include_diag);
             let exec = tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command(&cmd)).await;
             match exec {
                 Ok(Ok(output)) if !output.is_empty() => {
@@ -95,18 +86,27 @@ pub(crate) fn spawn_remote_stats_sampler(
                             stats.filesystems.clone(),
                         ));
                     } else if let Some((used, total, filesystems)) = &cached_disk {
-                        // 本轮没执行 df：复用上一次的磁盘结果，避免界面
-                        // 上磁盘指标跳 0。
                         stats.disk_used_bytes = *used;
                         stats.disk_total_bytes = *total;
                         stats.filesystems.clone_from(filesystems);
+                    }
+                    if include_diag {
+                        cached_diag = Some((
+                            stats.ports.clone(),
+                            stats.failed_services.clone(),
+                            stats.recent_oom.clone(),
+                        ));
+                    } else if let Some((ports, failed_services, recent_oom)) = &cached_diag {
+                        stats.ports.clone_from(ports);
+                        stats.failed_services.clone_from(failed_services);
+                        stats.recent_oom.clone_from(recent_oom);
                     }
                     if !send_overwritable(
                         &event_tx,
                         HostAppEvent::SystemStatsUpdated {
                             tab_id,
                             connection_id,
-                            stats,
+                            stats: Box::new(stats),
                         }
                         .into(),
                         "系统统计",
@@ -153,6 +153,7 @@ pub(crate) async fn run_local_stats_sampler(
     // 与远端采样同口径：df 每 DF_EVERY_N_ROUNDS 轮执行一次，其余轮次
     // 复用上一次的磁盘结果，把子进程开销摊薄到 1/N。
     let mut cached_disk: Option<CachedDisk> = None;
+    let mut cached_diag: Option<CachedDiag> = None;
     let mut round: u64 = 0;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
     // 采样耗时超过周期时不得连发补采：丢弃错过的 tick，保持完整采样窗口。
@@ -177,6 +178,9 @@ pub(crate) async fn run_local_stats_sampler(
         let uptime = tokio::fs::read_to_string("/proc/uptime")
             .await
             .unwrap_or_default();
+        let loadavg = tokio::fs::read_to_string("/proc/loadavg")
+            .await
+            .unwrap_or_default();
         let net = tokio::fs::read_to_string("/proc/net/dev")
             .await
             .unwrap_or_default();
@@ -187,10 +191,8 @@ pub(crate) async fn run_local_stats_sampler(
                 .unwrap_or_default(),
         };
         let include_df = round.is_multiple_of(DF_EVERY_N_ROUNDS);
+        let include_diag = round.is_multiple_of(DIAG_EVERY_N_ROUNDS);
         round = round.wrapping_add(1);
-        // df 是外部子进程：必须限时并保证退出收割，防止异常环境下
-        // 子进程假死拖住整轮采样；无 df 的轮次只保留空段标记（解析器
-        // 缺标记会回退全文扫描，标记不可省略），结果由缓存回填。
         let df = if include_df {
             let mut df_command = Command::new("df");
             df_command.args(["-P", "-k"]).kill_on_drop(true);
@@ -202,9 +204,62 @@ pub(crate) async fn run_local_stats_sampler(
         } else {
             String::new()
         };
-        let output = format!(
-            "{stat}\n{mem}\n__UPTIME__\n{uptime}\n__DF__\n{df}\n__NET__\n{net}\n__OS__\n{os}"
+        let (ports_out, services_out, oom_out) = if include_diag {
+            let mut p_cmd = Command::new("sh");
+            p_cmd
+                .args(["-c", "ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null"])
+                .kill_on_drop(true);
+            let p_out =
+                match tokio::time::timeout(std::time::Duration::from_secs(3), p_cmd.output()).await
+                {
+                    Ok(Ok(out)) => String::from_utf8_lossy(&out.stdout).to_string(),
+                    _ => String::new(),
+                };
+
+            let mut s_cmd = Command::new("systemctl");
+            s_cmd
+                .args([
+                    "list-units",
+                    "--type=service",
+                    "--state=failed",
+                    "--no-legend",
+                ])
+                .kill_on_drop(true);
+            let s_out =
+                match tokio::time::timeout(std::time::Duration::from_secs(3), s_cmd.output()).await
+                {
+                    Ok(Ok(out)) => String::from_utf8_lossy(&out.stdout).to_string(),
+                    _ => String::new(),
+                };
+
+            let mut o_cmd = Command::new("sh");
+            o_cmd
+                .args([
+                    "-c",
+                    "(dmesg -T 2>/dev/null || dmesg 2>/dev/null) | grep -i \"oom-killer\" | tail -n 1",
+                ])
+                .kill_on_drop(true);
+            let o_out =
+                match tokio::time::timeout(std::time::Duration::from_secs(2), o_cmd.output()).await
+                {
+                    Ok(Ok(out)) => String::from_utf8_lossy(&out.stdout).to_string(),
+                    _ => String::new(),
+                };
+
+            (p_out, s_out, o_out)
+        } else {
+            (String::new(), String::new(), String::new())
+        };
+
+        let mut output = format!(
+            "{stat}\n{mem}\n__UPTIME__\n{uptime}\n{loadavg}\n__DF__\n{df}\n__NET__\n{net}\n__OS__\n{os}"
         );
+        if include_diag {
+            output.push_str(&format!(
+                "\n__PORTS__\n{ports_out}\n__SERVICES__\n{services_out}\n__OOM__\n{oom_out}"
+            ));
+        }
+
         let mut stats = state.ingest(&output, std::time::Instant::now());
         match &cached_os {
             Some(cached) => stats.os_name = cached.clone(),
@@ -221,13 +276,24 @@ pub(crate) async fn run_local_stats_sampler(
             stats.disk_total_bytes = *total;
             stats.filesystems.clone_from(filesystems);
         }
+        if include_diag {
+            cached_diag = Some((
+                stats.ports.clone(),
+                stats.failed_services.clone(),
+                stats.recent_oom.clone(),
+            ));
+        } else if let Some((ports, failed_services, recent_oom)) = &cached_diag {
+            stats.ports.clone_from(ports);
+            stats.failed_services.clone_from(failed_services);
+            stats.recent_oom.clone_from(recent_oom);
+        }
         for (tab_id, connection_id) in tabs {
             if !send_overwritable(
                 &event_tx,
                 HostAppEvent::SystemStatsUpdated {
                     tab_id,
                     connection_id,
-                    stats: stats.clone(),
+                    stats: Box::new(stats.clone()),
                 }
                 .into(),
                 "系统统计",

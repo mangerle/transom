@@ -239,6 +239,7 @@ impl AppShell {
         );
         let terminal_appearance_subscriptions = vec![window_transparency_sub];
         let sidebar_visible = settings.window.sidebar_visible_at_startup();
+        let monitor = crate::monitor::MonitorState::new(window, &settings.monitor, cx);
 
         let mut this = Self {
             services,
@@ -271,7 +272,7 @@ impl AppShell {
             history,
             history_provider,
             probe_badges: HashMap::new(),
-            monitor: crate::monitor::MonitorState::new(window, cx),
+            monitor,
             editors: EditorManager::new(),
             sftp_modals: SftpModals {
                 chmod: None,

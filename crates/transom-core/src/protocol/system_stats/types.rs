@@ -25,11 +25,15 @@ pub struct InterfaceRate {
     pub tx_bytes_per_sec: u64,
 }
 
+/// 进程列表排序方式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ProcessSort {
+    #[default]
+    Cpu,
+    Memory,
+}
+
 /// 远端进程快照的一行。
-///
-/// `cmdline` 保存 `ps ... comm` 给出的进程名；完整命令行需要额外读取
-/// `/proc/<pid>/cmdline`，每 3 秒对 50 个进程各开一次 exec 会放大远端开销，
-/// 因此面板只展示短名，右键"复制命令"拼出 `pid + comm` 的可辨识文本。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProcessInfo {
     pub pid: u32,
@@ -39,4 +43,35 @@ pub struct ProcessInfo {
     pub mem_percent: f32,
     pub rss_bytes: u64,
     pub cmdline: String,
+    /// 完整命令行参数与启动参数；若未采集到则为短名。
+    #[serde(default)]
+    pub args: Option<String>,
+}
+
+/// 监听端口明细。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct PortListeningInfo {
+    pub protocol: String,
+    pub bind_addr: String,
+    pub port: u16,
+    pub pid: Option<u32>,
+    pub process_name: Option<String>,
+}
+
+/// 异常崩溃的 Systemd 服务。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct FailedServiceInfo {
+    pub unit: String,
+    pub load: String,
+    pub active: String,
+    pub sub: String,
+    pub description: String,
+}
+
+/// 内核 OOM Killer 触发警报。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct OomAlert {
+    pub process_name: String,
+    pub pid: u32,
+    pub message: String,
 }

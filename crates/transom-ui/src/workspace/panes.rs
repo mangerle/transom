@@ -269,6 +269,9 @@ impl AppShell {
         if let Some(player) = self.workspace.tabs[index].player() {
             return div().size_full().child(player).into_any_element();
         }
+        if let crate::app::TabContent::Monitor(target_id) = self.workspace.tabs[index].content {
+            return self.render_monitor_tab_content(tab_id, target_id, window, cx, p);
+        }
         if let Some(terminal) = self.workspace.tabs[index].terminal() {
             // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的
             // 最小外包块，绝对定位因此不受侧栏与面板列宽度变化的影响。

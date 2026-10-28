@@ -6,9 +6,9 @@ use crate::palette::Palette;
 use crate::sftp::EditorDragTracker;
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
+use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{h_resizable, resizable_panel};
-use gpui_kit::component::WindowExt;
 use gpui_kit::*;
 
 impl Render for AppShell {
@@ -43,9 +43,9 @@ impl Render for AppShell {
         }
         let plan = self.plan_workspace_layout(window, cx);
         let panels_state = if plan.side_left {
-            &self.workspace_panels_left
+            self.workspace_panels_left.clone()
         } else {
-            &self.workspace_panels
+            self.workspace_panels.clone()
         };
 
         let side_left = plan.side_left;
@@ -57,7 +57,7 @@ impl Render for AppShell {
             // 导致退出沉浸模式后侧边栏继承全屏宽度并撑满窗口。
             h_resizable(resizable_id)
         } else {
-            h_resizable(resizable_id).with_state(panels_state)
+            h_resizable(resizable_id).with_state(&panels_state)
         };
         if !self.immersive {
             resizable_group = resizable_group.child(sidebar_panel);
@@ -105,12 +105,19 @@ impl Render for AppShell {
         }
 
         if !self.immersive && self.monitor.open {
-            // 监控抽屉固定在主面板右侧，关闭时完全不占宽度。
+            // 监控抽屉停靠在主面板右侧，支持拖拽调整宽度（320px 至屏幕宽度的 75%）。
+            let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(480.0);
+            if let Some(actual_w) = panels_state.read(cx).sizes().last().copied() {
+                let actual_f32 = actual_w.as_f32();
+                if actual_f32 >= 320.0 && actual_f32 <= max_drawer_width {
+                    self.monitor.drawer_width = actual_f32;
+                }
+            }
+            let monitor_width = self.monitor.drawer_width.clamp(320.0, max_drawer_width);
             resizable_group = resizable_group.child(
                 resizable_panel()
-                    .size(px(380.0))
-                    .size_range(px(320.0)..px(720.0))
-                    .fixed()
+                    .size(px(monitor_width))
+                    .size_range(px(320.0)..px(max_drawer_width))
                     .child(self.render_monitor_panel(window, cx, &p)),
             );
         }

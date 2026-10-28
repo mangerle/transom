@@ -191,6 +191,7 @@ async fn handle_host_command(
         HostCommand::SampleProcesses {
             tab_id,
             connection_id,
+            sort,
         } => {
             state
                 .monitor_set
@@ -198,6 +199,7 @@ async fn handle_host_command(
                     remote: state.current_remote(tab_id, connection_id),
                     tab_id,
                     connection_id,
+                    sort,
                     event_tx: ctx.event_tx.clone(),
                 }));
         }
@@ -212,6 +214,7 @@ async fn handle_host_command(
                     remote: state.current_remote(tab_id, connection_id),
                     tab_id,
                     connection_id,
+                    sort: transom_core::ProcessSort::default(),
                     event_tx: ctx.event_tx.clone(),
                 },
                 pid,

@@ -1,6 +1,6 @@
-//! 主机监控看板与进程管理器：Agentless，数据来自现有 SSH 采样与按需 exec。
-
+mod components;
 mod ops;
+mod sections;
 mod types;
 mod view;
 

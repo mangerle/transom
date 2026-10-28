@@ -1822,6 +1822,9 @@ settings:
   max_concurrent_transfers:
     en: Concurrent Transfers
     zh-CN: 并发传输上限
+  max_concurrent_transfers_desc:
+    en: Limit simultaneous upload and download tasks (1-16).
+    zh-CN: 同时执行的上传与下载任务数上限（1~16）。
   verify_after_transfer:
     en: Verify After Transfer
     zh-CN: 传输后校验
@@ -2156,7 +2159,14 @@ monitor:
   kill_sent:
     en: Sent termination signal to PID %{pid}
     zh-CN: 已向 PID %{pid} 发送终止信号
+  load_avg:
+    en: Load Average
+    zh-CN: 系统平均负载
+  error_kill_pid1:
+    en: Cannot terminate system init process (PID 1)
+    zh-CN: 禁止终止系统核心引导进程 (PID 1)
 sync:
+
   group:
     en: Cloud Sync
     zh-CN: 云同步
@@ -2211,6 +2221,12 @@ sync:
   endpoint_s3:
     en: S3
     zh-CN: S3
+  endpoint_git:
+    en: Git Repository
+    zh-CN: Git 仓库
+  sync_disabled_hint:
+    en: Cloud sync is disabled. Choose WebDAV, S3 or Git Repository above to sync sessions across devices.
+    zh-CN: 当前未开启云同步。请在上方选择 WebDAV、S3 或 Git 仓库以启用多设备同步。
   webdav_url:
     en: Server URL
     zh-CN: 服务器地址

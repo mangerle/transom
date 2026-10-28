@@ -121,3 +121,46 @@ fn test_parse_disk() {
     assert_eq!(total2, 200000000 * 1024);
     assert_eq!(used2, 150000000 * 1024);
 }
+
+#[test]
+fn test_parse_swap_and_loadavg() {
+    let mem = "MemTotal: 16000000 kB\nMemAvailable: 8000000 kB\nSwapTotal: 4000000 kB\nSwapFree: 1000000 kB\n";
+    let (used, total, swap_used, swap_total) = parse_meminfo_full(mem);
+    assert_eq!(total, 16000000 * 1024);
+    assert_eq!(used, 8000000 * 1024);
+    assert_eq!(swap_total, 4000000 * 1024);
+    assert_eq!(swap_used, 3000000 * 1024);
+
+    let load_str = "0.45 0.55 0.65 2/300 9999\n";
+    let (l1, l2, l3) = parse_loadavg(load_str);
+    assert!((l1 - 0.45).abs() < 0.001);
+    assert!((l2 - 0.55).abs() < 0.001);
+    assert!((l3 - 0.65).abs() < 0.001);
+}
+
+#[test]
+fn test_parse_ports_and_diagnostics() {
+    let ss_out = "__PORTS__\nNetid State Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n\
+tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:((\"sshd\",pid=1234,fd=3))\n\
+tcp LISTEN 0 511 127.0.0.1:6379 0.0.0.0:* users:((\"redis-server\",pid=5678,fd=5))\n\
+__SERVICES__\n\
+nginx.service loaded failed failed A high performance web server\n\
+__OOM__\n\
+[12345.67] Out of memory: Killed process 8888 (python3) total-vm:1234kB\n";
+
+    let ports = parse_ports(ss_out);
+    assert_eq!(ports.len(), 2);
+    assert_eq!(ports[0].port, 22);
+    assert_eq!(ports[0].process_name.as_deref(), Some("sshd"));
+    assert_eq!(ports[0].pid, Some(1234));
+    assert_eq!(ports[1].port, 6379);
+
+    let services = parse_failed_services(ss_out);
+    assert_eq!(services.len(), 1);
+    assert_eq!(services[0].unit, "nginx.service");
+    assert_eq!(services[0].active, "failed");
+
+    let oom = parse_oom_alert(ss_out).expect("应解析出 OOM 事件");
+    assert_eq!(oom.pid, 8888);
+    assert_eq!(oom.process_name, "python3");
+}

@@ -13,32 +13,28 @@ pub(crate) struct ProcessTarget {
     pub(crate) remote: Option<SshRemote>,
     pub(crate) tab_id: TabId,
     pub(crate) connection_id: ConnectionId,
+    pub(crate) sort: transom_core::ProcessSort,
     pub(crate) event_tx: flume::Sender<AppEvent>,
 }
 
-/// 按 CPU 降序取前 50 个进程的一行采样命令。
-///
-/// 与 `ps` 默认输出不同，`--sort=-%cpu` 让最活跃的进程一定在面板顶部；
-/// `head -n 51` 保留表头在内的 51 行，远端输出量可控。
-const PROCESS_SAMPLE_COMMAND: &str =
-    "ps -eo pid,ppid,user,%cpu,%mem,rss,comm --sort=-%cpu | head -n 51";
-
 pub(crate) async fn run_process_sample(target: ProcessTarget) {
+    let sort_flag = match target.sort {
+        transom_core::ProcessSort::Cpu => "--sort=-%cpu",
+        transom_core::ProcessSort::Memory => "--sort=-rss",
+    };
+    let command = format!("ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args {sort_flag} | head -n 51");
     let result = match &target.remote {
         Some(remote) => {
-            match tokio::time::timeout(
-                COMMAND_TIMEOUT,
-                remote.exec_command_capture(PROCESS_SAMPLE_COMMAND),
-            )
-            .await
+            match tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command_capture(&command)).await
             {
                 Ok(Ok(output)) => Ok(output.stdout),
                 Ok(Err(error)) => Err(error),
                 Err(_) => Err(command_timeout("进程采样")),
             }
         }
-        None => local_command_output(PROCESS_SAMPLE_COMMAND).await,
+        None => local_command_output(&command).await,
     };
+
     let event: AppEvent = match result {
         Ok(output) => {
             let processes = transom_net::system_stats::parse_processes(&output);

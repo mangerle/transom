@@ -80,6 +80,7 @@ pub enum HostCommand {
     SampleProcesses {
         tab_id: TabId,
         connection_id: ConnectionId,
+        sort: crate::protocol::system_stats::ProcessSort,
     },
     KillProcess {
         tab_id: TabId,
