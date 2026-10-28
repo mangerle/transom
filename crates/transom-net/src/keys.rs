@@ -60,7 +60,7 @@ fn deployment_script(public_key: &str) -> Result<String, AppError> {
 }
 
 /// 按 POSIX shell 规则把任意文本包裹为单引号字面量。
-fn shell_single_quote(value: &str) -> String {
+pub(crate) fn shell_single_quote(value: &str) -> String {
     let mut quoted = String::with_capacity(value.len() + 2);
     quoted.push('\'');
     for character in value.chars() {

@@ -1,5 +1,6 @@
-//! SFTP 文件 SHA256 校验：本地后台线程分块计算，远端通过 SFTP 流式读取。
+//! SFTP 文件 SHA256 校验：本地在途/后台线程计算，远端优先通过 SSH 命令秒级计算并降级为流式读取。
 
+use crate::keys::shell_single_quote;
 use crate::sftp::{SftpClient, sftp_error, sftp_io_error};
 use sha2::{Digest, Sha256};
 use std::io::Read;
@@ -10,11 +11,64 @@ use transom_core::{AppError, ErrorCode};
 const HASH_CHUNK: usize = 64 * 1024;
 
 impl SftpClient {
-    /// 流式读取远端文件并计算 SHA256，不会把整个文件读入内存。
+    /// 计算远端文件 SHA256：优先通过 SSH 会话执行服务端本地命令秒级计算，
+    /// 避免将远端整文件再次下载回本地；不可用时安全降级为 SFTP 流式读取。
     ///
     /// # Errors
     /// 远端文件不存在、读取中断或会话异常时返回 `ErrorCode::SftpFailed`。
     pub async fn sha256_remote(&self, path: &str) -> Result<String, AppError> {
+        if let Some(hash) = self.try_sha256_remote_via_exec(path).await {
+            return Ok(hash);
+        }
+        self.sha256_remote_streaming(path).await
+    }
+
+    /// 尝试通过复用关联的 SSH 会话通道执行 sha256sum 或 shasum，在服务端本地计算哈希。
+    ///
+    /// 设计原理（Why）：
+    /// - 核心优势：通过远端本地读盘与算力在毫秒级内完成计算并返回数十字节摘要，
+    ///   避免了为了校验而把远端大文件全量网络回传二次读取，将网络下行开销彻底降为零；
+    /// - 容错降级：若底层无 SSH 会话、远端缺少校验命令（如精简容器环境）或执行超时，
+    ///   安全返回 `None` 并平滑降级至 SFTP 流式读取兜底。
+    async fn try_sha256_remote_via_exec(&self, path: &str) -> Option<String> {
+        let remote = self.ssh_remote.as_ref()?;
+        let quoted = shell_single_quote(path);
+        let command =
+            format!("sha256sum -- {quoted} 2>/dev/null || shasum -a 256 -- {quoted} 2>/dev/null");
+        match remote.exec_command_capture(&command).await {
+            Ok(output) if output.exit_status == Some(0) => {
+                if let Some(hash) = parse_sha256_output(&output.stdout) {
+                    log::debug!(
+                        "通过 SSH 远程命令成功计算远端 SHA-256，路径: {path}，哈希: {hash}"
+                    );
+                    return Some(hash);
+                }
+                log::debug!(
+                    "SSH 远程命令输出未能解析为有效 SHA-256: {}",
+                    output.stdout.trim()
+                );
+                None
+            }
+            Ok(output) => {
+                log::debug!(
+                    "SSH 远程哈希命令退出码非 0: {:?}，标准错误: {}",
+                    output.exit_status,
+                    output.stderr.trim()
+                );
+                None
+            }
+            Err(error) => {
+                log::debug!("执行 SSH 远程哈希命令失败，将降级为 SFTP 流式读取，原因: {error}");
+                None
+            }
+        }
+    }
+
+    /// 流式读取远端文件并计算 SHA256，不会把整个文件读入内存。
+    ///
+    /// # Errors
+    /// 远端文件不存在、读取中断或会话异常时返回 `ErrorCode::SftpFailed`。
+    pub async fn sha256_remote_streaming(&self, path: &str) -> Result<String, AppError> {
         let mut remote = self.session.open(path).await.map_err(sftp_error)?;
         let mut hasher = Sha256::new();
         let mut buffer = vec![0u8; HASH_CHUNK];
@@ -123,9 +177,51 @@ pub(crate) fn hex_encode(bytes: &[u8]) -> String {
     out
 }
 
+/// 解析 Linux/Unix `sha256sum` 或 `shasum -a 256` 命令的输出行，提取 64 位十六进制摘要。
+fn parse_sha256_output(output: &str) -> Option<String> {
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let token = trimmed.split_whitespace().next()?;
+        if token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Some(token.to_ascii_lowercase());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{hex_encode, sha256_local};
+    use super::{hex_encode, parse_sha256_output, sha256_local};
+
+    #[test]
+    fn parses_standard_and_shasum_outputs() {
+        // GNU sha256sum 输出格式：<hash>  <filename>
+        let gnu_output =
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  /var/log/app.log\n";
+        assert_eq!(
+            parse_sha256_output(gnu_output).as_deref(),
+            Some("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+        );
+
+        // shasum 或二进制标记格式：<hash> *<filename>
+        let binary_output =
+            "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 */tmp/empty\n";
+        assert_eq!(
+            parse_sha256_output(binary_output).as_deref(),
+            Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        );
+
+        // 空输出或错误文本应返回 None
+        assert_eq!(parse_sha256_output(""), None);
+        assert_eq!(
+            parse_sha256_output("sh: sha256sum: command not found"),
+            None
+        );
+        assert_eq!(parse_sha256_output("12345  short.txt"), None);
+    }
 
     #[tokio::test]
     async fn local_sha256_matches_known_digests() {

@@ -68,6 +68,7 @@ fn sftp_config() -> Config {
 pub struct SftpClient {
     pub(crate) session: Arc<SftpSession>,
     pub(crate) home: String,
+    pub(crate) ssh_remote: Option<SshRemote>,
 }
 
 impl SftpClient {
@@ -105,6 +106,7 @@ impl SftpClient {
         Ok(Self {
             session: Arc::new(session),
             home,
+            ssh_remote: Some(remote.clone()),
         })
     }
 
