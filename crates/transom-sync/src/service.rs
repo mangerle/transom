@@ -10,12 +10,12 @@
 //!   统一放进 `spawn_blocking`，不占用异步工作线程。
 
 use std::sync::Arc;
-use transom_core::crypto::backup::{BackupFormat, decrypt_document, encrypt_document};
 use transom_core::{
     AppError, BackupDocument, CloudSyncTarget, ErrorCode, GitSyncResult, SecretKey, SecretStore,
     SessionCatalog, SyncEndpoint, SyncPushReport, SyncSettings, collect_catalog_secrets,
     is_sync_conflict, merge_catalogs,
 };
+use transom_crypto::backup::{BackupFormat, decrypt_document, encrypt_document};
 use zeroize::Zeroizing;
 
 use super::git::{GitAuth, sync_git_blocking};

@@ -8127,23 +8127,33 @@ dependencies = [
 name = "transom-core"
 version = "1.1.0"
 dependencies = [
- "argon2 0.5.3",
  "async-trait",
- "base64 0.22.1",
- "chacha20poly1305",
  "directories",
- "getrandom 0.3.4",
  "globset",
  "log",
  "rand 0.10.3",
  "serde",
  "serde_json",
- "serde_yaml_ng",
  "ssh-key",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "transom-crypto"
+version = "1.1.0"
+dependencies = [
+ "argon2 0.5.3",
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "transom-core",
  "zeroize",
 ]
 
@@ -8186,6 +8196,7 @@ dependencies = [
  "serde_yaml_ng",
  "tempfile",
  "transom-core",
+ "transom-crypto",
  "zeroize",
 ]
 
@@ -8206,6 +8217,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "transom-core",
+ "transom-crypto",
  "transom-store",
  "zeroize",
 ]

@@ -11,7 +11,6 @@
 //! - 错误信息不区分"口令错误"与"密文损坏"，避免为暴力破解提供判定线索；
 //! - 明文负载以借用结构序列化，避免为加密再克隆一份口令。
 
-use crate::{AppError, BackupDocument, ErrorCode};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -19,6 +18,7 @@ use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use transom_core::{AppError, BackupDocument, ErrorCode};
 use zeroize::Zeroizing;
 
 const MAGIC: &str = "transom-backup";

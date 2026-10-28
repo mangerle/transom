@@ -8,7 +8,6 @@
 
 pub mod backup;
 pub mod commands;
-pub mod crypto;
 pub mod error;
 pub mod ids;
 pub mod model;
