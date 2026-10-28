@@ -7,11 +7,35 @@ use transom_core::{AppError, ConnectionId, HostCommand, InterfaceRate, ProcessIn
 
 impl AppShell {
     /// 活动栏入口：打开/关闭监控抽屉，打开时立即拉取一轮进程快照。
-    pub(crate) fn toggle_monitor(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    ///
+    /// 设计原理（Why）：若当前无聚焦的终端会话（如应用初启或全部标签关闭），
+    /// 默认激活已有本地终端或新建本地终端，确保监控抽屉能直接展示本机硬件与进程数据。
+    pub(crate) fn toggle_monitor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.monitor.open = !self.monitor.open;
         if self.monitor.open {
             self.monitor.history_tab = None;
             self.monitor.error = None;
+            let has_focused_terminal = self
+                .workspace
+                .active_tab
+                .and_then(|tab_id| self.workspace.tab(tab_id))
+                .is_some_and(|tab| tab.session_pane().is_some());
+            if !has_focused_terminal {
+                let existing_local = self
+                    .workspace
+                    .tabs
+                    .iter()
+                    .find(|tab| {
+                        matches!(tab.session.connection, transom_core::Connection::Local(_))
+                            && tab.session_pane().is_some()
+                    })
+                    .map(|tab| tab.id);
+                if let Some(tab_id) = existing_local {
+                    self.activate_tab(tab_id, window, cx);
+                } else {
+                    self.open_local_terminal(window, cx);
+                }
+            }
             self.sample_processes(cx);
             self.ensure_monitor_task(cx);
         } else {

@@ -148,6 +148,9 @@ impl AppShell {
         }
         self.schedule_startup_commands(tab_id, connection_id, window, cx);
         self.auto_start_forwards(tab_id, connection_id, session_id, cx);
+        if still_active && self.monitor.open {
+            self.sample_processes(cx);
+        }
         true
     }
 

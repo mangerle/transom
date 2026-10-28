@@ -230,6 +230,11 @@ impl AppShell {
             window.focus(&focus_handle, cx);
         }
         self.sync_broadcast_targets();
+        if self.monitor.open {
+            self.monitor.history_tab = None;
+            self.monitor.error = None;
+            self.sample_processes(cx);
+        }
         cx.notify();
     }
 }

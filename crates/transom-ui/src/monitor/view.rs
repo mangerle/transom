@@ -1,6 +1,7 @@
 use super::types::{ProcessSort, format_size, usage_bar, usage_color};
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -48,10 +49,10 @@ impl AppShell {
             .border_color(p.border);
         panel = panel.child(
             h_flex()
+                .h(rems(size::TAB_BAR_HEIGHT))
                 .justify_between()
                 .items_center()
                 .px_3()
-                .py_2()
                 .border_b_1()
                 .border_color(p.border)
                 .child(
@@ -71,7 +72,7 @@ impl AppShell {
                         .child(
                             Button::new("monitor-refresh")
                                 .ghost()
-                                .small()
+                                .xsmall()
                                 .icon(IconName::RefreshCw)
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.sample_processes(cx);
@@ -80,7 +81,7 @@ impl AppShell {
                         .child(
                             Button::new("monitor-close")
                                 .ghost()
-                                .small()
+                                .xsmall()
                                 .icon(IconName::Close)
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.monitor.open = false;
