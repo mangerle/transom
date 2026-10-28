@@ -23,11 +23,21 @@ pub(crate) enum SftpClipboardSource {
     Remote(ConnectionId),
 }
 
+/// 跨栏剪贴板中的单个条目。
+///
+/// 必须保留 `is_dir`：仅凭路径无法判断目录类型，粘贴近端时会把目录当作
+/// 单文件传输而失败（跨远端互传曾因此丢掉目录语义）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SftpClipboardEntry {
+    pub(crate) path: String,
+    pub(crate) is_dir: bool,
+}
+
 /// 跨栏剪贴板数据结构（供 Ctrl+C / Ctrl+V 使用）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SftpClipboardData {
     pub(crate) source: SftpClipboardSource,
-    pub(crate) paths: Vec<String>,
+    pub(crate) entries: Vec<SftpClipboardEntry>,
 }
 
 /// 跨列文件拖拽载荷。

@@ -8,6 +8,7 @@ use super::side_remote::{SftpDragItem, SftpRemoteCopyParams};
 use crate::app::AppShell;
 use crate::editor::render_editor_list_popover;
 use crate::palette::Palette;
+use crate::sftp::SftpTransferRequest;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -16,7 +17,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Sizable, VirtualListScrollHandle};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{TabId, TransferDirection};
 
 impl AppShell {
     /// 远程列：标题栏（路径输入与操作按钮）、内容区与过滤栏。
@@ -330,10 +331,15 @@ impl AppShell {
                                         .unwrap_or_else(|| "upload".into());
                                     let target_path =
                                         format!("{}/{}", dir.trim_end_matches('/'), fname);
-                                    this.sftp_enqueue_upload_path(
-                                        tab_id,
-                                        path_buf,
-                                        target_path,
+                                    this.sftp_enqueue_transfer(
+                                        SftpTransferRequest {
+                                            tab_id,
+                                            connection_id: main_conn,
+                                            direction: TransferDirection::Upload,
+                                            is_dir: item.is_dir,
+                                            local_path: path_buf,
+                                            remote_path: target_path,
+                                        },
                                         cx,
                                     );
                                 }

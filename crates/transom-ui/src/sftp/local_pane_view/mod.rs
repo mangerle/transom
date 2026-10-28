@@ -15,7 +15,7 @@ use self::context_menu::{LocalContextMenuProps, build_local_context_menu};
 use self::toolbar::{LocalToolbarProps, render_local_toolbar};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use super::side_remote::SftpDragItem;
-use super::{LocalFileEntry, LocalQuickPaths};
+use super::{LocalFileEntry, LocalQuickPaths, SftpTransferRequest};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
@@ -25,6 +25,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_core::TransferDirection;
 
 pub(crate) struct SftpLocalPaneProps {
     pub(crate) tab_id: TabId,
@@ -163,16 +164,38 @@ impl AppShell {
             .on_drop(move |drag: &SftpDragItem, _window, cx| {
                 let item = drag.clone();
                 app_local_drop.update(cx, |this, cx| {
-                    if item.source_connection_id.is_none() {
+                    let Some(source_connection_id) = item.source_connection_id else {
                         return;
-                    }
-                    if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
-                        let local_dir = panel.local.path.clone();
-                        for path in &item.paths {
-                            let fname = path.rsplit('/').next().unwrap_or(path);
-                            let target_local = local_dir.join(fname);
-                            this.sftp_enqueue_download_path(tab_id, path.clone(), target_local, cx);
-                        }
+                    };
+                    let Some(local_dir) = this
+                        .sftp_panel_mut_tab(tab_id)
+                        .map(|panel| panel.local.path.clone())
+                    else {
+                        return;
+                    };
+                    for path in &item.paths {
+                        let fname = path.rsplit('/').next().unwrap_or(path);
+                        let target_local = match transom_core::safe_local_join(&local_dir, fname) {
+                            Ok(path) => path,
+                            Err(_) => {
+                                if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
+                                    panel.set_error(rust_i18n::t!("sftp.invalid_name").to_string());
+                                }
+                                cx.notify();
+                                continue;
+                            }
+                        };
+                        this.sftp_enqueue_transfer(
+                            SftpTransferRequest {
+                                tab_id,
+                                connection_id: source_connection_id,
+                                direction: TransferDirection::Download,
+                                is_dir: item.is_dir,
+                                local_path: target_local,
+                                remote_path: path.clone(),
+                            },
+                            cx,
+                        );
                     }
                 });
             })

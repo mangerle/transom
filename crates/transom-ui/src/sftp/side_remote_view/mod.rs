@@ -19,13 +19,14 @@ use super::fuzzy_match_name;
 use super::side_remote::{SftpActivePane, SftpDragItem, SftpDragPreview, SftpRemoteCopyParams};
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::SftpTransferRequest;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::v_virtual_list;
 use gpui_kit::*;
 use std::rc::Rc;
-use transom_core::{RemoteFile, TabId};
+use transom_core::{RemoteFile, TabId, TransferDirection};
 
 impl AppShell {
     /// 渲染单个并列远端列（展开态）。
@@ -243,7 +244,17 @@ impl AppShell {
                                 .map(|n| n.to_string_lossy().to_string())
                                 .unwrap_or_else(|| "upload".into());
                             let target_path = format!("{}/{}", dir.trim_end_matches('/'), fname);
-                            this.sftp_enqueue_upload_path(tab_id, path_buf, target_path, cx);
+                            this.sftp_enqueue_transfer(
+                                SftpTransferRequest {
+                                    tab_id,
+                                    connection_id,
+                                    direction: TransferDirection::Upload,
+                                    is_dir: item.is_dir,
+                                    local_path: path_buf,
+                                    remote_path: target_path,
+                                },
+                                cx,
+                            );
                         }
                     }
                 });

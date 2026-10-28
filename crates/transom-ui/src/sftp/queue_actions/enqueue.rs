@@ -10,14 +10,17 @@
 use crate::sftp::join_remote;
 use crate::sftp::{TransferMode, TransferTask};
 use std::path::PathBuf;
-use transom_core::TransferDirection;
+use transom_core::{ConnectionId, TransferDirection};
 
 /// 把本地路径列表转成上传任务；目录与文件走不同的构造分支。
+///
+/// 目标连接必须显式传入：调度层不再回退主连接，避免上传落到另一台主机。
 pub(super) fn upload_tasks(
     paths: &[PathBuf],
     remote_dir: &str,
     resume_enabled: bool,
     verify: bool,
+    target_connection_id: ConnectionId,
 ) -> Result<Vec<TransferTask>, String> {
     let mode = if resume_enabled {
         TransferMode::Resume
@@ -55,6 +58,7 @@ pub(super) fn upload_tasks(
                 mode,
             )
         };
+        task.target_connection_id = Some(target_connection_id);
         task.verify = verify;
         tasks.push(task);
     }

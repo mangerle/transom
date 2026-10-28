@@ -6,11 +6,14 @@
 //! - 核心优势：集中维护菜单交互行为，各菜单项动作明确。
 
 use crate::app::AppShell;
-use crate::sftp::side_remote::{SftpClipboardData, SftpClipboardSource, SftpRemoteCopyParams};
+use crate::sftp::SftpTransferRequest;
+use crate::sftp::side_remote::{
+    SftpClipboardData, SftpClipboardEntry, SftpClipboardSource, SftpRemoteCopyParams,
+};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
-use transom_core::{ConnectionId, TabId};
+use transom_core::{ConnectionId, TabId, TransferDirection};
 
 /// 并列远端右键菜单配置参数。
 pub(super) struct SideRemoteMenuContext {
@@ -103,10 +106,15 @@ pub(super) fn build_side_remote_context_menu(
                                         return;
                                     }
                                 };
-                            this.sftp_enqueue_download_path(
-                                tab_id,
-                                path_tr.clone(),
-                                local_target,
+                            this.sftp_enqueue_transfer(
+                                SftpTransferRequest {
+                                    tab_id,
+                                    connection_id,
+                                    direction: TransferDirection::Download,
+                                    is_dir,
+                                    local_path: local_target,
+                                    remote_path: path_tr.clone(),
+                                },
                                 cx,
                             );
                         }
@@ -157,7 +165,10 @@ pub(super) fn build_side_remote_context_menu(
                         if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
                             panel.clipboard = Some(SftpClipboardData {
                                 source: SftpClipboardSource::Remote(connection_id),
-                                paths: vec![path_tr.clone()],
+                                entries: vec![SftpClipboardEntry {
+                                    path: path_tr.clone(),
+                                    is_dir,
+                                }],
                             });
                             panel.set_status(format!("已复制条目: {path_tr}"));
                             cx.notify();

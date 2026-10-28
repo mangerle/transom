@@ -6,13 +6,14 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::SftpTransferRequest;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{ConnectionId, TabId};
+use transom_core::{ConnectionId, TabId, TransferDirection};
 
 /// 并列远端头部工具栏渲染参数。
 pub(super) struct SideRemoteHeaderProps<'a> {
@@ -113,21 +114,33 @@ pub(super) fn render_side_remote_header(
         .icon(IconName::Download)
         .tooltip(rust_i18n::t!("sftp.download").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
-            let (selected_paths, local_path) = this
+            let (selected_entries, local_path) = this
                 .workspace
                 .tab(tab_id)
                 .and_then(|t| t.sftp())
                 .map(|p| {
-                    let paths = p
+                    let entries = p
                         .side_remotes
                         .get(side_index)
-                        .map(|s| s.selection.iter().cloned().collect::<Vec<_>>())
+                        .map(|s| {
+                            s.selection
+                                .iter()
+                                .map(|path| {
+                                    let is_dir = s
+                                        .entries
+                                        .iter()
+                                        .find(|entry| &entry.path == path)
+                                        .is_some_and(|entry| entry.is_dir);
+                                    (path.clone(), is_dir)
+                                })
+                                .collect::<Vec<_>>()
+                        })
                         .unwrap_or_default();
-                    (paths, p.local.path.clone())
+                    (entries, p.local.path.clone())
                 })
                 .unwrap_or_default();
 
-            for path in selected_paths {
+            for (path, is_dir) in selected_entries {
                 let fname = path.rsplit('/').next().unwrap_or(&path);
                 let local_target = match transom_core::safe_local_join(&local_path, fname) {
                     Ok(path) => path,
@@ -139,11 +152,15 @@ pub(super) fn render_side_remote_header(
                         continue;
                     }
                 };
-                this.sftp_enqueue_download_path_with_conn(
-                    tab_id,
-                    Some(connection_id),
-                    path,
-                    local_target,
+                this.sftp_enqueue_transfer(
+                    SftpTransferRequest {
+                        tab_id,
+                        connection_id,
+                        direction: TransferDirection::Download,
+                        is_dir,
+                        local_path: local_target,
+                        remote_path: path,
+                    },
                     cx,
                 );
             }

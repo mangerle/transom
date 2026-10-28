@@ -6,7 +6,22 @@
 //! 迁到 UI 后，core 只保留跨层的传输方向与目录汇总结果。
 
 use std::path::PathBuf;
-use transom_core::{ConnectionId, SyncItem, TransferDirection, TransferId};
+use transom_core::{ConnectionId, SyncItem, TabId, TransferDirection, TransferId};
+
+/// 单条上传/下载入队请求。
+///
+/// 设计原理（Why）：入队路径曾允许省略连接，调度层再回退到主连接或第一列，
+/// 跨列操作会把文件静默送到另一台主机；把方向、连接与条目类型收进一个请求
+/// 对象，让"不知道目标连接"在类型层面无法入队，调度层也不再猜测。
+pub(crate) struct SftpTransferRequest {
+    pub(crate) tab_id: TabId,
+    /// 上传时为目标端，下载时为源端。
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) direction: TransferDirection,
+    pub(crate) is_dir: bool,
+    pub(crate) local_path: PathBuf,
+    pub(crate) remote_path: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TransferMode {

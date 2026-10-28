@@ -15,14 +15,13 @@ mod clipboard;
 mod types;
 
 pub(crate) use self::types::{
-    SftpActivePane, SftpClipboardData, SftpClipboardSource, SftpDragItem, SftpDragPreview,
-    SftpRemoteCopyParams, SftpSideRemoteState,
+    SftpActivePane, SftpClipboardData, SftpClipboardEntry, SftpClipboardSource, SftpDragItem,
+    SftpDragPreview, SftpRemoteCopyParams, SftpSideRemoteState,
 };
 
 use crate::app::AppShell;
-use crate::sftp::{TransferMode, TransferTask};
+use crate::sftp::{SftpTransferRequest, TransferMode, TransferTask};
 use gpui_kit::*;
-use std::path::PathBuf;
 use transom_core::{ConnectionId, TabId, TransferDirection};
 
 impl AppShell {
@@ -136,28 +135,17 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 将单个下载路径加入传输队列。
-    pub(crate) fn sftp_enqueue_download_path(
+    /// 把单条上传/下载请求加入队列并立即尝试调度。
+    ///
+    /// 连接由调用方显式给出：调度层不再回退主连接，跨列操作不会静默落到
+    /// 另一台主机；目录类型同样由请求携带，避免目录被当作单文件传输。
+    pub(crate) fn sftp_enqueue_transfer(
         &mut self,
-        tab_id: TabId,
-        remote_path: String,
-        local_path: PathBuf,
-        cx: &mut Context<Self>,
-    ) {
-        self.sftp_enqueue_download_path_with_conn(tab_id, None, remote_path, local_path, cx);
-    }
-
-    /// 将单个下载路径加入传输队列，支持显式指定源远端连接 ID（用于并列远端与本地面板互通）。
-    pub(crate) fn sftp_enqueue_download_path_with_conn(
-        &mut self,
-        tab_id: TabId,
-        source_connection_id: Option<ConnectionId>,
-        remote_path: String,
-        local_path: PathBuf,
+        request: SftpTransferRequest,
         cx: &mut Context<Self>,
     ) {
         let verify = self.settings.sftp.verify_after_transfer;
-        let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
+        let Some(panel) = self.sftp_panel_mut_tab(request.tab_id) else {
             return;
         };
         let mode = if panel.queue.resume_enabled {
@@ -165,49 +153,36 @@ impl AppShell {
         } else {
             TransferMode::Overwrite
         };
-        let mut task = TransferTask::new(
-            TransferDirection::Download,
-            local_path,
-            remote_path.clone(),
-            None,
-            mode,
-        );
-        task.source_connection_id = source_connection_id;
-        task.verify = verify;
-        panel.queue.tasks.push(task);
-        panel.set_status(format!("已加入下载: {remote_path}"));
-        self.process_sftp_queue(tab_id, cx);
-        cx.notify();
-    }
-
-    /// 将单个上传路径加入传输队列。
-    pub(crate) fn sftp_enqueue_upload_path(
-        &mut self,
-        tab_id: TabId,
-        local_path: PathBuf,
-        target_remote: String,
-        cx: &mut Context<Self>,
-    ) {
-        let verify = self.settings.sftp.verify_after_transfer;
-        let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
-            return;
-        };
-        let mode = if panel.queue.resume_enabled {
-            TransferMode::Resume
+        let mut task = if request.is_dir {
+            TransferTask::new_directory(
+                request.direction,
+                request.local_path.clone(),
+                request.remote_path.clone(),
+                None,
+                mode,
+            )
         } else {
-            TransferMode::Overwrite
+            TransferTask::new(
+                request.direction,
+                request.local_path.clone(),
+                request.remote_path.clone(),
+                None,
+                mode,
+            )
         };
-        let mut task = TransferTask::new(
-            TransferDirection::Upload,
-            local_path.clone(),
-            target_remote.clone(),
-            None,
-            mode,
-        );
+        match request.direction {
+            TransferDirection::Upload => task.target_connection_id = Some(request.connection_id),
+            TransferDirection::Download => task.source_connection_id = Some(request.connection_id),
+            _ => {}
+        }
         task.verify = verify;
         panel.queue.tasks.push(task);
-        panel.set_status(format!("已加入上传: {}", local_path.display()));
-        self.process_sftp_queue(tab_id, cx);
+        panel.set_status(match request.direction {
+            TransferDirection::Upload => format!("已加入上传: {}", request.remote_path),
+            TransferDirection::Download => format!("已加入下载: {}", request.remote_path),
+            _ => format!("已加入传输: {}", request.remote_path),
+        });
+        self.process_sftp_queue(request.tab_id, cx);
         cx.notify();
     }
 

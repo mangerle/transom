@@ -16,7 +16,7 @@ use crate::sftp::{TransferKind, TransferMode, TransferStatus, TransferTask};
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    SftpCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId,
+    ConnectionId, SftpCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId,
 };
 
 impl AppShell {
@@ -46,6 +46,9 @@ impl AppShell {
         let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
+        let Some(target_connection_id) = tab.connection_id else {
+            return Err("当前标签没有远端连接，无法上传".to_string());
+        };
         let Some(panel) = tab.sftp_mut() else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
@@ -54,6 +57,7 @@ impl AppShell {
             &panel.remote.path,
             panel.queue.resume_enabled,
             verify,
+            target_connection_id,
         )?;
         let count = tasks.len();
         log::info!(
@@ -84,7 +88,13 @@ impl AppShell {
         let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
+        let source_connection_id = tab.connection_id;
         let Some(panel) = tab.sftp_mut() else {
+            return;
+        };
+        let Some(source_connection_id) = source_connection_id else {
+            panel.set_error("当前标签没有远端连接，无法下载".to_string());
+            cx.notify();
             return;
         };
         let paths = panel.selected_remote_paths();
@@ -130,6 +140,7 @@ impl AppShell {
                     mode,
                 )
             };
+            task.source_connection_id = Some(source_connection_id);
             task.verify = verify;
             tasks.push(task);
         }
@@ -157,7 +168,6 @@ impl AppShell {
         let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
-        let tab_conn_id = tab.connection_id;
         let Some(panel) = tab.sftp_mut() else {
             return;
         };
@@ -173,15 +183,9 @@ impl AppShell {
                 break;
             };
             let task = panel.queue.tasks[index].clone();
-            let target_conn = task
-                .target_connection_id
-                .or(task.source_connection_id)
-                .or(tab_conn_id)
-                .or_else(|| panel.side_remotes.first().map(|s| s.connection_id));
-
-            let Some(conn_id) = target_conn else {
+            let Some(conn_id) = task_connection_id(&task) else {
                 panel.queue.tasks[index].status =
-                    TransferStatus::Failed("未找到可用的远端连接".to_string());
+                    TransferStatus::Failed("任务缺少远端连接，已取消".to_string());
                 continue;
             };
 
@@ -360,6 +364,19 @@ impl AppShell {
     }
 }
 
+/// 任务执行所需的远端连接；方向决定用哪一端，缺失即视为入队缺陷。
+///
+/// 不再回退标签主连接或第一列：那会把跨列传输静默送到错误主机。
+fn task_connection_id(task: &TransferTask) -> Option<ConnectionId> {
+    match task.direction {
+        TransferDirection::Upload => task.target_connection_id,
+        TransferDirection::Download => task.source_connection_id,
+        TransferDirection::Sync | TransferDirection::RemoteCopy => {
+            task.target_connection_id.or(task.source_connection_id)
+        }
+    }
+}
+
 fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Option<SftpOperation> {
     let resume = task.mode != TransferMode::Overwrite;
     let op = match (task.kind, task.direction) {
@@ -412,4 +429,52 @@ fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Opti
         _ => return None,
     };
     Some(op)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::task_connection_id;
+    use crate::sftp::{TransferMode, TransferTask};
+    use std::path::PathBuf;
+    use transom_core::{ConnectionId, TransferDirection};
+
+    fn task(direction: TransferDirection) -> TransferTask {
+        TransferTask::new(
+            direction,
+            PathBuf::from("/tmp/a"),
+            "/remote/a".into(),
+            None,
+            TransferMode::Auto,
+        )
+    }
+
+    /// 上传只认目标端连接：缺失时宁可失败，也不能回退到标签主连接。
+    #[test]
+    fn upload_requires_target_connection() {
+        let mut upload = task(TransferDirection::Upload);
+        assert_eq!(task_connection_id(&upload), None);
+        let target = ConnectionId::new();
+        upload.target_connection_id = Some(target);
+        assert_eq!(task_connection_id(&upload), Some(target));
+    }
+
+    /// 下载只认源端连接，绝不能拿目标端字段兜底。
+    #[test]
+    fn download_requires_source_connection() {
+        let mut download = task(TransferDirection::Download);
+        assert_eq!(task_connection_id(&download), None);
+        let source = ConnectionId::new();
+        download.source_connection_id = Some(source);
+        download.target_connection_id = Some(ConnectionId::new());
+        assert_eq!(task_connection_id(&download), Some(source));
+    }
+
+    /// 跨远端互传两端都带连接，任一端可用即可调度（操作内部再校验两端）。
+    #[test]
+    fn remote_copy_accepts_either_endpoint() {
+        let mut copy = task(TransferDirection::RemoteCopy);
+        let source = ConnectionId::new();
+        copy.source_connection_id = Some(source);
+        assert_eq!(task_connection_id(&copy), Some(source));
+    }
 }

@@ -131,6 +131,7 @@ impl AppShell {
             Some(total_size),
         );
         task.verify = verify;
+        task.target_connection_id = Some(modal.connection_id);
         if let Some(panel) = self
             .workspace
             .tab_mut(tab_id)

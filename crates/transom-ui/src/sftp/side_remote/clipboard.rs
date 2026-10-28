@@ -4,11 +4,15 @@
 //! - 实现初衷：解耦复杂的跨栏剪贴板复制粘贴动作流，支持本地与多远端间的多向互通；
 //! - 核心优势：集中处理本地复制、主远端复制与并列远端复制。
 
-use super::types::{SftpActivePane, SftpClipboardData, SftpClipboardSource, SftpRemoteCopyParams};
+use super::types::{
+    SftpActivePane, SftpClipboardData, SftpClipboardEntry, SftpClipboardSource,
+    SftpRemoteCopyParams,
+};
 use crate::app::AppShell;
+use crate::sftp::SftpTransferRequest;
 use gpui_kit::*;
 use std::path::PathBuf;
-use transom_core::TabId;
+use transom_core::{TabId, TransferDirection};
 
 impl AppShell {
     /// 触发剪贴板复制（Ctrl+C 或右键复制）。
@@ -23,23 +27,39 @@ impl AppShell {
         let active_pane = panel.active_pane;
         match active_pane {
             SftpActivePane::Local => {
-                let paths: Vec<String> = if !panel.local.selection.is_empty() {
+                let entries: Vec<SftpClipboardEntry> = if !panel.local.selection.is_empty() {
                     panel
                         .local
                         .selection
                         .iter()
-                        .map(|p| p.to_string_lossy().to_string())
+                        .map(|path| SftpClipboardEntry {
+                            is_dir: panel
+                                .local
+                                .entries
+                                .iter()
+                                .find(|entry| &entry.path == path)
+                                .is_some_and(|entry| entry.is_dir),
+                            path: path.to_string_lossy().to_string(),
+                        })
                         .collect()
-                } else if let Some(sel) = &panel.local.selected {
-                    vec![sel.to_string_lossy().to_string()]
+                } else if let Some(selected) = &panel.local.selected {
+                    vec![SftpClipboardEntry {
+                        is_dir: panel
+                            .local
+                            .entries
+                            .iter()
+                            .find(|entry| &entry.path == selected)
+                            .is_some_and(|entry| entry.is_dir),
+                        path: selected.to_string_lossy().to_string(),
+                    }]
                 } else {
                     Vec::new()
                 };
-                if !paths.is_empty() {
-                    let count = paths.len();
+                if !entries.is_empty() {
+                    let count = entries.len();
                     panel.clipboard = Some(SftpClipboardData {
                         source: SftpClipboardSource::Local,
-                        paths,
+                        entries,
                     });
                     panel.set_status(format!("已复制本地 {count} 个条目，可粘贴至远端"));
                     cx.notify();
@@ -58,9 +78,21 @@ impl AppShell {
                 };
                 if !paths.is_empty() {
                     let count = paths.len();
+                    let entries = paths
+                        .into_iter()
+                        .map(|path| SftpClipboardEntry {
+                            is_dir: panel
+                                .remote
+                                .entries
+                                .iter()
+                                .find(|entry| entry.path == path)
+                                .is_some_and(|entry| entry.is_dir),
+                            path,
+                        })
+                        .collect();
                     panel.clipboard = Some(SftpClipboardData {
                         source: SftpClipboardSource::Remote(conn_id),
-                        paths,
+                        entries,
                     });
                     panel.set_status(format!(
                         "已复制主远端 {count} 个条目，可粘贴至本地或其他远端"
@@ -80,9 +112,20 @@ impl AppShell {
                     };
                     if !paths.is_empty() {
                         let count = paths.len();
+                        let entries = paths
+                            .into_iter()
+                            .map(|path| SftpClipboardEntry {
+                                is_dir: side
+                                    .entries
+                                    .iter()
+                                    .find(|entry| entry.path == path)
+                                    .is_some_and(|entry| entry.is_dir),
+                                path,
+                            })
+                            .collect();
                         panel.clipboard = Some(SftpClipboardData {
                             source: SftpClipboardSource::Remote(conn_id),
-                            paths,
+                            entries,
                         });
                         panel.set_status(format!(
                             "已复制并列远端 {count} 个条目，可粘贴至本地或其他远端"
@@ -115,18 +158,39 @@ impl AppShell {
 
         match active_pane {
             SftpActivePane::Local => {
-                match clip.source {
-                    SftpClipboardSource::Local => {
-                        // 本地到本地暂不触发
-                    }
-                    SftpClipboardSource::Remote(_conn_id) => {
-                        // 从远端下载至本地当前目录
-                        let local_dir = panel.local.path.clone();
-                        for path in clip.paths {
-                            let file_name = path.rsplit('/').next().unwrap_or(&path);
-                            let target_path = local_dir.join(file_name);
-                            self.sftp_enqueue_download_path(tab_id, path, target_path, cx);
-                        }
+                if let SftpClipboardSource::Remote(source_conn) = clip.source {
+                    // 从远端下载至本地当前目录
+                    let local_dir = panel.local.path.clone();
+                    for entry in clip.entries {
+                        let file_name = entry
+                            .path
+                            .rsplit('/')
+                            .next()
+                            .unwrap_or(&entry.path)
+                            .to_owned();
+                        let target_path =
+                            match transom_core::safe_local_join(&local_dir, &file_name) {
+                                Ok(path) => path,
+                                Err(_) => {
+                                    if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+                                        panel.set_error(
+                                            rust_i18n::t!("sftp.invalid_name").to_string(),
+                                        );
+                                    }
+                                    continue;
+                                }
+                            };
+                        self.sftp_enqueue_transfer(
+                            SftpTransferRequest {
+                                tab_id,
+                                connection_id: source_conn,
+                                direction: TransferDirection::Download,
+                                is_dir: entry.is_dir,
+                                local_path: target_path,
+                                remote_path: entry.path,
+                            },
+                            cx,
+                        );
                     }
                 }
             }
@@ -138,32 +202,43 @@ impl AppShell {
                 match clip.source {
                     SftpClipboardSource::Local => {
                         // 从本地上传至主远端
-                        for path_str in clip.paths {
-                            let path = PathBuf::from(&path_str);
+                        for entry in clip.entries {
+                            let path = PathBuf::from(&entry.path);
                             let file_name = path
                                 .file_name()
                                 .map(|n| n.to_string_lossy().to_string())
                                 .unwrap_or_else(|| "upload".into());
                             let target_remote =
                                 format!("{}/{}", remote_dir.trim_end_matches('/'), file_name);
-                            self.sftp_enqueue_upload_path(tab_id, path, target_remote, cx);
+                            self.sftp_enqueue_transfer(
+                                SftpTransferRequest {
+                                    tab_id,
+                                    connection_id: target_conn,
+                                    direction: TransferDirection::Upload,
+                                    is_dir: entry.is_dir,
+                                    local_path: path,
+                                    remote_path: target_remote,
+                                },
+                                cx,
+                            );
                         }
                     }
                     SftpClipboardSource::Remote(src_conn) => {
                         if src_conn != target_conn {
                             // 跨远端互传
-                            for path in clip.paths {
-                                let file_name = path.rsplit('/').next().unwrap_or(&path);
+                            for entry in clip.entries {
+                                let file_name =
+                                    entry.path.rsplit('/').next().unwrap_or(&entry.path);
                                 let target_remote =
                                     format!("{}/{}", remote_dir.trim_end_matches('/'), file_name);
                                 self.sftp_enqueue_remote_transfer(
                                     tab_id,
                                     SftpRemoteCopyParams {
                                         source_connection_id: src_conn,
-                                        source_path: path,
+                                        source_path: entry.path,
                                         target_connection_id: target_conn,
                                         target_path: target_remote,
-                                        is_dir: false,
+                                        is_dir: entry.is_dir,
                                     },
                                     cx,
                                 );
@@ -182,32 +257,43 @@ impl AppShell {
                 match clip.source {
                     SftpClipboardSource::Local => {
                         // 从本地上传至并列远端
-                        for path_str in clip.paths {
-                            let path = PathBuf::from(&path_str);
+                        for entry in clip.entries {
+                            let path = PathBuf::from(&entry.path);
                             let file_name = path
                                 .file_name()
                                 .map(|n| n.to_string_lossy().to_string())
                                 .unwrap_or_else(|| "upload".into());
                             let target_remote =
                                 format!("{}/{}", target_dir.trim_end_matches('/'), file_name);
-                            self.sftp_enqueue_upload_path(tab_id, path, target_remote, cx);
+                            self.sftp_enqueue_transfer(
+                                SftpTransferRequest {
+                                    tab_id,
+                                    connection_id: target_conn,
+                                    direction: TransferDirection::Upload,
+                                    is_dir: entry.is_dir,
+                                    local_path: path,
+                                    remote_path: target_remote,
+                                },
+                                cx,
+                            );
                         }
                     }
                     SftpClipboardSource::Remote(src_conn) => {
                         if src_conn != target_conn {
                             // 跨远端互传
-                            for path in clip.paths {
-                                let file_name = path.rsplit('/').next().unwrap_or(&path);
+                            for entry in clip.entries {
+                                let file_name =
+                                    entry.path.rsplit('/').next().unwrap_or(&entry.path);
                                 let target_remote =
                                     format!("{}/{}", target_dir.trim_end_matches('/'), file_name);
                                 self.sftp_enqueue_remote_transfer(
                                     tab_id,
                                     SftpRemoteCopyParams {
                                         source_connection_id: src_conn,
-                                        source_path: path,
+                                        source_path: entry.path,
                                         target_connection_id: target_conn,
                                         target_path: target_remote,
-                                        is_dir: false,
+                                        is_dir: entry.is_dir,
                                     },
                                     cx,
                                 );
