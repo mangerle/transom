@@ -212,21 +212,22 @@ impl CloudSyncService {
             AppError::with_detail(ErrorCode::Configuration, "尚未配置 Git 同步仓库")
         })?;
         let passphrase = self.read_passphrase()?;
-        // Git 专用槽位优先；未单独保存 PAT 时回退云同步凭据槽位，
-        // 兼容"同一条令牌同时服务 S3 与 Git"的简单用法。
+        // Git 只接受专用令牌：云同步凭据在 WebDAV 下是网盘应用口令、S3 下是
+        // Secret Key，复用它会把第三方服务的凭据当成 Basic Auth 发给 Git 主机。
         let token = self
             .secrets
             .get(&SecretKey::git_sync_token())?
-            .or(self.read_credential()?);
+            .ok_or_else(|| {
+                AppError::with_detail(
+                    ErrorCode::Configuration,
+                    "Git 同步需要单独填写访问令牌；云同步凭据不会发送给 Git 主机",
+                )
+            })?;
         let auth = GitAuth {
-            token,
+            token: Some(token),
             username: None,
         };
         sync_git_blocking(git, catalog, passphrase.as_str(), cache_dir, &auth)
-    }
-
-    fn read_credential(&self) -> Result<Option<Zeroizing<String>>, AppError> {
-        self.secrets.get(&SecretKey::cloud_sync_credential())
     }
 
     fn read_passphrase(&self) -> Result<Zeroizing<String>, AppError> {
@@ -341,7 +342,9 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::sync::Mutex;
-    use transom_core::{AuthMethod, CloudSyncTarget, Connection, Session, SshConnection};
+    use transom_core::{
+        AuthMethod, CloudSyncTarget, Connection, GitSyncSettings, Session, SshConnection,
+    };
 
     /// 内存钥匙串：覆盖"已设置/未设置"两种状态，不依赖系统 Secret Service。
     #[derive(Default)]
@@ -439,6 +442,28 @@ mod tests {
             username: "user".into(),
             directory: "transom".into(),
         }
+    }
+
+    /// Git 只接受专用令牌：即使配置了云同步凭据，也不能当作 PAT 发给
+    /// Git 主机（WebDAV 下那是网盘口令，S3 下是 Secret Key）。
+    #[test]
+    fn git_sync_requires_dedicated_token() {
+        let secrets = MemorySecrets::default();
+        secrets.put(&SecretKey::cloud_sync_credential(), "webdav-password");
+        secrets.put(&SecretKey::cloud_sync_passphrase(), "sync-passphrase");
+        let service = CloudSyncService::new(Arc::new(secrets)).unwrap();
+        let mut config = settings(None);
+        config.git = Some(GitSyncSettings {
+            remote: "https://git.example.com/repo.git".into(),
+            ..Default::default()
+        });
+        let cache = tempfile::tempdir().unwrap();
+
+        let error = service
+            .run_git_sync(&config, &catalog(), cache.path())
+            .expect_err("缺少 Git 专用令牌必须拒绝");
+        assert_eq!(error.code, ErrorCode::Configuration);
+        assert!(error.detail.unwrap_or_default().contains("单独"));
     }
 
     #[tokio::test]

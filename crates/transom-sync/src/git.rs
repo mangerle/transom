@@ -360,9 +360,71 @@ fn run_git(cache_dir: &Path, args: &[&str], auth: &GitAuth) -> Result<Output, Ap
 }
 
 fn git_error(action: &str, stderr: &str) -> AppError {
-    let detail: String = stderr.trim().chars().take(600).collect();
+    // 先脱敏再截断：git 会原样回显远端 URL，用户把令牌写进 URL 时错误详情
+    // 会展示到界面并写入日志，必须先遮蔽 userinfo。
+    let redacted = redact_credentials(stderr);
+    let detail: String = redacted.trim().chars().take(600).collect();
     AppError::with_detail(
         ErrorCode::CloudSyncFailed,
         format!("{action}失败: {detail}"),
     )
+}
+
+/// 遮蔽 URL 内嵌凭据：`https://user:token@host/...` -> `https://***@host/...`。
+fn redact_credentials(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(position) = rest.find("://") {
+        let split = position + 3;
+        out.push_str(&rest[..split]);
+        let tail = &rest[split..];
+        let Some(at) = tail.find('@') else {
+            rest = tail;
+            continue;
+        };
+        let userinfo = &tail[..at];
+        let looks_like_userinfo = !userinfo.is_empty()
+            && !userinfo.contains(['/', '\\', '"', '\''])
+            && !userinfo.contains(char::is_whitespace);
+        if looks_like_userinfo {
+            out.push_str("***@");
+        } else {
+            // 路径里恰好出现 @ 时不是凭据，保持原文。
+            out.push_str(&tail[..at + 1]);
+        }
+        rest = &tail[at + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact_credentials;
+
+    #[test]
+    fn url_credentials_are_redacted() {
+        let text = "fatal: unable to access 'https://user:token@git.example.com/repo.git': 403";
+        assert_eq!(
+            redact_credentials(text),
+            "fatal: unable to access 'https://***@git.example.com/repo.git': 403"
+        );
+    }
+
+    /// 路径中的 @ 不是凭据，不能被误判成 userinfo。
+    #[test]
+    fn at_sign_in_path_is_kept() {
+        let text = "https://example.com/a@b";
+        assert_eq!(redact_credentials(text), text);
+    }
+
+    /// 多个 URL 逐段处理，凭据与普通路径互不影响。
+    #[test]
+    fn multiple_urls_are_redacted_independently() {
+        let text = "https://a:b@one.example/x 与 https://two.example/y@z";
+        assert_eq!(
+            redact_credentials(text),
+            "https://***@one.example/x 与 https://two.example/y@z"
+        );
+    }
 }
