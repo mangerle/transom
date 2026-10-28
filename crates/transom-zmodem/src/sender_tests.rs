@@ -1,5 +1,5 @@
     use super::*;
-    use crate::zmodem::frames::{CANFDX, ZDLE};
+    use crate::frames::{CANFDX, ZDLE};
 
     fn remote(cap: u8) -> FrameHeader {
         FrameHeader {

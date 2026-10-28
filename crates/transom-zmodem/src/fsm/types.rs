@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use transom_core::ZmodemEvent;
 
-use crate::zmodem::attach::Shared;
+use crate::attach::Shared;
 
 /// ZRQINIT 之后的分流等待窗口：sz 的 ZSINIT/ZFILE 紧随其后，静默则视为
 /// 非 lrzsz 的 rz 变体（直接等 ZFILE），转上传决策。

@@ -1,4 +1,8 @@
-//! ZMODEM 文件传输协议实现。
+//! ZMODEM 文件传输协议实现（独立 crate）。
+//!
+//! 只依赖 `transom-core` 的终端 IO 契约与事件类型、`flume` 通道与 `log`
+//! 门面；不感知 SSH/SFTP 或界面。协议可单独测试与复用，宿主 crate 只需
+//! 把 `TerminalIo` 交给 [`attach_zmodem`]。
 //!
 //! 模块分层：
 //! - [`frames`]：常量、CRC、ZDLE 转义与帧头/子包构造（纯函数）；
@@ -11,12 +15,12 @@
 //! 全部字节级语义以 lrzsz 参考实现为准，关键分歧点（头字节序、ZDLE 转义
 //! 范围、CRC 字序、rz 的 ZRINIT 轮询行为）已在各文件文档注释中定案。
 
-pub(crate) mod attach;
-pub(crate) mod files;
-pub(crate) mod frames;
-pub(crate) mod fsm;
-pub(crate) mod receiver;
-pub(crate) mod scanner;
-pub(crate) mod sender;
+mod attach;
+mod files;
+mod frames;
+mod fsm;
+mod receiver;
+mod scanner;
+mod sender;
 
 pub use attach::{ZmodemConfig, ZmodemControl, attach_zmodem};

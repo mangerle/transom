@@ -1,0 +1,22 @@
+[package]
+name = "transom-zmodem"
+description = "Self-contained ZMODEM sender/receiver, byte-stream scanner and terminal attachment layer for Transom."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+transom-core.workspace = true
+flume.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+portable-pty.workspace = true

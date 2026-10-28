@@ -21,7 +21,9 @@ apps/transom (组合根 + 控制平面)
   │    │    └─ transom-core
   │    ├─ transom-platform (用户目录 / 私有文件权限 / 发行版识别)
   │    └─ transom-core
-  ├─ transom-net (SSH / SFTP / 转发 / 串口 / Telnet / ZMODEM / 统计解析)
+  ├─ transom-net (SSH / SFTP / 转发 / 串口 / Telnet / 统计解析)
+  │    └─ transom-core
+  ├─ transom-zmodem (ZMODEM 协议状态机与终端挂载层)
   │    └─ transom-core
   ├─ transom-sync (云同步 WebDAV / S3 / Git 编排)
   │    ├─ transom-crypto
@@ -122,6 +124,9 @@ crates/transom-crypto/src/
 crates/transom-terminal/src/
   highlight/ 关键词高亮扫描与编译规则引擎
 
+crates/transom-zmodem/src/
+  frames / scanner / receiver / sender / fsm / attach：字节级协议与会话驱动
+
 crates/transom-net/src/
   system_stats/ Linux 宿主与远端资源采样输出解析器与状态机
 
@@ -142,6 +147,7 @@ apps/transom/src/controller/
 | 可覆盖样本 try_send、迁移事件反压 | 样本丢了下一轮补，迁移事件不能丢 | UI 停滞时采样频率下降（可自愈） |
 | 加密信封独立为专用 crate（transom-crypto） | net/sync 不再反向依赖 store，同时 core 不再背负加解密重依赖 | 多维护一个轻量 crate |
 | 平台约定独立为 transom-platform | 路径与权限被存储/终端/同步/界面共同使用，留在 core 会把它变成 IO 实现层 | 多维护一个轻量 crate |
+| ZMODEM 独立为 transom-zmodem | 协议只依赖终端 IO 契约，抽离后 net 不再背负 4 千行编解码与真机测试 | 多维护一个轻量 crate |
 | 连接参数随命令携带（ZMODEM/SHA1 策略） | 控制循环零同步 IO，磁盘慢不拖控制平面 | 命令载荷变宽，UI 有责任携带最新快照 |
 | known_hosts 异步落盘 | 握手路径不带写盘 IO | record 成功 ≠ 已落盘；极端崩溃丢最后若干条 |
 | 原子写必带 fsync | rename 只保证"旧或新"，不保证已持久 | 每次保存多一次 fsync（毫秒级） |

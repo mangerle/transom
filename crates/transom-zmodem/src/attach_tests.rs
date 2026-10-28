@@ -1,9 +1,9 @@
     use super::*;
-    use crate::zmodem::frames::{
+    use crate::frames::{
         ZCRCE, ZCRCG, ZCRCW, ZDLE, ZEOF, ZFILE, ZFIN, ZRINIT, ZRPOS, ZSINIT, build_bin16_header,
         build_bin32_header, build_hex_header, build_subpacket16, build_subpacket32, receiver_flags,
     };
-    use crate::zmodem::fsm::Mode;
+    use crate::fsm::Mode;
     use std::io::Cursor;
     use transom_core::ZmodemDirection;
 

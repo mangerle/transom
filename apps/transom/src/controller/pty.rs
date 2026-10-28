@@ -7,9 +7,8 @@ use transom_core::{
     LocalConnection, OutboundProxy, PromptInfo, SerialConnection, Session, SshConnection, SshHop,
     TabId, TelnetConnection, TerminalAppEvent, TerminalIo, TerminalSize,
 };
-use transom_net::{
-    AuthPrompter, SshConnectParams, ZmodemConfig, connect_ssh, connect_telnet, open_serial,
-};
+use transom_net::{AuthPrompter, SshConnectParams, connect_ssh, connect_telnet, open_serial};
+use transom_zmodem::ZmodemConfig;
 
 use super::{Internal, ReadyConnection};
 

@@ -1,5 +1,5 @@
     use super::*;
-    use crate::zmodem::frames::{
+    use crate::frames::{
         build_bin16_header, build_bin32_header, build_hex_header, build_subpacket16,
         build_subpacket32, escape_zdle,
     };

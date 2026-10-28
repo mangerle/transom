@@ -13,7 +13,6 @@ pub mod sftp;
 pub mod system_stats;
 mod telnet;
 mod traffic;
-mod zmodem;
 
 pub use auth::{AuthPrompter, PasswordPrompter};
 pub use client::{CommandOutput, SshConnectParams, SshRemote, SshSession, connect_ssh};
@@ -25,4 +24,3 @@ pub use serial::{SerialSession, SystemSerialPortProvider, open_serial};
 pub use sftp::SftpClient;
 pub use system_stats::StatsSamplerState;
 pub use telnet::{TelnetSession, connect_telnet};
-pub use zmodem::{ZmodemConfig, ZmodemControl, attach_zmodem};

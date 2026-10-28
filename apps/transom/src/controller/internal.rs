@@ -20,7 +20,8 @@ use transom_core::{
     ConnectionId, ForwardAppEvent, ForwardState, ForwardStatus, SftpAppEvent, TabId,
     TerminalAppEvent, TerminalIo,
 };
-use transom_net::{SshRemote, SshSession, ZmodemConfig};
+use transom_net::{SshRemote, SshSession};
+use transom_zmodem::ZmodemConfig;
 
 /// 分发一条内部完成事件。
 pub(super) async fn handle_internal(

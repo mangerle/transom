@@ -7,7 +7,8 @@ use transom_core::{
     AppError, AppEvent, ConnectionId, ErrorCode, HostAppEvent, TabId, TerminalAppEvent, TerminalIo,
     TransferId, ZmodemAppEvent, ZmodemEvent,
 };
-use transom_net::{SshRemote, ZmodemConfig, attach_zmodem};
+use transom_net::SshRemote;
+use transom_zmodem::{ZmodemConfig, attach_zmodem};
 
 use super::Internal;
 use super::session_context::ManagedSessionContext;

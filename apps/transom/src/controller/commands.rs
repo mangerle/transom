@@ -19,7 +19,8 @@ use transom_core::{
     ForwardId, ForwardRule, ForwardState, ForwardStatus, HostCommand, SftpCommand, SyncCommand,
     TabId, TerminalCommand, ZmodemCommand,
 };
-use transom_net::{ZmodemConfig, start_forward};
+use transom_net::start_forward;
+use transom_zmodem::ZmodemConfig;
 
 /// 主循环的继续/停机判定。
 pub(super) enum LoopControl {

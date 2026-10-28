@@ -12,7 +12,8 @@
 use std::collections::HashMap;
 use tokio::task::{JoinHandle, JoinSet};
 use transom_core::{ConnectionId, ForwardId};
-use transom_net::{ForwardTask, SftpClient, SshRemote, ZmodemControl};
+use transom_net::{ForwardTask, SftpClient, SshRemote};
+use transom_zmodem::ZmodemControl;
 
 /// 托管会话上下文。
 pub(crate) struct ManagedSessionContext {

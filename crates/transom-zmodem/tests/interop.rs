@@ -18,7 +18,7 @@ use portable_pty::{Child, CommandBuilder, PtyPair, PtySize, native_pty_system};
 use transom_core::{
     TerminalControlHandle, TerminalIo, ZmodemDirection, ZmodemEvent, ZmodemFinished,
 };
-use transom_net::{ZmodemConfig, ZmodemControl, attach_zmodem};
+use transom_zmodem::{ZmodemConfig, ZmodemControl, attach_zmodem};
 
 /// 单场会话的看门狗：lrzsz 在对端不应答时会长时间轮询，测试不能跟着挂死。
 const WATCHDOG: Duration = Duration::from_secs(90);

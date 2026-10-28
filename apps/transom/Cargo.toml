@@ -20,6 +20,7 @@ publish.workspace = true
 transom-platform.workspace = true
 transom-core.workspace = true
 transom-net.workspace = true
+transom-zmodem.workspace = true
 transom-sync.workspace = true
 transom-store.workspace = true
 transom-ui.workspace = true

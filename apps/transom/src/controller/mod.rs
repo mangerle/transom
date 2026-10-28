@@ -17,8 +17,9 @@ use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, KnownHostsStore,
     SecretStore, SftpOperation, TabId, TerminalCommand, TerminalIo, TransferId,
 };
-use transom_net::{ForwardTask, SftpClient, SshSession, ZmodemConfig};
+use transom_net::{ForwardTask, SftpClient, SshSession};
 use transom_sync::CloudSyncService;
+use transom_zmodem::ZmodemConfig;
 
 mod commands;
 mod host_exec;
