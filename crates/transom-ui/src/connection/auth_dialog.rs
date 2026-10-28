@@ -1,7 +1,8 @@
 //! 密码提示弹窗与主机指纹确认（TOFU）弹窗渲染。
 
+use super::PendingCredential;
 use super::secrets::enable_auth_save;
-use crate::app::{AppShell, PendingCredential};
+use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;

@@ -1,8 +1,9 @@
 //! 偏好设置中心的模态弹窗状态回填、全局代理表单组装与设置持久化动作。
 
 use super::read_font_family;
-use crate::app::{AppShell, WindowAppearanceSnapshot};
+use crate::app::AppShell;
 use crate::palette::localized_error;
+use crate::settings::{ProxyProtocol, WindowAppearanceSnapshot};
 use gpui_kit::*;
 use transom_terminal::TerminalView;
 
@@ -119,14 +120,14 @@ impl AppShell {
     fn fill_proxy_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (kind, host, port, username, password) = match &self.settings.proxy {
             transom_core::OutboundProxy::Direct => (
-                crate::app::ProxyProtocol::Direct,
+                ProxyProtocol::Direct,
                 String::new(),
                 "1080".to_string(),
                 String::new(),
                 String::new(),
             ),
             transom_core::OutboundProxy::Socks5 { host, port, auth } => (
-                crate::app::ProxyProtocol::Socks5,
+                ProxyProtocol::Socks5,
                 host.clone(),
                 port.to_string(),
                 auth.as_ref()
@@ -135,7 +136,7 @@ impl AppShell {
                     .map_or_else(String::new, |a| a.password.clone()),
             ),
             transom_core::OutboundProxy::Http { host, port, auth } => (
-                crate::app::ProxyProtocol::Http,
+                ProxyProtocol::Http,
                 host.clone(),
                 port.to_string(),
                 auth.as_ref()
@@ -163,7 +164,7 @@ impl AppShell {
     /// 非法配置保留原值并提示原因：静默退回直连会让用户以为代理已生效，
     /// 在受限网络中表现为"设置改了却还是连不上"。
     fn commit_proxy_form(&mut self, cx: &mut Context<Self>) {
-        use crate::app::ProxyProtocol;
+        use crate::settings::ProxyProtocol;
         let form = &self.modals.settings.proxy;
         let host = form.host.read(cx).value().trim().to_string();
         let port = form

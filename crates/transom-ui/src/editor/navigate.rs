@@ -12,9 +12,10 @@
 //! - 行号解析与越界收敛在确认时完成：非法输入就地报错重试，超界行号跳到
 //!   最后一行（与常见编辑器行为一致），而不是拒绝服务。
 
-use crate::app::{AppShell, EditorGotoLineModalState};
+use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::{Palette, sftp_text_input};
+use crate::sftp::EditorGotoLineModalState;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};

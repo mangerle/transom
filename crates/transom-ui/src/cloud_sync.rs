@@ -20,6 +20,34 @@ use transom_core::{
     SecretRestoreReport, SessionCatalog, SyncCommand, SyncEndpoint, SyncPushReport, SyncSettings,
 };
 
+/// 定时 Git 同步的节拍器：按分钟累计，达到配置间隔才触发一次。
+///
+/// 独立于任务容器：它记录的是调度进度而非任务句柄，放进 `TaskHub` 会让
+/// “纳管后台任务生命周期”的职责失真。
+#[derive(Debug, Default)]
+pub(crate) struct GitSyncScheduler {
+    elapsed_minutes: u64,
+}
+
+impl GitSyncScheduler {
+    /// 推进一分钟；到达配置间隔返回 `true` 并清零。
+    ///
+    /// `interval_minutes` 为 0 表示关闭定时同步，此时同时清零累计值，
+    /// 避免关闭再开启后立即触发一次。
+    pub(crate) fn tick(&mut self, interval_minutes: u64) -> bool {
+        if interval_minutes == 0 {
+            self.elapsed_minutes = 0;
+            return false;
+        }
+        self.elapsed_minutes = self.elapsed_minutes.saturating_add(1);
+        if self.elapsed_minutes >= interval_minutes {
+            self.elapsed_minutes = 0;
+            return true;
+        }
+        false
+    }
+}
+
 /// 设置弹窗里云同步组的全部输入框。
 ///
 /// 密码、Secret Key 与同步口令为掩码输入且打开弹窗时不回填：钥匙串里
@@ -470,5 +498,29 @@ impl AppShell {
     pub(crate) fn handle_cloud_sync_missing(&mut self, cx: &mut Context<Self>) {
         self.status = Some(rust_i18n::t!("sync.missing_remote").to_string());
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GitSyncScheduler;
+
+    /// 间隔到达才触发，触发后重新计时。
+    #[test]
+    fn scheduler_fires_at_interval_and_resets() {
+        let mut scheduler = GitSyncScheduler::default();
+        assert!(!scheduler.tick(3));
+        assert!(!scheduler.tick(3));
+        assert!(scheduler.tick(3));
+        assert!(!scheduler.tick(3));
+    }
+
+    /// 关闭定时同步（间隔 0）会清空累计，重新开启后不会立即触发。
+    #[test]
+    fn zero_interval_disables_and_resets_progress() {
+        let mut scheduler = GitSyncScheduler::default();
+        assert!(!scheduler.tick(2));
+        assert!(!scheduler.tick(0));
+        assert!(!scheduler.tick(2));
     }
 }

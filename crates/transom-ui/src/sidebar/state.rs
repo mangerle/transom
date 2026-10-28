@@ -4,11 +4,19 @@
 //! 将侧边栏可见性、搜索框实体、行视图缓存与选择集从顶层 `AppShell` 抽离，
 //! 形成自包含的侧栏状态单元，降低顶层单体复杂度并收敛侧栏交互边界。
 
-use crate::app::SidebarRowsCache;
+use super::SidebarRow;
 use gpui_kit::Entity;
 use gpui_kit::component::input::InputState;
 use std::collections::HashSet;
+use std::rc::Rc;
 use transom_core::SessionId;
+
+/// 侧栏行快照缓存：目录版本与搜索词不变时直接复用已构建的行。
+pub(crate) struct SidebarRowsCache {
+    pub(crate) revision: u64,
+    pub(crate) query: String,
+    pub(crate) rows: Rc<Vec<SidebarRow>>,
+}
 
 /// 会话侧边栏状态。
 pub(crate) struct SidebarState {

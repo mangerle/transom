@@ -1,18 +1,32 @@
 //! 会话多选与批量属性更新。
 
-use crate::app::{AppShell, BatchEditForm};
+use crate::app::AppShell;
 use crate::palette::{Palette, sftp_text_input};
 use crate::session_form::AuthChoice;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::input::Input;
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::{AuthMethod, Connection, SessionCatalog, SessionId};
+
+/// 批量编辑表单：每个开关表示"是否覆盖该属性"。
+pub(crate) struct BatchEditForm {
+    pub(crate) selected_count: usize,
+    pub(crate) change_port: bool,
+    pub(crate) port: Entity<InputState>,
+    pub(crate) change_username: bool,
+    pub(crate) username: Entity<InputState>,
+    pub(crate) change_auth: bool,
+    pub(crate) auth: AuthChoice,
+    pub(crate) key_path: Entity<InputState>,
+    pub(crate) save_passphrase: bool,
+    pub(crate) error: Option<String>,
+}
 
 /// 批量更新值；`None` 表示该属性保持不变。
 struct BatchUpdates {

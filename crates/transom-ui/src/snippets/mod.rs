@@ -32,6 +32,12 @@ pub(crate) struct SnippetFormState {
     error: Option<String>,
 }
 
+/// 底栏快捷命令卡片的显隐与编辑状态。
+pub(crate) struct SnippetPanelState {
+    pub(crate) open: bool,
+    pub(crate) form: Option<SnippetFormState>,
+}
+
 impl AppShell {
     /// 快捷键入口：打开/关闭快捷命令卡片。
     pub(crate) fn on_toggle_snippets(

@@ -1,6 +1,9 @@
 //! SFTP 内置文本编辑器、Linux 文件权限 (Chmod) 与文件属性模态对话框视图渲染。
 
-use super::{format_size, format_unix_time};
+use super::{
+    SftpChmodModalState, SftpFilterModalState, SftpInputModalState, SftpPropertiesModalState,
+    SftpSyncModalState, format_size, format_unix_time,
+};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -8,10 +11,31 @@ use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::input::{Input, Textarea};
+use gpui_kit::component::input::{EditorState, Input, InputState, Textarea};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{format_octal_permissions, format_rwx_permissions};
+
+/// 编辑器"跳转到行"弹窗的状态。
+pub(crate) struct EditorGotoLineModalState {
+    pub(crate) editor: Entity<EditorState>,
+    pub(crate) input: Entity<InputState>,
+    pub(crate) error: Option<String>,
+    pub(crate) _enter_sub: Subscription,
+}
+
+/// SFTP 五类模态弹窗与编辑器跳转行的聚合状态。
+///
+/// 这些弹窗都依附于 SFTP 双栏或内置编辑器，统一由本模块管理显隐；
+/// AppShell 只持有聚合对象，不再平铺五个互不相关的 `Option` 字段。
+pub(crate) struct SftpModals {
+    pub(crate) chmod: Option<SftpChmodModalState>,
+    pub(crate) input: Option<SftpInputModalState>,
+    pub(crate) properties: Option<SftpPropertiesModalState>,
+    pub(crate) filter: Option<SftpFilterModalState>,
+    pub(crate) sync: Option<SftpSyncModalState>,
+    pub(crate) goto_line: Option<EditorGotoLineModalState>,
+}
 
 impl AppShell {
     pub(crate) fn render_sftp_filter_modal(

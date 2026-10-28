@@ -8,6 +8,7 @@ mod helpers;
 mod prompt;
 
 pub(crate) use helpers::secret_restore_note;
+pub(crate) use prompt::BackupPromptState;
 
 use crate::app::AppShell;
 use crate::palette::localized_error;

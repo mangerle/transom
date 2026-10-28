@@ -7,7 +7,22 @@
 
 use gpui_kit::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 use transom_core::{ShortcutSettings, TerminalKeyBinding};
+
+/// 快捷键改键捕获：等待用户按下新组合键。
+pub(crate) struct ShortcutCapture {
+    pub(crate) id: &'static str,
+    pub(crate) error: Option<String>,
+    pub(crate) focus: FocusHandle,
+}
+
+/// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
+pub(crate) struct ShortcutRecordingState {
+    pub(crate) filter: Arc<parking_lot::RwLock<Vec<KeybindingKeystroke>>>,
+    pub(crate) applied_keys: Vec<String>,
+    pub(crate) capture: Option<ShortcutCapture>,
+}
 
 actions!(
     transom_ui,

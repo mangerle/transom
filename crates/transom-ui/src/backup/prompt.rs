@@ -1,7 +1,7 @@
 //! 备份弹窗交互与 UI 渲染组件。
 
 use super::helpers::ensure_backup_extension;
-use crate::app::{AppShell, BackupAction, BackupPromptState};
+use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
@@ -10,6 +10,41 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
+use std::path::{Path, PathBuf};
+
+/// 备份导出/导入动作及其目标路径。
+#[derive(Debug, Clone)]
+pub(crate) enum BackupAction {
+    Export(PathBuf),
+    Import(PathBuf),
+}
+
+impl BackupAction {
+    pub(crate) fn path(&self) -> &Path {
+        match self {
+            Self::Export(path) | Self::Import(path) => path,
+        }
+    }
+
+    pub(crate) fn is_export(&self) -> bool {
+        matches!(self, Self::Export(_))
+    }
+}
+
+/// 备份口令弹窗的输入与校验状态。
+///
+/// `encrypt`/`include_secrets`/`encrypted_file` 分别是用户选择、导出内容
+/// 范围与所选文件自身格式，三者语义不同，不能合并成互斥枚举。
+pub(crate) struct BackupPromptState {
+    pub(crate) action: BackupAction,
+    pub(crate) passphrase: Entity<InputState>,
+    pub(crate) confirm: Option<Entity<InputState>>,
+    pub(crate) encrypt: bool,
+    pub(crate) include_secrets: bool,
+    pub(crate) encrypted_file: bool,
+    pub(crate) error: Option<String>,
+    pub(crate) busy: bool,
+}
 
 impl AppShell {
     pub(crate) fn open_backup_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {

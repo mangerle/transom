@@ -17,6 +17,8 @@ mod sync_page;
 mod terminal_page;
 mod window_page;
 
+pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearanceSnapshot};
+
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};

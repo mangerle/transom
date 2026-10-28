@@ -1,7 +1,8 @@
 //! 快捷键录制弹窗与运行时改键应用。
 
-use crate::app::{AppShell, ShortcutCapture};
+use crate::app::AppShell;
 use crate::keymap;
+use crate::keymap::ShortcutCapture;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};

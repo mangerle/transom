@@ -1,6 +1,6 @@
 //! 文件夹的新建、重命名、删除与模态表单渲染。
 
-use crate::app::{AppShell, FolderForm};
+use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::session_form::SessionForm;
 use gpui_kit::base::{h_flex, v_flex};
@@ -8,6 +8,17 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use transom_core::FolderId;
+
+/// 新建/编辑文件夹的模态表单；`base` 为编辑目标，`parent` 为新建位置。
+pub(crate) struct FolderForm {
+    pub(crate) base: Option<FolderId>,
+    pub(crate) parent: Option<FolderId>,
+    pub(crate) name: Entity<InputState>,
+    pub(crate) default_port: Entity<InputState>,
+    pub(crate) default_username: Entity<InputState>,
+    pub(crate) default_key_path: Entity<InputState>,
+    pub(crate) error: Option<String>,
+}
 
 impl AppShell {
     pub(crate) fn open_new_folder(

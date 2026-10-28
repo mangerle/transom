@@ -75,7 +75,7 @@ impl AppShell {
         self.immersive = !self.immersive;
         window.toggle_fullscreen();
         if self.immersive {
-            self.modals.snippet_panel.open = false;
+            self.modals.close_transient();
         }
         if self.immersive
             && let Some(focus_handle) = self

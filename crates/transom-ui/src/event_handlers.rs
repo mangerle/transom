@@ -5,7 +5,8 @@
 //! 的具名方法后，顶层只剩"分发 + 是否重绘"的骨架；方法返回 `false` 表示
 //! 事件已过期/内部自管重绘，调用方不再统一 `notify`。
 
-use crate::app::{AppShell, AuthPromptState, HostKeyConfirmState, TabStatus};
+use crate::app::{AppShell, TabStatus};
+use crate::connection::{AuthPromptState, HostKeyConfirmState};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;

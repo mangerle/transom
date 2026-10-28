@@ -4,7 +4,8 @@ mod folders;
 mod state;
 mod tree;
 
-pub(crate) use state::SidebarState;
+pub(crate) use folders::FolderForm;
+pub(crate) use state::{SidebarRowsCache, SidebarState};
 
 /// 侧栏工具图标按钮配置属性。
 pub(crate) struct SidebarButtonProps<F> {
@@ -15,7 +16,7 @@ pub(crate) struct SidebarButtonProps<F> {
     pub(crate) on_click: F,
 }
 
-use crate::app::{AppShell, SidebarRowsCache};
+use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};

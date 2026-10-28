@@ -9,8 +9,15 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use keygen::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 use std::path::PathBuf;
-use transom_core::{AppError, Connection, ConnectionId, HostCommand, TabId};
+use transom_core::{AppError, Connection, ConnectionId, HostCommand, HostKeyRecord, TabId};
 use zeroize::Zeroizing;
+
+/// 已知主机指纹管理弹窗：记录快照与搜索框。
+pub(crate) struct KnownHostsModalState {
+    pub(crate) open: bool,
+    pub(crate) records: Vec<HostKeyRecord>,
+    pub(crate) search: Entity<InputState>,
+}
 
 /// 可部署公钥的已连接 SSH 会话。
 #[derive(Debug, Clone)]

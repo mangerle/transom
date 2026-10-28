@@ -1,8 +1,8 @@
 //! 偏好设置中的通用页：语言、通知与声音、桌面集成、数据备份。
 
 use crate::app::AppShell;
-use crate::app::ProxyProtocol;
 use crate::palette::{Palette, localized_error};
+use crate::settings::ProxyProtocol;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;

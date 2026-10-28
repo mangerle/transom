@@ -5,12 +5,69 @@
 //! 新增一个设置项要穿过整个 new 找位置。把构造收进状态类型自己的构造
 //! 函数后，设置项只改本文件，AppShell::new 保持可读。
 
-use crate::app::{AppShell, ProxyFormInputs, ProxyProtocol, SettingsModalState};
+use crate::app::AppShell;
 use crate::cloud_sync::SyncFormInputs;
+use crate::identity::IdentityEditState;
+use crate::keys::KeyWizardState;
+use crate::trigger_panel::TriggerEditState;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::slider::SliderState;
 use gpui_kit::*;
-use transom_core::AppSettings;
+use transom_core::{AppSettings, AppearanceSettings, WindowBackgroundMode};
+
+/// 窗口外观的即时快照：设置弹窗取消时用于回滚透明与背景模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WindowAppearanceSnapshot {
+    pub(crate) transparency: u8,
+    pub(crate) background: WindowBackgroundMode,
+}
+
+/// 设置弹窗内的代理协议选项。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProxyProtocol {
+    Direct,
+    Socks5,
+    Http,
+}
+
+/// 设置弹窗的代理表单输入。
+pub(crate) struct ProxyFormInputs {
+    pub(crate) kind: ProxyProtocol,
+    pub(crate) host: Entity<InputState>,
+    pub(crate) port: Entity<InputState>,
+    pub(crate) username: Entity<InputState>,
+    pub(crate) password: Entity<InputState>,
+}
+
+/// 设置弹窗的全部输入控件与临时状态。
+///
+/// 字段仍由各设置页直接读写：它们只在弹窗打开期间存活，且没有跨字段
+/// 不变式需要维护；把控件集中在一个类型里是为了让 `AppShell` 不必平铺
+/// 二十多个输入框句柄。
+pub(crate) struct SettingsModalState {
+    pub(crate) open: bool,
+    pub(crate) key_wizard: Option<KeyWizardState>,
+    pub(crate) font_family: Entity<InputState>,
+    pub(crate) ui_font_family: Entity<InputState>,
+    pub(crate) panel_hidden_patterns: Entity<InputState>,
+    pub(crate) max_concurrent_transfers: Entity<InputState>,
+    pub(crate) cjk_font: Entity<InputState>,
+    pub(crate) font_size: Entity<InputState>,
+    pub(crate) line_height: Entity<InputState>,
+    pub(crate) scrollback: Entity<InputState>,
+    pub(crate) word_separators: Entity<InputState>,
+    pub(crate) notify_threshold: Entity<InputState>,
+    pub(crate) block_collapse_rows: Entity<InputState>,
+    pub(crate) terminal_key_bindings: Entity<TextareaState>,
+    pub(crate) highlight_keywords: Entity<InputState>,
+    pub(crate) window_transparency: Entity<SliderState>,
+    pub(crate) window_appearance_snapshot: Option<WindowAppearanceSnapshot>,
+    pub(crate) appearance_snapshot: Option<AppearanceSettings>,
+    pub(crate) sync_form: SyncFormInputs,
+    pub(crate) proxy: ProxyFormInputs,
+    pub(crate) identity_edit: Option<IdentityEditState>,
+    pub(crate) trigger_edit: Option<TriggerEditState>,
+}
 
 impl SettingsModalState {
     /// 按当前设置回填构造全部输入框与滑块。

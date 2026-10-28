@@ -10,11 +10,17 @@ pub(crate) use task_hub::TaskHub;
 
 use crate::UiServices;
 use crate::broadcast::BroadcastBarState;
+use crate::cloud_sync::GitSyncScheduler;
 use crate::editor::EditorManager;
 use crate::keymap;
+use crate::keymap::ShortcutRecordingState;
+use crate::keys::KnownHostsModalState;
 use crate::palette::localized_error;
 use crate::probe::ProbeBadge;
+use crate::settings::SettingsModalState;
+use crate::sftp::SftpModals;
 use crate::sidebar::SidebarState;
+use crate::snippets::SnippetPanelState;
 use crate::workspace::WorkspaceState;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
@@ -58,6 +64,8 @@ pub struct AppShell {
     pub(crate) modals: ModalHub,
     /// 统一纳管的应用外壳后台任务与事件订阅。
     pub(crate) tasks: TaskHub,
+    /// 定时 Git 同步的分钟节拍。
+    pub(crate) git_sync_schedule: GitSyncScheduler,
     /// 命令历史内存快照：终端视图的查询回调共享它，避免每次按键都读盘。
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
     /// 共享给每个终端视图的历史查询回调。
@@ -257,6 +265,7 @@ impl AppShell {
                 terminal_appearance_subscriptions,
                 event_task,
             ),
+            git_sync_schedule: GitSyncScheduler::default(),
             history,
             history_provider,
             probe_badges: HashMap::new(),
@@ -377,17 +386,13 @@ impl AppShell {
 
     /// 每分钟节拍：达到配置间隔时触发一次后台 Git 同步。
     fn tick_git_sync(&mut self, cx: &mut Context<Self>) {
-        let Some(git) = &self.settings.sync.git else {
-            self.tasks.git_sync_minutes = 0;
-            return;
-        };
-        if git.interval_minutes == 0 {
-            self.tasks.git_sync_minutes = 0;
-            return;
-        }
-        self.tasks.git_sync_minutes = self.tasks.git_sync_minutes.saturating_add(1);
-        if self.tasks.git_sync_minutes >= git.interval_minutes {
-            self.tasks.git_sync_minutes = 0;
+        let interval = self
+            .settings
+            .sync
+            .git
+            .as_ref()
+            .map_or(0, |git| git.interval_minutes);
+        if self.git_sync_schedule.tick(interval) {
             self.start_git_sync_scheduled(cx);
         }
     }

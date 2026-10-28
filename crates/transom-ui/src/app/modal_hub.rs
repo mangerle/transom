@@ -8,11 +8,14 @@
 //!   2. 统一提供重置与活动弹窗判定能力；
 //!   3. 大幅精简 `AppShell` 结构体，提高领域内聚度。
 
-use super::types::{
-    AuthPromptState, BackupPromptState, BatchEditForm, FolderForm, HostKeyConfirmState,
-    KnownHostsModalState, PendingCredential, SettingsModalState, SnippetPanelState,
-};
+use crate::backup::BackupPromptState;
+use crate::batch::BatchEditForm;
+use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
+use crate::keys::KnownHostsModalState;
 use crate::session_form::SessionForm;
+use crate::settings::SettingsModalState;
+use crate::sidebar::FolderForm;
+use crate::snippets::SnippetPanelState;
 use gpui_kit::Entity;
 use gpui_kit::component::command::CommandState;
 
@@ -36,6 +39,16 @@ pub(crate) struct ModalHub {
 }
 
 impl ModalHub {
+    /// 关闭不承载用户输入的轻量浮层（快捷打开与快捷命令卡片）。
+    ///
+    /// 承载表单或确认的模态不在此列：进入沉浸模式不等于放弃未提交的编辑。
+    /// 返回是否有浮层被关闭，调用方据此决定是否需要重绘。
+    pub(crate) fn close_transient(&mut self) -> bool {
+        let quick_open = std::mem::replace(&mut self.show_quick_open, false);
+        let snippet = std::mem::replace(&mut self.snippet_panel.open, false);
+        quick_open || snippet
+    }
+
     /// 构造新的模态聚合容器。
     pub(crate) fn new(
         known_hosts: KnownHostsModalState,

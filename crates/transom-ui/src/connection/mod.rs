@@ -8,12 +8,49 @@ pub(crate) use secrets::describe_target;
 
 use crate::app::{AppShell, TabStatus, TerminalTab};
 use crate::palette::localized_error;
+use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use secrets::{ConnectPayload, collect_connection_secrets, collect_jump_hops};
 use transom_core::{
-    AppError, ConnectParams, Connection, ConnectionId, ErrorCode, Session, SessionId, TabId,
-    TerminalCommand, TerminalSize,
+    AppError, ConnectParams, Connection, ConnectionId, ErrorCode, PromptInfo, SecretKind,
+    SecretOwner, Session, SessionId, TabId, TerminalCommand, TerminalSize,
 };
+use zeroize::Zeroizing;
+
+/// 认证通过前暂存的待保存凭据。
+///
+/// 只有连接真正建立后才允许写入钥匙串：口令被拒绝或连接取消时，
+/// 这条意图随连接一起作废，避免把未经验证的口令持久化。
+pub(crate) struct PendingCredential {
+    pub(crate) session_id: SessionId,
+    pub(crate) owner: SecretOwner,
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) kind: SecretKind,
+    pub(crate) value: Zeroizing<String>,
+}
+
+/// 键盘交互式认证弹窗的状态与回答通道。
+pub(crate) struct AuthPromptState {
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) name: String,
+    pub(crate) instructions: String,
+    pub(crate) prompts: Vec<PromptInfo>,
+    pub(crate) inputs: Vec<Entity<InputState>>,
+    pub(crate) responder: tokio::sync::mpsc::Sender<Vec<String>>,
+    pub(crate) error: Option<String>,
+    pub(crate) session_id: SessionId,
+    pub(crate) secret_kind: Option<SecretKind>,
+    pub(crate) save: bool,
+}
+
+/// 首次连接的主机指纹确认弹窗状态。
+pub(crate) struct HostKeyConfirmState {
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    pub(crate) key_type: String,
+    pub(crate) fingerprint: String,
+    pub(crate) responder: tokio::sync::mpsc::Sender<bool>,
+}
 
 impl AppShell {
     /// 记录最近打开的会话 ID，并异步落盘保存。
