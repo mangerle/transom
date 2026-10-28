@@ -10,7 +10,7 @@
 use crate::sftp::join_remote;
 use crate::sftp::{TransferMode, TransferTask};
 use std::path::PathBuf;
-use transom_core::{ConnectionId, TransferDirection};
+use transom_core::{ChecksumAlgorithm, ConnectionId, TransferDirection, VerifyMode};
 
 /// 把本地路径列表转成上传任务；目录与文件走不同的构造分支。
 ///
@@ -20,6 +20,8 @@ pub(super) fn upload_tasks(
     remote_dir: &str,
     resume_enabled: bool,
     verify: bool,
+    verify_mode: VerifyMode,
+    algorithm: ChecksumAlgorithm,
     target_connection_id: ConnectionId,
 ) -> Result<Vec<TransferTask>, String> {
     let mode = if resume_enabled {
@@ -60,6 +62,8 @@ pub(super) fn upload_tasks(
         };
         task.target_connection_id = Some(target_connection_id);
         task.verify = verify;
+        task.verify_mode = verify_mode;
+        task.checksum_algorithm = algorithm;
         tasks.push(task);
     }
     Ok(tasks)

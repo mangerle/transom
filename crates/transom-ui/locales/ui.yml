@@ -1826,8 +1826,32 @@ settings:
     en: Verify After Transfer
     zh-CN: 传输后校验
   verify_after_transfer_desc:
-    en: Compare SHA256 checksums on both ends after each transfer.
-    zh-CN: 每次传输完成后比对两端 SHA256，代价是额外的读盘耗时。
+    en: Compare checksums on both ends after each transfer to ensure data integrity.
+    zh-CN: 每次传输完成后比对两端文件校验和，确保数据完整一致。
+  checksum_algorithm:
+    en: Checksum Algorithm
+    zh-CN: 校验算法
+  checksum_algorithm_desc:
+    en: SHA-256 provides cryptographic integrity; MD5 offers high throughput and lower CPU usage for large files.
+    zh-CN: SHA-256 提供强密码学完整性保证；MD5 吞吐更高且显著降低大文件校验 CPU 占用。
+  checksum_sha256:
+    en: SHA-256 (Secure)
+    zh-CN: SHA-256（安全）
+  checksum_md5:
+    en: MD5 (Fast)
+    zh-CN: MD5（高速）
+  verify_mode:
+    en: Verification Mode
+    zh-CN: 校验模式
+  verify_mode_desc:
+    en: Full mode checks every byte; Quick Sample probes head/middle/tail blocks to verify multi-gigabyte files in sub-seconds.
+    zh-CN: 完整模式逐字节校验；快速抽样探测头、中、尾采样块，超大文件亚秒级完成完整性验证。
+  verify_mode_full:
+    en: Full Check
+    zh-CN: 完整校验
+  verify_mode_quick:
+    en: Quick Sample
+    zh-CN: 快速抽样
   audit_group:
     en: Session Output Audit
     zh-CN: 会话输出审计

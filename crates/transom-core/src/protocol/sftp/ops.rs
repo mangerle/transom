@@ -1,5 +1,6 @@
 //! SFTP 业务操作枚举定义。
 
+use super::transfer::{ChecksumAlgorithm, VerifyMode};
 use super::types::{RemoteDeleteTarget, RemoteTextMeta};
 use crate::ids::ConnectionId;
 use crate::protocol::sftp_filter::TransferFilter;
@@ -30,12 +31,16 @@ pub enum SftpOperation {
         local_path: PathBuf,
         resume: bool,
         verify: bool,
+        mode: VerifyMode,
+        algorithm: ChecksumAlgorithm,
     },
     Upload {
         local_path: PathBuf,
         remote_path: String,
         resume: bool,
         verify: bool,
+        mode: VerifyMode,
+        algorithm: ChecksumAlgorithm,
     },
     /// 递归上传整棵本地目录；`filter` 在遍历时剪枝被排除的子目录与文件。
     UploadDir {
@@ -44,6 +49,8 @@ pub enum SftpOperation {
         resume: bool,
         filter: TransferFilter,
         verify: bool,
+        mode: VerifyMode,
+        algorithm: ChecksumAlgorithm,
     },
     /// 递归下载整棵远端目录；`filter` 语义与 `UploadDir` 一致。
     DownloadDir {
@@ -52,6 +59,8 @@ pub enum SftpOperation {
         resume: bool,
         filter: TransferFilter,
         verify: bool,
+        mode: VerifyMode,
+        algorithm: ChecksumAlgorithm,
     },
     Mkdir {
         path: String,
@@ -137,6 +146,8 @@ pub enum SftpOperation {
         remote_path: String,
         items: Vec<SyncItem>,
         verify: bool,
+        mode: VerifyMode,
+        algorithm: ChecksumAlgorithm,
     },
     /// 跨远端流式互传（单文件或整棵目录树）。
     RemoteTransfer {

@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 use transom_core::{
-    ChecksumAlgorithm, ConnectionId, SyncItem, TabId, TransferDirection, TransferId,
+    ChecksumAlgorithm, ConnectionId, SyncItem, TabId, TransferDirection, TransferId, VerifyMode,
 };
 
 /// 单条上传/下载入队请求。
@@ -82,6 +82,8 @@ pub struct TransferTask {
     pub sync_items: Vec<SyncItem>,
     /// 任务入队时是否要求传输完成后做校验。
     pub verify: bool,
+    /// 校验策略级别（完整校验或快速抽样）。
+    pub verify_mode: VerifyMode,
     /// 校验所使用的哈希算法（Sha256 / Md5）。
     pub checksum_algorithm: ChecksumAlgorithm,
     /// 是否在传输完成后保留原始文件的 POSIX 权限与修改时间戳。
@@ -113,6 +115,7 @@ impl TransferTask {
             mode,
             sync_items: Vec::new(),
             verify: false,
+            verify_mode: VerifyMode::default(),
             checksum_algorithm: ChecksumAlgorithm::default(),
             preserve_attributes: true,
         }

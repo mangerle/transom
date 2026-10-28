@@ -144,6 +144,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let verify = self.settings.sftp.verify_after_transfer;
+        let verify_mode = self.settings.sftp.verify_mode;
+        let checksum_algorithm = self.settings.sftp.checksum_algorithm;
         let Some(panel) = self.sftp_panel_mut_tab(request.tab_id) else {
             return;
         };
@@ -175,6 +177,8 @@ impl AppShell {
             _ => {}
         }
         task.verify = verify;
+        task.verify_mode = verify_mode;
+        task.checksum_algorithm = checksum_algorithm;
         panel.queue.tasks.push(task);
         panel.set_status(match request.direction {
             TransferDirection::Upload => format!("已加入上传: {}", request.remote_path),

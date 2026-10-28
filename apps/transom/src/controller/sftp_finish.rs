@@ -2,8 +2,8 @@
 
 use std::path::Path;
 use transom_core::{
-    AppError, AppEvent, ConnectionId, ErrorCode, PreviewMode, SftpAppEvent, TabId, TransferId,
-    TransferSummary,
+    AppError, AppEvent, ChecksumAlgorithm, ConnectionId, ErrorCode, PreviewMode, SftpAppEvent,
+    TabId, TransferId, TransferSummary, VerifyMode,
 };
 use transom_net::SftpClient;
 use transom_net::sftp::TransferProgressResult;
@@ -17,6 +17,8 @@ pub(super) struct VerifyContext<'a> {
     pub(super) local_path: &'a Path,
     pub(super) remote_path: &'a str,
     pub(super) verify: bool,
+    pub(super) mode: VerifyMode,
+    pub(super) algorithm: ChecksumAlgorithm,
 }
 
 pub(super) async fn verify_transfer_result(
@@ -36,11 +38,18 @@ pub(super) async fn verify_transfer_result(
                 .into(),
             )
             .await;
+        let known = if ctx.algorithm == ChecksumAlgorithm::Sha256 {
+            progress.local_sha256.as_deref()
+        } else {
+            None
+        };
         ctx.client
-            .verify_file_with_known_local(
+            .verify_file_with_strategy_and_algo(
                 ctx.local_path,
                 ctx.remote_path,
-                progress.local_sha256.as_deref(),
+                known,
+                ctx.mode,
+                ctx.algorithm,
             )
             .await?;
     }

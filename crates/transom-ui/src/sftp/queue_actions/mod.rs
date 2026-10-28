@@ -43,6 +43,8 @@ impl AppShell {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         }
         let verify = self.settings.sftp.verify_after_transfer;
+        let verify_mode = self.settings.sftp.verify_mode;
+        let algorithm = self.settings.sftp.checksum_algorithm;
         let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
@@ -57,6 +59,8 @@ impl AppShell {
             &panel.remote.path,
             panel.queue.resume_enabled,
             verify,
+            verify_mode,
+            algorithm,
             target_connection_id,
         )?;
         let count = tasks.len();
@@ -142,6 +146,8 @@ impl AppShell {
             };
             task.source_connection_id = Some(source_connection_id);
             task.verify = verify;
+            task.verify_mode = self.settings.sftp.verify_mode;
+            task.checksum_algorithm = self.settings.sftp.checksum_algorithm;
             tasks.push(task);
         }
         if let Some(message) = invalid_name {
@@ -390,6 +396,8 @@ fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Opti
             resume,
             filter: filter.clone(),
             verify: task.verify,
+            mode: task.verify_mode,
+            algorithm: task.checksum_algorithm,
         },
         (TransferKind::Directory, TransferDirection::Download) => SftpOperation::DownloadDir {
             remote_path: task.remote_path.clone(),
@@ -397,24 +405,32 @@ fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Opti
             resume,
             filter: filter.clone(),
             verify: task.verify,
+            mode: task.verify_mode,
+            algorithm: task.checksum_algorithm,
         },
         (TransferKind::File, TransferDirection::Upload) => SftpOperation::Upload {
             local_path: task.local_path.clone(),
             remote_path: task.remote_path.clone(),
             resume,
             verify: task.verify,
+            mode: task.verify_mode,
+            algorithm: task.checksum_algorithm,
         },
         (TransferKind::File, TransferDirection::Download) => SftpOperation::Download {
             remote_path: task.remote_path.clone(),
             local_path: task.local_path.clone(),
             resume,
             verify: task.verify,
+            mode: task.verify_mode,
+            algorithm: task.checksum_algorithm,
         },
         (TransferKind::Sync, TransferDirection::Sync) => SftpOperation::SyncDirs {
             local_path: task.local_path.clone(),
             remote_path: task.remote_path.clone(),
             items: task.sync_items.clone(),
             verify: task.verify,
+            mode: task.verify_mode,
+            algorithm: task.checksum_algorithm,
         },
         (_, TransferDirection::RemoteCopy) => {
             let source_conn = task.source_connection_id?;

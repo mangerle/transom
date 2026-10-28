@@ -131,6 +131,8 @@ impl AppShell {
             Some(total_size),
         );
         task.verify = verify;
+        task.verify_mode = self.settings.sftp.verify_mode;
+        task.checksum_algorithm = self.settings.sftp.checksum_algorithm;
         task.target_connection_id = Some(modal.connection_id);
         if let Some(panel) = self
             .workspace

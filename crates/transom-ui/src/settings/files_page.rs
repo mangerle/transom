@@ -2,11 +2,12 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
+use transom_core::{ChecksumAlgorithm, VerifyMode};
 
 impl AppShell {
     /// 编辑器组：软换行与行号显示开关。
@@ -68,12 +69,14 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 传输组：并发上限与完成后校验。
+    /// 传输组：并发上限、完成后校验与校验算法。
     pub(crate) fn render_settings_transfer(
         &mut self,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let current_algo = self.settings.sftp.checksum_algorithm;
+        let current_mode = self.settings.sftp.verify_mode;
         v_flex()
             .gap_2()
             .child(Self::form_field(
@@ -91,6 +94,68 @@ impl AppShell {
                         this.settings.sftp.verify_after_transfer = checked;
                         cx.notify();
                     }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.checksum_algorithm",
+                Some("settings.checksum_algorithm_desc"),
+                h_flex()
+                    .gap_1()
+                    .children(
+                        [
+                            (
+                                "algo-sha256",
+                                "settings.checksum_sha256",
+                                ChecksumAlgorithm::Sha256,
+                            ),
+                            ("algo-md5", "settings.checksum_md5", ChecksumAlgorithm::Md5),
+                        ]
+                        .into_iter()
+                        .map(|(id, key, algo)| {
+                            Button::new(id)
+                                .small()
+                                .label(rust_i18n::t!(key).to_string())
+                                .selected(current_algo == algo)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.settings.sftp.checksum_algorithm = algo;
+                                    cx.notify();
+                                }))
+                        }),
+                    )
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.verify_mode",
+                Some("settings.verify_mode_desc"),
+                h_flex()
+                    .gap_1()
+                    .children(
+                        [
+                            (
+                                "mode-full",
+                                "settings.verify_mode_full",
+                                VerifyMode::FullSha256,
+                            ),
+                            (
+                                "mode-quick",
+                                "settings.verify_mode_quick",
+                                VerifyMode::QuickSample,
+                            ),
+                        ]
+                        .into_iter()
+                        .map(|(id, key, mode)| {
+                            Button::new(id)
+                                .small()
+                                .label(rust_i18n::t!(key).to_string())
+                                .selected(current_mode == mode)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.settings.sftp.verify_mode = mode;
+                                    cx.notify();
+                                }))
+                        }),
+                    )
                     .into_any_element(),
                 p,
             ))

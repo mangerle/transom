@@ -149,14 +149,16 @@ impl AppShell {
                                                     .save(&this.settings)
                                                 {
                                                     Ok(()) => {
-                                                        this.status = Some(
-                                                            if checked {
-                                                                "已开启传输后 SHA256 校验"
-                                                            } else {
-                                                                "已关闭传输后 SHA256 校验"
-                                                            }
-                                                            .to_string(),
-                                                        );
+                                                        let algo = this
+                                                            .settings
+                                                            .sftp
+                                                            .checksum_algorithm
+                                                            .label();
+                                                        this.status = Some(if checked {
+                                                            format!("已开启传输后 {algo} 校验")
+                                                        } else {
+                                                            format!("已关闭传输后 {algo} 校验")
+                                                        });
                                                     }
                                                     Err(error) => {
                                                         this.set_error(localized_error(&error));

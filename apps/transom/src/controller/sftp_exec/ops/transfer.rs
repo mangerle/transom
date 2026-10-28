@@ -6,13 +6,16 @@ use crate::controller::sftp_finish::{
     VerifyContext, finish_sftp, finish_sftp_summary, verify_transfer_result,
 };
 use std::path::PathBuf;
-use transom_core::TransferFilter;
+use transom_core::{ChecksumAlgorithm, TransferFilter, VerifyMode};
+
 pub(super) async fn handle_download(
     ctx: &SftpExecutionContext,
     remote_path: String,
     local_path: PathBuf,
     resume: bool,
     verify: bool,
+    mode: VerifyMode,
+    algorithm: ChecksumAlgorithm,
 ) {
     let progress = throttled_progress(
         ctx.event_tx.clone(),
@@ -33,6 +36,8 @@ pub(super) async fn handle_download(
         local_path: &local_path,
         remote_path: &remote_path,
         verify,
+        mode,
+        algorithm,
     };
     let result = verify_transfer_result(verify_ctx, result).await;
     finish_sftp(
@@ -51,6 +56,8 @@ pub(super) async fn handle_upload(
     remote_path: String,
     resume: bool,
     verify: bool,
+    mode: VerifyMode,
+    algorithm: ChecksumAlgorithm,
 ) {
     let progress = throttled_progress(
         ctx.event_tx.clone(),
@@ -71,6 +78,8 @@ pub(super) async fn handle_upload(
         local_path: &local_path,
         remote_path: &remote_path,
         verify,
+        mode,
+        algorithm,
     };
     let result = verify_transfer_result(verify_ctx, result).await;
     finish_sftp(
