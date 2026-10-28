@@ -1,7 +1,10 @@
 //! 会话树侧边栏：搜索、文件夹树渲染与根层级拖放区域。
 
 mod folders;
+mod state;
 mod tree;
+
+pub(crate) use state::SidebarState;
 
 use crate::app::{AppShell, SidebarRowsCache};
 use crate::palette::Palette;
@@ -25,14 +28,14 @@ impl AppShell {
     /// clone。失效键用 persist_catalog 推进的目录版本——目录的每次修改
     /// 都以持久化为终点（见 AppShell 字段注释）。
     pub(crate) fn sidebar_rows(&mut self, query: &str) -> Rc<Vec<SidebarRow>> {
-        if let Some(cache) = &self.sidebar_rows_cache
+        if let Some(cache) = &self.sidebar.rows_cache
             && cache.revision == self.catalog_revision
             && cache.query == query
         {
             return cache.rows.clone();
         }
         let rows = Rc::new(build_rows(&self.catalog, query));
-        self.sidebar_rows_cache = Some(SidebarRowsCache {
+        self.sidebar.rows_cache = Some(SidebarRowsCache {
             revision: self.catalog_revision,
             query: query.to_string(),
             rows: rows.clone(),
@@ -56,7 +59,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let query = self.search.read(cx).value().to_string();
+        let query = self.sidebar.search.read(cx).value().to_string();
         // 目录与搜索词都没变时复用上次构建的行表（见 `sidebar_rows`）。
         let rows = self.sidebar_rows(&query);
         let content = if rows.is_empty() {
@@ -104,12 +107,16 @@ impl AppShell {
                     .w_full()
                     .gap_1()
                     .items_center()
-                    .child(div().flex_1().child(Input::new(&self.search).w_full()))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Input::new(&self.sidebar.search).w_full()),
+                    )
                     .child(Self::sidebar_icon_button(
                         "sidebar-select",
                         IconName::ListChecks,
                         rust_i18n::t!("batch.select_mode").to_string(),
-                        self.selection_mode,
+                        self.sidebar.selection_mode,
                         p,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_selection_mode(cx);
@@ -136,8 +143,8 @@ impl AppShell {
                         }),
                     )),
             );
-        if self.selection_mode {
-            let selected_count = self.selected_sessions.len();
+        if self.sidebar.selection_mode {
+            let selected_count = self.sidebar.selected_sessions.len();
             header = header.child(
                 h_flex()
                     .w_full()

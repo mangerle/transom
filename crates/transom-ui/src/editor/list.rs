@@ -31,10 +31,11 @@ pub(crate) fn render_editor_list_popover(
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let open = this.editor_list_open;
+    let open = this.editors.list_open;
     // 渲染时快照面板数据：浮层内容闭包运行在 Popover 上下文，无法回读 AppShell。
     let panels: Vec<_> = this
-        .editor_panels
+        .editors
+        .panels
         .iter()
         .filter(|item| item.tab_id == tab_id)
         .map(|item| (item.editor.clone(), item.file_name.clone(), item.dirty))
@@ -62,8 +63,8 @@ pub(crate) fn render_editor_list_popover(
     .on_open_change(move |open, _window, cx| {
         let open = *open;
         app_open.update(cx, |this, cx| {
-            if this.editor_list_open != open {
-                this.editor_list_open = open;
+            if this.editors.list_open != open {
+                this.editors.list_open = open;
                 cx.notify();
             }
         });
@@ -115,7 +116,7 @@ fn render_editor_list_card(
                         }
                         this.raise_editor_panel(&row_editor, cx);
                         row_editor.update(cx, |state, cx| state.focus(window, cx));
-                        this.editor_list_open = false;
+                        this.editors.list_open = false;
                         cx.notify();
                     });
                 })

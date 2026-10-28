@@ -68,7 +68,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .find(|item| item.editor == *editor)
         else {
@@ -155,14 +156,15 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .position(|item| item.pending_op == Some(op_id))
         else {
             return;
         };
         let (editor, close_after, was_new_file, tab_id, remote_path) = {
-            let item = &mut self.editor_panels[index];
+            let item = &mut self.editors.panels[index];
             item.pending_op = None;
             item.baseline = item.editor.read(cx).value();
             item.remote_meta = Some(meta);
@@ -233,7 +235,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
-            .editor_panels
+            .editors
+            .panels
             .iter_mut()
             .find(|item| item.pending_op == Some(op_id))
         else {
@@ -257,7 +260,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
-            .editor_panels
+            .editors
+            .panels
             .iter_mut()
             .find(|item| item.pending_op == Some(op_id))
         else {
@@ -284,7 +288,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(item) = self
-            .editor_panels
+            .editors
+            .panels
             .iter_mut()
             .find(|item| item.pending_op == Some(op_id))
         {
@@ -317,7 +322,8 @@ impl AppShell {
             return;
         };
         let Some(editor) = self
-            .editor_panels
+            .editors
+            .panels
             .get(index)
             .map(|item| item.editor.clone())
         else {
@@ -329,10 +335,11 @@ impl AppShell {
     /// 当前应接收"保存"快捷键的面板下标：优先编辑器持有焦点的那个，
     /// 没有焦点信息时退到最上层，避免快捷键静默失效。
     pub(crate) fn focused_editor_panel_index(&self, window: &Window, cx: &App) -> Option<usize> {
-        if self.editor_panels.is_empty() {
+        if self.editors.panels.is_empty() {
             return None;
         }
-        self.editor_panels
+        self.editors
+            .panels
             .iter()
             .position(|item| {
                 item.editor
@@ -340,14 +347,15 @@ impl AppShell {
                     .focus_handle(cx)
                     .contains_focused(window, cx)
             })
-            .or(Some(self.editor_panels.len() - 1))
+            .or(Some(self.editors.panels.len() - 1))
     }
 
     pub(crate) fn editor_panel_mut(
         &mut self,
         editor: &Entity<EditorState>,
     ) -> Option<&mut EditorPanelState> {
-        self.editor_panels
+        self.editors
+            .panels
             .iter_mut()
             .find(|item| item.editor == *editor)
     }
@@ -358,7 +366,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.editor_panels.retain(|item| item.editor != *editor);
+        self.editors.panels.retain(|item| item.editor != *editor);
         self.focus_active_sftp_panel(window, cx);
         cx.notify();
     }

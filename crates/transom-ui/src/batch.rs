@@ -55,8 +55,8 @@ fn apply_batch_updates(
 
 impl AppShell {
     pub(crate) fn toggle_selection_mode(&mut self, cx: &mut Context<Self>) {
-        self.selection_mode = !self.selection_mode;
-        self.selected_sessions.clear();
+        self.sidebar.selection_mode = !self.sidebar.selection_mode;
+        self.sidebar.clear_selection();
         cx.notify();
     }
 
@@ -67,15 +67,15 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if selected {
-            self.selected_sessions.insert(session_id);
+            self.sidebar.selected_sessions.insert(session_id);
         } else {
-            self.selected_sessions.remove(&session_id);
+            self.sidebar.selected_sessions.remove(&session_id);
         }
         cx.notify();
     }
 
     pub(crate) fn select_all_sessions(&mut self, cx: &mut Context<Self>) {
-        self.selected_sessions = self
+        self.sidebar.selected_sessions = self
             .catalog
             .sessions
             .iter()
@@ -86,6 +86,7 @@ impl AppShell {
 
     pub(crate) fn open_batch_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let selected_count = self
+            .sidebar
             .selected_sessions
             .iter()
             .filter(|id| {
@@ -183,13 +184,13 @@ impl AppShell {
             username,
             auth,
         };
-        let selected = self.selected_sessions.clone();
+        let selected = self.sidebar.selected_sessions.clone();
         let (updated, skipped) = apply_batch_updates(&mut self.catalog, &selected, &updates);
         self.modals.batch_edit = None;
         let saved = self.persist_catalog();
         self.refresh_tab_sessions();
-        self.selection_mode = false;
-        self.selected_sessions.clear();
+        self.sidebar.selection_mode = false;
+        self.sidebar.clear_selection();
         if saved {
             self.status = Some(
                 rust_i18n::t!("batch.updated", updated = updated, skipped = skipped).to_string(),

@@ -42,7 +42,7 @@ pub(crate) use self::state::{
 };
 pub(crate) use self::vfs_entry_view::{VfsRowRenderOptions, render_vfs_row_content};
 pub(crate) use self::vfs_provider::LocalVfsProvider;
-pub(crate) use crate::editor::{EditorDragTracker, EditorPanelState, PendingEditorClose};
+pub(crate) use crate::editor::{EditorDragTracker, PendingEditorClose};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;

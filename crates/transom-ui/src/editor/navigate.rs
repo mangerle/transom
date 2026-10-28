@@ -33,7 +33,7 @@ impl AppShell {
     ) {
         let Some(editor) = self
             .focused_editor_panel_index(window, cx)
-            .and_then(|index| self.editor_panels.get(index))
+            .and_then(|index| self.editors.panels.get(index))
             .map(|item| item.editor.clone())
         else {
             return;

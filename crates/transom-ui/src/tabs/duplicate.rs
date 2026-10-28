@@ -27,7 +27,7 @@ impl AppShell {
         self.catalog
             .sessions
             .retain(|session| session.id != session_id);
-        self.selected_sessions.remove(&session_id);
+        self.sidebar.selected_sessions.remove(&session_id);
         for tab_id in &removed_tabs {
             self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }

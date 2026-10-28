@@ -50,9 +50,9 @@ impl AppShell {
         let session_color = session_color(session.color);
         let icon_name = session_icon(session.icon).unwrap_or(icon_name);
         let is_active = active_session == Some(session_id);
-        let selection_mode = self.selection_mode;
-        let is_selected = self.selected_sessions.contains(&session_id);
-        let is_marked = self.tree_selection == Some(session_id);
+        let selection_mode = self.sidebar.selection_mode;
+        let is_selected = self.sidebar.selected_sessions.contains(&session_id);
+        let is_marked = self.sidebar.tree_selection == Some(session_id);
         let drag_label = session.name.clone();
         let drag_icon = icon_name;
         let element = div()
@@ -67,13 +67,13 @@ impl AppShell {
             // 单击只负责选中这一行，双击才建立连接：会话行是列表里最容易被顺手点到的
             // 元素，把连接挂在单击上会让"看一眼"和"连上去"没法区分。
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if this.selection_mode {
-                    let selected = this.selected_sessions.contains(&session_id);
+                if this.sidebar.selection_mode {
+                    let selected = this.sidebar.selected_sessions.contains(&session_id);
                     this.toggle_session_selection(session_id, !selected, cx);
                 } else if event.click_count() >= 2 {
                     this.connect_session(session_id, window, cx);
                 } else {
-                    this.tree_selection = Some(session_id);
+                    this.sidebar.tree_selection = Some(session_id);
                     cx.notify();
                 }
             }))

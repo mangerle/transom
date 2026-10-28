@@ -61,7 +61,7 @@ impl AppShell {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.sidebar_visible = !self.sidebar_visible;
+        self.sidebar.toggle_visible();
         cx.notify();
     }
 

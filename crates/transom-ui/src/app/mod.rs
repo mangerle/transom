@@ -10,10 +10,11 @@ pub(crate) use task_hub::TaskHub;
 
 use crate::UiServices;
 use crate::broadcast::BroadcastBarState;
+use crate::editor::EditorManager;
 use crate::keymap;
 use crate::palette::localized_error;
 use crate::probe::ProbeBadge;
-use crate::sftp::{EditorPanelState, PendingEditorClose};
+use crate::sidebar::SidebarState;
 use crate::workspace::WorkspaceState;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
@@ -45,15 +46,14 @@ pub struct AppShell {
     pub(crate) catalog: SessionCatalog,
     /// 会话目录版本：每次持久化（= 目录被修改）递增，侧栏行缓存以此为失效键。
     pub(crate) catalog_revision: u64,
-    /// 侧栏行快照缓存：目录与搜索词不变时复用，避免整壳重绘反复构建行表。
-    pub(crate) sidebar_rows_cache: Option<SidebarRowsCache>,
+    /// 统一托管的侧栏核心状态与选择集。
+    pub(crate) sidebar: SidebarState,
     /// 统一托管的工作区多标签与分屏网格核心状态。
     pub(crate) workspace: WorkspaceState,
     /// 工作区分组（侧栏、主区、SFTP、转发）的列宽状态。
     pub(crate) workspace_panels: Entity<ResizableState>,
     /// 停靠左/右各自独立的列宽状态。
     pub(crate) workspace_panels_left: Entity<ResizableState>,
-    pub(crate) search: Entity<InputState>,
     /// 统一托管的应用顶层交互模态与表单集合。
     pub(crate) modals: ModalHub,
     /// 统一纳管的应用外壳后台任务与事件订阅。
@@ -66,12 +66,8 @@ pub struct AppShell {
     pub(crate) probe_badges: HashMap<SessionId, ProbeBadge>,
     /// 主机监控看板与进程管理器状态。
     pub(crate) monitor: crate::monitor::MonitorState,
-    /// 已打开的远端文本编辑面板。
-    pub(crate) editor_panels: Vec<EditorPanelState>,
-    /// 被脏编辑面板拦下的标签/会话关闭意图。
-    pub(crate) pending_editor_close: Option<PendingEditorClose>,
-    /// 工具栏"已打开编辑器"浮层的受控显隐。
-    pub(crate) editor_list_open: bool,
+    /// 统一托管的远端文本编辑器管理器。
+    pub(crate) editors: EditorManager,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
     pub(crate) sftp_modals: SftpModals,
     /// 底部广播输入条：目标集合、单行/多行输入与展开状态。
@@ -80,16 +76,10 @@ pub struct AppShell {
     pub(crate) status: Option<String>,
     /// 全局错误缓冲。
     pub(crate) error: Option<String>,
-    pub(crate) sidebar_visible: bool,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
     pub(crate) immersive: bool,
     /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
     pub(crate) shortcut_recording: ShortcutRecordingState,
-    /// 侧边栏多选模式与已选会话。
-    pub(crate) selection_mode: bool,
-    pub(crate) selected_sessions: HashSet<SessionId>,
-    /// 单击会话行留下的单选高亮。
-    pub(crate) tree_selection: Option<SessionId>,
 }
 
 impl AppShell {
@@ -232,11 +222,10 @@ impl AppShell {
             settings,
             catalog,
             catalog_revision: 0,
-            sidebar_rows_cache: None,
+            sidebar: SidebarState::new(sidebar_visible, search),
             workspace: WorkspaceState::new(),
             workspace_panels,
             workspace_panels_left,
-            search,
             modals: ModalHub::new(
                 KnownHostsModalState {
                     open: false,
@@ -259,9 +248,7 @@ impl AppShell {
             history_provider,
             probe_badges: HashMap::new(),
             monitor: crate::monitor::MonitorState::new(window, cx),
-            editor_panels: Vec::new(),
-            pending_editor_close: None,
-            editor_list_open: false,
+            editors: EditorManager::new(),
             sftp_modals: SftpModals {
                 chmod: None,
                 input: None,
@@ -281,16 +268,12 @@ impl AppShell {
             },
             status: None,
             error,
-            sidebar_visible,
             immersive: false,
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
                 applied_keys: applied_shortcut_keys,
                 capture: None,
             },
-            selection_mode: false,
-            tree_selection: None,
-            selected_sessions: HashSet::with_capacity(8),
         };
 
         cx.subscribe_in(

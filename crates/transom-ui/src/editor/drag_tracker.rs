@@ -104,7 +104,8 @@ impl AppShell {
     /// 是否有面板处于拖拽中；窗口级监听以此作廉价闸门，
     /// 避免每次鼠标移动都推进无意义的重绘。
     pub(crate) fn editor_drag_in_progress(&self) -> bool {
-        self.editor_panels
+        self.editors
+            .panels
             .iter()
             .any(|item| item.drag_grab.is_some())
     }

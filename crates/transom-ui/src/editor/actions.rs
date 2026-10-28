@@ -45,17 +45,18 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .position(|item| item.editor == *editor)
         else {
             return;
         };
-        if index + 1 == self.editor_panels.len() {
+        if index + 1 == self.editors.len() {
             return;
         }
-        let item = self.editor_panels.remove(index);
-        self.editor_panels.push(item);
+        let item = self.editors.panels.remove(index);
+        self.editors.panels.push(item);
         cx.notify();
     }
 
@@ -70,7 +71,7 @@ impl AppShell {
         self.raise_editor_panel(editor, cx);
         // 同一时刻至多一个面板在拖：清掉其他面板可能残留的拖拽位，
         // 防御任何未来遗漏收尾的路径导致双面板同时跟随鼠标。
-        for other in self.editor_panels.iter_mut() {
+        for other in self.editors.panels.iter_mut() {
             if other.editor != *editor {
                 other.drag_grab = None;
             }
@@ -95,7 +96,7 @@ impl AppShell {
         let (x, y): (f32, f32) = (position.x.into(), position.y.into());
         let (viewport_w, viewport_h): (f32, f32) = (viewport.width.into(), viewport.height.into());
         let mut dragging = false;
-        for item in self.editor_panels.iter_mut() {
+        for item in self.editors.panels.iter_mut() {
             let Some((grab_x, grab_y)) = item.drag_grab else {
                 continue;
             };
@@ -115,13 +116,14 @@ impl AppShell {
 
     pub(crate) fn end_editor_panel_drag(&mut self, cx: &mut Context<Self>) {
         if !self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .any(|item| item.drag_grab.is_some())
         {
             return;
         }
-        for item in self.editor_panels.iter_mut() {
+        for item in self.editors.panels.iter_mut() {
             item.drag_grab = None;
         }
         cx.notify();
@@ -135,7 +137,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let dirty = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .find(|item| item.editor == *editor)
             .is_some_and(|item| item.dirty);
@@ -178,7 +181,7 @@ impl AppShell {
         if let Some(item) = self.editor_panel_mut(editor) {
             item.confirm = None;
         }
-        self.pending_editor_close = None;
+        self.editors.pending_close = None;
         editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
     }

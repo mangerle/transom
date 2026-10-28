@@ -44,7 +44,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> bool {
         let dirty_editors: Vec<_> = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .filter(|item| tab_ids.contains(&item.tab_id) && item.dirty)
             .map(|item| item.editor.clone())
@@ -52,7 +53,7 @@ impl AppShell {
         if dirty_editors.is_empty() {
             return false;
         }
-        self.pending_editor_close = Some(intent);
+        self.editors.pending_close = Some(intent);
         for editor in dirty_editors {
             if let Some(item) = self.editor_panel_mut(&editor) {
                 // 确认横幅渲染在主体区：折叠会把它整个藏掉，先展开；冲突横幅
@@ -74,24 +75,25 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(intent) = self.pending_editor_close.clone() else {
+        let Some(intent) = self.editors.pending_close.clone() else {
             return;
         };
         let tab_ids = self.tabs_for_pending_close(&intent);
         if tab_ids.is_empty() {
             // 目标标签已全部消失：关闭已在别处发生或不再相关，意图作废。
-            self.pending_editor_close = None;
+            self.editors.pending_close = None;
             cx.notify();
             return;
         }
         let still_dirty = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .any(|item| tab_ids.contains(&item.tab_id) && item.dirty);
         if still_dirty {
             return;
         }
-        self.pending_editor_close = None;
+        self.editors.pending_close = None;
         match intent {
             PendingEditorClose::Group(group_id) => self.close_group(group_id, window, cx),
             PendingEditorClose::Pane(tab_id) => self.close_pane(tab_id, window, cx),
@@ -139,11 +141,10 @@ impl AppShell {
     /// 集中在一处按存活标签集合裁剪，比在每条关闭路径里分别点名更可靠，订阅句柄随
     /// 面板一起析构退订，不会留下向已死实体投递的事件。
     pub(crate) fn prune_editor_panels(&mut self) {
-        if self.editor_panels.is_empty() {
+        if self.editors.is_empty() {
             return;
         }
         let alive: Vec<TabId> = self.workspace.tabs.iter().map(|tab| tab.id).collect();
-        self.editor_panels
-            .retain(|item| alive.contains(&item.tab_id));
+        self.editors.prune_dead_tabs(&alive);
     }
 }

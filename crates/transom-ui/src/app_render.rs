@@ -34,8 +34,8 @@ impl Render for AppShell {
         let mut sidebar_panel = resizable_panel()
             .size(rem_px(size::SIDEBAR_WIDTH, rem))
             .fixed()
-            .visible(self.sidebar_visible);
-        if self.sidebar_visible {
+            .visible(self.sidebar.visible);
+        if self.sidebar.visible {
             sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
         }
         // 状态存在不等于面板展开：拖拽上传留下的隐藏状态不该把面板列撑出来。
@@ -76,7 +76,7 @@ impl Render for AppShell {
         };
         // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
         // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
-        let sidebar_width = if self.sidebar_visible {
+        let sidebar_width = if self.sidebar.visible {
             self.workspace_panels
                 .read(cx)
                 .sizes()
@@ -191,7 +191,7 @@ impl Render for AppShell {
         // 状态栏按活动栏加侧栏的实测宽度切分。尺寸取自工作区分组的上一帧布局，
         // 拖动侧栏时由 ResizableState 的通知驱动整帧重绘，分界线落后一帧。
         let status_bar = (!self.immersive).then(|| {
-            let divider_x = if self.sidebar_visible {
+            let divider_x = if self.sidebar.visible {
                 // 侧栏折叠期间仍以空面板参与分组，拖动其他分隔线可能把它的记录
                 // 宽度同步成 0；小于最小宽度的值一律视为无效，回退到默认宽度。
                 let sidebar_width = self

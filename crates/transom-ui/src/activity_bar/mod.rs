@@ -164,7 +164,7 @@ impl AppShell {
 
     fn activity_item_selected(&self, id: ActivityItemId) -> bool {
         match id {
-            ActivityItemId::Sessions => self.sidebar_visible,
+            ActivityItemId::Sessions => self.sidebar.visible,
             ActivityItemId::Forwards => self
                 .workspace
                 .active_tab
@@ -210,7 +210,7 @@ impl AppShell {
     ) {
         match id {
             ActivityItemId::Sessions => {
-                self.sidebar_visible = !self.sidebar_visible;
+                self.sidebar.toggle_visible();
                 cx.notify();
             }
             ActivityItemId::QuickOpen => self.toggle_quick_open(window, cx),

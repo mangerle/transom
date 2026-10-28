@@ -146,13 +146,14 @@ impl AppShell {
 
         // 同一文件已在编辑中就不再重复取文件：抬到最前并聚焦编辑器。
         if let Some(index) = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .position(|item| item.same_file(tab_id, &remote_path))
         {
-            let item = self.editor_panels.remove(index);
+            let item = self.editors.panels.remove(index);
             let editor = item.editor.clone();
-            self.editor_panels.push(item);
+            self.editors.panels.push(item);
             editor.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
@@ -241,7 +242,7 @@ impl AppShell {
         }
         editor.update(cx, |state, cx| state.focus(window, cx));
         let caret = caret_of(&editor, cx);
-        let cascade = self.editor_panels.len();
+        let cascade = self.editors.len();
         let viewport = window.viewport_size();
         let (left, top) = cascade_origin(cascade, viewport);
         let change_sub = cx.subscribe(&editor, |this, editor, event: &InputEvent, cx| {
@@ -249,7 +250,8 @@ impl AppShell {
                 return;
             }
             if let Some(item) = this
-                .editor_panels
+                .editors
+                .panels
                 .iter_mut()
                 .find(|item| item.editor == editor)
             {
@@ -270,7 +272,8 @@ impl AppShell {
         let caret_sub = cx.observe(&editor, |this, editor, cx| {
             let next = caret_of(&editor, cx);
             let changed = this
-                .editor_panels
+                .editors
+                .panels
                 .iter_mut()
                 .find(|item| item.editor == editor)
                 .is_some_and(|item| {
@@ -304,7 +307,7 @@ impl AppShell {
                 true,
             ),
         };
-        self.editor_panels.push(EditorPanelState {
+        self.editors.panels.push(EditorPanelState {
             tab_id,
             remote_path,
             file_name,
@@ -352,14 +355,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self
-            .editor_panels
-            .iter()
-            .position(|item| item.pending_op == Some(op_id) && item.phase == EditorPhase::Reading)
+        let Some(index) =
+            self.editors.panels.iter().position(|item| {
+                item.pending_op == Some(op_id) && item.phase == EditorPhase::Reading
+            })
         else {
             return;
         };
-        let item = &mut self.editor_panels[index];
+        let item = &mut self.editors.panels[index];
         item.editor
             .update(cx, |state, cx| state.set_value(content, window, cx));
         item.baseline = item.editor.read(cx).value();
@@ -396,7 +399,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
-            .editor_panels
+            .editors
+            .panels
             .iter()
             .find(|item| item.editor == *editor)
         else {

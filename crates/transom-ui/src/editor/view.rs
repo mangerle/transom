@@ -31,7 +31,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
-        self.editor_panels
+        self.editors
+            .panels
             .iter()
             .map(|item| render_editor_panel(item, window, p, cx))
             .collect()
