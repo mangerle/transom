@@ -1,16 +1,15 @@
 //! 密钥生成与管理向导的状态、密钥扫描与部署动作。
 
+mod keygen;
 mod view;
 
 use crate::app::{AppShell, TabStatus};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
+use keygen::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 use std::path::PathBuf;
-use transom_core::{
-    AppError, Connection, ConnectionId, GeneratedKey, HostCommand, KeyAlgorithm, PublicKeyInfo,
-    TabId,
-};
+use transom_core::{AppError, Connection, ConnectionId, HostCommand, TabId};
 use zeroize::Zeroizing;
 
 /// 可部署公钥的已连接 SSH 会话。
@@ -72,7 +71,7 @@ impl AppShell {
     pub(crate) fn open_key_wizard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let ssh_dir = default_ssh_dir();
         let mut state = KeyWizardState::new(window, cx, ssh_dir.clone());
-        match transom_core::scan_public_keys(&ssh_dir) {
+        match scan_public_keys(&ssh_dir) {
             Ok(keys) => {
                 state.selected = (!keys.is_empty()).then_some(0);
                 state.keys = keys;
@@ -148,7 +147,7 @@ impl AppShell {
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    transom_core::generate_keypair(
+                    generate_keypair(
                         algorithm,
                         &comment,
                         &private_path,
@@ -180,7 +179,7 @@ impl AppShell {
         state._task = None;
         match result {
             Ok(generated) => {
-                match transom_core::scan_public_keys(&ssh_dir) {
+                match scan_public_keys(&ssh_dir) {
                     Ok(keys) => {
                         state.keys = keys;
                         state.error = None;

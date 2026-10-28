@@ -5,12 +5,13 @@
 //! - 生成逻辑保持同步且不依赖 UI，调用方可将 RSA 4096 之类的耗时运算放入后台线程；
 //! - 公钥清单只解析 `*.pub`，损坏或非公钥文件被静默跳过，保证向导始终可用。
 
-use crate::{AppError, ErrorCode};
 use rand::rng;
 use ssh_key::{Algorithm, HashAlg, LineEnding, PrivateKey, PublicKey};
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
+use transom_core::{AppError, ErrorCode};
+use transom_platform::private_fs;
 
 /// 向导支持的密钥算法。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,10 +227,7 @@ fn validate_comment(comment: &str) -> Result<(), AppError> {
 }
 
 fn create_private_parent(parent: &Path) -> Result<(), AppError> {
-    if parent.exists() {
-        return Ok(());
-    }
-    fs::create_dir_all(parent).map_err(|error| {
+    private_fs::ensure_private_dir(parent).map_err(|error| {
         AppError::with_detail(
             ErrorCode::Io,
             format!(
@@ -237,13 +235,7 @@ fn create_private_parent(parent: &Path) -> Result<(), AppError> {
                 parent.display()
             ),
         )
-    })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
-    }
-    Ok(())
+    })
 }
 
 fn public_path_for(private_path: &Path) -> PathBuf {

@@ -1,5 +1,6 @@
 //! 密钥生成与管理向导的 GPUI 视图。
 
+use super::keygen::KeyAlgorithm;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -9,7 +10,6 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::KeyAlgorithm;
 
 impl AppShell {
     pub(crate) fn render_key_wizard(

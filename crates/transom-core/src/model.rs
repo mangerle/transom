@@ -11,7 +11,6 @@ pub mod forward;
 pub mod history;
 pub mod host;
 pub mod identity;
-pub mod keys;
 pub mod known_hosts;
 pub mod layout;
 pub mod mac;

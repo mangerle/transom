@@ -20,8 +20,8 @@ pub mod storage;
 // 迁移后的模块；这是纯目录整理，不改调用方的任何一行。
 pub use async_trait::async_trait;
 pub use model::{
-    catalog, color, forward, history, host, identity, keys, known_hosts, layout, mac, serial,
-    session, session_appearance, settings, terminal, theme, trigger,
+    catalog, color, forward, history, host, identity, known_hosts, layout, mac, serial, session,
+    session_appearance, settings, terminal, theme, trigger,
 };
 pub use protocol::{
     merge, proxy, sftp, sftp_filter, sftp_sync, ssh_config, ssh_url, sync, system_stats, traffic,
@@ -56,7 +56,6 @@ pub use ids::{
     ConnectionId, FolderId, ForwardId, GroupId, IdentityId, SessionId, SnippetId, SplitId, TabId,
     TransferId, TriggerId,
 };
-pub use keys::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
 pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host};
 pub use layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, StatusItemId};
 pub use mac::{MacAddress, MacParseError, normalize_mac};
