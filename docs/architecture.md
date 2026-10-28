@@ -13,23 +13,29 @@
 
 ```
 apps/transom (组合根 + 控制平面)
-  └─ transom-ui (GPUI 界面与全部应用状态)
-       └─ transom-terminal (VTE 网格 / 渲染 / 检索 / OSC / Kitty)
-            └─ alacritty_terminal
-       └─ transom-store (JSON 存储 / 钥匙串 / 备份文件读写 / 桌面集成)
-            └─ transom-core
+  ├─ transom-ui (GPUI 界面与全部应用状态)
+  │    ├─ transom-terminal (VTE 网格 / 渲染 / 高亮引擎 / 检索 / OSC / Kitty)
+  │    │    └─ alacritty_terminal
+  │    ├─ transom-store (JSON 存储 / 钥匙串 / 备份文件读写 / 桌面集成)
+  │    │    ├─ transom-crypto
+  │    │    └─ transom-core
+  │    └─ transom-core
+  ├─ transom-net (SSH / SFTP / 转发 / 串口 / Telnet / ZMODEM / 统计解析)
+  │    └─ transom-core
+  ├─ transom-sync (云同步 WebDAV / S3 / Git 编排)
+  │    ├─ transom-crypto
+  │    ├─ transom-store
+  │    └─ transom-core
+  ├─ transom-store
+  │    ├─ transom-crypto
+  │    └─ transom-core
+  └─ transom-crypto (TSYN 二进制信封与 JSON/YAML 加密信封)
        └─ transom-core
 
-apps/transom ──> transom-net (SSH / SFTP / 转发 / 串口 / Telnet / 云同步 / ZMODEM)
-  └─ transom-net ──> transom-core（含 crypto 信封）
-  └─ transom-store ──> transom-core
-
-全部 crate ──> transom-core（契约层，唯一被所有人依赖的底座）
+全部 crate ──> transom-core（纯粹契约层：领域模型、命令事件总线、错误定义）
 ```
 
-规则：**依赖只向内**。`transom-net` 不依赖 `transom-store`（加密信封上提
-到 `transom-core::crypto` 之后成立，`cargo tree -p transom-net --edges normal`
-可核验）；`transom-store` 不依赖 `transom-net`；UI 不直接做网络协议。
+规则：**依赖只向内**。`transom-net` 不依赖 `transom-store`；`transom-sync` 依赖 `transom-store` 与 `transom-crypto`；加解密信封由独立的 `transom-crypto` 提供；UI 不直接做网络协议。
 
 ## 数据流
 
@@ -85,19 +91,28 @@ AppCommand::Connect
 - known_hosts：内存态权威，常驻写盘线程异步落盘（覆盖式单槽，Drop 时
   join），`record` 返回 Ok 表示"已进入内存与待写槽"而非"已落盘"；
 - 凭据（口令/口令短语）：只进系统钥匙串，文件里只有 `save: bool` 开关；
-- 备份/同步文档：两套信封（`crypto::envelope` 的 TSYN 二进制对象、
-  `crypto::backup` 的 JSON/YAML 内嵌字段），Argon2id + XChaCha20-Poly1305。
+- 备份/同步文档：两套信封（`transom-crypto::envelope` 的 TSYN 二进制对象、
+  `transom-crypto::backup` 的 JSON/YAML 内嵌字段），Argon2id + XChaCha20-Poly1305。
 
 ## 目录结构（2026-10 整理后）
 
 ```
 crates/transom-core/src/
   model/     领域模型与算法：session / settings / catalog / appearance / keys ...
-  protocol/  线格式与同步：ssh_config / ssh_url / sftp / sync / system_stats ...
-  platform/  用户目录与私有文件权限：paths / private_fs
-  crypto/    加解密信封：envelope（TSYN）/ backup（JSON 信封）
+  protocol/  线格式与契约：ssh_config / ssh_url / sftp / sync / system_stats(types) ...
+  platform/  用户目录、os-release 与私有文件权限：paths / os_release / private_fs
   根        commands（命令/事件）、error、ids、prompt、secrets、storage、backup
   注：历史路径（crate::session 等）经 lib.rs 别名 re-export 保持可用。
+
+crates/transom-crypto/src/
+  envelope.rs  TSYN 二进制端到端加密信封
+  backup.rs    JSON/YAML 内嵌加解密信封
+
+crates/transom-terminal/src/
+  highlight/ 关键词高亮扫描与编译规则引擎
+
+crates/transom-net/src/
+  system_stats/ Linux 宿主与远端资源采样输出解析器与状态机
 
 apps/transom/src/controller/
   mod.rs       接线与主循环（约 300 行：收事件、委托处理、判定停机）
@@ -114,7 +129,7 @@ apps/transom/src/controller/
 | :--- | :--- | :--- |
 | 终端字节绕开事件总线 | 高频字节流与低频控制事件隔离 | 终端视图自己管读取任务与背压 |
 | 可覆盖样本 try_send、迁移事件反压 | 样本丢了下一轮补，迁移事件不能丢 | UI 停滞时采样频率下降（可自愈） |
-| 加密信封放契约层（core::crypto） | net 不再反向依赖 store；备份与云同步共用同一线格式 | core 依赖面变宽（加密四件套） |
+| 加密信封独立为专用 crate（transom-crypto） | net/sync 不再反向依赖 store，同时 core 不再背负加解密重依赖 | 多维护一个轻量 crate |
 | 连接参数随命令携带（ZMODEM/SHA1 策略） | 控制循环零同步 IO，磁盘慢不拖控制平面 | 命令载荷变宽，UI 有责任携带最新快照 |
 | known_hosts 异步落盘 | 握手路径不带写盘 IO | record 成功 ≠ 已落盘；极端崩溃丢最后若干条 |
 | 原子写必带 fsync | rename 只保证"旧或新"，不保证已持久 | 每次保存多一次 fsync（毫秒级） |
