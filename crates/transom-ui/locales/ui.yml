@@ -874,6 +874,9 @@ sftp:
   transferring:
     en: Transferring
     zh-CN: 传输中
+  verifying:
+    en: Verifying
+    zh-CN: 校验中
   paused:
     en: Paused
     zh-CN: 暂停

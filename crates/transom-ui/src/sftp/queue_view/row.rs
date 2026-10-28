@@ -69,6 +69,18 @@ pub(super) fn render_queue_task_row(
                         })),
                 );
         }
+        TransferStatus::Verifying => {
+            actions = actions.child(
+                Button::new(format!("queue-cancel-{idx}"))
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::X)
+                    .tooltip("取消任务")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.sftp_cancel_task(tab_id, task_id, cx);
+                    })),
+            );
+        }
         TransferStatus::Paused => {
             actions = actions
                 .child(
@@ -224,7 +236,9 @@ pub(super) fn render_queue_task_row(
         .child(
             div()
                 .text_color(match &task.status {
-                    TransferStatus::Transferring => p.sidebar_accent_foreground,
+                    TransferStatus::Transferring | TransferStatus::Verifying => {
+                        p.sidebar_accent_foreground
+                    }
                     TransferStatus::Completed => p.success,
                     TransferStatus::Failed(_) => p.danger,
                     _ => p.muted_foreground,

@@ -74,6 +74,12 @@ pub enum SftpAppEvent {
         speed_bps: Option<u64>,
         eta_secs: Option<u64>,
     },
+    /// 传输完成、进入完整性校验阶段。
+    SftpVerifying {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+    },
     SftpFinished {
         tab_id: TabId,
         connection_id: ConnectionId,

@@ -8,20 +8,43 @@ use transom_core::{
 use transom_net::SftpClient;
 use transom_net::sftp::TransferProgressResult;
 
+pub(super) struct VerifyContext<'a> {
+    pub(super) event_tx: &'a flume::Sender<AppEvent>,
+    pub(super) tab_id: TabId,
+    pub(super) connection_id: ConnectionId,
+    pub(super) op_id: TransferId,
+    pub(super) client: &'a SftpClient,
+    pub(super) local_path: &'a Path,
+    pub(super) remote_path: &'a str,
+    pub(super) verify: bool,
+}
+
 pub(super) async fn verify_transfer_result(
-    client: &SftpClient,
+    ctx: VerifyContext<'_>,
     result: Result<TransferProgressResult, AppError>,
-    verify: bool,
-    local_path: &Path,
-    remote_path: &str,
 ) -> Result<(u64, bool), AppError> {
     let progress = result?;
-    if verify {
-        client
-            .verify_file_with_known_local(local_path, remote_path, progress.local_sha256.as_deref())
+    if ctx.verify {
+        let _ = ctx
+            .event_tx
+            .send_async(
+                SftpAppEvent::SftpVerifying {
+                    tab_id: ctx.tab_id,
+                    connection_id: ctx.connection_id,
+                    op_id: ctx.op_id,
+                }
+                .into(),
+            )
+            .await;
+        ctx.client
+            .verify_file_with_known_local(
+                ctx.local_path,
+                ctx.remote_path,
+                progress.local_sha256.as_deref(),
+            )
             .await?;
     }
-    Ok((progress.transferred, verify))
+    Ok((progress.transferred, ctx.verify))
 }
 
 pub(super) async fn finish_sftp(

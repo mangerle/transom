@@ -23,6 +23,7 @@ pub(crate) fn status_label(status: &TransferStatus) -> String {
     match status {
         TransferStatus::Pending => rust_i18n::t!("sftp.pending").to_string(),
         TransferStatus::Transferring => rust_i18n::t!("sftp.transferring").to_string(),
+        TransferStatus::Verifying => rust_i18n::t!("sftp.verifying").to_string(),
         TransferStatus::Paused => rust_i18n::t!("sftp.paused").to_string(),
         TransferStatus::Completed => rust_i18n::t!("sftp.completed").to_string(),
         TransferStatus::Cancelled => rust_i18n::t!("sftp.cancelled").to_string(),
@@ -64,7 +65,10 @@ pub(crate) fn display_name(task: &TransferTask) -> String {
 pub(crate) fn is_busy(task: &TransferTask) -> bool {
     matches!(
         task.status,
-        TransferStatus::Pending | TransferStatus::Transferring | TransferStatus::Paused
+        TransferStatus::Pending
+            | TransferStatus::Transferring
+            | TransferStatus::Verifying
+            | TransferStatus::Paused
     )
 }
 

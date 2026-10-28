@@ -352,16 +352,18 @@ fn overlay_row(
         TransferStatus::Cancelled => (IconName::CircleSlash, p.muted_foreground),
         TransferStatus::Completed => (IconName::Check, p.success),
         TransferStatus::Paused => (IconName::Pause, p.warning),
+        TransferStatus::Verifying => (IconName::ShieldCheck, p.sidebar_accent_foreground),
         _ => (IconName::Upload, p.sidebar_accent_foreground),
     };
     let bar = match &task.status {
-        TransferStatus::Pending | TransferStatus::Transferring | TransferStatus::Paused => {
-            Progress::new(format!("overlay-progress-{task_id}"))
-                .w(OVERLAY_BAR_WIDTH)
-                .rounded_full()
-                .value(percent.unwrap_or(0.0))
-                .into_any_element()
-        }
+        TransferStatus::Pending
+        | TransferStatus::Transferring
+        | TransferStatus::Verifying
+        | TransferStatus::Paused => Progress::new(format!("overlay-progress-{task_id}"))
+            .w(OVERLAY_BAR_WIDTH)
+            .rounded_full()
+            .value(percent.unwrap_or(0.0))
+            .into_any_element(),
         // 结束态没有进度可显示，用等宽占位保持各行右侧对齐。
         _ => div().w(OVERLAY_BAR_WIDTH).into_any_element(),
     };
@@ -370,29 +372,32 @@ fn overlay_row(
     let actions = h_flex()
         .gap_0p5()
         .when(is_busy(task), |this| {
-            this.child(
-                Button::new(format!("overlay-act-{task_id}-toggle"))
-                    .ghost()
-                    .xsmall()
-                    .icon(if paused {
-                        IconName::Play
-                    } else {
-                        IconName::Pause
-                    })
-                    .tooltip(rust_i18n::t!(if paused {
-                        "sftp.overlay_resume"
-                    } else {
-                        "sftp.overlay_pause"
-                    }))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if paused {
-                            this.sftp_resume_task(tab_id, task_id, cx);
+            let is_verifying = task.status == TransferStatus::Verifying;
+            this.when(!is_verifying, |this| {
+                this.child(
+                    Button::new(format!("overlay-act-{task_id}-toggle"))
+                        .ghost()
+                        .xsmall()
+                        .icon(if paused {
+                            IconName::Play
                         } else {
-                            this.sftp_pause_task(tab_id, task_id, cx);
-                        }
-                        this.sync_drop_overlay(tab_id, cx);
-                    })),
-            )
+                            IconName::Pause
+                        })
+                        .tooltip(rust_i18n::t!(if paused {
+                            "sftp.overlay_resume"
+                        } else {
+                            "sftp.overlay_pause"
+                        }))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if paused {
+                                this.sftp_resume_task(tab_id, task_id, cx);
+                            } else {
+                                this.sftp_pause_task(tab_id, task_id, cx);
+                            }
+                            this.sync_drop_overlay(tab_id, cx);
+                        })),
+                )
+            })
             .child(
                 Button::new(format!("overlay-act-{task_id}-cancel"))
                     .ghost()

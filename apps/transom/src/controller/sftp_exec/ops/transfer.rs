@@ -2,7 +2,9 @@
 
 use super::SftpExecutionContext;
 use super::throttled_progress;
-use crate::controller::sftp_finish::{finish_sftp, finish_sftp_summary, verify_transfer_result};
+use crate::controller::sftp_finish::{
+    VerifyContext, finish_sftp, finish_sftp_summary, verify_transfer_result,
+};
 use std::path::PathBuf;
 use transom_core::TransferFilter;
 pub(super) async fn handle_download(
@@ -22,8 +24,17 @@ pub(super) async fn handle_download(
         .client
         .download_resumable(&remote_path, &local_path, resume, progress)
         .await;
-    let result =
-        verify_transfer_result(&ctx.client, result, verify, &local_path, &remote_path).await;
+    let verify_ctx = VerifyContext {
+        event_tx: &ctx.event_tx,
+        tab_id: ctx.tab_id,
+        connection_id: ctx.connection_id,
+        op_id: ctx.op_id,
+        client: &ctx.client,
+        local_path: &local_path,
+        remote_path: &remote_path,
+        verify,
+    };
+    let result = verify_transfer_result(verify_ctx, result).await;
     finish_sftp(
         ctx.event_tx.clone(),
         ctx.tab_id,
@@ -51,8 +62,17 @@ pub(super) async fn handle_upload(
         .client
         .upload_resumable(&local_path, &remote_path, resume, progress)
         .await;
-    let result =
-        verify_transfer_result(&ctx.client, result, verify, &local_path, &remote_path).await;
+    let verify_ctx = VerifyContext {
+        event_tx: &ctx.event_tx,
+        tab_id: ctx.tab_id,
+        connection_id: ctx.connection_id,
+        op_id: ctx.op_id,
+        client: &ctx.client,
+        local_path: &local_path,
+        remote_path: &remote_path,
+        verify,
+    };
+    let result = verify_transfer_result(verify_ctx, result).await;
     finish_sftp(
         ctx.event_tx.clone(),
         ctx.tab_id,

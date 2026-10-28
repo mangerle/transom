@@ -71,6 +71,7 @@ impl AppShell {
         let should_notify = match event {
             SftpAppEvent::SftpListing { .. } => self.on_sftp_listing(event, window, cx),
             SftpAppEvent::SftpProgress { .. } => self.on_sftp_progress(event, cx),
+            SftpAppEvent::SftpVerifying { .. } => self.on_sftp_verifying(event, cx),
             SftpAppEvent::SftpFinished { .. } => self.on_sftp_finished(event, cx),
             SftpAppEvent::SftpMetadata { .. } => self.on_sftp_metadata(event, cx),
             SftpAppEvent::SftpPreview { .. } => self.on_sftp_preview(event, cx),

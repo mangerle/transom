@@ -48,6 +48,7 @@ pub enum TransferKind {
 pub enum TransferStatus {
     Pending,
     Transferring,
+    Verifying,
     Paused,
     Completed,
     Failed(String),

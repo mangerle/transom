@@ -119,6 +119,36 @@ impl AppShell {
         false
     }
 
+    /// SFTP 进入校验阶段：将任务状态更新为 `TransferStatus::Verifying`。
+    pub(crate) fn on_sftp_verifying(
+        &mut self,
+        event: SftpAppEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let SftpAppEvent::SftpVerifying {
+            tab_id,
+            connection_id,
+            op_id,
+        } = event
+        else {
+            return true;
+        };
+        if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id)
+            && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
+        {
+            task.status = TransferStatus::Verifying;
+            task.speed_bps = None;
+            task.eta_secs = None;
+            Self::set_sftp_transient_status(
+                panel,
+                tab_id,
+                rust_i18n::t!("sftp.verifying").to_string(),
+                cx,
+            );
+        }
+        true
+    }
+
     /// SFTP 传输完成：落定任务状态、刷新受影响的目录并派发桌面通知。
     pub(crate) fn on_sftp_finished(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
         let SftpAppEvent::SftpFinished {
