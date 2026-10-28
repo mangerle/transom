@@ -12,6 +12,7 @@ mod serial;
 pub mod sftp;
 pub mod system_stats;
 mod telnet;
+mod timeout;
 mod traffic;
 
 pub use auth::{AuthPrompter, PasswordPrompter};

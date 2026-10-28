@@ -1,6 +1,9 @@
 //! SSH 会话句柄、远端命令执行与伪终端协程。
 
 use super::handler::{ClientHandler, RemoteForwardTasks};
+use crate::timeout::{
+    CHANNEL_OPEN_TIMEOUT, DISCONNECT_TIMEOUT, FORWARD_REQUEST_TIMEOUT, with_timeout,
+};
 use russh::client::{Handle, Msg};
 use russh::{Channel, ChannelMsg, Disconnect};
 use std::collections::HashMap;
@@ -50,10 +53,13 @@ impl SshRemote {
     }
 
     pub(crate) async fn open_session(&self) -> Result<Channel<Msg>, AppError> {
-        self.inner
-            .channel_open_session()
-            .await
-            .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))
+        with_timeout(
+            CHANNEL_OPEN_TIMEOUT,
+            ErrorCode::ChannelFailed,
+            "打开 SSH 会话通道",
+            self.inner.channel_open_session(),
+        )
+        .await
     }
 
     pub(crate) async fn open_direct_tcpip(
@@ -61,25 +67,36 @@ impl SshRemote {
         host: &str,
         port: u16,
     ) -> Result<Channel<Msg>, AppError> {
-        self.inner
-            .channel_open_direct_tcpip(host.to_string(), port as u32, "127.0.0.1", 0)
-            .await
-            .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
+        with_timeout(
+            CHANNEL_OPEN_TIMEOUT,
+            ErrorCode::ForwardFailed,
+            "打开转发通道",
+            self.inner
+                .channel_open_direct_tcpip(host.to_string(), port as u32, "127.0.0.1", 0),
+        )
+        .await
     }
 
     pub(crate) async fn tcpip_forward(&self, host: &str, port: u16) -> Result<u32, AppError> {
-        self.inner
-            .tcpip_forward(host.to_string(), port as u32)
-            .await
-            .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
+        with_timeout(
+            FORWARD_REQUEST_TIMEOUT,
+            ErrorCode::ForwardFailed,
+            "登记远端转发",
+            self.inner.tcpip_forward(host.to_string(), port as u32),
+        )
+        .await
     }
 
     pub(crate) async fn cancel_tcpip_forward(&self, host: &str, port: u16) -> Result<(), AppError> {
         self.unregister_remote_target(port);
-        self.inner
-            .cancel_tcpip_forward(host.to_string(), port as u32)
-            .await
-            .map_err(|error| AppError::with_detail(ErrorCode::ForwardFailed, error.to_string()))
+        with_timeout(
+            DISCONNECT_TIMEOUT,
+            ErrorCode::ForwardFailed,
+            "注销远端转发",
+            self.inner
+                .cancel_tcpip_forward(host.to_string(), port as u32),
+        )
+        .await
     }
 
     pub(crate) fn register_remote_target(&self, port: u16, host: String, target_port: u16) {
@@ -155,16 +172,24 @@ impl SshRemote {
         })
     }
 
+    /// 主动断开连接；对端失联时按 [`DISCONNECT_TIMEOUT`] 限时放弃。
+    ///
+    /// 关闭路径只做尽力而为：超时或失败都不影响本地资源回收，因此结果不
+    /// 上抛；停机流程等待的是本函数的返回，而不是对端确认。
     pub async fn disconnect(&self, description: &str) {
         self.forward_tasks.abort_all();
-        let _ = self
-            .inner
-            .disconnect(Disconnect::ByApplication, description, "en")
-            .await;
+        let _ = tokio::time::timeout(
+            DISCONNECT_TIMEOUT,
+            self.inner
+                .disconnect(Disconnect::ByApplication, description, "en"),
+        )
+        .await;
         for handle in self.jump_handles.iter().rev() {
-            let _ = handle
-                .disconnect(Disconnect::ByApplication, description, "en")
-                .await;
+            let _ = tokio::time::timeout(
+                DISCONNECT_TIMEOUT,
+                handle.disconnect(Disconnect::ByApplication, description, "en"),
+            )
+            .await;
         }
     }
 }

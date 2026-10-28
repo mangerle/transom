@@ -10,8 +10,10 @@ mod tests;
 
 use crate::auth::AuthPrompter;
 use crate::bridge::{ChannelReader, ChannelWriter};
+use crate::timeout::{CHANNEL_OPEN_TIMEOUT, CHANNEL_REQUEST_TIMEOUT, with_timeout};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, KnownHostsStore, OutboundProxy, SshConnection, SshHop,
     TerminalControlHandle, TerminalIo, TerminalSize,
@@ -77,13 +79,19 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
     })
     .await?;
 
-    let channel = session
-        .channel_open_session()
-        .await
-        .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
+    let channel = with_timeout(
+        CHANNEL_OPEN_TIMEOUT,
+        ErrorCode::ChannelFailed,
+        "打开 SSH 会话通道",
+        session.channel_open_session(),
+    )
+    .await?;
 
-    channel
-        .request_pty(
+    with_timeout(
+        CHANNEL_REQUEST_TIMEOUT,
+        ErrorCode::ChannelFailed,
+        "请求远端 PTY",
+        channel.request_pty(
             false,
             "xterm-256color",
             size.cols as u32,
@@ -91,14 +99,22 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
             0,
             0,
             &[],
-        )
-        .await
-        .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
-    let _ = channel.set_env(false, "COLORTERM", "truecolor").await;
-    channel
-        .request_shell(false)
-        .await
-        .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
+        ),
+    )
+    .await?;
+    // 颜色能力公告是尽力而为：对端不支持或超时都不影响登录，不能拖住建连。
+    let _ = tokio::time::timeout(
+        Duration::from_secs(5),
+        channel.set_env(false, "COLORTERM", "truecolor"),
+    )
+    .await;
+    with_timeout(
+        CHANNEL_REQUEST_TIMEOUT,
+        ErrorCode::ChannelFailed,
+        "启动远端 Shell",
+        channel.request_shell(false),
+    )
+    .await?;
 
     let (input_tx, input_rx) = flume::bounded::<Vec<u8>>(64);
     let (output_tx, output_rx) = flume::bounded::<Vec<u8>>(128);

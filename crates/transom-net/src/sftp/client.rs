@@ -1,6 +1,7 @@
 //! SFTP 会话客户端封装与通用错误转换。
 
 use crate::client::SshRemote;
+use crate::timeout::{SFTP_HANDSHAKE_TIMEOUT, with_timeout};
 use russh_sftp::client::{Config, SftpSession};
 use std::sync::Arc;
 use transom_core::{AppError, ErrorCode};
@@ -72,17 +73,35 @@ pub struct SftpClient {
 impl SftpClient {
     pub async fn open(remote: &SshRemote) -> Result<Self, AppError> {
         let channel = remote.open_session().await?;
-        channel
-            .request_subsystem(true, "sftp")
-            .await
-            .map_err(|error| AppError::with_detail(ErrorCode::ChannelFailed, error.to_string()))?;
-        let session = SftpSession::new_with_config(channel.into_stream(), sftp_config())
-            .await
-            .map_err(sftp_error)?;
-        let home = session
-            .canonicalize(".")
-            .await
-            .unwrap_or_else(|_| "/".to_string());
+        with_timeout(
+            SFTP_HANDSHAKE_TIMEOUT,
+            ErrorCode::ChannelFailed,
+            "启动 SFTP 子系统",
+            channel.request_subsystem(true, "sftp"),
+        )
+        .await?;
+        let session = with_timeout(
+            SFTP_HANDSHAKE_TIMEOUT,
+            ErrorCode::SftpFailed,
+            "SFTP 协议初始化",
+            SftpSession::new_with_config(channel.into_stream(), sftp_config()),
+        )
+        .await?;
+        // 主目录只用于初始定位；查询失败或超时都退化为根目录，不能阻断连接。
+        let home = match with_timeout(
+            SFTP_HANDSHAKE_TIMEOUT,
+            ErrorCode::SftpFailed,
+            "查询 SFTP 主目录",
+            session.canonicalize("."),
+        )
+        .await
+        {
+            Ok(home) => home,
+            Err(error) => {
+                log::debug!("查询 SFTP 主目录失败，按根目录继续，原因: {error}");
+                "/".to_string()
+            }
+        };
         Ok(Self {
             session: Arc::new(session),
             home,
