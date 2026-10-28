@@ -18,6 +18,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Editor, EditorState, RopeExt};
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -227,7 +228,7 @@ fn render_panel_body(
                 .gap_2()
                 .text_sm()
                 .text_color(p.muted_foreground)
-                .child(Icon::new(IconName::Loader).xsmall())
+                .child(Spinner::new().xsmall().color(p.muted_foreground))
                 .child(format!("正在读取 {}", item.remote_path))
                 .into_any_element()
         } else {
@@ -359,7 +360,7 @@ fn render_panel_status(
                 .gap_1()
                 .flex_none()
                 .when(busy, |this| {
-                    this.child(Icon::new(IconName::Loader).xsmall())
+                    this.child(Spinner::new().xsmall().color(p.muted_foreground))
                 })
                 .child(div().child(phase_label)),
         )

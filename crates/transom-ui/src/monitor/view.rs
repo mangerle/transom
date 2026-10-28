@@ -7,6 +7,7 @@ use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
@@ -459,7 +460,7 @@ impl AppShell {
                 .items_center()
                 .justify_center()
                 .gap_2()
-                .child(Icon::new(IconName::Loader).text_color(p.muted_foreground))
+                .child(Spinner::new().color(p.muted_foreground))
                 .child(
                     div()
                         .text_sm()
