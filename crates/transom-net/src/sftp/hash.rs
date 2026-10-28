@@ -29,18 +29,24 @@ impl SftpClient {
         Ok(hex_encode(&hasher.finalize()))
     }
 
-    /// 并行计算本地与远端 SHA256 并比对。
+    /// 并行计算本地与远端 SHA256 并比对，支持复用在途计算的本地哈希以消除二次读盘。
     ///
-    /// 设计原理（Why）：本端读盘与远端读取互不依赖，使用 `tokio::join!`
-    /// 让两者并行，校验总耗时接近较慢的一侧而非两者之和；本地读取通过
-    /// `spawn_blocking` 移出异步工作线程，避免大文件哈希阻塞运行时。
+    /// 设计原理（Why）：在单文件传输流中，数据已完整流经本地内存缓冲区；
+    /// 复用在途计算的哈希可彻底消灭传输完成后对本地磁盘的全量重复读取。若在途哈希缺失
+    /// （如断点续传 offset > 0），则安全回退到本地读盘计算。
     ///
     /// # Errors
-    /// 任一侧读取失败或两侧哈希不一致时返回 `ErrorCode::SftpFailed`；
-    /// 不一致详情包含两端哈希与路径，便于定位损坏文件。
-    pub async fn verify_file(&self, local_path: &Path, remote_path: &str) -> Result<(), AppError> {
-        let (local_hash, remote_hash) =
-            tokio::join!(sha256_local(local_path), self.sha256_remote(remote_path));
+    /// 读取失败或两侧哈希不一致时返回 `ErrorCode::SftpFailed`。
+    pub async fn verify_file_with_known_local(
+        &self,
+        local_path: &Path,
+        remote_path: &str,
+        known_local: Option<&str>,
+    ) -> Result<(), AppError> {
+        let (local_hash, remote_hash) = match known_local {
+            Some(known) => (Ok(known.to_string()), self.sha256_remote(remote_path).await),
+            None => tokio::join!(sha256_local(local_path), self.sha256_remote(remote_path)),
+        };
         let local_hash = local_hash?;
         let remote_hash = remote_hash?;
         if local_hash == remote_hash {
@@ -55,6 +61,20 @@ impl SftpClient {
                 ),
             ))
         }
+    }
+
+    /// 并行计算本地与远端 SHA256 并比对。
+    ///
+    /// 设计原理（Why）：本端读盘与远端读取互不依赖，使用 `tokio::join!`
+    /// 让两者并行，校验总耗时接近较慢的一侧而非两者之和；本地读取通过
+    /// `spawn_blocking` 移出异步工作线程，避免大文件哈希阻塞运行时。
+    ///
+    /// # Errors
+    /// 任一侧读取失败或两侧哈希不一致时返回 `ErrorCode::SftpFailed`；
+    /// 不一致详情包含两端哈希与路径，便于定位损坏文件。
+    pub async fn verify_file(&self, local_path: &Path, remote_path: &str) -> Result<(), AppError> {
+        self.verify_file_with_known_local(local_path, remote_path, None)
+            .await
     }
 }
 
@@ -94,7 +114,7 @@ fn hash_local_blocking(path: &PathBuf) -> Result<String, AppError> {
     Ok(hex_encode(&hasher.finalize()))
 }
 
-fn hex_encode(bytes: &[u8]) -> String {
+pub(crate) fn hex_encode(bytes: &[u8]) -> String {
     use std::fmt::Write;
     let mut out = String::with_capacity(bytes.len().saturating_mul(2));
     for byte in bytes {

@@ -1,10 +1,21 @@
 //! SFTP 单文件上传、下载、断点续传、跨远端流转与轻量预览。
 
 use super::client::{SftpClient, TRANSFER_CHUNK, sftp_error, sftp_io_error};
+use super::hash::hex_encode;
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use transom_core::{AppError, ErrorCode, PreviewMode};
+
+/// 单文件传输执行结果。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransferProgressResult {
+    /// 实际传输并完成落盘或上传的字节数。
+    pub transferred: u64,
+    /// 在途计算的本地文件完整 SHA-256 哈希；若发生断点续传（非从零开始传输），则为 None。
+    pub local_sha256: Option<String>,
+}
 
 impl SftpClient {
     /// 读取远端文件内容用于悬停轻量预览。
@@ -88,8 +99,10 @@ impl SftpClient {
     where
         F: FnMut(u64, Option<u64>) + Send,
     {
-        self.download_resumable(remote_path, local_path, false, progress)
-            .await
+        Ok(self
+            .download_resumable(remote_path, local_path, false, progress)
+            .await?
+            .transferred)
     }
 
     /// 顺序下载远端文件，可按本地已有字节数续传。
@@ -102,6 +115,8 @@ impl SftpClient {
     ///   按文件大小追加会跳过空洞，拼出损坏文件。
     /// - 与远端等大时直接视为完成，避免重复传输；本地比远端大说明目标残留了
     ///   多余尾部，必须截断重传。
+    /// - 传输过程中同步计算在途 SHA-256 哈希，传输落盘完毕即可直接获取本地哈希，
+    ///   彻底消除传输后的本地磁盘二次全量读取。
     /// - 代价与局限：单句柄没有多路并行，只能依赖库的预取深度；预取深度与
     ///   通道窗口的匹配关系集中维护在 `sftp_config`。
     ///
@@ -114,7 +129,7 @@ impl SftpClient {
         local_path: &Path,
         resume: bool,
         mut progress: F,
-    ) -> Result<u64, AppError>
+    ) -> Result<TransferProgressResult, AppError>
     where
         F: FnMut(u64, Option<u64>) + Send,
     {
@@ -136,7 +151,10 @@ impl SftpClient {
                             let _ = set_local_mtime(local_path, mtime).await;
                         }
                         progress(total_size, Some(total_size));
-                        return Ok(total_size);
+                        return Ok(TransferProgressResult {
+                            transferred: total_size,
+                            local_sha256: None,
+                        });
                     }
                     Some(total_size) if local_size > total_size => {
                         // 目标比源大时不可能只是“尚未传完”，多出的尾部必须截断重传
@@ -168,6 +186,12 @@ impl SftpClient {
             )
         })?;
 
+        let mut local_hasher = if offset == 0 {
+            Some(Sha256::new())
+        } else {
+            None
+        };
+
         let mut buffer = vec![0u8; TRANSFER_CHUNK];
         let mut transferred = offset;
         progress(transferred, total);
@@ -176,6 +200,9 @@ impl SftpClient {
             let count = remote.read(&mut buffer).await.map_err(sftp_io_error)?;
             if count == 0 {
                 break;
+            }
+            if let Some(hasher) = local_hasher.as_mut() {
+                hasher.update(&buffer[..count]);
             }
             local
                 .write_all(&buffer[..count])
@@ -194,7 +221,11 @@ impl SftpClient {
                 local_path.display()
             );
         }
-        Ok(transferred)
+        let local_sha256 = local_hasher.map(|h| hex_encode(&h.finalize()));
+        Ok(TransferProgressResult {
+            transferred,
+            local_sha256,
+        })
     }
 
     /// 上传本地文件到远端，覆盖已有内容。
@@ -207,8 +238,10 @@ impl SftpClient {
     where
         F: FnMut(u64, Option<u64>) + Send,
     {
-        self.upload_resumable(local_path, remote_path, false, progress)
-            .await
+        Ok(self
+            .upload_resumable(local_path, remote_path, false, progress)
+            .await?
+            .transferred)
     }
 
     /// 顺序上传本地文件，可按远端已有字节数续传。
@@ -221,6 +254,7 @@ impl SftpClient {
     /// - 全新上传用 `create` 一次性截断，不再需要并发块时代的“先 create
     ///   再各块 WRITE|CREATE”特判。
     /// - 两端等大时直接视为完成；远端比源大说明残留下多余尾部，截断重传。
+    /// - 传输过程中同步计算本地读取流的 SHA-256 哈希，完全消除传输后的本地磁盘二次读盘。
     ///
     /// # Errors
     /// 打开远端或本地文件、读取、写入失败时返回 `ErrorCode::SftpFailed`。
@@ -231,7 +265,7 @@ impl SftpClient {
         remote_path: &str,
         resume: bool,
         mut progress: F,
-    ) -> Result<u64, AppError>
+    ) -> Result<TransferProgressResult, AppError>
     where
         F: FnMut(u64, Option<u64>) + Send,
     {
@@ -256,7 +290,10 @@ impl SftpClient {
                             let _ = self.set_mtime(remote_path, mtime).await;
                         }
                         progress(total_size, Some(total_size));
-                        return Ok(total_size);
+                        return Ok(TransferProgressResult {
+                            transferred: total_size,
+                            local_sha256: None,
+                        });
                     }
                     Some(total_size) if remote_size > total_size => {
                         // 远端比源文件大时不能视为已完成，截断后从头上传
@@ -292,6 +329,12 @@ impl SftpClient {
             self.session.create(remote_path).await.map_err(sftp_error)?
         };
 
+        let mut local_hasher = if offset == 0 {
+            Some(Sha256::new())
+        } else {
+            None
+        };
+
         let mut buffer = vec![0u8; TRANSFER_CHUNK];
         let mut transferred = offset;
         progress(transferred, total);
@@ -300,6 +343,9 @@ impl SftpClient {
             let count = local.read(&mut buffer).await.map_err(sftp_io_error)?;
             if count == 0 {
                 break;
+            }
+            if let Some(hasher) = local_hasher.as_mut() {
+                hasher.update(&buffer[..count]);
             }
             remote_file
                 .write_all(&buffer[..count])
@@ -314,7 +360,11 @@ impl SftpClient {
         {
             log::debug!("保留远端文件修改时间失败，路径: {remote_path}，原因: {error}");
         }
-        Ok(transferred)
+        let local_sha256 = local_hasher.map(|h| hex_encode(&h.finalize()));
+        Ok(TransferProgressResult {
+            transferred,
+            local_sha256,
+        })
     }
 
     /// 跨远端流式传输单个文件：从当前 SFTP 会话读取并通过内存缓冲区写入目标 SFTP 会话。

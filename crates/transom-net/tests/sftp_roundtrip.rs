@@ -109,6 +109,21 @@ async fn sftp_list_upload_download_and_mutations() {
         .verify_file(&local, "/uploaded.txt")
         .await
         .expect("上传文件 SHA256 校验");
+    client
+        .verify_file_with_known_local(
+            &local,
+            "/uploaded.txt",
+            Some("a3ca2ea509ad4a9e3673a7652100889535d9d73d3434f02bc07f0ded2f65187c"),
+        )
+        .await
+        .expect("在途哈希一致时校验成功");
+    assert!(
+        client
+            .verify_file_with_known_local(&local, "/uploaded.txt", Some("bad_hash_digest"))
+            .await
+            .is_err(),
+        "在途哈希不一致时校验必须失败"
+    );
     tokio::fs::write(&local, b"tampered").await.unwrap();
     assert!(
         client.verify_file(&local, "/uploaded.txt").await.is_err(),
@@ -140,7 +155,11 @@ async fn sftp_list_upload_download_and_mutations() {
         .download_resumable("/uploaded.txt", &oversized_local, true, |_, _| {})
         .await
         .expect("目标更大时应截断重传");
-    assert_eq!(transferred, 10);
+    assert_eq!(transferred.transferred, 10);
+    assert!(
+        transferred.local_sha256.is_some(),
+        "截断全量重传应产生在途哈希"
+    );
     assert_eq!(
         tokio::fs::read(&oversized_local).await.unwrap(),
         b"hello sftp".to_vec(),
@@ -154,7 +173,11 @@ async fn sftp_list_upload_download_and_mutations() {
         .upload_resumable(&small_local, "/remote-larger.txt", true, |_, _| {})
         .await
         .expect("远端更大时应截断重传");
-    assert_eq!(transferred, 5);
+    assert_eq!(transferred.transferred, 5);
+    assert!(
+        transferred.local_sha256.is_some(),
+        "截断全量上传应产生在途哈希"
+    );
     assert_eq!(
         std::fs::read(dir.path().join("remote-larger.txt")).unwrap(),
         b"small",

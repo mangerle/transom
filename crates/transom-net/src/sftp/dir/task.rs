@@ -2,7 +2,7 @@
 
 use super::SharedProgress;
 use super::path::local_io_error;
-use crate::sftp::{SftpClient, notify_shared_progress};
+use crate::sftp::{SftpClient, TransferProgressResult, notify_shared_progress};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -46,13 +46,21 @@ impl DirFileTask {
     /// 校验（可选）并补齐进度回调未覆盖的尾部字节。
     ///
     /// 传输层回调只到最近的块边界，剩余字节在这里补上，避免进度条停在 99%。
-    async fn finish(&self, bytes: u64, last_reported: u64) -> Result<(), AppError> {
+    async fn finish(
+        &self,
+        result: TransferProgressResult,
+        last_reported: u64,
+    ) -> Result<(), AppError> {
         if self.verify {
             self.client
-                .verify_file(&self.local_path, &self.remote_path)
+                .verify_file_with_known_local(
+                    &self.local_path,
+                    &self.remote_path,
+                    result.local_sha256.as_deref(),
+                )
                 .await?;
         }
-        let tail = bytes.saturating_sub(last_reported);
+        let tail = result.transferred.saturating_sub(last_reported);
         if tail > 0 {
             let done = self
                 .transferred
@@ -66,7 +74,7 @@ impl DirFileTask {
     /// 上传单个文件：进度聚合后按需校验并补齐尾部。
     pub(super) async fn run_upload(self) -> Result<(), AppError> {
         let mut last_reported = 0u64;
-        let bytes = self
+        let result = self
             .client
             .upload_resumable(
                 &self.local_path,
@@ -75,7 +83,7 @@ impl DirFileTask {
                 |current, _| self.note_progress(current, &mut last_reported),
             )
             .await?;
-        self.finish(bytes, last_reported).await
+        self.finish(result, last_reported).await
     }
 
     /// 下载单个文件：确保本地父目录存在后拉取，进度聚合与上传同构。
@@ -86,7 +94,7 @@ impl DirFileTask {
                 .map_err(|error| local_io_error("创建本地父目录失败", parent, error))?;
         }
         let mut last_reported = 0u64;
-        let bytes = self
+        let result = self
             .client
             .download_resumable(
                 &self.remote_path,
@@ -95,6 +103,6 @@ impl DirFileTask {
                 |current, _| self.note_progress(current, &mut last_reported),
             )
             .await?;
-        self.finish(bytes, last_reported).await
+        self.finish(result, last_reported).await
     }
 }

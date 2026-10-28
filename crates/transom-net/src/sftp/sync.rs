@@ -97,15 +97,20 @@ impl SftpClient {
                         self.create_dir_all(parent).await?;
                     }
                     let base = completed;
-                    let transferred = self
+                    let result = self
                         .upload_resumable(&local_path, &remote_path, false, |transferred, _| {
                             progress(base.saturating_add(transferred), Some(total));
                         })
                         .await?;
                     if verify {
-                        self.verify_file(&local_path, &remote_path).await?;
+                        self.verify_file_with_known_local(
+                            &local_path,
+                            &remote_path,
+                            result.local_sha256.as_deref(),
+                        )
+                        .await?;
                     }
-                    completed = completed.saturating_add(transferred);
+                    completed = completed.saturating_add(result.transferred);
                 }
                 (SyncDirection::Download, false) => {
                     let local_path = local_path_for(local_root, &item.relative_path)?;
@@ -116,15 +121,20 @@ impl SftpClient {
                             .map_err(|error| local_io_error("创建本地父目录失败", parent, error))?;
                     }
                     let base = completed;
-                    let transferred = self
+                    let result = self
                         .download_resumable(&remote_path, &local_path, false, |transferred, _| {
                             progress(base.saturating_add(transferred), Some(total));
                         })
                         .await?;
                     if verify {
-                        self.verify_file(&local_path, &remote_path).await?;
+                        self.verify_file_with_known_local(
+                            &local_path,
+                            &remote_path,
+                            result.local_sha256.as_deref(),
+                        )
+                        .await?;
                     }
-                    completed = completed.saturating_add(transferred);
+                    completed = completed.saturating_add(result.transferred);
                 }
             }
         }

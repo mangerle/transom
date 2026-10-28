@@ -6,19 +6,22 @@ use transom_core::{
     TransferSummary,
 };
 use transom_net::SftpClient;
+use transom_net::sftp::TransferProgressResult;
 
 pub(super) async fn verify_transfer_result(
     client: &SftpClient,
-    result: Result<u64, AppError>,
+    result: Result<TransferProgressResult, AppError>,
     verify: bool,
     local_path: &Path,
     remote_path: &str,
 ) -> Result<(u64, bool), AppError> {
-    let transferred = result?;
+    let progress = result?;
     if verify {
-        client.verify_file(local_path, remote_path).await?;
+        client
+            .verify_file_with_known_local(local_path, remote_path, progress.local_sha256.as_deref())
+            .await?;
     }
-    Ok((transferred, verify))
+    Ok((progress.transferred, verify))
 }
 
 pub(super) async fn finish_sftp(
