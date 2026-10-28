@@ -133,14 +133,25 @@ impl BackupDocument {
     /// 备份文件可能来自另一台机器，父子指针与 ID 都未必自洽，因此在进入
     /// 合并流程前先按本机规则归一。
     pub fn normalize(&mut self) {
-        let mut catalog = SessionCatalog {
+        let mut catalog = self.take_catalog();
+        catalog.normalize();
+        self.restore_catalog(catalog);
+    }
+
+    /// 整体取走三张目录表，与 [`Self::restore_catalog`] 成对使用：逐字段
+    /// 搬移曾漏掉凭据模板，导致导入后模板静默消失，写回收敛到唯一入口。
+    fn take_catalog(&mut self) -> SessionCatalog {
+        SessionCatalog {
             folders: std::mem::take(&mut self.folders),
             sessions: std::mem::take(&mut self.sessions),
             identities: std::mem::take(&mut self.identities),
-        };
-        catalog.normalize();
+        }
+    }
+
+    fn restore_catalog(&mut self, catalog: SessionCatalog) {
         self.folders = catalog.folders;
         self.sessions = catalog.sessions;
+        self.identities = catalog.identities;
     }
 }
 
@@ -365,6 +376,32 @@ mod tests {
         assert!(serde_json::from_str::<BackupSecret>(&both).is_err());
         let neither = r#"{"kind":"password","value":"x"}"#;
         assert!(serde_json::from_str::<BackupSecret>(neither).is_err());
+    }
+
+    /// 归一化必须把凭据模板一并写回：曾因漏写 identities，导致明文导入、
+    /// 加密导入与云拉取后模板全部消失，引用它的会话也被清空 identity_id。
+    #[test]
+    fn normalize_keeps_identities_and_session_references() {
+        let identity = crate::model::identity::Identity::new(
+            "ops",
+            "ops",
+            crate::AuthMethod::Password { save: true },
+        );
+        let identity_id = identity.id;
+        let mut session = session_with_password("web-01");
+        session.identity_id = Some(identity_id);
+        let mut document = BackupDocument {
+            folders: Vec::new(),
+            sessions: vec![session],
+            identities: vec![identity],
+            secrets: None,
+        };
+
+        document.normalize();
+
+        assert_eq!(document.identities.len(), 1);
+        assert_eq!(document.identities[0].id, identity_id);
+        assert_eq!(document.sessions[0].identity_id, Some(identity_id));
     }
 
     /// 口令类型由认证方式决定：只有口令认证与私钥认证才有钥匙串条目。
