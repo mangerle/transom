@@ -20,6 +20,7 @@ use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::component::status_bar::StatusBar;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -170,60 +171,56 @@ impl AppShell {
             .children(zmodem_badge)
             .children(right_elements);
 
-        let mut bar = h_flex()
-            .id("status-bar")
+        let mut bar = StatusBar::new()
             .h(rems(size::STATUS_BAR_HEIGHT))
-            .items_center()
             .bg(p.status_bar)
-            .border_t_1()
             .border_color(p.border);
 
         if divider_x > px(0.0) {
             // 左段宽到侧栏右缘，连接状态过长时在段内截断；右段的左边框续上
             // 侧栏右边框，形成一条贯穿到窗口底边的分界线。
-            bar = bar
-                .child(
-                    h_flex()
-                        .w(divider_x)
-                        .flex_none()
-                        .h_full()
-                        .items_center()
-                        .pl_3()
-                        .pr_2()
-                        .child(h_flex().flex_1().min_w_0().child(connection_pill)),
-                )
-                .child(
-                    h_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .items_center()
-                        .gap_2()
-                        .pr_3()
-                        .border_l_1()
-                        .border_color(p.sidebar_border)
-                        .child(snippets_entry)
-                        .child(broadcast_entry)
-                        .child(recording_badge)
-                        .child(front_zone)
-                        .child(badges),
-                );
-        } else {
-            bar = bar
+            let left = h_flex()
+                .w(divider_x)
+                .flex_none()
+                .h_full()
+                .items_center()
                 .pl_3()
-                .pr_3()
+                .pr_2()
+                .child(h_flex().flex_1().min_w_0().child(connection_pill));
+            let right = h_flex()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .items_center()
                 .gap_2()
-                .child(connection_pill)
+                .pr_3()
+                .border_l_1()
+                .border_color(p.sidebar_border)
                 .child(snippets_entry)
                 .child(broadcast_entry)
                 .child(recording_badge)
                 .child(front_zone)
                 .child(badges);
+            bar = bar.left(left).right(right);
+        } else {
+            let right = h_flex()
+                .gap_2()
+                .items_center()
+                .child(snippets_entry)
+                .child(broadcast_entry)
+                .child(recording_badge)
+                .child(front_zone)
+                .child(badges);
+            bar = bar.left(connection_pill).right(right);
         }
 
         // 空白区与左侧固定状态都落到整条状态栏的兜底菜单；徽标自己的菜单
         // 先命中并阻止冒泡，因此不会出现两层菜单同时打开。
-        bar.context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app))
+        div()
+            .id("status-bar")
+            .w_full()
+            .context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app))
+            .child(bar)
             .into_any_element()
     }
 
