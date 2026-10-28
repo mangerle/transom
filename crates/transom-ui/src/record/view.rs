@@ -9,6 +9,7 @@ use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 
@@ -39,30 +40,21 @@ impl AppShell {
                 .into_any_element()
         } else {
             let stop_tip = rust_i18n::t!("recorder.stop_btn").to_string();
-            // 正在录制：红色圆点 + 闪烁/高亮提示
-            h_flex()
-                .id("recording-indicator")
-                .gap_1p5()
-                .items_center()
-                .px_2()
+            // 正在录制：使用 Tag::danger() 规范化徽标
+            let tag = Tag::danger()
                 .h(rems(BADGE_HEIGHT))
                 .rounded(p.radius.md)
-                .bg(p.danger.opacity(0.15))
-                .border_1()
-                .border_color(p.danger)
+                .gap_1p5()
+                .child(div().size(px(7.0)).rounded_full().bg(p.danger))
+                .child(rust_i18n::t!("recorder.recording").to_string());
+            div()
+                .id("recording-indicator")
                 .cursor_pointer()
                 .tooltip(move |_window, cx| Tooltip::new(stop_tip.clone()).build(_window, cx))
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.toggle_recording_for_active_tab(window, cx);
                 }))
-                .child(div().size(px(7.0)).rounded_full().bg(p.danger))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.danger)
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(rust_i18n::t!("recorder.recording").to_string()),
-                )
+                .child(tag)
                 .into_any_element()
         };
 

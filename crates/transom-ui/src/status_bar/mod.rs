@@ -21,6 +21,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::status_bar::StatusBar;
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -370,7 +371,7 @@ impl AppShell {
         }
     }
 
-    /// 统一徽标外壳：底色、细边框、hover 与拖拽光标都在这里定义，条目只负责内容。
+    /// 统一徽标外壳：使用 Tag 组件规范底色与边框，条目负责内容。
     fn status_badge(
         id: StatusItemId,
         tooltip: String,
@@ -378,27 +379,18 @@ impl AppShell {
         app: &Entity<AppShell>,
         p: &Palette,
     ) -> AnyElement {
-        let badge = div()
-            .id(ElementId::Name(format!("status-{}", id.key()).into()))
-            .relative()
+        let tag = Tag::secondary()
             .h(rems(BADGE_HEIGHT))
-            .flex()
-            .items_center()
             .gap_1()
             .px_1p5()
             .rounded(p.radius.md)
-            .bg(p.muted)
-            .border_1()
-            .border_color(p.foreground.opacity(0.10))
+            .child(content);
+        let badge = div()
+            .id(ElementId::Name(format!("status-{}", id.key()).into()))
+            .relative()
             .cursor_grab()
             .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
-            .hover(|style| {
-                style
-                    .bg(p.foreground.opacity(0.10))
-                    .border_color(p.foreground.opacity(0.28))
-            })
-            .active(|style| style.bg(p.foreground.opacity(0.16)))
-            .child(content);
+            .child(tag);
         drag::attach_status_drag(badge, id, app, p)
     }
 

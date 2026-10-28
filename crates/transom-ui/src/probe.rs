@@ -13,6 +13,7 @@
 
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
+use gpui_kit::component::badge::Badge;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use std::collections::HashSet;
@@ -26,9 +27,6 @@ const REACHABLE_TTL: Duration = Duration::from_secs(3);
 
 /// 不可达（红点）停留更久：失败原因需要时间读，tooltip 里带完整上下文。
 const UNREACHABLE_TTL: Duration = Duration::from_secs(8);
-
-/// 状态点直径，与状态栏连接点同规格，避免列表里再引入第二种尺寸的点。
-const BADGE_DOT_SIZE: Pixels = px(8.0);
 
 /// 会话行尾的拨测状态点。
 #[derive(Clone)]
@@ -231,10 +229,8 @@ impl AppShell {
         div()
             .id(ElementId::Name(format!("probe-badge-{session_id}").into()))
             .flex_none()
-            .size(BADGE_DOT_SIZE)
-            .rounded_full()
-            .bg(badge.color(p))
             .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
+            .child(Badge::new().dot().color(badge.color(p)))
             .into_any_element()
     }
 }
