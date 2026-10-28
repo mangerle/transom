@@ -4,8 +4,11 @@ use crate::app::AppShell;
 use crate::keymap;
 use crate::keymap::ShortcutCapture;
 use crate::palette::Palette;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::dialog::{
+    DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+};
 use gpui_kit::*;
 
 impl AppShell {
@@ -112,7 +115,33 @@ impl AppShell {
             .unwrap_or_else(|| capture.id.to_string());
         let error = capture.error.clone();
 
-        let mut panel = v_flex()
+        let header = DialogHeader::new()
+            .child(
+                DialogTitle::new()
+                    .child(rust_i18n::t!("settings.shortcut_capture_title").to_string()),
+            )
+            .child(DialogDescription::new().child(action));
+
+        let mut content = DialogContent::new().child(
+            div()
+                .text_sm()
+                .child(rust_i18n::t!("settings.shortcut_capture_hint").to_string()),
+        );
+        if let Some(error) = error {
+            content = content.child(div().text_sm().text_color(p.danger).child(error));
+        }
+
+        let footer = DialogFooter::new().child(
+            Button::new("cancel-shortcut-capture")
+                .ghost()
+                .label(rust_i18n::t!("common.cancel").to_string())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.shortcut_recording.capture = None;
+                    cx.notify();
+                })),
+        );
+
+        let panel = v_flex()
             .id("shortcut-capture-panel")
             .w(px(440.0))
             .gap_3()
@@ -126,32 +155,9 @@ impl AppShell {
             .track_focus(&focus)
             .key_context(keymap::OVERLAY_CONTEXT)
             .on_key_down(cx.listener(Self::on_shortcut_capture_key))
-            .child(
-                div()
-                    .text_lg()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("settings.shortcut_capture_title").to_string()),
-            )
-            .child(div().text_sm().text_color(p.muted_foreground).child(action))
-            .child(
-                div()
-                    .text_sm()
-                    .child(rust_i18n::t!("settings.shortcut_capture_hint").to_string()),
-            );
-        if let Some(error) = error {
-            panel = panel.child(div().text_sm().text_color(p.danger).child(error));
-        }
-        panel = panel.child(
-            h_flex().justify_end().child(
-                Button::new("cancel-shortcut-capture")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.shortcut_recording.capture = None;
-                        cx.notify();
-                    })),
-            ),
-        );
+            .child(header)
+            .child(content)
+            .child(footer);
         Self::overlay(panel, p)
     }
 }

@@ -3,10 +3,12 @@
 use crate::app::AppShell;
 use crate::keymap;
 use crate::theme::tokens::size;
-use gpui_kit::base::{RadiusTokens, h_flex, v_flex};
+use gpui_kit::base::{RadiusTokens, v_flex};
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::dialog::{
+    DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+};
 use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{AppError, ErrorCode};
 
@@ -113,7 +115,12 @@ impl AppShell {
         let title_str = title.into();
         // 先固化为 Copy 的 Length，避免 impl Trait 参数在链式调用里要求 Clone。
         let max_w = max_w.into();
-        v_flex()
+        let mut header = DialogHeader::new().child(DialogTitle::new().child(title_str));
+        if let Some(desc) = description {
+            header = header.child(DialogDescription::new().child(desc));
+        }
+
+        let mut frame = v_flex()
             .id(id.into())
             .w(max_w)
             .max_w(max_w)
@@ -126,33 +133,14 @@ impl AppShell {
             .border_1()
             .border_color(p.border)
             .shadow_2xl()
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(FontWeight::BOLD)
-                            .child(title_str),
-                    )
-                    .when_some(description, |this, desc| {
-                        this.child(div().text_xs().text_color(p.muted_foreground).child(desc))
-                    }),
-            )
-            .child(content)
-            .when_some(footer, |this, f| {
-                this.child(
-                    h_flex()
-                        .w_full()
-                        .flex_none()
-                        .justify_end()
-                        .gap_2()
-                        .items_center()
-                        .pt_2()
-                        .child(f),
-                )
-            })
-            .into_any_element()
+            .child(header)
+            .child(DialogContent::new().child(content));
+
+        if let Some(f) = footer {
+            frame = frame.child(DialogFooter::new().child(f));
+        }
+
+        frame.into_any_element()
     }
 
     pub(crate) fn overlay(content: impl IntoElement, p: &Palette) -> AnyElement {
