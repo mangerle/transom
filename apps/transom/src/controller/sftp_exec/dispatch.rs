@@ -94,7 +94,7 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         return;
     }
 
-    let (_target_tab_id, remote, cached) = if let Some(session) = sessions.get(&tab_id)
+    let (owner_tab, remote, cached) = if let Some(session) = sessions.get(&tab_id)
         && session.connection_id == connection_id
         && let Some(ref remote) = session.remote
     {
@@ -123,19 +123,20 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         Some(client) => spawn_sftp_op(
             sftp_tasks,
             event_tx,
-            tab_id,
+            owner_tab,
             connection_id,
             op_id,
             client,
             op,
         ),
         None => {
-            let remote = remote.clone();
-            tokio::spawn(async move {
+            // 打开阶段也登记任务：否则用户取消或关闭标签时，句柄不在表里，
+            // 取消命令无处 abort，删除/覆盖上传会在"取消之后"继续执行。
+            let handle = tokio::spawn(async move {
                 let result = SftpClient::open(&remote).await;
                 let _ = internal_tx
                     .send_async(Internal::SftpReady {
-                        tab_id,
+                        tab_id: owner_tab,
                         connection_id,
                         op_id,
                         op,
@@ -143,6 +144,8 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
                     })
                     .await;
             });
+            sftp_tasks.retain(|_, handle| !handle.is_finished());
+            sftp_tasks.insert((owner_tab, op_id), handle);
         }
     }
 }

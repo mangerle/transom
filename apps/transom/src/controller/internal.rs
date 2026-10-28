@@ -430,7 +430,7 @@ async fn handle_disconnected(
 /// SFTP 客户端就绪：校验连接归属后写入缓存并派发操作。
 async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, internal: Internal) {
     let Internal::SftpReady {
-        tab_id,
+        tab_id: requested_tab,
         connection_id,
         op_id,
         op,
@@ -448,6 +448,17 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
         drop(result);
         return;
     };
+    if requested_tab != owner_tab {
+        log::debug!("SFTP 连接归属已变化，请求窗格: {requested_tab}，当前窗格: {owner_tab}");
+    }
+    // 打开期间可能已被取消或标签已关闭：任务表里没有该操作时丢弃已建立的
+    // 客户端，避免"点了取消，删除/覆盖上传仍然执行"。
+    if !state.sftp_tasks.contains_key(&(owner_tab, op_id)) {
+        log::debug!("SFTP 操作在打开期间已被取消，丢弃已建立的客户端，窗格: {owner_tab}");
+        drop(result);
+        return;
+    }
+    state.sftp_tasks.remove(&(owner_tab, op_id));
     match result {
         Ok(client) => {
             if let Some(session) = state.sessions.get_mut(&owner_tab) {
@@ -456,7 +467,7 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
             sftp_exec::spawn_sftp_op(
                 &mut state.sftp_tasks,
                 ctx.event_tx.clone(),
-                tab_id,
+                owner_tab,
                 connection_id,
                 op_id,
                 client,
@@ -468,7 +479,7 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
                 .event_tx
                 .send_async(
                     SftpAppEvent::SftpFailed {
-                        tab_id,
+                        tab_id: owner_tab,
                         connection_id,
                         op_id,
                         error,
