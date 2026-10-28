@@ -1,6 +1,7 @@
 //! Telnet 终端传输实现（RFC 854/855 最小客户端）子模块。
 
 mod connect;
+pub(crate) mod iac;
 mod stream;
 
 #[cfg(test)]

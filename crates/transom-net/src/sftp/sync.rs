@@ -1,8 +1,8 @@
 //! 目录双向对比与增量同步的 SFTP 客户端实现。
 
+use super::dir::{join_remote_path, local_io_error, local_path_for};
+use super::scan::scan_local_snapshot;
 use crate::sftp::SftpClient;
-use crate::sftp_dir::{join_remote_path, local_io_error, local_path_for};
-use crate::sftp_scan::scan_local_snapshot;
 use std::path::Path;
 use transom_core::{
     AppError, DirComparison, SyncDirection, SyncItem, TransferFilter, TransferSummary,

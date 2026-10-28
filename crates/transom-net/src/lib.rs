@@ -9,15 +9,9 @@ mod host;
 mod keys;
 mod proxy;
 mod serial;
-mod sftp;
-mod sftp_dir;
-mod sftp_hash;
-mod sftp_scan;
-mod sftp_sync;
-mod sftp_text;
+pub mod sftp;
 pub mod system_stats;
 mod telnet;
-mod telnet_iac;
 mod traffic;
 mod zmodem;
 

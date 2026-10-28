@@ -10,8 +10,8 @@
 //!   完成读取（多余但无害）；并发度对单连接的请求压力受服务器实现约束，
 //!   固定为 8 以平衡吞吐与过载风险。
 
+use super::dir::{join_remote_path, local_io_error, safe_component};
 use crate::sftp::{SftpClient, sftp_error};
-use crate::sftp_dir::{join_remote_path, local_io_error, safe_component};
 use futures::stream::{self, StreamExt};
 use std::path::{Path, PathBuf};
 use transom_core::{AppError, DirEntryMeta, DirSnapshotEntry, ErrorCode, TransferMatcher};

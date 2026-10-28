@@ -1,10 +1,8 @@
 //! Telnet TCP 连接拨号、协商与控制线程组装。
 
+use super::iac::{IAC, IacParser, NOP, OPT_NAWS, OPT_SGA, OPT_TTYPE, WILL, naws_subnegotiation};
 use super::stream::{
     READ_CHUNK, READ_TIMEOUT, TelnetReader, TelnetSession, TelnetWire, TelnetWriter, encoding_for,
-};
-use crate::telnet_iac::{
-    IAC, IacParser, NOP, OPT_NAWS, OPT_SGA, OPT_TTYPE, WILL, naws_subnegotiation,
 };
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::Arc;

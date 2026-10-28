@@ -5,10 +5,16 @@
 //! - 上传建目录按层级分层，层内并发 `ensure_dir`；
 //! - 文件传输以固定并发度并行，进度经原子计数聚合后统一汇报。
 
+mod path;
+mod task;
+
+pub(crate) use path::{join_remote_path, local_io_error, local_path_for, safe_component};
+use task::DirFileTask;
+
+use super::scan::{layered_directories, scan_local_snapshot, sorted_files};
 use crate::sftp::{SftpClient, notify_shared_progress, sftp_error};
-use crate::sftp_scan::{layered_directories, scan_local_snapshot, sorted_files};
 use futures::stream::{self, StreamExt, TryStreamExt};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use transom_core::{AppError, ErrorCode, TransferFilter, TransferSummary};
@@ -363,145 +369,6 @@ impl DirRemoteCopyTask {
         }
         Ok(())
     }
-}
-
-/// 目录传输单个文件的并发任务上下文。
-///
-/// 设计原理（Why）：
-/// - 实现初衷：目录传输的回调是调用方的泛型闭包，若让它经"外层闭包包
-///   async 块"多级嵌套再被 `tokio::spawn` 要求 `'static`，会触发 rustc
-///   的 HRTT 推断限制（FnOnce is not general enough）；
-/// - 核心优势：入口处把回调装箱为具体类型并连同参数收进本结构，任务体是
-///   具名 async 函数，结构体内不再出现闭包嵌套闭包，完全绕开该限制；
-/// - 代价与局限：一次堆装箱（整个目录传输仅一次），换取可编译且清晰的
-///   任务边界。
-struct DirFileTask {
-    client: SftpClient,
-    local_path: PathBuf,
-    remote_path: String,
-    resume: bool,
-    verify: bool,
-    total: u64,
-    transferred: Arc<AtomicU64>,
-    progress: SharedProgress,
-}
-
-impl DirFileTask {
-    /// 上传单个文件：字节增量聚合进共享计数，完成后按需校验并补齐尾部进度。
-    async fn run_upload(self) -> Result<(), AppError> {
-        let mut last_reported = 0u64;
-        let bytes = self
-            .client
-            .upload_resumable(
-                &self.local_path,
-                &self.remote_path,
-                self.resume,
-                |current, _| {
-                    let delta = current.saturating_sub(last_reported);
-                    last_reported = current;
-                    if delta > 0 {
-                        let done = self
-                            .transferred
-                            .fetch_add(delta, Ordering::Relaxed)
-                            .saturating_add(delta);
-                        notify_shared_progress(&self.progress, done, Some(self.total));
-                    }
-                },
-            )
-            .await?;
-        if self.verify {
-            self.client
-                .verify_file(&self.local_path, &self.remote_path)
-                .await?;
-        }
-        // 进度回调只覆盖到最近的块边界，剩余字节在完成后补齐
-        let tail = bytes.saturating_sub(last_reported);
-        if tail > 0 {
-            let done = self
-                .transferred
-                .fetch_add(tail, Ordering::Relaxed)
-                .saturating_add(tail);
-            notify_shared_progress(&self.progress, done, Some(self.total));
-        }
-        Ok(())
-    }
-
-    /// 下载单个文件：确保本地父目录存在后拉取，进度聚合与上传同构。
-    async fn run_download(self) -> Result<(), AppError> {
-        if let Some(parent) = self.local_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|error| local_io_error("创建本地父目录失败", parent, error))?;
-        }
-        let mut last_reported = 0u64;
-        let bytes = self
-            .client
-            .download_resumable(
-                &self.remote_path,
-                &self.local_path,
-                self.resume,
-                |current, _| {
-                    let delta = current.saturating_sub(last_reported);
-                    last_reported = current;
-                    if delta > 0 {
-                        let done = self
-                            .transferred
-                            .fetch_add(delta, Ordering::Relaxed)
-                            .saturating_add(delta);
-                        notify_shared_progress(&self.progress, done, Some(self.total));
-                    }
-                },
-            )
-            .await?;
-        if self.verify {
-            self.client
-                .verify_file(&self.local_path, &self.remote_path)
-                .await?;
-        }
-        let tail = bytes.saturating_sub(last_reported);
-        if tail > 0 {
-            let done = self
-                .transferred
-                .fetch_add(tail, Ordering::Relaxed)
-                .saturating_add(tail);
-            notify_shared_progress(&self.progress, done, Some(self.total));
-        }
-        Ok(())
-    }
-}
-
-pub(crate) fn join_remote_path(root: &str, relative: &str) -> String {
-    if root == "/" {
-        format!("/{relative}")
-    } else {
-        format!("{}/{}", root.trim_end_matches('/'), relative)
-    }
-}
-
-/// 将相对路径逐段拼接到本地根目录，并拒绝任何越界片段。
-pub(crate) fn local_path_for(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
-    let mut path = root.to_path_buf();
-    for component in relative.split('/') {
-        if !safe_component(component) {
-            return Err(AppError::with_detail(
-                ErrorCode::SftpFailed,
-                format!("传输路径包含非法片段: {relative}"),
-            ));
-        }
-        path.push(component);
-    }
-    Ok(path)
-}
-
-pub(crate) fn safe_component(name: &str) -> bool {
-    !name.is_empty() && name != "." && name != ".." && !name.contains('/') && !name.contains('\\')
-}
-
-pub(crate) fn local_io_error(context: &str, path: &Path, error: std::io::Error) -> AppError {
-    AppError::with_detail(
-        ErrorCode::SftpFailed,
-        format!("{context} {}: {error}", path.display()),
-    )
 }
 
 #[cfg(test)]

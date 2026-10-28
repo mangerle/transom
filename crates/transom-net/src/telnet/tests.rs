@@ -1,7 +1,7 @@
 //! Telnet 客户端单元测试。
 
+use super::iac::{IAC, IacParser, OPT_TTYPE, WILL};
 use super::stream::{READ_CHUNK, TelnetReader, TelnetWire, TelnetWriter, encoding_for};
-use crate::telnet_iac::{IAC, IacParser, OPT_TTYPE, WILL};
 use std::io::{self, Cursor, Read, Write};
 use std::sync::Arc;
 use std::sync::Mutex;

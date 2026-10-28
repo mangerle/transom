@@ -1,6 +1,6 @@
 //! Telnet 线路写出端与读写 I/O 适配器。
 
-use crate::telnet_iac::{IacParser, escape_iac};
+use super::iac::{IacParser, escape_iac};
 use std::io::{self, Read, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
