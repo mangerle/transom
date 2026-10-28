@@ -4,8 +4,8 @@
 //! - 实现初衷：本地大目录 `read_dir` 与递归删除在慢速磁盘、FUSE/网络挂载上
 //!   可能挂起秒级甚至分钟级；这些调用出现在 UI 事件回调里会直接冻结整个
 //!   界面（GPUI 的渲染与事件分发共用主线程）；
-//! - 核心优势：阻塞段统一交给 gpui 后台执行器线程池，完成后回到 `AppShell`
-//!   实体应用结果，与悬浮预览缩略图加载（`preview_actions`）是同一套模式；
+//! - 核心优势：阻塞段交给专用线程执行（缩略图解码等短任务仍走 gpui 后台
+//!   执行器，两者按预期耗时区分），完成后回到 `AppShell` 实体应用结果；
 //!   过期防护通过比对回填时的目录路径实现，导航离开后旧结果不会覆盖新目录；
 //! - 代价与局限：刷新从"同步可见"变为"异步落地"，期间面板短暂显示旧内容
 //!   （导航场景先清空条目给出即时反馈）；同一目录的并发刷新以后完成者胜出。
@@ -40,10 +40,10 @@ impl AppShell {
         };
         cx.spawn(async move |this, cx| {
             let scan_dir = dir.clone();
-            let result = cx
-                .background_executor()
-                .spawn(async move { list_local_dir(&scan_dir) })
-                .await;
+            let Some(result) = spawn_blocking_local(move || list_local_dir(&scan_dir)).await else {
+                log::error!("本地目录读取线程启动失败，跳过本次刷新");
+                return;
+            };
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
                     .workspace
@@ -106,15 +106,14 @@ impl AppShell {
         let dir = panel.local.path.clone();
         cx.notify();
         cx.spawn(async move |this, cx| {
-            let (deleted, failed) = cx
-                .background_executor()
-                .spawn(async move { delete_local_paths(&paths) })
-                .await;
+            let Some((deleted, failed)) =
+                spawn_blocking_local(move || delete_local_paths(&paths)).await
+            else {
+                log::error!("本地删除线程启动失败，本次删除未执行");
+                return;
+            };
             let scan_dir = dir.clone();
-            let entries = cx
-                .background_executor()
-                .spawn(async move { list_local_dir(&scan_dir) })
-                .await;
+            let entries = spawn_blocking_local(move || list_local_dir(&scan_dir)).await;
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
                     .workspace
@@ -126,14 +125,15 @@ impl AppShell {
                     return;
                 };
                 if failed > 0 {
-                    panel.local.error =
-                        Some(format!("已删除 {deleted} 个本地项目，{failed} 个删除失败"));
+                    panel.set_local_error(format!(
+                        "已删除 {deleted} 个本地项目，{failed} 个删除失败"
+                    ));
                 } else {
                     panel.set_status(format!("已删除 {deleted} 个本地项目"));
                 }
                 // 删除期间用户可能已导航到其他目录：只在目录未变时回填刷新
                 if panel.local.path == dir
-                    && let Ok(entries) = entries
+                    && let Some(Ok(entries)) = entries
                 {
                     let valid_paths: BTreeSet<PathBuf> =
                         entries.iter().map(|entry| entry.path.clone()).collect();
@@ -149,7 +149,7 @@ impl AppShell {
 
 /// 串行删除本地路径：目录递归删除，其他（含符号链接）按文件删除。
 /// 返回 (成功数, 失败数)；单项失败不中断，保证批量操作的统计完整。
-/// 阻塞函数，仅允许在后台执行器线程池上调用。
+/// 阻塞函数，仅允许经 [`spawn_blocking_local`] 在专用线程上调用。
 fn delete_local_paths(paths: &[PathBuf]) -> (usize, usize) {
     let mut deleted = 0usize;
     let mut failed = 0usize;
@@ -164,4 +164,35 @@ fn delete_local_paths(paths: &[PathBuf]) -> (usize, usize) {
         }
     }
     (deleted, failed)
+}
+
+/// 在专用线程执行阻塞的本地文件操作。
+///
+/// 设计原理（Why）：递归删除与超大目录扫描可能运行数十秒，而 GPUI 的后台
+/// 执行器同时承担缩略图解码等短任务，占住其工作线程会拖慢其它后台工作。
+/// 专用线程只跑这一件事，发送结果后立即退出；异步侧收到结果即 join，
+/// 线程生命周期全程可追踪，不产生脱缰线程。
+fn spawn_blocking_local<T, F>(job: F) -> impl std::future::Future<Output = Option<T>>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    let (tx, rx) = flume::bounded(1);
+    let spawned = std::thread::Builder::new()
+        .name("transom-sftp-local".into())
+        .spawn(move || {
+            let _ = tx.send(job());
+        });
+    async move {
+        let handle = match spawned {
+            Ok(handle) => handle,
+            Err(error) => {
+                log::error!("创建本地文件操作线程失败，本次操作已取消: {error}");
+                return None;
+            }
+        };
+        let result = rx.recv_async().await.ok();
+        let _ = handle.join();
+        result
+    }
 }
