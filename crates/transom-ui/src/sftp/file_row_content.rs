@@ -1,11 +1,8 @@
-//! 虚拟文件系统通用列表项行视觉组件。
+//! 文件列表行的内容渲染：图标、截断文件名、POSIX 权限徽章与容量。
 //!
-//! 设计原理（Why）：
-//! - 实现初衷：消除本地文件浏览器、主远端 SFTP 与并列远端列中单行 UI 布局与样式的重复；
-//! - 核心优势：
-//!   1. 统一图标、文字截断、POSIX 权限徽章与字节单位格式化布局；
-//!   2. 视觉样式集中维护，修改文件行交互与外观时仅需调整单一组件；
-//!   3. 零成本适配 `VfsEntry` 契约，解耦具体的底层文件系统来源。
+//! 设计原理（Why）：本地栏、主远端栏与并列远端共用同一套行内布局，
+//! 图标选择、权限徽章与容量格式化在这里单点维护；行的外壳样式与交互
+//! 由 [`super::file_row`] 负责，两者组合成最终条目。
 
 use super::{format_size, sftp_file_icon};
 use crate::palette::Palette;
@@ -17,7 +14,7 @@ use gpui_kit::*;
 use transom_core::format_octal_permissions;
 
 /// 虚拟文件项渲染参数配置。
-pub(crate) struct VfsRowRenderOptions<'a> {
+pub(crate) struct FileRowContentOptions<'a> {
     pub(crate) name: &'a str,
     pub(crate) is_dir: bool,
     pub(crate) is_parent: bool,
@@ -27,7 +24,7 @@ pub(crate) struct VfsRowRenderOptions<'a> {
 }
 
 /// 渲染标准虚拟文件条目的内层视觉元素（图标、文件名、权限徽章、格式化大小）。
-pub(crate) fn render_vfs_row_content(options: VfsRowRenderOptions<'_>) -> impl IntoElement {
+pub(crate) fn render_file_row_content(options: FileRowContentOptions<'_>) -> impl IntoElement {
     let p = options.palette;
     let is_dir = options.is_dir;
     let is_parent = options.is_parent;

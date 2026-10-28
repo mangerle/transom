@@ -12,9 +12,9 @@ use transom_core::{AppError, ErrorCode};
 
 /// 本地文件系统扫描器。
 #[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct LocalVfsProvider;
+pub(crate) struct LocalDirectoryLister;
 
-impl LocalVfsProvider {
+impl LocalDirectoryLister {
     /// 同步扫描本地目录并返回排序后的条目列表。
     ///
     /// # Errors
@@ -56,12 +56,12 @@ impl LocalVfsProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::LocalVfsProvider;
+    use super::LocalDirectoryLister;
     use std::path::Path;
 
     #[test]
     fn local_provider_lists_current_dir_with_dirs_first() {
-        let entries = LocalVfsProvider::list_sync(Path::new(".")).unwrap();
+        let entries = LocalDirectoryLister::list_sync(Path::new(".")).unwrap();
         assert!(!entries.is_empty());
         let first_file = entries.iter().position(|entry| !entry.is_dir);
         let last_dir = entries.iter().rposition(|entry| entry.is_dir);

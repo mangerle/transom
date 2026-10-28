@@ -4,8 +4,9 @@ mod chmod;
 mod drop_upload;
 mod file_ops;
 mod file_row;
-mod filter;
+mod file_row_content;
 mod local_async;
+mod local_listing;
 mod local_only;
 mod local_pane_view;
 mod modals;
@@ -24,14 +25,15 @@ mod remote_pane;
 mod side_remote;
 mod side_remote_view;
 mod state;
-mod status;
+mod status_message;
 mod sync_actions;
 mod sync_modal;
 mod task;
+mod transfer_filter_modal;
 mod transfer_presentation;
-mod vfs_entry_view;
-mod vfs_provider;
 
+pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
+pub(crate) use self::local_listing::LocalDirectoryLister;
 pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;
 pub(crate) use self::properties::{
@@ -45,8 +47,6 @@ pub(crate) use self::state::{
     SftpSyncModalState,
 };
 pub(crate) use self::task::{TransferKind, TransferMode, TransferStatus, TransferTask};
-pub(crate) use self::vfs_entry_view::{VfsRowRenderOptions, render_vfs_row_content};
-pub(crate) use self::vfs_provider::LocalVfsProvider;
 pub(crate) use crate::editor::{EditorDragTracker, PendingEditorClose};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -62,7 +62,7 @@ pub(crate) fn local_home() -> PathBuf {
 }
 
 pub(crate) fn list_local_dir(dir: &Path) -> Result<Vec<LocalFileEntry>, String> {
-    LocalVfsProvider::list_sync(dir).map_err(|error| error.to_string())
+    LocalDirectoryLister::list_sync(dir).map_err(|error| error.to_string())
 }
 
 pub(crate) fn join_remote(dir: &str, name: &str) -> String {

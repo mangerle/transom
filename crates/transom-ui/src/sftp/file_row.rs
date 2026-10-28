@@ -5,7 +5,7 @@
 //! 只收敛"三处必须一致"的部分；点击、拖拽与右键菜单仍留在各自模块，因为
 //! 它们的业务语义确实不同。
 
-use super::{VfsRowRenderOptions, render_vfs_row_content};
+use super::{FileRowContentOptions, render_file_row_content};
 use crate::palette::Palette;
 use gpui_kit::base::h_flex;
 use gpui_kit::*;
@@ -48,7 +48,7 @@ pub(crate) fn file_row(props: FileRowProps<'_>) -> Stateful<Div> {
                 .text_color(p.sidebar_accent_foreground)
         })
     };
-    row.child(render_vfs_row_content(VfsRowRenderOptions {
+    row.child(render_file_row_content(FileRowContentOptions {
         name: props.name,
         is_dir: props.is_dir,
         is_parent: props.is_parent,
