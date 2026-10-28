@@ -3,6 +3,7 @@
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 
@@ -106,17 +107,18 @@ impl CollapsibleCard {
         header = header.child(right_side);
         card = card.child(header);
 
-        if !self.collapsed
-            && let Some(content) = self.content
-        {
+        if let Some(content) = self.content {
+            let content_box = div()
+                .w_full()
+                .overflow_hidden()
+                .p_2p5()
+                .border_t_1()
+                .border_color(p.border.opacity(0.4))
+                .child(content);
             card = card.child(
-                div()
-                    .w_full()
-                    .overflow_hidden()
-                    .p_2p5()
-                    .border_t_1()
-                    .border_color(p.border.opacity(0.4))
-                    .child(content),
+                Collapsible::new()
+                    .open(!self.collapsed)
+                    .content(content_box),
             );
         }
 
