@@ -15,20 +15,67 @@ use transom_platform::private_fs;
 
 pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, AppError> {
     match fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text).map(Some).map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                format!(
-                    "配置文件内容损坏，无法解析，路径: {}，原因: {error}",
-                    path.display()
-                ),
-            )
-        }),
+        Ok(text) => match serde_json::from_str(&text) {
+            Ok(value) => Ok(Some(value)),
+            Err(error) => {
+                let detail = match quarantine(path, "corrupt") {
+                    Some(saved) => format!(
+                        "配置文件内容损坏，无法解析，原文件已保留到 {}，路径: {}，原因: {error}",
+                        saved.display(),
+                        path.display()
+                    ),
+                    None => format!(
+                        "配置文件内容损坏，无法解析，路径: {}，原因: {error}",
+                        path.display()
+                    ),
+                };
+                Err(AppError::with_detail(ErrorCode::Configuration, detail))
+            }
+        },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(AppError::with_detail(
             ErrorCode::Io,
             format!("读取配置文件失败，路径: {}，原因: {error}", path.display()),
         )),
+    }
+}
+
+/// 把无法解析或版本不适合当前程序的文件改名保留，返回隔离后的路径。
+///
+/// 设计原理（Why）：加载失败后调用方通常以空配置继续运行，下一次保存会原子
+/// 覆盖原文件，原始数据就此永久消失。先改名保留，用户仍能从隔离文件里找回
+/// 内容，也便于事后排查；改名失败只告警，不掩盖原始错误。
+pub(crate) fn quarantine(path: &Path, reason: &str) -> Option<PathBuf> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default();
+    let name = path.file_name().map_or_else(
+        || "store".to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let mut target = path.with_file_name(format!("{name}.{reason}-{stamp}"));
+    let mut sequence = 1u32;
+    while target.exists() {
+        target = path.with_file_name(format!("{name}.{reason}-{stamp}-{sequence}"));
+        sequence = sequence.saturating_add(1);
+    }
+    match fs::rename(path, &target) {
+        Ok(()) => {
+            log::warn!(
+                "配置文件已隔离保留，原路径: {}，隔离路径: {}，原因: {reason}",
+                path.display(),
+                target.display()
+            );
+            Some(target)
+        }
+        Err(error) => {
+            log::warn!(
+                "配置文件隔离失败，原路径: {}，原因: {error}",
+                path.display()
+            );
+            None
+        }
     }
 }
 
@@ -164,5 +211,36 @@ mod tests {
         write_atomic(&path, b"{}").unwrap();
         let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "私有文件必须仅属主可读写");
+    }
+}
+
+#[cfg(test)]
+mod quarantine_tests {
+    use super::read_json;
+    use tempfile::tempdir;
+
+    /// 损坏的配置文件必须改名保留：否则界面空启动后的第一次保存会把原数据
+    /// 覆盖掉，用户再也没有找回的入口。
+    #[test]
+    fn corrupt_json_is_quarantined_and_preserved() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("sessions.json");
+        std::fs::write(&path, b"{ broken").unwrap();
+
+        let result = read_json::<serde_json::Value>(&path);
+        assert!(result.is_err());
+        assert!(!path.exists(), "原文件应被改名隔离");
+
+        let quarantined: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".corrupt-"))
+            .collect();
+        assert_eq!(quarantined.len(), 1, "必须恰好保留一份隔离文件");
+        assert_eq!(
+            std::fs::read(quarantined[0].path()).unwrap(),
+            b"{ broken",
+            "隔离文件必须保留原始内容"
+        );
     }
 }

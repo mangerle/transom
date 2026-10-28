@@ -89,13 +89,19 @@ impl SessionStore for JsonSessionStore {
             return Ok(SessionCatalog::default());
         };
         if file.version > SCHEMA_VERSION {
-            return Err(AppError::with_detail(
-                ErrorCode::Configuration,
-                format!(
+            let detail = match crate::file_io::quarantine(&self.path, "newer-version") {
+                Some(saved) => format!(
+                    "会话文件版本 {} 高于当前支持版本 {}，原文件已保留到 {}，请升级 Transom",
+                    file.version,
+                    SCHEMA_VERSION,
+                    saved.display()
+                ),
+                None => format!(
                     "会话文件版本 {} 高于当前支持版本 {}，请升级 Transom",
                     file.version, SCHEMA_VERSION
                 ),
-            ));
+            };
+            return Err(AppError::with_detail(ErrorCode::Configuration, detail));
         }
         self.decode(file)
     }
@@ -206,6 +212,17 @@ mod tests {
         std::fs::write(&path, r#"{"version":99,"sessions":[]}"#).unwrap();
         let store = JsonSessionStore::new(&path);
         assert!(store.load().is_err());
+        assert!(!path.exists(), "版本超前的文件应被隔离，不能被后续保存覆盖");
+        let quarantined = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(".newer-version-")
+            });
+        assert!(quarantined, "必须保留原会话文件");
     }
 
     #[test]

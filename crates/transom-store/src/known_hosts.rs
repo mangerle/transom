@@ -91,24 +91,43 @@ impl JsonKnownHostsStore {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, AppError> {
         let path = path.as_ref().to_path_buf();
         let inner = match fs::read_to_string(&path) {
-            Ok(text) => {
-                let file: KnownHostsFile = serde_json::from_str(&text).map_err(|error| {
-                    AppError::with_detail(
-                        ErrorCode::Configuration,
-                        format!("invalid known_hosts file {}: {error}", path.display()),
-                    )
-                })?;
-                file.hosts
-            }
+            Ok(text) => match serde_json::from_str::<KnownHostsFile>(&text) {
+                Ok(file) if file.version <= SCHEMA_VERSION => file.hosts,
+                Ok(file) => {
+                    let saved = crate::file_io::quarantine(&path, "newer-version");
+                    log::warn!(
+                        "known_hosts 文件版本 {} 高于当前支持版本 {}，已按空表启动，隔离路径: {}",
+                        file.version,
+                        SCHEMA_VERSION,
+                        saved.as_ref().map_or_else(
+                            || "隔离失败".to_string(),
+                            |path| path.display().to_string()
+                        )
+                    );
+                    Vec::new()
+                }
+                Err(error) => {
+                    let saved = crate::file_io::quarantine(&path, "corrupt");
+                    log::warn!(
+                        "known_hosts 文件损坏，已按空表启动，原路径: {}，隔离路径: {}，原因: {error}",
+                        path.display(),
+                        saved.as_ref().map_or_else(
+                            || "隔离失败".to_string(),
+                            |path| path.display().to_string()
+                        )
+                    );
+                    Vec::new()
+                }
+            },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            // 读取失败（权限、路径被占用等）不阻断启动：空表只会让下次连接
+            // 重新走 TOFU 确认，是安全方向；阻断启动则连终端都不可用。
             Err(error) => {
-                return Err(AppError::with_detail(
-                    ErrorCode::Io,
-                    format!(
-                        "读取已知主机文件失败，路径: {}，原因: {error}",
-                        path.display()
-                    ),
-                ));
+                log::warn!(
+                    "读取 known_hosts 失败，已按空表启动，路径: {}，原因: {error}",
+                    path.display()
+                );
+                Vec::new()
             }
         };
         let worker = Arc::new(PersistWorker::new());
@@ -339,5 +358,23 @@ mod tests {
         let reopened = JsonKnownHostsStore::new(&path).unwrap();
         let hosts = reopened.list().unwrap();
         assert_eq!(hosts.len(), 2, "最后一次全量快照必须包含全部记录");
+    }
+
+    /// 损坏的 known_hosts 不应阻断启动：隔离原文件、按空表继续，下次连接
+    /// 重新走 TOFU 确认（安全方向），而不是让整个应用起不来。
+    #[test]
+    fn corrupt_file_starts_empty_and_is_quarantined() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("known_hosts.json");
+        std::fs::write(&path, b"{ not json").unwrap();
+
+        let store = JsonKnownHostsStore::new(&path).expect("损坏文件不应阻断启动");
+        assert!(store.list().unwrap().is_empty());
+        assert!(!path.exists(), "原文件应被改名隔离");
+        let quarantined = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().contains(".corrupt-"));
+        assert!(quarantined, "必须保留原始文件供排查");
     }
 }

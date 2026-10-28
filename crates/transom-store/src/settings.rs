@@ -35,10 +35,19 @@ impl SettingsStore for JsonSettingsStore {
             return Ok(AppSettings::default());
         };
         if file.version > SCHEMA_VERSION {
-            return Err(AppError::with_detail(
-                ErrorCode::Configuration,
-                "settings file is newer than this application",
-            ));
+            let detail = match crate::file_io::quarantine(&self.path, "newer-version") {
+                Some(saved) => format!(
+                    "设置文件版本 {} 高于当前支持版本 {}，原文件已保留到 {}，请升级 Transom",
+                    file.version,
+                    SCHEMA_VERSION,
+                    saved.display()
+                ),
+                None => format!(
+                    "设置文件版本 {} 高于当前支持版本 {}，请升级 Transom",
+                    file.version, SCHEMA_VERSION
+                ),
+            };
+            return Err(AppError::with_detail(ErrorCode::Configuration, detail));
         }
         Ok(file.settings)
     }
@@ -73,5 +82,27 @@ mod tests {
         let loaded = store.load().unwrap();
         assert_eq!(loaded.language, "en");
         assert!(!loaded.terminal_interaction.copy_on_select);
+    }
+
+    /// 版本超前的设置文件必须隔离保留：旧版程序空启动后的保存不能把它覆盖。
+    #[test]
+    fn newer_schema_is_quarantined() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, r#"{"version":99,"settings":{}}"#).unwrap();
+        let store = JsonSettingsStore::new(&path);
+
+        assert!(store.load().is_err());
+        assert!(!path.exists(), "版本超前的文件应被隔离");
+        let quarantined = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(".newer-version-")
+            });
+        assert!(quarantined, "必须保留原设置文件");
     }
 }
