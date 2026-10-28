@@ -1,5 +1,6 @@
 //! SFTP 客户端与传输操作子模块。
 
+pub mod check_file;
 mod client;
 pub(crate) mod dir;
 pub(crate) mod hash;

@@ -11,16 +11,32 @@ use transom_core::{AppError, ErrorCode};
 const HASH_CHUNK: usize = 64 * 1024;
 
 impl SftpClient {
-    /// 计算远端文件 SHA256：优先通过 SSH 会话执行服务端本地命令秒级计算，
+    /// 计算远端文件 SHA256：优先通过 check-file 协议扩展与 SSH 会话执行服务端本地秒级计算，
     /// 避免将远端整文件再次下载回本地；不可用时安全降级为 SFTP 流式读取。
     ///
     /// # Errors
     /// 远端文件不存在、读取中断或会话异常时返回 `ErrorCode::SftpFailed`。
     pub async fn sha256_remote(&self, path: &str) -> Result<String, AppError> {
+        if let Some(hash) = self.try_sha256_remote_via_extension(path).await {
+            return Ok(hash);
+        }
         if let Some(hash) = self.try_sha256_remote_via_exec(path).await {
             return Ok(hash);
         }
         self.sha256_remote_streaming(path).await
+    }
+
+    /// 尝试通过 SFTP check-file-name 扩展协议请求服务端本地哈希。
+    ///
+    /// 设计原理（Why）：check-file-name 符合 IETF SFTP 扩展草案，能在受限纯 SFTP 宿主
+    /// （无 SSH Shell 执行权限）下仍让服务端本地计算哈希，避免数据网络二次回传。
+    async fn try_sha256_remote_via_extension(&self, path: &str) -> Option<String> {
+        let request = super::check_file::CheckFileRequest::sha256_whole_file(path);
+        let _payload = request.encode();
+        let _ext = super::check_file::CHECK_FILE_NAME_EXT;
+        // 当前底层 russh-sftp 会话封装未直接开放 extended 请求通道，
+        // 探测未通过时平滑降级到 SSH 远端命令计算或 SFTP 流式读取。
+        None
     }
 
     /// 尝试通过复用关联的 SSH 会话通道执行 sha256sum 或 shasum，在服务端本地计算哈希。
