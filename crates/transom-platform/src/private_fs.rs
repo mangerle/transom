@@ -64,26 +64,42 @@ pub fn restrict_file_permissions(file: &File) -> io::Result<()> {
     Ok(())
 }
 
-/// 以追加方式打开私有文件；不存在时创建，并把权限收紧到 0600。
+/// 以追加方式打开私有文件；不存在时创建，并保证权限为 0600。
+///
+/// Unix 上在 open 时直接带 0600 模式，新建文件从第一刻起就不是宽权限；
+/// 随后仍对句柄收紧一次，兜底旧版本留下的宽权限文件。非 Unix 平台没有
+/// mode 语义，只保留句柄收紧（空操作）。
 ///
 /// # Errors
 /// 打开或权限设置失败时返回底层 IO 错误。
 pub fn open_private_append(path: &Path) -> io::Result<File> {
-    let file = OpenOptions::new().create(true).append(true).open(path)?;
+    let mut options = OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options.open(path)?;
     restrict_file_permissions(&file)?;
     Ok(file)
 }
 
-/// 以截断方式创建/打开私有文件，并把权限收紧到 0600。
+/// 以截断方式创建/打开私有文件，并保证权限为 0600。
+///
+/// 与 [`open_private_append`] 相同：创建时即带 0600，创建后再兜底收紧。
 ///
 /// # Errors
 /// 打开或权限设置失败时返回底层 IO 错误。
 pub fn open_private_truncate(path: &Path) -> io::Result<File> {
-    let file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(path)?;
+    let mut options = OpenOptions::new();
+    options.create(true).write(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options.open(path)?;
     restrict_file_permissions(&file)?;
     Ok(file)
 }

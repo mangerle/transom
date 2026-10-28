@@ -50,12 +50,17 @@ pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), App
 ///   序号隔离同进程多线程；
 /// - 为什么显式关闭句柄再 rename：Windows 不允许重命名打开中的文件，
 ///   提前关闭让两个平台行为一致；
-/// - 代价与局限：每次保存多一次 fsync（毫秒级），写频率低可接受；极端
-///   崩溃可能残留唯一命名的 `.tmp` 文件，属无害垃圾，不会被后续写入读到。
+/// - 为什么 rename 后还要 fsync 父目录：rename 只原子替换目录项，目录项
+///   本身也是元数据；不同步父目录时，断电后可能仍指向旧文件或丢失新名字。
+/// - 代价与局限：每次保存多一次文件 fsync 与一次目录 fsync（毫秒级），
+///   写频率低可接受；极端崩溃可能残留唯一命名的 `.tmp` 文件，属无害垃圾，
+///   不会被后续写入读到。Windows 没有等价的可移植目录 fsync，且 rename
+///   不覆盖已存在文件、只能先删除，因此存在短暂缺失窗口；本实现不承诺
+///   Windows 上的掉电持久性，只保证不会留下半份内容。
 ///
 /// # Errors
-/// 父目录创建、临时文件打开、写入、同步或重命名失败时返回 `Io` 错误，
-/// 错误信息附带目标路径便于定位。
+/// 父目录创建、临时文件打开、写入、同步、重命名或目录同步失败时返回
+/// `Io` 错误，错误信息附带目标路径便于定位。
 pub fn write_atomic(path: &Path, data: &[u8]) -> Result<(), AppError> {
     let parent = path.parent().ok_or_else(|| {
         AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
@@ -87,6 +92,10 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> Result<(), AppError> {
         }
     }
     fs::rename(&temp, path).map_err(|error| write_error(path, error))?;
+    #[cfg(unix)]
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| write_error(parent, error))?;
     Ok(())
 }
 
