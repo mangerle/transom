@@ -4,4 +4,4 @@ mod sections;
 mod types;
 mod view;
 
-pub(crate) use types::MonitorState;
+pub(crate) use types::{MonitorState, SampleIntervalMode};

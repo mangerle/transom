@@ -1936,6 +1936,69 @@ settings:
   tab_window_layout:
     en: Window & Layout
     zh-CN: 窗口与布局
+  tab_monitor:
+    en: System Monitor
+    zh-CN: 主机监控
+  monitor_sections_group:
+    en: Default Section States
+    zh-CN: 板块默认折叠状态
+  monitor_behavior_group:
+    en: Drawer & Sampling
+    zh-CN: 抽屉与采样设置
+  monitor_cpu_expanded:
+    en: CPU Processor
+    zh-CN: CPU 处理器板块
+  monitor_cpu_expanded_desc:
+    en: Expand CPU usage and load average section by default
+    zh-CN: 开启监控抽屉时默认展开 CPU 使用率与平均负载
+  monitor_memory_expanded:
+    en: Memory & Swap
+    zh-CN: 内存与交换分区板块
+  monitor_memory_expanded_desc:
+    en: Expand RAM and Swap usage section by default
+    zh-CN: 开启监控抽屉时默认展开物理内存与 Swap 占用
+  monitor_disk_expanded:
+    en: Disk Filesystems
+    zh-CN: 磁盘存储板块
+  monitor_disk_expanded_desc:
+    en: Expand disk mount points and usage section by default
+    zh-CN: 开启监控抽屉时默认展开各分区挂载点用量
+  monitor_network_expanded:
+    en: Network Interfaces
+    zh-CN: 网络流量板块
+  monitor_network_expanded_desc:
+    en: Expand network throughput and waveform section by default
+    zh-CN: 开启监控抽屉时默认展开实时网络上下行速率与波形图
+  monitor_ports_expanded:
+    en: Listening Ports
+    zh-CN: 监听端口板块
+  monitor_ports_expanded_desc:
+    en: Expand listening ports list by default
+    zh-CN: 开启监控抽屉时默认展开端口号与绑定进程看板
+  monitor_services_expanded:
+    en: Failed Services
+    zh-CN: 异常服务板块
+  monitor_services_expanded_desc:
+    en: Expand failed systemd services section by default
+    zh-CN: 开启监控抽屉时默认展开崩溃服务与状态诊断
+  monitor_processes_expanded:
+    en: Process Management
+    zh-CN: 进程管理板块
+  monitor_processes_expanded_desc:
+    en: Expand process list and management section by default
+    zh-CN: 开启监控抽屉时默认展开高资源占用进程列表与操作
+  monitor_default_width:
+    en: Default Drawer Width
+    zh-CN: 默认抽屉宽度
+  monitor_default_width_desc:
+    en: Initial width when opening the system monitor drawer
+    zh-CN: 打开监控抽屉时的初始显示宽度
+  monitor_default_interval:
+    en: Sampling Interval
+    zh-CN: 采样频率档位
+  monitor_default_interval_desc:
+    en: Frequency for gathering background host diagnostic metrics
+    zh-CN: 后台采集主机各项硬件与系统指标的时间间隔
   ui_font_group:
     en: Interface Font
     zh-CN: 界面字体

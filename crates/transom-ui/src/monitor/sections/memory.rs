@@ -115,20 +115,19 @@ impl AppShell {
                     .child(
                         h_flex()
                             .justify_between()
+                            .items_center()
                             .text_xs()
                             .child(
                                 h_flex()
                                     .gap_1p5()
                                     .items_center()
                                     .child(
-                                        div()
-                                            .text_color(p.muted_foreground)
-                                            .child("内存占用走势 (2分钟)"),
+                                        div().text_color(p.muted_foreground).child("走势 (2分钟)"),
                                     )
                                     .child(trend_badge),
                             )
                             .child(div().text_color(p.muted_foreground).child(format!(
-                                "区间: {:.1}% ~ {:.1}% (均值 {:.1}%)",
+                                "{:.1}% ~ {:.1}% (均 {:.1}%)",
                                 min_val, max_val, avg_val
                             ))),
                     )

@@ -10,6 +10,7 @@ mod layout_page;
 mod logs_page;
 mod modal;
 mod modal_state;
+mod monitor_page;
 mod security_page;
 mod shortcuts_page;
 mod startup_page;

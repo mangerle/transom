@@ -105,19 +105,23 @@ impl Render for AppShell {
         }
 
         if !self.immersive && self.monitor.open {
-            // 监控抽屉停靠在主面板右侧，支持拖拽调整宽度（320px 至屏幕宽度的 75%）。
-            let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(480.0);
+            // 监控抽屉停靠在主面板右侧，支持拖拽调整宽度（360px 至屏幕宽度的 75%）。
+            let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(520.0);
             if let Some(actual_w) = panels_state.read(cx).sizes().last().copied() {
                 let actual_f32 = actual_w.as_f32();
-                if actual_f32 >= 320.0 && actual_f32 <= max_drawer_width {
+                if actual_f32 >= 360.0
+                    && actual_f32 <= max_drawer_width
+                    && (self.monitor.drawer_width - actual_f32).abs() > 1.0
+                {
                     self.monitor.drawer_width = actual_f32;
+                    self.settings.monitor.drawer_width = actual_f32;
                 }
             }
-            let monitor_width = self.monitor.drawer_width.clamp(320.0, max_drawer_width);
+            let monitor_width = self.monitor.drawer_width.clamp(360.0, max_drawer_width);
             resizable_group = resizable_group.child(
                 resizable_panel()
                     .size(px(monitor_width))
-                    .size_range(px(320.0)..px(max_drawer_width))
+                    .size_range(px(360.0)..px(max_drawer_width))
                     .child(self.render_monitor_panel(window, cx, &p)),
             );
         }

@@ -114,6 +114,10 @@ fn default_false() -> bool {
     false
 }
 
+fn default_drawer_width() -> f32 {
+    420.0
+}
+
 /// 主机监控面板各板块默认折叠/展开偏好设置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MonitorSettings {
@@ -138,6 +142,9 @@ pub struct MonitorSettings {
     /// 进程板块是否默认展开（默认 true）
     #[serde(default = "default_true")]
     pub processes_expanded: bool,
+    /// 上次使用的监控抽屉宽度（像素），默认 420.0
+    #[serde(default = "default_drawer_width")]
+    pub drawer_width: f32,
 }
 
 impl Default for MonitorSettings {
@@ -150,6 +157,7 @@ impl Default for MonitorSettings {
             ports_expanded: false,
             services_expanded: false,
             processes_expanded: true,
+            drawer_width: 420.0,
         }
     }
 }

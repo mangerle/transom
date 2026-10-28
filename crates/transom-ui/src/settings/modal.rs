@@ -396,6 +396,21 @@ impl AppShell {
                 AppShell::render_settings_logs,
             ));
 
+        let page_monitor = SettingPage::new(rust_i18n::t!("settings.tab_monitor").to_string())
+            .icon(IconName::Gauge)
+            .group(setting_group(
+                app,
+                p,
+                "settings.monitor_sections_group",
+                AppShell::render_settings_monitor_sections,
+            ))
+            .group(setting_group(
+                app,
+                p,
+                "settings.monitor_behavior_group",
+                AppShell::render_settings_monitor_behavior,
+            ));
+
         let page_about = SettingPage::new(rust_i18n::t!("settings.tab_about").to_string())
             .icon(IconName::Info)
             .group(setting_group_with_window(
@@ -413,6 +428,7 @@ impl AppShell {
             page_shortcuts,
             page_window_layout,
             page_general,
+            page_monitor,
             page_about,
         ]
     }

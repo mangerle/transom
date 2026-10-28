@@ -85,7 +85,7 @@ impl AppShell {
         body = body.child(self.render_process_section_card(cx, p));
 
         // 抽屉容器布局：尺寸由外部 resizable_panel 统一约束，内部填满并自适应。
-        let drawer_width = self.monitor.drawer_width.clamp(320.0, 750.0);
+        let drawer_width = self.monitor.drawer_width.clamp(360.0, 750.0);
         let mut panel = v_flex()
             .id("monitor-panel")
             .size_full()
@@ -173,20 +173,20 @@ impl AppShell {
                                 this.sample_processes(cx);
                             })),
                     )
-                    // 宽度缩放切换芯片（快速切换 380px / 540px）
+                    // 宽度缩放切换芯片（快速切换 420px / 600px）
                     .child(
                         Button::new("monitor-toggle-width")
                             .ghost()
                             .xsmall()
-                            .icon(if drawer_width > 420.0 {
+                            .icon(if drawer_width > 480.0 {
                                 IconName::Minimize2
                             } else {
                                 IconName::Maximize2
                             })
-                            .tooltip(if drawer_width > 420.0 {
-                                "紧凑宽度"
+                            .tooltip(if drawer_width > 480.0 {
+                                "紧凑宽度 (420px)"
                             } else {
-                                "宽幅视图"
+                                "宽幅视图 (600px)"
                             })
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.toggle_monitor_drawer_width(window, cx);

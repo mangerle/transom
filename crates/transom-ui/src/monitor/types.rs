@@ -118,7 +118,7 @@ impl MonitorState {
     ) -> Self {
         Self {
             open: false,
-            drawer_width: 380.0,
+            drawer_width: settings.drawer_width.clamp(360.0, 750.0),
             collapse: MonitorSectionCollapse::from(settings),
             interval_mode: SampleIntervalMode::Normal,
             sort: ProcessSort::Cpu,

@@ -287,18 +287,20 @@ impl AppShell {
         self.on_process_killed(tab_id, connection_id, pid, error, cx);
     }
 
-    /// 快速切换监控抽屉宽度（紧凑 380px / 宽屏 540px），同步通知 ResizableState 重新分配尺寸。
+    /// 快速切换监控抽屉宽度（紧凑 420px / 宽屏 600px），同步通知 ResizableState 重新分配尺寸并持久化。
     pub(crate) fn toggle_monitor_drawer_width(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let new_width = if self.monitor.drawer_width > 420.0 {
-            380.0
+        let new_width = if self.monitor.drawer_width > 480.0 {
+            420.0
         } else {
-            540.0
+            600.0
         };
         self.monitor.drawer_width = new_width;
+        self.settings.monitor.drawer_width = new_width;
+        self.persist_layout_settings(cx);
         let panels_state = if self.settings.window.sftp_panel_side.is_left() {
             &self.workspace_panels_left
         } else {
