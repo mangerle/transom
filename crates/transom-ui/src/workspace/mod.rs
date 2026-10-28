@@ -1,5 +1,6 @@
 //! 主工作区标签栏、分屏窗格、断线重连提示与底部硬件状态监控栏渲染模块。
 
+mod empty_state;
 mod panes;
 pub(crate) mod state;
 mod tab_drag;
@@ -13,8 +14,8 @@ use crate::app::{AppShell, TabStatus};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
 
@@ -123,39 +124,6 @@ impl AppShell {
                     .label(rust_i18n::t!("common.reconnect").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.reconnect_tab(tab_id, window, cx)
-                    })),
-            )
-            .into_any_element()
-    }
-
-    pub(crate) fn render_empty_state(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        v_flex()
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .gap_3()
-            .child(Icon::new(IconName::Terminal).text_color(p.muted_foreground))
-            .child(
-                div()
-                    .text_base()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(p.foreground)
-                    .child(rust_i18n::t!("app.no_tab").to_string()),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("app.no_tab_hint").to_string()),
-            )
-            .child(
-                Button::new("empty-new-session")
-                    .primary()
-                    .small()
-                    .icon(IconName::Plus)
-                    .label(rust_i18n::t!("app.new_session").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_new_session(window, cx);
                     })),
             )
             .into_any_element()

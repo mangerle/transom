@@ -1,5 +1,6 @@
 //! 窗口尺寸、标签页生命周期、多窗格布局与平铺设置。
 
+use crate::ids::SessionId;
 use serde::{Deserialize, Serialize};
 
 /// 终端提示音响铃模式
@@ -111,6 +112,9 @@ pub struct WindowSettings {
     /// 与 `.desktop` 模板"不静默抢占默认程序"的设计一致。
     #[serde(default)]
     pub default_terminal: bool,
+    /// 最近打开过的会话 ID 列表（按最近使用优先排序，上限 20 个）。
+    #[serde(default)]
+    pub recent_sessions: Vec<SessionId>,
 }
 
 /// 启动时标签区的内容。
@@ -337,6 +341,7 @@ impl Default for WindowSettings {
             tab_tilings: Vec::new(),
             sftp_panel_side: PanelSide::Right,
             default_terminal: false,
+            recent_sessions: Vec::new(),
         }
     }
 }
@@ -355,4 +360,29 @@ fn default_window_height() -> f32 {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_settings_recent_sessions_default_and_roundtrip() {
+        let default_settings = WindowSettings::default();
+        assert!(default_settings.recent_sessions.is_empty());
+
+        let id1 = SessionId::new();
+        let id2 = SessionId::new();
+        let mut settings = default_settings.clone();
+        settings.recent_sessions = vec![id1, id2];
+
+        let json = serde_json::to_string(&settings).expect("必须成功序列化");
+        let restored: WindowSettings = serde_json::from_str(&json).expect("必须成功反序列化");
+        assert_eq!(restored.recent_sessions, vec![id1, id2]);
+
+        // 测试移除已删除或指定的会话 ID
+        let mut filtered = restored.recent_sessions;
+        filtered.retain(|id| *id != id1);
+        assert_eq!(filtered, vec![id2]);
+    }
 }

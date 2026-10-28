@@ -16,6 +16,34 @@ use transom_core::{
 };
 
 impl AppShell {
+    /// 记录最近打开的会话 ID，并异步落盘保存。
+    pub(crate) fn record_recent_session(&mut self, session_id: SessionId) {
+        self.settings
+            .window
+            .recent_sessions
+            .retain(|id| *id != session_id);
+        self.settings.window.recent_sessions.insert(0, session_id);
+        self.settings.window.recent_sessions.truncate(20);
+        if let Err(error) = self.services.settings_store.save(&self.settings) {
+            log::warn!("保存最近打开会话失败，原因: {error}");
+        }
+    }
+
+    /// 从最近打开会话记录中移除指定会话，并异步落盘保存。
+    pub(crate) fn remove_recent_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
+        let before_len = self.settings.window.recent_sessions.len();
+        self.settings
+            .window
+            .recent_sessions
+            .retain(|id| *id != session_id);
+        if self.settings.window.recent_sessions.len() != before_len {
+            if let Err(error) = self.services.settings_store.save(&self.settings) {
+                log::warn!("保存最近打开会话设置失败，原因: {error}");
+            }
+            cx.notify();
+        }
+    }
+
     /// 为某个会话新建一个标签组并发起连接。
     pub(crate) fn connect_session(
         &mut self,
@@ -32,6 +60,7 @@ impl AppShell {
             return;
         };
         let session = self.catalog.resolved_session(found);
+        self.record_recent_session(session_id);
 
         let tab_id = TabId::new();
         self.create_group(tab_id, session_id);

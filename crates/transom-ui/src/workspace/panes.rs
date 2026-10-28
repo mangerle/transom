@@ -39,7 +39,7 @@ impl AppShell {
             return content;
         }
         let Some(group_index) = self.active_group_index() else {
-            return self.render_empty_state(p, cx);
+            return self.render_empty_state(window, cx, p);
         };
         self.render_group_content(group_index, window, cx, p)
     }

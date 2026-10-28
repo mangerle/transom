@@ -30,6 +30,18 @@ app:
   no_tab_hint:
     en: Select a session on the left, or create a new one.
     zh-CN: 从左侧选择会话，或新建一个。
+  empty_welcome_hint:
+    en: Quick launch or select a session on the left
+    zh-CN: 快速启动或从左侧选择会话
+  empty_local_shell:
+    en: System Default Shell
+    zh-CN: 系统默认 Shell
+  empty_new_session_hint:
+    en: SSH / Telnet / Serial
+    zh-CN: SSH / Telnet / 串口
+  remove_from_recent:
+    en: Remove from Recent
+    zh-CN: 从最近记录中移除
   language:
     en: EN
     zh-CN: 中文

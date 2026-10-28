@@ -28,6 +28,10 @@ impl AppShell {
             .sessions
             .retain(|session| session.id != session_id);
         self.sidebar.selected_sessions.remove(&session_id);
+        self.settings
+            .window
+            .recent_sessions
+            .retain(|id| *id != session_id);
         for tab_id in &removed_tabs {
             self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
