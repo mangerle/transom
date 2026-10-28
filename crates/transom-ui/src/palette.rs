@@ -247,6 +247,7 @@ pub(crate) fn localized_error(error: &AppError) -> String {
         ErrorCode::SftpFailed => rust_i18n::t!("error.sftp_failed"),
         ErrorCode::ForwardFailed => rust_i18n::t!("error.forward_failed"),
         ErrorCode::CloudSyncFailed => rust_i18n::t!("error.cloud_sync_failed"),
+        ErrorCode::CloudSyncConflict => rust_i18n::t!("error.cloud_sync_conflict"),
         ErrorCode::CloudSyncMissing => rust_i18n::t!("error.cloud_sync_missing"),
         _ => rust_i18n::t!("app.error"),
     }

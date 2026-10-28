@@ -144,7 +144,10 @@ impl CloudSyncService {
             }
         }
         Err(last_conflict.unwrap_or_else(|| {
-            AppError::with_detail(ErrorCode::CloudSyncFailed, "云同步连续版本冲突，请稍后重试")
+            AppError::with_detail(
+                ErrorCode::CloudSyncConflict,
+                "云同步连续版本冲突，请稍后重试",
+            )
         }))
     }
 

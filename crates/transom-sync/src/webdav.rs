@@ -166,7 +166,7 @@ impl CloudSyncTarget for WebDavTarget {
         let status = response.status();
         if status == reqwest::StatusCode::PRECONDITION_FAILED {
             return Err(AppError::with_detail(
-                ErrorCode::CloudSyncFailed,
+                ErrorCode::CloudSyncConflict,
                 format!(
                     "版本冲突：远端备份已被其他设备修改，服务器: {host}",
                     host = self.host

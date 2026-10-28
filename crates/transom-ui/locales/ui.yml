@@ -768,6 +768,9 @@ error:
   cloud_sync_failed:
     en: Cloud sync error
     zh-CN: 云端同步错误
+  cloud_sync_conflict:
+    en: Cloud sync conflict
+    zh-CN: 云端同步冲突
   cloud_sync_missing:
     en: No backup on the cloud yet
     zh-CN: 云端还没有备份

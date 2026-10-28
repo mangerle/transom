@@ -10,7 +10,7 @@
 
 use crate::backup::BackupDocument;
 use crate::catalog::SessionCatalog;
-use crate::error::AppError;
+use crate::error::{AppError, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 /// 远端固定对象名：目录下的唯一备份文件。
@@ -308,11 +308,7 @@ pub trait CloudSyncTarget: Send + Sync {
 
 /// 判断错误是否为"远端已被其他设备修改"的版本冲突。
 pub fn is_sync_conflict(error: &AppError) -> bool {
-    error.code == crate::error::ErrorCode::CloudSyncFailed
-        && error
-            .detail
-            .as_deref()
-            .is_some_and(|detail| detail.contains("版本冲突"))
+    error.code == ErrorCode::CloudSyncConflict
 }
 
 /// 供测试与"先合并后落盘"流程快速构造的文档别名，无附加字段。
@@ -395,5 +391,21 @@ mod tests {
             directory: "a/b/../../c".into(),
         };
         assert!(nested.sanitized().is_none());
+    }
+
+    #[test]
+    fn sync_conflict_is_decided_by_error_code() {
+        assert!(is_sync_conflict(&AppError::new(
+            ErrorCode::CloudSyncConflict
+        )));
+        // 普通同步失败即便文案提到"版本冲突"也不能被误判：冲突要触发
+        // 拉取合并重试，误判会把网络故障拖进重试循环。
+        assert!(!is_sync_conflict(&AppError::with_detail(
+            ErrorCode::CloudSyncFailed,
+            "版本冲突字样不应参与判定",
+        )));
+        assert!(!is_sync_conflict(&AppError::new(
+            ErrorCode::CloudSyncMissing
+        )));
     }
 }
