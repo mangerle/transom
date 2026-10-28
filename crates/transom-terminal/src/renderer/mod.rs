@@ -1,12 +1,12 @@
 mod decorations;
 mod palette;
+mod pipeline;
 mod runs;
 mod scan;
 mod search;
 mod types;
 
-use decorations::BlockBannerPaintParams;
-use runs::RowScanInput;
+use pipeline::RenderPassContext;
 pub(crate) use types::{
     DamageInfo, ImePaintInput, PaintRequest, RowVisual, SELECTION_ALPHA, TextVisual,
 };
@@ -14,7 +14,6 @@ pub(crate) use types::{
 #[cfg(test)]
 mod tests;
 
-use crate::block::VisualSlot;
 use crate::highlight::{CompiledHighlight, HighlightSpan};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint};
@@ -26,7 +25,7 @@ use alacritty_terminal::vte::ansi::{Color, CursorShape, NamedColor};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::*;
 pub(crate) use palette::PaletteColors;
-use scan::{CJK_PROBE_CHAR, RowScratch, fit_cjk_size, selection_segment};
+use scan::{CJK_PROBE_CHAR, fit_cjk_size};
 use std::ops::Range;
 use transom_core::{Rgb as PaletteColor, TerminalHighlight, TerminalPalette, TerminalProfile};
 
@@ -184,279 +183,66 @@ impl TerminalRenderer {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let PaintRequest {
-            bounds,
-            term,
-            ime,
-            blink_visible,
-            search,
-            block_layout,
-            block_style,
-            graphics,
-        } = request;
-        let grid = term.grid();
+        let grid = request.term.grid();
         let rows = grid.screen_lines();
         let cols = grid.columns();
-        let colors = term.colors();
+        let colors = request.term.colors();
         let default_bg = self.resolve(Color::Named(NamedColor::Background), colors);
-        // 背景按设置折算透明度：整块默认背景变半透明，透出下层应用背景。
-        // 显式设了背景色的单元格仍按原色绘制，不跟着一起洗白。
-        //
-        // 比较必须用未折算的原色：色块区段里"与默认背景同色"的区段靠这个
-        // 比较跳过，交给上面那块半透明底子铺；拿折算后的颜色去比，默认背景
-        // 的区段会被当成普通色块再画一遍不透明，整块终端又变实色。
-        let default_fill = default_bg.alpha(default_bg.a * self.background_alpha);
-        window.paint_quad(fill(bounds, default_fill));
-
         let origin = Point {
-            x: bounds.origin.x + Self::TERMINAL_PADDING_X,
-            y: bounds.origin.y + Self::TERMINAL_PADDING_Y,
+            x: request.bounds.origin.x + Self::TERMINAL_PADDING_X,
+            y: request.bounds.origin.y + Self::TERMINAL_PADDING_Y,
         };
         let display_offset = grid.display_offset() as i32;
-        let selection = term
+        let selection = request
+            .term
             .selection
             .as_ref()
-            .and_then(|selection| selection.to_range(term));
+            .and_then(|selection| selection.to_range(request.term));
         let cursor = grid.cursor.point;
-        // 折叠模式下光标行按可见行映射定位；落在被折叠区间内时直接隐藏。
-        let cursor_row = match block_layout {
+        let cursor_row = match request.block_layout {
             Some(layout) => layout.row_of_line(cursor.line).map(|row| row as i32),
             None => Some(cursor.line.0 + display_offset),
         };
         let cursor_row_raw = cursor_row.unwrap_or(-1);
         let cursor_col = cursor.column.0;
-        let cursor_style = term.cursor_style();
+        let cursor_style = request.term.cursor_style();
         let cursor_color = self.resolve(Color::Named(NamedColor::Cursor), colors);
-        let cursor_visible = blink_visible
-            && term.mode().contains(TermMode::SHOW_CURSOR)
+        let cursor_visible = request.blink_visible
+            && request.term.mode().contains(TermMode::SHOW_CURSOR)
             && cursor_style.shape != CursorShape::Hidden
             && cursor_row.is_some_and(|row| (0..rows as i32).contains(&row))
-            && ime.is_none();
+            && request.ime.is_none();
         let block_cursor = cursor_visible && cursor_style.shape == CursorShape::Block;
+        let graphics = request.graphics;
+        let bounds = request.bounds;
 
-        // Kitty 图像画在默认底色之上、文本之下：图片不会遮住程序输出的字，
-        // 程序显式设置的单元格背景仍然覆盖图片，与主流终端一致。
-        for graphic in graphics {
-            let row = match block_layout {
-                Some(layout) => layout.row_of_line(graphic.line),
-                None => {
-                    let row = graphic.line.0 + display_offset;
-                    (0..rows as i32).contains(&row).then_some(row as usize)
-                }
-            };
-            let Some(row) = row else {
-                continue;
-            };
-            if graphic.col >= cols {
-                continue;
-            }
-            let image_cols = graphic.cols.unwrap_or_else(|| {
-                ((graphic.width as f32 / f32::from(self.cell_width)).ceil() as usize).max(1)
-            });
-            let image_rows = graphic.rows.unwrap_or_else(|| {
-                ((graphic.height as f32 / f32::from(self.cell_height)).ceil() as usize).max(1)
-            });
-            let image_bounds = Bounds {
-                origin: Point {
-                    x: origin.x + self.cell_width * graphic.col as f32 + px(graphic.x as f32),
-                    y: origin.y + self.cell_height * row as f32 + px(graphic.y as f32),
-                },
-                size: Size {
-                    width: self.cell_width * image_cols as f32,
-                    height: self.cell_height * image_rows as f32,
-                },
-            };
-            let _ = window.paint_image(
-                bounds,
-                image_bounds,
-                Corners::default(),
-                graphic.image.clone(),
-                0,
-                false,
-            );
-        }
-
-        // 行缓存与网格行数对齐：resize 后长度不符即整体失效（内核 resize 也会
-        // 报告 Full 损伤，两道保险互为冗余）。
-        if row_cache.len() != rows {
-            row_cache.clear();
-            row_cache.resize_with(rows, RowVisual::default);
-        }
-
-        // 需要重建的行：内核损伤集合之外，强制加入光标行——闪烁相位翻转
-        // 不产生网格损伤，但块光标的字符反色随相位变化。
-        let mut damaged_rows: Vec<usize> = match (block_layout.is_some(), damage) {
-            // 折叠改变了行映射本身：任何局部损伤都可能移动整屏内容，直接全量重建。
-            (true, _) => (0..rows).collect(),
-            (false, DamageInfo::Full) => (0..rows).collect(),
-            (false, DamageInfo::Rows(list)) => {
-                let mut rows_set = Vec::with_capacity(list.len() + 1);
-                rows_set.extend_from_slice(list);
-                if cursor_visible && (0..rows).contains(&(cursor_row_raw.max(0) as usize)) {
-                    rows_set.push(cursor_row_raw as usize);
-                }
-                rows_set
-            }
+        let ctx = RenderPassContext {
+            bounds,
+            origin,
+            rows,
+            cols,
+            display_offset,
+            default_bg,
+            selection,
+            cursor_row_raw,
+            cursor_col,
+            cursor_color,
+            cursor_shape: cursor_style.shape,
+            cursor_visible,
+            block_cursor,
+            request,
         };
-        damaged_rows.sort_unstable();
-        damaged_rows.dedup();
 
-        // 逐行扫描的缓冲在整批重建间复用，避免每行都重新分配字符串与列映射。
-        let mut scratch = RowScratch::default();
-        let cursor_cell = block_cursor.then_some((cursor_row_raw, cursor_col));
-        for row in damaged_rows {
-            if row >= rows {
-                continue;
-            }
-            let line = Line(row as i32 - display_offset);
-            scratch.fill(
-                grid,
-                line,
-                cols,
-                &self.highlight,
-                &self.highlight_rules,
-                &self.palette,
-            );
-            // 就地重写而不是整行替换：滚动/刷屏时多数行都在重建，
-            // 保留上次的 Vec 容量可避免高吞吐输出下的持续重新分配。
-            let mut recycled = std::mem::take(&mut row_cache[row]);
-            self.refill_row_visual(
-                RowScanInput {
-                    grid,
-                    line,
-                    row,
-                    cols,
-                    colors,
-                    cursor_cell,
-                    highlights: &scratch.colors,
-                },
-                &mut recycled,
-            );
-            row_cache[row] = recycled;
-        }
-
-        for (row, visual) in row_cache.iter().enumerate() {
-            let y = origin.y + self.cell_height * row as f32;
-            let line = match block_layout {
-                Some(layout) => {
-                    if let Some(line) = layout.line_at(row) {
-                        line
-                    } else {
-                        if let Some(VisualSlot::Banner { label, failed, .. }) =
-                            layout.slots().get(row)
-                        {
-                            self.paint_block_banner(
-                                BlockBannerPaintParams {
-                                    row,
-                                    y,
-                                    origin,
-                                    label,
-                                    failed: *failed,
-                                    style: block_style,
-                                    cols,
-                                },
-                                window,
-                                cx,
-                            );
-                        }
-                        continue;
-                    }
-                }
-                None => Line(row as i32 - display_offset),
-            };
-
-            for (start, end, color) in &visual.background_runs {
-                if *color == default_bg {
-                    continue;
-                }
-                let rect = Bounds {
-                    origin: Point {
-                        x: origin.x + self.cell_width * *start as f32,
-                        y,
-                    },
-                    size: Size {
-                        width: self.cell_width * (end - start) as f32,
-                        height: self.cell_height,
-                    },
-                };
-                window.paint_quad(fill(rect, *color));
-            }
-
-            if let Some(paint) = search {
-                // 检索快照按原始视口行编号；折叠后需要换回该行原本的行号。
-                let source_row = match block_layout {
-                    Some(_) => (display_offset + line.0).max(0) as usize,
-                    None => row,
-                };
-                self.paint_row_hits(paint.rows.get(source_row), y, origin, window);
-            }
-
-            if let Some(range) = &selection
-                && let Some((start, end)) = selection_segment(range, line, cols)
-            {
-                let rect = Bounds {
-                    origin: Point {
-                        x: origin.x + self.cell_width * start as f32,
-                        y,
-                    },
-                    size: Size {
-                        width: self.cell_width * (end - start) as f32,
-                        height: self.cell_height,
-                    },
-                };
-                let mut color = self.palette_colors.selection;
-                color.a = SELECTION_ALPHA;
-                window.paint_quad(fill(rect, color));
-            }
-
-            if block_cursor && cursor_row_raw == row as i32 && cursor_col < cols {
-                let rect = Bounds {
-                    origin: Point {
-                        x: origin.x + self.cell_width * cursor_col as f32,
-                        y,
-                    },
-                    size: Size {
-                        width: self.cell_width,
-                        height: self.cell_height,
-                    },
-                };
-                window.paint_quad(fill(rect, cursor_color));
-            }
-
-            for run in &visual.text_runs {
-                self.paint_run_text(run, origin, row, window, cx);
-            }
-
-            if cursor_visible && cursor_row_raw == row as i32 && cursor_col < cols {
-                self.paint_cursor(
-                    origin,
-                    y,
-                    cursor_col,
-                    cursor_color,
-                    cursor_style.shape,
-                    window,
-                );
-            }
-        }
-
-        if let Some(paint) = search {
-            self.paint_search_strip(bounds, paint, window);
-        }
-
-        if let Some((text, marked_range)) = ime.filter(|(text, _)| !text.is_empty()) {
-            self.paint_ime(
-                ImePaintInput {
-                    cursor_row: cursor_row_raw,
-                    cursor_col,
-                    rows,
-                    cols,
-                    text,
-                    marked_range,
-                },
-                origin,
-                window,
-                cx,
-            );
-        }
+        // 渲染阶段流水线：
+        // Pass 1: 终端底色与半透明填充
+        self.paint_background_pass(bounds, default_bg, window);
+        // Pass 2: Kitty 协议图形绘制
+        self.paint_graphics_pass(&ctx, graphics, window);
+        // Pass 3: 脏行视觉扫描缓存重构
+        self.rebuild_dirty_rows(&ctx, row_cache, damage);
+        // Pass 4: 网格行 Runs、选区与光标绘制
+        self.paint_grid_rows_pass(&ctx, row_cache, window, cx);
+        // Pass 5: 覆盖层绘制（搜索刻度带与输入法浮层）
+        self.paint_overlays_pass(&ctx, window, cx);
     }
 }
