@@ -8,7 +8,14 @@ use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 use transom_core::{AppError, ErrorCode};
 
-const HASH_CHUNK: usize = 64 * 1024;
+/// 流式哈希计算时的默认分块缓冲区大小（256 KiB）。
+///
+/// 设计原理（Why）：
+/// - 对齐传输层：与 `TRANSFER_CHUNK`（256 KiB）保持对齐，消除分块大小错位；
+/// - 减少系统调用：相比传统的 64 KiB 缓冲，使系统读盘和轮询系统调用次数直接降低 75%，
+///   充分匹配操作系统的预读窗口（Read-Ahead）与现代 SSD 的块吞吐优势；
+/// - 内存安全可控：256 KiB 属于非常低廉的常数级开销，不会引起内存突增或 OOM 隐患。
+pub(crate) const HASH_CHUNK: usize = 256 * 1024;
 
 impl SftpClient {
     /// 计算远端文件 SHA256：优先通过 check-file 协议扩展与 SSH 会话执行服务端本地秒级计算，
