@@ -215,7 +215,7 @@ pub(super) fn render_queue_task_row(
                     .rounded(p.radius.sm)
                     .bg(p.muted)
                     .text_color(p.muted_foreground)
-                    .child("SHA256"),
+                    .child(task.checksum_algorithm.label()),
             )
         })
         .child(div().flex_1().overflow_hidden().child(file_name))

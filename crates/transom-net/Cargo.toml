@@ -26,6 +26,7 @@ zeroize.workspace = true
 log.workspace = true
 async-trait.workspace = true
 sha2.workspace = true
+md-5 = { workspace = true }
 serialport.workspace = true
 # 编辑器非 UTF-8 文本的 GBK 兜底解码（锁内已有 0.8.42，无新增传递依赖树）。
 encoding_rs = "0.8"

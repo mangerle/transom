@@ -6,7 +6,9 @@
 //! 迁到 UI 后，core 只保留跨层的传输方向与目录汇总结果。
 
 use std::path::PathBuf;
-use transom_core::{ConnectionId, SyncItem, TabId, TransferDirection, TransferId};
+use transom_core::{
+    ChecksumAlgorithm, ConnectionId, SyncItem, TabId, TransferDirection, TransferId,
+};
 
 /// 单条上传/下载入队请求。
 ///
@@ -78,8 +80,10 @@ pub struct TransferTask {
     pub mode: TransferMode,
     /// 同步任务携带的差异项；其他任务为空。
     pub sync_items: Vec<SyncItem>,
-    /// 任务入队时是否要求传输完成后做 SHA256 校验。
+    /// 任务入队时是否要求传输完成后做校验。
     pub verify: bool,
+    /// 校验所使用的哈希算法（Sha256 / Md5）。
+    pub checksum_algorithm: ChecksumAlgorithm,
     /// 是否在传输完成后保留原始文件的 POSIX 权限与修改时间戳。
     pub preserve_attributes: bool,
 }
@@ -109,6 +113,7 @@ impl TransferTask {
             mode,
             sync_items: Vec::new(),
             verify: false,
+            checksum_algorithm: ChecksumAlgorithm::default(),
             preserve_attributes: true,
         }
     }

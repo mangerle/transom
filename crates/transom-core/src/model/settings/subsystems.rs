@@ -1,7 +1,7 @@
 //! 语义块、日志等级、历史命令、审计日志、快捷指令片段、SFTP 与快捷键子系统配置。
 
 use crate::ids::SnippetId;
-use crate::protocol::sftp::VerifyMode;
+use crate::protocol::sftp::{ChecksumAlgorithm, VerifyMode};
 use crate::protocol::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -282,9 +282,12 @@ pub struct SftpSettings {
     /// 传输完成后是否计算并比对两端 SHA256；默认关闭以避免大文件额外读盘。
     #[serde(default)]
     pub verify_after_transfer: bool,
-    /// 传输完成后的校验模式，默认为完整 SHA256 校验。
+    /// 传输完成后的校验模式，默认为完整校验。
     #[serde(default)]
     pub verify_mode: VerifyMode,
+    /// 校验所使用的摘要算法，默认 SHA-256。
+    #[serde(default)]
+    pub checksum_algorithm: ChecksumAlgorithm,
     /// 同时执行的传输任务数上限，默认 3。
     #[serde(default = "default_max_concurrent_transfers")]
     pub max_concurrent_transfers: usize,
@@ -325,6 +328,7 @@ impl Default for SftpSettings {
             transfer_filter: default_transfer_filter(),
             verify_after_transfer: false,
             verify_mode: VerifyMode::default(),
+            checksum_algorithm: ChecksumAlgorithm::default(),
             max_concurrent_transfers: default_max_concurrent_transfers(),
             edit_max_bytes: default_edit_max_bytes(),
             editor_write_backup: false,

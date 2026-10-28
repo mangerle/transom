@@ -30,11 +30,27 @@ pub enum VerifyMode {
 /// 支持的校验和算法。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ChecksumAlgorithm {
-    /// SHA-256 算法。
+    /// SHA-256 算法（安全性最高，密码学推荐）。
     #[default]
     Sha256,
-    /// MD5 算法。
+    /// MD5 算法（兼容性最好，绝大多数 Linux/Unix 均内置 md5sum）。
     Md5,
+}
+
+impl ChecksumAlgorithm {
+    /// 获取算法的标准简称，用于 UI 徽标展示。
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Sha256 => "SHA256",
+            Self::Md5 => "MD5",
+        }
+    }
+}
+
+impl std::fmt::Display for ChecksumAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.label())
+    }
 }
 
 /// 目录递归传输的汇总结果。

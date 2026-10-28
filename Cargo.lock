@@ -8167,6 +8167,7 @@ dependencies = [
  "flume",
  "futures",
  "log",
+ "md-5",
  "parking_lot",
  "russh",
  "russh-sftp",

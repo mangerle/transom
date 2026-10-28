@@ -1,12 +1,11 @@
-//! SFTP 文件 SHA256 校验：本地在途/后台线程计算，远端优先通过 SSH 命令秒级计算并降级为流式读取。
-
 use crate::keys::shell_single_quote;
 use crate::sftp::{SftpClient, sftp_error, sftp_io_error};
+use md5::Md5;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use transom_core::{AppError, ErrorCode, VerifyMode};
+use transom_core::{AppError, ChecksumAlgorithm, ErrorCode, VerifyMode};
 
 /// 快速抽样校验时单段读取的字节数（64 KiB）。
 pub(crate) const SAMPLE_CHUNK: usize = 64 * 1024;
@@ -21,11 +20,24 @@ pub(crate) const SAMPLE_CHUNK: usize = 64 * 1024;
 pub(crate) const HASH_CHUNK: usize = 256 * 1024;
 
 impl SftpClient {
-    /// 计算远端文件 SHA256：优先通过 check-file 协议扩展与 SSH 会话执行服务端本地秒级计算，
+    /// 计算远端文件摘要：根据指定算法优先通过 check-file 协议扩展与 SSH 会话执行服务端本地秒级计算，
     /// 避免将远端整文件再次下载回本地；不可用时安全降级为 SFTP 流式读取。
     ///
     /// # Errors
     /// 远端文件不存在、读取中断或会话异常时返回 `ErrorCode::SftpFailed`。
+    pub async fn checksum_remote(
+        &self,
+        path: &str,
+        algorithm: ChecksumAlgorithm,
+    ) -> Result<String, AppError> {
+        match algorithm {
+            ChecksumAlgorithm::Sha256 => self.sha256_remote(path).await,
+            ChecksumAlgorithm::Md5 => self.md5_remote(path).await,
+        }
+    }
+
+    /// 计算远端文件 SHA256：优先通过 check-file 协议扩展与 SSH 会话执行服务端本地秒级计算，
+    /// 避免将远端整文件再次下载回本地；不可用时安全降级为 SFTP 流式读取。
     pub async fn sha256_remote(&self, path: &str) -> Result<String, AppError> {
         if let Some(hash) = self.try_sha256_remote_via_extension(path).await {
             return Ok(hash);
@@ -34,6 +46,14 @@ impl SftpClient {
             return Ok(hash);
         }
         self.sha256_remote_streaming(path).await
+    }
+
+    /// 计算远端文件 MD5：优先通过 SSH 会话执行 md5sum 秒级计算；不可用时安全降级为 SFTP 流式读取。
+    pub async fn md5_remote(&self, path: &str) -> Result<String, AppError> {
+        if let Some(hash) = self.try_md5_remote_via_exec(path).await {
+            return Ok(hash);
+        }
+        self.md5_remote_streaming(path).await
     }
 
     /// 尝试通过 SFTP check-file-name 扩展协议请求服务端本地哈希。
@@ -50,12 +70,6 @@ impl SftpClient {
     }
 
     /// 尝试通过复用关联的 SSH 会话通道执行 sha256sum 或 shasum，在服务端本地计算哈希。
-    ///
-    /// 设计原理（Why）：
-    /// - 核心优势：通过远端本地读盘与算力在毫秒级内完成计算并返回数十字节摘要，
-    ///   避免了为了校验而把远端大文件全量网络回传二次读取，将网络下行开销彻底降为零；
-    /// - 容错降级：若底层无 SSH 会话、远端缺少校验命令（如精简容器环境）或执行超时，
-    ///   安全返回 `None` 并平滑降级至 SFTP 流式读取兜底。
     async fn try_sha256_remote_via_exec(&self, path: &str) -> Option<String> {
         let remote = self.ssh_remote.as_ref()?;
         let quoted = shell_single_quote(path);
@@ -63,7 +77,7 @@ impl SftpClient {
             format!("sha256sum -- {quoted} 2>/dev/null || shasum -a 256 -- {quoted} 2>/dev/null");
         match remote.exec_command_capture(&command).await {
             Ok(output) if output.exit_status == Some(0) => {
-                if let Some(hash) = parse_sha256_output(&output.stdout) {
+                if let Some(hash) = parse_hash_output(&output.stdout, 64) {
                     log::debug!(
                         "通过 SSH 远程命令成功计算远端 SHA-256，路径: {path}，哈希: {hash}"
                     );
@@ -90,10 +104,39 @@ impl SftpClient {
         }
     }
 
+    /// 尝试通过复用关联的 SSH 会话通道执行 md5sum 或 md5，在服务端本地计算摘要。
+    async fn try_md5_remote_via_exec(&self, path: &str) -> Option<String> {
+        let remote = self.ssh_remote.as_ref()?;
+        let quoted = shell_single_quote(path);
+        let command = format!("md5sum -- {quoted} 2>/dev/null || md5 -q -- {quoted} 2>/dev/null");
+        match remote.exec_command_capture(&command).await {
+            Ok(output) if output.exit_status == Some(0) => {
+                if let Some(hash) = parse_hash_output(&output.stdout, 32) {
+                    log::debug!("通过 SSH 远程命令成功计算远端 MD5，路径: {path}，哈希: {hash}");
+                    return Some(hash);
+                }
+                log::debug!(
+                    "SSH 远程命令输出未能解析为有效 MD5: {}",
+                    output.stdout.trim()
+                );
+                None
+            }
+            Ok(output) => {
+                log::debug!(
+                    "SSH 远程 MD5 命令退出码非 0: {:?}，标准错误: {}",
+                    output.exit_status,
+                    output.stderr.trim()
+                );
+                None
+            }
+            Err(error) => {
+                log::debug!("执行 SSH 远程 MD5 命令失败，将降级为 SFTP 流式读取，原因: {error}");
+                None
+            }
+        }
+    }
+
     /// 流式读取远端文件并计算 SHA256，不会把整个文件读入内存。
-    ///
-    /// # Errors
-    /// 远端文件不存在、读取中断或会话异常时返回 `ErrorCode::SftpFailed`。
     pub async fn sha256_remote_streaming(&self, path: &str) -> Result<String, AppError> {
         let mut remote = self.session.open(path).await.map_err(sftp_error)?;
         let mut hasher = Sha256::new();
@@ -109,14 +152,22 @@ impl SftpClient {
         Ok(hex_encode(&hasher.finalize()))
     }
 
-    /// 并行计算本地与远端 SHA256 并比对，支持复用在途计算的本地哈希以消除二次读盘。
-    ///
-    /// 设计原理（Why）：在单文件传输流中，数据已完整流经本地内存缓冲区；
-    /// 复用在途计算的哈希可彻底消灭传输完成后对本地磁盘的全量重复读取。若在途哈希缺失
-    /// （如断点续传 offset > 0），则安全回退到本地读盘计算。
-    ///
-    /// # Errors
-    /// 读取失败或两侧哈希不一致时返回 `ErrorCode::SftpFailed`。
+    /// 流式读取远端文件并计算 MD5，不会把整个文件读入内存。
+    pub async fn md5_remote_streaming(&self, path: &str) -> Result<String, AppError> {
+        let mut remote = self.session.open(path).await.map_err(sftp_error)?;
+        let mut hasher = Md5::new();
+        let mut buffer = vec![0u8; HASH_CHUNK];
+        loop {
+            let count = remote.read(&mut buffer).await.map_err(sftp_io_error)?;
+            if count == 0 {
+                break;
+            }
+            hasher.update(&buffer[..count]);
+        }
+        let _ = remote.close().await;
+        Ok(hex_encode(&hasher.finalize()))
+    }
+
     /// 快速抽样计算远端文件指纹：对小文件退回完整 SHA256，对大文件采样读取头、中、尾块及文件大小。
     pub async fn quick_sample_remote(&self, path: &str) -> Result<String, AppError> {
         let mut remote = self.session.open(path).await.map_err(sftp_error)?;
@@ -155,7 +206,7 @@ impl SftpClient {
         Ok(hex_encode(&hasher.finalize()))
     }
 
-    /// 根据指定的校验策略级别执行文件完整性比对。
+    /// 根据指定的校验策略级别执行文件完整性比对（默认 SHA256）。
     pub async fn verify_file_with_strategy(
         &self,
         local_path: &Path,
@@ -163,9 +214,28 @@ impl SftpClient {
         known_local: Option<&str>,
         mode: VerifyMode,
     ) -> Result<(), AppError> {
+        self.verify_file_with_strategy_and_algo(
+            local_path,
+            remote_path,
+            known_local,
+            mode,
+            ChecksumAlgorithm::Sha256,
+        )
+        .await
+    }
+
+    /// 根据指定的校验策略级别与哈希算法执行文件完整性比对。
+    pub async fn verify_file_with_strategy_and_algo(
+        &self,
+        local_path: &Path,
+        remote_path: &str,
+        known_local: Option<&str>,
+        mode: VerifyMode,
+        algorithm: ChecksumAlgorithm,
+    ) -> Result<(), AppError> {
         match mode {
             VerifyMode::FullSha256 => {
-                self.verify_file_with_known_local(local_path, remote_path, known_local)
+                self.verify_file_with_algorithm(local_path, remote_path, known_local, algorithm)
                     .await
             }
             VerifyMode::QuickSample => {
@@ -191,7 +261,7 @@ impl SftpClient {
         }
     }
 
-    /// 并行计算本地与远端 SHA256 并比对，支持复用在途计算的本地哈希以消除二次读盘。
+    /// 并行计算本地与远端哈希并比对，支持复用在途计算的本地哈希以消除二次读盘。
     ///
     /// 设计原理（Why）：在单文件传输流中，数据已完整流经本地内存缓冲区；
     /// 复用在途计算的哈希可彻底消灭传输完成后对本地磁盘的全量重复读取。若在途哈希缺失
@@ -204,6 +274,23 @@ impl SftpClient {
         local_path: &Path,
         remote_path: &str,
         known_local: Option<&str>,
+    ) -> Result<(), AppError> {
+        self.verify_file_with_algorithm(
+            local_path,
+            remote_path,
+            known_local,
+            ChecksumAlgorithm::Sha256,
+        )
+        .await
+    }
+
+    /// 根据指定算法并行计算本地与远端哈希并比对，支持复用在途计算的本地哈希。
+    pub async fn verify_file_with_algorithm(
+        &self,
+        local_path: &Path,
+        remote_path: &str,
+        known_local: Option<&str>,
+        algorithm: ChecksumAlgorithm,
     ) -> Result<(), AppError> {
         let (local_meta, remote_meta) = tokio::join!(
             tokio::fs::metadata(local_path),
@@ -224,18 +311,25 @@ impl SftpClient {
         }
 
         let (local_hash, remote_hash) = match known_local {
-            Some(known) => (Ok(known.to_string()), self.sha256_remote(remote_path).await),
-            None => tokio::join!(sha256_local(local_path), self.sha256_remote(remote_path)),
+            Some(known) => (
+                Ok(known.to_string()),
+                self.checksum_remote(remote_path, algorithm).await,
+            ),
+            None => tokio::join!(
+                checksum_local(local_path, algorithm),
+                self.checksum_remote(remote_path, algorithm)
+            ),
         };
         let local_hash = local_hash?;
         let remote_hash = remote_hash?;
         if local_hash == remote_hash {
             Ok(())
         } else {
+            let label = algorithm.label();
             Err(AppError::with_detail(
                 ErrorCode::SftpVerifyFailed,
                 format!(
-                    "SHA256 哈希校验不匹配：本地 {}（{local_hash}），远端 {}（{remote_hash}）。重传时将自动截断覆盖损坏文件",
+                    "{label} 哈希校验不匹配：本地 {}（{local_hash}），远端 {}（{remote_hash}）。重传时将自动截断覆盖损坏文件",
                     local_path.display(),
                     remote_path
                 ),
@@ -286,7 +380,7 @@ fn quick_sample_local_blocking(path: &PathBuf) -> Result<String, AppError> {
     let file_len = metadata.len();
     let sample_threshold = (SAMPLE_CHUNK * 3) as u64;
     if file_len <= sample_threshold {
-        return hash_local_blocking(path);
+        return hash_local_blocking::<Sha256>(path, "SHA256");
     }
 
     let mut hasher = Sha256::new();
@@ -334,9 +428,20 @@ fn quick_sample_local_blocking(path: &PathBuf) -> Result<String, AppError> {
     Ok(hex_encode(&hasher.finalize()))
 }
 
+/// 根据算法计算本地文件的完整摘要。
+pub(crate) async fn checksum_local(
+    path: &Path,
+    algorithm: ChecksumAlgorithm,
+) -> Result<String, AppError> {
+    match algorithm {
+        ChecksumAlgorithm::Sha256 => sha256_local(path).await,
+        ChecksumAlgorithm::Md5 => md5_local(path).await,
+    }
+}
+
 pub(crate) async fn sha256_local(path: &Path) -> Result<String, AppError> {
     let path = path.to_path_buf();
-    tokio::task::spawn_blocking(move || hash_local_blocking(&path))
+    tokio::task::spawn_blocking(move || hash_local_blocking::<Sha256>(&path, "SHA256"))
         .await
         .map_err(|error| {
             AppError::with_detail(
@@ -346,20 +451,38 @@ pub(crate) async fn sha256_local(path: &Path) -> Result<String, AppError> {
         })?
 }
 
-fn hash_local_blocking(path: &PathBuf) -> Result<String, AppError> {
+pub(crate) async fn md5_local(path: &Path) -> Result<String, AppError> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || hash_local_blocking::<Md5>(&path, "MD5"))
+        .await
+        .map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("本地 MD5 计算任务异常结束: {error}"),
+            )
+        })?
+}
+
+fn hash_local_blocking<D: Digest + Default>(
+    path: &PathBuf,
+    algo_name: &str,
+) -> Result<String, AppError> {
     let mut file = std::fs::File::open(path).map_err(|error| {
         AppError::with_detail(
             ErrorCode::SftpFailed,
             format!("打开本地文件失败 {}: {error}", path.display()),
         )
     })?;
-    let mut hasher = Sha256::new();
+    let mut hasher = D::new();
     let mut buffer = vec![0u8; HASH_CHUNK];
     loop {
         let count = file.read(&mut buffer).map_err(|error| {
             AppError::with_detail(
                 ErrorCode::SftpFailed,
-                format!("读取本地文件失败 {}: {error}", path.display()),
+                format!(
+                    "读取本地文件失败进行 {algo_name} 计算 {}: {error}",
+                    path.display()
+                ),
             )
         })?;
         if count == 0 {
@@ -379,15 +502,15 @@ pub(crate) fn hex_encode(bytes: &[u8]) -> String {
     out
 }
 
-/// 解析 Linux/Unix `sha256sum` 或 `shasum -a 256` 命令的输出行，提取 64 位十六进制摘要。
-fn parse_sha256_output(output: &str) -> Option<String> {
+/// 解析 Linux/Unix 校验命令（sha256sum、md5sum 等）的输出行，提取指定长度的十六进制摘要。
+fn parse_hash_output(output: &str, expected_len: usize) -> Option<String> {
     for line in output.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
         let token = trimmed.split_whitespace().next()?;
-        if token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit()) {
+        if token.len() == expected_len && token.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Some(token.to_ascii_lowercase());
         }
     }
@@ -396,7 +519,8 @@ fn parse_sha256_output(output: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{hex_encode, parse_sha256_output, sha256_local};
+    use super::{checksum_local, hex_encode, md5_local, parse_hash_output, sha256_local};
+    use transom_core::ChecksumAlgorithm;
 
     #[test]
     fn parses_standard_and_shasum_outputs() {
@@ -404,7 +528,7 @@ mod tests {
         let gnu_output =
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  /var/log/app.log\n";
         assert_eq!(
-            parse_sha256_output(gnu_output).as_deref(),
+            parse_hash_output(gnu_output, 64).as_deref(),
             Some("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
         );
 
@@ -412,17 +536,24 @@ mod tests {
         let binary_output =
             "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 */tmp/empty\n";
         assert_eq!(
-            parse_sha256_output(binary_output).as_deref(),
+            parse_hash_output(binary_output, 64).as_deref(),
             Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
         );
 
-        // 空输出或错误文本应返回 None
-        assert_eq!(parse_sha256_output(""), None);
+        // md5sum 输出格式：<hash>  <filename>
+        let md5_output = "5d41402abc4b2a76b9719d911017c592  hello.txt\n";
         assert_eq!(
-            parse_sha256_output("sh: sha256sum: command not found"),
+            parse_hash_output(md5_output, 32).as_deref(),
+            Some("5d41402abc4b2a76b9719d911017c592")
+        );
+
+        // 空输出或错误文本应返回 None
+        assert_eq!(parse_hash_output("", 64), None);
+        assert_eq!(
+            parse_hash_output("sh: sha256sum: command not found", 64),
             None
         );
-        assert_eq!(parse_sha256_output("12345  short.txt"), None);
+        assert_eq!(parse_hash_output("12345  short.txt", 64), None);
     }
 
     #[tokio::test]
@@ -442,6 +573,32 @@ mod tests {
         assert_eq!(
             sha256_local(&empty).await.expect("计算空文件哈希"),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[tokio::test]
+    async fn local_md5_matches_known_digests() {
+        let dir = tempfile::tempdir().expect("创建临时目录");
+        let hello = dir.path().join("hello.txt");
+        tokio::fs::write(&hello, b"hello")
+            .await
+            .expect("写入测试文件");
+        assert_eq!(
+            md5_local(&hello).await.expect("计算 hello MD5"),
+            "5d41402abc4b2a76b9719d911017c592"
+        );
+        assert_eq!(
+            checksum_local(&hello, ChecksumAlgorithm::Md5)
+                .await
+                .expect("动态分发 MD5"),
+            "5d41402abc4b2a76b9719d911017c592"
+        );
+
+        let empty = dir.path().join("empty.txt");
+        tokio::fs::write(&empty, b"").await.expect("写入空文件");
+        assert_eq!(
+            md5_local(&empty).await.expect("计算空文件 MD5"),
+            "d41d8cd98f00b204e9800998ecf8427e"
         );
     }
 
