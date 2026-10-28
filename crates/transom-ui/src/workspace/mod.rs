@@ -1,6 +1,7 @@
 //! 主工作区标签栏、分屏窗格、断线重连提示与底部硬件状态监控栏渲染模块。
 
 mod empty_state;
+mod pane_header;
 mod panes;
 pub(crate) mod state;
 mod tab_drag;

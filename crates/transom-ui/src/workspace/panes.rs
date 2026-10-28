@@ -3,13 +3,10 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::pane_tree::LayoutNode;
-use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel, v_resizable};
-use gpui_kit::component::{Icon, Sizable};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{SplitAxis, SplitId, TabId};
 
@@ -180,125 +177,81 @@ impl AppShell {
             )
         };
 
-        let header = h_flex()
-            .id(ElementId::Name(format!("pane-header-{tab_id}").into()))
-            .h(rems(size::PANE_HEADER_HEIGHT))
-            .flex_none()
-            .px_2()
-            .gap_2()
-            .items_center()
-            .border_b_1()
-            // 焦点窗格只靠背景色区分太弱（激活色与标签栏底色只差几个色阶），
-            // 用同款强调下划线把"焦点在哪一格"显式画出来。
-            .when(active, |style| style.border_b_2())
-            .border_color(if active { p.primary } else { p.border })
-            .bg(if active { p.tab_active } else { p.tab_bar })
-            .text_color(if active {
-                p.tab_active_foreground
-            } else {
-                p.tab_foreground
-            })
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, window, cx| {
+        let header = super::pane_header::pane_header(
+            super::pane_header::PaneHeaderProps {
+                id: format!("pane-header-{tab_id}"),
+                close_id: format!("close-pane-{tab_id}"),
+                active,
+                dot_color,
+                icon: status_icon,
+                title: self.workspace.tabs[index].display_name(),
+                ordinal: Some(ordinal),
+                palette: p,
+            },
+            cx.listener(move |this, _, window, cx| {
                 this.activate_tab(tab_id, window, cx);
-            }))
-            .context_menu(move |menu, _window, _cx| {
-                let app = app_entity.clone();
-                menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("menu.split_right").to_string())
-                        .icon(IconName::Columns2)
-                        .on_click({
-                            let app = app.clone();
-                            move |_, window, cx| {
-                                app.update(cx, |this, cx| {
-                                    this.activate_tab(tab_id, window, cx);
-                                    this.split_active_pane(SplitAxis::Horizontal, window, cx);
-                                });
-                            }
-                        }),
-                )
-                .item(
-                    PopupMenuItem::new(rust_i18n::t!("menu.split_down").to_string())
-                        .icon(IconName::Rows2)
-                        .on_click({
-                            let app = app.clone();
-                            move |_, window, cx| {
-                                app.update(cx, |this, cx| {
-                                    this.activate_tab(tab_id, window, cx);
-                                    this.split_active_pane(SplitAxis::Vertical, window, cx);
-                                });
-                            }
-                        }),
-                )
-                .item(PopupMenuItem::separator())
-                .item(
-                    PopupMenuItem::new(zoom_label.clone())
-                        .icon(zoom_icon)
-                        .on_click({
-                            let app = app.clone();
-                            move |_, window, cx| {
-                                app.update(cx, |this, cx| {
-                                    this.activate_tab(tab_id, window, cx);
-                                    this.toggle_zoom_pane(tab_id, cx);
-                                });
-                            }
-                        }),
-                )
-                .item(
-                    PopupMenuItem::new(rust_i18n::t!("menu.detach_pane").to_string())
-                        .icon(IconName::ArrowUpRight)
-                        .on_click({
-                            let app = app.clone();
-                            move |_, window, cx| {
-                                app.update(cx, |this, cx| {
-                                    this.activate_tab(tab_id, window, cx);
-                                    this.detach_pane_to_tab(tab_id, window, cx);
-                                });
-                            }
-                        }),
-                )
-            })
-            .child(div().size(px(7.0)).rounded_full().flex_none().bg(dot_color))
-            .child(Icon::new(status_icon).xsmall())
-            .child(
-                div()
-                    .text_xs()
-                    .flex_none()
-                    .text_color(p.muted_foreground)
-                    .child(ordinal.to_string()),
+            }),
+            cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.close_pane(tab_id, window, cx);
+            }),
+        )
+        .context_menu(move |menu, _window, _cx| {
+            let app = app_entity.clone();
+            menu.item(
+                PopupMenuItem::new(rust_i18n::t!("menu.split_right").to_string())
+                    .icon(IconName::Columns2)
+                    .on_click({
+                        let app = app.clone();
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.activate_tab(tab_id, window, cx);
+                                this.split_active_pane(SplitAxis::Horizontal, window, cx);
+                            });
+                        }
+                    }),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .text_xs()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .truncate()
-                    .child(self.workspace.tabs[index].display_name()),
+            .item(
+                PopupMenuItem::new(rust_i18n::t!("menu.split_down").to_string())
+                    .icon(IconName::Rows2)
+                    .on_click({
+                        let app = app.clone();
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.activate_tab(tab_id, window, cx);
+                                this.split_active_pane(SplitAxis::Vertical, window, cx);
+                            });
+                        }
+                    }),
             )
-            .child(
-                div()
-                    .id(ElementId::Name(format!("close-pane-{tab_id}").into()))
-                    .size(px(18.0))
-                    .rounded(p.radius.sm)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| {
-                        s.bg(p.muted_foreground.opacity(0.2))
-                            .text_color(p.foreground)
-                    })
-                    .on_mouse_down(MouseButton::Left, |_, window, cx| {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    })
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.close_pane(tab_id, window, cx);
-                    }))
-                    .child(Icon::new(IconName::X).xsmall()),
-            );
+            .item(PopupMenuItem::separator())
+            .item(
+                PopupMenuItem::new(zoom_label.clone())
+                    .icon(zoom_icon)
+                    .on_click({
+                        let app = app.clone();
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.activate_tab(tab_id, window, cx);
+                                this.toggle_zoom_pane(tab_id, cx);
+                            });
+                        }
+                    }),
+            )
+            .item(
+                PopupMenuItem::new(rust_i18n::t!("menu.detach_pane").to_string())
+                    .icon(IconName::ArrowUpRight)
+                    .on_click({
+                        let app = app.clone();
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.activate_tab(tab_id, window, cx);
+                                this.detach_pane_to_tab(tab_id, window, cx);
+                            });
+                        }
+                    }),
+            )
+        });
 
         let body = self.render_pane_body(tab_id, window, cx, p);
         v_flex()

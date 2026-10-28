@@ -6,15 +6,13 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use crate::theme::tokens::size;
 use crate::tiling::{TiledTabs, TilingId, TilingNode};
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::resizable::{h_resizable, resizable_panel, v_resizable};
-use gpui_kit::component::{Icon, Sizable};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SplitAxis};
 
@@ -119,65 +117,25 @@ impl AppShell {
                 None => (String::new(), p.muted_foreground, IconName::Terminal),
             };
 
-        let header = h_flex()
-            .id(ElementId::Name(
-                format!("tiled-zone-header-{group_id}").into(),
-            ))
-            .h(rems(size::PANE_HEADER_HEIGHT))
-            .flex_none()
-            .px_2()
-            .gap_2()
-            .items_center()
-            .border_b_1()
-            .when(focused, |style| style.border_b_2())
-            .border_color(if focused { p.primary } else { p.border })
-            .bg(if focused { p.tab_active } else { p.tab_bar })
-            .text_color(if focused {
-                p.tab_active_foreground
-            } else {
-                p.tab_foreground
-            })
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, window, cx| {
+        let header = super::pane_header::pane_header(
+            super::pane_header::PaneHeaderProps {
+                id: format!("tiled-zone-header-{group_id}"),
+                close_id: format!("tiled-zone-close-{group_id}"),
+                active: focused,
+                dot_color,
+                icon: tab_icon,
+                title,
+                ordinal: None,
+                palette: p,
+            },
+            cx.listener(move |this, _, window, cx| {
                 this.activate_group(group_id, window, cx);
-            }))
-            .child(div().size(px(7.0)).rounded_full().flex_none().bg(dot_color))
-            .child(Icon::new(tab_icon).xsmall())
-            .child(
-                div()
-                    .flex_1()
-                    .text_xs()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .truncate()
-                    .child(title),
-            )
-            .child(
-                div()
-                    .id(ElementId::Name(
-                        format!("tiled-zone-close-{group_id}").into(),
-                    ))
-                    .size(px(18.0))
-                    .rounded(p.radius.sm)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|style| {
-                        style
-                            .bg(p.muted_foreground.opacity(0.2))
-                            .text_color(p.foreground)
-                    })
-                    .on_mouse_down(MouseButton::Left, |_, window, cx| {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    })
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.close_group(group_id, window, cx);
-                    }))
-                    .child(Icon::new(IconName::X).xsmall()),
-            );
+            }),
+            cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.close_group(group_id, window, cx);
+            }),
+        );
 
         let body = self.render_group_content(group_index, window, cx, p);
         v_flex()
