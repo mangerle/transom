@@ -13,6 +13,7 @@
 
 use super::SftpPanelState;
 use super::format_size;
+use super::transfer_presentation::{display_name, is_busy, progress_percent, status_label};
 use crate::app::{AppShell, TerminalTab};
 use crate::palette::Palette;
 use crate::status_bar::format_rate;
@@ -80,16 +81,6 @@ impl DropOverlayState {
         self.rate_anchor = None;
         self.rate_bytes_per_sec = 0;
     }
-}
-
-/// 任务是否仍需要用户关注。
-///
-/// 暂停也算：否则一按暂停浮层就消失，用户没有地方点"继续"。
-fn is_busy(task: &TransferTask) -> bool {
-    matches!(
-        task.status,
-        TransferStatus::Pending | TransferStatus::Transferring | TransferStatus::Paused
-    )
 }
 
 impl AppShell {
@@ -348,26 +339,17 @@ fn overlay_row(
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let task_id = task.id;
-    let name = task
-        .local_path
-        .file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| task.local_path.display().to_string());
+    let name = display_name(task);
     // 百分比与 `Progress::value` 同用 0..100 口径；目录树任务没有总大小。
-    let percent = task
-        .size
-        .filter(|size| *size > 0)
-        .map(|size| (task.transferred as f32 * 100.0 / size as f32).clamp(0.0, 100.0));
+    let percent = progress_percent(task);
     let status_text = match &task.status {
-        TransferStatus::Pending => rust_i18n::t!("sftp.pending").to_string(),
         TransferStatus::Transferring => percent.map_or_else(
-            || rust_i18n::t!("sftp.transferring").to_string(),
-            |value| format!("{:.0}% · {}", value, format_size(task.transferred)),
+            || status_label(&task.status),
+            |value| format!("{value:.0}% · {}", format_size(task.transferred)),
         ),
-        TransferStatus::Paused => rust_i18n::t!("sftp.paused").to_string(),
-        TransferStatus::Completed => rust_i18n::t!("sftp.completed").to_string(),
-        TransferStatus::Cancelled => rust_i18n::t!("sftp.cancelled").to_string(),
+        // 浮层空间窄，失败只显示原因，前缀由状态图标表达。
         TransferStatus::Failed(reason) => reason.clone(),
+        _ => status_label(&task.status),
     };
     let (icon, icon_color) = match &task.status {
         TransferStatus::Failed(_) => (IconName::CircleAlert, p.danger),
@@ -456,38 +438,4 @@ fn overlay_row(
         )
         .child(actions)
         .into_any_element()
-}
-
-#[cfg(test)]
-mod tests {
-    // 不用 `use super::*`：本模块 glob 导入了 gpui，而 gpui 里有同名属性宏
-    // `test`（gpui::test），glob 进来会把标准 `#[test]` 劫持成它，导致宏递归。
-    use super::is_busy;
-    use std::path::PathBuf;
-    use transom_core::{TransferDirection, TransferMode, TransferStatus, TransferTask};
-
-    fn task(status: TransferStatus) -> TransferTask {
-        let mut item = TransferTask::new(
-            TransferDirection::Upload,
-            PathBuf::from("/tmp/a.txt"),
-            "/remote/a.txt".to_string(),
-            Some(10),
-            TransferMode::Auto,
-        );
-        item.status = status;
-        item
-    }
-
-    /// 在途、排队与暂停都算"还需要用户看得见"，结束态不算。
-    ///
-    /// 暂停必须保持可见：否则按了暂停浮层就消失，没有地方点继续。
-    #[test]
-    fn busy_covers_pending_transferring_and_paused() {
-        assert!(is_busy(&task(TransferStatus::Pending)));
-        assert!(is_busy(&task(TransferStatus::Transferring)));
-        assert!(is_busy(&task(TransferStatus::Paused)));
-        assert!(!is_busy(&task(TransferStatus::Completed)));
-        assert!(!is_busy(&task(TransferStatus::Cancelled)));
-        assert!(!is_busy(&task(TransferStatus::Failed("写入失败".into()))));
-    }
 }

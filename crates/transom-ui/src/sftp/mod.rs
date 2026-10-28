@@ -27,6 +27,7 @@ mod state;
 mod status;
 mod sync_actions;
 mod sync_modal;
+mod transfer_presentation;
 mod vfs_entry_view;
 mod vfs_provider;
 

@@ -16,6 +16,7 @@ use transom_core::{TabId, TransferDirection, TransferKind, TransferStatus, Trans
 
 use super::format::{format_eta, format_speed};
 use crate::sftp::format_size;
+use crate::sftp::transfer_presentation::{display_name, progress_percent, status_label};
 
 /// 渲染单条传输任务行。
 pub(super) fn render_queue_task_row(
@@ -32,44 +33,13 @@ pub(super) fn render_queue_task_row(
         TransferDirection::RemoteCopy => "⇋ 互传",
     };
     let status_str = match &task.status {
-        TransferStatus::Pending => rust_i18n::t!("sftp.pending").to_string(),
-        TransferStatus::Transferring => {
-            if let Some(pct) = task
-                .size
-                .and_then(|total| task.transferred.saturating_mul(100).checked_div(total))
-            {
-                format!("{} ({pct}%)", rust_i18n::t!("sftp.transferring"))
-            } else {
-                rust_i18n::t!("sftp.transferring").to_string()
-            }
-        }
-        TransferStatus::Paused => "暂停".to_string(),
-        TransferStatus::Completed => "已完成".to_string(),
-        TransferStatus::Failed(err) => format!("失败: {err}"),
-        TransferStatus::Cancelled => "已取消".to_string(),
+        TransferStatus::Transferring => progress_percent(task).map_or_else(
+            || status_label(&task.status),
+            |pct| format!("{} ({pct:.0}%)", status_label(&task.status)),
+        ),
+        _ => status_label(&task.status),
     };
-    let file_name = if task.direction == TransferDirection::RemoteCopy {
-        if let Some(target) = &task.target_remote_path {
-            let src_name = task
-                .remote_path
-                .rsplit('/')
-                .next()
-                .unwrap_or(&task.remote_path);
-            let dst_name = target.rsplit('/').next().unwrap_or(target);
-            if src_name == dst_name {
-                src_name.to_string()
-            } else {
-                format!("{src_name} → {dst_name}")
-            }
-        } else {
-            task.remote_path.clone()
-        }
-    } else {
-        task.local_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| task.remote_path.clone())
-    };
+    let file_name = display_name(task);
 
     let task_id = task.id;
     let status_clone = task.status.clone();
