@@ -17,6 +17,7 @@ use crate::session_appearance::{session_color, session_icon};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Icon;
+use gpui_kit::component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
@@ -51,22 +52,24 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let logo_section = v_flex()
-            .items_center()
-            .gap_2()
-            .child(brand::logo_mark(LOGO_SIZE, window, cx))
-            .child(
-                div()
-                    .text_lg()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(p.foreground)
-                    .child(rust_i18n::t!("app.name").to_string()),
+        let empty_header = EmptyHeader::new()
+            .media(EmptyMedia::new().child(brand::logo_mark(LOGO_SIZE, window, cx)))
+            .title(
+                EmptyTitle::new().child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(p.foreground)
+                        .child(rust_i18n::t!("app.name").to_string()),
+                ),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("app.empty_welcome_hint").to_string()),
+            .description(
+                EmptyDescription::new().child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("app.empty_welcome_hint").to_string()),
+                ),
             );
 
         // 筛选存在于当前目录中的有效最近会话
@@ -119,12 +122,9 @@ impl AppShell {
             );
         }
 
-        v_flex()
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .gap_6()
-            .child(logo_section)
+        Empty::new()
+            .border_0()
+            .header(empty_header)
             .child(grid)
             .into_any_element()
     }
