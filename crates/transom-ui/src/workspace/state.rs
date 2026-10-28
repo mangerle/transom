@@ -81,18 +81,19 @@ impl WorkspaceState {
         self.groups.iter().position(|group| group.contains(tab))
     }
 
-    /// 收敛并排网格与标签组的关系：摘掉已消失的组，空槽补焦点，
-    /// 占用不足两个格子的网格整体解除。
+    /// 统一布局收敛入口：顺序固定为 并排网格 -> 分割拖拽状态 -> 多选。
     ///
-    /// 设计原理（Why）：并排、多选与拖拽状态三张辅助表都引用标签组与分割
-    /// 节点，清理逻辑原先散落在三处 `prune_*` 里，新增一条布局变更路径就
-    /// 容易漏掉其中一张表。收敛到状态容器后，清理规则与数据放在一起，
-    /// 调用方只表达"布局变了"；debug 构建在每次收敛后校验引用完整性。
-    ///
-    /// 代价与局限：三个入口仍分开暴露——`reconcile_tilings` 会解除占用不足
-    /// 的网格，不能在"网格尚未填满"的构造中途调用；多选与分割状态则可以
-    /// 在任意布局变更后单独收敛。
-    pub(crate) fn reconcile_tilings(&mut self, active_group: Option<GroupId>) {
+    /// 网格阶段摘掉已消失的组、空槽补焦点，占用不足两个格子的网格整体解除；
+    /// 反过来（先算分割存活再摘网格）会把已消失的节点当成仍存在，拖拽状态
+    /// 留下死键。活动标签由调用方在删除标签后自行选择，故此处只校验布局引用。
+    pub(crate) fn reconcile_layout(&mut self, active_group: Option<GroupId>) {
+        self.reconcile_tilings_inner(active_group);
+        self.reconcile_split_states_inner();
+        self.reconcile_selection_inner();
+        self.debug_assert_layout_refs();
+    }
+
+    fn reconcile_tilings_inner(&mut self, active_group: Option<GroupId>) {
         let alive: HashSet<GroupId> = self.groups.iter().map(|group| group.id).collect();
         self.tiled_sets.retain_mut(|tiled| {
             let dead: Vec<GroupId> = tiled
@@ -114,36 +115,34 @@ impl WorkspaceState {
             tiled.ensure_focus();
             true
         });
-        self.debug_assert_consistent();
     }
 
     /// 丢弃多选集合里已经关闭的标签组。
     pub(crate) fn reconcile_selection(&mut self) {
+        self.reconcile_selection_inner();
+        self.debug_assert_consistent();
+    }
+
+    fn reconcile_selection_inner(&mut self) {
         let groups = &self.groups;
         self.tab_selection
             .retain(|group| groups.iter().any(|item| item.id == *group));
-        self.debug_assert_consistent();
     }
 
     /// 丢弃分割树上已消失节点的拖拽状态。
     pub(crate) fn reconcile_split_states(&mut self) {
-        let alive: Vec<SplitId> = self
-            .groups
-            .iter()
-            .flat_map(|group| group.root.split_ids())
-            .chain(
-                self.tiled_sets
-                    .iter()
-                    .flat_map(|tiled| tiled.root.split_ids()),
-            )
-            .collect();
-        self.pane_split_states.retain(|id, _| alive.contains(id));
+        self.reconcile_split_states_inner();
         self.debug_assert_consistent();
     }
 
-    /// 校验五张表之间的引用完整性；只在 debug 构建生效。
+    fn reconcile_split_states_inner(&mut self) {
+        let alive = alive_split_ids(&self.groups, &self.tiled_sets);
+        self.pane_split_states.retain(|id, _| alive.contains(id));
+    }
+
+    /// 校验四张布局表之间的引用完整性；只在 debug 构建生效。
     #[cfg(debug_assertions)]
-    fn debug_assert_consistent(&self) {
+    fn debug_assert_layout_refs(&self) {
         debug_assert!(
             self.groups.iter().all(|group| group.pane_count() >= 1),
             "标签组不得为空"
@@ -164,22 +163,20 @@ impl WorkspaceState {
                 .all(|group| self.groups.iter().any(|item| item.id == *group)),
             "多选集合包含已关闭的标签组"
         );
-        let alive_splits: Vec<SplitId> = self
-            .groups
-            .iter()
-            .flat_map(|group| group.root.split_ids())
-            .chain(
-                self.tiled_sets
-                    .iter()
-                    .flat_map(|tiled| tiled.root.split_ids()),
-            )
-            .collect();
+        let alive_splits = alive_split_ids(&self.groups, &self.tiled_sets);
         debug_assert!(
             self.pane_split_states
                 .keys()
                 .all(|id| alive_splits.contains(id)),
             "分割拖拽状态包含已消失的节点"
         );
+    }
+
+    /// 布局引用与活动标签的双重校验；活动标签允许由调用方在收敛后修复，
+    /// 因此单步清理方法仍用它，统一收敛入口只用布局引用校验。
+    #[cfg(debug_assertions)]
+    fn debug_assert_consistent(&self) {
+        self.debug_assert_layout_refs();
         if let Some(active) = self.active_tab {
             debug_assert!(
                 self.tabs.iter().any(|tab| tab.id == active),
@@ -189,7 +186,19 @@ impl WorkspaceState {
     }
 
     #[cfg(not(debug_assertions))]
+    fn debug_assert_layout_refs(&self) {}
+
+    #[cfg(not(debug_assertions))]
     fn debug_assert_consistent(&self) {}
+}
+
+/// 当前仍被分割树引用的节点集合，供拖拽状态清理与 debug 校验共用。
+fn alive_split_ids(groups: &[TabGroup], tiled_sets: &[TiledTabs]) -> HashSet<SplitId> {
+    groups
+        .iter()
+        .flat_map(|group| group.root.split_ids())
+        .chain(tiled_sets.iter().flat_map(|tiled| tiled.root.split_ids()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -268,11 +277,51 @@ mod tests {
         ws.tiled_sets.push(tiled);
 
         ws.groups.remove(1);
-        ws.reconcile_tilings(None);
+        ws.reconcile_layout(None);
 
         assert!(
             ws.tiled_sets.is_empty(),
             "占用不足两个格子的并排网格必须解除"
         );
+    }
+
+    /// 统一收敛必须先摘网格再算分割存活：否则网格里的节点会被当成仍然存在，
+    /// 拖拽状态留下死键（关闭并排标签时的 debug 断言缺陷）。
+    #[test]
+    fn reconcile_layout_prunes_grid_before_split_states() {
+        let mut ws = WorkspaceState::new();
+        let first = TabGroup::new(TabId::new(), SessionId::new(), 0);
+        let second = TabGroup::new(TabId::new(), SessionId::new(), 1);
+        let first_id = first.id;
+        ws.groups.push(first);
+        ws.groups.push(second);
+        let second_id = ws.groups[1].id;
+        let tiled = TiledTabs::new(vec![first_id, second_id], 1, 2, false).expect("合法 1x2");
+        ws.tiled_sets.push(tiled);
+
+        let grid_splits = alive_split_ids(&ws.groups, &ws.tiled_sets);
+        assert!(!grid_splits.is_empty(), "1x2 网格应包含分割节点");
+
+        ws.groups.remove(1);
+        ws.reconcile_layout(None);
+
+        assert!(ws.tiled_sets.is_empty(), "占用不足两格的网格必须解除");
+        let remaining = alive_split_ids(&ws.groups, &ws.tiled_sets);
+        assert!(
+            grid_splits.is_disjoint(&remaining),
+            "网格解除后其分割节点必须从存活集合消失"
+        );
+    }
+
+    /// 活动标签在布局收敛时允许暂时失效（由调用方随后选择下一个），
+    /// 收敛入口不得因此触发 debug 断言。
+    #[test]
+    fn reconcile_layout_tolerates_stale_active_tab() {
+        let mut ws = WorkspaceState::new();
+        ws.active_tab = Some(TabId::new());
+
+        ws.reconcile_layout(None);
+
+        assert!(ws.groups.is_empty());
     }
 }

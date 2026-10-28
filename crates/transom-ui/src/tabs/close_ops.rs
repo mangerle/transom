@@ -126,9 +126,7 @@ impl AppShell {
             self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
         self.workspace.tabs.retain(|tab| !panes.contains(&tab.id));
-        self.prune_pane_split_states();
         self.prune_editor_panels();
-        self.workspace.tab_selection.remove(&group_id);
         self.prune_tilings();
 
         let active_removed = self

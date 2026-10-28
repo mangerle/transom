@@ -204,10 +204,11 @@ impl AppShell {
         self.sync_broadcast_targets();
     }
 
-    /// 校验所有并排绑定：摘掉已消失的标签组，有效槽位少于两个时解除该组。
+    /// 校验所有并排绑定：摘掉已消失的标签组，有效槽位少于两个时解除该组，
+    /// 随后按新的分割树清理拖拽状态与多选。
     pub(crate) fn prune_tilings(&mut self) {
         let active = self.active_group_id();
-        self.workspace.reconcile_tilings(active);
+        self.workspace.reconcile_layout(active);
         self.sync_broadcast_targets();
     }
 
