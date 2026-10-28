@@ -10,7 +10,6 @@ pub mod backup;
 pub mod commands;
 pub mod crypto;
 pub mod error;
-mod highlight;
 pub mod ids;
 pub mod model;
 pub mod platform;
@@ -52,7 +51,6 @@ pub use forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,
     TargetAddress,
 };
-pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan, TerminalHighlight};
 pub use history::{
     HISTORY_LIMIT, SUGGESTION_LIMIT, record as record_command, suggestions as command_suggestions,
 };
@@ -67,6 +65,7 @@ pub use known_hosts::{HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore
 pub use layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, StatusItemId};
 pub use mac::{MacAddress, MacParseError, normalize_mac};
 pub use merge::{SyncMergeReport, merge_catalogs};
+pub use model::terminal::TerminalHighlight;
 pub use prompt::{PromptInfo, PromptKind};
 pub use proxy::{OutboundProxy, ProxyAuth};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};

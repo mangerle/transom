@@ -1,6 +1,7 @@
 //! 关键词与模式编译规则集及单行文本扫描引擎。
 
-use super::types::{HighlightKind, HighlightSpan, PRESET_KEYWORDS, TerminalHighlight};
+use super::types::{HighlightKind, HighlightSpan, PRESET_KEYWORDS};
+use transom_core::TerminalHighlight;
 
 /// 编译后的规则集：自定义关键词预先转成小写字符向量。
 #[derive(Debug, Default, Clone)]

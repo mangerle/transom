@@ -2,11 +2,10 @@ use super::palette::palette_rgb;
 use super::scan::{CJK_PROBE_CHAR, RowScratch, fit_cjk_size, is_cjk_char};
 use super::{PaletteColors, background_alpha};
 use crate::engine::TerminalEngine;
+use crate::highlight::CompiledHighlight;
 use alacritty_terminal::index::Line;
 use gpui_kit::{Hsla, px, rgb};
-use transom_core::{
-    CompiledHighlight, TerminalHighlight, TerminalPalette, TerminalProfile, TerminalSize,
-};
+use transom_core::{TerminalHighlight, TerminalPalette, TerminalProfile, TerminalSize};
 
 /// 背景透明度折算：0% 完全不透明，100% 完全透明；越界值先钳位。
 #[test]

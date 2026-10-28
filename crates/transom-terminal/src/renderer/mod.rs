@@ -15,6 +15,7 @@ pub(crate) use types::{
 mod tests;
 
 use crate::block::VisualSlot;
+use crate::highlight::{CompiledHighlight, HighlightSpan};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint};
 use alacritty_terminal::selection::SelectionRange;
@@ -27,10 +28,7 @@ use gpui_kit::*;
 pub(crate) use palette::PaletteColors;
 use scan::{CJK_PROBE_CHAR, RowScratch, fit_cjk_size, selection_segment};
 use std::ops::Range;
-use transom_core::{
-    CompiledHighlight, HighlightSpan, Rgb as PaletteColor, TerminalHighlight, TerminalPalette,
-    TerminalProfile,
-};
+use transom_core::{Rgb as PaletteColor, TerminalHighlight, TerminalPalette, TerminalProfile};
 
 pub(crate) struct TerminalRenderer {
     pub font_family: SharedString,

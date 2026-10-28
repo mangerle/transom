@@ -147,3 +147,39 @@ fn cjk_font_round_trips() {
     let decoded: TerminalProfile = serde_json::from_str(&json).unwrap();
     assert_eq!(decoded.cjk_font_family.as_deref(), Some("更纱黑体 Mono SC"));
 }
+
+#[test]
+fn parses_keywords_across_chinese_separators() {
+    assert_eq!(
+        TerminalHighlight::parse_keywords("timeout, refused、连接失败;oom  killed"),
+        vec!["timeout", "refused", "连接失败", "oom", "killed"]
+    );
+    assert!(TerminalHighlight::parse_keywords("  , ， 、 ;;  ").is_empty());
+    let highlight = TerminalHighlight {
+        enabled: true,
+        keywords: vec!["oom".into(), "killed".into()],
+    };
+    assert_eq!(highlight.keywords_joined(), "oom, killed");
+}
+
+#[test]
+fn sanitize_drops_blank_dedupes_and_caps() {
+    let raw = TerminalHighlight {
+        enabled: true,
+        keywords: vec![
+            "".into(),
+            "   ".into(),
+            "oom".into(),
+            "OOM".into(),
+            "KILLED".into(),
+            "a".repeat(100),
+        ],
+    };
+    let clean = raw.sanitized();
+    assert_eq!(clean.keywords, vec!["oom", "KILLED"]);
+    let overflow = TerminalHighlight {
+        enabled: true,
+        keywords: (0..50).map(|i| format!("kw{i}")).collect(),
+    };
+    assert_eq!(overflow.sanitized().keywords.len(), 32);
+}

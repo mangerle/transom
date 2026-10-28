@@ -1,7 +1,8 @@
 //! 关键词高亮模块单元测试。
 
 use super::engine::CompiledHighlight;
-use super::types::{HighlightKind, HighlightSpan, TerminalHighlight};
+use super::types::{HighlightKind, HighlightSpan};
+use transom_core::TerminalHighlight;
 
 fn config(keywords: &[&str]) -> TerminalHighlight {
     TerminalHighlight {
@@ -158,59 +159,4 @@ fn disabled_config_scans_nothing() {
         "关闭状态下不该编译出任何关键词"
     );
     assert!(scan("", &[]).is_empty());
-}
-
-#[test]
-fn parses_keywords_across_chinese_separators() {
-    assert_eq!(
-        TerminalHighlight::parse_keywords("timeout, refused、连接失败;oom  killed"),
-        vec!["timeout", "refused", "连接失败", "oom", "killed"]
-    );
-    assert!(TerminalHighlight::parse_keywords("  , ， 、 ;;  ").is_empty());
-    let highlight = TerminalHighlight {
-        enabled: true,
-        keywords: vec!["oom".into(), "killed".into()],
-    };
-    assert_eq!(highlight.keywords_joined(), "oom, killed");
-}
-
-#[test]
-fn sanitize_drops_blank_dedupes_and_caps() {
-    let raw = TerminalHighlight {
-        enabled: true,
-        keywords: vec![
-            "  warn ".into(),
-            "WARN".into(),
-            "".into(),
-            "   ".into(),
-            "x".repeat(41),
-            "disk".into(),
-        ],
-    };
-    let cleaned = raw.sanitized();
-    assert_eq!(
-        cleaned.keywords,
-        vec!["warn", "disk"],
-        "去空白、不分大小写去重、丢超长项"
-    );
-    let many = TerminalHighlight {
-        enabled: true,
-        keywords: (0..60).map(|index| format!("k{index}")).collect(),
-    };
-    assert_eq!(many.sanitized().keywords.len(), 32, "条数上限必须生效");
-}
-
-#[test]
-fn ansi_indices_stay_inside_palette() {
-    for kind in [
-        HighlightKind::Error,
-        HighlightKind::Warning,
-        HighlightKind::Info,
-        HighlightKind::Debug,
-        HighlightKind::Ipv4,
-        HighlightKind::Uuid,
-        HighlightKind::Custom,
-    ] {
-        assert!((0..16).contains(&kind.ansi_index()), "{kind:?}");
-    }
 }

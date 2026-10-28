@@ -1,8 +1,8 @@
 //! 终端配置方案、调色板与交互行为。
 
+use super::highlight::TerminalHighlight;
 use super::key_bindings::TerminalKeyBinding;
 use crate::color::Rgb;
-use crate::highlight::TerminalHighlight;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
