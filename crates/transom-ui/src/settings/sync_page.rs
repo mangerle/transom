@@ -21,15 +21,21 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_kind = match self.settings.sync.endpoint {
-            Some(SyncEndpoint::Webdav { .. }) => Some("webdav"),
-            Some(SyncEndpoint::S3 { .. }) => Some("s3"),
-            None => None,
+        let current_kind = if self.settings.sync.git.is_some() {
+            "git"
+        } else {
+            match self.settings.sync.endpoint {
+                Some(SyncEndpoint::Webdav { .. }) => "webdav",
+                Some(SyncEndpoint::S3 { .. }) => "s3",
+                None => "off",
+            }
         };
+
         let endpoint_buttons = [
-            ("sync-kind-off", "sync.endpoint_off", None),
-            ("sync-kind-webdav", "sync.endpoint_webdav", Some("webdav")),
-            ("sync-kind-s3", "sync.endpoint_s3", Some("s3")),
+            ("sync-kind-off", "sync.endpoint_off", "off"),
+            ("sync-kind-webdav", "sync.endpoint_webdav", "webdav"),
+            ("sync-kind-s3", "sync.endpoint_s3", "s3"),
+            ("sync-kind-git", "sync.endpoint_git", "git"),
         ]
         .into_iter()
         .map(|(id, key, kind)| {
@@ -61,7 +67,16 @@ impl AppShell {
             );
 
         match current_kind {
-            Some("webdav") => {
+            "off" => {
+                content = content.child(
+                    div()
+                        .py_3()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("sync.sync_disabled_hint").to_string()),
+                );
+            }
+            "webdav" => {
                 content = content
                     .child(Self::form_field(
                         rust_i18n::t!("sync.webdav_url").to_string(),
@@ -84,7 +99,7 @@ impl AppShell {
                         p,
                     ));
             }
-            Some("s3") => {
+            "s3" => {
                 content = content
                     .child(Self::form_field(
                         rust_i18n::t!("sync.s3_endpoint").to_string(),
@@ -117,14 +132,53 @@ impl AppShell {
                         p,
                     ));
             }
+            "git" => {
+                let stepper = Self::setting_stepper(&form.git_interval, px(110.0));
+                content = content
+                    .child(Self::form_field(
+                        rust_i18n::t!("sync.git_remote").to_string(),
+                        form.git_remote.clone(),
+                        p,
+                    ))
+                    .child(
+                        h_flex()
+                            .gap_4()
+                            .items_center()
+                            .child(div().flex_1().child(Self::form_field(
+                                rust_i18n::t!("sync.git_branch").to_string(),
+                                form.git_branch.clone(),
+                                p,
+                            )))
+                            .child(
+                                h_flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(p.muted_foreground)
+                                            .child(rust_i18n::t!("sync.git_interval").to_string()),
+                                    )
+                                    .child(stepper),
+                            ),
+                    )
+                    .child(Self::secret_field(
+                        rust_i18n::t!("sync.git_token").to_string(),
+                        form.git_token.clone(),
+                        p,
+                    ))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("sync.git_hint").to_string()),
+                    );
+            }
             _ => {}
         }
 
-        let has_git =
-            !form.git_remote.read(cx).value().trim().is_empty() || self.settings.sync.git.is_some();
-
-        // 同步口令是两种通道共用的：只要启用了任一通道就展示。
-        if current_kind.is_some() || has_git {
+        // 只要启用了任一同步方式（WebDAV / S3 / Git），就展示同步口令
+        if current_kind != "off" {
             content = content
                 .child(Self::form_field(
                     rust_i18n::t!("sync.passphrase").to_string(),
@@ -139,7 +193,8 @@ impl AppShell {
                 );
         }
 
-        if current_kind.is_some() {
+        // WebDAV 或 S3 提供包含密钥开关、状态行与上传/下载操作
+        if current_kind == "webdav" || current_kind == "s3" {
             content = content
                 .child(Self::setting_row(
                     "sync.include_secrets",
@@ -177,48 +232,8 @@ impl AppShell {
                                 })),
                         ),
                 );
-        }
-
-        // 私有 Git 仓库：与 WebDAV/S3 相互独立，可只配置这一条通道。
-        content = content
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("sync.git_group").to_string()),
-            )
-            .child(Self::form_field(
-                rust_i18n::t!("sync.git_remote").to_string(),
-                form.git_remote.clone(),
-                p,
-            ))
-            .child(
-                h_flex()
-                    .gap_3()
-                    .items_end()
-                    .child(div().flex_1().child(Self::form_field(
-                        rust_i18n::t!("sync.git_branch").to_string(),
-                        form.git_branch.clone(),
-                        p,
-                    )))
-                    .child(div().w(px(160.0)).child(Self::form_field(
-                        rust_i18n::t!("sync.git_interval").to_string(),
-                        form.git_interval.clone(),
-                        p,
-                    ))),
-            )
-            .child(Self::secret_field(
-                rust_i18n::t!("sync.git_token").to_string(),
-                form.git_token.clone(),
-                p,
-            ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("sync.git_hint").to_string()),
-            )
-            .child(
+        } else if current_kind == "git" {
+            content = content.child(
                 Button::new("sync-git-now")
                     .small()
                     .icon(IconName::GitBranch)
@@ -227,6 +242,7 @@ impl AppShell {
                         this.start_git_sync(window, cx);
                     })),
             );
+        }
 
         content.into_any_element()
     }
@@ -263,30 +279,70 @@ impl AppShell {
     /// 点击当前类型不动作，避免误清空输入框里尚未保存的编辑。
     fn switch_sync_endpoint(
         &mut self,
-        kind: Option<&'static str>,
+        kind: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match (kind, &self.settings.sync.endpoint) {
-            (None, None) => return,
-            (Some("webdav"), Some(SyncEndpoint::Webdav { .. }))
-            | (Some("s3"), Some(SyncEndpoint::S3 { .. })) => return,
-            (None, _) => self.settings.sync.endpoint = None,
-            (Some("webdav"), _) => {
-                self.settings.sync.endpoint = Some(SyncEndpoint::Webdav {
-                    url: String::new(),
-                    username: String::new(),
-                    directory: DEFAULT_SYNC_DIRECTORY.to_string(),
-                });
+        match kind {
+            "off" => {
+                self.settings.sync.endpoint = None;
+                self.settings.sync.git = None;
+                self.modals
+                    .settings
+                    .sync_form
+                    .git_remote
+                    .update(cx, |input, cx| {
+                        input.set_value(String::new(), window, cx);
+                    });
             }
-            (Some("s3"), _) => {
-                self.settings.sync.endpoint = Some(SyncEndpoint::S3 {
-                    endpoint: String::new(),
-                    region: String::new(),
-                    bucket: String::new(),
-                    access_key: String::new(),
-                    directory: DEFAULT_SYNC_DIRECTORY.to_string(),
-                });
+            "webdav" => {
+                self.settings.sync.git = None;
+                self.modals
+                    .settings
+                    .sync_form
+                    .git_remote
+                    .update(cx, |input, cx| {
+                        input.set_value(String::new(), window, cx);
+                    });
+                if !matches!(
+                    self.settings.sync.endpoint,
+                    Some(SyncEndpoint::Webdav { .. })
+                ) {
+                    self.settings.sync.endpoint = Some(SyncEndpoint::Webdav {
+                        url: String::new(),
+                        username: String::new(),
+                        directory: DEFAULT_SYNC_DIRECTORY.to_string(),
+                    });
+                }
+            }
+            "s3" => {
+                self.settings.sync.git = None;
+                self.modals
+                    .settings
+                    .sync_form
+                    .git_remote
+                    .update(cx, |input, cx| {
+                        input.set_value(String::new(), window, cx);
+                    });
+                if !matches!(self.settings.sync.endpoint, Some(SyncEndpoint::S3 { .. })) {
+                    self.settings.sync.endpoint = Some(SyncEndpoint::S3 {
+                        endpoint: String::new(),
+                        region: String::new(),
+                        bucket: String::new(),
+                        access_key: String::new(),
+                        directory: DEFAULT_SYNC_DIRECTORY.to_string(),
+                    });
+                }
+            }
+            "git" => {
+                self.settings.sync.endpoint = None;
+                if self.settings.sync.git.is_none() {
+                    self.settings.sync.git = Some(transom_core::GitSyncSettings {
+                        remote: String::new(),
+                        branch: "transom-sync".to_string(),
+                        interval_minutes: 0,
+                    });
+                }
             }
             _ => return,
         }

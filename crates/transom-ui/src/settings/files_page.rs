@@ -77,11 +77,14 @@ impl AppShell {
     ) -> AnyElement {
         let current_algo = self.settings.sftp.checksum_algorithm;
         let current_mode = self.settings.sftp.verify_mode;
+        let stepper =
+            Self::setting_stepper(&self.modals.settings.max_concurrent_transfers, px(110.0));
         v_flex()
             .gap_2()
-            .child(Self::form_field(
-                rust_i18n::t!("settings.max_concurrent_transfers").to_string(),
-                self.modals.settings.max_concurrent_transfers.clone(),
+            .child(Self::setting_row(
+                "settings.max_concurrent_transfers",
+                Some("settings.max_concurrent_transfers_desc"),
+                stepper,
                 p,
             ))
             .child(Self::setting_row(

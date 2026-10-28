@@ -8,11 +8,13 @@ mod helpers;
 mod prompt;
 
 pub(crate) use helpers::secret_restore_note;
+use prompt::BackupAction;
 pub(crate) use prompt::BackupPromptState;
 
 use crate::app::AppShell;
 use crate::palette::localized_error;
 use gpui_kit::*;
+use std::path::PathBuf;
 use transom_core::{
     AppError, BackupExportOptions, BackupExportReport, BackupImportOptions, ErrorCode,
     MergePreference, SecretRestoreReport, SessionCatalog, merge_catalogs,
@@ -21,8 +23,11 @@ use zeroize::Zeroizing;
 
 /// 后台备份任务的结果。
 enum BackupOutcome {
-    /// 导出完成，附带统计。
-    Exported(BackupExportReport),
+    /// 导出完成，附带目标路径与统计。
+    Exported {
+        path: PathBuf,
+        report: BackupExportReport,
+    },
     /// 导入完成：目录快照交由界面合并，口令写回结果单独汇报。
     Imported {
         catalog: SessionCatalog,
@@ -80,7 +85,22 @@ impl AppShell {
             return;
         }
 
-        let path = prompt.action.path().to_path_buf();
+        let path = match &prompt.action {
+            BackupAction::Export => {
+                let Some(path) = rfd::FileDialog::new()
+                    .set_title(rust_i18n::t!("backup.export_title").to_string())
+                    .set_file_name("transom-backup.json")
+                    .add_filter("Transom Backup (JSON)", &["json"])
+                    .add_filter("Transom Backup (YAML)", &["yaml", "yml"])
+                    .save_file()
+                else {
+                    return;
+                };
+                helpers::ensure_backup_extension(path)
+            }
+            BackupAction::Import(path) => path.clone(),
+        };
+
         let backup = self.services.backup.clone();
         if let Some(prompt) = self.modals.backup_prompt.as_mut() {
             prompt.busy = true;
@@ -93,13 +113,16 @@ impl AppShell {
                 include_secrets,
             };
             let catalog = self.catalog.clone();
+            let target_path = path.clone();
             cx.spawn_in(window, async move |this, cx| {
                 let result = cx
                     .background_executor()
                     .spawn(async move {
-                        backup
-                            .export(&path, &catalog, &options)
-                            .map(BackupOutcome::Exported)
+                        let report = backup.export(&target_path, &catalog, &options)?;
+                        Ok(BackupOutcome::Exported {
+                            path: target_path,
+                            report,
+                        })
                     })
                     .await;
                 let _ = this.update_in(cx, |this, window, cx| {
@@ -146,12 +169,12 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.modals.backup_prompt.as_ref() else {
+        let Some(_prompt) = self.modals.backup_prompt.as_ref() else {
             return;
         };
         match result {
-            Ok(BackupOutcome::Exported(report)) => {
-                let path = prompt.action.path().display().to_string();
+            Ok(BackupOutcome::Exported { path, report }) => {
+                let path = path.display().to_string();
                 self.modals.backup_prompt = None;
                 let mut message = rust_i18n::t!("backup.exported", path = path).to_string();
                 if report.secrets > 0 {

@@ -103,6 +103,9 @@ impl SettingsModalState {
         });
         let settings_max_concurrent = cx.new(|cx| {
             InputState::new(window, cx)
+                .min(1.0)
+                .max(16.0)
+                .step(1.0)
                 .placeholder("3")
                 .default_value(settings.sftp.max_concurrent_transfers.to_string())
         });
@@ -119,12 +122,18 @@ impl SettingsModalState {
         let font_size_val = settings.terminal_profile.font_size.to_string();
         let settings_font_size = cx.new(|cx| {
             InputState::new(window, cx)
+                .min(6.0)
+                .max(72.0)
+                .step(1.0)
                 .placeholder("14")
                 .default_value(&font_size_val)
         });
         let line_height_val = settings.terminal_profile.line_height.to_string();
         let settings_line_height = cx.new(|cx| {
             InputState::new(window, cx)
+                .min(1.0)
+                .max(3.0)
+                .step(0.1)
                 .placeholder("1.2")
                 .default_value(&line_height_val)
         });
@@ -142,6 +151,9 @@ impl SettingsModalState {
         let notify_threshold_val = settings.window.notify_threshold_secs.to_string();
         let settings_notify_threshold = cx.new(|cx| {
             InputState::new(window, cx)
+                .min(1.0)
+                .max(3600.0)
+                .step(1.0)
                 .placeholder("10")
                 .default_value(notify_threshold_val)
         });

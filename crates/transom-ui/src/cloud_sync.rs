@@ -103,7 +103,13 @@ impl SyncFormInputs {
             passphrase: secret_field(window, cx, rust_i18n::t!("sync.passphrase_hint").as_ref()),
             git_remote: field(window, cx, rust_i18n::t!("sync.git_remote_hint").as_ref()),
             git_branch: field(window, cx, "transom-sync"),
-            git_interval: field(window, cx, "0"),
+            git_interval: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("0")
+                    .min(0.0)
+                    .max(1440.0)
+                    .step(5.0)
+            }),
             git_token: secret_field(window, cx, rust_i18n::t!("sync.git_token_hint").as_ref()),
         }
     }

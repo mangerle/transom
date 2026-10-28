@@ -46,6 +46,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let current_bell = self.settings.window.bell_style;
+        let stepper = Self::setting_stepper(&self.modals.settings.notify_threshold, px(110.0));
         v_flex()
             .gap_2()
             .child(Self::setting_row(
@@ -86,17 +87,12 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::form_field(
-                rust_i18n::t!("notify.threshold").to_string(),
-                self.modals.settings.notify_threshold.clone(),
+            .child(Self::setting_row(
+                "notify.threshold",
+                Some("notify.threshold_note"),
+                stepper,
                 p,
             ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("notify.threshold_note").to_string()),
-            )
             .into_any_element()
     }
 

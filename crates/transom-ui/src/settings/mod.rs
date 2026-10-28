@@ -22,10 +22,10 @@ pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearance
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::{InputState, NumberInput};
 use gpui_kit::component::slider::SliderValue;
 use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::{ActiveTheme, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{AppearanceSettings, FOLLOW_UI_THEME};
@@ -92,6 +92,15 @@ impl AppShell {
                     }),
             )
             .child(div().flex_none().child(control))
+            .into_any_element()
+    }
+
+    /// 数字步进器控件（直接复用 gpui-kit 内置的 NumberInput 组件）：
+    /// 原生集成减加微调按钮与居中文本输入框，内置键盘上下键微调与 min/max/step 约束。
+    pub(crate) fn setting_stepper(input: &Entity<InputState>, width: Pixels) -> AnyElement {
+        div()
+            .w(width)
+            .child(NumberInput::new(input).small())
             .into_any_element()
     }
 

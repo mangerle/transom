@@ -328,10 +328,11 @@ impl AppShell {
         else {
             return true;
         };
-        // 看板打开时先把网卡快照推入波形历史，再移动 stats。
+        // 看板打开时先把统计快照推入时序历史，再移动 stats。
         if self.monitor.open && self.workspace.active_tab == Some(tab_id) {
-            self.monitor_record_network(tab_id, &stats.interfaces);
+            self.monitor_record_stats(tab_id, &stats);
         }
+
         let mut applied = false;
         if let Some(tab) = self.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
@@ -341,7 +342,7 @@ impl AppShell {
                 // 与上一轮样本完全一致：不更新也不重绘。
                 return false;
             }
-            pane.system_stats = Some(stats);
+            pane.system_stats = Some(*stats);
             applied = true;
         }
         // 周期采样事件只在数据真的属于可见标签时才重绘底栏。

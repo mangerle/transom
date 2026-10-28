@@ -274,6 +274,37 @@ impl AppShell {
         p: &Palette,
         _cx: &mut Context<Self>,
     ) -> AnyElement {
+        let stepper_size = Self::setting_stepper(&self.modals.settings.font_size, px(110.0));
+        let stepper_height = Self::setting_stepper(&self.modals.settings.line_height, px(110.0));
+        let metrics_row = h_flex()
+            .w_full()
+            .gap_6()
+            .py_1()
+            .child(
+                h_flex()
+                    .flex_1()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("settings.font_size").to_string()),
+                    )
+                    .child(stepper_size),
+            )
+            .child(
+                h_flex()
+                    .flex_1()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("settings.line_height").to_string()),
+                    )
+                    .child(stepper_height),
+            );
+
         v_flex()
             .gap_2()
             .child(Self::form_field(
@@ -292,16 +323,7 @@ impl AppShell {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("settings.cjk_font_note").to_string()),
             )
-            .child(Self::form_field(
-                rust_i18n::t!("settings.font_size").to_string(),
-                self.modals.settings.font_size.clone(),
-                p,
-            ))
-            .child(Self::form_field(
-                rust_i18n::t!("settings.line_height").to_string(),
-                self.modals.settings.line_height.clone(),
-                p,
-            ))
+            .child(metrics_row)
             .into_any_element()
     }
 

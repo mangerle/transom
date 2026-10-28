@@ -63,8 +63,8 @@ pub(crate) mod size {
     pub const DIALOG_MAX_WIDTH: f32 = 47.5;
     /// 通用弹窗最大高度（标准档 640px）。
     pub const DIALOG_MAX_HEIGHT: f32 = 40.0;
-    /// 设置弹窗宽度（标准档 880px）。
-    pub const SETTINGS_DIALOG_WIDTH: f32 = 55.0;
-    /// 设置弹窗高度（标准档 640px）。
-    pub const SETTINGS_DIALOG_HEIGHT: f32 = 40.0;
+    /// 设置弹窗宽度（标准档 1088px）。
+    pub const SETTINGS_DIALOG_WIDTH: f32 = 68.0;
+    /// 设置弹窗高度（标准档 736px）。
+    pub const SETTINGS_DIALOG_HEIGHT: f32 = 46.0;
 }

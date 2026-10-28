@@ -1,6 +1,5 @@
 //! 备份弹窗交互与 UI 渲染组件。
 
-use super::helpers::ensure_backup_extension;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
@@ -10,24 +9,18 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// 备份导出/导入动作及其目标路径。
 #[derive(Debug, Clone)]
 pub(crate) enum BackupAction {
-    Export(PathBuf),
+    Export,
     Import(PathBuf),
 }
 
 impl BackupAction {
-    pub(crate) fn path(&self) -> &Path {
-        match self {
-            Self::Export(path) | Self::Import(path) => path,
-        }
-    }
-
     pub(crate) fn is_export(&self) -> bool {
-        matches!(self, Self::Export(_))
+        matches!(self, Self::Export)
     }
 }
 
@@ -48,17 +41,7 @@ pub(crate) struct BackupPromptState {
 
 impl AppShell {
     pub(crate) fn open_backup_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(path) = rfd::FileDialog::new()
-            .set_title(rust_i18n::t!("backup.export_title").to_string())
-            .set_file_name("transom-backup.json")
-            .add_filter("Transom Backup (JSON)", &["json"])
-            .add_filter("Transom Backup (YAML)", &["yaml", "yml"])
-            .save_file()
-        else {
-            return;
-        };
-        let path = ensure_backup_extension(path);
-        self.open_backup_prompt(BackupAction::Export(path), true, window, cx);
+        self.open_backup_prompt(BackupAction::Export, true, window, cx);
     }
 
     pub(crate) fn open_backup_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -126,19 +109,26 @@ impl AppShell {
         } else {
             rust_i18n::t!("backup.import_title").to_string()
         };
-        let path = prompt.action.path().display().to_string();
         let busy = prompt.busy;
         let error = prompt.error.clone();
 
-        let mut content = v_flex()
-            .gap_3()
-            .child(div().text_xs().text_color(p.muted_foreground).child(path))
-            .child(
+        let mut content = v_flex().gap_3();
+
+        if let BackupAction::Import(path) = &prompt.action {
+            content = content.child(
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("backup.hint").to_string()),
+                    .child(path.display().to_string()),
             );
+        }
+
+        content = content.child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("backup.hint").to_string()),
+        );
 
         if is_export {
             content = content
