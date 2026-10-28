@@ -198,7 +198,6 @@ impl AppShell {
         let status_bar_element = self.render_sftp_status_bar(
             SftpStatusBarProps {
                 tab_id,
-                loading,
                 progress: display_progress,
                 active_count,
                 paused_count,

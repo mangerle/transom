@@ -3,8 +3,9 @@
 //! 设计原理（Why）：
 //! - 实现初衷：为 SFTP 双栏文件浏览器底部提供常驻的状态显示、错误提示及传输进度条；
 //! - 核心优势：
-//!   1. 集中处理 loading、progress、error 与普通 status 优先级的展示分发；
-//!   2. 支持一键全部暂停、全部恢复与全部取消。
+//!   1. 集中处理 progress、error 与普通 status 优先级的展示分发；
+//!   2. 支持一键全部暂停、全部恢复与全部取消；
+//!   3. 避免目录读取等瞬态侵入状态栏导致整个 SFTP 面板布局抖动与闪烁。
 
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -22,7 +23,6 @@ use crate::sftp::format_size;
 
 pub(crate) struct SftpStatusBarProps {
     pub(crate) tab_id: TabId,
-    pub(crate) loading: bool,
     pub(crate) progress: Option<(u64, Option<u64>)>,
     /// 当前活动传输任务数。
     pub(crate) active_count: usize,
@@ -45,22 +45,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let tab_id = props.tab_id;
-        if props.loading {
-            Some(
-                v_flex()
-                    .px_3()
-                    .py_1p5()
-                    .gap_1()
-                    .bg(p.muted)
-                    .child(
-                        div()
-                            .text_xs()
-                            .child(rust_i18n::t!("sftp.loading").to_string()),
-                    )
-                    .child(Progress::new("sftp-loading-progress").loading(true))
-                    .into_any_element(),
-            )
-        } else if let Some((transferred, total)) = props.progress {
+        if let Some((transferred, total)) = props.progress {
             let percent = if let Some(tot) = total {
                 if tot > 0 {
                     ((transferred as f64 / tot as f64) * 100.0) as f32

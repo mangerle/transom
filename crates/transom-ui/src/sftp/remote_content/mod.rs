@@ -45,6 +45,13 @@ impl AppShell {
                 .text_color(p.muted_foreground)
                 .child(rust_i18n::t!("sftp.empty").to_string())
                 .into_any_element()
+        } else if remote_entries.is_empty() && loading {
+            div()
+                .p_3()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("sftp.loading").to_string())
+                .into_any_element()
         } else {
             let remote_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); remote_entries.len()]);
             let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
