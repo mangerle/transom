@@ -3,6 +3,7 @@
 use super::overlay::DropOverlayState;
 use super::preview::SftpPreviewState;
 use super::quick_paths::LocalQuickPaths;
+use super::selection;
 use super::side_remote::{SftpActivePane, SftpClipboardData, SftpSideRemoteState};
 use super::task::TransferTask;
 use gpui_kit::component::VirtualListScrollHandle;
@@ -213,31 +214,29 @@ impl SftpPanelState {
     /// `selected` 字段，右键操作另一栏后会残留旧活动栏，导致快捷键删错栏位；
     /// 统一经本方法赋值可从机制上杜绝该失配。
     pub(crate) fn select_remote(&mut self, path: String) {
-        self.remote.selected = Some(path.clone());
-        self.remote.anchor = Some(path.clone());
-        self.remote.selection.clear();
-        self.remote.selection.insert(path);
+        selection::select(
+            &mut self.remote.selected,
+            &mut self.remote.selection,
+            &mut self.remote.anchor,
+            path,
+        );
         self.active_pane = SftpActivePane::Remote;
     }
 
     /// 设置远端主项但保留已有多选集合，供右键菜单定位单项操作。
     pub(crate) fn set_remote_primary(&mut self, path: String) {
-        self.remote.selected = Some(path.clone());
-        self.remote.selection.insert(path);
+        selection::set_primary(&mut self.remote.selected, &mut self.remote.selection, path);
         self.active_pane = SftpActivePane::Remote;
     }
 
     /// Ctrl/Cmd 点击切换远端条目的选中状态。
     pub(crate) fn toggle_remote_selection(&mut self, path: String) {
-        if self.remote.selection.remove(&path) {
-            if self.remote.selected.as_deref() == Some(path.as_str()) {
-                self.remote.selected = self.remote.selection.iter().next_back().cloned();
-            }
-        } else {
-            self.remote.selection.insert(path.clone());
-            self.remote.selected = Some(path.clone());
-        }
-        self.remote.anchor = Some(path);
+        selection::toggle(
+            &mut self.remote.selected,
+            &mut self.remote.selection,
+            &mut self.remote.anchor,
+            path,
+        );
         self.active_pane = SftpActivePane::Remote;
     }
 
@@ -247,79 +246,63 @@ impl SftpPanelState {
         paths: impl IntoIterator<Item = String>,
         primary: String,
     ) {
-        self.remote.selection = paths.into_iter().collect();
-        self.remote.selection.insert(primary.clone());
-        self.remote.selected = Some(primary);
+        selection::select_range(
+            &mut self.remote.selected,
+            &mut self.remote.selection,
+            paths,
+            primary,
+        );
         self.active_pane = SftpActivePane::Remote;
     }
 
     /// 返回当前需要批量操作的远端路径；无多选时退化为单选主项。
     pub(crate) fn selected_remote_paths(&self) -> Vec<String> {
-        if self.remote.selection.is_empty() {
-            self.remote.selected.iter().cloned().collect()
-        } else {
-            self.remote.selection.iter().cloned().collect()
-        }
+        selection::paths(&self.remote.selected, &self.remote.selection)
     }
 
     pub(crate) fn clear_remote_selection(&mut self) {
-        self.remote.selected = None;
-        self.remote.selection.clear();
-        self.remote.anchor = None;
+        selection::clear(
+            &mut self.remote.selected,
+            &mut self.remote.selection,
+            &mut self.remote.anchor,
+        );
     }
 
     /// 刷新远端列表后剔除已不存在的选中项，并修正主项与锚点。
     pub(crate) fn sync_remote_selection(&mut self, valid: &BTreeSet<String>) {
-        self.remote.selection.retain(|path| valid.contains(path));
-        if self
-            .remote
-            .selected
-            .as_ref()
-            .is_some_and(|path| !valid.contains(path))
-        {
-            self.remote.selected = self.remote.selection.iter().next_back().cloned();
-        }
-        if self
-            .remote
-            .anchor
-            .as_ref()
-            .is_some_and(|path| !valid.contains(path))
-        {
-            self.remote.anchor = self.remote.selected.clone();
-        }
-        if self.remote.selection.is_empty() {
-            self.remote.selected = None;
-            self.remote.anchor = None;
-        }
+        selection::sync(
+            &mut self.remote.selected,
+            &mut self.remote.selection,
+            &mut self.remote.anchor,
+            valid,
+        );
     }
 
     /// 单选一个本地条目，同时清空多选集合并重置 Shift 锚点。
     pub(crate) fn select_local(&mut self, path: PathBuf) {
-        self.local.selected = Some(path.clone());
-        self.local.anchor = Some(path.clone());
-        self.local.selection.clear();
-        self.local.selection.insert(path);
+        selection::select(
+            &mut self.local.selected,
+            &mut self.local.selection,
+            &mut self.local.anchor,
+            path,
+        );
         self.active_pane = SftpActivePane::Local;
     }
 
     /// 设置本地主项但保留已有多选集合，供右键菜单定位单项操作。
     pub(crate) fn set_local_primary(&mut self, path: PathBuf) {
-        self.local.selected = Some(path.clone());
-        self.local.selection.insert(path);
+        selection::set_primary(&mut self.local.selected, &mut self.local.selection, path);
         self.active_pane = SftpActivePane::Local;
     }
 
     /// Ctrl/Cmd 点击切换单个条目的选中状态。
     pub(crate) fn toggle_local_selection(&mut self, path: PathBuf) {
-        if self.local.selection.remove(&path) {
-            if self.local.selected.as_ref() == Some(&path) {
-                self.local.selected = self.local.selection.iter().next_back().cloned();
-            }
-        } else {
-            self.local.selection.insert(path.clone());
-            self.local.selected = Some(path.clone());
-        }
-        self.local.anchor = Some(path);
+        selection::toggle(
+            &mut self.local.selected,
+            &mut self.local.selection,
+            &mut self.local.anchor,
+            path,
+        );
         self.active_pane = SftpActivePane::Local;
     }
 
@@ -329,50 +312,36 @@ impl SftpPanelState {
         paths: impl IntoIterator<Item = PathBuf>,
         primary: PathBuf,
     ) {
-        self.local.selection = paths.into_iter().collect();
-        self.local.selection.insert(primary.clone());
-        self.local.selected = Some(primary);
+        selection::select_range(
+            &mut self.local.selected,
+            &mut self.local.selection,
+            paths,
+            primary,
+        );
         self.active_pane = SftpActivePane::Local;
     }
 
     /// 返回当前需要批量操作的本地路径；无多选时退化为单选主项。
     pub(crate) fn selected_local_paths(&self) -> Vec<PathBuf> {
-        if self.local.selection.is_empty() {
-            self.local.selected.iter().cloned().collect()
-        } else {
-            self.local.selection.iter().cloned().collect()
-        }
+        selection::paths(&self.local.selected, &self.local.selection)
     }
 
     pub(crate) fn clear_local_selection(&mut self) {
-        self.local.selected = None;
-        self.local.selection.clear();
-        self.local.anchor = None;
+        selection::clear(
+            &mut self.local.selected,
+            &mut self.local.selection,
+            &mut self.local.anchor,
+        );
     }
 
     /// 刷新目录后剔除已不存在的选中项，并修正主项与锚点。
     pub(crate) fn sync_local_selection(&mut self, valid: &BTreeSet<PathBuf>) {
-        self.local.selection.retain(|path| valid.contains(path));
-        if self
-            .local
-            .selected
-            .as_ref()
-            .is_some_and(|path| !valid.contains(path))
-        {
-            self.local.selected = self.local.selection.iter().next_back().cloned();
-        }
-        if self
-            .local
-            .anchor
-            .as_ref()
-            .is_some_and(|path| !valid.contains(path))
-        {
-            self.local.anchor = self.local.selected.clone();
-        }
-        if self.local.selection.is_empty() {
-            self.local.selected = None;
-            self.local.anchor = None;
-        }
+        selection::sync(
+            &mut self.local.selected,
+            &mut self.local.selection,
+            &mut self.local.anchor,
+            valid,
+        );
     }
 
     /// 汇总所有活动任务的字节进度；无活动任务时清空进度。

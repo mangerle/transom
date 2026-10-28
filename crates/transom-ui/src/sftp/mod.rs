@@ -22,6 +22,7 @@ mod queue_view;
 mod quick_paths;
 mod remote_content;
 mod remote_pane;
+mod selection;
 mod side_remote;
 mod side_remote_view;
 mod state;
