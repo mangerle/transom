@@ -2,7 +2,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
@@ -103,63 +103,49 @@ impl AppShell {
             .child(Self::setting_row(
                 "settings.checksum_algorithm",
                 Some("settings.checksum_algorithm_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(
-                        [
-                            (
-                                "algo-sha256",
-                                "settings.checksum_sha256",
-                                ChecksumAlgorithm::Sha256,
-                            ),
-                            ("algo-md5", "settings.checksum_md5", ChecksumAlgorithm::Md5),
-                        ]
-                        .into_iter()
-                        .map(|(id, key, algo)| {
-                            Button::new(id)
-                                .small()
-                                .label(rust_i18n::t!(key).to_string())
-                                .selected(current_algo == algo)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.settings.sftp.checksum_algorithm = algo;
-                                    cx.notify();
-                                }))
-                        }),
-                    )
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-checksum-algo",
+                    current_algo,
+                    vec![
+                        (
+                            ChecksumAlgorithm::Sha256,
+                            rust_i18n::t!("settings.checksum_sha256").to_string(),
+                        ),
+                        (
+                            ChecksumAlgorithm::Md5,
+                            rust_i18n::t!("settings.checksum_md5").to_string(),
+                        ),
+                    ],
+                    |this, algo, cx| {
+                        this.settings.sftp.checksum_algorithm = algo;
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 p,
             ))
             .child(Self::setting_row(
                 "settings.verify_mode",
                 Some("settings.verify_mode_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(
-                        [
-                            (
-                                "mode-full",
-                                "settings.verify_mode_full",
-                                VerifyMode::FullSha256,
-                            ),
-                            (
-                                "mode-quick",
-                                "settings.verify_mode_quick",
-                                VerifyMode::QuickSample,
-                            ),
-                        ]
-                        .into_iter()
-                        .map(|(id, key, mode)| {
-                            Button::new(id)
-                                .small()
-                                .label(rust_i18n::t!(key).to_string())
-                                .selected(current_mode == mode)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.settings.sftp.verify_mode = mode;
-                                    cx.notify();
-                                }))
-                        }),
-                    )
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-verify-mode",
+                    current_mode,
+                    vec![
+                        (
+                            VerifyMode::FullSha256,
+                            rust_i18n::t!("settings.verify_mode_full").to_string(),
+                        ),
+                        (
+                            VerifyMode::QuickSample,
+                            rust_i18n::t!("settings.verify_mode_quick").to_string(),
+                        ),
+                    ],
+                    |this, mode, cx| {
+                        this.settings.sftp.verify_mode = mode;
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 p,
             ))
             .into_any_element()

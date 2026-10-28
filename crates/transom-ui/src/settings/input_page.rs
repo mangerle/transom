@@ -2,9 +2,8 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 
@@ -16,50 +15,39 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let behavior = self.settings.terminal_interaction.right_click_behavior();
+        let behavior_options = vec![
+            (
+                transom_core::RightClickBehavior::Paste,
+                rust_i18n::t!("settings.right_click_paste_action").to_string(),
+            ),
+            (
+                transom_core::RightClickBehavior::Menu,
+                rust_i18n::t!("settings.right_click_menu").to_string(),
+            ),
+            (
+                transom_core::RightClickBehavior::MenuWithPaste,
+                rust_i18n::t!("settings.right_click_menu_paste").to_string(),
+            ),
+        ];
+        let rc_dropdown = Self::setting_dropdown(
+            "dropdown-right-click-action",
+            behavior,
+            behavior_options,
+            |this, new_behavior, cx| {
+                this.settings
+                    .terminal_interaction
+                    .set_right_click_behavior(new_behavior);
+                cx.notify();
+            },
+            cx,
+        );
+
         v_flex()
             .gap_2()
             .child(Self::setting_row(
                 "settings.right_click_action",
                 Some("settings.right_click_action_desc"),
-                h_flex()
-                    .gap_1()
-                    .child(
-                        Button::new("rc-paste")
-                            .small()
-                            .label(rust_i18n::t!("settings.right_click_paste_action").to_string())
-                            .selected(behavior == transom_core::RightClickBehavior::Paste)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings.terminal_interaction.set_right_click_behavior(
-                                    transom_core::RightClickBehavior::Paste,
-                                );
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new("rc-menu")
-                            .small()
-                            .label(rust_i18n::t!("settings.right_click_menu").to_string())
-                            .selected(behavior == transom_core::RightClickBehavior::Menu)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings.terminal_interaction.set_right_click_behavior(
-                                    transom_core::RightClickBehavior::Menu,
-                                );
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new("rc-menu-paste")
-                            .small()
-                            .label(rust_i18n::t!("settings.right_click_menu_paste").to_string())
-                            .selected(behavior == transom_core::RightClickBehavior::MenuWithPaste)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings.terminal_interaction.set_right_click_behavior(
-                                    transom_core::RightClickBehavior::MenuWithPaste,
-                                );
-                                cx.notify();
-                            })),
-                    )
-                    .into_any_element(),
+                rc_dropdown,
                 p,
             ))
             .child(Self::setting_row(

@@ -23,7 +23,9 @@ pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearance
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{InputState, NumberInput};
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::slider::SliderValue;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable};
@@ -102,6 +104,55 @@ impl AppShell {
         div()
             .w(width)
             .child(NumberInput::new(input).small())
+            .into_any_element()
+    }
+
+    /// 通用设置项下拉选择器（Zed 风格）：
+    /// 触发按钮展示当前选中项文本与双向展开图标（dropdown_caret），
+    /// 点击弹出菜单，菜单项通过 `.checked(is_selected)` 原生展示右侧对勾标记。
+    pub(crate) fn setting_dropdown<T: Clone + PartialEq + 'static>(
+        id: impl Into<ElementId>,
+        current_value: T,
+        options: Vec<(T, String)>,
+        on_change: impl Fn(&mut Self, T, &mut Context<Self>) + 'static + Clone,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let app = cx.entity().clone();
+        let current_label = options
+            .iter()
+            .find(|(val, _)| val == &current_value)
+            .map(|(_, label)| label.clone())
+            .unwrap_or_default();
+
+        Button::new(id)
+            .small()
+            .outline()
+            .dropdown_caret(true)
+            .label(current_label)
+            .dropdown_menu_with_anchor(Anchor::TopRight, {
+                let options = options.clone();
+                let current_value = current_value.clone();
+                move |mut menu, _window, _cx| {
+                    for (val, label) in &options {
+                        let is_selected = val == &current_value;
+                        let val = val.clone();
+                        let app = app.clone();
+                        let on_change = on_change.clone();
+                        menu = menu.item(
+                            PopupMenuItem::new(label.clone())
+                                .checked(is_selected)
+                                .on_click(move |_, _, cx| {
+                                    let val = val.clone();
+                                    let on_change = on_change.clone();
+                                    app.update(cx, |this, cx| {
+                                        on_change(this, val, cx);
+                                    });
+                                }),
+                        );
+                    }
+                    menu
+                }
+            })
             .into_any_element()
     }
 

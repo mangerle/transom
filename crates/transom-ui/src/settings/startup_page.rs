@@ -11,9 +11,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::Button;
+use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_core::{SidebarStartup, StartupTabs};
 
@@ -53,37 +51,42 @@ impl AppShell {
             .child(Self::setting_row(
                 "settings.startup_tabs",
                 Some("settings.startup_tabs_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(StartupTabs::ALL.into_iter().map(|tab| {
-                        Button::new(format!("startup-tabs-{}", tab.as_str()))
-                            .xsmall()
-                            .label(rust_i18n::t!(startup_tabs_label(tab)).to_string())
-                            .selected(tabs == tab)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.settings.window.startup_tabs = tab;
-                                cx.notify();
-                            }))
-                    }))
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-startup-tabs",
+                    tabs,
+                    StartupTabs::ALL
+                        .into_iter()
+                        .map(|tab| (tab, rust_i18n::t!(startup_tabs_label(tab)).to_string()))
+                        .collect(),
+                    |this, tab, cx| {
+                        this.settings.window.startup_tabs = tab;
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 p,
             ))
             .child(Self::setting_row(
                 "settings.sidebar_startup",
                 Some("settings.sidebar_startup_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(SidebarStartup::ALL.into_iter().map(|startup| {
-                        Button::new(format!("startup-sidebar-{}", startup.as_str()))
-                            .xsmall()
-                            .label(rust_i18n::t!(sidebar_startup_label(startup)).to_string())
-                            .selected(sidebar == startup)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.settings.window.sidebar_startup = startup;
-                                cx.notify();
-                            }))
-                    }))
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-sidebar-startup",
+                    sidebar,
+                    SidebarStartup::ALL
+                        .into_iter()
+                        .map(|startup| {
+                            (
+                                startup,
+                                rust_i18n::t!(sidebar_startup_label(startup)).to_string(),
+                            )
+                        })
+                        .collect(),
+                    |this, startup, cx| {
+                        this.settings.window.sidebar_startup = startup;
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 p,
             ))
             .into_any_element()

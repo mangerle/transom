@@ -3,8 +3,7 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
-use gpui_kit::component::button::Button;
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Icon, Sizable};
@@ -333,44 +332,38 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let cursor_shape = self.settings.terminal_profile.cursor_shape;
+        let cursor_options = vec![
+            (
+                TerminalCursorShape::Block,
+                rust_i18n::t!("settings.cursor_block").to_string(),
+            ),
+            (
+                TerminalCursorShape::Bar,
+                rust_i18n::t!("settings.cursor_bar").to_string(),
+            ),
+            (
+                TerminalCursorShape::Underline,
+                rust_i18n::t!("settings.cursor_underline").to_string(),
+            ),
+        ];
+        let cursor_dropdown = Self::setting_dropdown(
+            "dropdown-cursor-shape",
+            cursor_shape,
+            cursor_options,
+            |this, shape, cx| {
+                this.settings.terminal_profile.cursor_shape = shape;
+                cx.notify();
+            },
+            cx,
+        );
+
         v_flex()
             .gap_2()
             .child(Self::setting_row(
                 "settings.cursor_shape",
                 Some("settings.cursor_shape_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(
-                        [
-                            (
-                                "cursor-block",
-                                "settings.cursor_block",
-                                TerminalCursorShape::Block,
-                            ),
-                            (
-                                "cursor-bar",
-                                "settings.cursor_bar",
-                                TerminalCursorShape::Bar,
-                            ),
-                            (
-                                "cursor-underline",
-                                "settings.cursor_underline",
-                                TerminalCursorShape::Underline,
-                            ),
-                        ]
-                        .into_iter()
-                        .map(|(id, key, shape)| {
-                            Button::new(id)
-                                .small()
-                                .label(rust_i18n::t!(key).to_string())
-                                .selected(self.settings.terminal_profile.cursor_shape == shape)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.settings.terminal_profile.cursor_shape = shape;
-                                    cx.notify();
-                                }))
-                        }),
-                    )
-                    .into_any_element(),
+                cursor_dropdown,
                 p,
             ))
             .child(Self::setting_row(

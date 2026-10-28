@@ -44,33 +44,28 @@ impl AppShell {
                     .text_sm()
                     .child(rust_i18n::t!("settings.ui_mode").to_string()),
             )
-            .child(
-                h_flex().gap_1().children(
-                    [
-                        (
-                            "ui-mode-system",
-                            "settings.ui_mode_system",
-                            UiThemeMode::System,
-                        ),
-                        (
-                            "ui-mode-light",
-                            "settings.ui_mode_light",
-                            UiThemeMode::Light,
-                        ),
-                        ("ui-mode-dark", "settings.ui_mode_dark", UiThemeMode::Dark),
-                    ]
-                    .into_iter()
-                    .map(|(id, key, mode)| {
-                        Button::new(id)
-                            .small()
-                            .label(rust_i18n::t!(key).to_string())
-                            .selected(self.settings.appearance.mode == mode)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.update_appearance(|appearance| appearance.mode = mode, cx);
-                            }))
-                    }),
-                ),
-            );
+            .child(Self::setting_dropdown(
+                "dropdown-ui-mode",
+                self.settings.appearance.mode,
+                vec![
+                    (
+                        UiThemeMode::System,
+                        rust_i18n::t!("settings.ui_mode_system").to_string(),
+                    ),
+                    (
+                        UiThemeMode::Light,
+                        rust_i18n::t!("settings.ui_mode_light").to_string(),
+                    ),
+                    (
+                        UiThemeMode::Dark,
+                        rust_i18n::t!("settings.ui_mode_dark").to_string(),
+                    ),
+                ],
+                |this, mode, cx| {
+                    this.update_appearance(|appearance| appearance.mode = mode, cx);
+                },
+                cx,
+            ));
 
         let density_row = h_flex()
             .justify_between()
@@ -81,22 +76,18 @@ impl AppShell {
                     .text_sm()
                     .child(rust_i18n::t!("settings.density").to_string()),
             )
-            .child(
-                h_flex()
-                    .gap_1()
-                    .children(UiDensity::ALL.into_iter().map(|density| {
-                        Button::new(density.label_key())
-                            .small()
-                            .label(rust_i18n::t!(density.label_key()).to_string())
-                            .selected(self.settings.appearance.density == density)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.update_appearance(
-                                    |appearance| appearance.density = density,
-                                    cx,
-                                );
-                            }))
-                    })),
-            );
+            .child(Self::setting_dropdown(
+                "dropdown-ui-density",
+                self.settings.appearance.density,
+                UiDensity::ALL
+                    .into_iter()
+                    .map(|d| (d, rust_i18n::t!(d.label_key()).to_string()))
+                    .collect(),
+                |this, density, cx| {
+                    this.update_appearance(|appearance| appearance.density = density, cx);
+                },
+                cx,
+            ));
 
         let cards: Vec<AnyElement> = themes
             .iter()

@@ -47,32 +47,43 @@ impl AppShell {
     ) -> AnyElement {
         let current_bell = self.settings.window.bell_style;
         let stepper = Self::setting_stepper(&self.modals.settings.notify_threshold, px(110.0));
+        let bell_options = vec![
+            (
+                "bell-none",
+                rust_i18n::t!("settings.bell_none").to_string(),
+                BellStyle::None,
+            ),
+            (
+                "bell-visual",
+                rust_i18n::t!("settings.bell_visual").to_string(),
+                BellStyle::Visual,
+            ),
+            (
+                "bell-audible",
+                rust_i18n::t!("settings.bell_audible").to_string(),
+                BellStyle::Audible,
+            ),
+        ];
+        let bell_dropdown = Self::setting_dropdown(
+            "dropdown-bell-style",
+            current_bell,
+            bell_options
+                .into_iter()
+                .map(|(_, label, val)| (val, label))
+                .collect(),
+            |this, style, cx| {
+                this.settings.window.bell_style = style;
+                cx.notify();
+            },
+            cx,
+        );
+
         v_flex()
             .gap_2()
             .child(Self::setting_row(
                 "settings.bell_style",
                 Some("settings.bell_style_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(
-                        [
-                            ("bell-none", "settings.bell_none", BellStyle::None),
-                            ("bell-visual", "settings.bell_visual", BellStyle::Visual),
-                            ("bell-audible", "settings.bell_audible", BellStyle::Audible),
-                        ]
-                        .into_iter()
-                        .map(|(id, key, style)| {
-                            Button::new(id)
-                                .small()
-                                .label(rust_i18n::t!(key).to_string())
-                                .selected(current_bell == style)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.settings.window.bell_style = style;
-                                    cx.notify();
-                                }))
-                        }),
-                    )
-                    .into_any_element(),
+                bell_dropdown,
                 p,
             ))
             .child(Self::setting_row(

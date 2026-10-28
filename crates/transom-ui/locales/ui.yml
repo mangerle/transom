@@ -2054,7 +2054,7 @@ settings:
     en: Terminal Bell
     zh-CN: 终端响铃提示
   bell_none:
-    en: Off
+    en: "Off"
     zh-CN: 关闭
   bell_visual:
     en: Visual Flash

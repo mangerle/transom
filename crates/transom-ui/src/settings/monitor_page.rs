@@ -3,9 +3,8 @@
 use crate::app::AppShell;
 use crate::monitor::SampleIntervalMode;
 use crate::palette::Palette;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 
@@ -141,68 +140,39 @@ impl AppShell {
             .child(Self::setting_row(
                 "settings.monitor_default_width",
                 Some("settings.monitor_default_width_desc"),
-                h_flex()
-                    .gap_1p5()
-                    .child(
-                        Button::new("btn-monitor-width-compact")
-                            .small()
-                            .label("紧凑 (420px)")
-                            .selected(!is_wide)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings.monitor.drawer_width = 420.0;
-                                this.monitor.drawer_width = 420.0;
-                                let _ = this.services.settings_store.save(&this.settings);
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new("btn-monitor-width-wide")
-                            .small()
-                            .label("宽幅 (600px)")
-                            .selected(is_wide)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings.monitor.drawer_width = 600.0;
-                                this.monitor.drawer_width = 600.0;
-                                let _ = this.services.settings_store.save(&this.settings);
-                                cx.notify();
-                            })),
-                    )
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-monitor-width",
+                    if is_wide { 600.0f32 } else { 420.0f32 },
+                    vec![
+                        (420.0f32, "紧凑 (420px)".to_string()),
+                        (600.0f32, "宽幅 (600px)".to_string()),
+                    ],
+                    |this, width, cx| {
+                        this.settings.monitor.drawer_width = width;
+                        this.monitor.drawer_width = width;
+                        let _ = this.services.settings_store.save(&this.settings);
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 p,
             ))
             .child(Self::setting_row(
                 "settings.monitor_default_interval",
                 Some("settings.monitor_default_interval_desc"),
-                h_flex()
-                    .gap_1p5()
-                    .child(
-                        Button::new("btn-interval-fast")
-                            .small()
-                            .label(SampleIntervalMode::Fast.label())
-                            .selected(current_interval == SampleIntervalMode::Fast)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.set_monitor_interval_mode(SampleIntervalMode::Fast, cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("btn-interval-normal")
-                            .small()
-                            .label(SampleIntervalMode::Normal.label())
-                            .selected(current_interval == SampleIntervalMode::Normal)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.set_monitor_interval_mode(SampleIntervalMode::Normal, cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("btn-interval-eco")
-                            .small()
-                            .label(SampleIntervalMode::Eco.label())
-                            .selected(current_interval == SampleIntervalMode::Eco)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.set_monitor_interval_mode(SampleIntervalMode::Eco, cx);
-                            })),
-                    )
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-monitor-interval",
+                    current_interval,
+                    vec![
+                        (SampleIntervalMode::Fast, "1s (极速排查)".to_string()),
+                        (SampleIntervalMode::Normal, "3s (默认平稳)".to_string()),
+                        (SampleIntervalMode::Eco, "10s (节能降噪)".to_string()),
+                    ],
+                    |this, mode, cx| {
+                        this.set_monitor_interval_mode(mode, cx);
+                    },
+                    cx,
+                ),
                 p,
             ))
             .into_any_element()

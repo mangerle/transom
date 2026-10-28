@@ -2,9 +2,8 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::PanelSide;
@@ -53,38 +52,30 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let side = self.settings.window.sftp_panel_side;
         v_flex()
             .gap_2()
             .child(Self::setting_row(
                 "settings.sftp_panel_side",
                 Some("settings.sftp_panel_side_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(
-                        [
-                            (
-                                "panel-side-left",
-                                "settings.panel_side_left",
-                                PanelSide::Left,
-                            ),
-                            (
-                                "panel-side-right",
-                                "settings.panel_side_right",
-                                PanelSide::Right,
-                            ),
-                        ]
-                        .into_iter()
-                        .map(|(id, key, side)| {
-                            Button::new(id)
-                                .small()
-                                .label(rust_i18n::t!(key).to_string())
-                                .selected(self.settings.window.sftp_panel_side == side)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.set_sftp_panel_side(side, cx);
-                                }))
-                        }),
-                    )
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-sftp-panel-side",
+                    side,
+                    vec![
+                        (
+                            PanelSide::Left,
+                            rust_i18n::t!("settings.panel_side_left").to_string(),
+                        ),
+                        (
+                            PanelSide::Right,
+                            rust_i18n::t!("settings.panel_side_right").to_string(),
+                        ),
+                    ],
+                    |this, new_side, cx| {
+                        this.set_sftp_panel_side(new_side, cx);
+                    },
+                    cx,
+                ),
                 p,
             ))
             .child(Self::setting_row(

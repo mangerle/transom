@@ -13,7 +13,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::*;
@@ -67,21 +67,20 @@ impl AppShell {
             .child(Self::setting_row(
                 "settings.log_level",
                 Some("settings.log_level_desc"),
-                h_flex()
-                    .gap_1()
-                    .children(LogLevel::ALL.into_iter().map(|level| {
-                        Button::new(format!("log-level-{}", level.as_str()))
-                            .xsmall()
-                            .label(rust_i18n::t!(level_label_key(level)).to_string())
-                            .selected(current == level)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.settings.logs.level = level;
-                                // 门槛就是一个全局原子量，改完下一条日志即刻生效。
-                                log::set_max_level(level.to_filter());
-                                cx.notify();
-                            }))
-                    }))
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-log-level",
+                    current,
+                    LogLevel::ALL
+                        .into_iter()
+                        .map(|level| (level, rust_i18n::t!(level_label_key(level)).to_string()))
+                        .collect(),
+                    |this, level, cx| {
+                        this.settings.logs.level = level;
+                        log::set_max_level(level.to_filter());
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 p,
             ))
             .child(Self::setting_row(
