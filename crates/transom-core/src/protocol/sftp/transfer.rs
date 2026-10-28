@@ -17,6 +17,26 @@ pub enum TransferDirection {
     RemoteCopy,
 }
 
+/// SFTP 传输校验策略级别。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum VerifyMode {
+    /// 完整密码学校验：逐字节计算并比对两端摘要。
+    #[default]
+    FullSha256,
+    /// 快速抽样校验：读取文件首尾与中间采样块计算指纹，适合超大文件的极速完整性判定。
+    QuickSample,
+}
+
+/// 支持的校验和算法。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ChecksumAlgorithm {
+    /// SHA-256 算法。
+    #[default]
+    Sha256,
+    /// MD5 算法。
+    Md5,
+}
+
 /// 目录递归传输的汇总结果。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TransferSummary {

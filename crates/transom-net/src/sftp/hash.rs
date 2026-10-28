@@ -3,10 +3,13 @@
 use crate::keys::shell_single_quote;
 use crate::sftp::{SftpClient, sftp_error, sftp_io_error};
 use sha2::{Digest, Sha256};
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use tokio::io::AsyncReadExt;
-use transom_core::{AppError, ErrorCode};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use transom_core::{AppError, ErrorCode, VerifyMode};
+
+/// 快速抽样校验时单段读取的字节数（64 KiB）。
+pub(crate) const SAMPLE_CHUNK: usize = 64 * 1024;
 
 /// 流式哈希计算时的默认分块缓冲区大小（256 KiB）。
 ///
@@ -114,6 +117,88 @@ impl SftpClient {
     ///
     /// # Errors
     /// 读取失败或两侧哈希不一致时返回 `ErrorCode::SftpFailed`。
+    /// 快速抽样计算远端文件指纹：对小文件退回完整 SHA256，对大文件采样读取头、中、尾块及文件大小。
+    pub async fn quick_sample_remote(&self, path: &str) -> Result<String, AppError> {
+        let mut remote = self.session.open(path).await.map_err(sftp_error)?;
+        let metadata = remote.metadata().await.map_err(sftp_error)?;
+        let file_len = metadata.size.unwrap_or(0);
+        let sample_threshold = (SAMPLE_CHUNK * 3) as u64;
+        if file_len <= sample_threshold {
+            let _ = remote.close().await;
+            return self.sha256_remote(path).await;
+        }
+
+        let mut hasher = Sha256::new();
+        hasher.update(file_len.to_be_bytes());
+
+        let mut buffer = vec![0u8; SAMPLE_CHUNK];
+        let count = remote.read(&mut buffer).await.map_err(sftp_io_error)?;
+        hasher.update(&buffer[..count]);
+
+        let mid_offset = (file_len / 2).saturating_sub((SAMPLE_CHUNK / 2) as u64);
+        remote
+            .seek(SeekFrom::Start(mid_offset))
+            .await
+            .map_err(sftp_io_error)?;
+        let count = remote.read(&mut buffer).await.map_err(sftp_io_error)?;
+        hasher.update(&buffer[..count]);
+
+        let tail_offset = file_len.saturating_sub(SAMPLE_CHUNK as u64);
+        remote
+            .seek(SeekFrom::Start(tail_offset))
+            .await
+            .map_err(sftp_io_error)?;
+        let count = remote.read(&mut buffer).await.map_err(sftp_io_error)?;
+        hasher.update(&buffer[..count]);
+
+        let _ = remote.close().await;
+        Ok(hex_encode(&hasher.finalize()))
+    }
+
+    /// 根据指定的校验策略级别执行文件完整性比对。
+    pub async fn verify_file_with_strategy(
+        &self,
+        local_path: &Path,
+        remote_path: &str,
+        known_local: Option<&str>,
+        mode: VerifyMode,
+    ) -> Result<(), AppError> {
+        match mode {
+            VerifyMode::FullSha256 => {
+                self.verify_file_with_known_local(local_path, remote_path, known_local)
+                    .await
+            }
+            VerifyMode::QuickSample => {
+                let (local_sample, remote_sample) = tokio::join!(
+                    quick_sample_local(local_path),
+                    self.quick_sample_remote(remote_path)
+                );
+                let local_sample = local_sample?;
+                let remote_sample = remote_sample?;
+                if local_sample == remote_sample {
+                    Ok(())
+                } else {
+                    Err(AppError::with_detail(
+                        ErrorCode::SftpFailed,
+                        format!(
+                            "快速抽样校验不一致：本地 {}（{local_sample}），远端 {}（{remote_sample}）",
+                            local_path.display(),
+                            remote_path
+                        ),
+                    ))
+                }
+            }
+        }
+    }
+
+    /// 并行计算本地与远端 SHA256 并比对，支持复用在途计算的本地哈希以消除二次读盘。
+    ///
+    /// 设计原理（Why）：在单文件传输流中，数据已完整流经本地内存缓冲区；
+    /// 复用在途计算的哈希可彻底消灭传输完成后对本地磁盘的全量重复读取。若在途哈希缺失
+    /// （如断点续传 offset > 0），则安全回退到本地读盘计算。
+    ///
+    /// # Errors
+    /// 读取失败或两侧哈希不一致时返回 `ErrorCode::SftpFailed`。
     pub async fn verify_file_with_known_local(
         &self,
         local_path: &Path,
@@ -153,6 +238,82 @@ impl SftpClient {
         self.verify_file_with_known_local(local_path, remote_path, None)
             .await
     }
+}
+
+pub(crate) async fn quick_sample_local(path: &Path) -> Result<String, AppError> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || quick_sample_local_blocking(&path))
+        .await
+        .map_err(|error| {
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                format!("本地抽样计算任务异常结束: {error}"),
+            )
+        })?
+}
+
+fn quick_sample_local_blocking(path: &PathBuf) -> Result<String, AppError> {
+    let mut file = std::fs::File::open(path).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("打开本地文件失败 {}: {error}", path.display()),
+        )
+    })?;
+    let metadata = file.metadata().map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("获取本地文件元数据失败 {}: {error}", path.display()),
+        )
+    })?;
+    let file_len = metadata.len();
+    let sample_threshold = (SAMPLE_CHUNK * 3) as u64;
+    if file_len <= sample_threshold {
+        return hash_local_blocking(path);
+    }
+
+    let mut hasher = Sha256::new();
+    hasher.update(file_len.to_be_bytes());
+
+    let mut buffer = vec![0u8; SAMPLE_CHUNK];
+    let count = file.read(&mut buffer).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("读取本地文件头部失败 {}: {error}", path.display()),
+        )
+    })?;
+    hasher.update(&buffer[..count]);
+
+    let mid_offset = (file_len / 2).saturating_sub((SAMPLE_CHUNK / 2) as u64);
+    file.seek(SeekFrom::Start(mid_offset)).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("定位本地文件中间偏移失败 {}: {error}", path.display()),
+        )
+    })?;
+    let count = file.read(&mut buffer).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("读取本地文件中间失败 {}: {error}", path.display()),
+        )
+    })?;
+    hasher.update(&buffer[..count]);
+
+    let tail_offset = file_len.saturating_sub(SAMPLE_CHUNK as u64);
+    file.seek(SeekFrom::Start(tail_offset)).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("定位本地文件尾部偏移失败 {}: {error}", path.display()),
+        )
+    })?;
+    let count = file.read(&mut buffer).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::SftpFailed,
+            format!("读取本地文件尾部失败 {}: {error}", path.display()),
+        )
+    })?;
+    hasher.update(&buffer[..count]);
+
+    Ok(hex_encode(&hasher.finalize()))
 }
 
 pub(crate) async fn sha256_local(path: &Path) -> Result<String, AppError> {
@@ -269,5 +430,32 @@ mod tests {
     #[test]
     fn hex_encode_uses_lowercase_and_pads_bytes() {
         assert_eq!(hex_encode(&[0x00, 0x0f, 0xff]), "000fff");
+    }
+
+    #[tokio::test]
+    async fn quick_sample_local_handles_large_and_small_files() {
+        use super::quick_sample_local;
+        let dir = tempfile::tempdir().expect("创建临时目录");
+
+        // 1. 小文件应回退到普通哈希计算
+        let small = dir.path().join("small.bin");
+        tokio::fs::write(&small, b"small payload")
+            .await
+            .expect("写入小文件");
+        let sample = quick_sample_local(&small).await.expect("小文件抽样");
+        let full = sha256_local(&small).await.expect("小文件完整哈希");
+        assert_eq!(sample, full);
+
+        // 2. 大文件（超过 3 * 64 KiB = 192 KiB）：构造 300 KiB 文件
+        let large = dir.path().join("large.bin");
+        let mut data = vec![0x42u8; 300 * 1024];
+        tokio::fs::write(&large, &data).await.expect("写入大文件");
+        let sample1 = quick_sample_local(&large).await.expect("计算抽样 1");
+
+        // 修改尾部一个字节，抽样指纹必须发生变化
+        data[299 * 1024] = 0x99;
+        tokio::fs::write(&large, &data).await.expect("覆写大文件");
+        let sample2 = quick_sample_local(&large).await.expect("计算抽样 2");
+        assert_ne!(sample1, sample2, "采样区变动必须导致抽样摘要不同");
     }
 }
