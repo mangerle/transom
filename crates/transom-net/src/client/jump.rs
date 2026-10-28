@@ -150,7 +150,7 @@ async fn build_chain(
     let mut transport: Box<dyn AsyncStream> = Box::new(transport);
 
     for (index, hop) in jumps.iter().enumerate() {
-        let handle = match timed_handshake(
+        let handle = match establish_session(
             transport,
             HandshakeParams {
                 connection: &hop.connection,
@@ -212,7 +212,7 @@ async fn build_chain(
     }
 
     let final_transport = CountingStream::new(transport, traffic);
-    let result = timed_handshake(
+    let result = establish_session(
         final_transport,
         HandshakeParams {
             connection: target,
@@ -240,31 +240,13 @@ async fn open_transport(
     Ok(socket)
 }
 
-async fn timed_handshake<S>(
-    transport: S,
-    params: HandshakeParams<'_>,
-) -> Result<Handle<ClientHandler>, AppError>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-{
-    let timeout_secs = params.connection.options.connect_timeout_secs.max(1);
-    let host = params.connection.host.clone();
-    let port = params.connection.port;
-    tokio::time::timeout(
-        Duration::from_secs(timeout_secs),
-        handshake(transport, params),
-    )
-    .await
-    .map_err(|_| {
-        AppError::from(NetError::Handshake {
-            host,
-            port,
-            reason: format!("连接超时，已等待 {timeout_secs} 秒"),
-        })
-    })?
-}
-
-async fn handshake<S>(
+/// 在已建立的传输上完成 SSH 握手与认证。
+///
+/// 设计原理（Why）：这里不套总超时。`connect_stream` 内部包含主机密钥确认，
+/// `authenticate` 会等待用户输入密码或验证码；把它们计入同一个截止时间会让
+/// 正常操作被误判超时。TCP 拨号超时由 [`build_chain`] 覆盖，握手或认证挂起
+/// 时用户可以直接取消连接，任务随标签关闭而中止。
+async fn establish_session<S>(
     transport: S,
     params: HandshakeParams<'_>,
 ) -> Result<Handle<ClientHandler>, AppError>
