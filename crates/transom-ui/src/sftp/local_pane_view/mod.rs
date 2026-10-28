@@ -13,12 +13,13 @@ mod toolbar;
 
 use self::context_menu::{LocalContextMenuProps, build_local_context_menu};
 use self::toolbar::{LocalToolbarProps, render_local_toolbar};
+use super::file_row::{FileRowProps, file_row};
 use super::preview::{PreviewKey, SftpHoverTarget};
 use super::side_remote::{SftpDragItem, SftpDragPreview};
-use super::{LocalFileEntry, LocalQuickPaths, VfsRowRenderOptions, render_vfs_row_content};
+use super::{LocalFileEntry, LocalQuickPaths};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -90,24 +91,16 @@ impl AppShell {
                             let is_parent_entry = entry_name == "..";
                             let is_selected = local_selection.contains(&entry.path)
                                 || local_primary.as_ref() == Some(&entry.path);
-                            let row = h_flex()
-                                .id(ElementId::Name(format!("local-file-{}", entry.name).into()))
-                                .px_2()
-                                .py_1()
-                                .gap_2()
-                                .items_center()
-                                .rounded(p.radius.sm)
-                                .cursor_pointer();
-                            let row = if is_selected {
-                                row.bg(p.sidebar_accent)
-                                    .text_color(p.sidebar_accent_foreground)
-                            } else {
-                                row.hover(|style| {
-                                    style
-                                        .bg(p.sidebar_accent)
-                                        .text_color(p.sidebar_accent_foreground)
-                                })
-                            };
+                            let row = file_row(FileRowProps {
+                                id: format!("local-file-{}", entry.name),
+                                name: &entry.name,
+                                is_dir,
+                                is_parent: is_parent_entry,
+                                size: entry.size,
+                                permissions: None,
+                                selected: is_selected,
+                                palette: &p,
+                            });
                             let entry_path_cm = entry.path.clone();
                             let entry_path_right = entry.path.clone();
                             let app_cm = app_entity.clone();
@@ -229,15 +222,7 @@ impl AppShell {
                                         }
                                         cx.notify();
                                     }),
-                                )
-                                .child(render_vfs_row_content(VfsRowRenderOptions {
-                                    name: &entry.name,
-                                    is_dir,
-                                    is_parent: is_parent_entry,
-                                    size: entry.size,
-                                    permissions: None,
-                                    palette: &p,
-                                }));
+                                );
 
                             let row = if is_parent_entry {
                                 row

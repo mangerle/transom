@@ -1,5 +1,6 @@
 //! SFTP 双栏文件管理器主面板视图渲染。
 
+use super::file_row::{insert_parent_local_entry, insert_parent_remote_entry};
 use super::local_pane_view::SftpLocalPaneProps;
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
 use super::remote_content::RemoteContentProps;
@@ -324,24 +325,7 @@ impl AppShell {
             })
             .cloned()
             .collect();
-        if panel.remote.path != "/"
-            && !panel.remote.path.is_empty()
-            && (remote_filter_query.is_empty() || fuzzy_match_name("..", remote_filter_query))
-        {
-            let parent = super::parent_remote(&panel.remote.path);
-            remote_entries.insert(
-                0,
-                RemoteFile {
-                    name: "..".to_string(),
-                    path: parent,
-                    is_dir: true,
-                    is_symlink: false,
-                    size: 0,
-                    modified: None,
-                    permissions: None,
-                },
-            );
-        }
+        insert_parent_remote_entry(&mut remote_entries, &panel.remote.path, remote_filter_query);
 
         let mut local_entries: Vec<LocalFileEntry> = panel
             .local
@@ -354,20 +338,7 @@ impl AppShell {
             })
             .cloned()
             .collect();
-        if let Some(parent) = panel.local.path.parent()
-            && panel.local.path != parent
-            && (local_filter_query.is_empty() || fuzzy_match_name("..", local_filter_query))
-        {
-            local_entries.insert(
-                0,
-                LocalFileEntry {
-                    name: "..".to_string(),
-                    path: parent.to_path_buf(),
-                    is_dir: true,
-                    size: 0,
-                },
-            );
-        }
+        insert_parent_local_entry(&mut local_entries, &panel.local.path, local_filter_query);
 
         (remote_entries, local_entries)
     }

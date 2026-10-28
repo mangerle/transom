@@ -14,11 +14,12 @@ mod header;
 
 use self::context_menu::build_side_remote_context_menu;
 use self::header::render_side_remote_header;
+use super::file_row::{FileRowProps, empty_dir_hint, file_row, insert_parent_remote_entry};
+use super::fuzzy_match_name;
 use super::side_remote::{SftpActivePane, SftpDragItem, SftpDragPreview, SftpRemoteCopyParams};
-use super::{VfsRowRenderOptions, fuzzy_match_name, render_vfs_row_content};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::v_virtual_list;
@@ -61,24 +62,7 @@ impl AppShell {
             .cloned()
             .collect();
 
-        if path != "/"
-            && !path.is_empty()
-            && (filter_query.is_empty() || fuzzy_match_name("..", &filter_query))
-        {
-            let parent = super::parent_remote(&path);
-            filtered_entries.insert(
-                0,
-                RemoteFile {
-                    name: "..".to_string(),
-                    path: parent,
-                    is_dir: true,
-                    is_symlink: false,
-                    size: 0,
-                    modified: None,
-                    permissions: None,
-                },
-            );
-        }
+        insert_parent_remote_entry(&mut filtered_entries, &path, &filter_query);
 
         let header = render_side_remote_header(
             self::header::SideRemoteHeaderProps {
@@ -96,12 +80,7 @@ impl AppShell {
         // 构建虚拟列表内容
         let app_entity = cx.entity().clone();
         let list_content = if filtered_entries.is_empty() && !loading {
-            div()
-                .p_3()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child("目录为空")
-                .into_any_element()
+            empty_dir_hint(p)
         } else {
             let row_sizes = Rc::new(vec![size(px(0.), px(28.)); filtered_entries.len()]);
             let entries_rc = Rc::new(filtered_entries);
@@ -129,29 +108,16 @@ impl AppShell {
                             let p_cm = entry_path.clone();
                             let dir_cur = current_dir.clone();
 
-                            let row = h_flex()
-                                .id(ElementId::Name(
-                                    format!("side-file-{side_index}-{}", entry.path).into(),
-                                ))
-                                .px_2()
-                                .py_1()
-                                .gap_2()
-                                .items_center()
-                                .rounded(p_row.radius.sm)
-                                .cursor_pointer()
-                                .hover(|style| {
-                                    style
-                                        .bg(p_row.sidebar_accent)
-                                        .text_color(p_row.sidebar_accent_foreground)
-                                })
-                                .child(render_vfs_row_content(VfsRowRenderOptions {
-                                    name: &entry.name,
-                                    is_dir,
-                                    is_parent: is_parent_entry,
-                                    size: entry.size,
-                                    permissions: entry.permissions,
-                                    palette: &p_row,
-                                }));
+                            let row = file_row(FileRowProps {
+                                id: format!("side-file-{side_index}-{}", entry.path),
+                                name: &entry.name,
+                                is_dir,
+                                is_parent: is_parent_entry,
+                                size: entry.size,
+                                permissions: entry.permissions,
+                                selected: false,
+                                palette: &p_row,
+                            });
 
                             // 双击与单击处理
                             let path_double = entry_path.clone();

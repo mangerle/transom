@@ -3,6 +3,7 @@
 mod chmod;
 mod drop_upload;
 mod file_ops;
+mod file_row;
 mod filter;
 mod local_async;
 mod local_only;

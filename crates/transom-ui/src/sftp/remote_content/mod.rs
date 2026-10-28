@@ -6,12 +6,11 @@
 mod context_menu;
 
 use self::context_menu::{RemoteContextMenuProps, build_remote_context_menu};
+use super::file_row::{FileRowProps, file_row};
 use super::preview::{PreviewKey, SftpHoverTarget};
 use super::side_remote::{SftpDragItem, SftpDragPreview};
-use super::{VfsRowRenderOptions, render_vfs_row_content};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
@@ -81,26 +80,16 @@ impl AppShell {
                             let is_parent_entry = entry_name == "..";
                             let is_selected = remote_selection.contains(&entry.path)
                                 || remote_primary.as_ref() == Some(&entry.path);
-                            let row = h_flex()
-                                .id(ElementId::Name(
-                                    format!("remote-file-{}", entry.path).into(),
-                                ))
-                                .px_2()
-                                .py_1()
-                                .gap_2()
-                                .items_center()
-                                .rounded(p.radius.sm)
-                                .cursor_pointer();
-                            let row = if is_selected {
-                                row.bg(p.sidebar_accent)
-                                    .text_color(p.sidebar_accent_foreground)
-                            } else {
-                                row.hover(|style| {
-                                    style
-                                        .bg(p.sidebar_accent)
-                                        .text_color(p.sidebar_accent_foreground)
-                                })
-                            };
+                            let row = file_row(FileRowProps {
+                                id: format!("remote-file-{}", entry.path),
+                                name: &entry.name,
+                                is_dir: entry_is_dir,
+                                is_parent: is_parent_entry,
+                                size: entry.size,
+                                permissions: entry.permissions,
+                                selected: is_selected,
+                                palette: &p,
+                            });
                             let entry_path_cm = entry.path.clone();
                             let entry_path_right = entry.path.clone();
                             let app_cm = app_entity.clone();
@@ -230,15 +219,7 @@ impl AppShell {
                                         }
                                         cx.notify();
                                     }),
-                                )
-                                .child(render_vfs_row_content(VfsRowRenderOptions {
-                                    name: &entry.name,
-                                    is_dir: entry_is_dir,
-                                    is_parent: is_parent_entry,
-                                    size: entry.size,
-                                    permissions: entry.permissions,
-                                    palette: &p,
-                                }));
+                                );
 
                             let row = if is_parent_entry {
                                 row
