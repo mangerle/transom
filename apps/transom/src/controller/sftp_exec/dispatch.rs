@@ -1,6 +1,6 @@
 //! SFTP 命令调度分发与客户端缓存处理。
 
-use super::ops::execute_sftp_op;
+use super::ops::{SftpExecutionContext, execute_sftp_op};
 use super::remote_transfer::{
     RemoteTransferParams, execute_remote_transfer_op, spawn_remote_transfer_op,
 };
@@ -229,11 +229,13 @@ pub(crate) fn spawn_sftp_op(
     op: SftpOperation,
 ) {
     let handle = tokio::spawn(execute_sftp_op(
-        event_tx,
-        tab_id,
-        connection_id,
-        op_id,
-        client,
+        SftpExecutionContext {
+            event_tx,
+            tab_id,
+            connection_id,
+            op_id,
+            client,
+        },
         op,
     ));
     sftp_tasks.retain(|_, h| !h.is_finished());
