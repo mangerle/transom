@@ -12,6 +12,7 @@ use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::separator::Separator;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::path::PathBuf;
@@ -133,7 +134,12 @@ pub(super) fn render_local_toolbar(
                     tab_id,
                     cx,
                 ))
-                .child(div().w(px(1.0)).h(px(14.0)).mx_1().bg(p.sidebar_border))
+                .child(
+                    Separator::vertical()
+                        .h(px(14.0))
+                        .mx_1()
+                        .color(p.sidebar_border),
+                )
                 .when(remote_available, |this| {
                     this.child(
                         Button::new("local-action-upload")

@@ -11,6 +11,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::separator::Separator;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId, TransferDirection};
@@ -199,7 +200,12 @@ pub(super) fn render_side_remote_header(
                 .gap_1()
                 .items_center()
                 .child(home_btn)
-                .child(div().w(px(1.0)).h(px(14.0)).mx_1().bg(p.sidebar_border))
+                .child(
+                    Separator::vertical()
+                        .h(px(14.0))
+                        .mx_1()
+                        .color(p.sidebar_border),
+                )
                 .child(download_btn),
         )
         .into_any_element()

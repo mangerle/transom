@@ -14,6 +14,7 @@ use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::scroll::ScrollableElement;
+use gpui_kit::component::separator::Separator;
 use gpui_kit::component::{Sizable, VirtualListScrollHandle};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -119,7 +120,12 @@ impl AppShell {
                                         this.sftp_remote_go_home(tab_id, window, cx);
                                     })),
                             )
-                            .child(div().w(px(1.0)).h(px(14.0)).mx_1().bg(p.sidebar_border))
+                            .child(
+                                Separator::vertical()
+                                    .h(px(14.0))
+                                    .mx_1()
+                                    .color(p.sidebar_border),
+                            )
                             .child(
                                 Button::new("sftp-action-download")
                                     .primary()
