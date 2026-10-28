@@ -106,8 +106,7 @@ async fn start_local(
         }
         // 停止转发必须同时断开在途连接：abort 取消 copy_bidirectional 后，
         // 本地套接字与 SSH 通道随 future 一起释放，客户端立即看到连接关闭。
-        connections.abort_all();
-        while connections.join_next().await.is_some() {}
+        abort_connections(&mut connections).await;
     });
 
     Ok(ForwardTask {
@@ -144,8 +143,7 @@ async fn start_dynamic(remote: &SshRemote, bind: &BindAddress) -> Result<Forward
             }
         }
         // 与本地转发一致：停止时中止协商与中继任务，关闭全部在途连接。
-        connections.abort_all();
-        while connections.join_next().await.is_some() {}
+        abort_connections(&mut connections).await;
     });
 
     Ok(ForwardTask {
@@ -482,6 +480,15 @@ async fn run_socks5_udp_relay(
     Ok(())
 }
 
+/// 中止并等待全部在途连接退出。
+///
+/// abort 会取消 `copy_bidirectional`/协商 future，套接字与 SSH 通道随
+/// future 一起释放；`join_next` 再逐个回收，保证返回时任务集合已清空。
+async fn abort_connections(connections: &mut JoinSet<()>) {
+    connections.abort_all();
+    while connections.join_next().await.is_some() {}
+}
+
 /// 解析 SOCKS5 UDP 请求头，返回目标主机、端口与载荷起始偏移。
 ///
 /// 只接受 RSV=0、FRAG=0 的单包请求；地址类型 1/3/4 分别对应 IPv4、
@@ -552,4 +559,96 @@ fn build_udp_response(remote: SocketAddr, payload: &[u8]) -> Vec<u8> {
     }
     packet.extend_from_slice(payload);
     packet
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{abort_connections, build_udp_response, parse_udp_target};
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::task::JoinSet;
+
+    /// 停止转发时，在途连接必须被取消并回收，而不是继续跑完。
+    #[tokio::test]
+    async fn abort_connections_cancels_in_flight_tasks() {
+        let cancelled = Arc::new(AtomicUsize::new(0));
+        let mut connections = JoinSet::new();
+        for _ in 0..3 {
+            let cancelled = cancelled.clone();
+            connections.spawn(async move {
+                struct Guard(Arc<AtomicUsize>);
+                impl Drop for Guard {
+                    fn drop(&mut self) {
+                        self.0.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                let _guard = Guard(cancelled);
+                std::future::pending::<()>().await;
+            });
+        }
+        tokio::task::yield_now().await;
+        abort_connections(&mut connections).await;
+        assert_eq!(
+            cancelled.load(Ordering::Relaxed),
+            3,
+            "停止转发必须取消全部在途连接"
+        );
+        assert!(connections.is_empty(), "回收后任务集合必须为空");
+    }
+
+    /// IPv4、域名与 IPv6 三种地址类型都能解析出目标与载荷偏移。
+    #[test]
+    fn parse_udp_target_supports_all_address_types() {
+        let mut ipv4 = vec![0, 0, 0, 1, 127, 0, 0, 1, 0x1f, 0x90];
+        ipv4.extend_from_slice(b"payload");
+        let (host, port, offset) = parse_udp_target(&ipv4, ipv4.len()).expect("IPv4 应可解析");
+        assert_eq!(host, "127.0.0.1");
+        assert_eq!(port, 8080);
+        assert_eq!(&ipv4[offset..], b"payload");
+
+        let mut domain = vec![0, 0, 0, 3, 11];
+        domain.extend_from_slice(b"example.com");
+        domain.extend_from_slice(&[0x01, 0xbb]);
+        domain.extend_from_slice(b"data");
+        let (host, port, offset) = parse_udp_target(&domain, domain.len()).expect("域名应可解析");
+        assert_eq!(host, "example.com");
+        assert_eq!(port, 443);
+        assert_eq!(&domain[offset..], b"data");
+
+        let mut ipv6 = vec![0, 0, 0, 4];
+        ipv6.extend_from_slice(&Ipv6Addr::LOCALHOST.octets());
+        ipv6.extend_from_slice(&[0x00, 0x16]);
+        ipv6.extend_from_slice(b"v6");
+        let (host, port, offset) = parse_udp_target(&ipv6, ipv6.len()).expect("IPv6 应可解析");
+        assert_eq!(host, "::1");
+        assert_eq!(port, 22);
+        assert_eq!(&ipv6[offset..], b"v6");
+    }
+
+    /// 分片、保留位非零与长度不足的包一律丢弃。
+    #[test]
+    fn parse_udp_target_rejects_fragmented_and_truncated_packets() {
+        assert!(parse_udp_target(&[0, 0, 1, 1, 127, 0, 0, 1], 8).is_none());
+        assert!(parse_udp_target(&[1, 0, 0, 1], 4).is_none());
+        assert!(parse_udp_target(&[0, 0, 0, 1, 127, 0], 6).is_none());
+        assert!(parse_udp_target(&[0, 0, 0, 9], 4).is_none());
+        assert!(parse_udp_target(&[0, 0, 0, 3, 10, b'a'], 6).is_none());
+    }
+
+    /// 响应头按目标地址族编码，载荷原样跟在后面。
+    #[test]
+    fn build_udp_response_encodes_address_family() {
+        let v4 = build_udp_response(SocketAddr::from((Ipv4Addr::new(10, 0, 0, 1), 8080)), b"ok");
+        assert_eq!(&v4[..4], &[0, 0, 0, 1]);
+        assert_eq!(&v4[4..8], &[10, 0, 0, 1]);
+        assert_eq!(&v4[8..10], &8080u16.to_be_bytes());
+        assert_eq!(&v4[10..], b"ok");
+
+        let v6 = build_udp_response(SocketAddr::from((Ipv6Addr::LOCALHOST, 443)), b"v6");
+        assert_eq!(v6[3], 4);
+        assert_eq!(&v6[4..20], &Ipv6Addr::LOCALHOST.octets());
+        assert_eq!(&v6[20..22], &443u16.to_be_bytes());
+        assert_eq!(&v6[22..], b"v6");
+    }
 }

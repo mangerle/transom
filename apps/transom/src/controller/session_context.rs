@@ -117,3 +117,48 @@ impl ManagedSessionContext {
         self.key_deploy_task = Some(task);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ManagedSessionContext;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::task::JoinSet;
+    use transom_core::ConnectionId;
+
+    fn pending_task(cancelled: Arc<AtomicUsize>) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            struct Guard(Arc<AtomicUsize>);
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    self.0.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            let _guard = Guard(cancelled);
+            std::future::pending::<()>().await;
+        })
+    }
+
+    /// 断开清理必须取消会话绑定的全部后台任务，且无远端时不产生收尾任务。
+    #[tokio::test]
+    async fn shutdown_aborts_session_tasks() {
+        let cancelled = Arc::new(AtomicUsize::new(0));
+        let mut context = ManagedSessionContext::new(ConnectionId::new(), None);
+        context.set_stats_task(pending_task(cancelled.clone()));
+        context.set_traffic_task(pending_task(cancelled.clone()));
+        context.set_key_deploy_task(pending_task(cancelled.clone()));
+
+        // 先让每个任务跑到 pending 并建立 Drop 守卫，再验证取消路径。
+        tokio::task::yield_now().await;
+        let mut cleanup = JoinSet::new();
+        context.shutdown(&mut cleanup, "测试断开");
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while cancelled.load(Ordering::Relaxed) < 3 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("断开清理必须在限定时间内取消全部后台任务");
+        assert!(cleanup.is_empty(), "无远端连接时不应产生断开收尾任务");
+    }
+}

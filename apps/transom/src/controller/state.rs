@@ -124,3 +124,28 @@ pub(super) struct ControllerCtx {
     /// 主机动作的跨批次并发闸门：用户连点两次也不会翻倍占用在途连接数。
     pub(super) action_permits: Arc<tokio::sync::Semaphore>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::find_session_by_connection;
+    use crate::controller::session_context::ManagedSessionContext;
+    use std::collections::HashMap;
+    use transom_core::{ConnectionId, TabId};
+
+    /// 按连接 ID 反查归属标签；过期连接 ID 必须查不到。
+    #[test]
+    fn finds_session_by_connection_and_rejects_stale_ids() {
+        let mut sessions = HashMap::new();
+        let tab = TabId::new();
+        let connection = ConnectionId::new();
+        sessions.insert(tab, ManagedSessionContext::new(connection, None));
+
+        let (found_tab, _) =
+            find_session_by_connection(&sessions, connection).expect("活跃连接必须能反查标签");
+        assert_eq!(found_tab, tab);
+        assert!(
+            find_session_by_connection(&sessions, ConnectionId::new()).is_none(),
+            "过期连接 ID 不得命中任何会话"
+        );
+    }
+}

@@ -317,6 +317,19 @@ mod tests {
     }
 
     #[test]
+    fn merge_reports_additions_and_removals_together() {
+        let web = session("web", "old", 10);
+        let ancestor = catalog(vec![web.clone()]);
+        let local = catalog(vec![web]);
+        let remote = catalog(vec![session("db", "db.remote", 20)]);
+        let (merged, report) = merge_catalogs(Some(&ancestor), &local, &remote);
+        assert_eq!(report.sessions_removed, 1, "本机未改的旧会话应真正删除");
+        assert_eq!(report.sessions_added, 1, "远端新会话应并入");
+        assert_eq!(merged.sessions.len(), 1);
+        assert_eq!(merged.sessions[0].name, "db");
+    }
+
+    #[test]
     fn no_base_conflict_prefers_newer_timestamp() {
         let origin = session("web", "local", 10);
         let mut local_session = origin.clone();
