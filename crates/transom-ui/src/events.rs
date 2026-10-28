@@ -233,7 +233,7 @@ impl AppShell {
                 if let Some(tab) = self.workspace.tab_mut(tab_id) {
                     tab.title = title.clone();
                 }
-                self.sftp_sync_with_terminal_title(tab_id, title, cx);
+                self.sftp_sync_with_terminal_title(tab_id, title, window, cx);
             }
             TerminalEvent::ResetTitle => {}
             TerminalEvent::Bell => {

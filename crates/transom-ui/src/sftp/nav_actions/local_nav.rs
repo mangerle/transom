@@ -38,6 +38,32 @@ impl AppShell {
         self.spawn_local_dir_refresh(tab_id, None, cx);
     }
 
+    /// 终端目录静默跟随专用导航：更新路径与输入框，保留现有条目平滑过渡至新目录读取完成，避免清空条目引起闪烁。
+    pub(crate) fn sftp_local_sync_navigate(
+        &mut self,
+        tab_id: TabId,
+        target: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+            return;
+        };
+        let Some(panel) = tab.sftp_mut() else {
+            return;
+        };
+        panel.local.path = target.clone();
+        panel.clear_local_selection();
+        panel.clear_local_error();
+        let input = panel.local.path_input.clone();
+        input.update(cx, |state, cx| {
+            state.set_value(target.display().to_string(), window, cx);
+        });
+        cx.notify();
+        self.spawn_local_dir_refresh(tab_id, None, cx);
+    }
+
     pub(crate) fn sftp_local_navigate(
         &mut self,
         tab_id: TabId,

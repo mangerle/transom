@@ -134,6 +134,47 @@ pub(crate) fn extract_candidate_path(title: &str) -> Option<String> {
     }
 }
 
+/// 从终端标题或状态文本中尝试解析当前本地工作目录。
+///
+/// 只有当解析出的路径在本地文件系统中真实存在且是目录时才返回有效路径，
+/// 避免命令名（如 vim、top）或无效文本误触发本地文件面板跳转。
+pub(crate) fn extract_local_candidate_path(title: &str) -> Option<PathBuf> {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let candidate = if let Some((_, right)) = trimmed.split_once(':') {
+        right.trim()
+    } else {
+        trimmed
+    };
+    let candidate = if let Some((left, _)) = candidate.split_once('(') {
+        left.trim()
+    } else {
+        candidate
+    };
+    let home = local_home();
+    let target = if candidate == "~" {
+        home
+    } else if let Some(rest) = candidate.strip_prefix("~/") {
+        home.join(rest)
+    } else if candidate.starts_with('/')
+        || (candidate.len() >= 3
+            && candidate
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic())
+            && candidate.chars().nth(1) == Some(':')
+            && (candidate.chars().nth(2) == Some('\\') || candidate.chars().nth(2) == Some('/')))
+    {
+        PathBuf::from(candidate)
+    } else {
+        return None;
+    };
+
+    if target.is_dir() { Some(target) } else { None }
+}
+
 /// 大小写不敏感文件名模糊匹配（优先包含子串，次选按字符顺序子序列匹配）
 pub(crate) fn fuzzy_match_name(name: &str, query_lower: &str) -> bool {
     if query_lower.is_empty() {
@@ -165,4 +206,46 @@ pub(crate) fn send_desktop_notification(summary: &str, body: &str) {
                 .body(&body)
                 .show();
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_candidate_path, extract_local_candidate_path, local_home};
+
+    #[test]
+    fn test_extract_local_candidate_path() {
+        let home = local_home();
+        if home.is_dir() {
+            assert_eq!(
+                extract_local_candidate_path("user@host: ~"),
+                Some(home.clone())
+            );
+            assert_eq!(extract_local_candidate_path("~"), Some(home.clone()));
+        }
+        assert_eq!(
+            extract_local_candidate_path("user@host: vim file.txt"),
+            None
+        );
+        assert_eq!(extract_local_candidate_path(""), None);
+        assert_eq!(
+            extract_local_candidate_path("user@host: /non_existent_dir_987654321"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_extract_candidate_path() {
+        assert_eq!(
+            extract_candidate_path("user@host: /var/log"),
+            Some("/var/log".to_string())
+        );
+        assert_eq!(
+            extract_candidate_path("user@host: ~"),
+            Some(".".to_string())
+        );
+        assert_eq!(
+            extract_candidate_path("user@host: ~/nginx"),
+            Some("./nginx".to_string())
+        );
+    }
 }

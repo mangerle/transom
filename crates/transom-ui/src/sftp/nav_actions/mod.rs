@@ -7,7 +7,7 @@
 mod init;
 mod local_nav;
 
-use super::{extract_candidate_path, parent_remote};
+use super::{extract_candidate_path, extract_local_candidate_path, parent_remote};
 use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::*;
@@ -239,6 +239,7 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
         title: &str,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(tab) = self.workspace.tab_mut(tab_id) else {
@@ -248,6 +249,11 @@ impl AppShell {
             return;
         };
         if panel.local.only {
+            if let Some(candidate) = extract_local_candidate_path(title)
+                && candidate != panel.local.path
+            {
+                self.sftp_local_sync_navigate(tab_id, candidate, window, cx);
+            }
             return;
         }
         if let Some(candidate) = extract_candidate_path(title)
