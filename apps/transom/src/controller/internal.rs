@@ -70,104 +70,220 @@ async fn handle_connected(state: &mut ControllerState, ctx: &ControllerCtx, inte
     }
     state.connecting.remove(&tab_id);
 
+    adopt_ready_connection(
+        state,
+        ctx,
+        ConnectedAdoption {
+            tab_id,
+            connection_id,
+            kind,
+            zmodem,
+        },
+    )
+    .await;
+}
+
+/// 已通过接入裁决的连接：统一交给按类型分派的落地路径。
+struct ConnectedAdoption {
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    kind: ReadyConnection,
+    zmodem: ZmodemConfig,
+}
+
+/// 按连接类型落地：SSH 追加采样器，本地追加共享统计订阅。
+async fn adopt_ready_connection(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    adoption: ConnectedAdoption,
+) {
+    let ConnectedAdoption {
+        tab_id,
+        connection_id,
+        kind,
+        zmodem,
+    } = adoption;
     match kind {
         ReadyConnection::Ssh(session) => {
-            let SshSession {
-                io,
-                join,
-                remote,
-                traffic,
-            } = session;
-            let remote_clone = remote.clone();
-            adopt_stream_connection(
+            adopt_ssh_connection(
                 state,
                 ctx,
-                StreamConnection {
+                SshAdoption {
                     tab_id,
                     connection_id,
-                    io,
-                    join: async move {
-                        let _ = join.await;
-                    },
-                    remote: Some(remote),
-                    disconnect_reason: "reconnected",
+                    session,
                     zmodem,
                 },
             )
             .await;
-
-            let traffic_task =
-                spawn_traffic_sampler(traffic, tab_id, connection_id, ctx.event_tx.clone());
-            if let Some(session) = state.sessions.get_mut(&tab_id) {
-                session.set_traffic_task(traffic_task);
-            }
-
-            let stats_task = spawn_remote_stats_sampler(
-                remote_clone,
-                tab_id,
-                connection_id,
-                ctx.event_tx.clone(),
-            );
-            if let Some(session) = state.sessions.get_mut(&tab_id) {
-                session.set_stats_task(stats_task);
-            }
         }
         ReadyConnection::Local { io, join } => {
-            adopt_stream_connection(
-                state,
-                ctx,
-                StreamConnection {
-                    tab_id,
-                    connection_id,
-                    io,
-                    join: async move {
-                        let _ = join.await;
-                    },
-                    remote: None,
-                    disconnect_reason: "reconnected to local",
-                    zmodem,
-                },
-            )
-            .await;
-            register_local_shared_samplers(state, ctx, tab_id, connection_id);
+            let adoption = PlainStreamAdoption::local(tab_id, connection_id, io, join, zmodem);
+            adopt_local_stream(state, ctx, adoption).await;
         }
         ReadyConnection::Serial { io, join } => {
-            adopt_stream_connection(
-                state,
-                ctx,
-                StreamConnection {
-                    tab_id,
-                    connection_id,
-                    io,
-                    join: async move {
-                        let _ = join.await;
-                    },
-                    remote: None,
-                    disconnect_reason: "reconnected to serial",
-                    zmodem,
-                },
-            )
-            .await;
+            let adoption = PlainStreamAdoption::serial(tab_id, connection_id, io, join, zmodem);
+            adopt_plain_stream(state, ctx, adoption).await;
         }
         ReadyConnection::Telnet { io, join } => {
-            adopt_stream_connection(
-                state,
-                ctx,
-                StreamConnection {
-                    tab_id,
-                    connection_id,
-                    io,
-                    join: async move {
-                        let _ = join.await;
-                    },
-                    remote: None,
-                    disconnect_reason: "reconnected to telnet",
-                    zmodem,
-                },
-            )
-            .await;
+            let adoption = PlainStreamAdoption::telnet(tab_id, connection_id, io, join, zmodem);
+            adopt_plain_stream(state, ctx, adoption).await;
         }
     }
+}
+
+/// SSH 接入参数：与其它流连接共用落地路径，额外携带远端与流量计数。
+struct SshAdoption {
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    session: SshSession,
+    zmodem: ZmodemConfig,
+}
+
+/// SSH 接入：公共落地后追加流量与远端统计采样任务。
+async fn adopt_ssh_connection(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    adoption: SshAdoption,
+) {
+    let SshAdoption {
+        tab_id,
+        connection_id,
+        session,
+        zmodem,
+    } = adoption;
+    let SshSession {
+        io,
+        join,
+        remote,
+        traffic,
+    } = session;
+    let remote_clone = remote.clone();
+    adopt_stream_connection(
+        state,
+        ctx,
+        StreamConnection {
+            tab_id,
+            connection_id,
+            io,
+            join: async move {
+                let _ = join.await;
+            },
+            remote: Some(remote),
+            disconnect_reason: "reconnected",
+            zmodem,
+        },
+    )
+    .await;
+
+    let traffic_task = spawn_traffic_sampler(traffic, tab_id, connection_id, ctx.event_tx.clone());
+    if let Some(session) = state.sessions.get_mut(&tab_id) {
+        session.set_traffic_task(traffic_task);
+    }
+    let stats_task =
+        spawn_remote_stats_sampler(remote_clone, tab_id, connection_id, ctx.event_tx.clone());
+    if let Some(session) = state.sessions.get_mut(&tab_id) {
+        session.set_stats_task(stats_task);
+    }
+}
+
+/// 无远端句柄的连接接入参数（本地/串口/Telnet）。
+struct PlainStreamAdoption {
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    io: TerminalIo,
+    join: tokio::sync::oneshot::Receiver<()>,
+    disconnect_reason: &'static str,
+    zmodem: ZmodemConfig,
+}
+
+impl PlainStreamAdoption {
+    fn local(
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        io: TerminalIo,
+        join: tokio::sync::oneshot::Receiver<()>,
+        zmodem: ZmodemConfig,
+    ) -> Self {
+        Self {
+            tab_id,
+            connection_id,
+            io,
+            join,
+            disconnect_reason: "reconnected to local",
+            zmodem,
+        }
+    }
+
+    fn serial(
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        io: TerminalIo,
+        join: tokio::sync::oneshot::Receiver<()>,
+        zmodem: ZmodemConfig,
+    ) -> Self {
+        Self {
+            tab_id,
+            connection_id,
+            io,
+            join,
+            disconnect_reason: "reconnected to serial",
+            zmodem,
+        }
+    }
+
+    fn telnet(
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        io: TerminalIo,
+        join: tokio::sync::oneshot::Receiver<()>,
+        zmodem: ZmodemConfig,
+    ) -> Self {
+        Self {
+            tab_id,
+            connection_id,
+            io,
+            join,
+            disconnect_reason: "reconnected to telnet",
+            zmodem,
+        }
+    }
+}
+
+/// 本地终端接入：公共落地后登记共享统计订阅。
+async fn adopt_local_stream(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    adoption: PlainStreamAdoption,
+) {
+    let tab_id = adoption.tab_id;
+    let connection_id = adoption.connection_id;
+    adopt_plain_stream(state, ctx, adoption).await;
+    register_local_shared_samplers(state, ctx, tab_id, connection_id);
+}
+
+/// 本地/串口/Telnet 接入：无远端句柄，只复用公共落地路径。
+async fn adopt_plain_stream(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    adoption: PlainStreamAdoption,
+) {
+    adopt_stream_connection(
+        state,
+        ctx,
+        StreamConnection {
+            tab_id: adoption.tab_id,
+            connection_id: adoption.connection_id,
+            io: adoption.io,
+            join: async move {
+                let _ = adoption.join.await;
+            },
+            remote: None,
+            disconnect_reason: adoption.disconnect_reason,
+            zmodem: adoption.zmodem,
+        },
+    )
+    .await;
 }
 
 /// 拒收过期连接：SSH 主动断开释放（服务器侧不必等 keepalive 超时），

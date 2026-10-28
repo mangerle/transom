@@ -245,6 +245,23 @@ async fn socks5_negotiate(
     remote: &SshRemote,
     client: &mut TcpStream,
 ) -> Result<Socks5Route, AppError> {
+    negotiate_methods(client).await?;
+    let request = read_request_header(client).await?;
+    match request[1] {
+        1 => connect_route(remote, client, request[3]).await,
+        3 => udp_associate(client, request[3]).await,
+        other => {
+            let _ = client.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await;
+            Err(AppError::with_detail(
+                ErrorCode::ForwardFailed,
+                format!("仅支持 SOCKS5 CONNECT 与 UDP ASSOCIATE，实际命令: {other}"),
+            ))
+        }
+    }
+}
+
+/// 读取版本与认证方式，完成免认证协商。
+async fn negotiate_methods(client: &mut TcpStream) -> Result<(), AppError> {
     let mut greeting = [0u8; 2];
     client
         .read_exact(&mut greeting)
@@ -269,7 +286,11 @@ async fn socks5_negotiate(
         ));
     }
     client.write_all(&[5, 0]).await.map_err(forward_error)?;
+    Ok(())
+}
 
+/// 读取 4 字节请求头并校验版本。
+async fn read_request_header(client: &mut TcpStream) -> Result<[u8; 4], AppError> {
     let mut request = [0u8; 4];
     client
         .read_exact(&mut request)
@@ -282,93 +303,77 @@ async fn socks5_negotiate(
             format!("不支持的 SOCKS 版本: {}", request[0]),
         ));
     }
+    Ok(request)
+}
 
-    match request[1] {
-        1 => {
-            let (host, port) = read_socks5_address_and_port(client, request[3]).await?;
-            let channel = match remote.open_direct_tcpip(&host, port).await {
-                Ok(channel) => channel,
-                Err(error) => {
-                    let _ = client.write_all(&[5, 1, 0, 1, 0, 0, 0, 0, 0, 0]).await;
-                    return Err(error);
-                }
-            };
-            client
-                .write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
-                .await
-                .map_err(forward_error)?;
-            Ok(Socks5Route::Connect(channel))
+/// CONNECT：解析目标地址、建立远端通道并回应成功。
+async fn connect_route(
+    remote: &SshRemote,
+    client: &mut TcpStream,
+    atyp: u8,
+) -> Result<Socks5Route, AppError> {
+    let (host, port) = read_socks5_address_and_port(client, atyp).await?;
+    let channel = match remote.open_direct_tcpip(&host, port).await {
+        Ok(channel) => channel,
+        Err(error) => {
+            let _ = client.write_all(&[5, 1, 0, 1, 0, 0, 0, 0, 0, 0]).await;
+            return Err(error);
         }
-        3 => {
-            let (_client_bind_host, _client_bind_port) =
-                read_socks5_address_and_port(client, request[3]).await?;
-            let local_ip = client
-                .local_addr()
-                .map(|addr| addr.ip())
-                .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
-            let bind_ip = match local_ip {
-                IpAddr::V4(v4) => {
-                    if v4.is_unspecified() {
-                        IpAddr::V4(Ipv4Addr::LOCALHOST)
-                    } else {
-                        IpAddr::V4(v4)
-                    }
-                }
-                IpAddr::V6(v6) => {
-                    if v6.is_unspecified() {
-                        IpAddr::V6(Ipv6Addr::LOCALHOST)
-                    } else {
-                        IpAddr::V6(v6)
-                    }
-                }
-            };
+    };
+    client
+        .write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
+        .await
+        .map_err(forward_error)?;
+    Ok(Socks5Route::Connect(channel))
+}
 
-            // 监听客户端发送过来的 SOCKS5 UDP 数据报。
-            let inbound_socket = UdpSocket::bind(SocketAddr::new(bind_ip, 0))
-                .await
-                .map_err(forward_error)?;
-            let bound_addr = inbound_socket.local_addr().map_err(forward_error)?;
+/// UDP ASSOCIATE：创建本地收发套接字并回应绑定地址。
+async fn udp_associate(client: &mut TcpStream, atyp: u8) -> Result<Socks5Route, AppError> {
+    let (_client_bind_host, _client_bind_port) = read_socks5_address_and_port(client, atyp).await?;
+    let local_ip = client
+        .local_addr()
+        .map(|addr| addr.ip())
+        .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let bind_ip = match local_ip {
+        IpAddr::V4(v4) if v4.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(v6) if v6.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
+        other => other,
+    };
 
-            // 负责向外部实际目标转发并接收回包的 socket。
-            let outbound_bind_addr = match bound_addr {
-                SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
-                SocketAddr::V6(_) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
-            };
-            let outbound_socket = UdpSocket::bind(outbound_bind_addr)
-                .await
-                .map_err(forward_error)?;
+    // 监听客户端发送过来的 SOCKS5 UDP 数据报。
+    let inbound_socket = UdpSocket::bind(SocketAddr::new(bind_ip, 0))
+        .await
+        .map_err(forward_error)?;
+    let bound_addr = inbound_socket.local_addr().map_err(forward_error)?;
 
-            // 返回成功应答，告知客户端应向哪个 UDP 端口发送数据。
-            let mut response = vec![5, 0, 0];
-            match bound_addr.ip() {
-                IpAddr::V4(v4) => {
-                    response.push(1);
-                    response.extend_from_slice(&v4.octets());
-                }
-                IpAddr::V6(v6) => {
-                    response.push(4);
-                    response.extend_from_slice(&v6.octets());
-                }
-            }
-            response.extend_from_slice(&bound_addr.port().to_be_bytes());
-            client.write_all(&response).await.map_err(forward_error)?;
+    // 负责向外部实际目标转发并接收回包的 socket。
+    let outbound_bind_addr = match bound_addr {
+        SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
+        SocketAddr::V6(_) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
+    };
+    let outbound_socket = UdpSocket::bind(outbound_bind_addr)
+        .await
+        .map_err(forward_error)?;
 
-            Ok(Socks5Route::Udp {
-                inbound: inbound_socket,
-                outbound: outbound_socket,
-            })
+    // 返回成功应答，告知客户端应向哪个 UDP 端口发送数据。
+    let mut response = vec![5, 0, 0];
+    match bound_addr.ip() {
+        IpAddr::V4(v4) => {
+            response.push(1);
+            response.extend_from_slice(&v4.octets());
         }
-        _ => {
-            let _ = client.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await;
-            Err(AppError::with_detail(
-                ErrorCode::ForwardFailed,
-                format!(
-                    "仅支持 SOCKS5 CONNECT 与 UDP ASSOCIATE，实际命令: {}",
-                    request[1]
-                ),
-            ))
+        IpAddr::V6(v6) => {
+            response.push(4);
+            response.extend_from_slice(&v6.octets());
         }
     }
+    response.extend_from_slice(&bound_addr.port().to_be_bytes());
+    client.write_all(&response).await.map_err(forward_error)?;
+
+    Ok(Socks5Route::Udp {
+        inbound: inbound_socket,
+        outbound: outbound_socket,
+    })
 }
 
 async fn read_socks5_address_and_port(
@@ -449,69 +454,7 @@ async fn run_socks5_udp_relay(
                     }
                 };
                 client_udp_peer = Some(peer);
-                if len < 4 {
-                    continue;
-                }
-                // RSV (2 字节) 为 0，FRAG (1 字节) 为 0
-                if in_buf[0] != 0 || in_buf[1] != 0 || in_buf[2] != 0 {
-                    continue;
-                }
-                let atyp = in_buf[3];
-                let mut offset = 4;
-                let target_addr: Option<(String, u16)> = match atyp {
-                    1 => {
-                        if len >= offset + 4 + 2 {
-                            let ip = Ipv4Addr::new(
-                                in_buf[offset],
-                                in_buf[offset + 1],
-                                in_buf[offset + 2],
-                                in_buf[offset + 3],
-                            );
-                            offset += 4;
-                            let port = u16::from_be_bytes([in_buf[offset], in_buf[offset + 1]]);
-                            offset += 2;
-                            Some((ip.to_string(), port))
-                        } else {
-                            None
-                        }
-                    }
-                    3 => {
-                        if len > offset {
-                            let domain_len = in_buf[offset] as usize;
-                            offset += 1;
-                            if len >= offset + domain_len + 2 {
-                                let domain = String::from_utf8_lossy(
-                                    &in_buf[offset..offset + domain_len],
-                                )
-                                .to_string();
-                                offset += domain_len;
-                                let port = u16::from_be_bytes([in_buf[offset], in_buf[offset + 1]]);
-                                offset += 2;
-                                Some((domain, port))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    }
-                    4 => {
-                        if len >= offset + 16 + 2 {
-                            let mut octets = [0u8; 16];
-                            octets.copy_from_slice(&in_buf[offset..offset + 16]);
-                            offset += 16;
-                            let ip = Ipv6Addr::from(octets);
-                            let port = u16::from_be_bytes([in_buf[offset], in_buf[offset + 1]]);
-                            offset += 2;
-                            Some((ip.to_string(), port))
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                };
-
-                let Some((host, port)) = target_addr else {
+                let Some((host, port, offset)) = parse_udp_target(&in_buf, len) else {
                     continue;
                 };
                 let payload = &in_buf[offset..len];
@@ -530,25 +473,83 @@ async fn run_socks5_udp_relay(
                 let Some(client_peer) = client_udp_peer else {
                     continue;
                 };
-                let mut packet = Vec::with_capacity(len + 22);
-                packet.extend_from_slice(&[0, 0, 0]); // RSV + FRAG
-                match remote_peer {
-                    SocketAddr::V4(v4) => {
-                        packet.push(1);
-                        packet.extend_from_slice(&v4.ip().octets());
-                        packet.extend_from_slice(&v4.port().to_be_bytes());
-                    }
-                    SocketAddr::V6(v6) => {
-                        packet.push(4);
-                        packet.extend_from_slice(&v6.ip().octets());
-                        packet.extend_from_slice(&v6.port().to_be_bytes());
-                    }
-                }
-                packet.extend_from_slice(&out_buf[..len]);
+                let packet = build_udp_response(remote_peer, &out_buf[..len]);
                 let _ = inbound.send_to(&packet, client_peer).await;
             }
         }
     }
 
     Ok(())
+}
+
+/// 解析 SOCKS5 UDP 请求头，返回目标主机、端口与载荷起始偏移。
+///
+/// 只接受 RSV=0、FRAG=0 的单包请求；地址类型 1/3/4 分别对应 IPv4、
+/// 域名与 IPv6，长度不足或未知类型返回 `None`，由调用方丢弃该包。
+fn parse_udp_target(packet: &[u8], len: usize) -> Option<(String, u16, usize)> {
+    if len < 4 || packet[0] != 0 || packet[1] != 0 || packet[2] != 0 {
+        return None;
+    }
+    let mut offset = 4;
+    let host = match packet[3] {
+        1 => {
+            if len < offset + 4 + 2 {
+                return None;
+            }
+            let ip = Ipv4Addr::new(
+                packet[offset],
+                packet[offset + 1],
+                packet[offset + 2],
+                packet[offset + 3],
+            );
+            offset += 4;
+            ip.to_string()
+        }
+        3 => {
+            if len <= offset {
+                return None;
+            }
+            let domain_len = packet[offset] as usize;
+            offset += 1;
+            if len < offset + domain_len + 2 {
+                return None;
+            }
+            let domain = String::from_utf8_lossy(&packet[offset..offset + domain_len]).to_string();
+            offset += domain_len;
+            domain
+        }
+        4 => {
+            if len < offset + 16 + 2 {
+                return None;
+            }
+            let mut octets = [0u8; 16];
+            octets.copy_from_slice(&packet[offset..offset + 16]);
+            offset += 16;
+            Ipv6Addr::from(octets).to_string()
+        }
+        _ => return None,
+    };
+    let port = u16::from_be_bytes([packet[offset], packet[offset + 1]]);
+    offset += 2;
+    Some((host, port, offset))
+}
+
+/// 把目标返回的 UDP 载荷封装成 SOCKS5 UDP 响应头。
+fn build_udp_response(remote: SocketAddr, payload: &[u8]) -> Vec<u8> {
+    let mut packet = Vec::with_capacity(payload.len() + 22);
+    packet.extend_from_slice(&[0, 0, 0]); // RSV + FRAG
+    match remote {
+        SocketAddr::V4(v4) => {
+            packet.push(1);
+            packet.extend_from_slice(&v4.ip().octets());
+            packet.extend_from_slice(&v4.port().to_be_bytes());
+        }
+        SocketAddr::V6(v6) => {
+            packet.push(4);
+            packet.extend_from_slice(&v6.ip().octets());
+            packet.extend_from_slice(&v6.port().to_be_bytes());
+        }
+    }
+    packet.extend_from_slice(payload);
+    packet
 }

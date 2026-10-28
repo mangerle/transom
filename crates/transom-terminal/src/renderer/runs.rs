@@ -47,31 +47,10 @@ impl TerminalRenderer {
         let mut bg_current: Option<(usize, usize, Hsla)> = None;
         let mut run: Option<TextRunBuilder> = None;
 
-        let flush_text = |run: &mut Option<TextRunBuilder>, text_runs: &mut Vec<TextVisual>| {
-            if let Some(builder) = run.take() {
-                text_runs.push(TextVisual {
-                    text: SharedString::from(builder.text),
-                    start_col: builder.start_col,
-                    end_col: builder.end_col,
-                    style: builder.style,
-                });
-            }
-        };
-
         for col in 0..cols {
             let cell = &grid[AlacPoint::new(line, Column(col))];
             let (fg, bg) = self.cell_colors(cell, colors);
-
-            if let Some((start, end, color)) = bg_current.as_mut() {
-                if *color == bg && *end == col {
-                    *end = col + 1;
-                } else {
-                    background_runs.push((*start, *end, *color));
-                    bg_current = Some((col, col + 1, bg));
-                }
-            } else {
-                bg_current = Some((col, col + 1, bg));
-            }
+            append_background_run(background_runs, &mut bg_current, bg, col);
 
             if cell.flags.contains(Flags::WIDE_CHAR_SPACER)
                 || cell.flags.contains(Flags::LEADING_WIDE_CHAR_SPACER)
@@ -79,87 +58,21 @@ impl TerminalRenderer {
                 continue;
             }
             if cell.c == ' ' || cell.c == '\0' {
-                if let Some(text_run) = run.as_mut()
-                    && text_run.style.fg == fg
-                    && text_run.style.bold == cell.flags.contains(Flags::BOLD)
-                    && text_run.style.italic == cell.flags.contains(Flags::ITALIC)
-                    && text_run.style.underline == cell_underline_kind(cell)
-                    && text_run.style.wide == cell.flags.contains(Flags::WIDE_CHAR)
-                {
-                    text_run.text.push(' ');
-                    text_run.end_col = col + 1;
-                } else {
-                    flush_text(&mut run, text_runs);
-                }
+                push_space_cell(&mut run, text_runs, cell, col, fg);
                 continue;
             }
 
-            let mut fg = fg;
-            // 关键词上色只覆盖"程序自己没着色"的字符：已经是红字的 ERROR 再压一层
-            // 我们的红只是白做功，还会抢掉程序刻意表达的语义。
-            if let Some(override_fg) = highlights.get(col).copied().flatten()
-                && cell.fg == Color::Named(NamedColor::Foreground)
-            {
-                fg = override_fg;
-            }
-            // cursor_cell 携带的是屏幕行坐标（cursor.line.0 + display_offset），
-            // 必须与同为屏幕坐标的 row 比较；误用网格坐标 line.0 会在上滚查看
-            // 历史时把反色字符画到错误行，与光标块分离。
-            if let Some((cursor_row, cursor_col)) = cursor_cell
-                && cursor_row == row as i32
-                && cursor_col == col
-            {
-                fg = bg;
-            }
-            let style = RunStyle {
-                fg,
-                bold: cell.flags.contains(Flags::BOLD),
-                italic: cell.flags.contains(Flags::ITALIC),
-                underline: cell_underline_kind(cell),
-                // 网格已经用 WIDE_CHAR 标记替我们判过宽度（含 wcwidth 的全部边界），
-                // 直接采信标记，比在渲染侧再维护一份宽度表更可靠。
-                wide: cell.flags.contains(Flags::WIDE_CHAR),
-            };
-
-            let text = cell_text(cell);
+            let style = cell_run_style(cell, fg, bg, col, row, highlights, cursor_cell);
             let single_cell = cell.flags.contains(Flags::WIDE_CHAR)
                 || cell.zerowidth().is_some()
                 || !cell.c.is_ascii();
-
             if single_cell {
-                flush_text(&mut run, text_runs);
-                text_runs.push(TextVisual {
-                    text: SharedString::from(text.as_str()),
-                    start_col: col,
-                    // 双格字符独占两列（含尾随衬格）
-                    end_col: col
-                        + if cell.flags.contains(Flags::WIDE_CHAR) {
-                            2
-                        } else {
-                            1
-                        },
-                    style,
-                });
-                continue;
-            }
-
-            match run.as_mut() {
-                Some(text_run) if text_run.style == style && text_run.end_col == col => {
-                    text_run.text.push(cell.c);
-                    text_run.end_col = col + 1;
-                }
-                _ => {
-                    flush_text(&mut run, text_runs);
-                    run = Some(TextRunBuilder {
-                        text: cell.c.to_string(),
-                        start_col: col,
-                        end_col: col + 1,
-                        style,
-                    });
-                }
+                push_complex_cell(&mut run, text_runs, cell, col, style);
+            } else {
+                push_ascii_cell(&mut run, text_runs, cell, col, style);
             }
         }
-        flush_text(&mut run, text_runs);
+        flush_text_run(&mut run, text_runs);
         if let Some((start, end, color)) = bg_current {
             background_runs.push((start, end, color));
         }
@@ -181,34 +94,12 @@ impl TerminalRenderer {
             end_col,
             style,
         } = visual;
-        let font = self.font_for(
-            style.wide,
-            if style.bold {
-                FontWeight::BOLD
-            } else {
-                FontWeight::NORMAL
-            },
-            if style.italic {
-                FontStyle::Italic
-            } else {
-                FontStyle::Normal
-            },
-        );
         let text_run = TextRun {
             len: text.len(),
-            font,
+            font: self.run_font(style),
             color: style.fg,
             background_color: None,
-            underline: match style.underline {
-                UnderlineKind::Single | UnderlineKind::Curl => Some(UnderlineStyle {
-                    thickness: px(1.0),
-                    color: Some(style.fg),
-                    wavy: style.underline == UnderlineKind::Curl,
-                }),
-                // 双线/点线/虚线文本系统不直接支持，走 paint_run_custom_underline
-                UnderlineKind::Double | UnderlineKind::Dotted | UnderlineKind::Dashed => None,
-                UnderlineKind::None => None,
-            },
+            underline: text_underline(style),
             strikethrough: None,
         };
         let shaped = window.text_system().shape_line(
@@ -232,17 +123,201 @@ impl TerminalRenderer {
             style.underline,
             UnderlineKind::Double | UnderlineKind::Dotted | UnderlineKind::Dashed
         ) {
-            self.paint_run_custom_underline(
-                &CustomUnderline {
-                    kind: style.underline,
-                    start_col: *start_col,
-                    end_col: *end_col,
-                    origin,
-                    row,
-                    color: style.fg,
-                },
-                window,
-            );
+            self.paint_custom_underline(style, *start_col, *end_col, origin, row, window);
+        }
+    }
+
+    fn run_font(&self, style: &RunStyle) -> Font {
+        self.font_for(
+            style.wide,
+            if style.bold {
+                FontWeight::BOLD
+            } else {
+                FontWeight::NORMAL
+            },
+            if style.italic {
+                FontStyle::Italic
+            } else {
+                FontStyle::Normal
+            },
+        )
+    }
+
+    fn paint_custom_underline(
+        &self,
+        style: &RunStyle,
+        start_col: usize,
+        end_col: usize,
+        origin: Point<Pixels>,
+        row: usize,
+        window: &mut Window,
+    ) {
+        self.paint_run_custom_underline(
+            &CustomUnderline {
+                kind: style.underline,
+                start_col,
+                end_col,
+                origin,
+                row,
+                color: style.fg,
+            },
+            window,
+        );
+    }
+}
+
+/// 文本系统直接支持的波浪/单线交给 `TextRun`；双线、点线、虚线走自绘。
+fn text_underline(style: &RunStyle) -> Option<UnderlineStyle> {
+    match style.underline {
+        UnderlineKind::Single | UnderlineKind::Curl => Some(UnderlineStyle {
+            thickness: px(1.0),
+            color: Some(style.fg),
+            wavy: style.underline == UnderlineKind::Curl,
+        }),
+        UnderlineKind::Double | UnderlineKind::Dotted | UnderlineKind::Dashed => None,
+        UnderlineKind::None => None,
+    }
+}
+
+/// 结束当前文本 run 并写入结果，保留调用方的 run 槽位供下一段复用。
+fn flush_text_run(run: &mut Option<TextRunBuilder>, text_runs: &mut Vec<TextVisual>) {
+    if let Some(builder) = run.take() {
+        text_runs.push(TextVisual {
+            text: SharedString::from(builder.text),
+            start_col: builder.start_col,
+            end_col: builder.end_col,
+            style: builder.style,
+        });
+    }
+}
+
+/// 把当前列并入相邻同色背景区段，颜色或位置断开时提交旧区段。
+fn append_background_run(
+    background_runs: &mut Vec<(usize, usize, Hsla)>,
+    current: &mut Option<(usize, usize, Hsla)>,
+    bg: Hsla,
+    col: usize,
+) {
+    if let Some((start, end, color)) = current.as_mut() {
+        if *color == bg && *end == col {
+            *end = col + 1;
+        } else {
+            background_runs.push((*start, *end, *color));
+            *current = Some((col, col + 1, bg));
+        }
+    } else {
+        *current = Some((col, col + 1, bg));
+    }
+}
+
+/// 空格并进相邻同风格 run 的条件与普通字符一致；不连续时提交当前 run。
+fn push_space_cell(
+    run: &mut Option<TextRunBuilder>,
+    text_runs: &mut Vec<TextVisual>,
+    cell: &Cell,
+    col: usize,
+    fg: Hsla,
+) {
+    let style = RunStyle {
+        fg,
+        bold: cell.flags.contains(Flags::BOLD),
+        italic: cell.flags.contains(Flags::ITALIC),
+        underline: cell_underline_kind(cell),
+        wide: cell.flags.contains(Flags::WIDE_CHAR),
+    };
+    if let Some(text_run) = run.as_mut()
+        && text_run.style == style
+    {
+        text_run.text.push(' ');
+        text_run.end_col = col + 1;
+    } else {
+        flush_text_run(run, text_runs);
+    }
+}
+
+/// 解析单个字符的前景色与样式：关键词覆盖、光标反色都只影响前景。
+fn cell_run_style(
+    cell: &Cell,
+    fg: Hsla,
+    bg: Hsla,
+    col: usize,
+    row: usize,
+    highlights: &[Option<Hsla>],
+    cursor_cell: Option<(i32, usize)>,
+) -> RunStyle {
+    let mut fg = fg;
+    // 关键词上色只覆盖"程序自己没着色"的字符：已经是红字的 ERROR 再压一层
+    // 我们的红只是白做功，还会抢掉程序刻意表达的语义。
+    if let Some(override_fg) = highlights.get(col).copied().flatten()
+        && cell.fg == Color::Named(NamedColor::Foreground)
+    {
+        fg = override_fg;
+    }
+    // cursor_cell 携带的是屏幕行坐标（cursor.line.0 + display_offset），
+    // 必须与同为屏幕坐标的 row 比较；误用网格坐标 line.0 会在上滚查看
+    // 历史时把反色字符画到错误行，与光标块分离。
+    if let Some((cursor_row, cursor_col)) = cursor_cell
+        && cursor_row == row as i32
+        && cursor_col == col
+    {
+        fg = bg;
+    }
+    RunStyle {
+        fg,
+        bold: cell.flags.contains(Flags::BOLD),
+        italic: cell.flags.contains(Flags::ITALIC),
+        underline: cell_underline_kind(cell),
+        // 网格已经用 WIDE_CHAR 标记替我们判过宽度（含 wcwidth 的全部边界），
+        // 直接采信标记，比在渲染侧再维护一份宽度表更可靠。
+        wide: cell.flags.contains(Flags::WIDE_CHAR),
+    }
+}
+
+/// 双格字符、零宽字符与非 ASCII 字符独占一个 run，避免与相邻 ASCII 合并。
+fn push_complex_cell(
+    run: &mut Option<TextRunBuilder>,
+    text_runs: &mut Vec<TextVisual>,
+    cell: &Cell,
+    col: usize,
+    style: RunStyle,
+) {
+    flush_text_run(run, text_runs);
+    let text = cell_text(cell);
+    text_runs.push(TextVisual {
+        text: SharedString::from(text.as_str()),
+        start_col: col,
+        // 双格字符独占两列（含尾随衬格）
+        end_col: col
+            + if cell.flags.contains(Flags::WIDE_CHAR) {
+                2
+            } else {
+                1
+            },
+        style,
+    });
+}
+
+/// 普通 ASCII 字符按样式与连续性并入当前 run，断开时新起一段。
+fn push_ascii_cell(
+    run: &mut Option<TextRunBuilder>,
+    text_runs: &mut Vec<TextVisual>,
+    cell: &Cell,
+    col: usize,
+    style: RunStyle,
+) {
+    match run.as_mut() {
+        Some(text_run) if text_run.style == style && text_run.end_col == col => {
+            text_run.text.push(cell.c);
+            text_run.end_col = col + 1;
+        }
+        _ => {
+            flush_text_run(run, text_runs);
+            *run = Some(TextRunBuilder {
+                text: cell.c.to_string(),
+                start_col: col,
+                end_col: col + 1,
+                style,
+            });
         }
     }
 }
