@@ -20,6 +20,7 @@ pub(crate) struct ManagedSessionContext {
     pub(crate) connection_id: ConnectionId,
     pub(crate) remote: Option<SshRemote>,
     pub(crate) sftp_client: Option<SftpClient>,
+    pub(crate) transfer_sftp_client: Option<SftpClient>,
     pub(crate) forwards: HashMap<ForwardId, ForwardTask>,
     pub(crate) traffic_task: Option<JoinHandle<()>>,
     pub(crate) key_deploy_task: Option<JoinHandle<()>>,
@@ -35,6 +36,7 @@ impl ManagedSessionContext {
             connection_id,
             remote,
             sftp_client: None,
+            transfer_sftp_client: None,
             forwards: HashMap::new(),
             traffic_task: None,
             key_deploy_task: None,
@@ -90,6 +92,7 @@ impl ManagedSessionContext {
         self.stop_zmodem();
         self.stop_forwards(cleanup);
         self.sftp_client = None;
+        self.transfer_sftp_client = None;
 
         if let Some(remote) = self.remote.take() {
             let reason = disconnect_reason.to_string();

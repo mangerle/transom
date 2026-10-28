@@ -94,17 +94,27 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         return;
     }
 
+    let is_transfer = op.is_transfer();
     let (owner_tab, remote, cached) = if let Some(session) = sessions.get(&tab_id)
         && session.connection_id == connection_id
         && let Some(ref remote) = session.remote
     {
-        (tab_id, remote.clone(), session.sftp_client.clone())
+        let cached = if is_transfer {
+            session.transfer_sftp_client.clone()
+        } else {
+            session.sftp_client.clone()
+        };
+        (tab_id, remote.clone(), cached)
     } else if let Some((owner_tab, remote, client)) =
         find_session_by_connection(sessions, connection_id).and_then(|(tab_id, session)| {
-            session
-                .remote
-                .clone()
-                .map(|remote| (tab_id, remote, session.sftp_client.clone()))
+            session.remote.clone().map(|remote| {
+                let cached = if is_transfer {
+                    session.transfer_sftp_client.clone()
+                } else {
+                    session.sftp_client.clone()
+                };
+                (tab_id, remote, cached)
+            })
         })
     {
         (owner_tab, remote, client)
@@ -173,10 +183,26 @@ fn dispatch_remote_transfer(dispatch: RemoteTransferDispatch<'_>) {
     } = scope;
 
     let (source_remote, cached_source) = find_session_by_connection(sessions, source_connection_id)
-        .map(|(_, session)| (session.remote.clone(), session.sftp_client.clone()))
+        .map(|(_, session)| {
+            (
+                session.remote.clone(),
+                session
+                    .transfer_sftp_client
+                    .clone()
+                    .or_else(|| session.sftp_client.clone()),
+            )
+        })
         .unwrap_or((None, None));
     let (target_remote, cached_target) = find_session_by_connection(sessions, target_connection_id)
-        .map(|(_, session)| (session.remote.clone(), session.sftp_client.clone()))
+        .map(|(_, session)| {
+            (
+                session.remote.clone(),
+                session
+                    .transfer_sftp_client
+                    .clone()
+                    .or_else(|| session.sftp_client.clone()),
+            )
+        })
         .unwrap_or((None, None));
     let (Some(source_remote), Some(target_remote)) = (source_remote, target_remote) else {
         send_sftp_not_ready(

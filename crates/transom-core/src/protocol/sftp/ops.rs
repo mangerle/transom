@@ -160,3 +160,29 @@ pub enum SftpOperation {
         preserve_attributes: bool,
     },
 }
+
+impl SftpOperation {
+    /// 判断当前 SFTP 操作是否属于大吞吐或长时间运行的数据传输类任务。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：SFTP 下载、上传与同步操作具有高带宽占用与深预取排队特征。若与目录列表（`List`）、
+    ///   属性查询（`Stat`）等轻量交互操作共享单个 SFTP 会话通道，交互请求会被压在长队尾部产生明显的
+    ///   长时间“加载中”卡顿；
+    /// - 核心优势：通过语义准确划分传输任务与交互操作，驱动调度器复用或建立专用的后台传输通道，
+    ///   使前台目录切换与浏览完全不受文件传输流水线影响；
+    /// - 代价与局限：首次启动传输任务时需要额外建立一条 SSH 会话子通道（通常几十毫秒完成），
+    ///   并在服务器端多启动一个独立的 `sftp-server` 子进程。
+    #[must_use]
+    pub fn is_transfer(&self) -> bool {
+        matches!(
+            self,
+            Self::Download { .. }
+                | Self::Upload { .. }
+                | Self::DownloadDir { .. }
+                | Self::UploadDir { .. }
+                | Self::CompareDirs { .. }
+                | Self::SyncDirs { .. }
+                | Self::RemoteTransfer { .. }
+        )
+    }
+}

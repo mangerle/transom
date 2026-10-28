@@ -114,3 +114,61 @@ fn safe_local_join_stays_inside_download_root() {
     assert!(safe_local_join(root, "../escape").is_err());
     assert!(safe_local_join(root, "a/b").is_err());
 }
+
+#[test]
+fn test_sftp_operation_is_transfer() {
+    use super::ops::SftpOperation;
+    use super::transfer::{ChecksumAlgorithm, VerifyMode};
+    use std::path::PathBuf;
+
+    // 交互操作应判定为非传输
+    assert!(
+        !SftpOperation::List {
+            path: "/var/log".to_string()
+        }
+        .is_transfer()
+    );
+    assert!(
+        !SftpOperation::Stat {
+            path: "/etc/hosts".to_string()
+        }
+        .is_transfer()
+    );
+    assert!(
+        !SftpOperation::Mkdir {
+            path: "/tmp/test".to_string()
+        }
+        .is_transfer()
+    );
+    assert!(
+        !SftpOperation::Delete {
+            path: "/tmp/file".to_string(),
+            is_dir: false
+        }
+        .is_transfer()
+    );
+
+    // 传输操作应判定为传输
+    assert!(
+        SftpOperation::Download {
+            remote_path: "/remote/file".to_string(),
+            local_path: PathBuf::from("/local/file"),
+            resume: false,
+            verify: false,
+            mode: VerifyMode::FullSha256,
+            algorithm: ChecksumAlgorithm::Sha256,
+        }
+        .is_transfer()
+    );
+    assert!(
+        SftpOperation::Upload {
+            local_path: PathBuf::from("/local/file"),
+            remote_path: "/remote/file".to_string(),
+            resume: false,
+            verify: false,
+            mode: VerifyMode::FullSha256,
+            algorithm: ChecksumAlgorithm::Sha256,
+        }
+        .is_transfer()
+    );
+}

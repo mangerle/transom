@@ -462,7 +462,11 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
     match result {
         Ok(client) => {
             if let Some(session) = state.sessions.get_mut(&owner_tab) {
-                session.sftp_client = Some(client.clone());
+                if op.is_transfer() {
+                    session.transfer_sftp_client = Some(client.clone());
+                } else {
+                    session.sftp_client = Some(client.clone());
+                }
             }
             sftp_exec::spawn_sftp_op(
                 &mut state.sftp_tasks,
@@ -475,6 +479,25 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
             );
         }
         Err(error) => {
+            // 打开专用传输通道失败时尝试回退至主控制通道，兼顾只支持单会话（MaxSessions=1）的受限服务器
+            if op.is_transfer()
+                && let Some(session) = state.sessions.get(&owner_tab)
+                && let Some(fallback_client) = session.sftp_client.clone()
+            {
+                log::warn!(
+                    "打开专用 SFTP 传输通道失败，回退至主控制通道，标签: {owner_tab}，原因: {error}"
+                );
+                sftp_exec::spawn_sftp_op(
+                    &mut state.sftp_tasks,
+                    ctx.event_tx.clone(),
+                    owner_tab,
+                    connection_id,
+                    op_id,
+                    fallback_client,
+                    op,
+                );
+                return;
+            }
             let _ = ctx
                 .event_tx
                 .send_async(
