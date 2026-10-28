@@ -212,24 +212,83 @@ impl AppShell {
     }
 
     pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // 自定义按键映射先整体校验：一行写错就整份不落盘，并保持弹窗打开，
-        // 避免用户以为已保存、实际运行期静默跳过某条映射。
-        let raw_bindings = self
+        if !self.collect_settings_from_form(window, cx) {
+            return;
+        }
+        // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
+        self.modals.settings.window_appearance_snapshot = None;
+        if let Err(error) = self.services.settings_store.save(&self.settings) {
+            log::error!("保存偏好设置失败，界面仍是新值但下次启动会回退，原因: {error}");
+            self.set_error(localized_error(&error));
+        } else {
+            log::info!(
+                "偏好设置已保存，语言: {}，日志级别: {}",
+                self.settings.language,
+                self.settings.logs.level.as_str()
+            );
+            self.apply_appearance_to_live_panes(cx);
+            self.apply_shortcut_settings(cx);
+            self.apply_block_view_settings(cx);
+            // 实时下发最新触发器规则给所有运行中的终端窗格
+            let triggers = self.settings.triggers.clone();
+            let terminals: Vec<Entity<TerminalView>> = self
+                .workspace
+                .tabs
+                .iter()
+                .filter_map(|tab| tab.terminal())
+                .collect();
+            for terminal in terminals {
+                terminal.update(cx, |view, _| view.reload_triggers(&triggers));
+            }
+            self.status = Some(rust_i18n::t!("status.ready").to_string());
+        }
+        self.modals.settings.open = false;
+        cx.notify();
+    }
+
+    /// 表单 → 内存设置的收集与校验；返回 false 表示校验失败、弹窗应保持打开。
+    ///
+    /// 拆成按领域的收集器后，`save_settings` 只负责"收集 → 落盘 → 应用效果"
+    /// 三段流程；新增一个设置项时只需改对应收集器，不必在百行函数里找位置。
+    fn collect_settings_from_form(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !self.collect_key_bindings(cx) {
+            return false;
+        }
+        self.collect_interface_preferences(cx);
+        self.collect_sync_preferences(window, cx);
+        // 外观偏好在弹窗内已即时写入，落盘前归一化兜底值，保证文件可回读。
+        self.settings.appearance.normalize();
+        self.collect_terminal_profile(cx);
+        self.sync_terminal_palette(cx);
+        self.commit_proxy_form(cx);
+        true
+    }
+
+    /// 自定义按键映射先整体校验：一行写错就整份不落盘，并保持弹窗打开，
+    /// 避免用户以为已保存、实际运行期静默跳过某条映射。
+    fn collect_key_bindings(&mut self, cx: &mut Context<Self>) -> bool {
+        let raw = self
             .modals
             .settings
             .terminal_key_bindings
             .read(cx)
             .value()
             .to_string();
-        let key_bindings = match crate::keymap::parse_terminal_key_bindings(&raw_bindings) {
-            Ok(bindings) => bindings,
+        match crate::keymap::parse_terminal_key_bindings(&raw) {
+            Ok(bindings) => {
+                self.settings.terminal_profile.key_bindings = bindings;
+                true
+            }
             Err(error) => {
                 self.set_error(error);
                 cx.notify();
-                return;
+                false
             }
-        };
-        self.settings.terminal_profile.key_bindings = key_bindings;
+        }
+    }
+
+    /// 界面外观、文件面板与块视图的轻量偏好。
+    fn collect_interface_preferences(&mut self, cx: &mut Context<Self>) {
         // 界面字体族：留空表示跟随主题。
         self.settings.appearance.ui_font_family =
             read_font_family(&self.modals.settings.ui_font_family, cx);
@@ -254,13 +313,30 @@ impl AppShell {
         {
             self.settings.sftp.max_concurrent_transfers = max;
         }
-        // 云同步：凭据先落钥匙串（非空才写），端点拓扑清洗后进设置文件。
+        // 阈值越界回退存量；0 是"不自动折叠"的合法表达。
+        if let Ok(rows) = self
+            .modals
+            .settings
+            .block_collapse_rows
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<usize>()
+        {
+            self.settings.block_view.auto_collapse_rows = rows;
+        }
+    }
+
+    /// 云同步：凭据先落钥匙串（非空才写），端点拓扑清洗后进设置文件。
+    fn collect_sync_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.persist_sync_credentials(window, cx) {
             self.settings.sync = self.collect_sync_settings(cx);
             self.settings.sync.normalize();
         }
-        // 外观偏好在弹窗内已即时写入，落盘前归一化兜底值，保证文件可回读。
-        self.settings.appearance.normalize();
+    }
+
+    /// 终端字体、尺寸、高亮、滚动与通知阈值。
+    fn collect_terminal_profile(&mut self, cx: &mut Context<Self>) {
         self.settings.terminal_profile.font_family =
             read_font_family(&self.modals.settings.font_family, cx);
         self.settings.terminal_profile.cjk_font_family =
@@ -334,48 +410,5 @@ impl AppShell {
         {
             self.settings.terminal_profile.scrollback = scrollback;
         }
-        self.sync_terminal_palette(cx);
-        self.commit_proxy_form(cx);
-        // 阈值越界回退存量；0 是"不自动折叠"的合法表达。
-        if let Ok(rows) = self
-            .modals
-            .settings
-            .block_collapse_rows
-            .read(cx)
-            .value()
-            .trim()
-            .parse::<usize>()
-        {
-            self.settings.block_view.auto_collapse_rows = rows;
-        }
-        // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
-        self.modals.settings.window_appearance_snapshot = None;
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
-            log::error!("保存偏好设置失败，界面仍是新值但下次启动会回退，原因: {error}");
-            self.set_error(localized_error(&error));
-        } else {
-            log::info!(
-                "偏好设置已保存，语言: {}，日志级别: {}",
-                self.settings.language,
-                self.settings.logs.level.as_str()
-            );
-            self.apply_appearance_to_live_panes(cx);
-            self.apply_shortcut_settings(cx);
-            self.apply_block_view_settings(cx);
-            // 实时下发最新触发器规则给所有运行中的终端窗格
-            let triggers = self.settings.triggers.clone();
-            let terminals: Vec<Entity<TerminalView>> = self
-                .workspace
-                .tabs
-                .iter()
-                .filter_map(|tab| tab.terminal())
-                .collect();
-            for terminal in terminals {
-                terminal.update(cx, |view, _| view.reload_triggers(&triggers));
-            }
-            self.status = Some(rust_i18n::t!("status.ready").to_string());
-        }
-        self.modals.settings.open = false;
-        cx.notify();
     }
 }

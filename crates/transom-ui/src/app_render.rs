@@ -38,79 +38,15 @@ impl Render for AppShell {
         if self.sidebar.visible {
             sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
         }
-        // 状态存在不等于面板展开：拖拽上传留下的隐藏状态不该把面板列撑出来。
-        let show_sftp = self
-            .workspace
-            .active_tab
-            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-            .is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open));
-        let sftp_panel = self
-            .workspace
-            .active_tab
-            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-            .and_then(|tab| tab.sftp());
-        let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);
-        let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
-        let collapsed_count = sftp_panel
-            .map(|panel| panel.collapsed_columns_count())
-            .unwrap_or(0);
-        let sftp_collapsed_width = (collapsed_count as f32 * 32.0).max(32.0);
-
-        let show_forwards = self
-            .workspace
-            .active_tab
-            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
-            .is_some_and(|tab| tab.forwards_panel().is_some());
-        let (sftp_width, sftp_min_width) = if sftp_all_collapsed {
-            (sftp_collapsed_width, sftp_collapsed_width)
-        } else if sftp_local_only && sftp_panel.is_some_and(|p| p.side_remotes.is_empty()) {
-            (
-                rem_px(size::SFTP_LOCAL_PANEL_WIDTH, rem).as_f32(),
-                rem_px(size::SFTP_LOCAL_MIN_WIDTH, rem).as_f32(),
-            )
+        let plan = self.plan_workspace_layout(window, cx);
+        let panels_state = if plan.side_left {
+            &self.workspace_panels_left
         } else {
-            (
-                rem_px(size::SFTP_PANEL_WIDTH, rem).as_f32(),
-                rem_px(size::SFTP_MIN_WIDTH, rem).as_f32(),
-            )
+            &self.workspace_panels
         };
-        // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
-        // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
-        let sidebar_width = if self.sidebar.visible {
-            self.workspace_panels
-                .read(cx)
-                .sizes()
-                .first()
-                .copied()
-                .filter(|width| *width >= px(100.0))
-                .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
-                .as_f32()
-        } else {
-            0.0
-        };
-        let forward_width = if show_forwards {
-            rem_px(size::FORWARD_PANEL_WIDTH, rem).as_f32()
-        } else {
-            0.0
-        };
-        let available_width = window.viewport_size().width.as_f32()
-            - rem_px(size::ACTIVITY_BAR_WIDTH, rem).as_f32()
-            - sidebar_width
-            - forward_width
-            - 100.0
-            - 8.0;
-        let sftp_max_width = if sftp_all_collapsed {
-            sftp_collapsed_width
-        } else {
-            available_width.max(sftp_min_width)
-        };
-        // 两个方向各自持有列宽状态：面板顺序随停靠方向变化，共用一份按索引
-        // 记录的尺寸会把宽度错位到别的面板上。
-        let (side_left, panels_state) = if self.settings.window.sftp_panel_side.is_left() {
-            (true, &self.workspace_panels_left)
-        } else {
-            (false, &self.workspace_panels)
-        };
+        let side_left = plan.side_left;
+        let show_sftp = plan.show_sftp;
+        let show_forwards = plan.show_forwards;
         let mut resizable_group = h_resizable(resizable_id).with_state(panels_state);
         if !self.immersive {
             resizable_group = resizable_group.child(sidebar_panel);
@@ -120,8 +56,8 @@ impl Render for AppShell {
             if show_sftp {
                 resizable_group = resizable_group.child(
                     resizable_panel()
-                        .size(px(sftp_width.min(sftp_max_width)))
-                        .size_range(px(sftp_min_width)..px(sftp_max_width))
+                        .size(px(plan.sftp_width.min(plan.sftp_max_width)))
+                        .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
                         .child(self.render_sftp_panel(window, cx, &p)),
                 );
@@ -141,8 +77,8 @@ impl Render for AppShell {
             if show_sftp {
                 resizable_group = resizable_group.child(
                     resizable_panel()
-                        .size(px(sftp_width.min(sftp_max_width)))
-                        .size_range(px(sftp_min_width)..px(sftp_max_width))
+                        .size(px(plan.sftp_width.min(plan.sftp_max_width)))
+                        .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
                         .child(self.render_sftp_panel(window, cx, &p)),
                 );
@@ -274,5 +210,88 @@ impl Render for AppShell {
         // 监听最先执行，拖拽位移与收尾不会被其他监听的 stop_propagation 挡掉。
         root.child(EditorDragTracker::new(cx.entity()))
             .children(overlays)
+    }
+}
+
+/// 外层布局的派生尺寸与可见性：把窗口宽度、侧栏实测宽度与面板折叠状态
+/// 折算成 resizable 面板需要的像素值。
+struct WorkspaceChromeLayout {
+    show_sftp: bool,
+    show_forwards: bool,
+    sftp_width: f32,
+    sftp_min_width: f32,
+    sftp_max_width: f32,
+    side_left: bool,
+}
+
+impl AppShell {
+    /// 计算外层布局。设计原理（Why）：这些算术只在渲染时需要，抽出来后
+    /// `render` 只负责按 plan 拼装面板，宽度规则可以单独核对与调整。
+    fn plan_workspace_layout(&self, window: &Window, cx: &App) -> WorkspaceChromeLayout {
+        let rem = window.rem_size();
+        let active_panel = self
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id));
+        let show_sftp = active_panel.is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open));
+        let sftp_panel = active_panel.and_then(|tab| tab.sftp());
+        let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);
+        let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
+        let collapsed_count = sftp_panel
+            .map(|panel| panel.collapsed_columns_count())
+            .unwrap_or(0);
+        let sftp_collapsed_width = (collapsed_count as f32 * 32.0).max(32.0);
+        let show_forwards = active_panel.is_some_and(|tab| tab.forwards_panel().is_some());
+        let (sftp_width, sftp_min_width) = if sftp_all_collapsed {
+            (sftp_collapsed_width, sftp_collapsed_width)
+        } else if sftp_local_only && sftp_panel.is_some_and(|panel| panel.side_remotes.is_empty()) {
+            (
+                rem_px(size::SFTP_LOCAL_PANEL_WIDTH, rem).as_f32(),
+                rem_px(size::SFTP_LOCAL_MIN_WIDTH, rem).as_f32(),
+            )
+        } else {
+            (
+                rem_px(size::SFTP_PANEL_WIDTH, rem).as_f32(),
+                rem_px(size::SFTP_MIN_WIDTH, rem).as_f32(),
+            )
+        };
+        // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
+        // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
+        let sidebar_width = if self.sidebar.visible {
+            self.workspace_panels
+                .read(cx)
+                .sizes()
+                .first()
+                .copied()
+                .filter(|width| *width >= px(100.0))
+                .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
+                .as_f32()
+        } else {
+            0.0
+        };
+        let forward_width = if show_forwards {
+            rem_px(size::FORWARD_PANEL_WIDTH, rem).as_f32()
+        } else {
+            0.0
+        };
+        let available_width = window.viewport_size().width.as_f32()
+            - rem_px(size::ACTIVITY_BAR_WIDTH, rem).as_f32()
+            - sidebar_width
+            - forward_width
+            - 100.0
+            - 8.0;
+        let sftp_max_width = if sftp_all_collapsed {
+            sftp_collapsed_width
+        } else {
+            available_width.max(sftp_min_width)
+        };
+        WorkspaceChromeLayout {
+            show_sftp,
+            show_forwards,
+            sftp_width,
+            sftp_min_width,
+            sftp_max_width,
+            side_left: self.settings.window.sftp_panel_side.is_left(),
+        }
     }
 }

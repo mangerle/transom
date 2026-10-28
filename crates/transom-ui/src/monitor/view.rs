@@ -360,82 +360,93 @@ impl AppShell {
                     ),
             );
         for (index, process) in processes.iter().enumerate() {
-            let pid = process.pid;
-            let command = format!("{} {}", process.pid, process.cmdline);
-            let app = app_entity.clone();
-            let strong = app_entity.clone();
-            let mut row = h_flex()
-                .id(ElementId::Name(format!("process-row-{pid}").into()))
-                .gap_2()
-                .px_1()
-                .h(px(22.0))
-                .text_xs()
-                .child(
-                    div()
-                        .w(px(54.0))
-                        .text_color(p.muted_foreground)
-                        .child(pid.to_string()),
-                )
-                .child(
-                    div()
-                        .w(px(64.0))
-                        .truncate()
-                        .text_color(p.foreground)
-                        .child(process.user.clone()),
-                )
-                .child(
-                    div()
-                        .w(px(48.0))
-                        .text_color(usage_color(process.cpu_percent, p))
-                        .child(format!("{:.1}", process.cpu_percent)),
-                )
-                .child(
-                    div()
-                        .w(px(48.0))
-                        .text_color(p.muted_foreground)
-                        .child(format!("{:.1}", process.mem_percent)),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .truncate()
-                        .text_color(p.foreground)
-                        .child(process.cmdline.clone()),
-                )
-                .context_menu(move |menu, _window, _cx| {
-                    let term = app.clone();
-                    let kill = strong.clone();
-                    let command_text = command.clone();
-                    menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.kill_term").to_string())
-                            .icon(IconName::CircleX)
-                            .on_click(move |_, _, cx| {
-                                term.update(cx, |this, cx| this.send_kill_process(pid, false, cx));
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.kill_kill").to_string())
-                            .icon(IconName::Ban)
-                            .on_click(move |_, _, cx| {
-                                kill.update(cx, |this, cx| this.send_kill_process(pid, true, cx));
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.copy_command").to_string())
-                            .icon(IconName::Copy)
-                            .on_click(move |_, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(
-                                    command_text.clone(),
-                                ));
-                            }),
-                    )
-                });
-            if index % 2 == 1 {
-                row = row.bg(p.muted.opacity(0.35));
-            }
-            section = section.child(row);
+            section = section.child(Self::render_process_row(index, process, &app_entity, p));
         }
         section.into_any_element()
+    }
+
+    /// 渲染一行进程：固定列宽 + 右键终止/复制菜单。
+    fn render_process_row(
+        index: usize,
+        process: &ProcessInfo,
+        app_entity: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let pid = process.pid;
+        let command = format!("{} {}", process.pid, process.cmdline);
+        let app = app_entity.clone();
+        let strong = app_entity.clone();
+        let mut row = h_flex()
+            .id(ElementId::Name(format!("process-row-{pid}").into()))
+            .gap_2()
+            .px_1()
+            .h(px(22.0))
+            .text_xs()
+            .child(
+                div()
+                    .w(px(54.0))
+                    .text_color(p.muted_foreground)
+                    .child(pid.to_string()),
+            )
+            .child(
+                div()
+                    .w(px(64.0))
+                    .truncate()
+                    .text_color(p.foreground)
+                    .child(process.user.clone()),
+            )
+            .child(
+                div()
+                    .w(px(48.0))
+                    .text_color(usage_color(process.cpu_percent, p))
+                    .child(format!("{:.1}", process.cpu_percent)),
+            )
+            .child(
+                div()
+                    .w(px(48.0))
+                    .text_color(p.muted_foreground)
+                    .child(format!("{:.1}", process.mem_percent)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .truncate()
+                    .text_color(p.foreground)
+                    .child(process.cmdline.clone()),
+            )
+            .context_menu(move |menu, _window, _cx| {
+                let term = app.clone();
+                let kill = strong.clone();
+                let command_text = command.clone();
+                menu.item(
+                    PopupMenuItem::new(rust_i18n::t!("monitor.kill_term").to_string())
+                        .icon(IconName::CircleX)
+                        .on_click(move |_, _, cx| {
+                            term.update(cx, |this, cx| this.send_kill_process(pid, false, cx));
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new(rust_i18n::t!("monitor.kill_kill").to_string())
+                        .icon(IconName::Ban)
+                        .on_click(move |_, _, cx| {
+                            kill.update(cx, |this, cx| this.send_kill_process(pid, true, cx));
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new(rust_i18n::t!("monitor.copy_command").to_string())
+                        .icon(IconName::Copy)
+                        .on_click(move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(command_text.clone()));
+                        }),
+                )
+            });
+        if index % 2 == 1 {
+            row = row.bg(p.muted.opacity(0.35));
+        }
+        if index % 2 == 1 {
+            row = row.bg(p.muted.opacity(0.35));
+        }
+        row.into_any_element()
     }
 
     fn section_title(&self, key: &'static str, p: &Palette) -> AnyElement {
