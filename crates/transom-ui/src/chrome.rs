@@ -6,6 +6,7 @@ use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::TitleBar;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -106,46 +107,50 @@ impl AppShell {
             }))
             .child(Icon::new(IconName::WindowClose).small());
 
-        h_flex()
-            .w_full()
+        TitleBar::new()
             .h(rems(size::TOP_BAR_HEIGHT))
-            .items_center()
-            .justify_between()
-            .px_3()
             .bg(p.title_bar)
             .border_b_1()
             .border_color(p.title_bar_border)
             .child(
                 h_flex()
-                    .items_center()
-                    .gap_2()
-                    .child(brand::logo_mark(LOGO_SIZE, window, cx))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::BOLD)
-                            .child(rust_i18n::t!("app.name").to_string()),
-                    ),
-            )
-            .child(div().flex_1().h_full().on_mouse_down(
-                MouseButton::Left,
-                |event: &MouseDownEvent, window, _| {
-                    if event.click_count >= 2 {
-                        window.zoom_window();
-                    } else {
-                        window.start_window_move();
-                    }
-                },
-            ))
-            .child(
-                h_flex()
+                    .w_full()
                     .h_full()
                     .items_center()
-                    .gap_1()
-                    .px_1()
-                    .child(min_button)
-                    .child(max_button)
-                    .child(close_button),
+                    .justify_between()
+                    .px_3()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_2()
+                            .child(brand::logo_mark(LOGO_SIZE, window, cx))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(rust_i18n::t!("app.name").to_string()),
+                            ),
+                    )
+                    .child(div().flex_1().h_full().on_mouse_down(
+                        MouseButton::Left,
+                        |event: &MouseDownEvent, window, _| {
+                            if event.click_count >= 2 {
+                                window.zoom_window();
+                            } else {
+                                window.start_window_move();
+                            }
+                        },
+                    ))
+                    .child(
+                        h_flex()
+                            .h_full()
+                            .items_center()
+                            .gap_1()
+                            .px_1()
+                            .child(min_button)
+                            .child(max_button)
+                            .child(close_button),
+                    ),
             )
             .into_any_element()
     }
