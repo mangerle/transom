@@ -22,9 +22,10 @@ pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearance
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::Button;
-use gpui_kit::component::input::{InputState, NumberInput};
+use gpui_kit::component::input::{Input, InputState, NumberInput};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::slider::SliderValue;
 use gpui_kit::component::tooltip::Tooltip;
@@ -154,6 +155,157 @@ impl AppShell {
                 }
             })
             .into_any_element()
+    }
+
+    /// 常用等宽代码字体预设选项。
+    pub(crate) const MONO_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
+        ("默认等宽 (JetBrains Mono)", ""),
+        ("JetBrains Mono", "JetBrains Mono"),
+        ("Fira Code", "Fira Code"),
+        ("Cascadia Code", "Cascadia Code"),
+        ("Cascadia Mono", "Cascadia Mono"),
+        ("Hack", "Hack"),
+        ("Source Code Pro", "Source Code Pro"),
+        ("Consolas", "Consolas"),
+        ("Menlo", "Menlo"),
+        ("Monaco", "Monaco"),
+        ("DejaVu Sans Mono", "DejaVu Sans Mono"),
+        ("Ubuntu Mono", "Ubuntu Mono"),
+    ];
+
+    /// 常用中文字体预设选项。
+    pub(crate) const CJK_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
+        ("跟随系统回退", ""),
+        ("PingFang SC (苹方)", "PingFang SC"),
+        ("Microsoft YaHei (微软雅黑)", "Microsoft YaHei"),
+        ("Noto Sans CJK SC (思源黑体)", "Noto Sans CJK SC"),
+        ("Source Han Sans SC (思源黑体)", "Source Han Sans SC"),
+        ("WenQuanYi Micro Hei (文泉驿微米黑)", "WenQuanYi Micro Hei"),
+        ("Sarasa Gothic SC (更纱黑体)", "Sarasa Gothic SC"),
+    ];
+
+    /// 常用 UI 界面字体预设选项。
+    pub(crate) const UI_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
+        ("跟随系统默认", ""),
+        ("Inter", "Inter"),
+        ("Segoe UI", "Segoe UI"),
+        ("PingFang SC (苹方)", "PingFang SC"),
+        ("Microsoft YaHei (微软雅黑)", "Microsoft YaHei"),
+        ("Noto Sans", "Noto Sans"),
+    ];
+
+    /// 字体配置复合行：左侧标签，下方是输入框 + 下拉预设选择按钮 + 本地字体导入按钮。
+    pub(crate) fn setting_font_field(
+        id: &'static str,
+        label: String,
+        input: Entity<InputState>,
+        presets: &'static [(&'static str, &'static str)],
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_1()
+            .child(div().text_xs().text_color(p.muted_foreground).child(label))
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_1p5()
+                    .items_center()
+                    .child(div().flex_1().min_w_0().child(Input::new(&input).w_full()))
+                    .child(
+                        Button::new(format!("{id}-presets"))
+                            .outline()
+                            .small()
+                            .icon(IconName::ChevronsUpDown)
+                            .tooltip(rust_i18n::t!("settings.preset_fonts_tooltip").to_string())
+                            .dropdown_menu({
+                                let input = input.clone();
+                                move |mut menu, _window, cx| {
+                                    for &(name, value) in presets {
+                                        let input = input.clone();
+                                        let current_val = input.read(cx).value();
+                                        let is_active = current_val == value
+                                            || (value.is_empty() && current_val.trim().is_empty());
+                                        menu = menu.item(
+                                            PopupMenuItem::new(name).checked(is_active).on_click(
+                                                move |_, window, cx| {
+                                                    input.update(cx, |inp, cx| {
+                                                        inp.set_value(value, window, cx);
+                                                    });
+                                                },
+                                            ),
+                                        );
+                                    }
+                                    menu
+                                }
+                            }),
+                    )
+                    .child(
+                        Button::new(format!("{id}-import"))
+                            .outline()
+                            .small()
+                            .icon(IconName::FolderOpen)
+                            .tooltip(rust_i18n::t!("settings.import_font_tooltip").to_string())
+                            .on_click(cx.listener({
+                                let input = input.clone();
+                                move |this, _, window, cx| {
+                                    this.import_local_font_file(&input, window, cx);
+                                }
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// 唤起系统文件选择器导入外部字体文件（.ttf, .otf, .ttc 等），动态加载并填入输入框。
+    pub(crate) fn import_local_font_file(
+        &mut self,
+        input: &Entity<InputState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let picked = rfd::FileDialog::new()
+            .set_title("选择本地字体文件")
+            .add_filter(
+                "字体文件 (*.ttf, *.otf, *.ttc, *.woff2)",
+                &["ttf", "otf", "ttc", "woff2"],
+            )
+            .pick_file();
+
+        let Some(path) = picked else {
+            return;
+        };
+
+        match std::fs::read(&path) {
+            Ok(bytes) => {
+                let font_name = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "CustomFont".to_string());
+
+                if let Err(err) = cx
+                    .text_system()
+                    .add_fonts(vec![std::borrow::Cow::Owned(bytes)])
+                {
+                    log::warn!("加载外部字体文件失败，路径: {:?}，原因: {err}", path);
+                } else {
+                    log::info!("成功注册本地字体: {}，路径: {:?}", font_name, path);
+                }
+
+                input.update(cx, |inp, cx| {
+                    inp.set_value(&font_name, window, cx);
+                });
+                self.status = Some(
+                    rust_i18n::t!("settings.font_imported_success", name = font_name).to_string(),
+                );
+                cx.notify();
+            }
+            Err(err) => {
+                log::error!("读取本地字体文件失败，路径: {:?}，原因: {err}", path);
+                self.status = Some(format!("读取字体文件失败: {err}"));
+                cx.notify();
+            }
+        }
     }
 
     /// 路径型设置值：定宽截断，完整路径挂在悬停 tooltip 上。

@@ -1477,6 +1477,15 @@ settings:
   cjk_font_note:
     en: CJK glyphs are scaled to exactly two cells, so any CJK font lines up; a proportional font may look squeezed.
     zh-CN: 中文字形会自动缩放到恰好两格宽，因此任意中文字体都能对齐；比例字体只是观感偏紧。
+  preset_fonts_tooltip:
+    en: Choose from recommended fonts
+    zh-CN: 选择常用字体预设
+  import_font_tooltip:
+    en: Import local font file (.ttf, .otf, .ttc)
+    zh-CN: 导入本地字体文件 (.ttf, .otf, .ttc)
+  font_imported_success:
+    en: "Successfully loaded font: %{name}"
+    zh-CN: "已成功加载字体：%{name}"
   font_size:
     en: Font Size
     zh-CN: 字体大小

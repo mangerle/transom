@@ -271,7 +271,7 @@ impl AppShell {
     pub(crate) fn render_settings_terminal_font(
         &mut self,
         p: &Palette,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let stepper_size = Self::setting_stepper(&self.modals.settings.font_size, px(110.0));
         let stepper_height = Self::setting_stepper(&self.modals.settings.line_height, px(110.0));
@@ -306,15 +306,21 @@ impl AppShell {
 
         v_flex()
             .gap_2()
-            .child(Self::form_field(
+            .child(Self::setting_font_field(
+                "terminal-font-family",
                 rust_i18n::t!("settings.font_family").to_string(),
                 self.modals.settings.font_family.clone(),
+                Self::MONO_FONT_PRESETS,
                 p,
+                cx,
             ))
-            .child(Self::form_field(
+            .child(Self::setting_font_field(
+                "terminal-cjk-font",
                 rust_i18n::t!("settings.cjk_font").to_string(),
                 self.modals.settings.cjk_font.clone(),
+                Self::CJK_FONT_PRESETS,
                 p,
+                cx,
             ))
             .child(
                 div()

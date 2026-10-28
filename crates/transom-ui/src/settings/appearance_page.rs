@@ -203,14 +203,17 @@ impl AppShell {
     pub(crate) fn render_settings_ui_font(
         &mut self,
         p: &Palette,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::form_field(
+            .child(Self::setting_font_field(
+                "ui-font-family",
                 rust_i18n::t!("settings.ui_font_family").to_string(),
                 self.modals.settings.ui_font_family.clone(),
+                Self::UI_FONT_PRESETS,
                 p,
+                cx,
             ))
             .child(
                 div()
