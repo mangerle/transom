@@ -6,7 +6,7 @@ mod service;
 mod sigv4;
 mod webdav;
 
-pub use git::{GIT_SYNC_FILE, GitAuth, GitSyncOutcome, sync_git_blocking};
+pub use git::{GIT_SYNC_FILE, GitAuth, sync_git_blocking};
 pub use service::CloudSyncService;
 
 use transom_core::{AppError, ErrorCode, SYNC_MAX_DOCUMENT_BYTES};

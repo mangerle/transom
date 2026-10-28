@@ -239,14 +239,7 @@ impl CloudSyncService {
             token,
             username: None,
         };
-        let outcome = sync_git_blocking(git, catalog, passphrase.as_str(), cache_dir, &auth)?;
-        Ok(GitSyncResult {
-            catalog: outcome.catalog,
-            report: outcome.report,
-            pushed: outcome.pushed,
-            bytes: outcome.bytes,
-            at: outcome.at,
-        })
+        sync_git_blocking(git, catalog, passphrase.as_str(), cache_dir, &auth)
     }
 
     fn read_credential(&self) -> Result<Option<Zeroizing<String>>, AppError> {

@@ -24,8 +24,7 @@ use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::Duration;
 use transom_core::{
-    AppError, ErrorCode, GitSyncSettings, SessionCatalog, SyncMergeReport, merge_catalogs,
-    private_fs,
+    AppError, ErrorCode, GitSyncResult, GitSyncSettings, SessionCatalog, merge_catalogs, private_fs,
 };
 use transom_crypto::envelope::{is_envelope, open, seal};
 use transom_store::write_atomic;
@@ -48,18 +47,6 @@ pub struct GitAuth {
     pub username: Option<String>,
 }
 
-/// 一次 Git 同步的结果。
-#[derive(Debug)]
-pub struct GitSyncOutcome {
-    /// 合并后的完整目录，调用方应整体替换本地目录。
-    pub catalog: SessionCatalog,
-    pub report: SyncMergeReport,
-    /// 是否真的产生了新提交并推送；内容无变化时为 false。
-    pub pushed: bool,
-    pub bytes: u64,
-    pub at: i64,
-}
-
 /// 执行一次完整的 Git 同步（阻塞）。
 ///
 /// 必须在 `spawn_blocking` 中调用：Git 子进程与 Argon2 派生都是阻塞操作。
@@ -73,7 +60,7 @@ pub fn sync_git_blocking(
     passphrase: &str,
     cache_dir: &Path,
     auth: &GitAuth,
-) -> Result<GitSyncOutcome, AppError> {
+) -> Result<GitSyncResult, AppError> {
     let mut last_error = None;
     for _ in 0..GIT_MAX_ATTEMPTS {
         match attempt_sync(settings, local, passphrase, cache_dir, auth) {
@@ -98,7 +85,7 @@ fn attempt_sync(
     passphrase: &str,
     cache_dir: &Path,
     auth: &GitAuth,
-) -> Result<GitSyncOutcome, AppError> {
+) -> Result<GitSyncResult, AppError> {
     ensure_repo(cache_dir, &settings.remote, auth)?;
     let remote_bytes = fetch_remote(cache_dir, &settings.branch, auth)?;
     let remote_catalog = match &remote_bytes {
@@ -119,7 +106,7 @@ fn attempt_sync(
     if remote_bytes.is_some() && catalogs_equivalent(&remote_catalog, &merged) {
         let envelope = seal(&plaintext, passphrase)?;
         write_atomic(&cache_dir.join(GIT_BASE_FILE), &envelope)?;
-        return Ok(GitSyncOutcome {
+        return Ok(GitSyncResult {
             catalog: merged,
             report,
             pushed: false,
@@ -143,7 +130,7 @@ fn attempt_sync(
         report.conflicts,
         bytes
     );
-    Ok(GitSyncOutcome {
+    Ok(GitSyncResult {
         catalog: merged,
         report,
         pushed: true,
