@@ -10,7 +10,7 @@
 //! - 代价与局限：刷新从"同步可见"变为"异步落地"，期间面板短暂显示旧内容
 //!   （导航场景先清空条目给出即时反馈）；同一目录的并发刷新以后完成者胜出。
 
-use super::list_local_dir;
+use super::{SftpConfirmModalState, SftpPendingDelete, list_local_dir};
 use crate::app::AppShell;
 use gpui_kit::*;
 use std::collections::BTreeSet;
@@ -76,10 +76,7 @@ impl AppShell {
         .detach();
     }
 
-    /// 批量删除本地选中项；目录递归删除，符号链接只删除链接本身。
-    ///
-    /// 删除与随后的目录刷新都是阻塞 IO，整体放后台执行；期间状态栏先提示
-    /// "正在删除"，完成后回填成功/失败统计并刷新列表。
+    /// 批量删除本地选中项：先弹确认，确认后再执行。
     pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
         let Some(panel) = self
@@ -95,13 +92,41 @@ impl AppShell {
             cx.notify();
             return;
         }
+        let count = paths.len();
+        self.sftp_modals.confirm = Some(SftpConfirmModalState {
+            action: SftpPendingDelete::Local { tab_id, paths },
+            title: "删除本地项目".to_string(),
+            description: format!(
+                "将永久删除 {count} 个本地项目（目录按递归删除），不经回收站，此操作不可撤销。"
+            ),
+        });
+        cx.notify();
+    }
+
+    /// 执行已确认的本地删除：目录递归删除，符号链接只删除链接本身。
+    ///
+    /// 删除与随后的目录刷新都是阻塞 IO，整体放后台执行；期间状态栏先提示
+    /// "正在删除"，完成后回填成功/失败统计并刷新列表。
+    pub(crate) fn perform_sftp_local_delete(
+        &mut self,
+        tab_id: TabId,
+        paths: Vec<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismiss_sftp_hover_preview(tab_id, cx);
+        let Some(panel) = self
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|tab| tab.sftp_mut())
+        else {
+            return;
+        };
         panel.clear_local_error();
         panel.set_status(format!("正在删除 {} 个本地项目...", paths.len()));
         let dir = panel.local.path.clone();
         cx.notify();
         cx.spawn(async move |this, cx| {
-            let Some((deleted, failed)) =
-                spawn_blocking_local(move || delete_local_paths(&paths)).await
+            let Some(outcome) = spawn_blocking_local(move || delete_local_paths(&paths)).await
             else {
                 log::error!("本地删除线程启动失败，本次删除未执行");
                 return;
@@ -116,12 +141,26 @@ impl AppShell {
                 else {
                     return;
                 };
-                if failed > 0 {
-                    panel.set_local_error(format!(
-                        "已删除 {deleted} 个本地项目，{failed} 个删除失败"
-                    ));
+                if outcome.failures.is_empty() {
+                    panel.set_status(format!("已删除 {} 个本地项目", outcome.deleted));
                 } else {
-                    panel.set_status(format!("已删除 {deleted} 个本地项目"));
+                    let detail = outcome
+                        .failures
+                        .iter()
+                        .take(3)
+                        .map(|(path, error)| format!("{}（{error}）", path.display()))
+                        .collect::<Vec<_>>()
+                        .join("；");
+                    log::warn!(
+                        "本地删除部分失败，成功 {} 个，失败 {} 个，示例: {detail}",
+                        outcome.deleted,
+                        outcome.failures.len()
+                    );
+                    panel.set_local_error(format!(
+                        "已删除 {} 个本地项目，{} 个失败：{detail}",
+                        outcome.deleted,
+                        outcome.failures.len()
+                    ));
                 }
                 // 删除期间用户可能已导航到其他目录：只在目录未变时回填刷新
                 if panel.local.path == dir
@@ -139,12 +178,18 @@ impl AppShell {
     }
 }
 
+/// 本地批量删除的结果：成功数与逐项失败原因。
+struct LocalDeleteOutcome {
+    deleted: usize,
+    failures: Vec<(PathBuf, String)>,
+}
+
 /// 串行删除本地路径：目录递归删除，其他（含符号链接）按文件删除。
-/// 返回 (成功数, 失败数)；单项失败不中断，保证批量操作的统计完整。
+/// 单项失败不中断，保留每项路径与原因供界面逐条提示。
 /// 阻塞函数，仅允许经 [`spawn_blocking_local`] 在专用线程上调用。
-fn delete_local_paths(paths: &[PathBuf]) -> (usize, usize) {
+fn delete_local_paths(paths: &[PathBuf]) -> LocalDeleteOutcome {
     let mut deleted = 0usize;
-    let mut failed = 0usize;
+    let mut failures = Vec::new();
     for path in paths {
         let result = match std::fs::symlink_metadata(path) {
             Ok(metadata) if metadata.is_dir() => std::fs::remove_dir_all(path),
@@ -152,10 +197,10 @@ fn delete_local_paths(paths: &[PathBuf]) -> (usize, usize) {
         };
         match result {
             Ok(()) => deleted = deleted.saturating_add(1),
-            Err(_) => failed = failed.saturating_add(1),
+            Err(error) => failures.push((path.clone(), error.to_string())),
         }
     }
-    (deleted, failed)
+    LocalDeleteOutcome { deleted, failures }
 }
 
 /// 在专用线程执行阻塞的本地文件操作。

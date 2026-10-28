@@ -14,7 +14,8 @@ use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{EditorState, Input, InputState, Textarea};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{format_octal_permissions, format_rwx_permissions};
+use std::path::PathBuf;
+use transom_core::{RemoteDeleteTarget, TabId, format_octal_permissions, format_rwx_permissions};
 
 /// 编辑器"跳转到行"弹窗的状态。
 pub(crate) struct EditorGotoLineModalState {
@@ -22,6 +23,25 @@ pub(crate) struct EditorGotoLineModalState {
     pub(crate) input: Entity<InputState>,
     pub(crate) error: Option<String>,
     pub(crate) _enter_sub: Subscription,
+}
+
+/// 待用户确认的破坏性操作。
+pub(crate) enum SftpPendingDelete {
+    Local {
+        tab_id: TabId,
+        paths: Vec<PathBuf>,
+    },
+    Remote {
+        tab_id: TabId,
+        targets: Vec<RemoteDeleteTarget>,
+    },
+}
+
+/// 删除确认弹窗：破坏性操作必须经过一次显式确认，且文案说明不可恢复。
+pub(crate) struct SftpConfirmModalState {
+    pub(crate) action: SftpPendingDelete,
+    pub(crate) title: String,
+    pub(crate) description: String,
 }
 
 /// SFTP 五类模态弹窗与编辑器跳转行的聚合状态。
@@ -35,9 +55,60 @@ pub(crate) struct SftpModals {
     pub(crate) filter: Option<SftpFilterModalState>,
     pub(crate) sync: Option<SftpSyncModalState>,
     pub(crate) goto_line: Option<EditorGotoLineModalState>,
+    pub(crate) confirm: Option<SftpConfirmModalState>,
 }
 
 impl AppShell {
+    pub(crate) fn render_sftp_confirm_modal(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(modal) = self.sftp_modals.confirm.as_ref() else {
+            return div().into_any_element();
+        };
+        let title = modal.title.clone();
+        let description = modal.description.clone();
+
+        let content = div()
+            .text_sm()
+            .text_color(p.muted_foreground)
+            .child(description);
+        let footer = h_flex()
+            .gap_2()
+            .child(
+                Button::new("cancel-sftp-delete")
+                    .ghost()
+                    .label(rust_i18n::t!("common.cancel").to_string())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.sftp_modals.confirm = None;
+                        this.focus_active_sftp_panel(window, cx);
+                        cx.notify();
+                    })),
+            )
+            .child(
+                Button::new("confirm-sftp-delete")
+                    .danger()
+                    .label("确认删除")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.sftp_confirm_delete(cx);
+                        this.focus_active_sftp_panel(window, cx);
+                    })),
+            );
+
+        let dialog = Self::dialog_frame(
+            "sftp-confirm-modal",
+            title,
+            None::<String>,
+            content,
+            Some(footer),
+            px(460.0),
+            p,
+        );
+        Self::overlay(dialog, p)
+    }
+
     pub(crate) fn render_sftp_filter_modal(
         &mut self,
         _window: &mut Window,

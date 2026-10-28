@@ -6,12 +6,14 @@ mod validate;
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::sftp_text_input;
-use crate::sftp::{SftpActivePane, SftpInputModalState, SftpInputTarget};
+use crate::sftp::{
+    SftpActivePane, SftpConfirmModalState, SftpInputModalState, SftpInputTarget, SftpPendingDelete,
+};
 use gpui_kit::*;
 use transom_core::{RemoteDeleteTarget, SftpOperation, TabId};
 
 impl AppShell {
-    /// 批量删除远端选中项；目录按递归语义删除。
+    /// 批量删除远端选中项：先弹确认，确认后再按递归语义删除。
     pub(crate) fn sftp_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
@@ -45,6 +47,24 @@ impl AppShell {
             return;
         }
         let count = targets.len();
+        self.sftp_modals.confirm = Some(SftpConfirmModalState {
+            action: SftpPendingDelete::Remote { tab_id, targets },
+            title: "删除远端项目".to_string(),
+            description: format!(
+                "将永久删除 {count} 个远端项目（目录按递归删除），此操作不可撤销。"
+            ),
+        });
+        cx.notify();
+    }
+
+    /// 执行已确认的远端删除。
+    pub(crate) fn perform_sftp_delete(
+        &mut self,
+        tab_id: TabId,
+        targets: Vec<RemoteDeleteTarget>,
+        cx: &mut Context<Self>,
+    ) {
+        let count = targets.len();
         self.send_sftp_op(tab_id, SftpOperation::DeleteMany { targets }, cx);
         if let Some(panel) = self
             .workspace
@@ -56,15 +76,27 @@ impl AppShell {
         }
     }
 
-    /// Delete 快捷键：直接删除当前活动栏选中的项目（与右键“删除”行为一致，无二次确认）。
+    /// 执行确认弹窗中挂起的删除动作。
+    pub(crate) fn sftp_confirm_delete(&mut self, cx: &mut Context<Self>) {
+        let Some(modal) = self.sftp_modals.confirm.take() else {
+            return;
+        };
+        match modal.action {
+            SftpPendingDelete::Local { tab_id, paths } => {
+                self.perform_sftp_local_delete(tab_id, paths, cx);
+            }
+            SftpPendingDelete::Remote { tab_id, targets } => {
+                self.perform_sftp_delete(tab_id, targets, cx);
+            }
+        }
+    }
+
+    /// Delete 快捷键：删除当前活动栏选中的项目（与右键"删除"行为一致，均先弹确认）。
     ///
-    /// 设计原理（Why）：
-    /// - 实现初衷：文件管理器惯例是选中后按 Delete 直接删除；双栏共用同一键盘上下文，
-    ///   因此以“最近交互栏”（`active_pane`）确定删除目标；
-    /// - 核心优势：与右键菜单删除共用同一操作路径，行为完全一致，
-    ///   活动栏由统一选中方法维护，不会出现删错栏位的失配；
-    /// - 代价与局限：无二次确认，Delete 按下即删除；如需误删保护需在设计层面
-    ///   为所有删除入口统一补确认机制。
+    /// 设计原理（Why）：双栏共用同一键盘上下文，因此以"最近交互栏"（`active_pane`）
+    /// 确定删除目标；与右键菜单删除共用同一操作路径，活动栏由统一选中方法维护，
+    /// 不会出现删错栏位的失配。删除不可恢复，确认步骤由
+    /// `sftp_delete_selection` 与 `sftp_local_delete_selection` 统一弹出。
     pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(active_pane) = self
             .workspace

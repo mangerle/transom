@@ -36,7 +36,9 @@ mod transfer_presentation;
 
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
 pub(crate) use self::local_listing::LocalDirectoryLister;
-pub(crate) use self::modals::{EditorGotoLineModalState, SftpModals};
+pub(crate) use self::modals::{
+    EditorGotoLineModalState, SftpConfirmModalState, SftpModals, SftpPendingDelete,
+};
 pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;
 pub(crate) use self::properties::{

@@ -143,6 +143,9 @@ impl AppShell {
         if self.modals.settings.key_wizard.is_some() {
             overlays.push(self.render_key_wizard(window, cx, &p));
         }
+        if self.sftp_modals.confirm.is_some() {
+            overlays.push(self.render_sftp_confirm_modal(window, cx, &p));
+        }
         if self.sftp_modals.chmod.is_some() {
             overlays.push(self.render_sftp_chmod_modal(window, cx, &p));
         }

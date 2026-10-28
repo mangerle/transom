@@ -275,6 +275,7 @@ impl AppShell {
             editors: EditorManager::new(),
             sftp_modals: SftpModals {
                 chmod: None,
+                confirm: None,
                 input: None,
                 properties: None,
                 filter: None,
