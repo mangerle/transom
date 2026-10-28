@@ -5,9 +5,6 @@ use std::time::Instant;
 /// OSC 载荷缓冲上限。
 pub(crate) const MAX_PAYLOAD_BYTES: usize = 4096;
 
-pub(crate) const TERMINATOR_BEL: u8 = 0x07;
-pub(crate) const TERMINATOR_ST: u8 = 0x5c;
-pub(crate) const ESCAPE: u8 = 0x1b;
 pub(crate) const OSC_INTRO: u8 = 0x5d;
 
 /// 一条 OSC 序列携带的、上层关心的语义。

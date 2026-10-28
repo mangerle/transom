@@ -6,6 +6,7 @@ use super::remote_transfer::{
 };
 use crate::controller::Internal;
 use crate::controller::session_context::ManagedSessionContext;
+use crate::controller::state::find_session_by_connection;
 use std::collections::HashMap;
 use transom_core::{
     AppError, AppEvent, ConnectionId, ErrorCode, SftpAppEvent, SftpOperation, TabId,
@@ -98,15 +99,14 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         && let Some(ref remote) = session.remote
     {
         (tab_id, remote.clone(), session.sftp_client.clone())
-    } else if let Some((owner_tab, remote, client)) = sessions.iter().find_map(|(owner_tab, s)| {
-        if s.connection_id == connection_id
-            && let Some(ref remote) = s.remote
-        {
-            Some((*owner_tab, remote.clone(), s.sftp_client.clone()))
-        } else {
-            None
-        }
-    }) {
+    } else if let Some((owner_tab, remote, client)) =
+        find_session_by_connection(sessions, connection_id).and_then(|(tab_id, session)| {
+            session
+                .remote
+                .clone()
+                .map(|remote| (tab_id, remote, session.sftp_client.clone()))
+        })
+    {
         (owner_tab, remote, client)
     } else {
         send_sftp_not_ready(
@@ -169,14 +169,12 @@ fn dispatch_remote_transfer(dispatch: RemoteTransferDispatch<'_>) {
         op_id,
     } = scope;
 
-    let source_remote = sessions
-        .values()
-        .find(|s| s.connection_id == source_connection_id)
-        .and_then(|s| s.remote.clone());
-    let target_remote = sessions
-        .values()
-        .find(|s| s.connection_id == target_connection_id)
-        .and_then(|s| s.remote.clone());
+    let (source_remote, cached_source) = find_session_by_connection(sessions, source_connection_id)
+        .map(|(_, session)| (session.remote.clone(), session.sftp_client.clone()))
+        .unwrap_or((None, None));
+    let (target_remote, cached_target) = find_session_by_connection(sessions, target_connection_id)
+        .map(|(_, session)| (session.remote.clone(), session.sftp_client.clone()))
+        .unwrap_or((None, None));
     let (Some(source_remote), Some(target_remote)) = (source_remote, target_remote) else {
         send_sftp_not_ready(
             event_tx,
@@ -187,15 +185,6 @@ fn dispatch_remote_transfer(dispatch: RemoteTransferDispatch<'_>) {
         );
         return;
     };
-
-    let cached_source = sessions
-        .values()
-        .find(|s| s.connection_id == source_connection_id)
-        .and_then(|s| s.sftp_client.clone());
-    let cached_target = sessions
-        .values()
-        .find(|s| s.connection_id == target_connection_id)
-        .and_then(|s| s.sftp_client.clone());
 
     if let (Some(source_client), Some(target_client)) =
         (cached_source.clone(), cached_target.clone())

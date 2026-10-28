@@ -1,19 +1,19 @@
 //! PTY 字节流旁路 OSC 增量扫描器。
 
-use super::types::{ESCAPE, MAX_PAYLOAD_BYTES, OSC_INTRO, OscEvent, TERMINATOR_BEL, TERMINATOR_ST};
+use super::types::{MAX_PAYLOAD_BYTES, OSC_INTRO, OscEvent};
+use crate::sequence_scanner::SequenceScanner;
 
-/// 增量扫描状态。
-#[derive(Debug, Default)]
+/// OSC 扫描器：序列边界复用通用骨架，载荷语义在本模块解析。
 pub(crate) struct OscScanner {
-    /// 上一个字节是 `ESC`，正在确认它后面是不是 `]`。
-    awaiting_intro: bool,
-    /// 正在收集 OSC 载荷。
-    in_payload: bool,
-    /// 载荷里已见 `ESC`，下一个字节是 `\` 才算 ST 结束。
-    awaiting_st: bool,
-    /// 载荷已超长，丢弃内容直到序列结束。
-    overflow: bool,
-    payload: Vec<u8>,
+    inner: SequenceScanner,
+}
+
+impl Default for OscScanner {
+    fn default() -> Self {
+        Self {
+            inner: SequenceScanner::new(OSC_INTRO, MAX_PAYLOAD_BYTES),
+        }
+    }
 }
 
 impl OscScanner {
@@ -28,75 +28,7 @@ impl OscScanner {
 
     /// 与 [`Self::feed`] 相同，但附带序列末字节在本段中的下标。
     pub(crate) fn feed_with_offsets(&mut self, bytes: &[u8]) -> Vec<(usize, OscEvent)> {
-        let mut events = Vec::new();
-        for (offset, &byte) in bytes.iter().enumerate() {
-            self.push(byte, offset, &mut events);
-        }
-        events
-    }
-
-    fn push(&mut self, byte: u8, offset: usize, events: &mut Vec<(usize, OscEvent)>) {
-        if !self.in_payload {
-            self.push_idle(byte);
-            return;
-        }
-        if self.awaiting_st {
-            self.awaiting_st = false;
-            if byte == TERMINATOR_ST || byte == TERMINATOR_BEL {
-                self.close(offset, events);
-            } else {
-                self.collect(ESCAPE, events);
-                self.collect(byte, events);
-            }
-            return;
-        }
-        match byte {
-            TERMINATOR_BEL => self.close(offset, events),
-            ESCAPE => self.awaiting_st = true,
-            other => self.collect(other, events),
-        }
-    }
-
-    fn push_idle(&mut self, byte: u8) {
-        if self.awaiting_intro {
-            self.awaiting_intro = false;
-            if byte == OSC_INTRO {
-                self.in_payload = true;
-                self.payload.clear();
-                self.overflow = false;
-            } else if byte == ESCAPE {
-                self.awaiting_intro = true;
-            }
-            return;
-        }
-        if byte == ESCAPE {
-            self.awaiting_intro = true;
-        }
-    }
-
-    fn collect(&mut self, byte: u8, events: &mut Vec<(usize, OscEvent)>) {
-        if self.overflow {
-            return;
-        }
-        self.payload.push(byte);
-        if self.payload.len() > MAX_PAYLOAD_BYTES {
-            self.payload.clear();
-            self.overflow = true;
-            let _ = events;
-        }
-    }
-
-    fn close(&mut self, offset: usize, events: &mut Vec<(usize, OscEvent)>) {
-        let overflowed = self.overflow;
-        self.in_payload = false;
-        self.awaiting_st = false;
-        self.overflow = false;
-        if overflowed {
-            self.payload.clear();
-            return;
-        }
-        emit(&self.payload, offset, events);
-        self.payload.clear();
+        self.inner.feed_with_offsets(bytes, emit)
     }
 }
 

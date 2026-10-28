@@ -311,11 +311,7 @@ async fn handle_forward_start(
     connection_id: ConnectionId,
     rule: ForwardRule,
 ) {
-    let remote = state
-        .sessions
-        .get(&tab_id)
-        .filter(|s| s.connection_id == connection_id)
-        .and_then(|s| s.remote.clone());
+    let remote = state.current_remote(tab_id, connection_id);
 
     let Some(remote) = remote else {
         let _ = ctx

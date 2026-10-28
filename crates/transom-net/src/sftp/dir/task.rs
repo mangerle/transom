@@ -30,34 +30,28 @@ pub(super) struct DirFileTask {
 }
 
 impl DirFileTask {
-    /// 上传单个文件：字节增量聚合进共享计数，完成后按需校验并补齐尾部进度。
-    pub(super) async fn run_upload(self) -> Result<(), AppError> {
-        let mut last_reported = 0u64;
-        let bytes = self
-            .client
-            .upload_resumable(
-                &self.local_path,
-                &self.remote_path,
-                self.resume,
-                |current, _| {
-                    let delta = current.saturating_sub(last_reported);
-                    last_reported = current;
-                    if delta > 0 {
-                        let done = self
-                            .transferred
-                            .fetch_add(delta, Ordering::Relaxed)
-                            .saturating_add(delta);
-                        notify_shared_progress(&self.progress, done, Some(self.total));
-                    }
-                },
-            )
-            .await?;
+    /// 把传输层回调的累计字节换算成增量，聚合进共享进度。
+    fn note_progress(&self, current: u64, last_reported: &mut u64) {
+        let delta = current.saturating_sub(*last_reported);
+        *last_reported = current;
+        if delta > 0 {
+            let done = self
+                .transferred
+                .fetch_add(delta, Ordering::Relaxed)
+                .saturating_add(delta);
+            notify_shared_progress(&self.progress, done, Some(self.total));
+        }
+    }
+
+    /// 校验（可选）并补齐进度回调未覆盖的尾部字节。
+    ///
+    /// 传输层回调只到最近的块边界，剩余字节在这里补上，避免进度条停在 99%。
+    async fn finish(&self, bytes: u64, last_reported: u64) -> Result<(), AppError> {
         if self.verify {
             self.client
                 .verify_file(&self.local_path, &self.remote_path)
                 .await?;
         }
-        // 进度回调只覆盖到最近的块边界，剩余字节在完成后补齐
         let tail = bytes.saturating_sub(last_reported);
         if tail > 0 {
             let done = self
@@ -67,6 +61,21 @@ impl DirFileTask {
             notify_shared_progress(&self.progress, done, Some(self.total));
         }
         Ok(())
+    }
+
+    /// 上传单个文件：进度聚合后按需校验并补齐尾部。
+    pub(super) async fn run_upload(self) -> Result<(), AppError> {
+        let mut last_reported = 0u64;
+        let bytes = self
+            .client
+            .upload_resumable(
+                &self.local_path,
+                &self.remote_path,
+                self.resume,
+                |current, _| self.note_progress(current, &mut last_reported),
+            )
+            .await?;
+        self.finish(bytes, last_reported).await
     }
 
     /// 下载单个文件：确保本地父目录存在后拉取，进度聚合与上传同构。
@@ -83,32 +92,9 @@ impl DirFileTask {
                 &self.remote_path,
                 &self.local_path,
                 self.resume,
-                |current, _| {
-                    let delta = current.saturating_sub(last_reported);
-                    last_reported = current;
-                    if delta > 0 {
-                        let done = self
-                            .transferred
-                            .fetch_add(delta, Ordering::Relaxed)
-                            .saturating_add(delta);
-                        notify_shared_progress(&self.progress, done, Some(self.total));
-                    }
-                },
+                |current, _| self.note_progress(current, &mut last_reported),
             )
             .await?;
-        if self.verify {
-            self.client
-                .verify_file(&self.local_path, &self.remote_path)
-                .await?;
-        }
-        let tail = bytes.saturating_sub(last_reported);
-        if tail > 0 {
-            let done = self
-                .transferred
-                .fetch_add(tail, Ordering::Relaxed)
-                .saturating_add(tail);
-            notify_shared_progress(&self.progress, done, Some(self.total));
-        }
-        Ok(())
+        self.finish(bytes, last_reported).await
     }
 }

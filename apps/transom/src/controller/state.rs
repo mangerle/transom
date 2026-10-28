@@ -70,6 +70,17 @@ impl ControllerState {
         self.sessions.get(&tab_id).map(|s| s.connection_id)
     }
 
+    /// 按连接 ID 查找仍活跃的会话及其标签。
+    ///
+    /// 连接 ID 全局唯一，SFTP/转发的迟到完成事件需要用它反查归属标签；
+    /// 这里集中一条查找口径，避免各处各写一遍 `iter().find(...)`。
+    pub(super) fn session_by_connection(
+        &self,
+        connection_id: ConnectionId,
+    ) -> Option<(TabId, &ManagedSessionContext)> {
+        find_session_by_connection(&self.sessions, connection_id)
+    }
+
     /// 查询指定标签当前生效且连接 ID 匹配的 SSH 远端连接。
     pub(super) fn current_remote(
         &self,
@@ -88,6 +99,20 @@ impl ControllerState {
             session.shutdown(&mut self.cleanup_set, reason);
         }
     }
+}
+
+/// 在会话表中按连接 ID 查找归属标签。
+///
+/// 以自由函数提供，供只持有 `sessions` 表的调度函数复用；连接 ID 全局唯一，
+/// 同一连接不会同时归属多个标签。
+pub(super) fn find_session_by_connection(
+    sessions: &HashMap<TabId, ManagedSessionContext>,
+    connection_id: ConnectionId,
+) -> Option<(TabId, &ManagedSessionContext)> {
+    sessions
+        .iter()
+        .find(|(_, session)| session.connection_id == connection_id)
+        .map(|(tab_id, session)| (*tab_id, session))
 }
 
 /// 控制平面随控制器一次性建立的共享句柄。

@@ -12,10 +12,7 @@ pub(crate) const MAX_IMAGES: usize = 32;
 /// 图像显存总量上限（按 RGBA 字节估算）。
 pub(crate) const MAX_GRAPHICS_BYTES: usize = 64 * 1024 * 1024;
 
-pub(crate) const ESCAPE: u8 = 0x1b;
 pub(crate) const APC_INTRO: u8 = 0x5f;
-pub(crate) const ST_TAIL: u8 = 0x5c;
-pub(crate) const BEL: u8 = 0x07;
 
 /// 一次图像传输/放置的解码结果。
 #[derive(Clone)]

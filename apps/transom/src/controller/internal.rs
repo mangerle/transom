@@ -326,10 +326,8 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
     };
     // 提交前校验归属：只要该连接仍在活跃连接表中即合法。
     let valid_owner = state
-        .sessions
-        .iter()
-        .find(|(_, s)| s.connection_id == connection_id)
-        .map(|(t, _)| *t);
+        .session_by_connection(connection_id)
+        .map(|(tab_id, _)| tab_id);
     let Some(owner_tab) = valid_owner else {
         drop(result);
         return;

@@ -3,11 +3,13 @@
 use super::parser::KittyParser;
 use super::store::GraphicsStore;
 use super::types::{
-    APC_INTRO, ESCAPE, KittyEvent, MAX_APC_PAYLOAD, MAX_GRAPHICS_BYTES, MAX_IMAGES, PlaceRequest,
-    ST_TAIL,
+    APC_INTRO, KittyEvent, MAX_APC_PAYLOAD, MAX_GRAPHICS_BYTES, MAX_IMAGES, PlaceRequest,
 };
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+
+const ESCAPE: u8 = 0x1b;
+const ST_TAIL: u8 = 0x5c;
 
 fn encode_base64(bytes: &[u8]) -> String {
     STANDARD.encode(bytes)

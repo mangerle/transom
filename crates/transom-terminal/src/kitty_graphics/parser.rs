@@ -1,220 +1,172 @@
 //! Kitty APC 序列扫描与图像解码。
 
-use super::types::{
-    APC_INTRO, BEL, ESCAPE, KittyEvent, MAX_APC_PAYLOAD, MAX_IMAGE_PIXELS, PendingImage, ST_TAIL,
-};
+use super::types::{APC_INTRO, KittyEvent, MAX_APC_PAYLOAD, MAX_IMAGE_PIXELS, PendingImage};
+use crate::sequence_scanner::SequenceScanner;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use gpui_kit::RenderImage;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Kitty APC 增量扫描器。
-#[derive(Default)]
+/// Kitty APC 增量扫描器：序列边界复用通用骨架，图像语义在本模块解析。
 pub(crate) struct KittyParser {
-    awaiting_intro: bool,
-    in_payload: bool,
-    awaiting_st: bool,
-    overflow: bool,
-    payload: Vec<u8>,
+    scanner: SequenceScanner,
     pending: HashMap<u32, PendingImage>,
     next_id: u32,
+}
+
+impl Default for KittyParser {
+    fn default() -> Self {
+        Self {
+            scanner: SequenceScanner::new(APC_INTRO, MAX_APC_PAYLOAD),
+            pending: HashMap::new(),
+            next_id: 0,
+        }
+    }
 }
 
 impl KittyParser {
     /// 喂入一段字节流，返回带字节偏移的事件。不消费输入。
     pub(crate) fn feed_with_offsets(&mut self, bytes: &[u8]) -> Vec<(usize, KittyEvent)> {
-        let mut events = Vec::new();
-        for (offset, &byte) in bytes.iter().enumerate() {
-            self.push(byte, offset, &mut events);
-        }
-        events
-    }
-
-    fn push(&mut self, byte: u8, offset: usize, events: &mut Vec<(usize, KittyEvent)>) {
-        if !self.in_payload {
-            if self.awaiting_intro {
-                self.awaiting_intro = false;
-                if byte == APC_INTRO {
-                    self.in_payload = true;
-                    self.payload.clear();
-                    self.overflow = false;
-                } else if byte == ESCAPE {
-                    self.awaiting_intro = true;
-                }
-                return;
+        let Self {
+            scanner,
+            pending,
+            next_id,
+        } = self;
+        scanner.feed_with_offsets(bytes, |payload, offset, events| {
+            if let Some(event) = parse_kitty_event(payload, pending, next_id) {
+                events.push((offset, event));
             }
-            if byte == ESCAPE {
-                self.awaiting_intro = true;
-            }
-            return;
-        }
-        if self.awaiting_st {
-            self.awaiting_st = false;
-            if byte == ST_TAIL || byte == BEL {
-                self.close(offset, events);
-            } else {
-                // ESC 后不是 ST：本身属于载荷内容。
-                self.collect(ESCAPE);
-                self.collect(byte);
-            }
-            return;
-        }
-        match byte {
-            BEL => self.close(offset, events),
-            ESCAPE => self.awaiting_st = true,
-            other => self.collect(other),
+        })
+    }
+}
+
+fn parse_kitty_event(
+    payload: &[u8],
+    pending: &mut HashMap<u32, PendingImage>,
+    next_id: &mut u32,
+) -> Option<KittyEvent> {
+    let payload = std::str::from_utf8(payload).ok()?;
+    let rest = payload.strip_prefix('G')?;
+    let (controls, data) = rest.split_once(';').unwrap_or((rest, ""));
+    let mut action = "t".to_string();
+    let mut format = 0u32;
+    let mut width = 0u32;
+    let mut height = 0u32;
+    let mut cols = None;
+    let mut rows = None;
+    let mut id = 0u32;
+    let mut more = false;
+    let mut delete = None;
+    let mut x = 0i32;
+    let mut y = 0i32;
+    for field in controls.split(',') {
+        let Some((key, value)) = field.split_once('=') else {
+            continue;
+        };
+        match key {
+            "a" => action = value.to_string(),
+            "f" => format = value.parse().unwrap_or(format),
+            "s" => width = value.parse().unwrap_or(0),
+            "v" => height = value.parse().unwrap_or(0),
+            "c" => cols = value.parse::<usize>().ok().filter(|value| *value > 0),
+            "r" => rows = value.parse::<usize>().ok().filter(|value| *value > 0),
+            "i" => id = value.parse().unwrap_or(0),
+            "m" => more = value == "1",
+            "d" => delete = Some(value.to_string()),
+            "x" => x = value.parse().unwrap_or(0),
+            "y" => y = value.parse().unwrap_or(0),
+            _ => {}
         }
     }
-
-    fn collect(&mut self, byte: u8) {
-        if self.overflow {
-            return;
-        }
-        self.payload.push(byte);
-        if self.payload.len() > MAX_APC_PAYLOAD {
-            self.payload.clear();
-            self.overflow = true;
-        }
-    }
-
-    fn close(&mut self, offset: usize, events: &mut Vec<(usize, KittyEvent)>) {
-        let overflowed = self.overflow;
-        self.in_payload = false;
-        self.awaiting_st = false;
-        self.overflow = false;
-        if overflowed {
-            self.payload.clear();
-            return;
-        }
-        if let Some(event) = self.parse() {
-            events.push((offset, event));
-        }
-        self.payload.clear();
-    }
-
-    fn parse(&mut self) -> Option<KittyEvent> {
-        let payload = std::str::from_utf8(&self.payload).ok()?;
-        let rest = payload.strip_prefix('G')?;
-        let (controls, data) = rest.split_once(';').unwrap_or((rest, ""));
-        let mut action = "t".to_string();
-        let mut format = 0u32;
-        let mut width = 0u32;
-        let mut height = 0u32;
-        let mut cols = None;
-        let mut rows = None;
-        let mut id = 0u32;
-        let mut more = false;
-        let mut delete = None;
-        let mut x = 0i32;
-        let mut y = 0i32;
-        for field in controls.split(',') {
-            let Some((key, value)) = field.split_once('=') else {
-                continue;
+    match action.as_str() {
+        "d" => {
+            let id = match delete.as_deref() {
+                Some("i") if id > 0 => Some(id),
+                Some("a") | None => None,
+                _ => Some(id).filter(|value| *value > 0),
             };
-            match key {
-                "a" => action = value.to_string(),
-                "f" => format = value.parse().unwrap_or(format),
-                "s" => width = value.parse().unwrap_or(0),
-                "v" => height = value.parse().unwrap_or(0),
-                "c" => cols = value.parse::<usize>().ok().filter(|value| *value > 0),
-                "r" => rows = value.parse::<usize>().ok().filter(|value| *value > 0),
-                "i" => id = value.parse().unwrap_or(0),
-                "m" => more = value == "1",
-                "d" => delete = Some(value.to_string()),
-                "x" => x = value.parse().unwrap_or(0),
-                "y" => y = value.parse().unwrap_or(0),
-                _ => {}
-            }
+            Some(KittyEvent::Delete { id })
         }
-        match action.as_str() {
-            "d" => {
-                let id = match delete.as_deref() {
-                    Some("i") if id > 0 => Some(id),
-                    Some("a") | None => None,
-                    _ => Some(id).filter(|value| *value > 0),
-                };
-                Some(KittyEvent::Delete { id })
-            }
-            "p" => Some(KittyEvent::Place {
-                id,
+        "p" => Some(KittyEvent::Place {
+            id,
+            cols,
+            rows,
+            x,
+            y,
+        }),
+        "t" | "T" => {
+            let id = if id == 0 {
+                // 续传块常省略 `i`：只有一个在途图片时直接接上它。
+                if pending.len() == 1 {
+                    *pending.keys().next().unwrap_or(&0)
+                } else {
+                    *next_id = next_id.wrapping_add(1);
+                    *next_id
+                }
+            } else {
+                id
+            };
+            let display = action == "T";
+            let entry = pending.entry(id).or_insert_with(|| PendingImage {
+                format,
+                width,
+                height,
                 cols,
                 rows,
+                display,
                 x,
                 y,
-            }),
-            "t" | "T" => {
-                let id = if id == 0 {
-                    // 续传块常省略 `i`：只有一个在途图片时直接接上它。
-                    if self.pending.len() == 1 {
-                        *self.pending.keys().next().unwrap_or(&0)
-                    } else {
-                        self.next_id = self.next_id.wrapping_add(1);
-                        self.next_id
-                    }
-                } else {
-                    id
+                data: Vec::new(),
+            });
+            if format > 0 {
+                entry.format = format;
+            }
+            if width > 0 {
+                entry.width = width;
+            }
+            if height > 0 {
+                entry.height = height;
+            }
+            entry.cols = cols.or(entry.cols);
+            entry.rows = rows.or(entry.rows);
+            entry.display |= display;
+            entry.x = x;
+            entry.y = y;
+            if !data.is_empty() {
+                let Ok(decoded) = STANDARD.decode(data) else {
+                    pending.remove(&id);
+                    return None;
                 };
-                let display = action == "T";
-                if data.is_empty() && more {
-                    // 首块只带控制字段，载荷要在后续块里累积。
-                }
-                let entry = self.pending.entry(id).or_insert_with(|| PendingImage {
-                    format,
-                    width,
-                    height,
-                    cols,
-                    rows,
-                    display,
-                    x,
-                    y,
-                    data: Vec::new(),
-                });
-                if format > 0 {
-                    entry.format = format;
-                }
-                if width > 0 {
-                    entry.width = width;
-                }
-                if height > 0 {
-                    entry.height = height;
-                }
-                entry.cols = cols.or(entry.cols);
-                entry.rows = rows.or(entry.rows);
-                entry.display |= display;
-                entry.x = x;
-                entry.y = y;
-                if !data.is_empty() {
-                    let Ok(decoded) = STANDARD.decode(data) else {
-                        self.pending.remove(&id);
-                        return None;
-                    };
-                    entry.data.extend_from_slice(&decoded);
-                    if entry.data.len() > MAX_APC_PAYLOAD {
-                        self.pending.remove(&id);
-                        return None;
-                    }
-                }
-                if more {
+                entry.data.extend_from_slice(&decoded);
+                if entry.data.len() > MAX_APC_PAYLOAD {
+                    pending.remove(&id);
                     return None;
                 }
-                let pending = self.pending.remove(&id)?;
-                let (image, actual_width, actual_height) =
-                    decode_image(pending.format, pending.width, pending.height, &pending.data)?;
-                Some(KittyEvent::Transmit {
-                    id,
-                    image,
-                    width: actual_width,
-                    height: actual_height,
-                    cols: pending.cols,
-                    rows: pending.rows,
-                    display: pending.display,
-                    x: pending.x,
-                    y: pending.y,
-                })
             }
-            _ => None,
+            if more {
+                return None;
+            }
+            let pending_image = pending.remove(&id)?;
+            let (image, actual_width, actual_height) = decode_image(
+                pending_image.format,
+                pending_image.width,
+                pending_image.height,
+                &pending_image.data,
+            )?;
+            Some(KittyEvent::Transmit {
+                id,
+                image,
+                width: actual_width,
+                height: actual_height,
+                cols: pending_image.cols,
+                rows: pending_image.rows,
+                display: pending_image.display,
+                x: pending_image.x,
+                y: pending_image.y,
+            })
         }
+        _ => None,
     }
 }
 

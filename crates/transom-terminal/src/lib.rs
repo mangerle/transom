@@ -14,6 +14,7 @@ mod renderer;
 mod search;
 mod search_bar;
 mod search_ticks;
+mod sequence_scanner;
 pub mod trigger;
 mod view;
 mod view_ime;
