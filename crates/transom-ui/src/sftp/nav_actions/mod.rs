@@ -21,7 +21,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -46,7 +46,7 @@ impl AppShell {
         op: SftpOperation,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -73,9 +73,7 @@ impl AppShell {
     pub(crate) fn sftp_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(path) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| panel.remote.path.clone())
         else {
@@ -93,9 +91,7 @@ impl AppShell {
     ) {
         let sync_local_target = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .and_then(|panel| {
                 if !panel.sync_navigation {
@@ -139,9 +135,7 @@ impl AppShell {
     ) {
         let Some((path, sync_local_parent)) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| {
                 let remote_parent = parent_remote(&panel.remote.path);
@@ -164,9 +158,7 @@ impl AppShell {
     pub(crate) fn sftp_enter_path(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(path) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| panel.remote.path_input.read(cx).value().trim().to_string())
         else {
@@ -183,13 +175,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp_mut())
-        {
+        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
             panel.show_filter = !panel.show_filter;
             let remote_filter = panel.remote.filter_input.clone();
             let local_filter = panel.local.filter_input.clone();
@@ -227,13 +213,7 @@ impl AppShell {
     }
 
     pub(crate) fn sftp_toggle_hidden(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = self
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp_mut())
-        {
+        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
             panel.show_hidden = !panel.show_hidden;
             panel.set_status(if panel.show_hidden {
                 "已显示隐藏文件".to_string()
@@ -261,7 +241,7 @@ impl AppShell {
         title: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -286,13 +266,7 @@ impl AppShell {
         start_y: f32,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp_mut())
-        {
+        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
             panel.queue.drag_start_y = Some(start_y);
             panel.queue.drag_start_height = panel.queue.height;
             cx.notify();
@@ -305,12 +279,7 @@ impl AppShell {
         current_y: f32,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp_mut())
+        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
             && let Some(start_y) = panel.queue.drag_start_y
         {
             let delta = start_y - current_y;
@@ -321,12 +290,7 @@ impl AppShell {
     }
 
     pub(crate) fn sftp_stop_resize_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = self
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp_mut())
+        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
             && panel.queue.drag_start_y.is_some()
         {
             panel.queue.drag_start_y = None;

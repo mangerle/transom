@@ -181,12 +181,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let panel = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)?
-            .sftp()?;
+        let panel = self.workspace.tab(tab_id)?.sftp()?;
         if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
             return None;
         }

@@ -23,9 +23,7 @@ impl AppShell {
     pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let paths = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| panel.selected_local_paths())
             .unwrap_or_default();
@@ -45,7 +43,7 @@ impl AppShell {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         }
         let verify = self.settings.sftp.verify_after_transfer;
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -73,9 +71,7 @@ impl AppShell {
     fn set_sftp_panel_error(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             panel.set_error(message);
@@ -85,7 +81,7 @@ impl AppShell {
 
     pub(crate) fn sftp_queue_download(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let verify = self.settings.sftp.verify_after_transfer;
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -158,7 +154,7 @@ impl AppShell {
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let filter = TransferFilter::from_text(&self.settings.sftp.transfer_filter);
         let max_concurrent = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let tab_conn_id = tab.connection_id;
@@ -220,9 +216,7 @@ impl AppShell {
     pub(crate) fn sftp_queue_clear_done(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             panel.queue.tasks.retain(|task| {
@@ -252,9 +246,7 @@ impl AppShell {
         let mut retried_count: usize = 0;
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             let resume_enabled = panel.queue.resume_enabled;
@@ -284,9 +276,7 @@ impl AppShell {
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             active_ids = panel.queue.active_transfers.iter().copied().collect();
@@ -317,9 +307,7 @@ impl AppShell {
         let mut resumed = 0u32;
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             for task in &mut panel.queue.tasks {
@@ -345,9 +333,7 @@ impl AppShell {
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             active_ids = panel.queue.active_transfers.iter().copied().collect();

@@ -119,11 +119,7 @@ impl AppShell {
 
     /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
     pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
-        let index = self
-            .workspace
-            .tabs
-            .iter()
-            .position(|tab| tab.id == tab_id)?;
+        let index = self.workspace.tab_index(tab_id)?;
         let session_id = self.workspace.tabs[index].session_id;
         Some(
             self.catalog
@@ -150,10 +146,7 @@ impl AppShell {
     }
 
     pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
-        self.workspace
-            .groups
-            .iter()
-            .position(|group| group.contains(tab_id))
+        self.workspace.group_index_of(tab_id)
     }
 
     pub(crate) fn reconnect_tab(
@@ -162,7 +155,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tab_index(tab_id) else {
             return;
         };
         let Some(session) = self.session_for_tab(tab_id) else {
@@ -209,13 +202,7 @@ impl AppShell {
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
             self.workspace.groups[group_index].active_pane = tab_id;
         }
-        if let Some(terminal) = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.terminal())
-        {
+        if let Some(terminal) = self.workspace.tab(tab_id).and_then(|tab| tab.terminal()) {
             let focus_handle = terminal.read(cx).focus_handle().clone();
             window.focus(&focus_handle, cx);
         }

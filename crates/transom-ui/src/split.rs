@@ -121,19 +121,13 @@ impl AppShell {
         }
         // 摘出后的标签仍属于原会话：SSH 按会话序号继续排；本地终端每次都是
         // 新 Session，改按基础标题序号排，否则会与已有本地标签重名。
-        let Some((session_id, base_title, is_local)) = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
-            .map(|tab| {
-                (
-                    tab.session_id,
-                    tab.session.name.clone(),
-                    matches!(tab.session.connection, Connection::Local(_)),
-                )
-            })
-        else {
+        let Some((session_id, base_title, is_local)) = self.workspace.tab(tab_id).map(|tab| {
+            (
+                tab.session_id,
+                tab.session.name.clone(),
+                matches!(tab.session.connection, Connection::Local(_)),
+            )
+        }) else {
             return;
         };
         if is_local {

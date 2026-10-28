@@ -19,9 +19,7 @@ impl AppShell {
         let mut needs_cancel = false;
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
@@ -52,9 +50,7 @@ impl AppShell {
     ) {
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
@@ -79,9 +75,7 @@ impl AppShell {
         let mut should_cancel = false;
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
@@ -112,9 +106,7 @@ impl AppShell {
     ) {
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             panel.queue.active_transfers.remove(&op_id);
@@ -133,9 +125,7 @@ impl AppShell {
         let mut needs_cancel = false;
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             if panel.queue.active_transfers.contains(&op_id)

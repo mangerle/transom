@@ -28,7 +28,7 @@ impl AppShell {
         let Some(tab_id) = self.workspace.active_tab else {
             return div().into_any_element();
         };
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return div().into_any_element();
         };
         let tab_conn_id = tab.connection_id;
@@ -370,9 +370,7 @@ impl AppShell {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if let Some(pane) = this
                                 .workspace
-                                .tabs
-                                .iter_mut()
-                                .find(|tab| tab.id == tab_id)
+                                .tab_mut(tab_id)
                                 .and_then(|tab| tab.session_pane_mut())
                             {
                                 pane.sftp = None;

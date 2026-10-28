@@ -88,12 +88,7 @@ impl AppShell {
         let expected = item.remote_meta;
         let backup = self.settings.sftp.editor_write_backup;
         let content = editor.read(cx).value();
-        let Some(connection_id) = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.connection_id)
+        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
         else {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
@@ -191,7 +186,7 @@ impl AppShell {
         };
         // 目录列表条目就地补丁：size/mtime 都来自写后 stat，与远端一致，
         // 无需为刷新列表再发一次目录请求。
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tab_mut(tab_id)
             && let Some(panel) = tab.sftp_mut()
             && let Some(entry) = panel
                 .remote
@@ -208,9 +203,7 @@ impl AppShell {
             && let Some(parent) = parent_dir(&remote_path)
             && self
                 .workspace
-                .tabs
-                .iter()
-                .find(|tab| tab.id == tab_id)
+                .tab(tab_id)
                 .and_then(|tab| tab.sftp())
                 .is_some_and(|panel| panel.remote.path == parent)
         {
@@ -303,7 +296,7 @@ impl AppShell {
 
     /// 把编辑入口的拒绝原因写到该标签的远端栏错误位上。
     pub(crate) fn editor_reject(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tab_mut(tab_id)
             && let Some(panel) = tab.sftp_mut()
         {
             panel.set_error(message);

@@ -34,9 +34,7 @@ impl AppShell {
     ) {
         let Some(pane) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.session_pane_mut())
         else {
             return;
@@ -151,9 +149,7 @@ impl AppShell {
     ) -> Option<AnyElement> {
         let state = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.zmodem().cloned())?;
         let direction_label = match state.direction {
             ZmodemDirection::Upload => rust_i18n::t!("zmodem.upload").to_string(),

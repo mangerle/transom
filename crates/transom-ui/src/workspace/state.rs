@@ -46,6 +46,41 @@ impl WorkspaceState {
         }
     }
 
+    /// 按窗格 id 查找标签。
+    pub(crate) fn tab(&self, id: TabId) -> Option<&TerminalTab> {
+        self.tabs.iter().find(|tab| tab.id == id)
+    }
+
+    /// 按窗格 id 可变查找标签。
+    pub(crate) fn tab_mut(&mut self, id: TabId) -> Option<&mut TerminalTab> {
+        self.tabs.iter_mut().find(|tab| tab.id == id)
+    }
+
+    /// 标签在集合中的下标；需要按下标同时访问其它工作区字段时使用。
+    pub(crate) fn tab_index(&self, id: TabId) -> Option<usize> {
+        self.tabs.iter().position(|tab| tab.id == id)
+    }
+
+    /// 标签是否存在。
+    pub(crate) fn has_tab(&self, id: TabId) -> bool {
+        self.tabs.iter().any(|tab| tab.id == id)
+    }
+
+    /// 按分组 id 查找标签组。
+    pub(crate) fn group(&self, id: GroupId) -> Option<&TabGroup> {
+        self.groups.iter().find(|group| group.id == id)
+    }
+
+    /// 标签组在集合中的下标。
+    pub(crate) fn group_index(&self, id: GroupId) -> Option<usize> {
+        self.groups.iter().position(|group| group.id == id)
+    }
+
+    /// 标签所属分组的索引；标签不属于任何分组时返回 `None`。
+    pub(crate) fn group_index_of(&self, tab: TabId) -> Option<usize> {
+        self.groups.iter().position(|group| group.contains(tab))
+    }
+
     /// 收敛并排网格与标签组的关系：摘掉已消失的组，空槽补焦点，
     /// 占用不足两个格子的网格整体解除。
     ///
@@ -160,7 +195,42 @@ impl WorkspaceState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use transom_core::SessionId;
+    use transom_core::{AuthMethod, Connection, Session, SessionId, SshConnection};
+
+    /// 查询 API 与底层集合保持一致：标签、分组与归属关系都能按 id 命中。
+    #[test]
+    fn lookup_helpers_find_tabs_and_groups() {
+        let mut workspace = WorkspaceState::new();
+        let pane = TabId::new();
+        let session = Session::new(
+            "demo",
+            Connection::Ssh(SshConnection {
+                host: "example.com".into(),
+                port: 22,
+                username: "demo".into(),
+                auth: AuthMethod::Password { save: false },
+                options: Default::default(),
+                proxy_jump: None,
+            }),
+        );
+        let group = TabGroup::new(pane, session.id, 0);
+        let group_id = group.id;
+        workspace.groups.push(group);
+        workspace.tabs.push(TerminalTab::pending(pane, session));
+
+        assert!(workspace.tab(pane).is_some());
+        assert_eq!(workspace.tab_index(pane), Some(0));
+        assert!(workspace.has_tab(pane));
+        assert!(workspace.tab_mut(pane).is_some());
+        assert_eq!(workspace.group_index_of(pane), Some(0));
+        assert!(workspace.group(group_id).is_some());
+        assert_eq!(workspace.group_index(group_id), Some(0));
+
+        let missing = TabId::new();
+        assert!(workspace.tab(missing).is_none());
+        assert!(!workspace.has_tab(missing));
+        assert!(workspace.group_index_of(missing).is_none());
+    }
 
     #[test]
     fn workspace_state_lifecycle() {

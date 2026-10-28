@@ -49,10 +49,6 @@ impl AppShell {
     /// 当前窗格已建好的终端实体；未连接或连接已断开的窗格返回 `None`。
     pub(crate) fn active_pane_terminal(&self) -> Option<Entity<TerminalView>> {
         let tab_id = self.workspace.active_tab?;
-        self.workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.terminal())
+        self.workspace.tab(tab_id).and_then(|tab| tab.terminal())
     }
 }

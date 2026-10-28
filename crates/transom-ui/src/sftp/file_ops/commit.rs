@@ -40,9 +40,7 @@ impl AppShell {
         if matches!(modal.target, SftpInputTarget::RemoteEditorNewFile) {
             let existing = self
                 .workspace
-                .tabs
-                .iter()
-                .find(|t| t.id == tab_id)
+                .tab(tab_id)
                 .and_then(|t| t.sftp())
                 .map(|panel| {
                     let path = join_remote(&panel.remote.path, &name);
@@ -76,7 +74,7 @@ impl AppShell {
 
         match modal.target {
             SftpInputTarget::RemoteMkdir => {
-                let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
+                let Some(tab) = self.workspace.tab(tab_id) else {
                     return;
                 };
                 let Some(panel) = tab.sftp() else {
@@ -98,7 +96,7 @@ impl AppShell {
                 self.send_sftp_op(tab_id, op, cx);
             }
             SftpInputTarget::RemoteSymlink { target } => {
-                let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
+                let Some(tab) = self.workspace.tab(tab_id) else {
                     return;
                 };
                 let Some(panel) = tab.sftp() else {
@@ -111,13 +109,7 @@ impl AppShell {
                 self.send_sftp_op(tab_id, op, cx);
             }
             SftpInputTarget::LocalMkdir => {
-                if let Some(panel) = self
-                    .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp_mut())
-                {
+                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     let new_dir = panel.local.path.join(&name);
                     if let Err(err) = std::fs::create_dir_all(&new_dir) {
                         panel.set_local_error(format!("新建本地文件夹失败: {err}"));
@@ -129,13 +121,7 @@ impl AppShell {
                 }
             }
             SftpInputTarget::LocalRename { old_path } => {
-                if let Some(panel) = self
-                    .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp_mut())
-                {
+                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     if let Some(parent) = old_path.parent() {
                         let new_path = parent.join(&name);
                         if let Err(err) = std::fs::rename(&old_path, &new_path) {
@@ -171,13 +157,7 @@ impl AppShell {
         name: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|t| t.id == tab_id)
-            .and_then(|t| t.sftp_mut())
-        else {
+        let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
             return;
         };
         let link_path = panel.local.path.join(name);

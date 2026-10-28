@@ -65,13 +65,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(target_pane) = self
-            .workspace
-            .groups
-            .iter()
-            .find(|group| group.id == target)
-            .map(|group| group.active_pane)
-        else {
+        let Some(target_pane) = self.workspace.group(target).map(|group| group.active_pane) else {
             return;
         };
         if self.tiling_of_group(target).is_some() {
@@ -188,12 +182,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self
-            .workspace
-            .groups
-            .iter()
-            .position(|item| item.id == group)
-        else {
+        let Some(index) = self.workspace.group_index(group) else {
             return;
         };
         let pane = self.workspace.groups[index].active_pane;

@@ -45,7 +45,7 @@ impl AppShell {
         if paths.is_empty() {
             return;
         }
-        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tab_index(tab_id) else {
             return;
         };
         if let Some(key) = drop_rejection(

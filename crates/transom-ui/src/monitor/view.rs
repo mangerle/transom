@@ -21,7 +21,7 @@ impl AppShell {
         let stats = self
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab_id| self.workspace.tab(tab_id))
             .and_then(|tab| tab.system_stats().cloned());
         let mut body = v_flex().gap_4().p_3();
         if let Some(stats) = &stats {

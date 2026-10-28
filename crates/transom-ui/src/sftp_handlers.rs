@@ -31,7 +31,7 @@ impl AppShell {
             return true;
         };
         let mut update_input = None;
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+        if let Some(tab) = self.workspace.tab_mut(tab_id) {
             let is_main_conn = tab.connection_id == Some(connection_id);
             if let Some(panel) = tab.sftp_mut() {
                 if is_main_conn {

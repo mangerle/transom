@@ -72,13 +72,7 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
-                    if let Some(panel) = this
-                        .workspace
-                        .tabs
-                        .iter_mut()
-                        .find(|t| t.id == tab_id)
-                        .and_then(|t| t.sftp_mut())
-                    {
+                    if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                         if panel.local.selection.contains(&p_up) {
                             panel.set_local_primary(p_up.clone());
                         } else {
@@ -99,12 +93,8 @@ pub(super) fn build_local_context_menu(
                 move |_, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(p_cp.display().to_string()));
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             panel.set_status(format!("已复制本地路径: {}", p_cp.display()));
                         }
@@ -120,12 +110,8 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             panel.select_local(p_sym.clone());
                         }
@@ -165,12 +151,8 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             panel.select_local(p_ren.clone());
                         }
@@ -183,12 +165,7 @@ pub(super) fn build_local_context_menu(
         let app = app_entity.clone();
         move |_, _, cx| {
             app.update(cx, |this, cx| {
-                if let Some(panel) = this
-                    .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp_mut())
+                if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                     && !panel.local.selection.contains(&p_del)
                 {
                     panel.select_local(p_del.clone());

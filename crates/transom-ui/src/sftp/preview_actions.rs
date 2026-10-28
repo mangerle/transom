@@ -127,11 +127,7 @@ impl AppShell {
     }
 
     fn sftp_panel_mut_by_tab(&mut self, tab_id: TabId) -> Option<&mut SftpPanelState> {
-        self.workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)?
-            .sftp_mut()
+        self.workspace.tab_mut(tab_id)?.sftp_mut()
     }
 
     fn schedule_preview_start(

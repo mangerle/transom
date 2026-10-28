@@ -80,7 +80,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         const BACKOFF_SECS: [u64; 3] = [2, 5, 10];
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         if tab.connection_id != Some(failed_connection) {
@@ -129,7 +129,7 @@ impl AppShell {
                 .timer(std::time::Duration::from_secs(delay_secs))
                 .await;
             let _ = this.update(cx, |this, cx| {
-                let Some(tab) = this.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+                let Some(tab) = this.workspace.tab(tab_id) else {
                     return;
                 };
                 if tab.connection_id != Some(failed_connection) || tab.session_id != session_id {
@@ -153,7 +153,7 @@ impl AppShell {
             session.name,
             describe_target(&session)
         );
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+        if let Some(tab) = self.workspace.tab_mut(tab_id) {
             tab.connection_id = Some(connection_id);
             if let Some(pane) = tab.session_pane_mut() {
                 pane.sftp = None;
@@ -181,7 +181,7 @@ impl AppShell {
                     session.name
                 );
                 self.set_error(localized_error(&error));
-                if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+                if let Some(tab) = self.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Failed(error);
                 }
                 cx.notify();
@@ -197,7 +197,7 @@ impl AppShell {
             );
             let error = AppError::with_detail(ErrorCode::Configuration, reason);
             self.set_error(localized_error(&error));
-            if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+            if let Some(tab) = self.workspace.tab_mut(tab_id) {
                 tab.status = TabStatus::Failed(error);
             }
             cx.notify();

@@ -137,7 +137,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tab_index(tab_id) else {
             return div().into_any_element();
         };
         let p = frame.palette;
@@ -263,7 +263,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tab_index(tab_id) else {
             return div().into_any_element();
         };
         if let Some(player) = self.workspace.tabs[index].player() {

@@ -73,12 +73,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let session = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
-            .map(|tab| tab.session.clone());
+        let session = self.workspace.tab(tab_id).map(|tab| tab.session.clone());
         if let Some(s) = session {
             self.open_audit_viewer(Some(&s), window, cx);
         } else {

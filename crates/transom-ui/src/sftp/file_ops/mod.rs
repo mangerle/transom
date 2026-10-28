@@ -13,7 +13,7 @@ use transom_core::{RemoteDeleteTarget, SftpOperation, TabId};
 impl AppShell {
     /// 批量删除远端选中项；目录按递归语义删除。
     pub(crate) fn sftp_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -48,9 +48,7 @@ impl AppShell {
         self.send_sftp_op(tab_id, SftpOperation::DeleteMany { targets }, cx);
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             panel.set_status(format!("正在删除 {count} 个远端项目"));
@@ -70,9 +68,7 @@ impl AppShell {
     pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(active_pane) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| panel.active_pane)
         else {
@@ -157,7 +153,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp() else {
@@ -221,7 +217,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp() else {

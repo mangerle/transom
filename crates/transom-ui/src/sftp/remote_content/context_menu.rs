@@ -72,12 +72,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             if panel.remote.selection.contains(&p_dl) {
                                 panel.set_remote_primary(p_dl.clone());
@@ -114,12 +110,8 @@ pub(crate) fn build_remote_context_menu(
                 move |_, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(p_cp.clone()));
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             panel.set_status(format!("已复制远端路径: {p_cp}"));
                         }
@@ -135,12 +127,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             panel.select_remote(p_sym.clone());
                         }
@@ -168,12 +156,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             panel.select_remote(p_chmod.clone());
                         }
@@ -201,12 +185,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) = this
-                            .workspace
-                            .tabs
-                            .iter_mut()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.sftp_mut())
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
                             panel.select_remote(p_ren.clone());
                         }
@@ -219,12 +199,7 @@ pub(crate) fn build_remote_context_menu(
         let app = app.clone();
         move |_, _, cx| {
             app.update(cx, |this, cx| {
-                if let Some(panel) = this
-                    .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp_mut())
+                if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                     && !panel.remote.selection.contains(&p_del)
                 {
                     panel.select_remote(p_del.clone());

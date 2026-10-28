@@ -168,9 +168,7 @@ impl AppShell {
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         let selected = this
                                             .workspace
-                                            .tabs
-                                            .iter()
-                                            .find(|t| t.id == tab_id)
+                                            .tab(tab_id)
                                             .and_then(|t| t.sftp())
                                             .and_then(|p| p.remote.selected.clone());
                                         if let Some(remote_path) = selected {
@@ -237,9 +235,7 @@ impl AppShell {
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(panel) = this
                                             .workspace
-                                            .tabs
-                                            .iter_mut()
-                                            .find(|t| t.id == tab_id)
+                                            .tab_mut(tab_id)
                                             .and_then(|t| t.sftp_mut())
                                         {
                                             panel.sync_navigation = !panel.sync_navigation;
@@ -299,8 +295,7 @@ impl AppShell {
                         let item = drag.clone();
                         let dir = dir_drop.clone();
                         app_drop.update(cx, |this, cx| {
-                            let Some(tab) = this.workspace.tabs.iter().find(|t| t.id == tab_id)
-                            else {
+                            let Some(tab) = this.workspace.tab(tab_id) else {
                                 return;
                             };
                             let Some(main_conn) = tab.connection_id else {

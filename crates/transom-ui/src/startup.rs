@@ -41,21 +41,22 @@ impl AppShell {
         let task = cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(STARTUP_GRACE).await;
             for command in commands {
-                let delivered =
-                    this.update_in(cx, |this, _window, cx| {
-                        let Some(tab) = this.workspace.tabs.iter().find(|tab| {
-                            tab.id == tab_id && tab.connection_id == Some(connection_id)
-                        }) else {
-                            return false;
-                        };
-                        let Some(terminal) = tab.terminal() else {
-                            return false;
-                        };
-                        terminal.update(cx, |view, cx| {
-                            view.send_text(&format!("{command}\r"), cx);
-                        });
-                        true
+                let delivered = this.update_in(cx, |this, _window, cx| {
+                    let Some(tab) = this
+                        .workspace
+                        .tab(tab_id)
+                        .filter(|tab| tab.connection_id == Some(connection_id))
+                    else {
+                        return false;
+                    };
+                    let Some(terminal) = tab.terminal() else {
+                        return false;
+                    };
+                    terminal.update(cx, |view, cx| {
+                        view.send_text(&format!("{command}\r"), cx);
                     });
+                    true
+                });
                 if !delivered.unwrap_or(false) {
                     break;
                 }

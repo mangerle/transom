@@ -81,7 +81,7 @@ impl AppShell {
             && let Some(focus_handle) = self
                 .workspace
                 .active_tab
-                .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
+                .and_then(|tab_id| self.workspace.tab(tab_id))
                 .and_then(|tab| tab.terminal())
                 .map(|terminal| terminal.read(cx).focus_handle().clone())
         {

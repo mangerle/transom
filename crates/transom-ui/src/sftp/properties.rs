@@ -35,13 +35,7 @@ impl AppShell {
                 });
             }
             Err(err) => {
-                if let Some(panel) = self
-                    .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|t| t.id == tab_id)
-                    .and_then(|t| t.sftp_mut())
-                {
+                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     panel.set_local_error(format!("读取本地文件属性失败: {err}"));
                 }
             }

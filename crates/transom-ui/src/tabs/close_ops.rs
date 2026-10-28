@@ -111,12 +111,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self
-            .workspace
-            .groups
-            .iter()
-            .position(|group| group.id == group_id)
-        else {
+        let Some(index) = self.workspace.group_index(group_id) else {
             return;
         };
         let panes = self.workspace.groups[index].pane_ids();
@@ -145,7 +140,7 @@ impl AppShell {
                 .active_tiling()
                 .and_then(|tiled| tiled.focused_group())
                 .or(tiled_focus)
-                .and_then(|id| self.workspace.groups.iter().find(|group| group.id == id))
+                .and_then(|id| self.workspace.group(id))
                 .map(|group| group.active_pane);
             self.workspace.active_tab = tiled_return.or_else(|| {
                 self.workspace
@@ -220,22 +215,11 @@ impl AppShell {
                 .or_else(|| {
                     self.active_tiling()
                         .and_then(|tiled| tiled.focused_group())
-                        .and_then(|group| {
-                            self.workspace
-                                .groups
-                                .iter()
-                                .find(|item| item.id == group)
-                                .map(|item| item.active_pane)
-                        })
+                        .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
                 })
                 .or_else(|| {
-                    tiled_focus.and_then(|group| {
-                        self.workspace
-                            .groups
-                            .iter()
-                            .find(|item| item.id == group)
-                            .map(|item| item.active_pane)
-                    })
+                    tiled_focus
+                        .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
                 })
                 .or_else(|| self.workspace.groups.first().map(|group| group.active_pane));
         }

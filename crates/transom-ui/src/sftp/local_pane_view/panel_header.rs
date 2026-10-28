@@ -28,7 +28,7 @@ impl AppShell {
             .tooltip("关闭面板")
             .on_click(cx.listener(|this, _, _, cx| {
                 if let Some(tab_id) = this.workspace.active_tab
-                    && let Some(tab) = this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                    && let Some(tab) = this.workspace.tab_mut(tab_id)
                     && let Some(pane) = tab.session_pane_mut()
                 {
                     pane.sftp = None;

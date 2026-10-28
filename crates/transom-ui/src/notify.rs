@@ -34,9 +34,7 @@ impl AppShell {
         }
         let pane_name = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .map(|tab| tab.display_name())
             .unwrap_or_default();
         let exit_text = match exit_code {

@@ -348,11 +348,7 @@ impl AppShell {
                         }
                     }
                     if let Some(group) = focus
-                        && let Some(index) = self
-                            .workspace
-                            .groups
-                            .iter()
-                            .position(|item| item.id == group)
+                        && let Some(index) = self.workspace.group_index(group)
                     {
                         let pane = self.workspace.groups[index].active_pane;
                         self.activate_tab(pane, window, cx);

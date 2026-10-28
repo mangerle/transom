@@ -18,9 +18,7 @@ impl AppShell {
     pub(crate) fn mark_forwards_stopped(&mut self, tab_id: TabId) {
         if let Some(pane) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.session_pane_mut())
         {
             for status in pane.forward_statuses.values_mut() {
@@ -41,9 +39,7 @@ impl AppShell {
     ) {
         if let Some(pane) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.session_pane_mut())
         {
             pane.forward_statuses.insert(
@@ -98,9 +94,7 @@ impl AppShell {
 
     pub(crate) fn forward_panel_mut(&mut self, tab_id: TabId) -> Option<&mut ForwardPanelState> {
         self.workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.forwards_panel_mut())
     }
 
@@ -108,7 +102,7 @@ impl AppShell {
         let Some(tab_id) = self.workspace.active_tab else {
             return;
         };
-        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tab_index(tab_id) else {
             return;
         };
         if self.workspace.tabs[index].forwards_panel().is_some() {
@@ -171,7 +165,7 @@ impl AppShell {
     }
 
     pub(crate) fn add_forward_rule(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -291,7 +285,7 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -349,12 +343,7 @@ impl AppShell {
             connection_id,
             rule,
         } = pending;
-        let session_id = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|t| t.id == tab_id)
-            .map(|t| t.session_id);
+        let session_id = self.workspace.tab(tab_id).map(|t| t.session_id);
         if let Some(session_id) = session_id {
             if let Some(session) = self
                 .catalog
@@ -387,7 +376,7 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -419,7 +408,7 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return;
         };
         let connection_id = tab.connection_id;
@@ -427,9 +416,7 @@ impl AppShell {
         if let (Some(connection_id), Some(status)) = (
             connection_id,
             self.workspace
-                .tabs
-                .iter()
-                .find(|tab| tab.id == tab_id)
+                .tab(tab_id)
                 .and_then(|tab| tab.session_pane())
                 .and_then(|pane| pane.forward_statuses.get(&rule_id)),
         ) && matches!(
@@ -444,9 +431,7 @@ impl AppShell {
         }
         if let Some(pane) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.session_pane_mut())
         {
             pane.forward_statuses.remove(&rule_id);

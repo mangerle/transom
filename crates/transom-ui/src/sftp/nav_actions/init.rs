@@ -24,11 +24,7 @@ impl AppShell {
         tab_id: TabId,
         connection_id: ConnectionId,
     ) -> Option<&mut SftpPanelState> {
-        let tab = self
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)?;
+        let tab = self.workspace.tab_mut(tab_id)?;
         if tab.connection_id != Some(connection_id) {
             let is_side = tab
                 .sftp()
@@ -50,7 +46,7 @@ impl AppShell {
         if let Some(panel) = self
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id))
+            .and_then(|tab_id| self.workspace.tab(tab_id))
             .and_then(|tab| tab.sftp())
         {
             window.focus(&panel.focus_handle, cx);
@@ -61,7 +57,7 @@ impl AppShell {
         let Some(tab_id) = self.workspace.active_tab else {
             return;
         };
-        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tab_index(tab_id) else {
             return;
         };
         // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，

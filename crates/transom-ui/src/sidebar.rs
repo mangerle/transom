@@ -53,13 +53,9 @@ impl AppShell {
     }
 
     pub(crate) fn active_session_id(&self) -> Option<SessionId> {
-        self.workspace.active_tab.and_then(|tab_id| {
-            self.workspace
-                .tabs
-                .iter()
-                .find(|tab| tab.id == tab_id)
-                .map(|tab| tab.session_id)
-        })
+        self.workspace
+            .active_tab
+            .and_then(|tab_id| self.workspace.tab(tab_id).map(|tab| tab.session_id))
     }
 
     pub(crate) fn render_sidebar(

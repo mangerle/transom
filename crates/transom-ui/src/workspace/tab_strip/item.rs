@@ -36,11 +36,7 @@ pub(super) fn render_tab_entry(
         }
     };
 
-    let group = shell
-        .workspace
-        .groups
-        .iter()
-        .find(|item| item.id == group_id)?;
+    let group = shell.workspace.group(group_id)?;
     let tile_enabled = !composite && can_tile;
     let tab = shell
         .workspace
@@ -315,7 +311,7 @@ fn render_pane_badge(
         .into_iter()
         .enumerate()
         .filter_map(|(position, pane_id)| {
-            let tab = shell.workspace.tabs.iter().find(|tab| tab.id == pane_id)?;
+            let tab = shell.workspace.tab(pane_id)?;
             let (dot_color, icon) = crate::workspace::pane_status_indicator(&tab.status, p);
             Some(PaneRow {
                 tab_id: pane_id,

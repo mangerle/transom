@@ -126,12 +126,7 @@ impl AppShell {
         let allowed: HashSet<TabId> = self
             .current_visual_groups()
             .into_iter()
-            .filter_map(|group_id| {
-                self.workspace
-                    .groups
-                    .iter()
-                    .find(|group| group.id == group_id)
-            })
+            .filter_map(|group_id| self.workspace.group(group_id))
             .flat_map(|group| group.pane_ids())
             .collect();
         self.broadcast.targets.retain(|id| allowed.contains(id));
@@ -145,7 +140,7 @@ impl AppShell {
         let multiline = self.broadcast.multiline;
         let mut failed = 0usize;
         for tab_id in &targets {
-            let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == *tab_id) else {
+            let Some(tab) = self.workspace.tab(*tab_id) else {
                 failed += 1;
                 continue;
             };
@@ -273,12 +268,7 @@ impl AppShell {
         let groups = self.current_visual_groups();
         let mut rows = Vec::with_capacity(self.workspace.tabs.len());
         for group_id in groups {
-            let Some(group) = self
-                .workspace
-                .groups
-                .iter()
-                .find(|group| group.id == group_id)
-            else {
+            let Some(group) = self.workspace.group(group_id) else {
                 continue;
             };
             let pane_ids = group.pane_ids();

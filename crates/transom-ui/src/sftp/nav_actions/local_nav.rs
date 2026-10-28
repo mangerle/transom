@@ -19,7 +19,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -47,9 +47,7 @@ impl AppShell {
     ) {
         let sync_remote_target = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .and_then(|panel| {
                 if !panel.sync_navigation {
@@ -77,9 +75,7 @@ impl AppShell {
     ) {
         let (parent, sync_remote_parent) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| {
                 let local_parent = panel.local.path.parent().map(|p| p.to_path_buf());
@@ -112,9 +108,7 @@ impl AppShell {
     ) {
         let target = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| PathBuf::from(panel.local.path_input.read(cx).value().trim()));
         if let Some(target) = target
@@ -127,9 +121,7 @@ impl AppShell {
     pub(crate) fn sftp_open_local_file_manager(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(local_path) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| panel.local.path.clone())
         else {
@@ -139,9 +131,7 @@ impl AppShell {
 
         if let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
             panel.set_status(format!(

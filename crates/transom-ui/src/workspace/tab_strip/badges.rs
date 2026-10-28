@@ -101,12 +101,7 @@ pub(super) fn build_tiled_group_badge(
         let Some(group_id) = *group_id else {
             continue;
         };
-        let Some(group) = shell
-            .workspace
-            .groups
-            .iter()
-            .find(|group| group.id == group_id)
-        else {
+        let Some(group) = shell.workspace.group(group_id) else {
             continue;
         };
         let Some(tab) = shell

@@ -34,9 +34,7 @@ impl AppShell {
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
                     .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|tab| tab.id == tab_id)
+                    .tab_mut(tab_id)
                     .and_then(|tab| tab.sftp_mut())
                 else {
                     return;

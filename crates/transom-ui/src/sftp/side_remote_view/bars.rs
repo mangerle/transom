@@ -29,9 +29,7 @@ impl AppShell {
     ) -> AnyElement {
         let (open, mounted_conn_ids) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|t| t.id == tab_id)
+            .tab(tab_id)
             .and_then(|t| t.sftp())
             .map(|p| {
                 let mounted: Vec<ConnectionId> =
@@ -49,7 +47,7 @@ impl AppShell {
             .tooltip("并列挂载其他已连接会话");
 
         // 收集当前标签页的连接与排除信息
-        let current_tab = self.workspace.tabs.iter().find(|t| t.id == tab_id);
+        let current_tab = self.workspace.tab(tab_id);
         let current_conn_id = current_tab.and_then(|t| t.connection_id);
         let current_session_id = current_tab.map(|t| t.session.id);
         let is_local_only = current_tab

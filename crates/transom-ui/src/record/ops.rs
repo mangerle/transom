@@ -30,7 +30,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.iter_mut().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(terminal) = tab.terminal() else {
@@ -221,7 +221,7 @@ impl AppShell {
             return;
         }
 
-        let Some(tab) = self.workspace.tabs.iter().find(|t| t.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return;
         };
         let Some(terminal) = tab.terminal() else {

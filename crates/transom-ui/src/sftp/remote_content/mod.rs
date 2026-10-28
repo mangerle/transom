@@ -59,9 +59,7 @@ impl AppShell {
                 move |this, range, _window, cx| {
                     let (remote_selection, remote_primary) = this
                         .workspace
-                        .tabs
-                        .iter()
-                        .find(|tab| tab.id == tab_id)
+                        .tab(tab_id)
                         .and_then(|tab| tab.sftp())
                         .map(|panel| {
                             (
@@ -117,12 +115,8 @@ impl AppShell {
                                     MouseButton::Left,
                                     cx.listener(move |this, event: &MouseDownEvent, window, cx| {
                                         this.dismiss_sftp_hover_preview(tab_id, cx);
-                                        if let Some(panel) = this
-                                            .workspace
-                                            .tabs
-                                            .iter()
-                                            .find(|tab| tab.id == tab_id)
-                                            .and_then(|tab| tab.sftp())
+                                        if let Some(panel) =
+                                            this.workspace.tab(tab_id).and_then(|tab| tab.sftp())
                                         {
                                             window.focus(&panel.focus_handle, cx);
                                         }
@@ -151,9 +145,7 @@ impl AppShell {
                                         }
                                         let Some(panel) = this
                                             .workspace
-                                            .tabs
-                                            .iter_mut()
-                                            .find(|tab| tab.id == tab_id)
+                                            .tab_mut(tab_id)
                                             .and_then(|tab| tab.sftp_mut())
                                         else {
                                             return;
@@ -205,9 +197,7 @@ impl AppShell {
                                         this.dismiss_sftp_hover_preview(tab_id, cx);
                                         if let Some(panel) = this
                                             .workspace
-                                            .tabs
-                                            .iter_mut()
-                                            .find(|tab| tab.id == tab_id)
+                                            .tab_mut(tab_id)
                                             .and_then(|tab| tab.sftp_mut())
                                         {
                                             if panel.remote.selection.contains(&entry_path_right) {

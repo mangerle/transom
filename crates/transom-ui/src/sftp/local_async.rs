@@ -30,9 +30,7 @@ impl AppShell {
     ) {
         let Some(dir) = self
             .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
+            .tab(tab_id)
             .and_then(|tab| tab.sftp())
             .map(|panel| panel.local.path.clone())
         else {
@@ -47,9 +45,7 @@ impl AppShell {
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
                     .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|tab| tab.id == tab_id)
+                    .tab_mut(tab_id)
                     .and_then(|tab| tab.sftp_mut())
                 else {
                     return;
@@ -88,9 +84,7 @@ impl AppShell {
         self.dismiss_sftp_hover_preview(tab_id, cx);
         let Some(panel) = self
             .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.id == tab_id)
+            .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         else {
             return;
@@ -117,9 +111,7 @@ impl AppShell {
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
                     .workspace
-                    .tabs
-                    .iter_mut()
-                    .find(|tab| tab.id == tab_id)
+                    .tab_mut(tab_id)
                     .and_then(|tab| tab.sftp_mut())
                 else {
                     return;

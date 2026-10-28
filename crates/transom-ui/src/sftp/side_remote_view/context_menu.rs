@@ -123,12 +123,7 @@ pub(super) fn build_side_remote_context_menu(
                 let name_tr = name_tr.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        let main_conn = this
-                            .workspace
-                            .tabs
-                            .iter()
-                            .find(|t| t.id == tab_id)
-                            .and_then(|t| t.connection_id);
+                        let main_conn = this.workspace.tab(tab_id).and_then(|t| t.connection_id);
                         let main_path = this
                             .sftp_panel_mut_tab(tab_id)
                             .map(|p| p.remote.path.clone());

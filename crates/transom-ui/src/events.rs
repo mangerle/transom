@@ -229,7 +229,7 @@ impl AppShell {
     ) {
         match event {
             TerminalEvent::Title(title) => {
-                if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) {
+                if let Some(tab) = self.workspace.tab_mut(tab_id) {
                     tab.title = title.clone();
                 }
                 self.sftp_sync_with_terminal_title(tab_id, title, cx);
@@ -242,7 +242,7 @@ impl AppShell {
                 self.status = Some(rust_i18n::t!("status.copied").to_string());
             }
             TerminalEvent::Exit => {
-                if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                if let Some(tab) = self.workspace.tab_mut(tab_id)
                     && !matches!(tab.status, TabStatus::Failed(_))
                 {
                     tab.status = TabStatus::Disconnected;

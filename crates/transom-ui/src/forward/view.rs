@@ -21,7 +21,7 @@ impl AppShell {
         let Some(tab_id) = self.workspace.active_tab else {
             return div().into_any_element();
         };
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return div().into_any_element();
         };
         let Some(pane) = tab.session_pane() else {
@@ -84,8 +84,7 @@ impl AppShell {
                     .icon(IconName::X)
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(tab_id) = this.workspace.active_tab
-                            && let Some(tab) =
-                                this.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+                            && let Some(tab) = this.workspace.tab_mut(tab_id)
                             && let Some(pane) = tab.session_pane_mut()
                         {
                             pane.forwards_panel = None;

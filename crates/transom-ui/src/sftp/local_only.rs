@@ -129,13 +129,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(panel) = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp())
-        else {
+        let Some(panel) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
             return div().into_any_element();
         };
         let local_path_input = panel.local.path_input.clone();

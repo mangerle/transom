@@ -31,7 +31,7 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(index) = self.workspace.tabs.iter().position(|tab| tab.id == tab_id) else {
+        let Some(index) = self.workspace.tab_index(tab_id) else {
             return false;
         };
         if self.workspace.tabs[index].connection_id != Some(connection_id) {
@@ -164,7 +164,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
         {
             tab.status = TabStatus::Failed(error.clone());
@@ -198,7 +198,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
             && !matches!(tab.status, TabStatus::Failed(_))
         {
@@ -237,7 +237,7 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return false;
         };
         if tab.connection_id != Some(connection_id) {
@@ -296,7 +296,7 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(tab) = self.workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
+        let Some(tab) = self.workspace.tab(tab_id) else {
             return false;
         };
         if tab.connection_id != Some(connection_id) {
@@ -329,7 +329,7 @@ impl AppShell {
             self.monitor_record_network(tab_id, &stats.interfaces);
         }
         let mut applied = false;
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
             && let Some(pane) = tab.session_pane_mut()
         {
@@ -367,7 +367,7 @@ impl AppShell {
             return true;
         };
         let mut applied = false;
-        if let Some(tab) = self.workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)
+        if let Some(tab) = self.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
             && let Some(pane) = tab.session_pane_mut()
         {

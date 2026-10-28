@@ -115,9 +115,7 @@ pub(super) fn render_side_remote_header(
         .on_click(cx.listener(move |this, _, _, cx| {
             let (selected_paths, local_path) = this
                 .workspace
-                .tabs
-                .iter()
-                .find(|t| t.id == tab_id)
+                .tab(tab_id)
                 .and_then(|t| t.sftp())
                 .map(|p| {
                     let paths = p

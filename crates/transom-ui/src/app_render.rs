@@ -232,7 +232,7 @@ impl AppShell {
         let active_panel = self
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id));
+            .and_then(|tab_id| self.workspace.tab(tab_id));
         let show_sftp = active_panel.is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open));
         let sftp_panel = active_panel.and_then(|tab| tab.sftp());
         let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);

@@ -75,7 +75,7 @@ impl AppShell {
         let active_tab_info = self
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tabs.iter().find(|tab| tab.id == tab_id));
+            .and_then(|tab_id| self.workspace.tab(tab_id));
 
         let (status_dot_color, status_text) = if let Some(tab) = active_tab_info {
             let (color, text) = match &tab.status {

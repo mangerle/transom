@@ -59,7 +59,7 @@ impl AppShell {
     /// 当前活动标签的进程采样目标；只有 SSH 与本地终端支持。
     fn active_monitor_target(&self) -> Option<(TabId, ConnectionId)> {
         let tab_id = self.workspace.active_tab?;
-        let tab = self.workspace.tabs.iter().find(|tab| tab.id == tab_id)?;
+        let tab = self.workspace.tab(tab_id)?;
         if !matches!(
             tab.session.connection,
             transom_core::Connection::Ssh(_) | transom_core::Connection::Local(_)
