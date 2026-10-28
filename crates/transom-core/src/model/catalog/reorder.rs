@@ -1,6 +1,6 @@
 //! 目录节点拖拽排序、快照合并与结构校验归一化。
 
-use super::{CatalogError, CatalogMergeSummary, DropSide, SessionCatalog, SessionFolder};
+use super::{CatalogError, DropSide, SessionCatalog};
 use crate::ids::{FolderId, SessionId};
 use std::collections::{HashMap, HashSet};
 
@@ -84,56 +84,6 @@ impl SessionCatalog {
         };
         self.folders.insert(insert_at, folder);
         Ok(())
-    }
-
-    /// 合并另一份目录快照，用于备份导入与多机同步。
-    pub fn merge(&mut self, other: SessionCatalog) -> CatalogMergeSummary {
-        let mut summary = CatalogMergeSummary::default();
-        for folder in other.folders {
-            if let Some(existing) = self
-                .folders
-                .iter_mut()
-                .find(|existing| existing.id == folder.id)
-            {
-                let collapsed = existing.collapsed;
-                *existing = SessionFolder {
-                    collapsed,
-                    ..folder
-                };
-                summary.updated_folders += 1;
-            } else {
-                self.folders.push(folder);
-                summary.added_folders += 1;
-            }
-        }
-        for session in other.sessions {
-            if let Some(existing) = self
-                .sessions
-                .iter_mut()
-                .find(|existing| existing.id == session.id)
-            {
-                *existing = session;
-                summary.updated_sessions += 1;
-            } else {
-                self.sessions.push(session);
-                summary.added_sessions += 1;
-            }
-        }
-        for identity in other.identities {
-            if let Some(existing) = self
-                .identities
-                .iter_mut()
-                .find(|existing| existing.id == identity.id)
-            {
-                *existing = identity;
-                summary.updated_identities += 1;
-            } else {
-                self.identities.push(identity);
-                summary.added_identities += 1;
-            }
-        }
-        self.normalize();
-        summary
     }
 
     /// 修复外部文件中的损坏树结构，保证后续 UI 与移动操作安全。

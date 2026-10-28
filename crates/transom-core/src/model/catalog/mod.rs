@@ -19,7 +19,7 @@ mod sessions;
 #[cfg(test)]
 mod tests;
 
-pub use merge::{SyncMergeReport, merge_catalogs};
+pub use merge::{MergePreference, SyncMergeReport, merge_catalogs};
 
 use crate::ids::{FolderId, SessionId};
 use crate::model::session::Session;
@@ -83,18 +83,6 @@ pub struct SessionCatalog {
     /// 凭据模板清单；老目录文件没有该字段时按空清单降级。
     #[serde(default)]
     pub identities: Vec<crate::model::identity::Identity>,
-}
-
-/// 备份合并统计。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct CatalogMergeSummary {
-    pub added_sessions: usize,
-    pub updated_sessions: usize,
-    pub added_folders: usize,
-    pub updated_folders: usize,
-    /// 新增/更新的凭据模板数；口令是否随之落盘由导出选项决定，这里只报目录变化。
-    pub added_identities: usize,
-    pub updated_identities: usize,
 }
 
 /// 拖拽落点的侧向：插到锚点条目之前或之后。

@@ -34,7 +34,7 @@ pub use ids::{
     TransferId, TriggerId,
 };
 pub use model::catalog::{
-    CatalogError, CatalogMergeSummary, DropSide, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH,
+    CatalogError, DropSide, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH, MergePreference,
     SessionCatalog, SessionFolder, SyncMergeReport, merge_catalogs,
 };
 pub use model::color::Rgb;

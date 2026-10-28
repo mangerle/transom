@@ -220,13 +220,12 @@ fn merge_adds_new_and_updates_same_ids() {
     let new_session = Session::new("new", Connection::Local(LocalConnection::default()));
     remote.sessions = vec![same, new_session];
 
-    let summary = local.merge(remote);
-    assert_eq!(summary.added_sessions, 1);
-    assert_eq!(summary.updated_sessions, 1);
-    assert_eq!(summary.updated_folders, 1);
-    assert_eq!(local.folders[0].name, "远端");
-    assert!(local.folders[0].collapsed, "折叠状态应保留本机偏好");
-    assert_eq!(local.sessions.len(), 2);
+    let (merged, summary) = merge_catalogs(None, &local, &remote, MergePreference::Remote);
+    assert_eq!(summary.sessions_added, 1);
+    assert_eq!(summary.folders_updated, 1);
+    assert_eq!(merged.folders[0].name, "远端");
+    assert!(merged.folders[0].collapsed, "折叠状态应保留本机偏好");
+    assert_eq!(merged.sessions.len(), 2);
 }
 
 #[test]

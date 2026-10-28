@@ -6,8 +6,9 @@
 //! - 上传下载是分钟级网络操作，走 `AppCommand` 交给控制器的 tokio 运行时，
 //!   结果经 `AppEvent` 回流；合并动作回到界面线程执行，因为目录快照是
 //!   界面侧的独占状态；
-//! - 冲突策略是"后写者胜"，因此下载合并前先把本机目录导出为明文安全
-//!   副本（0600），误合并可从文件恢复。
+//! - 合并策略：会话按 updated_at 较新者胜；没有时间戳的文件夹/凭据在冲突时
+//!   按操作方向裁决（拉取取远端）。下载合并前仍先导出本机安全副本，误合并
+//!   可从文件恢复。
 
 use crate::app::AppShell;
 use crate::backup::secret_restore_note;
@@ -16,8 +17,9 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{
-    AppError, BackupDocument, BackupExportOptions, GitSyncResult, GitSyncSettings, SecretKey,
-    SecretRestoreReport, SessionCatalog, SyncCommand, SyncEndpoint, SyncPushReport, SyncSettings,
+    AppError, BackupDocument, BackupExportOptions, GitSyncResult, GitSyncSettings, MergePreference,
+    SecretKey, SecretRestoreReport, SessionCatalog, SyncCommand, SyncEndpoint, SyncPushReport,
+    SyncSettings, merge_catalogs,
 };
 
 /// 定时 Git 同步的节拍器：按分钟累计，达到配置间隔才触发一次。
@@ -463,7 +465,9 @@ impl AppShell {
         safety_path: Option<PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        let summary = self.catalog.merge(catalog);
+        let (merged, report) =
+            merge_catalogs(None, &self.catalog, &catalog, MergePreference::Remote);
+        self.catalog = merged;
         let saved = self.persist_catalog();
         self.refresh_tab_sessions();
         self.settings.sync.last_pull_at = Some(chrono::Utc::now().timestamp());
@@ -473,11 +477,16 @@ impl AppShell {
 
         let mut message = rust_i18n::t!(
             "sync.pulled",
-            added = summary.added_sessions,
-            updated = summary.updated_sessions,
-            folders = summary.added_folders
+            added = report.sessions_added,
+            updated = report.sessions_updated,
+            folders = report.folders_added
         )
         .to_string();
+        if report.conflicts > 0 {
+            message.push(' ');
+            message
+                .push_str(rust_i18n::t!("sync.merge_conflicts", count = report.conflicts).as_ref());
+        }
         message.push_str(&secret_restore_note(secrets));
         if let Some(path) = safety_path {
             message.push(' ');

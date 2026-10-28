@@ -11,9 +11,9 @@
 
 use std::sync::Arc;
 use transom_core::{
-    AppError, BackupDocument, CloudSyncTarget, ErrorCode, GitSyncResult, SecretKey, SecretStore,
-    SessionCatalog, SyncEndpoint, SyncPushReport, SyncSettings, collect_catalog_secrets,
-    is_sync_conflict, merge_catalogs,
+    AppError, BackupDocument, CloudSyncTarget, ErrorCode, GitSyncResult, MergePreference,
+    SecretKey, SecretStore, SessionCatalog, SyncEndpoint, SyncPushReport, SyncSettings,
+    collect_catalog_secrets, is_sync_conflict, merge_catalogs,
 };
 use transom_crypto::backup::{BackupFormat, decrypt_document, encrypt_document};
 use zeroize::Zeroizing;
@@ -90,7 +90,8 @@ impl CloudSyncService {
                 .into_parts()
                 .0
             };
-            let (merged, _) = merge_catalogs(None, catalog, &remote_catalog);
+            let (merged, _) =
+                merge_catalogs(None, catalog, &remote_catalog, MergePreference::Local);
             let sessions = merged.sessions.len();
             let folders = merged.folders.len();
             let merged_for_build = merged.clone();

@@ -2256,6 +2256,9 @@ sync:
   pulled:
     en: "Restored from cloud: %{added} added, %{updated} updated, %{folders} folders."
     zh-CN: 已从云端恢复：新增 %{added}，更新 %{updated}，新增文件夹 %{folders}。
+  merge_conflicts:
+    en: "%{count} conflicting entries kept the local version."
+    zh-CN: 有 %{count} 项冲突保留了本机版本。
   safety_note:
     en: A pre-merge copy of this machine was saved to %{path}.
     zh-CN: 合并前的本机目录已备份到 %{path}。

@@ -24,7 +24,8 @@ use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::Duration;
 use transom_core::{
-    AppError, ErrorCode, GitSyncResult, GitSyncSettings, SessionCatalog, merge_catalogs,
+    AppError, ErrorCode, GitSyncResult, GitSyncSettings, MergePreference, SessionCatalog,
+    merge_catalogs,
 };
 use transom_crypto::envelope::{is_envelope, open, seal};
 use transom_platform::private_fs;
@@ -94,7 +95,12 @@ fn attempt_sync(
         None => SessionCatalog::default(),
     };
     let base = load_base(cache_dir, passphrase);
-    let (merged, report) = merge_catalogs(base.as_ref(), local, &remote_catalog);
+    let (merged, report) = merge_catalogs(
+        base.as_ref(),
+        local,
+        &remote_catalog,
+        MergePreference::Local,
+    );
     let plaintext = serde_json::to_vec(&merged).map_err(|error| {
         AppError::with_detail(
             ErrorCode::CloudSyncFailed,

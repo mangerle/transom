@@ -15,7 +15,7 @@ use crate::palette::localized_error;
 use gpui_kit::*;
 use transom_core::{
     AppError, BackupExportOptions, BackupExportReport, BackupImportOptions, ErrorCode,
-    SecretRestoreReport, SessionCatalog,
+    MergePreference, SecretRestoreReport, SessionCatalog, merge_catalogs,
 };
 use zeroize::Zeroizing;
 
@@ -163,17 +163,25 @@ impl AppShell {
                 self.status = Some(message);
             }
             Ok(BackupOutcome::Imported { catalog, secrets }) => {
-                let summary = self.catalog.merge(catalog);
+                let (merged, report) =
+                    merge_catalogs(None, &self.catalog, &catalog, MergePreference::Remote);
+                self.catalog = merged;
                 let saved = self.persist_catalog();
                 self.refresh_tab_sessions();
                 self.modals.backup_prompt = None;
                 let mut message = rust_i18n::t!(
                     "backup.imported",
-                    added = summary.added_sessions,
-                    updated = summary.updated_sessions,
-                    folders = summary.added_folders
+                    added = report.sessions_added,
+                    updated = report.sessions_updated,
+                    folders = report.folders_added
                 )
                 .to_string();
+                if report.conflicts > 0 {
+                    message.push(' ');
+                    message.push_str(
+                        rust_i18n::t!("sync.merge_conflicts", count = report.conflicts).as_ref(),
+                    );
+                }
                 message.push_str(&secret_restore_note(secrets));
                 if saved {
                     self.status = Some(message);
