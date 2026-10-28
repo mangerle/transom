@@ -252,8 +252,40 @@ pub(crate) fn localized_error(error: &AppError) -> String {
         _ => rust_i18n::t!("app.error"),
     }
     .to_string();
+    // 底层 `AppError.detail` 是 core/net 产出的中文诊断文本；只有中文界面
+    // 才拼接，其他语言只展示按错误码本地化的标题，避免中英混排的"半句英文"。
+    // 需要完整诊断时以日志为准，界面不再充当原始错误的透传管道。
     match &error.detail {
-        Some(detail) if !detail.is_empty() => format!("{label}: {detail}"),
+        Some(detail) if !detail.is_empty() && locale_displays_detail(&rust_i18n::locale()) => {
+            format!("{label}: {detail}")
+        }
         _ => label,
+    }
+}
+
+/// 指定语言是否应展示底层中文诊断详情。
+///
+/// 纯函数便于测试：`zh`、`zh-CN`、`zh-TW` 等中文变体展示详情，其余语言
+/// 只显示按错误码本地化的标题。
+fn locale_displays_detail(locale: &str) -> bool {
+    locale.starts_with("zh")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::locale_displays_detail;
+
+    #[test]
+    fn chinese_locales_show_raw_detail() {
+        assert!(locale_displays_detail("zh"));
+        assert!(locale_displays_detail("zh-CN"));
+        assert!(locale_displays_detail("zh-TW"));
+    }
+
+    #[test]
+    fn other_locales_hide_raw_detail() {
+        assert!(!locale_displays_detail("en"));
+        assert!(!locale_displays_detail("en-US"));
+        assert!(!locale_displays_detail("ja"));
     }
 }
