@@ -12,14 +12,17 @@
 //!   以及任何写入都必须显式保持数组顺序（不能依赖按名称字典序渲染）。
 
 mod folders;
+mod merge;
 mod reorder;
 mod sessions;
 
 #[cfg(test)]
 mod tests;
 
+pub use merge::{SyncMergeReport, merge_catalogs};
+
 use crate::ids::{FolderId, SessionId};
-use crate::session::Session;
+use crate::model::session::Session;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -79,7 +82,7 @@ pub struct SessionCatalog {
     pub sessions: Vec<Session>,
     /// 凭据模板清单；老目录文件没有该字段时按空清单降级。
     #[serde(default)]
-    pub identities: Vec<crate::identity::Identity>,
+    pub identities: Vec<crate::model::identity::Identity>,
 }
 
 /// 备份合并统计。

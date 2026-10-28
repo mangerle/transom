@@ -63,10 +63,10 @@ impl fmt::Debug for TerminalControlHandle {
     }
 }
 
-/// A transport-independent terminal byte stream.
+/// 与具体传输方式无关的终端字节流。
 ///
-/// The terminal widget owns `reader`/`writer`; the transport keeps the receiving
-/// half of `control` and reacts to resize and close requests.
+/// 终端视图独占 `reader`/`writer` 的消费与生产；传输端持有 `control` 的
+/// 接收半端，响应尺寸调整与关闭请求。
 pub struct TerminalIo {
     pub reader: Box<dyn Read + Send>,
     pub writer: Box<dyn Write + Send>,

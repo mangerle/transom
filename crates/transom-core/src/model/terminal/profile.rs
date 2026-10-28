@@ -2,7 +2,7 @@
 
 use super::highlight::TerminalHighlight;
 use super::key_bindings::TerminalKeyBinding;
-use crate::color::Rgb;
+use crate::model::color::Rgb;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

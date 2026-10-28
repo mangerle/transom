@@ -2,8 +2,8 @@
 
 use super::types::{RemoteDeleteTarget, RemoteTextMeta};
 use crate::ids::ConnectionId;
-use crate::sftp_filter::TransferFilter;
-use crate::sftp_sync::SyncItem;
+use crate::protocol::sftp_filter::TransferFilter;
+use crate::protocol::sftp_sync::SyncItem;
 use std::path::PathBuf;
 
 /// 悬停预览的读取语义。

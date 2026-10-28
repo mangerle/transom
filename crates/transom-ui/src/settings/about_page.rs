@@ -32,7 +32,7 @@ fn platform_label() -> &'static str {
         .get_or_init(|| {
             let distro = std::fs::read_to_string("/etc/os-release")
                 .ok()
-                .map(|content| transom_core::system_stats::parse_os_name(&content))
+                .map(|content| transom_core::protocol::system_stats::parse_os_name(&content))
                 .filter(|name| !name.is_empty())
                 .unwrap_or_else(|| std::env::consts::OS.to_string());
             format!("{distro} · {}", std::env::consts::ARCH)

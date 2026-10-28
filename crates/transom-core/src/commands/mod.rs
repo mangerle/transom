@@ -120,11 +120,11 @@ pub struct SystemStats {
     pub os_name: String,
     /// 每个逻辑核心的使用率；旧配置或首轮采样时为空。
     #[serde(default)]
-    pub cpu_cores: Vec<crate::system_stats::CoreUsage>,
+    pub cpu_cores: Vec<crate::protocol::system_stats::CoreUsage>,
     /// 全部真实挂载点的占用明细。
     #[serde(default)]
-    pub filesystems: Vec<crate::system_stats::FilesystemUsage>,
+    pub filesystems: Vec<crate::protocol::system_stats::FilesystemUsage>,
     /// 每块非回环网卡的本轮速率。
     #[serde(default)]
-    pub interfaces: Vec<crate::system_stats::InterfaceRate>,
+    pub interfaces: Vec<crate::protocol::system_stats::InterfaceRate>,
 }

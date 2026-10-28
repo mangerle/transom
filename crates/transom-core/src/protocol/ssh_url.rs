@@ -10,7 +10,7 @@
 //! 规则的完全可控；这些扩展在终端连接场景中没有对应语义，将来需要时在本模块
 //! 增量扩展即可，不影响调用方契约。
 
-use crate::session::{AuthMethod, Connection, Session, SessionOptions, SshConnection};
+use crate::model::session::{AuthMethod, Connection, Session, SessionOptions, SshConnection};
 
 /// 把未指定用户名/端口的地址补齐为可发起连接的 SSH 会话参数。
 ///

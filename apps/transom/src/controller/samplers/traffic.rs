@@ -2,7 +2,7 @@
 
 use super::common::send_overwritable;
 use std::sync::Arc;
-use transom_core::traffic::parse_net_dev_totals;
+use transom_core::protocol::traffic::parse_net_dev_totals;
 use transom_core::{AppEvent, ConnectionId, HostAppEvent, NetworkTraffic, TabId, TrafficCounter};
 
 pub(crate) fn spawn_traffic_sampler(

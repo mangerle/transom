@@ -106,10 +106,10 @@ AppCommand::Connect
 
 ```
 crates/transom-core/src/
-  model/     领域模型与算法：session / settings / catalog / appearance ...
+  model/     领域模型与算法：session / settings / catalog / merge / appearance ...
   protocol/  线格式与契约：ssh_config / ssh_url / sftp / sync / system_stats(types) ...
-  根        commands（命令/事件）、error、ids、prompt、secrets、storage、backup
-  注：历史路径（crate::session 等）经 lib.rs 别名 re-export 保持可用；
+  根        commands（命令/事件）、error、ids、prompt、secrets、storage、backup、transport（终端字节流契约）
+  注：模块路径即规范路径，不再保留历史别名；
   仅界面队列使用的 TransferTask 系列模型在 transom-ui/sftp/task.rs。
 
 crates/transom-platform/src/

@@ -1,7 +1,7 @@
 //! 语义块、日志等级、历史命令、审计日志、快捷指令片段、SFTP 与快捷键子系统配置。
 
 use crate::ids::SnippetId;
-use crate::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
+use crate::protocol::sftp_filter::DEFAULT_TRANSFER_EXCLUDES;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -46,12 +46,12 @@ impl Default for BlockViewSettings {
 
 impl BlockViewSettings {
     /// 叠加会话级覆盖："强制开启/关闭"只改开关，样式与阈值仍取全局。
-    pub fn resolved(self, override_: crate::session::BlockViewOverride) -> Self {
+    pub fn resolved(self, override_: crate::model::session::BlockViewOverride) -> Self {
         let mut settings = self;
         match override_ {
-            crate::session::BlockViewOverride::FollowGlobal => {}
-            crate::session::BlockViewOverride::Enabled => settings.enabled = true,
-            crate::session::BlockViewOverride::Disabled => settings.enabled = false,
+            crate::model::session::BlockViewOverride::FollowGlobal => {}
+            crate::model::session::BlockViewOverride::Enabled => settings.enabled = true,
+            crate::model::session::BlockViewOverride::Disabled => settings.enabled = false,
         }
         settings
     }

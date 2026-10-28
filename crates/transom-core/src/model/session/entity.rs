@@ -2,11 +2,11 @@
 
 use super::connection::Connection;
 use super::ssh::AuthMethod;
-use crate::forward::ForwardRule;
 use crate::ids::{FolderId, SessionId};
+use crate::model::forward::ForwardRule;
+use crate::model::session_appearance::{SessionColor, SessionIcon};
+use crate::model::terminal::TerminalProfile;
 use crate::secrets::SecretKind;
-use crate::session_appearance::{SessionColor, SessionIcon};
-use crate::terminal::TerminalProfile;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +42,7 @@ pub struct Session {
     ///
     /// 老会话文件没有该字段，按跟随全局降级。
     #[serde(default)]
-    pub proxy: Option<crate::proxy::OutboundProxy>,
+    pub proxy: Option<crate::protocol::proxy::OutboundProxy>,
     /// 语义块视图的会话级覆盖；老会话文件按跟随全局降级。
     #[serde(default)]
     pub block_view: BlockViewOverride,
@@ -93,8 +93,8 @@ impl Session {
     /// net 层拿到的是最终结果，不需要理解"会话/全局"的优先级。
     pub fn effective_proxy(
         &self,
-        global: &crate::proxy::OutboundProxy,
-    ) -> crate::proxy::OutboundProxy {
+        global: &crate::protocol::proxy::OutboundProxy,
+    ) -> crate::protocol::proxy::OutboundProxy {
         self.proxy.clone().unwrap_or_else(|| global.clone())
     }
 

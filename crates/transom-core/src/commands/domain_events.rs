@@ -9,16 +9,16 @@
 //! - ZmodemEvent: ZMODEM 传输协议事件
 
 use crate::error::AppError;
-use crate::forward::ForwardStatus;
-use crate::host::HostOutcome;
 use crate::ids::{ConnectionId, SessionId, TabId, TransferId};
+use crate::model::forward::ForwardStatus;
+use crate::model::host::HostOutcome;
 use crate::prompt::PromptInfo;
-use crate::sftp::{RemoteFile, RemoteMetadata, RemoteTextMeta};
-use crate::sftp_sync::DirComparison;
-use crate::sync::{GitSyncResult, SyncPushReport};
-use crate::system_stats::ProcessInfo;
-use crate::terminal::TerminalIo;
-use crate::traffic::NetworkTraffic;
+use crate::protocol::sftp::{RemoteFile, RemoteMetadata, RemoteTextMeta};
+use crate::protocol::sftp_sync::DirComparison;
+use crate::protocol::sync::{GitSyncResult, SyncPushReport};
+use crate::protocol::system_stats::ProcessInfo;
+use crate::protocol::traffic::NetworkTraffic;
+use crate::transport::TerminalIo;
 use std::path::PathBuf;
 
 /// 终端会话与连接相关的事件。
@@ -207,7 +207,7 @@ pub enum ZmodemAppEvent {
     Zmodem {
         tab_id: TabId,
         connection_id: ConnectionId,
-        event: crate::zmodem::ZmodemEvent,
+        event: crate::protocol::zmodem::ZmodemEvent,
     },
 }
 

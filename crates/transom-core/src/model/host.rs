@@ -12,7 +12,7 @@
 //! 仍然保留，前者是已单测的公开能力，后者是既有会话文件里的用户数据。
 
 use crate::ids::SessionId;
-use crate::session::{Connection, Session};
+use crate::model::session::{Connection, Session};
 
 /// 一次主机级网络动作；`session_id` 用于把结果回填到会话列表的对应行。
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ impl HostAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::{LocalConnection, SshConnection, TelnetConnection};
+    use crate::model::session::{LocalConnection, SshConnection, TelnetConnection};
 
     fn ssh_session() -> Session {
         Session::new(

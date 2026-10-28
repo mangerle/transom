@@ -9,12 +9,12 @@
 //! - 加密与否由"有没有口令"表达，而不是额外的布尔开关：明文与加密是两种
 //!   互斥的文件形态，用 `Option` 能让非法组合在类型层面无法出现。
 
-use crate::catalog::{SessionCatalog, SessionFolder};
 use crate::error::AppError;
-use crate::identity::Identity;
 use crate::ids::{IdentityId, SessionId};
+use crate::model::catalog::{SessionCatalog, SessionFolder};
+use crate::model::identity::Identity;
+use crate::model::session::Session;
 use crate::secrets::{SecretKind, SecretOwner};
-use crate::session::Session;
 use crate::storage::SecretStore;
 use serde::de::Deserializer;
 use serde::ser::{SerializeStruct, Serializer};
@@ -332,7 +332,7 @@ mod tests {
     /// 备份文件是用户手上的历史资产，格式变更不能让他们导不出旧包。
     #[test]
     fn identity_secrets_use_separate_field_and_legacy_still_parses() {
-        let identity = crate::identity::Identity::new(
+        let identity = crate::model::identity::Identity::new(
             "ops",
             "ops",
             crate::AuthMethod::Password { save: true },

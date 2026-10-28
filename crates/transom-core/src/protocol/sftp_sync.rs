@@ -1,6 +1,6 @@
 //! 本地/远端目录差异计算与增量同步计划。
 
-use crate::sftp::TransferDirection;
+use crate::protocol::sftp::TransferDirection;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -211,7 +211,7 @@ mod tests {
     use super::{
         DirDiffStatus, DirEntryMeta, DirSnapshotEntry, SyncDirection, build_dir_comparison,
     };
-    use crate::sftp::TransferDirection;
+    use crate::protocol::sftp::TransferDirection;
 
     fn file(path: &str, size: u64, mtime: u32) -> DirSnapshotEntry {
         DirSnapshotEntry {

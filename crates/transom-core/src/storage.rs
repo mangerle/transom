@@ -2,10 +2,10 @@ use crate::backup::{
     BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,
     SecretRestoreReport,
 };
-use crate::catalog::SessionCatalog;
 use crate::error::AppError;
+use crate::model::catalog::SessionCatalog;
+use crate::model::settings::AppSettings;
 use crate::secrets::SecretKey;
-use crate::settings::AppSettings;
 use std::path::Path;
 use zeroize::Zeroizing;
 

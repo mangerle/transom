@@ -1,4 +1,5 @@
 use super::*;
+use crate::transport::{TerminalControl, TerminalControlHandle, TerminalSize};
 
 /// 老配置没有 `right_click` 字段：必须按旧开关迁移，不能把用户此前的
 /// "右键粘贴"悄悄改成弹菜单。

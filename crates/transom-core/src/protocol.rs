@@ -4,7 +4,6 @@
 //! URL、传输元数据、同步文档、采样输出），与 UI 无关、可独立测试；与领域
 //! 模型的"状态形状"分开放置后，两边的边界一眼可见。
 
-pub mod merge;
 pub mod proxy;
 pub mod sftp;
 pub mod sftp_filter;

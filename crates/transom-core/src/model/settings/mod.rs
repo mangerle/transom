@@ -8,6 +8,7 @@
 
 mod appearance;
 mod subsystems;
+mod sync;
 mod window;
 
 #[cfg(test)]
@@ -18,14 +19,14 @@ pub use subsystems::{
     AuditSettings, BlockViewSettings, BlockViewStyle, HistorySettings, LogLevel, LogSettings,
     SftpSettings, ShortcutSettings, Snippet, SnippetSettings,
 };
+pub use sync::{GitSyncSettings, SyncEndpoint, SyncSettings};
 pub use window::{
     BellStyle, PanelSide, SavedLayout, SavedTabGroup, SavedTabTiling, SidebarStartup, SplitAxis,
     StartupTabs, WindowBackgroundMode, WindowSettings,
 };
 
-use crate::layout::{ActivityBarLayout, StatusBarLayout};
-use crate::sync::SyncSettings;
-use crate::terminal::{TerminalInteraction, TerminalProfile};
+use crate::model::layout::{ActivityBarLayout, StatusBarLayout};
+use crate::model::terminal::{TerminalInteraction, TerminalProfile};
 use serde::{Deserialize, Serialize};
 
 /// 全局应用设置。
@@ -65,7 +66,7 @@ pub struct AppSettings {
     pub sync: SyncSettings,
     /// ZMODEM 下载目录与自动接收开关；旧配置缺少该字段时使用默认。
     #[serde(default)]
-    pub zmodem: crate::zmodem::ZmodemSettings,
+    pub zmodem: crate::protocol::zmodem::ZmodemSettings,
     /// 会话输出审计落盘；旧配置缺少该字段时按关闭降级。
     #[serde(default)]
     pub audit: AuditSettings,
@@ -77,10 +78,10 @@ pub struct AppSettings {
     pub logs: LogSettings,
     /// 终端输出触发器与自动应答规则；旧配置缺少该字段时默认空。
     #[serde(default)]
-    pub triggers: crate::trigger::TriggerSettings,
+    pub triggers: crate::model::trigger::TriggerSettings,
     /// 全局出站代理；会话未显式指定代理时生效，旧配置缺省为直连。
     #[serde(default)]
-    pub proxy: crate::proxy::OutboundProxy,
+    pub proxy: crate::protocol::proxy::OutboundProxy,
     /// OSC 133 语义块视图偏好；旧配置缺省为启用卡片样式。
     #[serde(default)]
     pub block_view: BlockViewSettings,
@@ -117,12 +118,12 @@ impl Default for AppSettings {
             activity_bar: ActivityBarLayout::default(),
             status_bar: StatusBarLayout::default(),
             sync: SyncSettings::default(),
-            zmodem: crate::zmodem::ZmodemSettings::default(),
+            zmodem: crate::protocol::zmodem::ZmodemSettings::default(),
             audit: AuditSettings::default(),
             history: HistorySettings::default(),
             logs: LogSettings::default(),
-            triggers: crate::trigger::TriggerSettings::default(),
-            proxy: crate::proxy::OutboundProxy::default(),
+            triggers: crate::model::trigger::TriggerSettings::default(),
+            proxy: crate::protocol::proxy::OutboundProxy::default(),
             block_view: BlockViewSettings::default(),
             allow_sha1_publickey_auth: default_allow_sha1_publickey_auth(),
         }

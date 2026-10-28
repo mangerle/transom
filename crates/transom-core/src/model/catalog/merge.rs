@@ -13,7 +13,7 @@
 //! 代价与局限：文件夹与凭据模板没有逐条时间戳，冲突一律本机优先；合并按
 //! 稳定 ID 对齐，重名条目不会被合并。
 
-use crate::catalog::SessionCatalog;
+use super::SessionCatalog;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -188,10 +188,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::SessionFolder;
-    use crate::identity::Identity;
     use crate::ids::{FolderId, IdentityId, SessionId};
-    use crate::session::{AuthMethod, Connection, Session, SshConnection};
+    use crate::model::catalog::SessionFolder;
+    use crate::model::identity::Identity;
+    use crate::model::session::{AuthMethod, Connection, Session, SshConnection};
 
     // 让编译器确认键类型与目录条目字段一致（改字段时会在这里报错）。
     fn _key_types(

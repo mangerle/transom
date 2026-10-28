@@ -3,7 +3,7 @@
 use super::common::send_overwritable;
 use std::sync::Arc;
 use tokio::process::Command;
-use transom_core::system_stats::FilesystemUsage;
+use transom_core::FilesystemUsage;
 use transom_core::{AppEvent, ConnectionId, HostAppEvent, TabId};
 use transom_net::{SshRemote, StatsSamplerState};
 

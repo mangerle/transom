@@ -1,6 +1,6 @@
 use super::*;
 use crate::error::ErrorCode;
-use crate::session::{Connection, LocalConnection};
+use crate::model::session::{Connection, LocalConnection};
 
 fn session(catalog: &mut SessionCatalog, name: &str) -> SessionId {
     let session = Session::new(name, Connection::Local(LocalConnection::default()));
@@ -250,7 +250,10 @@ fn normalize_drops_duplicate_folder_ids() {
 fn ssh_session(catalog: &mut SessionCatalog, name: &str) -> SessionId {
     let session = Session::new(
         name,
-        crate::session::Connection::Ssh(crate::session::SshConnection::new("h", "inline-user")),
+        crate::model::session::Connection::Ssh(crate::model::session::SshConnection::new(
+            "h",
+            "inline-user",
+        )),
     );
     let id = session.id;
     catalog.sessions.push(session);
@@ -258,10 +261,10 @@ fn ssh_session(catalog: &mut SessionCatalog, name: &str) -> SessionId {
 }
 
 fn ops(catalog: &mut SessionCatalog) -> crate::ids::IdentityId {
-    let identity = crate::identity::Identity::new(
+    let identity = crate::model::identity::Identity::new(
         "ops",
         "ops-user",
-        crate::session::AuthMethod::Password { save: true },
+        crate::model::session::AuthMethod::Password { save: true },
     );
     let id = identity.id;
     catalog.identities.push(identity);
@@ -274,10 +277,10 @@ fn set_jump(catalog: &mut SessionCatalog, session: SessionId, jump: SessionId) {
         .iter_mut()
         .find(|candidate| candidate.id == session)
         .unwrap();
-    let crate::session::Connection::Ssh(ssh) = &mut session.connection else {
+    let crate::model::session::Connection::Ssh(ssh) = &mut session.connection else {
         panic!("测试会话必须是 SSH 连接");
     };
-    ssh.proxy_jump = Some(crate::session::ProxyJumpConfig {
+    ssh.proxy_jump = Some(crate::model::session::ProxyJumpConfig {
         jump_session_id: jump,
     });
 }
@@ -303,7 +306,7 @@ fn proxy_jump_chain_is_ordered_outermost_first() {
     // 链路副本同样叠加了模板/文件夹继承，与直连目标保持同一口径。
     assert!(matches!(
         chain[0].connection,
-        crate::session::Connection::Ssh(_)
+        crate::model::session::Connection::Ssh(_)
     ));
 }
 
@@ -369,7 +372,7 @@ fn proxy_jump_chain_rejects_non_ssh_jump() {
     let mut catalog = SessionCatalog::default();
     let local = Session::new(
         "local",
-        crate::session::Connection::Local(crate::session::LocalConnection::default()),
+        crate::model::session::Connection::Local(crate::model::session::LocalConnection::default()),
     );
     let local_id = local.id;
     catalog.sessions.push(local);
@@ -411,20 +414,20 @@ fn resolved_session_overrides_identity_fields_only() {
         .unwrap();
     let resolved = catalog.resolved_session(session);
     match &resolved.connection {
-        crate::session::Connection::Ssh(ssh) => {
+        crate::model::session::Connection::Ssh(ssh) => {
             assert_eq!(ssh.username, "ops-user");
             assert_eq!(ssh.host, "h");
             assert_eq!(ssh.port, 22);
             assert!(matches!(
                 ssh.auth,
-                crate::session::AuthMethod::Password { save: true }
+                crate::model::session::AuthMethod::Password { save: true }
             ));
         }
         _ => panic!("应仍是 SSH 连接"),
     }
     // 原会话不被修改：叠加发生在连接派发时的副本上。
     match &session.connection {
-        crate::session::Connection::Ssh(ssh) => assert_eq!(ssh.username, "inline-user"),
+        crate::model::session::Connection::Ssh(ssh) => assert_eq!(ssh.username, "inline-user"),
         _ => panic!("应仍是 SSH 连接"),
     }
 }
@@ -435,13 +438,13 @@ fn resolved_session_passes_through_without_reference() {
     let catalog = SessionCatalog::default();
     let session = Session::new(
         "web",
-        crate::session::Connection::Ssh(crate::session::SshConnection::new("h", "u")),
+        crate::model::session::Connection::Ssh(crate::model::session::SshConnection::new("h", "u")),
     );
     let resolved = catalog.resolved_session(&session);
     match &resolved.connection {
-        crate::session::Connection::Ssh(ssh) => {
+        crate::model::session::Connection::Ssh(ssh) => {
             assert_eq!(ssh.username, "u");
-            assert!(matches!(ssh.auth, crate::session::AuthMethod::Agent));
+            assert!(matches!(ssh.auth, crate::model::session::AuthMethod::Agent));
         }
         _ => panic!("应仍是 SSH 连接"),
     }
@@ -537,26 +540,26 @@ fn folder_defaults_inheritance_and_session_resolution() {
     // 新建一个属于 sub 的会话，用户名为空，端口为默认 22，私钥为空
     let mut session = Session::new(
         "child_session",
-        crate::session::Connection::Ssh(crate::session::SshConnection {
+        crate::model::session::Connection::Ssh(crate::model::session::SshConnection {
             host: "server.internal".into(),
             port: 22,
             username: "".into(),
-            auth: crate::session::AuthMethod::PrivateKey {
+            auth: crate::model::session::AuthMethod::PrivateKey {
                 path: PathBuf::new(),
                 cert_path: None,
                 save_passphrase: false,
             },
-            options: crate::session::SessionOptions::default(),
+            options: crate::model::session::SessionOptions::default(),
             proxy_jump: None,
         }),
     );
     session.folder_id = Some(sub);
 
     let resolved = catalog.resolved_session(&session);
-    if let crate::session::Connection::Ssh(ssh) = resolved.connection {
+    if let crate::model::session::Connection::Ssh(ssh) = resolved.connection {
         assert_eq!(ssh.port, 2222);
         assert_eq!(ssh.username, "root_user");
-        if let crate::session::AuthMethod::PrivateKey { path, .. } = ssh.auth {
+        if let crate::model::session::AuthMethod::PrivateKey { path, .. } = ssh.auth {
             assert_eq!(path, PathBuf::from("/keys/root_id_rsa"));
         } else {
             panic!("应为私钥认证");

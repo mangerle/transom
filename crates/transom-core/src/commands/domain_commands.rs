@@ -8,14 +8,14 @@
 //! - SyncCommand: CloudSyncPush, CloudSyncPull, GitSync
 //! - ZmodemCommand: ZmodemUpload, ZmodemCancel
 
-use crate::forward::ForwardRule;
-use crate::host::HostAction;
 use crate::ids::{ConnectionId, ForwardId, TabId, TransferId};
+use crate::model::forward::ForwardRule;
+use crate::model::host::HostAction;
+use crate::model::session::Session;
+use crate::model::settings::SyncSettings;
+use crate::protocol::sftp::SftpOperation;
 use crate::secrets::ConnectionSecrets;
-use crate::session::Session;
-use crate::sftp::SftpOperation;
-use crate::sync::SyncSettings;
-use crate::terminal::TerminalSize;
+use crate::transport::TerminalSize;
 use std::path::PathBuf;
 
 /// 终端建连参数载荷，收敛多参数并消除枚举变体尺寸倾斜。
@@ -23,11 +23,11 @@ pub struct ConnectParams {
     pub tab_id: TabId,
     pub connection_id: ConnectionId,
     pub session: Session,
-    pub jumps: Vec<crate::session::SshHop>,
-    pub proxy: crate::proxy::OutboundProxy,
+    pub jumps: Vec<crate::model::session::SshHop>,
+    pub proxy: crate::protocol::proxy::OutboundProxy,
     pub size: TerminalSize,
     pub secrets: ConnectionSecrets,
-    pub zmodem: crate::zmodem::ZmodemSettings,
+    pub zmodem: crate::protocol::zmodem::ZmodemSettings,
     pub allow_sha1_publickey_auth: bool,
 }
 
@@ -93,14 +93,14 @@ pub enum HostCommand {
 pub enum SyncCommand {
     CloudSyncPush {
         settings: SyncSettings,
-        catalog: crate::catalog::SessionCatalog,
+        catalog: crate::model::catalog::SessionCatalog,
     },
     CloudSyncPull {
         settings: SyncSettings,
     },
     GitSync {
         settings: SyncSettings,
-        catalog: crate::catalog::SessionCatalog,
+        catalog: crate::model::catalog::SessionCatalog,
     },
 }
 

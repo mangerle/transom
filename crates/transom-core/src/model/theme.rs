@@ -1,5 +1,5 @@
-use crate::color::Rgb;
-use crate::terminal::TerminalPalette;
+use crate::model::color::Rgb;
+use crate::model::terminal::TerminalPalette;
 use serde::{Deserialize, Serialize};
 
 /// 调色板明暗属性。

@@ -1,6 +1,6 @@
 //! OpenSSH 配置文件（~/.ssh/config）解析模块。
 
-use crate::session::{AuthMethod, Connection, Session, SessionOptions, SshConnection};
+use crate::model::session::{AuthMethod, Connection, Session, SessionOptions, SshConnection};
 use std::path::{Path, PathBuf};
 
 /// 解析 SSH 配置文件内容，使用当前用户家目录展开路径

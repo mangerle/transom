@@ -3,7 +3,7 @@
 use super::{CatalogError, MAX_PROXY_JUMP_DEPTH, SessionCatalog};
 use crate::error::{AppError, ErrorCode};
 use crate::ids::{FolderId, SessionId};
-use crate::session::{Connection, Session};
+use crate::model::session::{Connection, Session};
 use std::collections::HashSet;
 
 impl SessionCatalog {
@@ -33,7 +33,10 @@ impl SessionCatalog {
     }
 
     /// 按 ID 查找凭据模板。
-    pub fn identity(&self, id: crate::ids::IdentityId) -> Option<&crate::identity::Identity> {
+    pub fn identity(
+        &self,
+        id: crate::ids::IdentityId,
+    ) -> Option<&crate::model::identity::Identity> {
         self.identities.iter().find(|identity| identity.id == id)
     }
 
@@ -77,7 +80,7 @@ impl SessionCatalog {
                 {
                     ssh.username = username.clone();
                 }
-                if let crate::session::AuthMethod::PrivateKey { path, .. } = &mut ssh.auth
+                if let crate::model::session::AuthMethod::PrivateKey { path, .. } = &mut ssh.auth
                     && path.as_os_str().is_empty()
                     && let Some(key_path) = &defaults.key_path
                 {

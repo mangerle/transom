@@ -11,8 +11,8 @@
 //!   "连不上又不知道为什么"的悬空引用。
 
 use crate::ids::IdentityId;
+use crate::model::session::AuthMethod;
 use crate::secrets::SecretKind;
-use crate::session::AuthMethod;
 use serde::{Deserialize, Serialize};
 
 /// 一份可复用的登录身份。
