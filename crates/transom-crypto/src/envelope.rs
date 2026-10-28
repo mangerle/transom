@@ -12,7 +12,6 @@
 //! 代价与局限：每次同步都重新派生密钥（约 0.1~0.3 秒），换来的是不需要在
 //! 磁盘上缓存派生密钥；大文件同步前先整体读入内存，上限由调用方控制。
 
-use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use transom_core::{AppError, ErrorCode};
@@ -29,9 +28,6 @@ const NONCE_LEN: usize = 24;
 /// Poly1305 标签长度（AEAD 附在密文尾部）。
 const TAG_LEN: usize = 16;
 const AAD: &[u8] = b"transom-sync-v1";
-const ARGON_MEMORY_KIB: u32 = 64 * 1024;
-const ARGON_ITERATIONS: u32 = 3;
-const ARGON_PARALLELISM: u32 = 1;
 
 /// 是否是本模块生成的信封（只看魔数与版本，不做解密）。
 pub fn is_envelope(bytes: &[u8]) -> bool {
@@ -46,7 +42,8 @@ pub fn is_envelope(bytes: &[u8]) -> bool {
 /// 安全随机数不可用、Argon2 参数非法或加密失败时返回 `CloudSyncFailed`。
 pub fn seal(plaintext: &[u8], passphrase: &str) -> Result<Vec<u8>, AppError> {
     let salt = random_bytes::<SALT_LEN>()?;
-    let key = derive_key_with_salt(passphrase, &salt)?;
+    let key = crate::kdf::derive_key(passphrase, &salt)
+        .map_err(|detail| AppError::with_detail(ErrorCode::CloudSyncFailed, detail))?;
     let nonce_bytes = random_bytes::<NONCE_LEN>()?;
     let cipher = XChaCha20Poly1305::new(key.as_ref().into());
     let ciphertext = cipher
@@ -94,7 +91,8 @@ pub fn open(envelope: &[u8], passphrase: &str) -> Result<Zeroizing<Vec<u8>>, App
     let salt = &envelope[5..5 + SALT_LEN];
     let nonce = &envelope[5 + SALT_LEN..ENVELOPE_HEADER_LEN];
     let ciphertext = &envelope[ENVELOPE_HEADER_LEN..];
-    let key = derive_key_with_salt(passphrase, salt)?;
+    let key = crate::kdf::derive_key(passphrase, salt)
+        .map_err(|detail| AppError::with_detail(ErrorCode::CloudSyncFailed, detail))?;
     let cipher = XChaCha20Poly1305::new(key.as_ref().into());
     let plaintext = cipher
         .decrypt(
@@ -111,32 +109,6 @@ pub fn open(envelope: &[u8], passphrase: &str) -> Result<Zeroizing<Vec<u8>>, App
             )
         })?;
     Ok(Zeroizing::new(plaintext))
-}
-
-fn derive_key_with_salt(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>, AppError> {
-    let params = Params::new(
-        ARGON_MEMORY_KIB,
-        ARGON_ITERATIONS,
-        ARGON_PARALLELISM,
-        Some(32),
-    )
-    .map_err(|error| {
-        AppError::with_detail(
-            ErrorCode::CloudSyncFailed,
-            format!("Argon2 参数非法: {error}"),
-        )
-    })?;
-    let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = Zeroizing::new([0u8; 32]);
-    argon
-        .hash_password_into(passphrase.as_bytes(), salt, key.as_mut())
-        .map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::CloudSyncFailed,
-                format!("从同步口令派生密钥失败: {error}"),
-            )
-        })?;
-    Ok(key)
 }
 
 fn random_bytes<const N: usize>() -> Result<[u8; N], AppError> {

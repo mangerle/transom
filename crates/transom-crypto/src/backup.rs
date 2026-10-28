@@ -11,7 +11,6 @@
 //! - 错误信息不区分"口令错误"与"密文损坏"，避免为暴力破解提供判定线索；
 //! - 明文负载以借用结构序列化，避免为加密再克隆一份口令。
 
-use argon2::{Algorithm, Argon2, Params, Version};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
@@ -28,9 +27,6 @@ const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 24;
 /// 备份仅含配置文本，16 MiB 足以容纳数万条会话，同时限制恶意文件体积。
 pub const MAX_BACKUP_BYTES: u64 = 16 * 1024 * 1024;
-const ARGON_MEMORY_KIB: u32 = 64 * 1024;
-const ARGON_ITERATIONS: u32 = 3;
-const ARGON_PARALLELISM: u32 = 1;
 
 /// 备份文件的序列化格式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,7 +109,8 @@ pub fn encrypt_document(
         AppError::with_detail(ErrorCode::Io, format!("生成备份随机数失败: {error}"))
     })?;
 
-    let key = derive_key(passphrase, &salt)?;
+    let key = crate::kdf::derive_key(passphrase, &salt)
+        .map_err(|detail| AppError::with_detail(ErrorCode::Configuration, detail))?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
         .map_err(|_| AppError::with_detail(ErrorCode::Configuration, "初始化备份加密器失败"))?;
     let ciphertext = cipher
@@ -162,7 +159,8 @@ pub fn decrypt_document(bytes: &[u8], passphrase: &str) -> Result<BackupDocument
         return Err(invalid_backup());
     }
 
-    let key = derive_key(passphrase, &salt)?;
+    let key = crate::kdf::derive_key(passphrase, &salt)
+        .map_err(|detail| AppError::with_detail(ErrorCode::Configuration, detail))?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..]).map_err(|_| invalid_backup())?;
     let plaintext = Zeroizing::new(
         cipher
@@ -194,32 +192,6 @@ pub fn decrypt_document(bytes: &[u8], passphrase: &str) -> Result<BackupDocument
 /// "能按信封解析且标记匹配"，不必给明文格式另立一套字段。
 pub fn is_encrypted_envelope(bytes: &[u8]) -> bool {
     parse_envelope(bytes).is_ok_and(|envelope| envelope.format == MAGIC)
-}
-
-fn derive_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>, AppError> {
-    let params = Params::new(
-        ARGON_MEMORY_KIB,
-        ARGON_ITERATIONS,
-        ARGON_PARALLELISM,
-        Some(32),
-    )
-    .map_err(|error| {
-        AppError::with_detail(
-            ErrorCode::Configuration,
-            format!("初始化备份密钥派生参数失败: {error}"),
-        )
-    })?;
-    let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = Zeroizing::new([0u8; 32]);
-    argon
-        .hash_password_into(passphrase.as_bytes(), salt, &mut key[..])
-        .map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                format!("派生备份密钥失败: {error}"),
-            )
-        })?;
-    Ok(key)
 }
 
 fn serialize_envelope(

@@ -8,6 +8,7 @@
 
 pub mod backup;
 pub mod envelope;
+mod kdf;
 
 pub use backup::{BackupFormat, decrypt_document, encrypt_document};
 pub use envelope::{is_envelope, open, seal};
