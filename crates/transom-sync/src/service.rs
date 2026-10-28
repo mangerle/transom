@@ -58,9 +58,9 @@ impl CloudSyncService {
         catalog: &SessionCatalog,
         settings: &SyncSettings,
     ) -> Result<SyncPushReport, AppError> {
-        let endpoint = required_endpoint(settings)?;
-        let target = self.build_target(endpoint)?;
-        let passphrase = self.read_passphrase()?;
+        let endpoint = required_endpoint(settings)?.clone();
+        let target = self.build_target_async(&endpoint).await?;
+        let passphrase = self.read_passphrase_async().await?;
         let include_secrets = settings.include_secrets;
         let secrets = self.secrets.clone();
 
@@ -157,9 +157,9 @@ impl CloudSyncService {
     /// 未配置端点、同步口令未设置、远端无备份、解密失败或网络失败时
     /// 返回 `AppError`。
     pub async fn pull(&self, settings: &SyncSettings) -> Result<BackupDocument, AppError> {
-        let endpoint = required_endpoint(settings)?;
-        let target = self.build_target(endpoint)?;
-        let passphrase = self.read_passphrase()?;
+        let endpoint = required_endpoint(settings)?.clone();
+        let target = self.build_target_async(&endpoint).await?;
+        let passphrase = self.read_passphrase_async().await?;
 
         let data = target.get_document().await?;
         tokio::task::spawn_blocking(move || decrypt_document(&data, &passphrase))
@@ -172,47 +172,29 @@ impl CloudSyncService {
             })?
     }
 
-    /// 按端点配置构造远端目标；端点凭据从钥匙串读取。
-    fn build_target(&self, endpoint: &SyncEndpoint) -> Result<Box<dyn CloudSyncTarget>, AppError> {
-        match endpoint {
-            SyncEndpoint::Webdav {
-                url,
-                username,
-                directory,
-            } => {
-                let password = self.read_credential()?.map(|password| password.to_string());
-                Ok(Box::new(WebDavTarget::new(
-                    self.http.clone(),
-                    url,
-                    username,
-                    password.as_deref(),
-                    directory,
-                )?))
-            }
-            SyncEndpoint::S3 {
-                endpoint,
-                region,
-                bucket,
-                access_key,
-                directory,
-            } => {
-                let secret_key = self.read_credential()?.ok_or_else(|| {
-                    AppError::with_detail(
-                        ErrorCode::Configuration,
-                        "尚未在钥匙串保存 S3 Secret Key，请先在设置中填写并保存",
-                    )
-                })?;
-                Ok(Box::new(S3Target::new(
-                    self.http.clone(),
-                    endpoint,
-                    region,
-                    bucket,
-                    access_key,
-                    secret_key,
-                    directory,
-                )?))
-            }
-        }
+    /// 按端点配置读取凭据并构造远端目标。
+    ///
+    /// 钥匙串访问可能走 D-Bus 并阻塞数秒，必须放进阻塞线程池：控制面运行时
+    /// 只有两个工作线程，一次同步读取就可能拖住全部连接与停机。
+    async fn build_target_async(
+        &self,
+        endpoint: &SyncEndpoint,
+    ) -> Result<Box<dyn CloudSyncTarget>, AppError> {
+        let http = self.http.clone();
+        let secrets = self.secrets.clone();
+        let endpoint = endpoint.clone();
+        run_blocking("读取同步端点凭据", move || {
+            build_target(&http, secrets.as_ref(), &endpoint)
+        })
+        .await
+    }
+
+    async fn read_passphrase_async(&self) -> Result<Zeroizing<String>, AppError> {
+        let secrets = self.secrets.clone();
+        run_blocking("读取同步口令", move || {
+            passphrase_from(secrets.as_ref())
+        })
+        .await
     }
 
     /// 执行一次私有 Git 仓库同步（阻塞，调用方必须放进 spawn_blocking）。
@@ -247,14 +229,81 @@ impl CloudSyncService {
     }
 
     fn read_passphrase(&self) -> Result<Zeroizing<String>, AppError> {
-        self.secrets
-            .get(&SecretKey::cloud_sync_passphrase())?
-            .ok_or_else(|| {
+        passphrase_from(self.secrets.as_ref())
+    }
+}
+
+/// 按端点配置构造远端目标；凭据在调用方的阻塞线程内读取。
+fn build_target(
+    http: &reqwest::Client,
+    secrets: &dyn SecretStore,
+    endpoint: &SyncEndpoint,
+) -> Result<Box<dyn CloudSyncTarget>, AppError> {
+    let credential = || secrets.get(&SecretKey::cloud_sync_credential());
+    match endpoint {
+        SyncEndpoint::Webdav {
+            url,
+            username,
+            directory,
+        } => {
+            let password = credential()?.map(|password| password.to_string());
+            Ok(Box::new(WebDavTarget::new(
+                http.clone(),
+                url,
+                username,
+                password.as_deref(),
+                directory,
+            )?))
+        }
+        SyncEndpoint::S3 {
+            endpoint,
+            region,
+            bucket,
+            access_key,
+            directory,
+        } => {
+            let secret_key = credential()?.ok_or_else(|| {
                 AppError::with_detail(
                     ErrorCode::Configuration,
-                    "尚未设置同步口令，云端备份必须加密；请先在设置中填写并保存",
+                    "尚未在钥匙串保存 S3 Secret Key，请先在设置中填写并保存",
                 )
-            })
+            })?;
+            Ok(Box::new(S3Target::new(
+                http.clone(),
+                endpoint,
+                region,
+                bucket,
+                access_key,
+                secret_key,
+                directory,
+            )?))
+        }
+    }
+}
+
+fn passphrase_from(secrets: &dyn SecretStore) -> Result<Zeroizing<String>, AppError> {
+    secrets
+        .get(&SecretKey::cloud_sync_passphrase())?
+        .ok_or_else(|| {
+            AppError::with_detail(
+                ErrorCode::Configuration,
+                "尚未设置同步口令，云端备份必须加密；请先在设置中填写并保存",
+            )
+        })
+}
+
+/// 在阻塞线程池执行钥匙串等同步操作，并统一转换任务异常。
+async fn run_blocking<T, F>(action: &str, job: F) -> Result<T, AppError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+{
+    match tokio::task::spawn_blocking(job).await {
+        Ok(result) => result,
+        Err(error) => Err(AppError::with_detail(
+            ErrorCode::CloudSyncFailed,
+            format!("{action}任务异常终止: {error}"),
+        )),
     }
 }
 
