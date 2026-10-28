@@ -60,16 +60,7 @@ pub(crate) fn local_home() -> PathBuf {
 }
 
 pub(crate) fn list_local_dir(dir: &Path) -> Result<Vec<LocalFileEntry>, String> {
-    let entries = LocalVfsProvider::list_sync(dir).map_err(|e| e.to_string())?;
-    Ok(entries
-        .into_iter()
-        .map(|entry| LocalFileEntry {
-            name: entry.name,
-            path: PathBuf::from(entry.path),
-            is_dir: entry.is_dir,
-            size: entry.size,
-        })
-        .collect())
+    LocalVfsProvider::list_sync(dir).map_err(|error| error.to_string())
 }
 
 pub(crate) fn join_remote(dir: &str, name: &str) -> String {

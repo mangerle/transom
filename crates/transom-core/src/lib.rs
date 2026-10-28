@@ -27,9 +27,8 @@ pub use model::{
 pub use platform::{paths, private_fs};
 pub use protocol::{
     merge, proxy, sftp, sftp_filter, sftp_sync, ssh_config, ssh_url, sync, system_stats, traffic,
-    vfs, zmodem,
+    zmodem,
 };
-pub use vfs::{VfsEntry, VirtualFileSystem, get_parent_path};
 
 pub use backup::{
     BackupDocument, BackupExportOptions, BackupExportReport, BackupImportOptions, BackupSecret,
