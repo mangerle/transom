@@ -5,6 +5,7 @@ use crate::monitor::components::CollapsibleCard;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::list::ListItem;
 use gpui_kit::*;
 use transom_core::SystemStats;
 
@@ -56,42 +57,45 @@ impl AppShell {
                     (None, None) => "-".to_string(),
                 };
 
-                let mut row = h_flex()
-                    .gap_2()
-                    .px_1()
-                    .py_0p5()
-                    .rounded_xs()
-                    .text_xs()
+                let mut row = ListItem::new(ElementId::Name(format!("port-row-{idx}").into()))
+                    .py(px(2.0))
                     .child(
-                        div()
-                            .w(px(40.0))
-                            .text_color(p.primary)
-                            .child(port.protocol.to_uppercase()),
-                    )
-                    .child(
-                        div()
-                            .w(px(52.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.foreground)
-                            .child(port.port.to_string()),
-                    )
-                    .child(
-                        div()
-                            .w(px(80.0))
-                            .truncate()
-                            .text_color(p.muted_foreground)
-                            .child(port.bind_addr.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .truncate()
-                            .text_color(p.foreground)
-                            .child(proc_text),
+                        h_flex()
+                            .w_full()
+                            .gap_2()
+                            .items_center()
+                            .text_xs()
+                            .child(
+                                div()
+                                    .w(px(40.0))
+                                    .text_color(p.primary)
+                                    .child(port.protocol.to_uppercase()),
+                            )
+                            .child(
+                                div()
+                                    .w(px(52.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.foreground)
+                                    .child(port.port.to_string()),
+                            )
+                            .child(
+                                div()
+                                    .w(px(80.0))
+                                    .truncate()
+                                    .text_color(p.muted_foreground)
+                                    .child(port.bind_addr.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .truncate()
+                                    .text_color(p.foreground)
+                                    .child(proc_text),
+                            ),
                     );
 
                 if idx % 2 == 1 {
-                    row = row.bg(p.muted.opacity(0.3));
+                    row = row.bg(p.muted.opacity(0.1));
                 }
                 content = content.child(row);
             }

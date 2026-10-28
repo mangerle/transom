@@ -7,6 +7,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
+use gpui_kit::component::list::ListItem;
 use gpui_kit::*;
 use transom_core::SystemStats;
 
@@ -44,43 +45,49 @@ impl AppShell {
                     .child("无崩溃服务，所有注册服务运行正常"),
             );
         } else {
-            for service in &stats.failed_services {
+            for (idx, service) in stats.failed_services.iter().enumerate() {
                 let unit = service.unit.clone();
                 content = content.child(
-                    h_flex()
-                        .justify_between()
-                        .items_center()
+                    ListItem::new(ElementId::Name(format!("service-item-{idx}").into()))
                         .p_1p5()
                         .rounded_sm()
                         .bg(p.danger.opacity(0.12))
                         .border_1()
                         .border_color(p.danger.opacity(0.3))
                         .child(
-                            v_flex()
-                                .gap_0p5()
+                            h_flex()
+                                .w_full()
+                                .justify_between()
+                                .items_center()
                                 .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(p.danger)
-                                        .child(service.unit.clone()),
+                                    v_flex()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(p.danger)
+                                                .child(service.unit.clone()),
+                                        )
+                                        .child(
+                                            div().text_xs().text_color(p.muted_foreground).child(
+                                                if service.description.is_empty() {
+                                                    format!("{}/{}", service.active, service.sub)
+                                                } else {
+                                                    service.description.clone()
+                                                },
+                                            ),
+                                        ),
                                 )
-                                .child(div().text_xs().text_color(p.muted_foreground).child(
-                                    if service.description.is_empty() {
-                                        format!("{}/{}", service.active, service.sub)
-                                    } else {
-                                        service.description.clone()
-                                    },
-                                )),
-                        )
-                        .child(
-                            Button::new(format!("restart-service-{}", service.unit))
-                                .xsmall()
-                                .icon(IconName::RefreshCw)
-                                .label("重启")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.restart_systemd_service(&unit, cx);
-                                })),
+                                .child(
+                                    Button::new(format!("restart-service-{}", service.unit))
+                                        .xsmall()
+                                        .icon(IconName::RefreshCw)
+                                        .label("重启")
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.restart_systemd_service(&unit, cx);
+                                        })),
+                                ),
                         ),
                 );
             }

@@ -8,6 +8,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::Input;
+use gpui_kit::component::list::ListItem;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -171,15 +172,9 @@ impl AppShell {
 
         let mut row = v_flex().w_full().rounded_xs();
 
-        let mut main_line = h_flex()
-            .id(ElementId::Name(format!("process-row-{pid}").into()))
-            .gap_2()
-            .px_1()
-            .h(px(22.0))
-            .text_xs()
-            .items_center()
-            .cursor_pointer()
-            .hover(|s| s.bg(p.muted.opacity(0.35)))
+        let list_item = ListItem::new(ElementId::Name(format!("process-row-{pid}").into()))
+            .selected(is_expanded)
+            .py(px(2.0))
             .on_click(move |_, _, cx| {
                 app.update(cx, |this, cx| {
                     if this.monitor.expanded_process_pid == Some(pid) {
@@ -191,85 +186,93 @@ impl AppShell {
                 });
             })
             .child(
-                div()
-                    .w(px(52.0))
-                    .text_color(p.muted_foreground)
-                    .child(pid.to_string()),
-            )
-            .child(
-                div()
-                    .w(px(60.0))
-                    .truncate()
-                    .text_color(p.foreground)
-                    .child(process.user.clone()),
-            )
-            .child(
-                div()
-                    .w(px(44.0))
-                    .text_color(usage_color(process.cpu_percent, p))
-                    .child(format!("{:.1}", process.cpu_percent)),
-            )
-            .child(
-                div()
-                    .w(px(44.0))
-                    .text_color(p.muted_foreground)
-                    .child(format!("{:.1}", process.mem_percent)),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .truncate()
-                    .text_color(p.foreground)
-                    .child(process.cmdline.clone()),
-            )
-            .context_menu({
-                let command_copy = command.clone();
-                move |menu, _window, _cx| {
-                    let term = term_app.clone();
-                    let safe_kill = safe_kill_app.clone();
-                    let force_kill = force_kill_app.clone();
-                    let cmd_for_clipboard = command_copy.clone();
-                    menu.item(
-                        PopupMenuItem::new("在终端跟踪该进程 (htop/top)".to_string())
-                            .icon(IconName::Terminal)
-                            .on_click(move |_, _, cx| {
-                                term.update(cx, |this, cx| {
-                                    this.trace_process_in_terminal(pid, cx);
-                                });
-                            }),
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .items_center()
+                    .text_xs()
+                    .child(
+                        div()
+                            .w(px(52.0))
+                            .text_color(p.muted_foreground)
+                            .child(pid.to_string()),
                     )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.kill_term").to_string())
-                            .icon(IconName::CircleX)
-                            .on_click(move |_, _, cx| {
-                                safe_kill.update(cx, |this, cx| {
-                                    this.send_kill_process_safe(pid, false, cx);
-                                });
-                            }),
+                    .child(
+                        div()
+                            .w(px(60.0))
+                            .truncate()
+                            .text_color(p.foreground)
+                            .child(process.user.clone()),
                     )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.kill_kill").to_string())
-                            .icon(IconName::Ban)
-                            .on_click(move |_, _, cx| {
-                                force_kill.update(cx, |this, cx| {
-                                    this.send_kill_process_safe(pid, true, cx);
-                                });
-                            }),
+                    .child(
+                        div()
+                            .w(px(44.0))
+                            .text_color(usage_color(process.cpu_percent, p))
+                            .child(format!("{:.1}", process.cpu_percent)),
                     )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.copy_command").to_string())
-                            .icon(IconName::Copy)
-                            .on_click(move |_, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(
-                                    cmd_for_clipboard.clone(),
-                                ));
-                            }),
+                    .child(
+                        div()
+                            .w(px(44.0))
+                            .text_color(p.muted_foreground)
+                            .child(format!("{:.1}", process.mem_percent)),
                     )
-                }
-            });
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .text_color(p.foreground)
+                            .child(process.cmdline.clone()),
+                    ),
+            );
+
+        let mut main_line = div().w_full().child(list_item).context_menu({
+            let command_copy = command.clone();
+            move |menu, _window, _cx| {
+                let term = term_app.clone();
+                let safe_kill = safe_kill_app.clone();
+                let force_kill = force_kill_app.clone();
+                let cmd_for_clipboard = command_copy.clone();
+                menu.item(
+                    PopupMenuItem::new("在终端跟踪该进程 (htop/top)".to_string())
+                        .icon(IconName::Terminal)
+                        .on_click(move |_, _, cx| {
+                            term.update(cx, |this, cx| {
+                                this.trace_process_in_terminal(pid, cx);
+                            });
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new(rust_i18n::t!("monitor.kill_term").to_string())
+                        .icon(IconName::CircleX)
+                        .on_click(move |_, _, cx| {
+                            safe_kill.update(cx, |this, cx| {
+                                this.send_kill_process_safe(pid, false, cx);
+                            });
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new(rust_i18n::t!("monitor.kill_kill").to_string())
+                        .icon(IconName::Ban)
+                        .on_click(move |_, _, cx| {
+                            force_kill.update(cx, |this, cx| {
+                                this.send_kill_process_safe(pid, true, cx);
+                            });
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new(rust_i18n::t!("monitor.copy_command").to_string())
+                        .icon(IconName::Copy)
+                        .on_click(move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                cmd_for_clipboard.clone(),
+                            ));
+                        }),
+                )
+            }
+        });
 
         if index % 2 == 1 {
-            main_line = main_line.bg(p.muted.opacity(0.2));
+            main_line = main_line.bg(p.muted.opacity(0.1));
         }
         row = row.child(main_line);
 
