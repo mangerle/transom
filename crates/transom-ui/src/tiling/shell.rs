@@ -8,7 +8,6 @@ use crate::app::AppShell;
 use crate::pane_tree::PaneDirection;
 use crate::sftp::PendingEditorClose;
 use gpui_kit::*;
-use std::collections::HashSet;
 use transom_core::{GroupId, SavedTabTiling, SplitAxis, TabId};
 
 impl AppShell {
@@ -218,29 +217,8 @@ impl AppShell {
 
     /// 校验所有并排绑定：摘掉已消失的标签组，有效槽位少于两个时解除该组。
     pub(crate) fn prune_tilings(&mut self) {
-        let alive: HashSet<GroupId> = self.workspace.groups.iter().map(|group| group.id).collect();
         let active = self.active_group_id();
-        self.workspace.tiled_sets.retain_mut(|tiled| {
-            let dead: Vec<GroupId> = tiled
-                .occupied_groups()
-                .into_iter()
-                .filter(|group| !alive.contains(group))
-                .collect();
-            for group in dead {
-                tiled.remove_group(group);
-            }
-            if tiled.occupied_count() < 2 {
-                return false;
-            }
-            if let Some(active) = active
-                && let Some(slot) = tiled.slot_of(active)
-            {
-                tiled.focused = slot;
-            }
-            tiled.ensure_focus();
-            true
-        });
-        self.prune_pane_split_states();
+        self.workspace.reconcile_tilings(active);
         self.sync_broadcast_targets();
     }
 
@@ -330,10 +308,7 @@ impl AppShell {
 
     /// 丢弃已经关闭的标签组，避免多选集合里残留死 ID。
     pub(crate) fn prune_tab_selection(&mut self) {
-        let groups = &self.workspace.groups;
-        self.workspace
-            .tab_selection
-            .retain(|group| groups.iter().any(|item| item.id == *group));
+        self.workspace.reconcile_selection();
     }
 
     /// 按给定标签组与布局应用并排；由二级布局菜单点击后调用。

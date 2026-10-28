@@ -126,21 +126,7 @@ impl AppShell {
     ///
     /// 只在布局被改动后调用（渲染期不能调用：那会儿新节点的状态刚刚登记）。
     pub(crate) fn prune_pane_split_states(&mut self) {
-        let alive: Vec<SplitId> = self
-            .workspace
-            .groups
-            .iter()
-            .flat_map(|group| group.root.split_ids())
-            .chain(
-                self.workspace
-                    .tiled_sets
-                    .iter()
-                    .flat_map(|tiled| tiled.root.split_ids()),
-            )
-            .collect();
-        self.workspace
-            .pane_split_states
-            .retain(|id, _| alive.contains(id));
+        self.workspace.reconcile_split_states();
     }
 
     /// 渲染单个窗格：细条头部（状态灯、序号、标题、关闭）加终端本体。
