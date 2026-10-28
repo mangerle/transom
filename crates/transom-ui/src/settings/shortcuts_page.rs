@@ -6,6 +6,7 @@ use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::kbd::Kbd;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
@@ -15,29 +16,33 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let key_tag = |label: String| {
-            div()
-                .px_2()
-                .py_0p5()
-                .rounded(p.radius.md)
-                .border_1()
-                .border_color(p.border)
-                .bg(p.muted)
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .text_color(p.foreground)
-                .child(label)
-        };
-
         let rows: Vec<AnyElement> = keymap::specs()
             .iter()
             .map(|spec| {
-                let keys = keymap::pretty_keys(spec, &self.settings.shortcuts);
+                let effective = keymap::effective_keys(spec, &self.settings.shortcuts);
                 let customized = self.settings.shortcuts.bindings.contains_key(spec.id);
                 let id = spec.id;
-                let key_elements = h_flex()
-                    .gap_1()
-                    .children(keys.split(" / ").map(|key| key_tag(key.to_string())));
+                let key_elements =
+                    h_flex()
+                        .gap_1()
+                        .children(effective.into_iter().map(|key_str| {
+                            if let Ok(keystroke) = Keystroke::parse(&key_str) {
+                                Kbd::new(keystroke).outline().into_any_element()
+                            } else {
+                                div()
+                                    .px_2()
+                                    .py_0p5()
+                                    .rounded(p.radius.md)
+                                    .border_1()
+                                    .border_color(p.border)
+                                    .bg(p.muted)
+                                    .text_xs()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(p.foreground)
+                                    .child(key_str)
+                                    .into_any_element()
+                            }
+                        }));
                 h_flex()
                     .justify_between()
                     .items_center()

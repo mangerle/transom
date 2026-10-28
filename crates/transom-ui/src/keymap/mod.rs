@@ -382,19 +382,6 @@ pub(crate) fn reserved_keystrokes(custom: &ShortcutSettings) -> Vec<KeybindingKe
     reserved
 }
 
-/// 将当前生效键位格式化为界面标签，例如 `Ctrl+Shift+N / F11`。
-pub(crate) fn pretty_keys(spec: &ShortcutSpec, custom: &ShortcutSettings) -> String {
-    effective_keys(spec, custom)
-        .iter()
-        .map(|key| {
-            Keystroke::parse(key)
-                .map(|keystroke| keystroke.to_string())
-                .unwrap_or_else(|_| key.clone())
-        })
-        .collect::<Vec<_>>()
-        .join(" / ")
-}
-
 /// 检查候选键位是否与其他动作冲突，返回冲突动作。
 pub(crate) fn conflict_with(
     id: &str,
