@@ -3,6 +3,7 @@
 use crate::auth::AuthPrompter;
 use crate::error::NetError;
 use russh::Channel;
+use russh::ChannelOpenFailure;
 use russh::client::{self, Msg};
 use russh::keys::{HashAlg, PublicKeyOrCertificate};
 use std::collections::HashMap;
@@ -11,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use transom_core::{AppError, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore};
 
@@ -30,6 +32,13 @@ pub struct ClientError(pub AppError);
 /// 转发目标通常是内网邻近服务，正常连接远快于该上限；取 30 秒是为
 /// 跨机房高延迟链路留余量，同时兜住"对端不可达导致任务永久泄漏"。
 pub(crate) const FORWARD_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// 单会话远端转发的最大并发通道数。
+///
+/// 服务端可以按任意速率发起 forwarded-tcpip 通道；不设上限时，一个被暴露
+/// 到公网的远端监听就能把本地 TCP 连接与任务表打满。超限直接拒绝，让服务端
+/// 侧看到明确的失败而不是本地资源耗尽。
+pub(crate) const REMOTE_FORWARD_LIMIT: usize = 64;
 
 impl fmt::Display for ClientError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -119,6 +128,8 @@ pub(crate) struct ClientHandler {
     pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
     /// 远端转发在途异步任务追踪器，消除脱缰孤儿任务。
     pub(crate) forward_tasks: RemoteForwardTasks,
+    /// 远端转发通道准入：服务端开通道前先取许可，超限直接拒绝。
+    pub(crate) remote_forward_slots: Arc<Semaphore>,
     /// TOFU 指纹确认走认证提示通道，与凭据索取共用同一条 UI 往返链路。
     pub(crate) prompter: Arc<dyn AuthPrompter>,
 }
@@ -197,12 +208,25 @@ impl client::Handler for ClientHandler {
             .lock()
             .ok()
             .and_then(|map| map.get(&listen_port).cloned());
-        reply.accept().await;
         let Some((host, port)) = target else {
+            log::warn!("收到未登记端口的远端转发请求，已拒绝，远端端口: {listen_port}");
+            reply
+                .reject(ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
             return Ok(());
         };
+        let Ok(permit) = Arc::clone(&self.remote_forward_slots).try_acquire_owned() else {
+            log::warn!(
+                "远端转发通道数已达上限，拒绝新通道，远端端口: {listen_port}，上限: {REMOTE_FORWARD_LIMIT}"
+            );
+            reply.reject(ChannelOpenFailure::ResourceShortage).await;
+            return Ok(());
+        };
+        reply.accept().await;
         let mut stream = channel.into_stream();
         let forward_task = tokio::spawn(async move {
+            // 许可随任务存活：任务结束（含连接失败）即释放，不占住后续通道。
+            let _permit = permit;
             // 转发目标是任意外部地址：对端不可达或防火墙静默丢包时 connect 会
             // 无限挂起，任务与通道随之泄漏。只给连接阶段设限，建立后的双向
             // 转发不设限——长空闲本身就是隧道的正常形态。

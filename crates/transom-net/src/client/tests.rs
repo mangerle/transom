@@ -1,7 +1,7 @@
 //! 客户端握手、认证与输出限制单元测试。
 
 use super::auth::{request_secret, sha1_signature_required};
-use super::handler::{ClientHandler, RemoteForwardTasks};
+use super::handler::{ClientHandler, REMOTE_FORWARD_LIMIT, RemoteForwardTasks};
 use super::jump::ssh_preferred;
 use super::session::{
     COMMAND_EXCERPT_BYTES, MAX_EXEC_OUTPUT_BYTES, command_excerpt, exec_output_exceeds,
@@ -13,6 +13,7 @@ use russh::keys::key::safe_rng;
 use russh::keys::{Algorithm, HashAlg, PrivateKey, PublicKeyOrCertificate};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 use transom_core::{
     AppError, ErrorCode, HostKeyInfo, HostKeyStatus, KnownHostsStore, PromptInfo, PromptKind,
 };
@@ -103,6 +104,7 @@ async fn handler_records_unknown_and_rejects_changed_keys() {
         known_hosts: known_hosts.clone(),
         remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
         forward_tasks: RemoteForwardTasks::new(),
+        remote_forward_slots: Arc::new(Semaphore::new(REMOTE_FORWARD_LIMIT)),
         prompter: Arc::new(ScriptedPrompter {
             answers: Ok(Vec::new()),
             host_key: true,
@@ -132,6 +134,7 @@ async fn handler_rejected_host_key_is_not_recorded() {
         known_hosts: known_hosts.clone(),
         remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
         forward_tasks: RemoteForwardTasks::new(),
+        remote_forward_slots: Arc::new(Semaphore::new(REMOTE_FORWARD_LIMIT)),
         prompter: Arc::new(ScriptedPrompter {
             answers: Ok(Vec::new()),
             host_key: false,

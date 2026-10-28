@@ -1,7 +1,9 @@
 //! 多跳 ProxyJump 隧道级联构建与出站代理穿透。
 
 use super::auth::authenticate;
-use super::handler::{AsyncStream, ClientError, ClientHandler, RemoteForwardTasks};
+use super::handler::{
+    AsyncStream, ClientError, ClientHandler, REMOTE_FORWARD_LIMIT, RemoteForwardTasks,
+};
 use crate::auth::AuthPrompter;
 use crate::bridge::AsyncChannelStream;
 use crate::error::NetError;
@@ -15,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
+use tokio::sync::Semaphore;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, KnownHostsStore, OutboundProxy, SessionOptions,
     SshConnection, SshHop, TrafficCounter,
@@ -269,6 +272,7 @@ where
         known_hosts,
         remote_forwards,
         forward_tasks,
+        remote_forward_slots: Arc::new(Semaphore::new(REMOTE_FORWARD_LIMIT)),
         prompter: prompter.clone(),
     };
     let mut session = client::connect_stream(config, transport, handler)
