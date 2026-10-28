@@ -13,9 +13,8 @@ mod toolbar;
 
 use self::context_menu::{LocalContextMenuProps, build_local_context_menu};
 use self::toolbar::{LocalToolbarProps, render_local_toolbar};
-use super::file_row::{FileRowProps, file_row};
-use super::preview::{PreviewKey, SftpHoverTarget};
-use super::side_remote::{SftpDragItem, SftpDragPreview};
+use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
+use super::side_remote::SftpDragItem;
 use super::{LocalFileEntry, LocalQuickPaths};
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -65,6 +64,12 @@ impl AppShell {
                 .into_any_element()
         } else {
             let local_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); local_entries.len()]);
+            let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
+                local_entries
+                    .iter()
+                    .map(|entry| SftpRowPath::Local(entry.path.clone()))
+                    .collect(),
+            );
             let local_entries_rc = std::rc::Rc::new(local_entries);
             let p = p.clone();
             let app_entity = cx.entity().clone();
@@ -83,152 +88,31 @@ impl AppShell {
                     range
                         .filter_map(|ix| {
                             let entry = local_entries_rc.get(ix)?;
-                            let entry_path = entry.path.clone();
                             let entry_name = entry.name.clone();
                             let is_dir = entry.is_dir;
                             let is_parent_entry = entry_name == "..";
                             let is_selected = local_selection.contains(&entry.path)
                                 || local_primary.as_ref() == Some(&entry.path);
-                            let row = file_row(FileRowProps {
-                                id: format!("local-file-{}", entry.name),
-                                name: &entry.name,
-                                is_dir,
-                                is_parent: is_parent_entry,
-                                size: entry.size,
-                                permissions: None,
-                                selected: is_selected,
-                                palette: &p,
-                            });
                             let entry_path_cm = entry.path.clone();
-                            let entry_path_right = entry.path.clone();
                             let app_cm = app_entity.clone();
-                            let click_entries = local_entries_rc.clone();
-                            let hover_target = SftpHoverTarget {
-                                tab_id,
-                                key: PreviewKey {
-                                    is_remote: false,
-                                    path: entry.path.to_string_lossy().to_string(),
-                                },
-                                name: entry.name.clone(),
-                                is_dir,
-                                size: entry.size,
-                            };
-                            let row = row
-                                .on_hover(cx.listener(move |this, hovered, window, cx| {
-                                    this.sftp_hover_preview(
-                                        hover_target.clone(),
-                                        *hovered,
-                                        window,
-                                        cx,
-                                    );
-                                }))
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                                        this.dismiss_sftp_hover_preview(tab_id, cx);
-                                        if let Some(panel) =
-                                            this.workspace.tab(tab_id).and_then(|tab| tab.sftp())
-                                        {
-                                            window.focus(&panel.focus_handle, cx);
-                                        }
-                                        if event.click_count >= 2 {
-                                            if is_parent_entry {
-                                                this.sftp_local_go_up(tab_id, window, cx);
-                                            } else if is_dir {
-                                                this.sftp_local_navigate(
-                                                    tab_id,
-                                                    entry_path.clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            }
-                                            return;
-                                        }
-                                        if is_parent_entry {
-                                            return;
-                                        }
-                                        let Some(panel) = this
-                                            .workspace
-                                            .tab_mut(tab_id)
-                                            .and_then(|tab| tab.sftp_mut())
-                                        else {
-                                            return;
-                                        };
-                                        if event.modifiers.shift {
-                                            let anchor_index =
-                                                panel.local.anchor.as_ref().and_then(|anchor| {
-                                                    click_entries
-                                                        .iter()
-                                                        .position(|entry| &entry.path == anchor)
-                                                });
-                                            if let Some(anchor_index) = anchor_index {
-                                                let (start, end) = if anchor_index <= ix {
-                                                    (anchor_index, ix)
-                                                } else {
-                                                    (ix, anchor_index)
-                                                };
-                                                let paths = click_entries[start..=end]
-                                                    .iter()
-                                                    .map(|entry| entry.path.clone())
-                                                    .collect::<Vec<_>>();
-                                                panel.select_local_range(paths, entry_path.clone());
-                                            } else {
-                                                panel.select_local(entry_path.clone());
-                                            }
-                                        } else if event.modifiers.control
-                                            || event.modifiers.platform
-                                        {
-                                            panel.toggle_local_selection(entry_path.clone());
-                                        } else {
-                                            panel.select_local(entry_path.clone());
-                                        }
-                                        let selected_count = panel.selected_local_paths().len();
-                                        if selected_count > 1 {
-                                            panel.queue.status =
-                                                Some(format!("已选择 {selected_count} 个本地项目"));
-                                        }
-                                        let name = entry_name.clone();
-                                        panel.remote.name_input.update(cx, |state, cx| {
-                                            state.set_value(name, window, cx);
-                                        });
-                                        cx.notify();
-                                    }),
-                                )
-                                .on_mouse_down(
-                                    MouseButton::Right,
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.dismiss_sftp_hover_preview(tab_id, cx);
-                                        if let Some(panel) = this
-                                            .workspace
-                                            .tab_mut(tab_id)
-                                            .and_then(|tab| tab.sftp_mut())
-                                        {
-                                            if panel.local.selection.contains(&entry_path_right) {
-                                                panel.set_local_primary(entry_path_right.clone());
-                                            } else {
-                                                panel.select_local(entry_path_right.clone());
-                                            }
-                                            window.focus(&panel.focus_handle, cx);
-                                        }
-                                        cx.notify();
-                                    }),
-                                );
-
-                            let row = if is_parent_entry {
-                                row
-                            } else {
-                                let drag_payload = SftpDragItem {
-                                    source_tab_id: tab_id,
-                                    source_connection_id: None,
-                                    paths: vec![entry.path.to_string_lossy().to_string()],
-                                    file_name: entry.name.clone(),
+                            let row = this.sftp_file_row(
+                                SftpRowContext {
+                                    tab_id,
+                                    side: SftpSide::Local,
+                                    index: ix,
+                                    path: SftpRowPath::Local(entry.path.clone()),
+                                    name: entry.name.clone(),
                                     is_dir,
-                                };
-                                let preview_name = entry.name.clone();
-                                row.on_drag(drag_payload, move |_, _, _, cx| {
-                                    cx.new(|_| SftpDragPreview::new(preview_name.clone(), 1))
-                                })
-                            };
+                                    is_parent: is_parent_entry,
+                                    size: entry.size,
+                                    permissions: None,
+                                    selected: is_selected,
+                                    visible_paths: visible_paths.clone(),
+                                    source_connection_id: None,
+                                },
+                                &p,
+                                cx,
+                            );
 
                             let row = row.context_menu(move |menu, _window, _cx| {
                                 build_local_context_menu(
