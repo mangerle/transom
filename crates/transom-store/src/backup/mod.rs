@@ -19,7 +19,8 @@ use transom_core::{
     SessionCatalog, collect_catalog_secrets,
 };
 use transom_crypto::backup::{
-    BackupFormat, MAX_BACKUP_BYTES, decrypt_document, encrypt_document, is_encrypted_envelope,
+    BackupFormat, MAX_BACKUP_BYTES, decrypt_document, encrypt_document, ensure_backup_size,
+    is_encrypted_envelope,
 };
 
 /// 会话目录备份服务：文件格式、加密与钥匙串口令的出入口。
@@ -135,6 +136,8 @@ pub fn write_backup(
         Some(passphrase) => encrypt_document(document, passphrase, format)?,
         None => serialize_document(document, format)?,
     };
+    // 明文导出同样受导入上限约束：否则用户会拿到一个应用自己拒绝读回的文件。
+    ensure_backup_size(data.len())?;
     crate::file_io::write_atomic(path, &data)
 }
 

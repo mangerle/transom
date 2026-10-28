@@ -38,6 +38,8 @@ pub enum ErrorCode {
     BackupEncrypted,
     /// 备份文件不是加密信封，但调用方提供了解密口令。
     BackupNotEncrypted,
+    /// 备份内容超过体积上限。写侧与读侧共用同一码，避免导出成功却无法读回。
+    BackupTooLarge,
     /// 操作被用户或上层任务主动取消。
     Cancelled,
     /// 违反线格式协议契约或数据包解析异常。

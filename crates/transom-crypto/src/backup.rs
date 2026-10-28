@@ -28,6 +28,24 @@ const NONCE_LEN: usize = 24;
 /// 备份仅含配置文本，16 MiB 足以容纳数万条会话，同时限制恶意文件体积。
 pub const MAX_BACKUP_BYTES: u64 = 16 * 1024 * 1024;
 
+/// 校验备份序列化后的体积不超过上限。
+///
+/// 设计原理（Why）：导入与下载按 [`MAX_BACKUP_BYTES`] 拒绝，若导出与上传不
+/// 校验，应用能产出自己读不回的备份，云端还会留下无法拉取的对象。写侧
+/// 与读侧共用本函数，保证两端口径一致。
+///
+/// # Errors
+/// 超过上限时返回 [`ErrorCode::BackupTooLarge`]。
+pub fn ensure_backup_size(len: usize) -> Result<(), AppError> {
+    if len as u64 > MAX_BACKUP_BYTES {
+        return Err(AppError::with_detail(
+            ErrorCode::BackupTooLarge,
+            format!("备份内容超过 {MAX_BACKUP_BYTES} 字节上限，当前: {len} 字节"),
+        ));
+    }
+    Ok(())
+}
+
 /// 备份文件的序列化格式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackupFormat {
@@ -130,7 +148,9 @@ pub fn encrypt_document(
         nonce: BASE64.encode(nonce),
         ciphertext: BASE64.encode(ciphertext),
     };
-    serialize_envelope(&envelope, format)
+    let payload = serialize_envelope(&envelope, format)?;
+    ensure_backup_size(payload.len())?;
+    Ok(payload)
 }
 
 /// 解密备份并返回文档快照。
@@ -229,6 +249,14 @@ fn invalid_backup() -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 写侧上限与读侧一致：刚好等于上限通过，多一字节即拒绝。
+    #[test]
+    fn backup_size_limit_is_enforced_on_write() {
+        assert!(ensure_backup_size(MAX_BACKUP_BYTES as usize).is_ok());
+        let error = ensure_backup_size(MAX_BACKUP_BYTES as usize + 1).expect_err("超限必须拒绝");
+        assert_eq!(error.code, ErrorCode::BackupTooLarge);
+    }
 
     /// 篡改格式标记或抬高版本号都必须被拒绝，且不得落入"按明文解析"的路径。
     #[test]
