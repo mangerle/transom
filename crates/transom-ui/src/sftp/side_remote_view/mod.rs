@@ -129,9 +129,11 @@ impl AppShell {
                                     app_click.update(cx, |this, cx| {
                                         if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
                                             panel.active_pane =
-                                                SftpActivePane::SideRemote(side_index);
-                                            if let Some(side_state) =
-                                                panel.side_remotes.get_mut(side_index)
+                                                SftpActivePane::SideRemote(connection_id);
+                                            if let Some(side_state) = panel
+                                                .side_remotes
+                                                .iter_mut()
+                                                .find(|side| side.connection_id == connection_id)
                                             {
                                                 if event.click_count >= 2 {
                                                     if is_parent_entry || is_dir {

@@ -100,9 +100,12 @@ impl AppShell {
                     cx.notify();
                 }
             }
-            SftpActivePane::SideRemote(idx) => {
-                if let Some(side) = panel.side_remotes.get(idx) {
-                    let conn_id = side.connection_id;
+            SftpActivePane::SideRemote(conn_id) => {
+                if let Some(side) = panel
+                    .side_remotes
+                    .iter()
+                    .find(|side| side.connection_id == conn_id)
+                {
                     let paths: Vec<String> = if !side.selection.is_empty() {
                         side.selection.iter().cloned().collect()
                     } else if let Some(sel) = &side.selected {
@@ -247,12 +250,16 @@ impl AppShell {
                     }
                 }
             }
-            SftpActivePane::SideRemote(idx) => {
-                let target_conn = panel.side_remotes.get(idx).map(|s| s.connection_id);
-                let target_dir = panel.side_remotes.get(idx).map(|s| s.path.clone());
-                let (Some(target_conn), Some(target_dir)) = (target_conn, target_dir) else {
+            SftpActivePane::SideRemote(active_conn) => {
+                let Some(side) = panel
+                    .side_remotes
+                    .iter()
+                    .find(|side| side.connection_id == active_conn)
+                else {
                     return;
                 };
+                let target_conn = side.connection_id;
+                let target_dir = side.path.clone();
 
                 match clip.source {
                     SftpClipboardSource::Local => {

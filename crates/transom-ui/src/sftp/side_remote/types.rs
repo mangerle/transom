@@ -88,12 +88,28 @@ impl Render for SftpDragPreview {
 }
 
 /// SFTP 激活的焦点栏位。
+///
+/// 并列远端用连接 ID 而不是 `Vec` 下标标识：删除任意一列都会让后续下标整体
+/// 前移，按位置记录的活动栏会静默指向另一台主机，Delete/复制等操作随之作用
+/// 到错误目标。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum SftpActivePane {
     Local,
     #[default]
     Remote,
-    SideRemote(usize),
+    SideRemote(ConnectionId),
+}
+
+/// 删除一列并列远端后，活动栏应落到的位置。
+pub(crate) fn active_pane_after_removing(
+    active: SftpActivePane,
+    removed: ConnectionId,
+) -> SftpActivePane {
+    if active == SftpActivePane::SideRemote(removed) {
+        SftpActivePane::Remote
+    } else {
+        active
+    }
 }
 
 /// 跨远端互传任务参数对象。
@@ -147,5 +163,41 @@ impl SftpSideRemoteState {
             error: None,
             collapsed: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SftpActivePane, active_pane_after_removing};
+    use transom_core::ConnectionId;
+
+    /// 删除非活动列不应改变活动栏指向：按连接 ID 记录不会因下标前移而漂移。
+    #[test]
+    fn removing_other_side_keeps_active_connection() {
+        let active = ConnectionId::new();
+        let removed = ConnectionId::new();
+        assert_eq!(
+            active_pane_after_removing(SftpActivePane::SideRemote(active), removed),
+            SftpActivePane::SideRemote(active)
+        );
+    }
+
+    /// 删除活动列后回落到主远端，而不是指向已经不存在的连接。
+    #[test]
+    fn removing_active_side_falls_back_to_main_remote() {
+        let active = ConnectionId::new();
+        assert_eq!(
+            active_pane_after_removing(SftpActivePane::SideRemote(active), active),
+            SftpActivePane::Remote
+        );
+    }
+
+    /// 本地栏不参与并列列删除的回落。
+    #[test]
+    fn local_pane_is_untouched() {
+        assert_eq!(
+            active_pane_after_removing(SftpActivePane::Local, ConnectionId::new()),
+            SftpActivePane::Local
+        );
     }
 }

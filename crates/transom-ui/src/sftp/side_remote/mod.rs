@@ -16,7 +16,7 @@ mod types;
 
 pub(crate) use self::types::{
     SftpActivePane, SftpClipboardData, SftpClipboardEntry, SftpClipboardSource, SftpDragItem,
-    SftpDragPreview, SftpRemoteCopyParams, SftpSideRemoteState,
+    SftpDragPreview, SftpRemoteCopyParams, SftpSideRemoteState, active_pane_after_removing,
 };
 
 use crate::app::AppShell;
@@ -70,10 +70,9 @@ impl AppShell {
         if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
             && index < panel.side_remotes.len()
         {
+            let removed = panel.side_remotes[index].connection_id;
             panel.side_remotes.remove(index);
-            if panel.active_pane == SftpActivePane::SideRemote(index) {
-                panel.active_pane = SftpActivePane::Remote;
-            }
+            panel.active_pane = active_pane_after_removing(panel.active_pane, removed);
             cx.notify();
         }
     }
