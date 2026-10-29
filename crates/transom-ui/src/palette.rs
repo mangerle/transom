@@ -38,6 +38,12 @@ pub(crate) struct Palette {
     pub(crate) tab_active_foreground: Hsla,
     pub(crate) title_bar: Hsla,
     pub(crate) status_bar: Hsla,
+    /// 次级表面背景色（徽标胶囊等）。
+    pub(crate) secondary: Hsla,
+    pub(crate) secondary_foreground: Hsla,
+    pub(crate) secondary_hover: Hsla,
+    /// 列表偶数行斑马纹背景色。
+    pub(crate) list_even: Hsla,
     /// 主题强调色（设置页主题卡预览色点等场景）。
     pub(crate) primary: Hsla,
     /// 警示语义色（设置页明暗反差提示等场景）。
@@ -81,6 +87,10 @@ impl Palette {
             tab_active_foreground: theme.tab_active_foreground,
             title_bar: theme.title_bar,
             status_bar: theme.status_bar,
+            secondary: theme.secondary,
+            secondary_foreground: theme.secondary_foreground,
+            secondary_hover: theme.secondary_hover,
+            list_even: theme.list_even,
             primary: theme.primary,
             warning: theme.warning,
             danger: theme.danger,

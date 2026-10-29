@@ -185,14 +185,15 @@ impl AppShell {
                 .h(rems(crate::status_bar::BADGE_HEIGHT))
                 .px_2()
                 .rounded(p.radius.md)
-                .bg(p.muted)
+                .bg(p.secondary)
                 .border_1()
-                .border_color(p.foreground.opacity(0.08))
+                .border_color(p.border)
                 .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
                 .child(
                     div()
                         .flex_none()
                         .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted_foreground)
                         .child(progress),
                 )
@@ -202,7 +203,8 @@ impl AppShell {
                         .min_w_0()
                         .truncate()
                         .text_xs()
-                        .text_color(p.foreground)
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.secondary_foreground)
                         .child(name),
                 )
                 .child(

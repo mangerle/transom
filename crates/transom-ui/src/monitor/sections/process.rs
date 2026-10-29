@@ -274,9 +274,9 @@ impl AppShell {
         });
 
         let bg_color = if index % 2 == 1 {
-            p.muted
+            p.list_even
         } else {
-            p.background.opacity(0.35)
+            p.background
         };
         main_line = main_line.bg(bg_color);
         row = row.child(main_line);

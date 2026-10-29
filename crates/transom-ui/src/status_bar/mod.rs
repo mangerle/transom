@@ -116,6 +116,7 @@ impl AppShell {
             right_elements.push(
                 div()
                     .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(p.muted_foreground)
                     .child(text)
                     .into_any_element(),
@@ -131,11 +132,11 @@ impl AppShell {
             .h(rems(BADGE_HEIGHT))
             .px_2()
             .rounded(p.radius.md)
-            .bg(p.muted)
+            .bg(p.secondary)
             .border_1()
-            .border_color(p.foreground.opacity(0.08))
+            .border_color(p.border)
             .cursor_default()
-            .hover(|style| style.bg(p.foreground.opacity(0.06)))
+            .hover(|style| style.bg(p.secondary_hover))
             .tooltip(move |_window, cx| Tooltip::new(pill_tooltip.clone()).build(_window, cx))
             .child(
                 div()
@@ -150,7 +151,8 @@ impl AppShell {
                     .min_w_0()
                     .truncate()
                     .text_xs()
-                    .text_color(p.foreground)
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.secondary_foreground)
                     .child(status_text),
             );
 
@@ -302,7 +304,7 @@ impl AppShell {
                     ),
                     MEMORY_VALUE_WIDTH,
                     p.foreground,
-                    p.muted_foreground,
+                    p.foreground,
                 );
                 let tooltip = format!(
                     "{}: {used_gb:.1}G / {total_gb:.1}G ({mem_pct:.0}%)",
@@ -325,7 +327,7 @@ impl AppShell {
                     ),
                     DISK_VALUE_WIDTH,
                     p.foreground,
-                    p.muted_foreground,
+                    p.foreground,
                 );
                 let tooltip = format!(
                     "{}: {used_gb:.1}G / {total_gb:.1}G ({disk_pct:.0}%)",
@@ -341,7 +343,7 @@ impl AppShell {
                     os_name.clone(),
                     OS_VALUE_WIDTH,
                     p.foreground,
-                    p.muted_foreground,
+                    p.foreground,
                 );
                 Some(Self::status_badge(id, os_name, content, app, p))
             }
@@ -366,7 +368,7 @@ impl AppShell {
                     up_text,
                     UPTIME_VALUE_WIDTH,
                     p.foreground,
-                    p.muted_foreground,
+                    p.foreground,
                 );
                 Some(Self::status_badge(
                     id,
@@ -407,7 +409,7 @@ impl AppShell {
         h_flex()
             .gap_1()
             .items_center()
-            .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
+            .child(Icon::new(icon).xsmall().text_color(p.foreground))
             .child(
                 div().w(rems(RATE_WIDTH)).flex().child(
                     div()

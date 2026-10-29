@@ -96,9 +96,9 @@ impl AppShell {
                     );
 
                 let bg_color = if idx % 2 == 1 {
-                    p.muted
+                    p.list_even
                 } else {
-                    p.background.opacity(0.35)
+                    p.background
                 };
                 row = row.bg(bg_color);
                 list = list.child(row);
