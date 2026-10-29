@@ -1,7 +1,9 @@
 //! 终端键鼠事件处理、选区拖拽与滚动响应。
 
 use super::{SendBacktab, SendTab, TerminalView};
-use crate::input::{MouseButtonCode, encode_mouse, keystroke_to_bytes};
+use crate::input::{
+    KeyEventKind, MouseButtonCode, encode_mouse, keystroke_event_to_bytes, tab_bytes,
+};
 use alacritty_terminal::grid::Scroll;
 use alacritty_terminal::index::Side;
 use alacritty_terminal::selection::SelectionType;
@@ -77,14 +79,27 @@ impl TerminalView {
 
         // Tab is consumed by the terminal context action to avoid focus traversal.
         // 建议浮层打开时先用来补全：这是用户此刻最想要 Tab 干的事。
-        if key == "tab" {
+        // 带修饰键的 Tab（Ctrl+Tab / Ctrl+Shift+Tab）必须继续走向编码器：
+        // 在 Kitty 协议下它们是与 Tab 完全不同的按键，吞掉就违背了协商语义。
+        if key == "tab"
+            && !modifiers.control
+            && !modifiers.alt
+            && !modifiers.platform
+            && !modifiers.shift
+        {
             self.accept_suggestion(cx);
             return;
         }
 
+        let mode = self.state.engine.lock().mode();
+        // "全部按键按转义序列上报"开启后，普通字符也必须由这里编码；平台随后
+        // 会尝试把同一按键当文本提交，必须阻断，否则字符会进终端两次。
+        let all_keys = mode.contains(TermMode::REPORT_ALL_KEYS_AS_ESC);
+
         // 普通文本与空格输入由 GPUI 的 EntityInputHandler::replace_text_in_range 处理（支持标准字符与 IME 输入），
         // 避免在 on_key_down 与 replace_text_in_range 中双重写入终端。
-        if !modifiers.control
+        if !all_keys
+            && !modifiers.control
             && !modifiers.alt
             && !modifiers.platform
             && !is_control_or_function_key(&key)
@@ -92,27 +107,60 @@ impl TerminalView {
             return;
         }
 
-        let mode = self.state.engine.lock().mode();
-        if let Some(bytes) = keystroke_to_bytes(&event.keystroke, mode)
+        let kind = if event.is_held {
+            KeyEventKind::Repeat
+        } else {
+            KeyEventKind::Press
+        };
+        if let Some(bytes) = keystroke_event_to_bytes(&event.keystroke, mode, kind)
             && self.write_input(&bytes)
         {
             self.state.engine.lock().scroll_to_bottom();
-            // 回车结算一行、退格删一格，其余控制键（方向键、Ctrl-R、Esc 序列）
-            // 都可能让 shell 自己改这一行，本地跟踪只能作废。
-            match key.as_str() {
-                "enter" => {
-                    self.input_line.clear();
-                    self.clear_suggestions();
-                }
-                "backspace" => {
-                    self.input_line.pop();
+            let typed_text = all_keys
+                && !modifiers.control
+                && !modifiers.alt
+                && !modifiers.platform
+                && event.keystroke.key_char.is_some();
+            if typed_text {
+                // 文本已由 CSI u 携带（可关联文本），本地输入行要同步累积，
+                // 否则命令历史建议在 all-keys 模式下的终端里会停更。
+                if let Some(text) = event.keystroke.key_char.as_deref() {
+                    self.input_line.push_str(text);
                     self.note_input_changed(false, cx);
                 }
-                _ => {
-                    self.input_line.clear();
-                    self.clear_suggestions();
+                cx.stop_propagation();
+            } else {
+                // 回车结算一行、退格删一格，其余控制键（方向键、Ctrl-R、Esc 序列）
+                // 都可能让 shell 自己改这一行，本地跟踪只能作废。
+                match key.as_str() {
+                    "enter" => {
+                        self.input_line.clear();
+                        self.clear_suggestions();
+                    }
+                    "backspace" => {
+                        self.input_line.pop();
+                        self.note_input_changed(false, cx);
+                    }
+                    _ => {
+                        self.input_line.clear();
+                        self.clear_suggestions();
+                    }
                 }
             }
+            cx.notify();
+        }
+    }
+
+    /// 释放事件只服务协商了 `REPORT_EVENT_TYPES` 的应用；未协商时直接忽略，
+    /// 传统终端没有"松开"这个概念。
+    pub(super) fn on_key_up(&mut self, event: &KeyUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let mode = self.state.engine.lock().mode();
+        if !mode.contains(TermMode::REPORT_EVENT_TYPES) {
+            return;
+        }
+        if let Some(bytes) = keystroke_event_to_bytes(&event.keystroke, mode, KeyEventKind::Release)
+            && self.write_input(&bytes)
+        {
             cx.notify();
         }
     }
@@ -125,7 +173,8 @@ impl TerminalView {
     ) {
         // 与 on_key_down 同源：Tab 也是用户亲自敲进 Shell 的按键。
         self.user_typed = true;
-        if self.write_input(b"\t") {
+        let mode = self.state.engine.lock().mode();
+        if self.write_input(&tab_bytes(mode, false)) {
             self.state.engine.lock().scroll_to_bottom();
             cx.notify();
         }
@@ -138,7 +187,8 @@ impl TerminalView {
         cx: &mut Context<Self>,
     ) {
         self.user_typed = true;
-        if self.write_input(b"\x1b[Z") {
+        let mode = self.state.engine.lock().mode();
+        if self.write_input(&tab_bytes(mode, true)) {
             self.state.engine.lock().scroll_to_bottom();
             cx.notify();
         }

@@ -677,3 +677,34 @@ fn handshake_markers_do_not_create_blocks() {
     );
     assert!(!engine.shell_markers_seen(), "握手不是 133 标记");
 }
+
+/// Kitty 键盘协议握手：压栈后查询必须回报压入的标志位，出栈后回到无标志状态。
+///
+/// 查询回复是应用判定"终端支持扩展键盘"的唯一依据；这里同时验证内核解析到的
+/// TermMode 与按键编码器读的是同一份状态，避免两边各存一套标志。
+#[test]
+fn kitty_keyboard_handshake_tracks_pushed_flags() {
+    use alacritty_terminal::event::Event;
+    use alacritty_terminal::term::TermMode;
+
+    let (mut engine, events) = engine(20, 4);
+    engine.process(b"\x1b[>3u");
+    assert!(
+        engine.mode().contains(TermMode::DISAMBIGUATE_ESC_CODES),
+        "压栈 3 应同时开启 disambiguate（1）与事件上报（2）"
+    );
+    assert!(engine.mode().contains(TermMode::REPORT_EVENT_TYPES));
+
+    engine.process(b"\x1b[?u");
+    let reply = events.try_recv().expect("查询应回复当前标志位");
+    assert!(
+        matches!(reply, Event::PtyWrite(ref text) if text == "\x1b[?3u"),
+        "回复必须是 CSI ? 3 u，实际: {reply:?}"
+    );
+
+    engine.process(b"\x1b[<u");
+    assert!(
+        !engine.mode().intersects(TermMode::KITTY_KEYBOARD_PROTOCOL),
+        "出栈后必须清空全部渐进标志"
+    );
+}

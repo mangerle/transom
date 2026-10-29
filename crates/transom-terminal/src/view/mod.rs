@@ -444,6 +444,7 @@ impl Render for TerminalView {
             .on_action(cx.listener(Self::on_action_send_tab))
             .on_action(cx.listener(Self::on_action_send_backtab))
             .on_key_down(cx.listener(Self::on_key_down))
+            .on_key_up(cx.listener(Self::on_key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::on_mouse_down))
             .on_mouse_down(MouseButton::Middle, cx.listener(Self::on_mouse_down))

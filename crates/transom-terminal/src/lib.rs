@@ -7,6 +7,7 @@ mod event;
 pub mod highlight;
 mod history_popup;
 mod input;
+mod keyboard;
 mod kitty_graphics;
 mod osc;
 pub mod record;
@@ -23,7 +24,10 @@ mod view_ime;
 pub use engine::TerminalEngine;
 pub use event::{HistoryProvider, TerminalEvent, TerminalEventProxy};
 pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan};
-pub use input::{MouseButtonCode, encode_mouse, focus_bytes, keystroke_to_bytes, paste_bytes};
+pub use input::{
+    KeyEventKind, MouseButtonCode, encode_mouse, focus_bytes, keystroke_event_to_bytes,
+    keystroke_to_bytes, paste_bytes, tab_bytes,
+};
 pub use record::{
     CastEvent, CastEventType, CastHeader, RecorderHandle, ReplayInputStep, SessionRecorder,
     extract_replay_inputs, parse_cast_file,

@@ -101,6 +101,10 @@ impl TerminalEngine {
             // 双击选词的分隔符由设置驱动；语义选择（`SelectionType::Semantic`）在仿真
             // 内核里解析，所以必须在这里传入，视图层拿不到第二套口径。
             semantic_escape_chars: profile.word_separators.clone(),
+            // Kitty 扩展键盘协议：开启后内核才会响应 `CSI ? u` 查询与压栈/出栈，
+            // 并把五个渐进标志映射进 TermMode；按键编码由 `crate::keyboard` 负责。
+            // 应用未协商时模式位为空，传统编码路径完全不变。
+            kitty_keyboard: true,
             default_cursor_style: AlacCursorStyle {
                 shape: match profile.cursor_shape {
                     TerminalCursorShape::Block => AlacCursorShape::Block,

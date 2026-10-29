@@ -1,5 +1,28 @@
+use crate::keyboard::encode_kitty;
 use alacritty_terminal::term::TermMode;
 use gpui_kit::Keystroke;
+
+pub use crate::keyboard::KeyEventKind;
+
+/// 把一次按键编成终端字节，按内核协商出的模式选择 Kitty 协议或传统序列。
+///
+/// 事件类型只在应用开启 `REPORT_EVENT_TYPES` 时才会真正区别重复/释放；
+/// 传统编码没有释放语义，`Release` 在这里被丢弃，避免向老程序注入多余字节。
+pub fn keystroke_event_to_bytes(
+    keystroke: &Keystroke,
+    mode: TermMode,
+    kind: KeyEventKind,
+) -> Option<Vec<u8>> {
+    if mode.intersects(TermMode::KITTY_KEYBOARD_PROTOCOL)
+        && let Some(bytes) = encode_kitty(keystroke, mode, kind)
+    {
+        return Some(bytes);
+    }
+    if kind == KeyEventKind::Release {
+        return None;
+    }
+    keystroke_to_bytes(keystroke, mode)
+}
 
 pub fn keystroke_to_bytes(keystroke: &Keystroke, mode: TermMode) -> Option<Vec<u8>> {
     if keystroke.modifiers.platform {
@@ -124,6 +147,31 @@ fn single_char(text: &str) -> Option<char> {
     match (chars.next(), chars.next()) {
         (Some(ch), None) => Some(ch),
         _ => None,
+    }
+}
+
+/// Tab / Shift+Tab 的字节：应用协商 Kitty 协议时走 CSI u，否则保持传统序列。
+///
+/// 输入法候选浮层会优先消费 Tab，这个函数只服务真正发往 Shell 的 Tab；
+/// 传统模式下 Shift+Tab 仍是 `ESC [ Z`，不能误落到普通 Tab 的 0x09。
+pub fn tab_bytes(mode: TermMode, backtab: bool) -> Vec<u8> {
+    let keystroke = Keystroke {
+        modifiers: gpui_kit::Modifiers {
+            shift: backtab,
+            ..Default::default()
+        },
+        key: "tab".to_string(),
+        key_char: None,
+    };
+    if mode.intersects(TermMode::KITTY_KEYBOARD_PROTOCOL)
+        && let Some(bytes) = encode_kitty(&keystroke, mode, KeyEventKind::Press)
+    {
+        return bytes;
+    }
+    if backtab {
+        b"\x1b[Z".to_vec()
+    } else {
+        b"\t".to_vec()
     }
 }
 
@@ -299,5 +347,19 @@ mod tests {
             focus_bytes(TermMode::FOCUS_IN_OUT, true),
             Some(b"\x1b[I".to_vec())
         );
+    }
+    /// 未协商 Kitty 时 Tab 保持传统字节；Shift+Tab 仍然是 CSI Z。
+    #[test]
+    fn tab_bytes_stay_legacy_without_kitty() {
+        assert_eq!(tab_bytes(TermMode::empty(), false), b"\t");
+        assert_eq!(tab_bytes(TermMode::empty(), true), b"\x1b[Z");
+    }
+
+    /// 协商 disambiguate 后 Shift+Tab 必须与 Tab 分开编码。
+    #[test]
+    fn shift_tab_uses_csi_u_when_kitty_negotiated() {
+        let mode = TermMode::DISAMBIGUATE_ESC_CODES;
+        assert_eq!(tab_bytes(mode, false), b"\t", "无修饰 Tab 仍保留逃生门");
+        assert_eq!(tab_bytes(mode, true), b"\x1b[9;2u");
     }
 }
