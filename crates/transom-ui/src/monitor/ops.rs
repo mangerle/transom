@@ -39,6 +39,7 @@ impl AppShell {
             self.ensure_monitor_task(cx);
         } else {
             self.monitor.processes.clear();
+            self.monitor.process_total = 0;
         }
         cx.notify();
     }
@@ -77,35 +78,43 @@ impl AppShell {
     }
 
     fn sample_processes_if_open(&mut self, cx: &mut Context<Self>) {
-        if !self.monitor.open || self.monitor.collapse.processes {
+        if !self.monitor.open {
             return;
         }
         self.sample_processes(cx);
     }
 
-    /// 采样进程列表，结合当前界面的排序意图（CPU 或 内存）。
+    /// 采样进程列表：卡片折叠时只取总数维持摘要计数，展开时拉全量明细。
     pub(crate) fn sample_processes(&mut self, cx: &mut Context<Self>) {
-        if self.monitor.collapse.processes {
-            return;
-        }
         let Some((tab_id, connection_id)) = self.active_monitor_target() else {
             return;
         };
-        self.send_command(HostCommand::SampleProcesses {
-            tab_id,
-            connection_id,
-            sort: self.monitor.sort,
-        });
+        if self.monitor.collapse.processes {
+            self.send_command(HostCommand::SampleProcessCount {
+                tab_id,
+                connection_id,
+            });
+        } else {
+            self.send_command(HostCommand::SampleProcesses {
+                tab_id,
+                connection_id,
+            });
+        }
         cx.notify();
     }
 
-    /// 切换排序方式（按 CPU 或按 内存），触发新采样。
+    /// 点击表头列切换排序。
+    ///
+    /// 换列默认从降序开始（排行榜直觉），再次点同一列则翻转方向。
+    /// 排序只发生在本地，不重新采样，切换是即时的。
     pub(crate) fn toggle_process_sort(&mut self, sort: ProcessSort, cx: &mut Context<Self>) {
-        if self.monitor.sort != sort {
+        if self.monitor.sort == sort {
+            self.monitor.sort_ascending = !self.monitor.sort_ascending;
+        } else {
             self.monitor.sort = sort;
-            self.sample_processes(cx);
-            cx.notify();
+            self.monitor.sort_ascending = false;
         }
+        cx.notify();
     }
 
     /// 切换各板块展开/折叠状态。
@@ -207,6 +216,23 @@ impl AppShell {
             return;
         }
         self.monitor.processes = processes;
+        self.monitor.process_total =
+            u32::try_from(self.monitor.processes.len()).unwrap_or(u32::MAX);
+        self.monitor.error = None;
+        cx.notify();
+    }
+
+    fn on_process_count_sampled(
+        &mut self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        count: u32,
+        cx: &mut Context<Self>,
+    ) {
+        if self.active_monitor_target() != Some((tab_id, connection_id)) {
+            return;
+        }
+        self.monitor.process_total = count;
         self.monitor.error = None;
         cx.notify();
     }
@@ -264,6 +290,17 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.on_processes_sampled(tab_id, connection_id, processes, cx);
+    }
+
+    /// 折叠态的进程总数采样落地。
+    pub(crate) fn monitor_count_sampled(
+        &mut self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        count: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.on_process_count_sampled(tab_id, connection_id, count, cx);
     }
 
     pub(crate) fn monitor_failed(
@@ -368,7 +405,7 @@ impl AppShell {
         let target_session_id = target_tab.session_id;
 
         let monitor_tab_id = TabId::new();
-        let tab_title = format!("监控 - {}", target_title);
+        let tab_title = rust_i18n::t!("monitor.view.tab_name", host = &target_title).to_string();
 
         let new_tab = TerminalTab::monitor_tab(
             monitor_tab_id,

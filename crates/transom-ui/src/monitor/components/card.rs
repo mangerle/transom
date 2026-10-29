@@ -14,6 +14,11 @@ pub(crate) struct CollapsibleCard {
     title: String,
     collapsed: bool,
     summary: Option<AnyElement>,
+    /// 展开时也在标题栏保留摘要。
+    ///
+    /// 列表类卡片（进程、端口）的计数与筛选结果在展开后仍然是关键信息，
+    /// 收起时才显示会导致"展开后看不到总数"，也让两个状态的排版不一致。
+    summary_always: bool,
     content: Option<AnyElement>,
 }
 
@@ -25,6 +30,7 @@ impl CollapsibleCard {
             title: title.into(),
             collapsed: false,
             summary: None,
+            summary_always: false,
             content: None,
         }
     }
@@ -36,6 +42,11 @@ impl CollapsibleCard {
 
     pub(crate) fn summary(mut self, summary: impl IntoElement) -> Self {
         self.summary = Some(summary.into_any_element());
+        self
+    }
+
+    pub(crate) fn summary_always(mut self, always: bool) -> Self {
+        self.summary_always = always;
         self
     }
 
@@ -93,7 +104,7 @@ impl CollapsibleCard {
             );
 
         let mut right_side = h_flex().gap_2().items_center().flex_shrink_0();
-        if self.collapsed
+        if (self.collapsed || self.summary_always)
             && let Some(summary) = self.summary
         {
             right_side = right_side.child(summary);

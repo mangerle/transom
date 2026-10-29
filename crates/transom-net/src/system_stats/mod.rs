@@ -10,5 +10,5 @@ pub use parser::{
     calculate_interface_rates, parse_combined_stats, parse_cpu_cores, parse_cpu_jiffies,
     parse_cpu_times, parse_disk, parse_failed_services, parse_filesystems, parse_loadavg,
     parse_meminfo, parse_meminfo_full, parse_net_dev_interfaces, parse_oom_alert, parse_os_name,
-    parse_ports, parse_processes, parse_uptime,
+    parse_ports, parse_process_count, parse_processes, parse_uptime,
 };

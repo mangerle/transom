@@ -526,6 +526,18 @@ pub fn parse_processes(content: &str) -> Vec<ProcessInfo> {
     processes
 }
 
+/// 统计 `ps -eo pid=` 输出的进程行数。
+///
+/// 折叠态只需要总数，用仅含 pid 的窄列输出把每轮传输量从全量明细的数十 KB
+/// 压到数 KB，代价是计数与明细采样发生在不同时刻，两者可能相差一两个进程。
+pub fn parse_process_count(content: &str) -> u32 {
+    let lines = content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count();
+    u32::try_from(lines).unwrap_or(u32::MAX)
+}
+
 /// 解析系统平均负载 Load Average：(1m, 5m, 15m)
 pub fn parse_loadavg(content: &str) -> (f32, f32, f32) {
     for line in content.lines() {

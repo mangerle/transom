@@ -25,9 +25,13 @@ impl AppShell {
             .gap_2()
             .text_xs()
             .child(
-                div()
-                    .text_color(p.muted_foreground)
-                    .child(format!("负载: {:.2}", stats.load_avg.0)),
+                div().text_color(p.muted_foreground).child(
+                    rust_i18n::t!(
+                        "monitor.cpu_section.load_summary",
+                        load = format!("{:.2}", stats.load_avg.0)
+                    )
+                    .to_string(),
+                ),
             )
             .child(
                 div()
@@ -83,7 +87,11 @@ impl AppShell {
                 .child(
                     h_flex()
                         .gap_1()
-                        .child(div().text_color(p.muted_foreground).child("用户:"))
+                        .child(
+                            div()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("monitor.cpu_section.user").to_string()),
+                        )
                         .child(
                             div()
                                 .text_color(p.foreground)
@@ -93,7 +101,11 @@ impl AppShell {
                 .child(
                     h_flex()
                         .gap_1()
-                        .child(div().text_color(p.muted_foreground).child("系统:"))
+                        .child(
+                            div()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("monitor.cpu_section.system").to_string()),
+                        )
                         .child(
                             div()
                                 .text_color(p.foreground)
@@ -103,7 +115,11 @@ impl AppShell {
                 .child(
                     h_flex()
                         .gap_1()
-                        .child(div().text_color(p.muted_foreground).child("IO等待:"))
+                        .child(
+                            div()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("monitor.cpu_section.iowait").to_string()),
+                        )
                         .child(
                             div()
                                 .text_color(if stats.cpu_iowait_percent > 20.0 {
@@ -126,7 +142,7 @@ impl AppShell {
                         div()
                             .text_xs()
                             .text_color(p.muted_foreground)
-                            .child("负载走势 (2分钟)"),
+                            .child(rust_i18n::t!("monitor.cpu_section.load_trend").to_string()),
                     )
                     .child(render_percent_sparkline(
                         &history,
@@ -144,10 +160,13 @@ impl AppShell {
                 v_flex()
                     .gap_1()
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(format!("核心分布 ({} 核)", stats.cpu_cores.len())),
+                        div().text_xs().text_color(p.muted_foreground).child(
+                            rust_i18n::t!(
+                                "monitor.cpu_section.core_distribution",
+                                count = stats.cpu_cores.len()
+                            )
+                            .to_string(),
+                        ),
                     )
                     .child(
                         h_flex()
@@ -176,6 +195,7 @@ impl AppShell {
         )
         .collapsed(collapsed)
         .summary(summary)
+        .summary_always(true)
         .content(content)
         .render(
             p,

@@ -177,6 +177,13 @@ impl AppShell {
             } => {
                 self.monitor_sampled(tab_id, connection_id, processes, cx);
             }
+            HostAppEvent::ProcessCountSampled {
+                tab_id,
+                connection_id,
+                count,
+            } => {
+                self.monitor_count_sampled(tab_id, connection_id, count, cx);
+            }
             HostAppEvent::ProcessesSampleFailed {
                 tab_id,
                 connection_id,

@@ -4,7 +4,7 @@
 //! - TerminalCommand: Connect, CloseTab, Shutdown
 //! - SftpCommand: Sftp (文件操作), SftpCancel (取消任务)
 //! - ForwardCommand: ForwardStart, ForwardStop
-//! - HostCommand: DeployPublicKey, RunHostActions, SampleProcesses, KillProcess
+//! - HostCommand: DeployPublicKey, RunHostActions, SampleProcesses, SampleProcessCount, KillProcess
 //! - SyncCommand: CloudSyncPush, CloudSyncPull, GitSync
 //! - ZmodemCommand: ZmodemUpload, ZmodemCancel
 
@@ -85,7 +85,11 @@ pub enum HostCommand {
     SampleProcesses {
         tab_id: TabId,
         connection_id: ConnectionId,
-        sort: crate::protocol::system_stats::ProcessSort,
+    },
+    /// 只采样进程总数：进程卡片折叠时用它维持摘要计数，避免拉取全量明细。
+    SampleProcessCount {
+        tab_id: TabId,
+        connection_id: ConnectionId,
     },
     KillProcess {
         tab_id: TabId,

@@ -55,8 +55,8 @@ app:
     en: Import SSH Config
     zh-CN: 导入 SSH 配置
   import_success:
-    en: "Imported %{count} sessions from ~/.ssh/config"
-    zh-CN: "已从 ~/.ssh/config 导入 %{count} 个会话"
+    en: Imported %{count} sessions from ~/.ssh/config
+    zh-CN: 已从 ~/.ssh/config 导入 %{count} 个会话
   import_none:
     en: No new hosts found in ~/.ssh/config
     zh-CN: 未在 ~/.ssh/config 中发现新主机
@@ -67,8 +67,8 @@ app:
     en: Type to search sessions, or paste a host to connect directly...
     zh-CN: 输入关键字搜索会话，或填入主机地址直接连接...
   quick_connect:
-    en: "Connect directly to %{host} (without saving)"
-    zh-CN: "直接连接 %{host}（不保存会话）"
+    en: Connect directly to %{host} (without saving)
+    zh-CN: 直接连接 %{host}（不保存会话）
   error:
     en: Error
     zh-CN: 错误
@@ -100,6 +100,12 @@ activity:
   unknown:
     en: Unknown Item
     zh-CN: 未知条目
+  switch_to_english:
+    en: Switch to English
+    zh-CN: 切换为英文
+  switch_to_chinese:
+    en: Switch to Chinese
+    zh-CN: 切换为中文
 common:
   save:
     en: Save
@@ -119,11 +125,11 @@ common:
   confirm_delete:
     en: Confirm delete
     zh-CN: 确认删除
-  yes:
-    en: "On"
+  true:
+    en: 'On'
     zh-CN: 开
-  no:
-    en: "Off"
+  false:
+    en: 'Off'
     zh-CN: 关
   reconnect:
     en: Reconnect
@@ -132,8 +138,8 @@ common:
     en: Copy
     zh-CN: 复制
   duplicate_name:
-    en: "%{name} (Copy)"
-    zh-CN: "%{name} 副本"
+    en: '%{name} (Copy)'
+    zh-CN: '%{name} 副本'
   paste:
     en: Paste
     zh-CN: 粘贴
@@ -151,8 +157,8 @@ tab:
     en: Connection failed
     zh-CN: 连接失败
   pane_count:
-    en: "%{title} · %{count} panes"
-    zh-CN: "%{title} · %{count} 个窗格"
+    en: '%{title} · %{count} panes'
+    zh-CN: '%{title} · %{count} 个窗格'
 broadcast:
   title:
     en: Broadcast Input
@@ -179,8 +185,8 @@ broadcast:
     en: Broadcast failed on some disconnected panes
     zh-CN: 部分窗格已断开，广播发送失败
   pane_suffix:
-    en: "Pane %{index}"
-    zh-CN: "窗格 %{index}"
+    en: Pane %{index}
+    zh-CN: 窗格 %{index}
 tiling:
   fill_slot:
     en: Choose Tab
@@ -204,8 +210,8 @@ tiling:
     en: Re-layout Tiling
     zh-CN: 重排并排布局
   too_many:
-    en: "At most %{max} tabs can be tiled"
-    zh-CN: "最多同时并排 %{max} 个标签"
+    en: At most %{max} tabs can be tiled
+    zh-CN: 最多同时并排 %{max} 个标签
 form:
   new_title:
     en: New Session
@@ -307,8 +313,8 @@ form:
     en: HTTP CONNECT
     zh-CN: HTTP CONNECT
   proxy_global_hint:
-    en: "Current global proxy: %{proxy}"
-    zh-CN: "当前全局代理：%{proxy}"
+    en: 'Current global proxy: %{proxy}'
+    zh-CN: 当前全局代理：%{proxy}
   proxy_host:
     en: Proxy host
     zh-CN: 代理地址
@@ -364,8 +370,8 @@ form:
     en: NIC MAC for Wake-on-LAN
     zh-CN: 用于 Wake-on-LAN 的网卡 MAC
   wol_mac_placeholder:
-    en: "aa:bb:cc:dd:ee:ff (blank disables wake)"
-    zh-CN: "aa:bb:cc:dd:ee:ff（留空表示不唤醒）"
+    en: aa:bb:cc:dd:ee:ff (blank disables wake)
+    zh-CN: aa:bb:cc:dd:ee:ff（留空表示不唤醒）
   error_mac:
     en: MAC address is invalid; use 6 hex groups like aa:bb:cc:dd:ee:ff
     zh-CN: MAC 地址格式非法，应为 6 组十六进制，如 aa:bb:cc:dd:ee:ff
@@ -433,11 +439,11 @@ form:
     en: Even
     zh-CN: 偶校验
   stop_bits_one:
-    en: "1"
-    zh-CN: "1"
+    en: '1'
+    zh-CN: '1'
   stop_bits_two:
-    en: "2"
-    zh-CN: "2"
+    en: '2'
+    zh-CN: '2'
   flow_none:
     en: None
     zh-CN: 无
@@ -501,6 +507,28 @@ form:
   error_key:
     en: Private key path is required.
     zh-CN: 私钥路径不能为空。
+  agent_forward:
+    en: SSH agent forwarding (ssh -A)
+    zh-CN: SSH Agent 代理转发 (ssh -A)
+  cert_filter:
+    en: OpenSSH certificate
+    zh-CN: OpenSSH 证书
+  mosh:
+    group:
+      en: Mosh roaming protocol settings
+      zh-CN: Mosh 漫游协议参数配置
+    server_path:
+      en: Remote mosh-server path
+      zh-CN: 远端 mosh-server 执行路径
+    server_port:
+      en: Remote UDP listen port (auto-assigned from 60000-61000 by default)
+      zh-CN: 远端 UDP 监听端口（默认 60000-61000 自动分配）
+    hint:
+      en: 'Note: Mosh requires mosh-server on the remote host and the matching UDP port range open in the firewall. Locally, Transom prefers bridging roaming through mosh-client.'
+      zh-CN: 提示：Mosh 依赖远端已安装 mosh-server 且防火墙开放对应 UDP 端口范围；本地将优先通过 mosh-client 桥接漫游。
+    port_placeholder:
+      en: Leave empty to auto-assign
+      zh-CN: 留空自动分配
 prompt:
   password_field:
     en: Login password
@@ -515,7 +543,7 @@ prompt:
     en: First connection to this host
     zh-CN: 首次连接到该主机
   host_key_body:
-    en: "Connecting to %{host}:%{port} for the first time. Verify the fingerprint below against a trusted channel before continuing."
+    en: Connecting to %{host}:%{port} for the first time. Verify the fingerprint below against a trusted channel before continuing.
     zh-CN: 首次连接到 %{host}:%{port}。请将下方指纹与可信渠道获取的指纹核对无误后再继续。
   host_key_warning:
     en: Only trust this key if the fingerprint matches; a mismatch may indicate a man-in-the-middle attack.
@@ -567,8 +595,8 @@ snippets:
     en: Edit Quick Command
     zh-CN: 编辑快捷命令
   form_invalid:
-    en: "Both name and command are required; name up to 40 characters, command up to 4000."
-    zh-CN: "名称与命令都不能为空；名称不超过 40 字，命令不超过 4000 字。"
+    en: Both name and command are required; name up to 40 characters, command up to 4000.
+    zh-CN: 名称与命令都不能为空；名称不超过 40 字，命令不超过 4000 字。
   name_column:
     en: Name
     zh-CN: 名称
@@ -596,7 +624,6 @@ snippets:
   too_many:
     en: Too many snippets (max 40)
     zh-CN: 快捷命令数量已达上限（40 条）
-
 desktop:
   default_terminal_switch:
     en: Set as default terminal
@@ -620,12 +647,37 @@ notify:
   desktop_sent:
     en: Program notification forwarded to the system
     zh-CN: 已把程序通知转发到系统通知中心
-
+  exit_code_zero:
+    en: Exit code 0
+    zh-CN: 退出码 0
+  exit_code:
+    en: Exit code %{code}
+    zh-CN: 退出码 %{code}
+  exit_code_unknown:
+    en: Exit code unknown
+    zh-CN: 退出码未知
+  command_done_title:
+    en: Transom command finished
+    zh-CN: Transom 命令执行完成
+  command_done_body:
+    en: '%{pane} · took %{duration} · %{exit}'
+    zh-CN: '%{pane}｜用时 %{duration}｜%{exit}'
+  default_title:
+    en: Transom notification
+    zh-CN: Transom 通知
+  unit_second:
+    en: s
+    zh-CN: 秒
+  duration_hms:
+    en: '%{hours} h %{minutes} min %{seconds} s'
+    zh-CN: '%{hours} 小时 %{minutes} 分 %{seconds} 秒'
+  duration_ms:
+    en: '%{minutes} min %{seconds} s'
+    zh-CN: '%{minutes} 分 %{seconds} 秒'
 search:
   terminal_unavailable:
     en: No terminal is ready in the current pane
     zh-CN: 当前窗格还没有可用的终端
-
 zmodem:
   started:
     en: ZMODEM transfer started
@@ -663,7 +715,6 @@ zmodem:
   notify_failed_body:
     en: Transfer failed, see status bar for details
     zh-CN: 传输失败，详情见状态栏
-
 status:
   ready:
     en: Ready
@@ -827,14 +878,14 @@ sftp:
     en: Local file to upload
     zh-CN: 要上传的本地文件
   upload_queued:
-    en: "Queued %{count} upload task(s)"
-    zh-CN: "已加入 %{count} 个上传任务"
+    en: Queued %{count} upload task(s)
+    zh-CN: 已加入 %{count} 个上传任务
   drop_needs_ssh:
-    en: "Drop-to-upload works only on a connected SSH session."
-    zh-CN: "拖拽上传仅支持已连接的 SSH 会话。"
+    en: Drop-to-upload works only on a connected SSH session.
+    zh-CN: 拖拽上传仅支持已连接的 SSH 会话。
   drop_not_connected:
-    en: "The session is not connected yet; connect first, then drop the files."
-    zh-CN: "会话尚未连接，请连接后再拖入文件。"
+    en: The session is not connected yet; connect first, then drop the files.
+    zh-CN: 会话尚未连接，请连接后再拖入文件。
   name:
     en: Name
     zh-CN: 名称
@@ -866,8 +917,8 @@ sftp:
     en: Select a remote file first
     zh-CN: 请先选择一个远程文件
   invalid_name:
-    en: "Invalid file name: use a single name without path separators, . or .."
-    zh-CN: "文件名非法：必须是单个名称，不能包含路径分隔符、. 或 .."
+    en: 'Invalid file name: use a single name without path separators, . or ..'
+    zh-CN: 文件名非法：必须是单个名称，不能包含路径分隔符、. 或 ..
   transfer_done:
     en: Transfer complete
     zh-CN: 传输完成
@@ -899,8 +950,8 @@ sftp:
     en: Upload target folder
     zh-CN: 上传目标目录
   overlay_summary:
-    en: "Uploading %{busy}/%{total} item(s)"
-    zh-CN: "上传中 %{busy}/%{total} 项"
+    en: Uploading %{busy}/%{total} item(s)
+    zh-CN: 上传中 %{busy}/%{total} 项
   overlay_expand:
     en: Show or hide transfer details
     zh-CN: 展开或收起逐项明细
@@ -941,8 +992,84 @@ sftp:
     en: Browse File
     zh-CN: 浏览文件
   queue:
-    en: Transfer Queue
-    zh-CN: 传输队列
+    dir_upload:
+      en: ↑ Upload
+      zh-CN: ↑ 上传
+    dir_download:
+      en: ↓ Download
+      zh-CN: ↓ 下载
+    dir_sync:
+      en: ↕ Sync
+      zh-CN: ↕ 同步
+    dir_remote_copy:
+      en: ⇋ Cross-copy
+      zh-CN: ⇋ 互传
+    pause_task:
+      en: Pause Transfer
+      zh-CN: 暂停传输
+    cancel_task:
+      en: Cancel Task
+      zh-CN: 取消任务
+    prioritize_task:
+      en: Move to Top and Start First
+      zh-CN: 置顶优先传输
+    resume_task:
+      en: Resume Transfer
+      zh-CN: 恢复传输
+    retry_task:
+      en: Retry Transfer
+      zh-CN: 重试传输
+    verify_on:
+      en: Post-transfer %{algo} verification enabled
+      zh-CN: 已开启传输后 %{algo} 校验
+    verify_off:
+      en: Post-transfer %{algo} verification disabled
+      zh-CN: 已关闭传输后 %{algo} 校验
+    concurrency:
+      en: '%{count} Concurrent'
+      zh-CN: 并发 %{count}
+    concurrency_tooltip:
+      en: Number of simultaneous transfers; click to cycle 1-4
+      zh-CN: 同时传输的任务数，点击切换 1-4
+    retry_failed:
+      en: Retry Failed (%{count})
+      zh-CN: 重试失败 (%{count})
+    retry_all_tooltip:
+      en: Retry all failed transfers in the queue
+      zh-CN: 一键重试队列中所有失败的传输任务
+    filter_rules_tooltip:
+      en: Transfer filter rules (directory transfers only)
+      zh-CN: 传输过滤规则（仅对目录传输生效）
+    collapse:
+      en: Collapse Transfer List
+      zh-CN: 收起传输列表
+    expand:
+      en: Expand Transfer List
+      zh-CN: 展开传输列表
+    total_speed:
+      en: 'Total throughput: %{speed}'
+      zh-CN: '总传输速率: %{speed}'
+    active_progress:
+      en: '%{count} task(s) transferring%{suffix} · %{progress}'
+      zh-CN: '%{count} 个任务传输中%{suffix} · %{progress}'
+    paused_progress:
+      en: Paused %{count} task(s) · %{progress}
+      zh-CN: 已暂停 %{count} 个任务 · %{progress}
+    pause_all:
+      en: Pause All Transfers
+      zh-CN: 暂停全部传输
+    cancel_all:
+      en: Cancel All Transfers
+      zh-CN: 取消全部传输
+    resume_all:
+      en: Resume All Transfers
+      zh-CN: 继续全部传输
+    eta:
+      en: '%{time} left'
+      zh-CN: 剩余 %{time}
+    title:
+      en: Transfer Queue
+      zh-CN: 传输队列
   resume_transfer:
     en: Resume
     zh-CN: 断点续传
@@ -965,12 +1092,708 @@ sftp:
     en: Transfer Filter Rules
     zh-CN: 传输过滤规则
   filter_rules_hint:
-    en: One glob per line. Rules without / match names at any depth; rules with / match paths relative to the transfer root; a trailing / matches directories only. Lines starting with # are comments.
-    zh-CN: 每行一个通配符；不含 / 的规则匹配任意层级的名称，含 / 的规则匹配相对传输根目录的路径，末尾 / 仅匹配目录；以 # 开头为注释。
+    en: 'One glob per line. Rules without / match names at any depth; rules with / match paths relative to the transfer root; a trailing / matches directories only. Lines starting with # are comments.'
+    zh-CN: '每行一个通配符；不含 / 的规则匹配任意层级的名称，含 / 的规则匹配相对传输根目录的路径，末尾 / 仅匹配目录；以 # 开头为注释。'
   filter_rules_saved:
     en: Transfer filter rules saved
     zh-CN: 传输过滤规则已保存
-
+  file_ops:
+    delete_remote_title:
+      en: Delete Remote Items
+      zh-CN: 删除远端项目
+    delete_remote_body:
+      en: This will permanently delete %{count} remote item(s) (folders are deleted recursively). This cannot be undone.
+      zh-CN: 将永久删除 %{count} 个远端项目（目录按递归删除），此操作不可撤销。
+    deleting_remote:
+      en: Deleting %{count} remote item(s)
+      zh-CN: 正在删除 %{count} 个远端项目
+    mkdir_remote_title:
+      en: New Remote Folder
+      zh-CN: 新建远端文件夹
+    mkdir_remote_prompt:
+      en: 'Enter a name for the new remote folder:'
+      zh-CN: '请输入新建远端文件夹的名称:'
+    mkdir_local_title:
+      en: New Local Folder
+      zh-CN: 新建本地文件夹
+    mkdir_local_prompt:
+      en: 'Enter a name for the new local folder:'
+      zh-CN: '请输入新建本地文件夹的名称:'
+    folder_name_placeholder:
+      en: Folder name
+      zh-CN: 文件夹名称
+    new_file_placeholder:
+      en: New file name
+      zh-CN: 新文件名称
+    new_remote_file_title:
+      en: New Remote File
+      zh-CN: 新建远端文件
+    new_remote_file_prompt:
+      en: 'Enter a name for the new file (created in the current remote directory):'
+      zh-CN: '输入新文件名称（在当前远端目录下创建）:'
+    new_local_file_title:
+      en: New Local File
+      zh-CN: 新建本地文件
+    new_local_file_prompt:
+      en: 'Enter a name for the new file (created in the current local directory):'
+      zh-CN: '输入新文件名称（在当前本地目录下创建）:'
+    rename_remote_title:
+      en: Rename Remote Item
+      zh-CN: 重命名远端文件
+    rename_local_title:
+      en: Rename Local Item
+      zh-CN: 重命名本地文件
+    rename_prompt:
+      en: 'Enter a new name:'
+      zh-CN: '请输入新的名称:'
+    rename_placeholder:
+      en: New name
+      zh-CN: 新名称
+    symlink_remote_title:
+      en: Create Remote Symlink
+      zh-CN: 创建远端软链接
+    symlink_remote_prompt:
+      en: 'The new link will be created in the current remote directory and point to: %{path}'
+      zh-CN: '新链接将创建于当前远端目录，指向: %{path}'
+    symlink_local_title:
+      en: Create Local Symlink
+      zh-CN: 创建本地软链接
+    symlink_local_prompt:
+      en: 'The new link will be created in the current local directory and point to: %{path}'
+      zh-CN: '新链接将创建于当前本地目录，指向: %{path}'
+    symlink_name_placeholder:
+      en: Link name
+      zh-CN: 软链接名称
+    archive_placeholder:
+      en: Archive file name
+      zh-CN: 归档文件名
+    archive_title:
+      en: Archive Remote Items
+      zh-CN: 远程归档压缩
+    archive_prompt:
+      en: 'Pack the %{count} selected item(s) into the current directory. Enter an archive file name (.tar.gz / .zip):'
+      zh-CN: '将打包选中的 %{count} 项至当前目录，请输入归档文件名 (.tar.gz / .zip):'
+    extract_placeholder:
+      en: Target folder name
+      zh-CN: 目标文件夹名称
+    extract_title:
+      en: Extract to New Remote Folder
+      zh-CN: 远程解压缩至新文件夹
+    extract_prompt:
+      en: 'Enter a name for the destination subfolder (created in the current directory):'
+      zh-CN: '请输入解压目标子文件夹名称（将在当前目录下创建）:'
+    name_empty:
+      en: Name cannot be empty
+      zh-CN: 名称不能为空
+    file_exists_as_dir:
+      en: 'A directory with this name already exists; cannot create the file: %{name}'
+      zh-CN: 同名目录已存在，无法创建文件：%{name}
+    local_mkdir_failed:
+      en: 'Failed to create the local folder: %{error}'
+      zh-CN: '新建本地文件夹失败: %{error}'
+    local_mkdir_created:
+      en: 'Local folder created: %{name}'
+      zh-CN: '已成功创建本地文件夹: %{name}'
+    local_file_exists:
+      en: 'The local file already exists: %{name}'
+      zh-CN: '本地文件已存在: %{name}'
+    local_file_created:
+      en: 'Local file created: %{name}'
+      zh-CN: '已成功创建本地文件: %{name}'
+    local_file_create_failed:
+      en: 'Failed to create the local file: %{error}'
+      zh-CN: '新建本地文件失败: %{error}'
+    local_rename_failed:
+      en: 'Failed to rename the local file: %{error}'
+      zh-CN: '重命名本地文件失败: %{error}'
+    local_renamed:
+      en: 'Renamed to: %{name}'
+      zh-CN: '已重命名为: %{name}'
+    local_symlink_unsupported:
+      en: Creating local symlinks is not supported on this platform
+      zh-CN: 当前平台暂不支持创建本地软链接
+    local_symlink_created:
+      en: 'Local symlink created: %{name}'
+      zh-CN: '已创建本地软链接: %{name}'
+    local_symlink_failed:
+      en: 'Failed to create the local symlink: %{error}'
+      zh-CN: '创建本地软链接失败: %{error}'
+    name_absolute_or_parent:
+      en: The name must not be an absolute path or contain '..' (leaving the current directory is not allowed)
+      zh-CN: 名称不能是绝对路径或包含 .. 路径片段（不允许逃逸当前目录）
+    name_single_file:
+      en: The name must be a single file name without path separators, '.' or '..'
+      zh-CN: 名称必须是单个文件名，不能包含路径分隔符、. 或 ..
+  modals:
+    filter_save:
+      en: Save Rules
+      zh-CN: 保存规则
+    filter_scope_hint:
+      en: Applies only to directory uploads/downloads; single-file transfers are unaffected.
+      zh-CN: 仅对目录上传/下载生效；单文件传输不受影响。
+    scope_remote:
+      en: Remote
+      zh-CN: 远端
+  sync:
+    scanning:
+      en: Scanning and comparing local and remote directories...
+      zh-CN: 正在扫描并比较本地与远端目录，请稍候...
+    rescan:
+      en: Rescan
+      zh-CN: 重新扫描
+    identical:
+      en: The two directories are identical; nothing to sync
+      zh-CN: 两个目录内容一致，无需同步
+    skipped_count:
+      en: '%{count} item(s) excluded from this scan'
+      zh-CN: 本次扫描排除 %{count} 个条目
+    column_relative_path:
+      en: Relative Path
+      zh-CN: 相对路径
+    column_status:
+      en: Difference
+      zh-CN: 差异
+    column_local:
+      en: Local
+      zh-CN: 本地
+    column_remote:
+      en: Remote
+      zh-CN: 远端
+    summary:
+      en: '%{diff} differences: %{upload} to upload, %{download} to download, %{conflict} type conflicts; %{skipped} excluded from scan'
+      zh-CN: 差异 %{diff} 项：待上传 %{upload}，待下载 %{download}，类型冲突 %{conflict}；扫描排除 %{skipped} 项
+    select_all:
+      en: Select All
+      zh-CN: 全选
+    select_none:
+      en: Select None
+      zh-CN: 全不选
+    start:
+      en: Start Sync (%{count})
+      zh-CN: 开始同步 (%{count})
+    title:
+      en: Directory Compare and Incremental Sync
+      zh-CN: 目录对比与增量同步
+    subtitle:
+      en: 'Local: %{local}  |  Remote: %{remote}'
+      zh-CN: '本地: %{local}  |  远端: %{remote}'
+    status_local_only:
+      en: Local only
+      zh-CN: 仅本地
+    status_remote_only:
+      en: Remote only
+      zh-CN: 仅远端
+    status_local_newer:
+      en: Local is newer
+      zh-CN: 本地较新
+    status_remote_newer:
+      en: Remote is newer
+      zh-CN: 远端较新
+    status_type_mismatch:
+      en: Type conflict
+      zh-CN: 类型冲突
+    side_directory:
+      en: Directory
+      zh-CN: 目录
+  search:
+    placeholder:
+      en: Type a file name keyword or text to search...
+      zh-CN: 键入文件名关键字或搜索文本内容...
+    error_empty:
+      en: Search keyword cannot be empty
+      zh-CN: 搜索关键字不能为空
+    root:
+      en: 'Search root: %{path}'
+      zh-CN: '检索根目录: %{path}'
+    searching_short:
+      en: Searching...
+      zh-CN: 检索中...
+    search:
+      en: Search
+      zh-CN: 检索
+    content_mode:
+      en: Search file contents (Grep)
+      zh-CN: 全文内容检索 (Grep)
+    case_sensitive:
+      en: Case sensitive
+      zh-CN: 区分大小写
+    searching_hint:
+      en: Searching on the remote server, please wait...
+      zh-CN: 正在远程服务器执行检索，请稍候...
+    no_results:
+      en: No matches. Adjust the keyword and search again.
+      zh-CN: 暂无匹配的条目，请调整关键字后重新检索
+    line:
+      en: Line %{line}
+      zh-CN: 行 %{line}
+    title:
+      en: Remote File and Content Search
+      zh-CN: 远程文件与内容检索
+  filter:
+    invalid:
+      en: Invalid transfer filter rules
+      zh-CN: 传输过滤规则无效
+  properties:
+    label_name:
+      en: Name
+      zh-CN: 名称
+    label_kind:
+      en: Type
+      zh-CN: 类型
+    label_size:
+      en: Size
+      zh-CN: 大小
+    size_value:
+      en: '%{size} (%{bytes} bytes)'
+      zh-CN: '%{size} (%{bytes} 字节)'
+    label_permissions:
+      en: Permissions
+      zh-CN: 权限
+    label_owner:
+      en: Owner
+      zh-CN: 属主
+    label_group:
+      en: Group
+      zh-CN: 属组
+    label_modified:
+      en: Modified
+      zh-CN: 修改时间
+    label_accessed:
+      en: Accessed
+      zh-CN: 访问时间
+    label_link_target:
+      en: Symlink target
+      zh-CN: 符号链接指向
+    title:
+      en: 'Properties: %{name}'
+      zh-CN: '属性: %{name}'
+    subtitle:
+      en: '%{scope} path: %{path}'
+      zh-CN: '%{scope}路径: %{path}'
+    kind_symlink:
+      en: Symlink
+      zh-CN: 符号链接
+    kind_directory:
+      en: Folder
+      zh-CN: 文件夹
+    kind_file:
+      en: File
+      zh-CN: 文件
+    timestamp_suffix:
+      en: '%{seconds} (Unix timestamp)'
+      zh-CN: '%{seconds} (Unix 时间戳)'
+    read_local_failed:
+      en: 'Failed to read local file properties: %{error}'
+      zh-CN: '读取本地文件属性失败: %{error}'
+  chmod:
+    group_owner:
+      en: Owner
+      zh-CN: 所有者 (Owner)
+    group_group:
+      en: Group
+      zh-CN: 所属组 (Group)
+    group_others:
+      en: Others
+      zh-CN: 其他用户 (Others)
+    read:
+      en: Read (r)
+      zh-CN: 读取 (r)
+    write:
+      en: Write (w)
+      zh-CN: 写入 (w)
+    execute:
+      en: Execute (x)
+      zh-CN: 执行 (x)
+    octal_label:
+      en: 'Octal mode:'
+      zh-CN: '八进制权限码:'
+    apply:
+      en: Apply Permissions
+      zh-CN: 应用权限
+    title:
+      en: 'Change File Permissions (Chmod): %{name}'
+      zh-CN: '修改文件权限 (Chmod): %{name}'
+    remote_path:
+      en: 'Remote path: %{path}'
+      zh-CN: '远端路径: %{path}'
+    granted_remote:
+      en: Queued execution permission changes for %{count} remote item(s)
+      zh-CN: 已为 %{count} 个远端条目下发执行权限变更
+    grant_failed:
+      en: 'Failed to grant execute permission to %{failed} of %{total} item(s); first failed path: %{first}'
+      zh-CN: '赋予执行权限失败 %{failed} 项，共 %{total} 项，首个失败路径: %{first}'
+    granted_local:
+      en: Granted execute permission to %{count} local item(s)
+      zh-CN: 已为 %{count} 个本地条目赋予执行权限
+    octal_placeholder:
+      en: e.g. 755 or 644
+      zh-CN: 例如 755 或 644
+    octal_invalid:
+      en: Invalid octal mode (enter an octal number between 000 and 777)
+      zh-CN: 无效的八进制权限码（请输入 000 - 777 之间的八进制数字）
+  preview:
+    image_label:
+      en: Image preview
+      zh-CN: 图片预览
+    text_label:
+      en: Text preview
+      zh-CN: 文本预览
+    loading_image:
+      en: Generating thumbnail…
+      zh-CN: 正在生成缩略图…
+    loading_text:
+      en: Loading preview…
+      zh-CN: 正在读取预览…
+    empty_file:
+      en: (Empty file)
+      zh-CN: （空文件）
+    head_only:
+      en: Only the beginning of the file is shown
+      zh-CN: 仅显示文件开头部分
+    unrecognized_format:
+      en: 'Unrecognized image format: %{error}'
+      zh-CN: '无法识别图片格式: %{error}'
+    read_dimensions_failed:
+      en: 'Failed to read image dimensions: %{error}'
+      zh-CN: '读取图片尺寸失败: %{error}'
+    too_many_pixels:
+      en: Image size %{width}x%{height} (%{pixels} pixels) exceeds the preview limit of %{max} pixels
+      zh-CN: 图片尺寸 %{width}x%{height}（%{pixels} 像素）超过预览上限 %{max} 像素
+    decoder_failed:
+      en: 'Failed to create the image decoder: %{error}'
+      zh-CN: '创建图片解码器失败: %{error}'
+    decode_failed:
+      en: 'Failed to decode the image: %{error}'
+      zh-CN: '解码图片失败: %{error}'
+    image_too_large:
+      en: Image size %{size} exceeds the limit of %{max}; preview skipped
+      zh-CN: 图片大小 %{size} 超过上限 %{max}，已跳过预览
+    ssh_not_ready:
+      en: The SSH connection is not ready; cannot load the preview
+      zh-CN: SSH 连接尚未就绪，无法读取预览
+    local_read_failed:
+      en: 'Failed to read the local file: %{error}'
+      zh-CN: '读取本地文件失败: %{error}'
+    remote_empty:
+      en: The remote image is empty; cannot preview it
+      zh-CN: 远端图片内容为空，无法预览
+    local_image_read_failed:
+      en: 'Failed to read the local image: %{error}'
+      zh-CN: '读取本地图片失败: %{error}'
+  remote:
+    go_up:
+      en: Go up one level
+      zh-CN: 返回上一级
+    refresh:
+      en: Refresh remote directory
+      zh-CN: 刷新远程目录
+    enter_path:
+      en: Open path
+      zh-CN: 进入路径
+    collapse:
+      en: Collapse main remote pane
+      zh-CN: 收起主远端列
+    new_file_edit:
+      en: New file and edit
+      zh-CN: 新建文件并编辑
+    search:
+      en: Remote search (Find / Grep)
+      zh-CN: 远程检索 (Find / Grep)
+    chmod:
+      en: Change permissions (Chmod)
+      zh-CN: 修改权限 (Chmod)
+    hide_dotfiles:
+      en: Hide dotfiles (Ctrl+H)
+      zh-CN: 隐藏点号文件 (Ctrl+H)
+    show_dotfiles:
+      en: Show hidden files (Ctrl+H)
+      zh-CN: 显示隐藏文件 (Ctrl+H)
+    sync_nav_on:
+      en: Sync navigation (on, click to turn off)
+      zh-CN: 同步导航（已开启，点击关闭）
+    sync_nav_off:
+      en: Sync navigation (off, click to turn on)
+      zh-CN: 同步导航（已关闭，点击开启）
+    sync_nav_enabled:
+      en: Two-pane sync navigation enabled
+      zh-CN: 已开启双栏同步导航联动
+    sync_nav_disabled:
+      en: Two-pane sync navigation disabled
+      zh-CN: 已关闭双栏同步导航联动
+    filter:
+      en: Filter within directory (Ctrl+F)
+      zh-CN: 目录内模糊过滤 (Ctrl+F)
+  local_async:
+    read_dir_failed:
+      en: 'Failed to read the local directory: %{error}'
+      zh-CN: '读取本地目录失败: %{error}'
+    select_first:
+      en: Select a local item first
+      zh-CN: 请先选择一个本地项目
+    delete_title:
+      en: Delete Local Items
+      zh-CN: 删除本地项目
+    delete_body:
+      en: This will permanently delete %{count} local item(s) (folders are deleted recursively), bypassing the Trash. This cannot be undone.
+      zh-CN: 将永久删除 %{count} 个本地项目（目录按递归删除），不经回收站，此操作不可撤销。
+    deleting:
+      en: Deleting %{count} local item(s)...
+      zh-CN: 正在删除 %{count} 个本地项目...
+    deleted:
+      en: Deleted %{count} local item(s)
+      zh-CN: 已删除 %{count} 个本地项目
+    delete_partial:
+      en: 'Deleted %{deleted} local item(s); %{failed} failed: %{detail}'
+      zh-CN: 已删除 %{deleted} 个本地项目，%{failed} 个失败：%{detail}
+  menu:
+    go_up:
+      en: Go Up One Level
+      zh-CN: 返回上一级
+    builtin_edit:
+      en: Built-in Editor
+      zh-CN: 内置编辑
+    extract_here:
+      en: Extract Here
+      zh-CN: 解压到当前目录
+    extract_to_new_folder:
+      en: Extract to New Folder...
+      zh-CN: 解压至新文件夹...
+    compress_tar_gz:
+      en: Compress Remotely to .tar.gz...
+      zh-CN: 远程压缩为 .tar.gz...
+    compress_zip:
+      en: Compress Remotely to .zip...
+      zh-CN: 远程压缩为 .zip...
+    copy_abs_path:
+      en: Copy Absolute Path
+      zh-CN: 复制绝对路径
+    copy_entries:
+      en: Copy Entries (Ctrl+C)
+      zh-CN: 复制条目 (Ctrl+C)
+    paste_here:
+      en: Paste Here (Ctrl+V)
+      zh-CN: 粘贴至此处 (Ctrl+V)
+    create_symlink:
+      en: Create Symlink
+      zh-CN: 创建软链接
+    properties:
+      en: Properties
+      zh-CN: 查看属性
+    grant_exec:
+      en: Grant Execute Permission
+      zh-CN: 赋予执行权限
+    chmod:
+      en: Change Permissions (Chmod)
+      zh-CN: 修改权限 (Chmod)
+    new_remote_folder:
+      en: New Remote Folder
+      zh-CN: 新建远端文件夹
+    new_local_folder:
+      en: New Local Folder
+      zh-CN: 新建本地文件夹
+    new_local_file:
+      en: New Local File
+      zh-CN: 新建本地文件
+    open_file_manager:
+      en: Open in File Manager
+      zh-CN: 打开文件管理器
+    download_to_local:
+      en: Download to Local
+      zh-CN: 下载到本地
+    copy_to_main_remote:
+      en: Stream Copy to Main Remote
+      zh-CN: 流式复制到主远端
+    local_path_copied:
+      en: 'Local path copied: %{path}'
+      zh-CN: '已复制本地路径: %{path}'
+    remote_path_copied:
+      en: 'Remote path copied: %{path}'
+      zh-CN: '已复制远端路径: %{path}'
+    entries_copied:
+      en: 'Entry copied: %{path}'
+      zh-CN: '已复制条目: %{path}'
+  nav:
+    close_panel:
+      en: Close Panel
+      zh-CN: 关闭面板
+    refresh_local_dir:
+      en: Refresh Local Folder
+      zh-CN: 刷新本地目录
+    enter_path:
+      en: Open Path
+      zh-CN: 进入路径
+    diff_with_remote:
+      en: Compare with the same-named file in the remote directory
+      zh-CN: 与远端当前目录的同名文件分栏对比
+    show_dotfiles:
+      en: Show Hidden Files (Ctrl+H)
+      zh-CN: 显示隐藏文件 (Ctrl+H)
+    hide_dotfiles:
+      en: Hide Dotfiles (Ctrl+H)
+      zh-CN: 隐藏点号文件 (Ctrl+H)
+    toggle_filter:
+      en: Fuzzy Filter in Folder (Ctrl+F)
+      zh-CN: 目录内模糊过滤 (Ctrl+F)
+    hidden_shown:
+      en: Hidden files shown
+      zh-CN: 已显示隐藏文件
+    hidden_hidden:
+      en: Dotfiles hidden
+      zh-CN: 已隐藏点号文件
+    revealed_local_path:
+      en: 'Opened in the system file manager: %{path}'
+      zh-CN: '已在系统文件管理器中打开: %{path}'
+    opened_with_default:
+      en: 'Opened with the system default application: %{path}'
+      zh-CN: '已调用系统程序打开: %{path}'
+    sync_no_selection:
+      en: Select at least one item to sync
+      zh-CN: 请至少勾选一个可同步项
+    sync_queued:
+      en: Directory sync queued (%{upload} to upload, %{download} to download)
+      zh-CN: 已加入目录同步任务（上传 %{upload} 项，下载 %{download} 项）
+  sidebar:
+    collapse_local:
+      en: Collapse Local Files Column
+      zh-CN: 收起本地文件列
+    expand_local:
+      en: Expand Local Files Column
+      zh-CN: 展开本地文件列
+    expand_remote:
+      en: Expand Main Remote Column
+      zh-CN: 展开主远端列
+    remote_column:
+      en: Remote
+      zh-CN: 远端
+    expand_side_remote:
+      en: Expand Remote Column
+      zh-CN: 展开远端列
+    collapse_side:
+      en: Collapse This Column
+      zh-CN: 收起此列
+    close_side_remote:
+      en: Close Side Remote
+      zh-CN: 关闭并列远端
+    go_up:
+      en: Up One Level
+      zh-CN: 上一级
+    refresh_dir:
+      en: Refresh Folder
+      zh-CN: 刷新目录
+    mount_tooltip:
+      en: Mount another connected session alongside
+      zh-CN: 并列挂载其他已连接会话
+    no_candidates:
+      en: No other connected remote sessions
+      zh-CN: 暂无其他已连接的远端会话
+    candidates_header:
+      en: Connected Sessions (click to mount)
+      zh-CN: 已连接的会话 (点击挂载)
+    already_mounted:
+      en: 'This remote session is already mounted: %{title}'
+      zh-CN: '该远端会话已挂载: %{title}'
+    remote_copy_queued:
+      en: 'Cross-remote transfer queued: %{src} → %{tgt}'
+      zh-CN: '已添加跨远端传输任务: %{src} → %{tgt}'
+    upload_queued_path:
+      en: 'Upload queued: %{path}'
+      zh-CN: '已加入上传: %{path}'
+    download_queued_path:
+      en: 'Download queued: %{path}'
+      zh-CN: '已加入下载: %{path}'
+    transfer_queued_path:
+      en: 'Transfer queued: %{path}'
+      zh-CN: '已加入传输: %{path}'
+    copied_local:
+      en: Copied %{count} local item(s); paste into a remote pane
+      zh-CN: 已复制本地 %{count} 个条目，可粘贴至远端
+    copied_remote:
+      en: Copied %{count} main-remote item(s); paste into local or another remote pane
+      zh-CN: 已复制主远端 %{count} 个条目，可粘贴至本地或其他远端
+    copied_side_remote:
+      en: Copied %{count} side-remote item(s); paste into local or another remote pane
+      zh-CN: 已复制并列远端 %{count} 个条目，可粘贴至本地或其他远端
+    remote_path_placeholder:
+      en: Remote path...
+      zh-CN: 远端路径...
+    filter_placeholder:
+      en: Filter files (fuzzy match)...
+      zh-CN: 过滤文件 (模糊匹配)...
+    filter_remote_placeholder:
+      en: Filter remote files (fuzzy match)...
+      zh-CN: 过滤远程文件 (模糊匹配名称)...
+    filter_local_placeholder:
+      en: Filter local files (fuzzy match)...
+      zh-CN: 过滤本地文件 (模糊匹配名称)...
+  queue_actions:
+    no_remote_upload:
+      en: No remote connection in this tab; cannot upload
+      zh-CN: 当前标签没有远端连接，无法上传
+    no_remote_download:
+      en: No remote connection in this tab; cannot download
+      zh-CN: 当前标签没有远端连接，无法下载
+    downloads_queued:
+      en: Queued %{count} download task(s)
+      zh-CN: 已加入 %{count} 个下载任务
+    missing_connection:
+      en: Task has no remote connection; cancelled
+      zh-CN: 任务缺少远端连接，已取消
+    unsupported_task:
+      en: Unsupported transfer task type combination
+      zh-CN: 不支持的传输任务类型组合
+    concurrency_set:
+      en: 'Concurrent transfers: %{count}'
+      zh-CN: '并发传输数: %{count}'
+    retried:
+      en: Re-queued %{count} failed transfer task(s)
+      zh-CN: 已重新入队 %{count} 个失败传输任务
+    paused:
+      en: Paused %{count} transfer task(s)
+      zh-CN: 已暂停 %{count} 个传输任务
+    resumed:
+      en: Resumed %{count} transfer task(s)
+      zh-CN: 已继续 %{count} 个传输任务
+    cancelled:
+      en: Cancelled %{count} transfer task(s)
+      zh-CN: 已取消 %{count} 个传输任务
+    paused_one:
+      en: Transfer paused
+      zh-CN: 传输已暂停
+    cancelled_one:
+      en: Transfer cancelled
+      zh-CN: 已取消传输
+    prioritized:
+      en: Transfer moved to the top and started first
+      zh-CN: 已将传输任务置顶并优先开始传输
+  row:
+    select_local_to_edit:
+      en: Select a local file to edit first
+      zh-CN: 请先选择一个本地文件进行编辑
+    selected_local:
+      en: Selected %{count} local item(s)
+      zh-CN: 已选择 %{count} 个本地项目
+    selected_remote:
+      en: Selected %{count} remote item(s)
+      zh-CN: 已选择 %{count} 个远端项目
+    parent_entry:
+      en: .. (Go up one level)
+      zh-CN: .. (返回上一级)
+  handlers:
+    notify_upload_done:
+      en: Upload Complete
+      zh-CN: 上传完成
+    notify_download_done:
+      en: Download Complete
+      zh-CN: 下载完成
+    notify_sync_done:
+      en: Sync Complete
+      zh-CN: 同步完成
+    notify_remote_copy_done:
+      en: Cross-remote Transfer Complete
+      zh-CN: 跨远端传输完成
+    notify_failed_title:
+      en: Transom SFTP Transfer Failed
+      zh-CN: Transom SFTP 传输失败
 forward:
   title:
     en: Port Forwarding
@@ -1039,11 +1862,11 @@ forward:
     en: Target host and port are required.
     zh-CN: 目标地址和端口不能为空。
   confirm_any_title:
-    en: "Security Warning: Public Bind Address"
+    en: 'Security Warning: Public Bind Address'
     zh-CN: 安全警告：公开绑定地址
   confirm_any_hint:
-    en: "The rule binds to 0.0.0.0, exposing this port to all network interfaces. Anyone who can reach this machine can access this port. Are you sure you want to proceed?"
-    zh-CN: "当前规则绑定了 0.0.0.0，将向所有网络接口暴露此端口，任何可访问本机的设备均可连接该端口。确认要继续启动吗？"
+    en: The rule binds to 0.0.0.0, exposing this port to all network interfaces. Anyone who can reach this machine can access this port. Are you sure you want to proceed?
+    zh-CN: 当前规则绑定了 0.0.0.0，将向所有网络接口暴露此端口，任何可访问本机的设备均可连接该端口。确认要继续启动吗？
   confirm_start:
     en: Confirm & Start
     zh-CN: 确认并启动
@@ -1071,8 +1894,8 @@ batch:
     en: Select Sessions
     zh-CN: 多选会话
   selected_count:
-    en: "%{count} selected"
-    zh-CN: "已选 %{count} 项"
+    en: '%{count} selected'
+    zh-CN: 已选 %{count} 项
   select_all:
     en: Select All
     zh-CN: 全选
@@ -1110,8 +1933,8 @@ batch:
     en: Apply Changes
     zh-CN: 应用修改
   updated:
-    en: "Updated %{updated} SSH sessions; skipped %{skipped} non-SSH sessions."
-    zh-CN: "已更新 %{updated} 个 SSH 会话，跳过 %{skipped} 个非 SSH 会话。"
+    en: Updated %{updated} SSH sessions; skipped %{skipped} non-SSH sessions.
+    zh-CN: 已更新 %{updated} 个 SSH 会话，跳过 %{skipped} 个非 SSH 会话。
 folder:
   new_title:
     en: New Folder
@@ -1126,8 +1949,8 @@ folder:
     en: Production
     zh-CN: 生产环境
   parent_hint:
-    en: "Create under: %{path}"
-    zh-CN: "创建位置：%{path}"
+    en: 'Create under: %{path}'
+    zh-CN: 创建位置：%{path}
   root_hint:
     en: Create at the root level.
     zh-CN: 创建在根层级。
@@ -1138,14 +1961,14 @@ folder:
     en: Folder renamed
     zh-CN: 文件夹已重命名
   deleted:
-    en: "Folder %{name} deleted; its sessions were kept"
-    zh-CN: "已删除文件夹 %{name}，其中的会话已保留"
+    en: Folder %{name} deleted; its sessions were kept
+    zh-CN: 已删除文件夹 %{name}，其中的会话已保留
   edit_title:
     en: Edit Folder & Defaults
     zh-CN: 编辑文件夹与默认继承属性
   defaults_legend:
-    en: "Default connection attributes (sub-sessions automatically inherit if unset)"
-    zh-CN: "默认连接属性（下属子会话未配置时自动继承）"
+    en: Default connection attributes (sub-sessions automatically inherit if unset)
+    zh-CN: 默认连接属性（下属子会话未配置时自动继承）
   default_port:
     en: Default Port
     zh-CN: 默认端口
@@ -1159,8 +1982,8 @@ folder:
     en: Select Folder
     zh-CN: 选择分组
   root_level:
-    en: "(Root Level / No Folder)"
-    zh-CN: "(根层级 / 无分组)"
+    en: (Root Level / No Folder)
+    zh-CN: (根层级 / 无分组)
 menu:
   connect:
     en: Connect
@@ -1226,11 +2049,11 @@ menu:
     en: Tile Tab Down
     zh-CN: 向下标签并排
   tile_selected:
-    en: "Tile %{count} Selected Tabs…"
-    zh-CN: "并排选中标签（%{count}）…"
+    en: Tile %{count} Selected Tabs…
+    zh-CN: 并排选中标签（%{count}）…
   add_to_tiling:
-    en: "Add to Tiling (+%{count})"
-    zh-CN: "加入并排（+%{count}）"
+    en: Add to Tiling (+%{count})
+    zh-CN: 加入并排（+%{count}）
   untile:
     en: Stop Tiling Tabs
     zh-CN: 退出标签并排
@@ -1249,6 +2072,9 @@ menu:
   detach_pane:
     en: Detach Pane to Tab
     zh-CN: 拆分为新标签
+  copied_host:
+    en: 'Host address copied: %{host}'
+    zh-CN: '已复制主机地址: %{host}'
 identity:
   group:
     en: Credential Templates
@@ -1299,8 +2125,8 @@ identity:
     en: Other
     zh-CN: 其他方式
   used_by:
-    en: "Used by %{count} session(s)"
-    zh-CN: "被 %{count} 个会话使用"
+    en: Used by %{count} session(s)
+    zh-CN: 被 %{count} 个会话使用
   created:
     en: Credential template created
     zh-CN: 凭据模板已创建
@@ -1308,8 +2134,8 @@ identity:
     en: Credential template updated; every session using it now picks up the change
     zh-CN: 凭据模板已更新，引用它的会话即刻共用新身份
   deleted:
-    en: "Credential template deleted: %{name}"
-    zh-CN: "凭据模板已删除：%{name}"
+    en: 'Credential template deleted: %{name}'
+    zh-CN: 凭据模板已删除：%{name}
   error_name:
     en: Template name is required
     zh-CN: 模板名称不能为空
@@ -1319,7 +2145,6 @@ identity:
   error_key:
     en: Private key path is required for key authentication
     zh-CN: 私钥认证必须填写私钥路径
-
 settings:
   title:
     en: Preferences & Settings
@@ -1349,8 +2174,8 @@ settings:
     en: Log level
     zh-CN: 日志级别
   log_level_desc:
-    en: "Info is enough for everyday use; Debug and Trace write protocol and command details into the local log, so turn them on only while reproducing a problem. Takes effect immediately."
-    zh-CN: "信息档够日常使用；调试与追踪会把协议与命令细节写进本地日志，只在复现问题时打开。改完立即生效，不必重启。"
+    en: Info is enough for everyday use; Debug and Trace write protocol and command details into the local log, so turn them on only while reproducing a problem. Takes effect immediately.
+    zh-CN: 信息档够日常使用；调试与追踪会把协议与命令细节写进本地日志，只在复现问题时打开。改完立即生效，不必重启。
   log_level_error:
     en: Error
     zh-CN: 错误
@@ -1388,8 +2213,8 @@ settings:
     en: Clean up
     zh-CN: 立即清理
   log_cleanup_done:
-    en: "Removed %{count} rotated log file(s)"
-    zh-CN: "已清理 %{count} 份历史日志"
+    en: Removed %{count} rotated log file(s)
+    zh-CN: 已清理 %{count} 份历史日志
   tab_about:
     en: About
     zh-CN: 关于
@@ -1490,8 +2315,8 @@ settings:
     en: Import local font file (.ttf, .otf, .ttc)
     zh-CN: 导入本地字体文件 (.ttf, .otf, .ttc)
   font_imported_success:
-    en: "Successfully loaded font: %{name}"
-    zh-CN: "已成功加载字体：%{name}"
+    en: 'Successfully loaded font: %{name}'
+    zh-CN: 已成功加载字体：%{name}
   font_size:
     en: Font Size
     zh-CN: 字体大小
@@ -1643,8 +2468,8 @@ settings:
     en: One mapping per line as `keys = sequence`. App shortcuts take precedence when a combination conflicts.
     zh-CN: 每行一条 `按键 = 转义序列`；与应用快捷键冲突时以应用快捷键为准。
   key_bindings_hint:
-    en: "Example: ctrl-shift-left = \\e[1;6D. Supported escapes: \\e, \\x1b, \\n, \\r, \\t, \\\\, \\0, \\u{...}."
-    zh-CN: "示例：ctrl-shift-left = \\e[1;6D。支持转义：\\e、\\x1b、\\n、\\r、\\t、\\\\、\\0、\\u{...}。"
+    en: 'Example: ctrl-shift-left = \e[1;6D. Supported escapes: \e, \x1b, \n, \r, \t, \\, \0, \u{...}.'
+    zh-CN: 示例：ctrl-shift-left = \e[1;6D。支持转义：\e、\x1b、\n、\r、\t、\\、\0、\u{...}。
   block_view_enable:
     en: Enable semantic block view
     zh-CN: 启用语义块视图
@@ -1709,8 +2534,8 @@ settings:
     en: Cloud Sync
     zh-CN: 云同步
   language_desc:
-    en: Click to switch the interface language.
-    zh-CN: 点击在中英文之间切换界面语言。
+    en: Choose the interface language. Follow system uses your desktop locale.
+    zh-CN: 选择界面语言；跟随系统时使用桌面语言设置。
   keyword_highlight_desc:
     en: Highlight lines containing matched keywords in the terminal.
     zh-CN: 终端输出命中关键词时整行高亮，便于扫读日志。
@@ -1757,8 +2582,8 @@ settings:
     en: Tabs On Launch
     zh-CN: 启动时打开
   startup_tabs_desc:
-    en: "Applies on next launch. Restoring reopens the groups and split layout from the last clean exit; New Local Terminal starts fresh instead of restoring, so no duplicate tab is added."
-    zh-CN: "下次启动生效。恢复上次会按上次正常退出时的标签组与分屏形状重开；新建本地终端不叠加恢复结果，而是只开这一个，所以不会出现凭空多出的标签。"
+    en: Applies on next launch. Restoring reopens the groups and split layout from the last clean exit; New Local Terminal starts fresh instead of restoring, so no duplicate tab is added.
+    zh-CN: 下次启动生效。恢复上次会按上次正常退出时的标签组与分屏形状重开；新建本地终端不叠加恢复结果，而是只开这一个，所以不会出现凭空多出的标签。
   startup_restore_last:
     en: Restore last tabs
     zh-CN: 恢复上次标签
@@ -1772,8 +2597,8 @@ settings:
     en: Session List Visibility
     zh-CN: 会话列表展开状态
   sidebar_startup_desc:
-    en: "Applies on next launch. Remember last keeps whatever you had when the app quit; Always show is the escape hatch for a list you collapsed once and never got back."
-    zh-CN: "下次启动生效。记住上次沿用退出前的状态；选始终展开可摆脱“某次手动收起后每次都收起”，选始终收起则每次从工作台开始。"
+    en: Applies on next launch. Remember last keeps whatever you had when the app quit; Always show is the escape hatch for a list you collapsed once and never got back.
+    zh-CN: 下次启动生效。记住上次沿用退出前的状态；选始终展开可摆脱“某次手动收起后每次都收起”，选始终收起则每次从工作台开始。
   sidebar_remember:
     en: Remember last
     zh-CN: 记住上次
@@ -1889,13 +2714,13 @@ settings:
     en: Collect commands and suggest them while typing
     zh-CN: 采集命令并在输入时给出建议
   history_enabled_desc:
-    en: "Requires shell integration that emits OSC 133 markers; commands are kept in ~/.config/transom/history.json and never leave the machine. Tab completes the top match."
-    zh-CN: "需要能输出 OSC 133 标记的 shell 集成；命令存在 ~/.config/transom/history.json，不会离开本机。按 Tab 补全第一条建议。"
+    en: Requires shell integration that emits OSC 133 markers; commands are kept in ~/.config/transom/history.json and never leave the machine. Tab completes the top match.
+    zh-CN: 需要能输出 OSC 133 标记的 shell 集成；命令存在 ~/.config/transom/history.json，不会离开本机。按 Tab 补全第一条建议。
   audit_enabled:
     en: Record session output to disk
     zh-CN: 将会话输出落盘记录
   audit_enabled_desc:
-    en: "Writes the raw output byte stream of every new connection into the audit directory. Off by default, because the log contains everything that appears on screen, including secrets typed back to it. Existing connections are not affected until they reconnect."
+    en: Writes the raw output byte stream of every new connection into the audit directory. Off by default, because the log contains everything that appears on screen, including secrets typed back to it. Existing connections are not affected until they reconnect.
     zh-CN: 每个新建连接的终端原始输出按会话写入审计目录。默认关闭：日志会包含屏幕上出现过的全部内容（包括回显的口令）。已打开的连接需重连后才开始记录。
   audit_dir:
     en: Audit directory
@@ -2075,7 +2900,7 @@ settings:
     en: Terminal Bell
     zh-CN: 终端响铃提示
   bell_none:
-    en: "Off"
+    en: 'Off'
     zh-CN: 关闭
   bell_visual:
     en: Visual Flash
@@ -2171,8 +2996,8 @@ settings:
     en: Reset All
     zh-CN: 全部重置
   shortcut_conflicts:
-    en: "Conflicting shortcuts: %{list}"
-    zh-CN: "快捷键冲突：%{list}"
+    en: 'Conflicting shortcuts: %{list}'
+    zh-CN: 快捷键冲突：%{list}
   shortcut_capture_title:
     en: Record Shortcut
     zh-CN: 录制快捷键
@@ -2189,8 +3014,47 @@ settings:
     en: The shortcut must include Ctrl, Alt, Cmd, Fn, or be a function key.
     zh-CN: 快捷键必须包含 Ctrl、Alt、Cmd、Fn 修饰键，或使用功能键。
   shortcut_conflict:
-    en: "This key is already used by %{name}. Reset or change that action first."
-    zh-CN: "该键位已用于“%{name}”，请先重置或修改该动作。"
+    en: This key is already used by %{name}. Reset or change that action first.
+    zh-CN: 该键位已用于“%{name}”，请先重置或修改该动作。
+  pick_font_title:
+    en: Select a local font file
+    zh-CN: 选择本地字体文件
+  font_file_filter:
+    en: Font files (*.ttf, *.otf, *.ttc, *.woff2)
+    zh-CN: 字体文件 (*.ttf, *.otf, *.ttc, *.woff2)
+  font_read_failed:
+    en: 'Failed to read font file: %{error}'
+    zh-CN: '读取字体文件失败: %{error}'
+  font_preset_default_mono:
+    en: Default Mono (JetBrains Mono)
+    zh-CN: 默认等宽 (JetBrains Mono)
+  font_preset_system_fallback:
+    en: Follow system fallback
+    zh-CN: 跟随系统回退
+  font_preset_system_default:
+    en: Follow system default
+    zh-CN: 跟随系统默认
+  font_preset_pingfang:
+    en: PingFang SC
+    zh-CN: PingFang SC (苹方)
+  font_preset_yahei:
+    en: Microsoft YaHei
+    zh-CN: Microsoft YaHei (微软雅黑)
+  font_preset_noto_cjk:
+    en: Noto Sans CJK SC
+    zh-CN: Noto Sans CJK SC (思源黑体)
+  font_preset_source_han:
+    en: Source Han Sans SC
+    zh-CN: Source Han Sans SC (思源黑体)
+  font_preset_wqy:
+    en: WenQuanYi Micro Hei
+    zh-CN: WenQuanYi Micro Hei (文泉驿微米黑)
+  font_preset_sarasa:
+    en: Sarasa Gothic SC
+    zh-CN: Sarasa Gothic SC (更纱黑体)
+  language_system:
+    en: Follow system
+    zh-CN: 跟随系统
 monitor:
   cpu:
     en: CPU
@@ -2213,15 +3077,6 @@ monitor:
   processes:
     en: Processes
     zh-CN: 进程
-  process_count:
-    en: "%{count} shown"
-    zh-CN: "共 %{count} 个"
-  sort_cpu:
-    en: By CPU
-    zh-CN: 按 CPU
-  sort_mem:
-    en: By Memory
-    zh-CN: 按内存
   filter_placeholder:
     en: Filter by name, user or PID
     zh-CN: 按名称、用户或 PID 过滤
@@ -2234,6 +3089,15 @@ monitor:
   command:
     en: Command
     zh-CN: 命令
+  col_pid:
+    en: PID
+    zh-CN: PID
+  col_cpu:
+    en: CPU
+    zh-CN: CPU
+  col_mem:
+    en: MEM
+    zh-CN: 内存
   waiting:
     en: Waiting for the first sample…
     zh-CN: 等待首轮采样…
@@ -2258,8 +3122,180 @@ monitor:
   error_kill_pid1:
     en: Cannot terminate system init process (PID 1)
     zh-CN: 禁止终止系统核心引导进程 (PID 1)
+  view:
+    oom_title:
+      en: Kernel OOM Killer alert
+      zh-CN: 内核触发 OOM Killer 告警
+    oom_killed:
+      en: 'Process [%{name}] (PID: %{pid}) was force-terminated'
+      zh-CN: '进程 [%{name}] (PID: %{pid}) 已被强制终止'
+    oom_killed_full:
+      en: 'Process [%{name}] (PID: %{pid}) was force-terminated by the system'
+      zh-CN: '进程 [%{name}] (PID: %{pid}) 已被系统强制终止'
+    chart_line_tooltip:
+      en: 'Current: line chart (click for bars)'
+      zh-CN: 当前：折线图（点击切换为柱状图）
+    chart_bar_tooltip:
+      en: 'Current: bar chart (click for lines)'
+      zh-CN: 当前：柱状图（点击切换为折线图）
+    width_compact_tooltip:
+      en: Compact width (420px)
+      zh-CN: 紧凑宽度 (420px)
+    width_wide_tooltip:
+      en: Wide view (600px)
+      zh-CN: 宽幅视图 (600px)
+    detach_tooltip:
+      en: Detach into a monitor tab
+      zh-CN: 脱离为独立监控标签页
+    close_tooltip:
+      en: Close monitor drawer
+      zh-CN: 关闭监控抽屉
+    host_fallback:
+      en: Host
+      zh-CN: 主机
+    tab_header:
+      en: Host overview · %{host}
+      zh-CN: 主机全景监控 · %{host}
+    tab_name:
+      en: Monitor - %{host}
+      zh-CN: 监控 - %{host}
+    uptime_days:
+      en: Up %{days}d %{hours}h
+      zh-CN: 运行 %{days}天%{hours}小时
+    uptime_hours:
+      en: Up %{hours}h %{minutes}m
+      zh-CN: 运行 %{hours}小时%{minutes}分
+    cpu_cores:
+      en: '%{count} cores'
+      zh-CN: '%{count} 核心'
+    mem_total:
+      en: '%{gb} GB RAM'
+      zh-CN: '%{gb} GB 内存'
+    refresh_tooltip:
+      en: Refresh now
+      zh-CN: 立即采样刷新
+    dock_label:
+      en: Dock as drawer
+      zh-CN: 停靠为侧边抽屉
+    dock_tooltip:
+      en: Dock the monitor panel back into the right sidebar drawer
+      zh-CN: 将监控面板停靠回右侧边栏抽屉
+    close_tab_tooltip:
+      en: Close monitor tab
+      zh-CN: 关闭监控标签页
+  cpu_section:
+    load_summary:
+      en: 'Load: %{load}'
+      zh-CN: '负载: %{load}'
+    user:
+      en: 'User:'
+      zh-CN: '用户:'
+    system:
+      en: 'System:'
+      zh-CN: '系统:'
+    iowait:
+      en: 'I/O wait:'
+      zh-CN: 'IO等待:'
+    load_trend:
+      en: Load trend (2 min)
+      zh-CN: 负载走势 (2分钟)
+    core_distribution:
+      en: Core distribution (%{count} cores)
+      zh-CN: 核心分布 (%{count} 核)
+  memory_section:
+    swap:
+      en: Swap
+      zh-CN: 交换分区 (Swap)
+    trend_flat:
+      en: '[Steady]'
+      zh-CN: '[平稳]'
+    trend_rising:
+      en: '[Rising]'
+      zh-CN: '[上升中]'
+    trend_falling:
+      en: '[Falling]'
+      zh-CN: '[下降中]'
+    trend_title:
+      en: Trend (2 min)
+      zh-CN: 走势 (2分钟)
+    trend_range:
+      en: '%{min}% ~ %{max}% (avg %{avg}%)'
+      zh-CN: '%{min}% ~ %{max}% (均 %{avg}%)'
+  network_section:
+    trend_title:
+      en: Total throughput trend (2 min)
+      zh-CN: 总流量走势 (2分钟)
+    downlink:
+      en: Down
+      zh-CN: 下行
+    uplink:
+      en: Up
+      zh-CN: 上行
+    rx_peak:
+      en: ↓ %{rate}/s (peak %{peak})
+      zh-CN: ↓ %{rate}/s (峰值 %{peak})
+    tx_peak:
+      en: ↑ %{rate}/s (peak %{peak})
+      zh-CN: ↑ %{rate}/s (峰值 %{peak})
+  ports:
+    empty:
+      en: No listening port data, or insufficient permission
+      zh-CN: 暂无监听端口数据或无权限读取
+    no_match:
+      en: No listening ports match "%{query}"
+      zh-CN: 没有匹配 "%{query}" 的监听端口
+    col_protocol:
+      en: Proto
+      zh-CN: 协议
+    col_port:
+      en: Port
+      zh-CN: 端口
+    col_bind_addr:
+      en: Address
+      zh-CN: 绑定地址
+    col_process:
+      en: Process
+      zh-CN: 所属进程
+    title:
+      en: Listening Ports
+      zh-CN: 监听端口
+  process_section:
+    trace:
+      en: Trace in terminal (htop/top)
+      zh-CN: 在终端跟踪该进程 (htop/top)
+  services:
+    healthy:
+      en: All services healthy
+      zh-CN: 服务运行正常
+    failed_count:
+      en: '%{count} failed services'
+      zh-CN: '%{count} 个异常服务'
+    empty:
+      en: No failed services; all registered services are healthy
+      zh-CN: 无崩溃服务，所有注册服务运行正常
+    restart:
+      en: Restart
+      zh-CN: 重启
+    title:
+      en: Service Status
+      zh-CN: 服务状态
+  settings:
+    width_compact:
+      en: Compact (420px)
+      zh-CN: 紧凑 (420px)
+    width_wide:
+      en: Wide (600px)
+      zh-CN: 宽幅 (600px)
+    interval_fast:
+      en: 1s (Fast)
+      zh-CN: 1s (极速排查)
+    interval_normal:
+      en: 3s (Default)
+      zh-CN: 3s (默认平稳)
+    interval_eco:
+      en: 10s (Eco)
+      zh-CN: 10s (节能降噪)
 sync:
-
   group:
     en: Cloud Sync
     zh-CN: 云同步
@@ -2303,10 +3339,10 @@ sync:
     en: Git sync in progress…
     zh-CN: Git 同步进行中…
   git_done:
-    en: "Git sync finished: %{added} added, %{updated} updated, %{conflicts} conflicts"
-    zh-CN: "Git 同步完成：新增 %{added}，更新 %{updated}，冲突 %{conflicts}"
+    en: 'Git sync finished: %{added} added, %{updated} updated, %{conflicts} conflicts'
+    zh-CN: Git 同步完成：新增 %{added}，更新 %{updated}，冲突 %{conflicts}
   endpoint_off:
-    en: Off
+    en: 'Off'
     zh-CN: 关闭
   endpoint_webdav:
     en: WebDAV
@@ -2390,13 +3426,13 @@ sync:
     en: Downloading backup from the cloud…
     zh-CN: 正在从云端下载备份…
   pushed:
-    en: "Cloud backup uploaded: %{sessions} sessions, %{kb} KB."
+    en: 'Cloud backup uploaded: %{sessions} sessions, %{kb} KB.'
     zh-CN: 云端备份已上传：%{sessions} 个会话，%{kb} KB。
   pulled:
-    en: "Restored from cloud: %{added} added, %{updated} updated, %{folders} folders."
+    en: 'Restored from cloud: %{added} added, %{updated} updated, %{folders} folders.'
     zh-CN: 已从云端恢复：新增 %{added}，更新 %{updated}，新增文件夹 %{folders}。
   merge_conflicts:
-    en: "%{count} conflicting entries kept the local version."
+    en: '%{count} conflicting entries kept the local version.'
     zh-CN: 有 %{count} 项冲突保留了本机版本。
   safety_note:
     en: A pre-merge copy of this machine was saved to %{path}.
@@ -2445,7 +3481,7 @@ backup:
     en: Encrypt the backup with a passphrase
     zh-CN: 使用口令加密备份
   plain_hint:
-    en: "Plain backup is not encrypted: host names, user names and ports are stored in clear text."
+    en: 'Plain backup is not encrypted: host names, user names and ports are stored in clear text.'
     zh-CN: 明文备份不加密：主机名、用户名与端口都以明文保存，请妥善保管文件。
   include_secrets:
     en: Include stored passphrases
@@ -2481,20 +3517,20 @@ backup:
     en: Processing, please wait...
     zh-CN: 正在处理，请稍候...
   exported:
-    en: "Backup exported to %{path}"
-    zh-CN: "备份已导出到 %{path}"
+    en: Backup exported to %{path}
+    zh-CN: 备份已导出到 %{path}
   exported_secrets:
-    en: "(with %{count} stored passphrases)"
-    zh-CN: "（含 %{count} 个口令）"
+    en: (with %{count} stored passphrases)
+    zh-CN: （含 %{count} 个口令）
   imported:
-    en: "Import complete: %{added} sessions added, %{updated} updated, %{folders} folders added."
-    zh-CN: "导入完成：新增 %{added} 个会话、更新 %{updated} 个会话、新增 %{folders} 个文件夹。"
+    en: 'Import complete: %{added} sessions added, %{updated} updated, %{folders} folders added.'
+    zh-CN: 导入完成：新增 %{added} 个会话、更新 %{updated} 个会话、新增 %{folders} 个文件夹。
   imported_secrets:
-    en: "Restored %{restored} passphrases, kept %{kept} existing ones."
-    zh-CN: "已写回 %{restored} 个口令，保留 %{kept} 个本机已存在的口令。"
+    en: Restored %{restored} passphrases, kept %{kept} existing ones.
+    zh-CN: 已写回 %{restored} 个口令，保留 %{kept} 个本机已存在的口令。
   imported_secrets_failed:
-    en: "Stored passphrases could not be restored"
-    zh-CN: "口令未能写回"
+    en: Stored passphrases could not be restored
+    zh-CN: 口令未能写回
 keys:
   title:
     en: SSH Key Manager
@@ -2553,31 +3589,71 @@ keys:
   export:
     en: Export
     zh-CN: 导出
-
+  passphrase_placeholder:
+    en: Leave blank to skip encryption
+    zh-CN: 留空则不加密私钥
+  error_path_empty:
+    en: Private key path is required
+    zh-CN: 请填写私钥保存路径
+  generated:
+    en: 'Generated %{algorithm} key: %{path} (%{fingerprint})'
+    zh-CN: 已生成 %{algorithm} 密钥：%{path}（%{fingerprint}）
+  error_select_first:
+    en: Select a public key first
+    zh-CN: 请先选择一个公钥
+  copied:
+    en: Public key copied to clipboard
+    zh-CN: 公钥已复制到剪贴板
+  export_title:
+    en: Export Public Key
+    zh-CN: 导出公钥
+  openssh_filter:
+    en: OpenSSH public key
+    zh-CN: OpenSSH 公钥
+  exported:
+    en: Public key exported to %{path}
+    zh-CN: 公钥已导出到 %{path}
+  export_failed:
+    en: 'Failed to export public key: %{error}'
+    zh-CN: '导出公钥失败: %{error}'
+  deploying:
+    en: Deploying %{key} to %{host}...
+    zh-CN: 正在部署 %{key} 到 %{host} ...
+  deploy_send_failed:
+    en: Failed to send the deploy request; the app may have exited
+    zh-CN: 发送部署请求失败，应用可能已退出
+  deployed:
+    en: Public key %{key} written to the remote authorized_keys
+    zh-CN: 公钥 %{key} 已写入远端 authorized_keys
+  deployed_status:
+    en: Public key %{key} deployed
+    zh-CN: 公钥 %{key} 已部署
 probe:
   pending:
-    en: "Probing…"
-    zh-CN: "拨测中…"
+    en: Probing…
+    zh-CN: 拨测中…
   session_tooltip:
-    en: "Check reachability of this host (TCP handshake only)"
-    zh-CN: "拨测这台主机的连通性（仅 TCP 握手，不发送协议报文）"
+    en: Check reachability of this host (TCP handshake only)
+    zh-CN: 拨测这台主机的连通性（仅 TCP 握手，不发送协议报文）
   folder_tooltip:
-    en: "Check every host in this folder, subfolders included (TCP handshake only)"
-    zh-CN: "拨测本分组内全部主机的连通性，含子分组；仅 TCP 握手，不发送协议报文"
+    en: Check every host in this folder, subfolders included (TCP handshake only)
+    zh-CN: 拨测本分组内全部主机的连通性，含子分组；仅 TCP 握手，不发送协议报文
   latency:
-    en: "reachable in %{ms} ms"
-    zh-CN: "可达，耗时 %{ms} 毫秒"
+    en: reachable in %{ms} ms
+    zh-CN: 可达，耗时 %{ms} 毫秒
   no_target:
-    en: "Selected sessions have no network host to probe (local shell and serial ports are skipped)."
-    zh-CN: "所选会话没有可拨测的网络主机（本地终端与串口已跳过）。"
-
+    en: Selected sessions have no network host to probe (local shell and serial ports are skipped).
+    zh-CN: 所选会话没有可拨测的网络主机（本地终端与串口已跳过）。
+  session_fallback:
+    en: Session %{id}
+    zh-CN: 会话 %{id}
 audit_viewer:
   title:
     en: Audit Log Viewer
     zh-CN: 审计日志查看器
   for_session:
-    en: "Audit Log Viewer - %{name}"
-    zh-CN: "审计日志查看器 - %{name}"
+    en: Audit Log Viewer - %{name}
+    zh-CN: 审计日志查看器 - %{name}
   all_logs:
     en: All Sessions
     zh-CN: 全部会话日志
@@ -2606,8 +3682,8 @@ audit_viewer:
     en: Reveal in File Manager
     zh-CN: 在文件管理器中显示
   truncated_hint:
-    en: "(File is very large, displaying first 2 MiB)"
-    zh-CN: "(日志文件过大，当前展示前 2 MiB)"
+    en: (File is very large, displaying first 2 MiB)
+    zh-CN: (日志文件过大，当前展示前 2 MiB)
   search_placeholder:
     en: Search in log...
     zh-CN: 在日志中搜索...
@@ -2629,6 +3705,15 @@ audit_viewer:
   close:
     en: Close
     zh-CN: 关闭
+  no_search_matches:
+    en: (No content matches the search)
+    zh-CN: (未找到匹配搜索的内容)
+  open_failed:
+    en: (Unable to open the log file)
+    zh-CN: (无法打开日志文件)
+  read_failed:
+    en: (Failed to read the log file)
+    zh-CN: (读取日志文件出错)
 recorder:
   toggle_recording:
     en: Record Session / Stop
@@ -2649,8 +3734,8 @@ recorder:
     en: Started recording interactive session (.cast)
     zh-CN: 已开始录制当前终端交互序列 (.cast)
   saved_notice:
-    en: "Recording saved: %{name}"
-    zh-CN: "会话录制已保存: %{name}"
+    en: 'Recording saved: %{name}'
+    zh-CN: '会话录制已保存: %{name}'
   start_failed:
     en: Failed to start session recording
     zh-CN: 启动会话录制失败
@@ -2664,8 +3749,8 @@ recorder:
     en: No user inputs found in recording
     zh-CN: 该录制脚本中未找到任何可回放的按键输入
   replaying_start:
-    en: "Replaying '%{title}' (%{count} steps)..."
-    zh-CN: "正在回放脚本 '%{title}'（共 %{count} 步输入）..."
+    en: Replaying '%{title}' (%{count} steps)...
+    zh-CN: 正在回放脚本 '%{title}'（共 %{count} 步输入）...
   replay_completed:
     en: Script replay completed
     zh-CN: 交互脚本回放已完成
@@ -2694,8 +3779,8 @@ recorder:
     en: Open in Player
     zh-CN: 在播放器中打开
   player_tab_title:
-    en: "Replay: %{name}"
-    zh-CN: "会话回放: %{name}"
+    en: 'Replay: %{name}'
+    zh-CN: '会话回放: %{name}'
   play:
     en: Play
     zh-CN: 播放
@@ -2717,6 +3802,12 @@ recorder:
   double_click_play_hint:
     en: Double click to play in dedicated player tab
     zh-CN: 双击条目可直接在独立标签页中只读播放
+  duration_steps:
+    en: '%{seconds}s · %{steps} steps'
+    zh-CN: '%{seconds}s · %{steps} 步'
+  script_fallback:
+    en: Script
+    zh-CN: 脚本
 trigger:
   master_switch:
     en: Enable Triggers
@@ -2767,11 +3858,26 @@ trigger:
     en: Notification Body (Supports $0, $1 captures)
     zh-CN: 通知正文（留空使用默认提示，支持 $0, $1 捕获组）
   auto_response_notice:
-    en: "Trigger '%{name}' auto-responded: %{reply}"
-    zh-CN: "触发器 '%{name}' 已自动应答: %{reply}"
-
-
-
+    en: 'Trigger ''%{name}'' auto-responded: %{reply}'
+    zh-CN: '触发器 ''%{name}'' 已自动应答: %{reply}'
+  name_placeholder:
+    en: e.g. Watch for errors or auto-fill a password
+    zh-CN: 如：监控错误告警或自动输入密码
+  pattern_placeholder:
+    en: 'Regex, e.g. (?i)password:'
+    zh-CN: '正则表达式，如：(?i)password:'
+  action_text_placeholder:
+    en: Response or notification text
+    zh-CN: 应答内容或通知文本
+  action_unknown:
+    en: Unknown action
+    zh-CN: 未知动作
+  error_pattern_empty:
+    en: Regular expression pattern cannot be empty
+    zh-CN: 正则表达式模式串不能为空
+  error_pattern_invalid:
+    en: 'Invalid regular expression: %{error}'
+    zh-CN: '正则表达式语法错误: %{error}'
 prompt_nav:
   no_prev_prompt:
     en: No earlier command prompt in this buffer
@@ -2786,3 +3892,445 @@ block_view_status:
   disabled:
     en: Switched to classic continuous view
     zh-CN: 已切换到经典连续流
+editor:
+  status_caret_pending:
+    en: Line and column pending
+    zh-CN: 行列待载入
+  status_caret:
+    en: Line %{line} · Column %{column} · %{total} lines
+    zh-CN: 行 %{line} · 列 %{column} · 共 %{total} 行
+  status_read_only_preview:
+    en: GBK · Read-only preview
+    zh-CN: GBK · 只读预览
+  status_read_only:
+    en: Read-only
+    zh-CN: 只读
+  phase_reading:
+    en: Reading remote…
+    zh-CN: 读取远端中…
+  phase_unsaved:
+    en: Unsaved
+    zh-CN: 未保存
+  phase_clean:
+    en: No changes
+    zh-CN: 无改动
+  phase_sudo_probe:
+    en: Checking sudo…
+    zh-CN: 探测提权中…
+  phase_uploading:
+    en: Uploading…
+    zh-CN: 回传中…
+  phase_uploaded_size:
+    en: Uploaded to remote (%{size})
+    zh-CN: 已回传远端（%{size}）
+  phase_uploaded:
+    en: Uploaded to remote
+    zh-CN: 已回传远端
+  phase_remote_changed:
+    en: Remote changed
+    zh-CN: 远端已修改
+  phase_upload_failed:
+    en: Upload failed
+    zh-CN: 回传失败
+  phase_read_failed:
+    en: Read failed
+    zh-CN: 读取失败
+  actions_more:
+    en: More actions
+    zh-CN: 更多操作
+  action_compare:
+    en: Compare changes
+    zh-CN: 对比差异
+  action_compare_local:
+    en: Compare with local
+    zh-CN: 与本地对比
+  action_revert:
+    en: Discard changes
+    zh-CN: 放弃修改
+  save_upload_tooltip:
+    en: Save and upload (Ctrl+S)
+    zh-CN: 保存并回传（Ctrl+S）
+  sudo_save:
+    en: Save with sudo
+    zh-CN: Sudo 提权保存
+  error_tab_disconnected_probe:
+    en: The tab's connection is closed; cannot check sudo capability
+    zh-CN: 所属标签的连接已断开，无法探测提权能力
+  status_probing_sudo:
+    en: Checking remote sudo capability…
+    zh-CN: 正在探测远端提权能力…
+  error_probe_dispatch:
+    en: Failed to dispatch the sudo probe command
+    zh-CN: 提权探测命令投递失败
+  sudo_password_hint:
+    en: Sudo password (leave blank if passwordless)
+    zh-CN: Sudo 口令（免密可留空）
+  sudo_save_prompt:
+    en: 'The target file "%{file_name}" is protected by system permissions. Enter the sudo password:'
+    zh-CN: 目标文件「%{file_name}」受系统权限保护，请输入 Sudo 提权密码：
+  sudo_unavailable:
+    en: '%{reason}: %{detail}'
+    zh-CN: '%{reason}：%{detail}'
+  error_tab_disconnected_write:
+    en: The tab's connection is closed; cannot upload. Copy the content and reopen the file.
+    zh-CN: 所属标签的连接已断开，无法回传，请复制内容后重新打开
+  error_tab_disconnected_sudo:
+    en: The tab's connection is closed; cannot start the sudo write.
+    zh-CN: 所属标签的连接已断开，无法发起提权写入
+  error_remote_changed:
+    en: 'Remote file changed: %{message}'
+    zh-CN: '远端已被修改: %{message}'
+  error_sudo_probe_failed:
+    en: 'Failed to check remote sudo capability: %{message}'
+    zh-CN: 探测远端提权能力失败：%{message}
+  error_read_failed:
+    en: 'Failed to read remote file: %{message}'
+    zh-CN: '读取远端失败: %{message}'
+  error_write_failed:
+    en: 'Failed to upload remote file: %{message}'
+    zh-CN: '回传远端失败: %{message}'
+  status_probing_sudo_after_denied:
+    en: Remote denied the write; checking sudo capability…
+    zh-CN: 远端拒绝写入，正在探测提权能力…
+  sudo_not_installed:
+    en: sudo is not installed on the remote host; cannot write with elevation
+    zh-CN: 远端未安装 sudo，无法提权写入
+  sudo_requires_tty:
+    en: Remote sudo requires a TTY; elevation is unavailable over the non-interactive channel
+    zh-CN: 远端 sudo 要求 TTY，非交互通道无法提权
+  sudo_not_authorized:
+    en: The current user is not authorized to use sudo on the remote host
+    zh-CN: 当前用户不在远端 sudo 授权范围内
+  sudo_probe_failed_reason:
+    en: Unable to determine remote sudo capability
+    zh-CN: 无法探测远端提权能力
+  sudo_save_action:
+    en: Save with sudo
+    zh-CN: 使用 Sudo 提权保存
+  conflict_hint:
+    en: The remote file changed after it was opened. Uploading now will overwrite those changes.
+    zh-CN: 远端文件在打开后已被修改，直接回传会覆盖这些改动
+  conflict_reload:
+    en: Discard local and reload
+    zh-CN: 放弃本地并重新载入
+  conflict_overwrite:
+    en: Overwrite remote
+    zh-CN: 强制覆盖远端
+  conflict_continue:
+    en: Keep editing
+    zh-CN: 继续编辑
+  confirm_discard_close:
+    en: There are unsaved changes. Close and discard them?
+    zh-CN: 有未保存的修改，确定关闭并丢弃吗？
+  confirm_keep_editing:
+    en: Keep editing
+    zh-CN: 留下继续编辑
+  confirm_discard:
+    en: Discard and close
+    zh-CN: 丢弃修改并关闭
+  confirm_revert:
+    en: Discard all unsaved changes and restore the last uploaded remote content? This cannot be undone.
+    zh-CN: 确定放弃全部未保存修改，恢复到最近回传的远端内容吗？该操作无法撤销。
+  save_and_close:
+    en: Save and close
+    zh-CN: 保存并关闭
+  expand_panel:
+    en: Expand panel
+    zh-CN: 展开面板
+  collapse_panel:
+    en: Collapse panel
+    zh-CN: 折叠面板
+  restore_panel:
+    en: Restore panel
+    zh-CN: 还原面板
+  maximize_panel:
+    en: Maximize panel
+    zh-CN: 最大化面板
+  close_panel:
+    en: Close panel
+    zh-CN: 关闭面板
+  reading_path:
+    en: Reading %{path}
+    zh-CN: 正在读取 %{path}
+  not_loaded:
+    en: Remote content is not loaded; editing is unavailable
+    zh-CN: 远端内容未载入，无法编辑
+  retry_read:
+    en: Retry read
+    zh-CN: 重试读取
+  diff_header_old:
+    en: a/Original
+    zh-CN: a/原内容
+  diff_header_new:
+    en: b/Current
+    zh-CN: b/当前内容
+  diff_summary:
+    en: 'Pending upload: +%{additions} lines, -%{deletions} lines'
+    zh-CN: 待回传变更：+%{additions} 行，-%{deletions} 行
+  diff_back:
+    en: Back to editor
+    zh-CN: 返回编辑
+  diff_confirm_upload:
+    en: Upload
+    zh-CN: 确认回传
+  diff_empty:
+    en: Diff not generated yet
+    zh-CN: 差异尚未生成
+  goto_placeholder:
+    en: Line number, e.g. 120
+    zh-CN: 行号，如 120
+  goto_error:
+    en: Enter an integer line number greater than 0
+    zh-CN: 请输入大于 0 的整数行号
+  goto_hint:
+    en: Target line (1 - %{total}); out-of-range values jump to the last line
+    zh-CN: 目标行号（1 - %{total}），超出范围将跳到最后一行
+  goto_action:
+    en: Go
+    zh-CN: 跳转
+  goto_title:
+    en: Go to Line
+    zh-CN: 跳转到行
+  error_too_large:
+    en: '%{name} (%{size}) exceeds the built-in editor limit of %{max}. Open it in a terminal editor or download it first.'
+    zh-CN: '%{name}（%{size}）超过内置编辑器上限 %{max}：请在终端窗格用编辑器打开，或先下载到本地再编辑'
+  error_no_connection:
+    en: SSH connection is not ready; cannot edit the remote file
+    zh-CN: SSH 连接尚未就绪，无法编辑远端文件
+  error_read_dispatch:
+    en: Failed to dispatch the read command
+    zh-CN: 读取命令投递失败
+  error_no_connection_read:
+    en: SSH connection is not ready; cannot read the remote file
+    zh-CN: SSH 连接尚未就绪，无法读取远端文件
+  remote_file_fallback:
+    en: Remote file
+    zh-CN: 远端文件
+  error_unresolved_link:
+    en: 'Cannot resolve the relative code-link path: %{path} (open the SFTP panel to provide a remote working directory)'
+    zh-CN: 无法解析代码链接的相对路径：%{path}（打开 SFTP 面板后可提供远端工作目录）
+  error_local_absolute:
+    en: 'Local code links require an absolute path: %{path}'
+    zh-CN: 本地代码链接需要绝对路径：%{path}
+  open_editors_tooltip:
+    en: Open editors (%{count})
+    zh-CN: 已打开的编辑器（%{count}）
+  open_editors:
+    en: Open editors
+    zh-CN: 已打开的编辑器
+  list_empty:
+    en: No open editor files in this tab
+    zh-CN: 当前标签没有打开的编辑文件
+diff:
+  title:
+    en: 'Local: %{local} · Remote: %{remote}'
+    zh-CN: 本地：%{local}　远端：%{remote}
+  close_tooltip:
+    en: Close comparison
+    zh-CN: 关闭对比
+  computing:
+    en: Computing diff…
+    zh-CN: 正在计算差异…
+  reading:
+    en: Reading both sides…
+    zh-CN: 正在读取两侧内容…
+  identical:
+    en: Both sides are identical; nothing to merge
+    zh-CN: 两侧内容完全一致，没有可合并的差异
+  not_ready:
+    en: Diff view not generated yet
+    zh-CN: 差异视图尚未生成
+  summary:
+    en: '%{count} changes: +%{additions} lines, −%{deletions} lines'
+    zh-CN: 差异 %{count} 处：+%{additions} 行，−%{deletions} 行
+  hunk_position:
+    en: '%{index}/%{count}'
+    zh-CN: 第 %{index}/%{count} 处
+  prev_hunk:
+    en: Previous change
+    zh-CN: 上一处差异
+  next_hunk:
+    en: Next change
+    zh-CN: 下一处差异
+  apply_local:
+    en: Apply to local
+    zh-CN: 应用到本地
+  apply_local_tooltip:
+    en: Overwrite the corresponding local lines with the current remote change
+    zh-CN: 用远端当前变更块覆盖本地对应行
+  apply_remote:
+    en: Apply to remote
+    zh-CN: 应用到远端
+  apply_remote_blocked:
+    en: The remote file cannot be written back (not UTF-8 or missing version fingerprint)
+    zh-CN: 远端文件不可写回（非 UTF-8 文本或版本指纹缺失）
+  apply_remote_tooltip:
+    en: Overwrite the corresponding remote lines with the current local change
+    zh-CN: 用本地当前变更块覆盖远端对应行
+  local:
+    en: local
+    zh-CN: 本地
+  remote:
+    en: remote
+    zh-CN: 远端
+  confirm_overwrite:
+    en: Overwrite the change near line %{line} in %{target} with the %{source} version? This cannot be undone in the app.
+    zh-CN: 确认用%{source}内容覆盖%{target}第 %{line} 行附近的这一处变更？覆盖后无法从本应用撤销。
+  confirm_action:
+    en: Overwrite
+    zh-CN: 确认覆盖
+  close:
+    en: Close
+    zh-CN: 关闭
+  writing:
+    en: Writing…
+    zh-CN: 正在写回…
+  merge_hint:
+    en: Only the selected change is merged; the diff refreshes after writing.
+    zh-CN: 合并只影响当前选中的这一处变更；写入后会自动重新对比。
+  error_compute_spawn:
+    en: Failed to start the diff computation thread
+    zh-CN: 差异计算线程启动失败
+  error_stale_hunk:
+    en: The change is stale; compare again
+    zh-CN: 变更块已失效，请重新对比
+  error_remote_dispatch:
+    en: Failed to dispatch the remote write command
+    zh-CN: 写入远端文件的命令投递失败
+  error_local_spawn:
+    en: Failed to start the local write thread
+    zh-CN: 本地写入线程启动失败
+  error_read_remote:
+    en: 'Failed to read the remote file: %{message}'
+    zh-CN: 读取远端文件失败：%{message}
+  error_conflict:
+    en: 'The remote file changed; this merge was not written: %{message}'
+    zh-CN: 远端已被修改，本次合并未写入：%{message}
+  error_metadata:
+    en: 'Failed to read local file metadata (%{path}): %{error}'
+    zh-CN: '读取本地文件属性失败（%{path}）: %{error}'
+  error_not_file:
+    en: 'Not a regular file: %{path}'
+    zh-CN: 不是普通文件：%{path}
+  error_too_large:
+    en: 'Local file exceeds the comparison limit (%{limit} bytes): %{path}'
+    zh-CN: 本地文件超过对比上限（%{limit} 字节）：%{path}
+  error_too_large_during_read:
+    en: 'Local file exceeded the comparison limit during reading: %{path}'
+    zh-CN: 本地文件在读取期间超过对比上限：%{path}
+  error_not_utf8:
+    en: 'Local file is not UTF-8 text: %{path}'
+    zh-CN: 本地文件不是 UTF-8 文本：%{path}
+  error_modified:
+    en: The local file was modified by another program (%{path}); this merge was cancelled
+    zh-CN: 本地文件已被其他程序修改（%{path}），已取消本次合并
+  error_no_parent:
+    en: 'Cannot determine the containing directory: %{path}'
+    zh-CN: 无法确定文件所在目录：%{path}
+  error_bad_path:
+    en: 'Invalid file path: %{path}'
+    zh-CN: 非法文件路径：%{path}
+  error_temp_write:
+    en: 'Failed to write the temporary file (%{path}): %{error}'
+    zh-CN: '写入临时文件失败（%{path}）: %{error}'
+  error_set_permissions:
+    en: 'Failed to set file permissions (%{path}): %{error}'
+    zh-CN: '设置文件权限失败（%{path}）: %{error}'
+  error_replace:
+    en: 'Failed to replace the local file (%{path}): %{error}'
+    zh-CN: '替换本地文件失败（%{path}）: %{error}'
+  error_read:
+    en: 'Failed to read the local file (%{path}): %{error}'
+    zh-CN: '读取本地文件失败（%{path}）: %{error}'
+terminal:
+  search:
+    placeholder:
+      en: Search terminal output
+      zh-CN: 搜索终端输出
+    regex_tooltip:
+      en: Regular expression
+      zh-CN: 正则表达式
+    prev_tooltip:
+      en: Previous match (Shift+Enter)
+      zh-CN: 上一个匹配 (Shift+Enter)
+    next_tooltip:
+      en: Next match (Enter)
+      zh-CN: 下一个匹配 (Enter)
+    close_tooltip:
+      en: Close search (Esc)
+      zh-CN: 关闭搜索 (Esc)
+    invalid_regex:
+      en: 'Invalid regular expression: %{error}'
+      zh-CN: 正则无效：%{error}
+    hint:
+      en: Type a keyword to start searching
+      zh-CN: 输入关键词开始搜索
+    stale:
+      en: Output is streaming; results will update
+      zh-CN: 输出中，稍后自动更新
+    no_matches:
+      en: No matches
+      zh-CN: 没有匹配项
+    match_count:
+      en: '%{total}%{suffix} matches'
+      zh-CN: 共 %{total}%{suffix} 处匹配
+  menu:
+    previous_prompt:
+      en: Jump to Previous Command
+      zh-CN: 跳转到上一条命令
+    next_prompt:
+      en: Jump to Next Command
+      zh-CN: 跳转到下一条命令
+    toggle_block_view:
+      en: Toggle Block View / Classic Flow
+      zh-CN: 切换语义块视图 / 经典连续流
+  block:
+    banner:
+      en: Collapsed %{rows} rows · %{status}%{duration}
+      zh-CN: 已折叠 %{rows} 行 · %{status}%{duration}
+    status_success:
+      en: succeeded
+      zh-CN: 成功
+    status_exit_code:
+      en: exit code %{code}
+      zh-CN: 退出码 %{code}
+    status_finished:
+      en: finished
+      zh-CN: 已完成
+    unknown_command:
+      en: (unknown command)
+      zh-CN: (未知命令)
+    unknown_exit_code:
+      en: unknown exit code
+      zh-CN: 退出码未知
+    markdown_duration:
+      en: ' · took %{duration}'
+      zh-CN: ' · 耗时 %{duration}'
+  trigger:
+    default_notification:
+      en: 'Trigger matched: %{name}'
+      zh-CN: '命中触发器: %{name}'
+connection:
+  local_terminal:
+    en: Local terminal %{shell}
+    zh-CN: 本地终端 %{shell}
+  serial:
+    en: Serial %{port}@%{baud}
+    zh-CN: 串口 %{port}@%{baud}
+  unknown:
+    en: Unknown connection type
+    zh-CN: 未知连接类型
+keymap:
+  parse_failed:
+    en: Key combination %{keys} cannot be parsed; use forms like ctrl-shift-left, alt-backspace, or f1
+    zh-CN: 按键组合「%{keys}」无法解析，请使用 ctrl-shift-left、alt-backspace、f1 这类写法
+  missing_modifier:
+    en: Key combination %{keys} has no modifier and would swallow normal character input; add ctrl/alt/shift
+    zh-CN: 按键组合「%{keys}」没有修饰键，会覆盖正常字符输入，请加 ctrl/alt/shift
+  duplicate:
+    en: Key combination %{keys} is already bound (previously to %{previous})
+    zh-CN: 按键组合「%{keys}」重复绑定（前一条为「%{previous}」）
+sidebar:
+  host_copied:
+    en: 'Host address copied: %{host}'
+    zh-CN: '已复制主机地址: %{host}'

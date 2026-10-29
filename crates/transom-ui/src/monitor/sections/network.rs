@@ -66,9 +66,10 @@ impl AppShell {
                                     .gap_2()
                                     .items_center()
                                     .child(
-                                        div()
-                                            .text_color(p.muted_foreground)
-                                            .child("总流量走势 (2分钟)"),
+                                        div().text_color(p.muted_foreground).child(
+                                            rust_i18n::t!("monitor.network_section.trend_title")
+                                                .to_string(),
+                                        ),
                                     )
                                     .child(
                                         h_flex()
@@ -82,7 +83,12 @@ impl AppShell {
                                                     .bg(p.primary),
                                             )
                                             .child(
-                                                div().text_xs().text_color(p.primary).child("下行"),
+                                                div().text_xs().text_color(p.primary).child(
+                                                    rust_i18n::t!(
+                                                        "monitor.network_section.downlink"
+                                                    )
+                                                    .to_string(),
+                                                ),
                                             ),
                                     )
                                     .child(
@@ -100,25 +106,38 @@ impl AppShell {
                                                 div()
                                                     .text_xs()
                                                     .text_color(p.sidebar_accent_foreground)
-                                                    .child("上行"),
+                                                    .child(
+                                                        rust_i18n::t!(
+                                                            "monitor.network_section.uplink"
+                                                        )
+                                                        .to_string(),
+                                                    ),
                                             ),
                                     ),
                             )
                             .child(
                                 h_flex()
                                     .gap_2()
-                                    .child(div().text_color(p.primary).child(format!(
-                                        "↓ {}/s (峰值 {})",
-                                        format_size(total_rx),
-                                        format_size(rx_peak)
-                                    )))
-                                    .child(div().text_color(p.sidebar_accent_foreground).child(
-                                        format!(
-                                            "↑ {}/s (峰值 {})",
-                                            format_size(total_tx),
-                                            format_size(tx_peak)
+                                    .child(
+                                        div().text_color(p.primary).child(
+                                            rust_i18n::t!(
+                                                "monitor.network_section.rx_peak",
+                                                rate = format_size(total_rx),
+                                                peak = format_size(rx_peak)
+                                            )
+                                            .to_string(),
                                         ),
-                                    )),
+                                    )
+                                    .child(
+                                        div().text_color(p.sidebar_accent_foreground).child(
+                                            rust_i18n::t!(
+                                                "monitor.network_section.tx_peak",
+                                                rate = format_size(total_tx),
+                                                peak = format_size(tx_peak)
+                                            )
+                                            .to_string(),
+                                        ),
+                                    ),
                             ),
                     )
                     .child(render_network_dual_sparkline(
@@ -182,6 +201,7 @@ impl AppShell {
         )
         .collapsed(collapsed)
         .summary(summary)
+        .summary_always(true)
         .content(content)
         .render(
             p,

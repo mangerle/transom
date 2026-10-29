@@ -91,6 +91,15 @@ bad line\n";
     assert_eq!(processes[1].cmdline, "cargo build --release");
 }
 
+/// 折叠态的进程总数按 `ps -eo pid=` 的非空行统计。
+#[test]
+fn parse_process_count_counts_non_empty_lines() {
+    assert_eq!(parse_process_count("1\n2\n3\n"), 3);
+    assert_eq!(parse_process_count("  12 \n  34 \n"), 2);
+    assert_eq!(parse_process_count("\n\n  56  \n\n"), 1);
+    assert_eq!(parse_process_count(""), 0);
+}
+
 /// 每核使用率来自独立 jiffies 差；首轮没有前值时不输出伪造数据。
 #[test]
 fn parse_cpu_cores_and_rates() {

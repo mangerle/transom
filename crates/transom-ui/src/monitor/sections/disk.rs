@@ -98,6 +98,7 @@ impl AppShell {
         )
         .collapsed(collapsed)
         .summary(summary)
+        .summary_always(true)
         .content(content)
         .render(
             p,

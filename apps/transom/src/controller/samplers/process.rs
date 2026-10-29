@@ -13,27 +13,14 @@ pub(crate) struct ProcessTarget {
     pub(crate) remote: Option<SshRemote>,
     pub(crate) tab_id: TabId,
     pub(crate) connection_id: ConnectionId,
-    pub(crate) sort: transom_core::ProcessSort,
     pub(crate) event_tx: flume::Sender<AppEvent>,
 }
 
 pub(crate) async fn run_process_sample(target: ProcessTarget) {
-    let sort_flag = match target.sort {
-        transom_core::ProcessSort::Cpu => "--sort=-%cpu",
-        transom_core::ProcessSort::Memory => "--sort=-rss",
-    };
-    let command = format!("ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args {sort_flag} | head -n 51");
-    let result = match &target.remote {
-        Some(remote) => {
-            match tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command_capture(&command)).await
-            {
-                Ok(Ok(output)) => Ok(output.stdout),
-                Ok(Err(error)) => Err(error),
-                Err(_) => Err(command_timeout("进程采样")),
-            }
-        }
-        None => local_command_output(&command).await,
-    };
+    // 不排序、不截断：进程表要完整可搜，排序在界面侧按当前列完成，
+    // 远端多排一次全表既浪费又和界面排序口径重复。
+    let command = "ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args";
+    let result = exec_sample_command(target.remote.as_ref(), command, "进程采样").await;
 
     let event: AppEvent = match result {
         Ok(output) => {
@@ -53,6 +40,46 @@ pub(crate) async fn run_process_sample(target: ProcessTarget) {
         .into(),
     };
     let _ = target.event_tx.send_async(event).await;
+}
+
+/// 折叠态采样：只取进程总数，用窄列输出把每轮传输量压到数 KB。
+pub(crate) async fn run_process_count(target: ProcessTarget) {
+    let result = exec_sample_command(target.remote.as_ref(), "ps -eo pid=", "进程计数采样").await;
+
+    let event: AppEvent = match result {
+        Ok(output) => HostAppEvent::ProcessCountSampled {
+            tab_id: target.tab_id,
+            connection_id: target.connection_id,
+            count: transom_net::system_stats::parse_process_count(&output),
+        }
+        .into(),
+        Err(error) => HostAppEvent::ProcessesSampleFailed {
+            tab_id: target.tab_id,
+            connection_id: target.connection_id,
+            error,
+        }
+        .into(),
+    };
+    let _ = target.event_tx.send_async(event).await;
+}
+
+/// 执行采样命令并取回标准输出：SSH 会话走远端 exec 通道，本地终端跑本机命令。
+async fn exec_sample_command(
+    remote: Option<&SshRemote>,
+    command: &str,
+    action: &str,
+) -> Result<String, AppError> {
+    match remote {
+        Some(remote) => {
+            match tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command_capture(command)).await
+            {
+                Ok(Ok(output)) => Ok(output.stdout),
+                Ok(Err(error)) => Err(error),
+                Err(_) => Err(command_timeout(action)),
+            }
+        }
+        None => local_command_output(command).await,
+    }
 }
 
 pub(crate) async fn run_process_kill(target: ProcessTarget, pid: u32, force: bool) {

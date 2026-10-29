@@ -77,7 +77,7 @@ impl AppShell {
                         .child(
                             div()
                                 .text_color(p.muted_foreground)
-                                .child("交换分区 (Swap)"),
+                                .child(rust_i18n::t!("monitor.memory_section.swap").to_string()),
                         )
                         .child(div().text_color(p.foreground).child(format!(
                             "{} / {} ({:.1}%)",
@@ -100,13 +100,19 @@ impl AppShell {
                 div()
                     .text_xs()
                     .text_color(p.sidebar_accent_foreground)
-                    .child("[平稳]")
+                    .child(rust_i18n::t!("monitor.memory_section.trend_flat").to_string())
             } else if history.last().copied().unwrap_or(0.0)
                 >= history.first().copied().unwrap_or(0.0)
             {
-                div().text_xs().text_color(p.warning).child("[上升中]")
+                div()
+                    .text_xs()
+                    .text_color(p.warning)
+                    .child(rust_i18n::t!("monitor.memory_section.trend_rising").to_string())
             } else {
-                div().text_xs().text_color(p.primary).child("[下降中]")
+                div()
+                    .text_xs()
+                    .text_color(p.primary)
+                    .child(rust_i18n::t!("monitor.memory_section.trend_falling").to_string())
             };
 
             content = content.child(
@@ -122,14 +128,24 @@ impl AppShell {
                                     .gap_1p5()
                                     .items_center()
                                     .child(
-                                        div().text_color(p.muted_foreground).child("走势 (2分钟)"),
+                                        div().text_color(p.muted_foreground).child(
+                                            rust_i18n::t!("monitor.memory_section.trend_title")
+                                                .to_string(),
+                                        ),
                                     )
                                     .child(trend_badge),
                             )
-                            .child(div().text_color(p.muted_foreground).child(format!(
-                                "{:.1}% ~ {:.1}% (均 {:.1}%)",
-                                min_val, max_val, avg_val
-                            ))),
+                            .child(
+                                div().text_color(p.muted_foreground).child(
+                                    rust_i18n::t!(
+                                        "monitor.memory_section.trend_range",
+                                        min = format!("{min_val:.1}"),
+                                        max = format!("{max_val:.1}"),
+                                        avg = format!("{avg_val:.1}")
+                                    )
+                                    .to_string(),
+                                ),
+                            ),
                     )
                     .child(render_percent_sparkline(
                         &history,
@@ -148,6 +164,7 @@ impl AppShell {
         )
         .collapsed(collapsed)
         .summary(summary)
+        .summary_always(true)
         .content(content)
         .render(
             p,

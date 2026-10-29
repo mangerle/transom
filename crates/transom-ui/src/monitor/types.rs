@@ -1,6 +1,7 @@
 //! 主机监控状态模型与辅助计算工具。
 
 use crate::app::AppShell;
+use gpui_kit::base::VirtualListScrollHandle;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::collections::VecDeque;
@@ -105,9 +106,18 @@ pub(crate) struct MonitorState {
     pub(crate) chart_type: SparklineChartType,
     /// 进程排序依据。
     pub(crate) sort: ProcessSort,
+    /// 进程排序方向：false 为降序（最大值在前），点同一列表头翻转。
+    pub(crate) sort_ascending: bool,
+    /// 进程明细快照。
     pub(crate) processes: Vec<ProcessInfo>,
-    /// 当前展开查看完整 args 的进程 PID。
-    pub(crate) expanded_process_pid: Option<u32>,
+    /// 进程列表滚动句柄：虚拟列表与可见滚动条共用同一个偏移。
+    pub(crate) process_scroll: VirtualListScrollHandle,
+    /// 监听端口列表滚动句柄。
+    pub(crate) ports_scroll: VirtualListScrollHandle,
+    /// 主机进程总数：折叠态由轻量计数采样刷新，展开态等于明细条数。
+    pub(crate) process_total: u32,
+    /// 当前选中查看完整命令行的进程 PID。
+    pub(crate) selected_process_pid: Option<u32>,
     pub(crate) error: Option<String>,
     pub(crate) filter: Entity<InputState>,
     /// 监听端口筛选框：端口表按 5 秒一轮刷新，条目常常超过一屏，
@@ -138,8 +148,12 @@ impl MonitorState {
             interval_mode: SampleIntervalMode::Normal,
             chart_type: SparklineChartType::default(),
             sort: ProcessSort::Cpu,
+            sort_ascending: false,
             processes: Vec::new(),
-            expanded_process_pid: None,
+            process_scroll: VirtualListScrollHandle::new(),
+            ports_scroll: VirtualListScrollHandle::new(),
+            process_total: 0,
+            selected_process_pid: None,
             error: None,
             filter: cx.new(|cx| {
                 InputState::new(window, cx)

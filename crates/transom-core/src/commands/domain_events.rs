@@ -198,6 +198,12 @@ pub enum HostAppEvent {
         connection_id: ConnectionId,
         processes: Vec<ProcessInfo>,
     },
+    /// 折叠态下的进程总数采样结果。
+    ProcessCountSampled {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        count: u32,
+    },
     ProcessesSampleFailed {
         tab_id: TabId,
         connection_id: ConnectionId,
