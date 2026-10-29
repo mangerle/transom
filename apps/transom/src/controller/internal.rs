@@ -468,14 +468,21 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
                     session.sftp_client = Some(client.clone());
                 }
             }
+            let remote = state
+                .sessions
+                .get(&owner_tab)
+                .and_then(|s| s.remote.clone());
             sftp_exec::spawn_sftp_op(
                 &mut state.sftp_tasks,
                 ctx.event_tx.clone(),
-                owner_tab,
-                connection_id,
-                op_id,
-                client,
-                op,
+                sftp_exec::SpawnSftpOpParams {
+                    tab_id: owner_tab,
+                    connection_id,
+                    op_id,
+                    client,
+                    remote,
+                    op,
+                },
             );
         }
         Err(error) => {
@@ -484,17 +491,21 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
                 && let Some(session) = state.sessions.get(&owner_tab)
                 && let Some(fallback_client) = session.sftp_client.clone()
             {
+                let fallback_remote = session.remote.clone();
                 log::warn!(
                     "打开专用 SFTP 传输通道失败，回退至主控制通道，标签: {owner_tab}，原因: {error}"
                 );
                 sftp_exec::spawn_sftp_op(
                     &mut state.sftp_tasks,
                     ctx.event_tx.clone(),
-                    owner_tab,
-                    connection_id,
-                    op_id,
-                    fallback_client,
-                    op,
+                    sftp_exec::SpawnSftpOpParams {
+                        tab_id: owner_tab,
+                        connection_id,
+                        op_id,
+                        client: fallback_client,
+                        remote: fallback_remote,
+                        op,
+                    },
                 );
                 return;
             }

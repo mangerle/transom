@@ -108,6 +108,28 @@ impl AppShell {
                 };
                 self.send_sftp_op(tab_id, op, cx);
             }
+            SftpInputTarget::RemoteArchive {
+                source_paths,
+                parent_dir,
+            } => {
+                let dest_archive_path = join_remote(&parent_dir, &name);
+                let op = SftpOperation::Archive {
+                    source_paths,
+                    dest_archive_path,
+                };
+                self.send_sftp_op(tab_id, op, cx);
+            }
+            SftpInputTarget::RemoteExtract {
+                archive_path,
+                parent_dir,
+            } => {
+                let dest_dir = join_remote(&parent_dir, &name);
+                let op = SftpOperation::Extract {
+                    archive_path,
+                    dest_dir,
+                };
+                self.send_sftp_op(tab_id, op, cx);
+            }
             SftpInputTarget::LocalMkdir => {
                 if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     let new_dir = panel.local.path.join(&name);

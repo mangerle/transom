@@ -73,6 +73,16 @@ pub(crate) enum SftpInputTarget {
     LocalSymlink {
         target_path: PathBuf,
     },
+    /// 远端归档压缩：在当前目录下生成归档文件
+    RemoteArchive {
+        source_paths: Vec<String>,
+        parent_dir: String,
+    },
+    /// 远端解压到指定新目录
+    RemoteExtract {
+        archive_path: String,
+        parent_dir: String,
+    },
 }
 
 pub(crate) struct SftpInputModalState {

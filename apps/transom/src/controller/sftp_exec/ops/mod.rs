@@ -5,12 +5,14 @@
 //! - 采用 Handler 模式将各操作分支独立为细粒度处理函数，主分发函数控制在 35 行以内；
 //! - 各处理函数单一职责，便于独立测试、维护与添加超时保护。
 
+mod archive;
 mod fs;
 mod query;
 mod sync;
 mod text;
 mod transfer;
 
+use self::archive::{handle_archive, handle_extract};
 use self::fs::{
     handle_chmod, handle_delete, handle_delete_many, handle_mkdir, handle_rename, handle_symlink,
 };
@@ -20,7 +22,7 @@ use self::text::{handle_preview, handle_read_text, handle_write_text};
 use self::transfer::{handle_download, handle_download_dir, handle_upload, handle_upload_dir};
 pub(super) use super::progress::throttled_progress;
 use transom_core::{AppEvent, ConnectionId, SftpOperation, TabId, TransferId};
-use transom_net::SftpClient;
+use transom_net::{SftpClient, SshRemote};
 
 /// SFTP 任务执行上下文对象：收敛原平铺参数。
 pub(crate) struct SftpExecutionContext {
@@ -29,6 +31,7 @@ pub(crate) struct SftpExecutionContext {
     pub(crate) connection_id: ConnectionId,
     pub(crate) op_id: TransferId,
     pub(crate) client: SftpClient,
+    pub(crate) remote: Option<SshRemote>,
 }
 
 /// 执行单项 SFTP 操作的主入口分发。
@@ -129,5 +132,13 @@ pub(crate) async fn execute_sftp_op(ctx: SftpExecutionContext, op: SftpOperation
             algorithm: _,
         } => handle_sync_dirs(&ctx, local_path, remote_path, items, verify).await,
         SftpOperation::RemoteTransfer { .. } => {}
+        SftpOperation::Archive {
+            source_paths,
+            dest_archive_path,
+        } => handle_archive(&ctx, source_paths, dest_archive_path).await,
+        SftpOperation::Extract {
+            archive_path,
+            dest_dir,
+        } => handle_extract(&ctx, archive_path, dest_dir).await,
     }
 }

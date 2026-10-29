@@ -12,7 +12,7 @@ use transom_core::{
     AppError, AppEvent, ConnectionId, ErrorCode, SftpAppEvent, SftpOperation, TabId,
     TransferFilter, TransferId,
 };
-use transom_net::SftpClient;
+use transom_net::{SftpClient, SshRemote};
 
 /// SFTP 命令的调度参数：主循环状态表的借用与命令载荷。
 pub(crate) struct SftpDispatch<'a> {
@@ -133,11 +133,14 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         Some(client) => spawn_sftp_op(
             sftp_tasks,
             event_tx,
-            owner_tab,
-            connection_id,
-            op_id,
-            client,
-            op,
+            SpawnSftpOpParams {
+                tab_id: owner_tab,
+                connection_id,
+                op_id,
+                client,
+                remote: Some(remote),
+                op,
+            },
         ),
         None => {
             // 打开阶段也登记任务：否则用户取消或关闭标签时，句柄不在表里，
@@ -303,16 +306,30 @@ fn send_sftp_not_ready(
     );
 }
 
+/// 派发 SFTP 单项操作所需参数集合。
+pub(crate) struct SpawnSftpOpParams {
+    pub(crate) tab_id: TabId,
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) op_id: TransferId,
+    pub(crate) client: SftpClient,
+    pub(crate) remote: Option<SshRemote>,
+    pub(crate) op: SftpOperation,
+}
+
 /// 派发单个 SFTP 操作执行：全部操作纳入任务表跟踪，标签关闭与停机时可统一取消。
 pub(crate) fn spawn_sftp_op(
     sftp_tasks: &mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
     event_tx: flume::Sender<AppEvent>,
-    tab_id: TabId,
-    connection_id: ConnectionId,
-    op_id: TransferId,
-    client: SftpClient,
-    op: SftpOperation,
+    params: SpawnSftpOpParams,
 ) {
+    let SpawnSftpOpParams {
+        tab_id,
+        connection_id,
+        op_id,
+        client,
+        remote,
+        op,
+    } = params;
     let handle = tokio::spawn(execute_sftp_op(
         SftpExecutionContext {
             event_tx,
@@ -320,6 +337,7 @@ pub(crate) fn spawn_sftp_op(
             connection_id,
             op_id,
             client,
+            remote,
         },
         op,
     ));

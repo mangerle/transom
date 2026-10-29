@@ -1,10 +1,32 @@
 //! SFTP 远程文件项右键上下文菜单构建。
 
 use crate::app::AppShell;
+use crate::sftp::parent_remote;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{SftpOperation, TabId};
+
+/// 判断指定路径是否属于受支持的常见压缩包格式。
+fn is_archive_name(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".tar.gz")
+        || lower.ends_with(".tgz")
+        || lower.ends_with(".tar")
+        || lower.ends_with(".zip")
+}
+
+/// 剥离归档文件名末尾的压缩后缀，提取基础名称作为默认解压目录名。
+fn strip_archive_suffix(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".tar.gz") {
+        name[..name.len() - 7].to_string()
+    } else if lower.ends_with(".tgz") || lower.ends_with(".tar") || lower.ends_with(".zip") {
+        name[..name.len() - 4].to_string()
+    } else {
+        name.to_string()
+    }
+}
 
 /// 远端右键上下文菜单构建所需的参数上下文对象。
 pub(crate) struct RemoteContextMenuProps {
@@ -101,6 +123,118 @@ pub(crate) fn build_remote_context_menu(
                 }),
         );
     }
+
+    if !is_dir && is_archive_name(&entry_path) {
+        let p_extract = entry_path.clone();
+        let p_extract_new = entry_path.clone();
+        m = m
+            .item(
+                PopupMenuItem::new("解压到当前目录")
+                    .icon(IconName::Archive)
+                    .on_click({
+                        let app = app.clone();
+                        move |_, _, cx| {
+                            app.update(cx, |this, cx| {
+                                let dest_dir = parent_remote(&p_extract);
+                                let op = SftpOperation::Extract {
+                                    archive_path: p_extract.clone(),
+                                    dest_dir,
+                                };
+                                this.send_sftp_op(tab_id, op, cx);
+                            });
+                        }
+                    }),
+            )
+            .item(
+                PopupMenuItem::new("解压至新文件夹...")
+                    .icon(IconName::FolderArchive)
+                    .on_click({
+                        let app = app.clone();
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                let file_name = p_extract_new
+                                    .rsplit_once('/')
+                                    .map(|(_, name)| name)
+                                    .unwrap_or(&p_extract_new);
+                                let default_dir = strip_archive_suffix(file_name);
+                                this.sftp_open_extract_modal(
+                                    tab_id,
+                                    p_extract_new.clone(),
+                                    default_dir,
+                                    window,
+                                    cx,
+                                );
+                            });
+                        }
+                    }),
+            );
+    }
+
+    let p_archive_gz = entry_path.clone();
+    let p_archive_zip = entry_path.clone();
+    m = m
+        .item(
+            PopupMenuItem::new("远程压缩为 .tar.gz...")
+                .icon(IconName::Archive)
+                .on_click({
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            let mut sources = Vec::new();
+                            if let Some(panel) = this.workspace.tab(tab_id).and_then(|t| t.sftp())
+                                && panel.remote.selection.contains(&p_archive_gz)
+                            {
+                                sources = panel.remote.selection.iter().cloned().collect();
+                            }
+                            if sources.is_empty() {
+                                sources.push(p_archive_gz.clone());
+                            }
+                            let default_name = if sources.len() == 1 {
+                                let item_name = sources[0]
+                                    .trim_end_matches('/')
+                                    .rsplit_once('/')
+                                    .map(|(_, n)| n)
+                                    .unwrap_or(&sources[0]);
+                                format!("{item_name}.tar.gz")
+                            } else {
+                                "archive.tar.gz".to_string()
+                            };
+                            this.sftp_open_archive_modal(tab_id, sources, default_name, window, cx);
+                        });
+                    }
+                }),
+        )
+        .item(
+            PopupMenuItem::new("远程压缩为 .zip...")
+                .icon(IconName::Archive)
+                .on_click({
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            let mut sources = Vec::new();
+                            if let Some(panel) = this.workspace.tab(tab_id).and_then(|t| t.sftp())
+                                && panel.remote.selection.contains(&p_archive_zip)
+                            {
+                                sources = panel.remote.selection.iter().cloned().collect();
+                            }
+                            if sources.is_empty() {
+                                sources.push(p_archive_zip.clone());
+                            }
+                            let default_name = if sources.len() == 1 {
+                                let item_name = sources[0]
+                                    .trim_end_matches('/')
+                                    .rsplit_once('/')
+                                    .map(|(_, n)| n)
+                                    .unwrap_or(&sources[0]);
+                                format!("{item_name}.zip")
+                            } else {
+                                "archive.zip".to_string()
+                            };
+                            this.sftp_open_archive_modal(tab_id, sources, default_name, window, cx);
+                        });
+                    }
+                }),
+        );
 
     m.item(
         PopupMenuItem::new("复制绝对路径")

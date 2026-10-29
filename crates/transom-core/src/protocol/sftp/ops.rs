@@ -159,6 +159,16 @@ pub enum SftpOperation {
         filter: TransferFilter,
         preserve_attributes: bool,
     },
+    /// 远程归档（打包压缩）：将一组远端路径打包至目标归档文件。
+    Archive {
+        source_paths: Vec<String>,
+        dest_archive_path: String,
+    },
+    /// 远程解压：将指定归档文件解压到目标目录。
+    Extract {
+        archive_path: String,
+        dest_dir: String,
+    },
 }
 
 impl SftpOperation {

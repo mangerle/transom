@@ -324,4 +324,71 @@ impl AppShell {
         });
         cx.notify();
     }
+
+    /// 打开远程归档压缩弹窗：输入归档文件名后向远端发送归档任务。
+    pub(crate) fn sftp_open_archive_modal(
+        &mut self,
+        tab_id: TabId,
+        source_paths: Vec<String>,
+        default_name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.workspace.tab(tab_id) else {
+            return;
+        };
+        let Some(panel) = tab.sftp() else {
+            return;
+        };
+        let parent_dir = panel.remote.path.clone();
+        let input = sftp_text_input(window, cx, &default_name, "归档文件名");
+        input.update(cx, |state, cx| state.focus(window, cx));
+        self.sftp_modals.input = Some(SftpInputModalState {
+            tab_id,
+            title: "远程归档压缩".to_string(),
+            prompt: format!(
+                "将打包选中的 {} 项至当前目录，请输入归档文件名 (.tar.gz / .zip):",
+                source_paths.len()
+            ),
+            input,
+            target: SftpInputTarget::RemoteArchive {
+                source_paths,
+                parent_dir,
+            },
+            error: None,
+        });
+        cx.notify();
+    }
+
+    /// 打开远程解压缩至新文件夹弹窗：输入新文件夹名称后解压。
+    pub(crate) fn sftp_open_extract_modal(
+        &mut self,
+        tab_id: TabId,
+        archive_path: String,
+        default_dir_name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.workspace.tab(tab_id) else {
+            return;
+        };
+        let Some(panel) = tab.sftp() else {
+            return;
+        };
+        let parent_dir = panel.remote.path.clone();
+        let input = sftp_text_input(window, cx, &default_dir_name, "目标文件夹名称");
+        input.update(cx, |state, cx| state.focus(window, cx));
+        self.sftp_modals.input = Some(SftpInputModalState {
+            tab_id,
+            title: "远程解压缩至新文件夹".to_string(),
+            prompt: "请输入解压目标子文件夹名称（将在当前目录下创建）:".to_string(),
+            input,
+            target: SftpInputTarget::RemoteExtract {
+                archive_path,
+                parent_dir,
+            },
+            error: None,
+        });
+        cx.notify();
+    }
 }
