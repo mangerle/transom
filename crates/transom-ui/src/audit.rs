@@ -42,6 +42,14 @@ pub(crate) fn open_web_page(url: &str) {
     open_with_default_app(std::ffi::OsStr::new(url));
 }
 
+/// 用系统默认程序打开一个已校验的本地路径（文件或目录）。
+///
+/// 调用方必须保证目标来自受控来源：绝对路径、不来自远端协议头；
+/// 本函数只负责派生进程与收割，不再做路径安全校验。
+pub(crate) fn open_local_path(path: &std::path::Path) {
+    open_with_default_app(path.as_os_str());
+}
+
 /// 交给系统默认程序处理一个目标，并在同一线程里收割子进程。
 ///
 /// 子进程在同一线程里 `wait` 收割，避免遗留僵尸进程；失败只记日志，

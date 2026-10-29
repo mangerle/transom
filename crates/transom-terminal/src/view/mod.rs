@@ -1,6 +1,7 @@
 mod block;
 mod input;
 mod integration;
+mod links;
 mod menu;
 mod paint;
 mod tasks;
@@ -86,6 +87,8 @@ pub struct TerminalView {
     block_view: Option<BlockViewSettings>,
     /// 当前悬浮的命令块与所在可见行；`None` 表示不在块上。
     hover_block: Option<(u64, usize)>,
+    /// 指针是否停在可打开的 OSC 8 链接上；仅用于避免重复提交光标样式。
+    hover_link: bool,
     /// 已解析的自定义按键映射；键盘热路径只做遍历匹配。
     custom_keys: Vec<(KeybindingKeystroke, Vec<u8>)>,
     _reader_task: Task<()>,
@@ -208,6 +211,7 @@ impl TerminalView {
             _search_subscription: None,
             block_view: None,
             hover_block: None,
+            hover_link: false,
             custom_keys,
             _reader_task: reader_task,
             _blink_task: blink_task,
@@ -437,6 +441,9 @@ impl Render for TerminalView {
         let right_click = self.interaction.right_click_behavior();
         let menu_entity = cx.entity();
         let layer = div()
+            .id(ElementId::Name(
+                format!("terminal-layer-{}", cx.entity().entity_id()).into(),
+            ))
             .size_full()
             .overflow_hidden()
             .track_focus(&self.focus_handle)
@@ -450,6 +457,7 @@ impl Render for TerminalView {
             .on_mouse_down(MouseButton::Middle, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .on_hover(cx.listener(Self::on_terminal_hover))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .child(self.render_canvas(cx));
         let layer = Self::wrap_context_menu(layer, menu_entity, right_click);

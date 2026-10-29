@@ -272,6 +272,9 @@ impl AppShell {
             TerminalEvent::DesktopNotification { title, body } => {
                 self.on_desktop_notification(title, body, cx);
             }
+            TerminalEvent::OpenCodeLocation { path, line, column } => {
+                self.open_terminal_code_location(tab_id, path, *line, *column, window, cx);
+            }
             TerminalEvent::TriggerFired { rule_name, action } => match action {
                 transom_core::TriggerAction::AutoResponse(reply) => {
                     self.status = Some(

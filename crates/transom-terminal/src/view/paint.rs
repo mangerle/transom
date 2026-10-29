@@ -73,6 +73,10 @@ fn prepare_canvas(
     cx: &mut App,
 ) -> PreparedTerminal {
     let state = &inputs.state;
+    // 悬停链接要换系统光标，而光标样式只能绑定在 hitbox 上；每帧重建一次
+    // 普通命中盒，鼠标事件里取最近一帧的句柄即可。
+    let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+    *state.canvas_hitbox.lock() = Some(hitbox);
     // 外观变更（脏标记）在此重建：只有 prepaint 阶段持有窗口文本系统，
     // 度量（"M"/"中" 整形探测）必须在这里做。
     let mut renderer_rebuilt = false;

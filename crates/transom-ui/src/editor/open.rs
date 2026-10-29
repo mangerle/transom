@@ -59,7 +59,7 @@ fn permissions_writable(permissions: Option<u32>) -> bool {
 ///
 /// 权限位属于"打开既有条目"的信息（来自目录列表快照），随读取种子传入；
 /// 新建文件没有已存在的权限位可依据，视作可写。
-enum PanelSeed {
+pub(super) enum PanelSeed {
     /// 打开既有文件：面板先出现，等待 `SftpTextRead` 装载内容。
     Reading {
         op_id: TransferId,
@@ -211,7 +211,7 @@ impl AppShell {
     ///
     /// 读取态与新建态共用一套装配，只差初始状态字段（见 `PanelSeed`）；
     /// 新建面板可编辑、无在途任务，读取面板等待 `SftpTextRead` 装载内容。
-    fn spawn_editor_panel(
+    pub(super) fn spawn_editor_panel(
         &mut self,
         tab_id: TabId,
         remote_path: String,
@@ -318,6 +318,7 @@ impl AppShell {
             baseline: SharedString::default(),
             remote_meta,
             new_file,
+            pending_goto: None,
             caret,
             dirty: false,
             loaded,
@@ -385,7 +386,15 @@ impl AppShell {
             item.editor
                 .update(cx, |state, cx| state.set_readonly(true, cx));
         }
-        item.editor.update(cx, |state, cx| state.focus(window, cx));
+        // 终端代码链接带进来的定位请求在内容落地后一次性消费；普通打开仍聚焦到
+        // 上次位置之外的行首，两种来源共用同一个跳转helper，边界口径一致。
+        let goto = item.pending_goto.take();
+        let editor = item.editor.clone();
+        if let Some((line, column)) = goto {
+            super::navigate::apply_editor_goto(&editor, line, column, window, cx);
+        } else {
+            editor.update(cx, |state, cx| state.focus(window, cx));
+        }
         cx.notify();
     }
 

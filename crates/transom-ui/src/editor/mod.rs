@@ -11,6 +11,8 @@
 mod actions;
 mod banner;
 mod close;
+mod code_link;
+mod code_open;
 mod diff;
 mod drag_tracker;
 mod list;
@@ -22,6 +24,8 @@ mod panel;
 mod view;
 
 pub(crate) use close::PendingEditorClose;
+pub(crate) use code_open::RemoteCodeLocation;
 pub(crate) use drag_tracker::EditorDragTracker;
 pub(crate) use list::render_editor_list_popover;
 pub(crate) use manager::EditorManager;
+pub(crate) use panel::{EditorPhase, caret_of, editor_language_token};

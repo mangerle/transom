@@ -6,6 +6,7 @@ mod engine;
 mod event;
 pub mod highlight;
 mod history_popup;
+mod hyperlink;
 mod input;
 mod keyboard;
 mod kitty_graphics;

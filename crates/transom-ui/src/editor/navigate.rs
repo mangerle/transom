@@ -19,10 +19,31 @@ use crate::sftp::EditorGotoLineModalState;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Input, InputEvent, Position, RopeExt};
+use gpui_kit::component::input::{EditorState, Input, InputEvent, Position, RopeExt};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+
+/// 把编辑器光标移到 1 基的行列位置，展开被折叠的行并收敛越界值。
+///
+/// 收敛口径集中在这里：空文件至少第 1 行、超界跳到最后一行，列缺省为行首。
+/// "跳转到行"模态与终端代码链接共用同一套定位行为，避免两处各算一套边界。
+pub(crate) fn apply_editor_goto(
+    editor: &Entity<EditorState>,
+    line: u32,
+    column: Option<u32>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let total = editor.read(cx).text().lines_len().max(1) as u32;
+    let line = line.max(1).min(total);
+    let column = column.unwrap_or(1).max(1) - 1;
+    let position = Position::new(line - 1, column);
+    editor.update(cx, |state, cx| {
+        state.unfold_at(position, cx);
+        state.set_cursor_position(position, window, cx);
+    });
+}
 
 impl AppShell {
     /// 面板内"跳转到行"快捷键：打开行号输入模态，捕获当前焦点面板的编辑器。
@@ -80,14 +101,7 @@ impl AppShell {
             cx.notify();
             return;
         };
-        // 收敛到有效区间：空文件（0 行）至少定位到第 1 行，超界跳到最后一行。
-        let total = editor.read(cx).text().lines_len().max(1);
-        let line = line.min(total);
-        let position = Position::new((line - 1) as u32, 0);
-        editor.update(cx, |state, cx| {
-            state.unfold_at(position, cx);
-            state.set_cursor_position(position, window, cx);
-        });
+        apply_editor_goto(&editor, line as u32, None, window, cx);
         self.sftp_modals.goto_line = None;
         cx.notify();
     }

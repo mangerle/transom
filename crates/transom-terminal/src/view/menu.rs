@@ -9,7 +9,7 @@ use transom_core::RightClickBehavior;
 impl TerminalView {
     /// 为终端层挂载上下文菜单（或直接执行粘贴）。
     pub(super) fn wrap_context_menu(
-        layer: Div,
+        layer: Stateful<Div>,
         menu_entity: Entity<Self>,
         right_click: RightClickBehavior,
     ) -> AnyElement {

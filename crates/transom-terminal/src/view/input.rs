@@ -222,7 +222,7 @@ impl TerminalView {
             MouseButton::Left => {
                 // Ctrl+点击优先尝试打开 OSC 8 超链接：命中即消费本次点击，
                 // 未命中回落到既有的选择/上报行为，不改变其他修饰键语义。
-                if event.modifiers.control && self.open_hyperlink_at(event.position) {
+                if event.modifiers.control && self.open_hyperlink_at(event.position, cx) {
                     return;
                 }
                 // Alt 拖拽 = 矩形列选。它和 Shift 一样压制程序自己的鼠标上报：
@@ -261,34 +261,6 @@ impl TerminalView {
         }
     }
 
-    /// Ctrl+点击打开终端里的 OSC 8 超链接，返回点击是否命中链接。
-    ///
-    /// 安全约束：只放行 http/https/mailto/ftp 白名单协议，防止终端输出内容
-    /// 借 xdg-open 触发任意协议处理器；命中但协议被拒同样视为已消费，
-    /// 避免 Ctrl+点击误启选择拖拽。
-    pub(super) fn open_hyperlink_at(&mut self, position: Point<Pixels>) -> bool {
-        let Some(point) = self.hit_test_grid_point(position) else {
-            return false;
-        };
-        let Some(uri) = self.state.engine.lock().hyperlink_at(point) else {
-            return false;
-        };
-        const ALLOWED_PREFIXES: [&str; 4] = ["http://", "https://", "mailto:", "ftp://"];
-        if !ALLOWED_PREFIXES
-            .iter()
-            .any(|prefix| uri.starts_with(prefix))
-        {
-            log::warn!("超链接协议不在白名单内，已拒绝打开: {uri}");
-            return true;
-        }
-        log::info!("打开终端超链接: {uri}");
-        #[cfg(unix)]
-        open_external_uri(&uri);
-        #[cfg(not(unix))]
-        log::warn!("当前平台暂不支持打开终端超链接");
-        true
-    }
-
     pub(super) fn on_mouse_up(
         &mut self,
         event: &MouseUpEvent,
@@ -322,7 +294,7 @@ impl TerminalView {
     pub(super) fn on_mouse_move(
         &mut self,
         event: &MouseMoveEvent,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let mode = self.state.engine.lock().mode();
@@ -347,6 +319,10 @@ impl TerminalView {
             cx.notify();
         }
         self.update_hover_block(event.position, cx);
+        // 拖拽选区时不切手型：此刻用户的操作对象是文本，不是链接。
+        if !self.mouse_pressed && !self.dragging_selection {
+            self.update_link_cursor(event.position, window);
+        }
     }
 
     /// 选区拖拽到视口上下边缘时的自动滚动。
@@ -439,25 +415,6 @@ impl TerminalView {
                 .scroll_display(Scroll::Delta(lines));
             cx.notify();
         }
-    }
-}
-
-/// 交给系统默认程序打开 URI，并在专用线程里回收子进程。
-#[cfg(unix)]
-fn open_external_uri(uri: &str) {
-    let uri = uri.to_string();
-    let spawned = std::thread::Builder::new()
-        .name("transom-open-uri".into())
-        .spawn(
-            move || match std::process::Command::new("xdg-open").arg(&uri).spawn() {
-                Ok(mut child) => {
-                    let _ = child.wait();
-                }
-                Err(error) => log::warn!("打开超链接失败，原因: {error}"),
-            },
-        );
-    if spawned.is_err() {
-        log::warn!("启动超链接打开线程失败，已忽略本次请求");
     }
 }
 

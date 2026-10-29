@@ -58,6 +58,11 @@ pub(crate) struct TerminalRenderState {
     pub(crate) row_cache: parking_lot::Mutex<Vec<crate::renderer::RowVisual>>,
     pub(crate) block_layout: parking_lot::Mutex<Option<Arc<BlockLayout>>>,
     pub(crate) trigger_engine: parking_lot::Mutex<crate::trigger::TriggerEngine>,
+    /// 本帧终端画布的命中盒：悬停超链接时用它把系统光标切成手型。
+    ///
+    /// GPUI 的光标样式必须挂在具体 hitbox 上，且 hitbox 只在预备帧生成；
+    /// 这里保存最近一帧的句柄，鼠标事件里直接复用，避免为了改光标再建一个元素。
+    pub(crate) canvas_hitbox: parking_lot::Mutex<Option<gpui_kit::Hitbox>>,
 }
 
 impl TerminalRenderState {
@@ -73,6 +78,7 @@ impl TerminalRenderState {
             row_cache: parking_lot::Mutex::new(Vec::new()),
             block_layout: parking_lot::Mutex::new(None),
             trigger_engine: parking_lot::Mutex::new(crate::trigger::TriggerEngine::default()),
+            canvas_hitbox: parking_lot::Mutex::new(None),
         }
     }
 }

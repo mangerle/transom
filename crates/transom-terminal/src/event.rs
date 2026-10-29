@@ -48,6 +48,15 @@ pub enum TerminalEvent {
         rule_name: String,
         action: transom_core::TriggerAction,
     },
+    /// 用户点击了 OSC 8 代码位置链接（`file:line:col`）。
+    ///
+    /// 终端只负责识别与投递：路径是远端还是本地、开哪个编辑器、相对路径
+    /// 按哪个工作目录解析，全部由应用层决定。行列均为 1 基，缺列时为 `None`。
+    OpenCodeLocation {
+        path: String,
+        line: u32,
+        column: Option<u32>,
+    },
 }
 
 /// Bridges alacritty terminal events into a bounded channel consumed by the view.
