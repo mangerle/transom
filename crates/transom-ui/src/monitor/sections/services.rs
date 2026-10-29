@@ -26,13 +26,13 @@ impl AppShell {
             div()
                 .text_xs()
                 .text_color(p.sidebar_accent_foreground)
-                .child("服务运行正常")
+                .child(rust_i18n::t!("monitor.services.healthy").to_string())
         } else {
             div()
                 .text_xs()
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(p.danger)
-                .child(format!("{count} 个异常服务"))
+                .child(rust_i18n::t!("monitor.services.failed_count", count = count).to_string())
         };
 
         let mut content = v_flex().gap_1p5();
@@ -42,7 +42,7 @@ impl AppShell {
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child("无崩溃服务，所有注册服务运行正常"),
+                    .child(rust_i18n::t!("monitor.services.empty").to_string()),
             );
         } else {
             for (idx, service) in stats.failed_services.iter().enumerate() {
@@ -83,7 +83,9 @@ impl AppShell {
                                     Button::new(format!("restart-service-{}", service.unit))
                                         .xsmall()
                                         .icon(IconName::RefreshCw)
-                                        .label("重启")
+                                        .label(
+                                            rust_i18n::t!("monitor.services.restart").to_string(),
+                                        )
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.restart_systemd_service(&unit, cx);
                                         })),
@@ -96,7 +98,7 @@ impl AppShell {
         CollapsibleCard::new(
             "card-services",
             IconName::ShieldAlert,
-            "服务状态 (Services)".to_string(),
+            rust_i18n::t!("monitor.services.title").to_string(),
         )
         .collapsed(collapsed)
         .summary(summary)

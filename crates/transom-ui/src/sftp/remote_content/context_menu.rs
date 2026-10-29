@@ -53,7 +53,7 @@ pub(crate) fn build_remote_context_menu(
     if is_parent_entry {
         return menu
             .item(
-                PopupMenuItem::new("返回上一级")
+                PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
                     .icon(IconName::ArrowUp)
                     .on_click({
                         let app = app.clone();
@@ -65,7 +65,7 @@ pub(crate) fn build_remote_context_menu(
                     }),
             )
             .item(
-                PopupMenuItem::new("刷新")
+                PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
                     .icon(IconName::RefreshCw)
                     .on_click({
                         let app = app.clone();
@@ -89,7 +89,7 @@ pub(crate) fn build_remote_context_menu(
     let p_del = entry_path.clone();
 
     let mut m = menu.item(
-        PopupMenuItem::new("下载")
+        PopupMenuItem::new(rust_i18n::t!("sftp.download").to_string())
             .icon(IconName::Download)
             .on_click({
                 let app = app.clone();
@@ -112,7 +112,7 @@ pub(crate) fn build_remote_context_menu(
 
     if !is_dir {
         m = m.item(
-            PopupMenuItem::new("内置编辑")
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.builtin_edit").to_string())
                 .icon(IconName::FilePen)
                 .on_click({
                     let app = app.clone();
@@ -130,7 +130,7 @@ pub(crate) fn build_remote_context_menu(
         let p_extract_new = entry_path.clone();
         m = m
             .item(
-                PopupMenuItem::new("解压到当前目录")
+                PopupMenuItem::new(rust_i18n::t!("sftp.menu.extract_here").to_string())
                     .icon(IconName::Archive)
                     .on_click({
                         let app = app.clone();
@@ -147,7 +147,7 @@ pub(crate) fn build_remote_context_menu(
                     }),
             )
             .item(
-                PopupMenuItem::new("解压至新文件夹...")
+                PopupMenuItem::new(rust_i18n::t!("sftp.menu.extract_to_new_folder").to_string())
                     .icon(IconName::FolderArchive)
                     .on_click({
                         let app = app.clone();
@@ -175,7 +175,7 @@ pub(crate) fn build_remote_context_menu(
     let p_archive_zip = entry_path.clone();
     m = m
         .item(
-            PopupMenuItem::new("远程压缩为 .tar.gz...")
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.compress_tar_gz").to_string())
                 .icon(IconName::Archive)
                 .on_click({
                     let app = app.clone();
@@ -206,7 +206,7 @@ pub(crate) fn build_remote_context_menu(
                 }),
         )
         .item(
-            PopupMenuItem::new("远程压缩为 .zip...")
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.compress_zip").to_string())
                 .icon(IconName::Archive)
                 .on_click({
                     let app = app.clone();
@@ -238,7 +238,7 @@ pub(crate) fn build_remote_context_menu(
         );
 
     m.item(
-        PopupMenuItem::new("复制绝对路径")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_abs_path").to_string())
             .icon(IconName::Copy)
             .on_click({
                 let app = app.clone();
@@ -248,7 +248,10 @@ pub(crate) fn build_remote_context_menu(
                         if let Some(panel) =
                             this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                         {
-                            panel.set_status(format!("已复制远端路径: {p_cp}"));
+                            panel.set_status(
+                                rust_i18n::t!("sftp.menu.remote_path_copied", path = p_cp)
+                                    .to_string(),
+                            );
                         }
                         cx.notify();
                     });
@@ -256,7 +259,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("创建软链接")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.create_symlink").to_string())
             .icon(IconName::Link2)
             .on_click({
                 let app = app.clone();
@@ -273,7 +276,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("查看属性")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.properties").to_string())
             .icon(IconName::Info)
             .on_click({
                 let app = app.clone();
@@ -285,7 +288,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("赋予执行权限")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.grant_exec").to_string())
             .icon(IconName::Terminal)
             .on_click({
                 let app = app.clone();
@@ -306,7 +309,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("修改权限 (Chmod)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.chmod").to_string())
             .icon(IconName::Settings)
             .on_click({
                 let app = app.clone();
@@ -323,7 +326,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("新建远端文件夹")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_remote_folder").to_string())
             .icon(IconName::FolderPlus)
             .on_click({
                 let app = app.clone();
@@ -335,7 +338,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("重命名")
+        PopupMenuItem::new(rust_i18n::t!("sftp.rename").to_string())
             .icon(IconName::Pencil)
             .on_click({
                 let app = app.clone();
@@ -351,21 +354,26 @@ pub(crate) fn build_remote_context_menu(
                 }
             }),
     )
-    .item(PopupMenuItem::new("删除").icon(IconName::Trash).on_click({
-        let app = app.clone();
-        move |_, _, cx| {
-            app.update(cx, |this, cx| {
-                if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                    && !panel.remote.selection.contains(&p_del)
-                {
-                    panel.select_remote(p_del.clone());
-                }
-                this.sftp_delete_selection(tab_id, cx);
-            });
-        }
-    }))
     .item(
-        PopupMenuItem::new("刷新")
+        PopupMenuItem::new(rust_i18n::t!("sftp.delete").to_string())
+            .icon(IconName::Trash)
+            .on_click({
+                let app = app.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                            && !panel.remote.selection.contains(&p_del)
+                        {
+                            panel.select_remote(p_del.clone());
+                        }
+                        this.sftp_delete_selection(tab_id, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
             .icon(IconName::RefreshCw)
             .on_click({
                 let app = app.clone();
@@ -377,7 +385,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("复制条目 (Ctrl+C)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_entries").to_string())
             .icon(IconName::Copy)
             .on_click({
                 let app = app.clone();
@@ -389,7 +397,7 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.paste_here").to_string())
             .icon(IconName::Clipboard)
             .on_click({
                 let app = app.clone();
@@ -417,7 +425,7 @@ pub(crate) fn build_remote_blank_context_menu(
     tab_id: TabId,
 ) -> PopupMenu {
     menu.item(
-        PopupMenuItem::new("返回上一级")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
             .icon(IconName::ArrowUp)
             .on_click({
                 let app = app.clone();
@@ -429,7 +437,7 @@ pub(crate) fn build_remote_blank_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("刷新")
+        PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
             .icon(IconName::RefreshCw)
             .on_click({
                 let app = app.clone();
@@ -441,7 +449,7 @@ pub(crate) fn build_remote_blank_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("新建远端文件夹")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_remote_folder").to_string())
             .icon(IconName::FolderPlus)
             .on_click({
                 let app = app.clone();
@@ -453,7 +461,7 @@ pub(crate) fn build_remote_blank_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.paste_here").to_string())
             .icon(IconName::Clipboard)
             .on_click(move |_, window, cx| {
                 app.update(cx, |this, cx| {

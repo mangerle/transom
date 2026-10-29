@@ -232,7 +232,9 @@ impl AppShell {
         self.status = Some(
             rust_i18n::t!(
                 "recorder.replaying_start",
-                title = header.title.unwrap_or_else(|| "脚本".into()),
+                title = header
+                    .title
+                    .unwrap_or_else(|| rust_i18n::t!("recorder.script_fallback").to_string()),
                 count = step_count
             )
             .to_string(),

@@ -44,8 +44,10 @@ impl AppShell {
             .rsplit('/')
             .next()
             .filter(|name| !name.is_empty())
-            .unwrap_or("远端文件")
-            .to_string();
+            .map_or_else(
+                || rust_i18n::t!("editor.remote_file_fallback").to_string(),
+                |name| name.to_string(),
+            );
         let max_bytes = self.settings.sftp.edit_max_bytes;
         let op_id = TransferId::new();
         self.spawn_editor_panel(
@@ -76,7 +78,11 @@ impl AppShell {
                 max_bytes,
             },
         }) {
-            self.fail_editor_panel_by_op(op_id, "读取命令投递失败".to_string(), cx);
+            self.fail_editor_panel_by_op(
+                op_id,
+                rust_i18n::t!("editor.error_read_dispatch").to_string(),
+                cx,
+            );
         }
     }
 

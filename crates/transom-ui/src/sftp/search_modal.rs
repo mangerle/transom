@@ -49,8 +49,10 @@ impl AppShell {
             return;
         };
         let root_path = panel.remote.path.clone();
-        let input = cx
-            .new(|cx| InputState::new(window, cx).placeholder("键入文件名关键字或搜索文本内容..."));
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("sftp.search.placeholder").to_string())
+        });
         input.update(cx, |state, cx| state.focus(window, cx));
 
         self.sftp_modals.search = Some(SftpSearchModalState {
@@ -73,7 +75,7 @@ impl AppShell {
         };
         let pattern = modal.input.read(cx).value().trim().to_string();
         if pattern.is_empty() {
-            modal.error = Some("搜索关键字不能为空".to_string());
+            modal.error = Some(rust_i18n::t!("sftp.search.error_empty").to_string());
             let input = modal.input.clone();
             input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
@@ -123,63 +125,61 @@ impl AppShell {
         let results = modal.results.clone();
         let error = modal.error.clone();
 
-        let header = v_flex()
-            .gap_2()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(format!("检索根目录: {root_path}")),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .w_full()
-                    .child(Input::new(&input).w_full())
-                    .child(
-                        Button::new("btn-trigger-search")
-                            .primary()
-                            .icon(IconName::Search)
-                            .label(if is_searching {
-                                "检索中..."
-                            } else {
-                                "检索"
-                            })
-                            .disabled(is_searching)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.sftp_execute_search(window, cx);
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_4()
-                    .child(
-                        Checkbox::new("chk-is-content")
-                            .checked(is_content)
-                            .label("全文内容检索 (Grep)")
-                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
-                                if let Some(ref mut m) = this.sftp_modals.search {
-                                    m.is_content = *checked;
-                                    cx.notify();
-                                }
-                            })),
-                    )
-                    .child(
-                        Checkbox::new("chk-case-sensitive")
-                            .checked(case_sensitive)
-                            .label("区分大小写")
-                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
-                                if let Some(ref mut m) = this.sftp_modals.search {
-                                    m.case_sensitive = *checked;
-                                    cx.notify();
-                                }
-                            })),
-                    ),
-            )
-            .when_some(error, |this, err| {
-                this.child(div().text_xs().text_color(p.danger).child(err))
-            });
+        let header =
+            v_flex()
+                .gap_2()
+                .child(div().text_xs().text_color(p.muted_foreground).child(
+                    rust_i18n::t!("sftp.search.root", path = root_path.as_str()).to_string(),
+                ))
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .w_full()
+                        .child(Input::new(&input).w_full())
+                        .child(
+                            Button::new("btn-trigger-search")
+                                .primary()
+                                .icon(IconName::Search)
+                                .label(if is_searching {
+                                    rust_i18n::t!("sftp.search.searching_short").to_string()
+                                } else {
+                                    rust_i18n::t!("sftp.search.search").to_string()
+                                })
+                                .disabled(is_searching)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.sftp_execute_search(window, cx);
+                                })),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap_4()
+                        .child(
+                            Checkbox::new("chk-is-content")
+                                .checked(is_content)
+                                .label(rust_i18n::t!("sftp.search.content_mode").to_string())
+                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                    if let Some(ref mut m) = this.sftp_modals.search {
+                                        m.is_content = *checked;
+                                        cx.notify();
+                                    }
+                                })),
+                        )
+                        .child(
+                            Checkbox::new("chk-case-sensitive")
+                                .checked(case_sensitive)
+                                .label(rust_i18n::t!("sftp.search.case_sensitive").to_string())
+                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                    if let Some(ref mut m) = this.sftp_modals.search {
+                                        m.case_sensitive = *checked;
+                                        cx.notify();
+                                    }
+                                })),
+                        ),
+                )
+                .when_some(error, |this, err| {
+                    this.child(div().text_xs().text_color(p.danger).child(err))
+                });
 
         let mut results_container = v_flex()
             .id("sftp-search-results-list")
@@ -194,7 +194,7 @@ impl AppShell {
                     .p_4()
                     .text_sm()
                     .text_color(p.muted_foreground)
-                    .child("正在远程服务器执行检索，请稍候..."),
+                    .child(rust_i18n::t!("sftp.search.searching_hint").to_string()),
             );
         } else if results.is_empty() {
             results_container = results_container.child(
@@ -202,13 +202,15 @@ impl AppShell {
                     .p_4()
                     .text_sm()
                     .text_color(p.muted_foreground)
-                    .child("暂无匹配的条目，请调整关键字后重新检索"),
+                    .child(rust_i18n::t!("sftp.search.no_results").to_string()),
             );
         } else {
             for (idx, item) in results.into_iter().enumerate() {
                 let tab_id = modal.tab_id;
                 let target_path = item.path.clone();
-                let line_info = item.line_number.map(|num| format!("行 {num}"));
+                let line_info = item
+                    .line_number
+                    .map(|num| rust_i18n::t!("sftp.search.line", line = num).to_string());
                 let content_excerpt = item.line_content.clone();
 
                 let row = h_flex()
@@ -266,7 +268,7 @@ impl AppShell {
         let footer = h_flex().gap_2().child(
             Button::new("close-sftp-search")
                 .ghost()
-                .label("关闭")
+                .label(rust_i18n::t!("app.close").to_string())
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.sftp_modals.search = None;
                     this.focus_active_sftp_panel(window, cx);
@@ -276,7 +278,7 @@ impl AppShell {
 
         let dialog = Self::dialog_frame(
             "sftp-search-modal",
-            "远程文件与内容检索".to_string(),
+            rust_i18n::t!("sftp.search.title").to_string(),
             None::<String>,
             content,
             Some(footer),

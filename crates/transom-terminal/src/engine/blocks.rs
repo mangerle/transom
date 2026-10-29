@@ -89,17 +89,23 @@ impl TerminalEngine {
             .read_absolute_lines(block.output_start_line, block.output_end_line)
             .unwrap_or_default();
         let command = if block.command_text.is_empty() {
-            "(未知命令)".to_string()
+            rust_i18n::t!("terminal.block.unknown_command").to_string()
         } else {
             block.command_text.clone()
         };
         let status = match block.exit_code {
-            Some(code) => format!("退出码 {code}"),
-            None => "退出码未知".to_string(),
+            Some(code) => rust_i18n::t!("terminal.block.status_exit_code", code = code).to_string(),
+            None => rust_i18n::t!("terminal.block.unknown_exit_code").to_string(),
         };
         let duration = block
             .duration_ms
-            .map(|ms| format!(" · 耗时 {}", crate::block::format_duration(ms)))
+            .map(|ms| {
+                rust_i18n::t!(
+                    "terminal.block.markdown_duration",
+                    duration = crate::block::format_duration(ms)
+                )
+                .to_string()
+            })
             .unwrap_or_default();
         Some(format!(
             "```console\n$ {command}\n{output}```\n\n> {status}{duration}\n"

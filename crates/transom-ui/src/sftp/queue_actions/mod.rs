@@ -49,7 +49,7 @@ impl AppShell {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
         let Some(target_connection_id) = tab.connection_id else {
-            return Err("当前标签没有远端连接，无法上传".to_string());
+            return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
         };
         let Some(panel) = tab.sftp_mut() else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
@@ -97,7 +97,7 @@ impl AppShell {
             return;
         };
         let Some(source_connection_id) = source_connection_id else {
-            panel.set_error("当前标签没有远端连接，无法下载".to_string());
+            panel.set_error(rust_i18n::t!("sftp.queue_actions.no_remote_download").to_string());
             cx.notify();
             return;
         };
@@ -162,7 +162,9 @@ impl AppShell {
         }
         let count = tasks.len();
         panel.queue.tasks.extend(tasks);
-        panel.set_status(format!("已加入 {count} 个下载任务"));
+        panel.set_status(
+            rust_i18n::t!("sftp.queue_actions.downloads_queued", count = count).to_string(),
+        );
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }
@@ -190,14 +192,16 @@ impl AppShell {
             };
             let task = panel.queue.tasks[index].clone();
             let Some(conn_id) = task_connection_id(&task) else {
-                panel.queue.tasks[index].status =
-                    TransferStatus::Failed("任务缺少远端连接，已取消".to_string());
+                panel.queue.tasks[index].status = TransferStatus::Failed(
+                    rust_i18n::t!("sftp.queue_actions.missing_connection").to_string(),
+                );
                 continue;
             };
 
             let Some(op) = sftp_operation_for_task(&task, &filter) else {
-                panel.queue.tasks[index].status =
-                    TransferStatus::Failed("不支持的传输任务类型组合".to_string());
+                panel.queue.tasks[index].status = TransferStatus::Failed(
+                    rust_i18n::t!("sftp.queue_actions.unsupported_task").to_string(),
+                );
                 continue;
             };
             panel.queue.tasks[index].status = TransferStatus::Transferring;
@@ -244,7 +248,8 @@ impl AppShell {
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             self.set_error(localized_error(&error));
         }
-        self.status = Some(format!("并发传输数: {next}"));
+        self.status =
+            Some(rust_i18n::t!("sftp.queue_actions.concurrency_set", count = next).to_string());
         if let Some(tab_id) = self.workspace.active_tab {
             self.process_sftp_queue(tab_id, cx);
         }
@@ -275,7 +280,9 @@ impl AppShell {
             }
             if retried_count > 0 {
                 panel.clear_error();
-                panel.set_status(format!("已重新入队 {retried_count} 个失败传输任务"));
+                panel.set_status(
+                    rust_i18n::t!("sftp.queue_actions.retried", count = retried_count).to_string(),
+                );
                 cx.notify();
             }
         }
@@ -307,7 +314,9 @@ impl AppShell {
             panel.queue.active_transfers.clear();
             panel.recompute_progress();
             if paused > 0 {
-                panel.set_status(format!("已暂停 {paused} 个传输任务"));
+                panel.set_status(
+                    rust_i18n::t!("sftp.queue_actions.paused", count = paused).to_string(),
+                );
             }
             cx.notify();
         }
@@ -332,7 +341,9 @@ impl AppShell {
                 }
             }
             if resumed > 0 {
-                panel.set_status(format!("已继续 {resumed} 个传输任务"));
+                panel.set_status(
+                    rust_i18n::t!("sftp.queue_actions.resumed", count = resumed).to_string(),
+                );
             }
             cx.notify();
         }
@@ -364,7 +375,9 @@ impl AppShell {
             panel.queue.active_transfers.clear();
             panel.recompute_progress();
             if cancelled > 0 {
-                panel.set_status(format!("已取消 {cancelled} 个传输任务"));
+                panel.set_status(
+                    rust_i18n::t!("sftp.queue_actions.cancelled", count = cancelled).to_string(),
+                );
             }
             cx.notify();
         }

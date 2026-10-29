@@ -47,9 +47,10 @@ fn stale_baseline_blocks_local_overwrite() {
     std::fs::write(&path, "别人刚改过\n").expect("预置文件");
     let error = write_local_text(&path, "对比时的旧内容\n", "合并结果\n")
         .expect_err("基线不一致必须拒绝覆盖");
-    assert!(
-        error.contains("已被其他程序修改"),
-        "错误应说明冲突: {error}"
+    assert_eq!(
+        error,
+        rust_i18n::t!("diff.error_modified", path = path.display()).to_string(),
+        "错误应说明冲突"
     );
     assert_eq!(
         read_local_text(&path).expect("读取"),

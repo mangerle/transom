@@ -67,7 +67,7 @@ impl AppShell {
         let remote = viewer.remote_text.as_deref()?;
         let merged = diff.apply_hunk(local, remote, confirm.hunk, confirm.direction);
         let Some(merged) = merged else {
-            viewer.error = Some("变更块已失效，请重新对比".to_string());
+            viewer.error = Some(rust_i18n::t!("diff.error_stale_hunk").to_string());
             return None;
         };
         if confirm.direction == MergeDirection::LeftToRight
@@ -112,7 +112,7 @@ impl AppShell {
                 viewer.phase = DiffPhase::Writing;
                 viewer.error = None;
             } else {
-                viewer.error = Some("写入远端文件的命令投递失败".to_string());
+                viewer.error = Some(rust_i18n::t!("diff.error_remote_dispatch").to_string());
             }
         }
         cx.notify();
@@ -166,7 +166,7 @@ impl AppShell {
             None => {
                 viewer.pending_local_merged = None;
                 viewer.phase = DiffPhase::Ready;
-                viewer.error = Some("本地写入线程启动失败".to_string());
+                viewer.error = Some(rust_i18n::t!("diff.error_local_spawn").to_string());
             }
         }
         self.recompute_diff(cx);
@@ -291,7 +291,8 @@ impl AppShell {
         if viewer.pending_read == Some(op_id) {
             viewer.pending_read = None;
             viewer.phase = DiffPhase::Ready;
-            viewer.error = Some(format!("读取远端文件失败：{message}"));
+            viewer.error =
+                Some(rust_i18n::t!("diff.error_read_remote", message = message).to_string());
             cx.notify();
             return true;
         }
@@ -302,7 +303,7 @@ impl AppShell {
         viewer.pending_merged = None;
         viewer.phase = DiffPhase::Ready;
         viewer.error = Some(if conflict {
-            format!("远端已被修改，本次合并未写入：{message}")
+            rust_i18n::t!("diff.error_conflict", message = message).to_string()
         } else {
             message.to_string()
         });

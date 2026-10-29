@@ -12,28 +12,35 @@ use gpui_kit::*;
 use transom_core::{BellStyle, BlockViewStyle};
 
 impl AppShell {
-    /// 语言组：界面语言切换。
+    /// 语言组：跟随系统、中文、英文三档。
+    ///
+    /// 空字符串表示跟随系统（新建配置的默认值）；两个语言名按自身语言书写，
+    /// 刻意不参与界面语言切换。
     pub(crate) fn render_settings_language(
         &mut self,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let current = self.settings.language.clone();
         v_flex()
             .gap_2()
             .child(Self::setting_row(
                 "app.language",
                 Some("settings.language_desc"),
-                Button::new("settings-lang")
-                    .small()
-                    .label(if self.settings.language == "zh-CN" {
-                        "中文"
-                    } else {
-                        "English"
-                    })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.toggle_language(cx);
-                    }))
-                    .into_any_element(),
+                Self::setting_dropdown(
+                    "dropdown-language",
+                    current,
+                    vec![
+                        (
+                            String::new(),
+                            rust_i18n::t!("settings.language_system").to_string(),
+                        ),
+                        ("zh-CN".to_string(), "中文".to_string()),
+                        ("en".to_string(), "English".to_string()),
+                    ],
+                    |this, language, cx| this.set_language(language, cx),
+                    cx,
+                ),
                 p,
             ))
             .into_any_element()
@@ -128,17 +135,9 @@ impl AppShell {
                 .gap_1()
                 .children(
                     [
-                        (
-                            "proxy-direct",
-                            "settings.proxy_direct",
-                            ProxyProtocol::Direct,
-                        ),
-                        (
-                            "proxy-socks5",
-                            "settings.proxy_socks5",
-                            ProxyProtocol::Socks5,
-                        ),
-                        ("proxy-http", "settings.proxy_http", ProxyProtocol::Http),
+                        ("proxy-direct", "form.proxy_direct", ProxyProtocol::Direct),
+                        ("proxy-socks5", "form.proxy_socks5", ProxyProtocol::Socks5),
+                        ("proxy-http", "form.proxy_http", ProxyProtocol::Http),
                     ]
                     .into_iter()
                     .map(|(id, key, protocol)| {

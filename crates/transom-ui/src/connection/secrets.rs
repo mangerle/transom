@@ -5,17 +5,24 @@ use transom_core::{
     AuthMethod, Connection, ConnectionSecrets, SecretKey, SecretKind, SecretStore, Session,
 };
 
-/// 连接目标的日志用描述：`user@host:port`，本地与串口按各自口径。
+/// 连接目标的展示描述：`user@host:port`，本地与串口按各自口径。
 pub(crate) fn describe_target(session: &Session) -> String {
     match &session.connection {
         Connection::Ssh(ssh) => format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
         Connection::Mosh(mosh) => format!("mosh {}@{}:{}", mosh.username, mosh.host, mosh.ssh_port),
         Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
-        Connection::Local(local) => {
-            format!("本地终端 {}", local.shell.as_deref().unwrap_or("sh"))
-        }
-        Connection::Serial(serial) => format!("串口 {}@{}", serial.port, serial.baud_rate),
-        _ => "未知连接类型".to_string(),
+        Connection::Local(local) => rust_i18n::t!(
+            "connection.local_terminal",
+            shell = local.shell.as_deref().unwrap_or("sh")
+        )
+        .to_string(),
+        Connection::Serial(serial) => rust_i18n::t!(
+            "connection.serial",
+            port = serial.port,
+            baud = serial.baud_rate
+        )
+        .to_string(),
+        _ => rust_i18n::t!("connection.unknown").to_string(),
     }
 }
 

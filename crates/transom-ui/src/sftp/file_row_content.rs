@@ -49,7 +49,7 @@ pub(crate) fn render_file_row_content(options: FileRowContentOptions<'_>) -> imp
                 .text_sm()
                 .overflow_hidden()
                 .child(if is_parent {
-                    ".. (返回上一级)".to_string()
+                    rust_i18n::t!("sftp.row.parent_entry").to_string()
                 } else {
                     name.to_string()
                 }),

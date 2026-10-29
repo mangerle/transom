@@ -172,11 +172,14 @@ impl AppShell {
         preview.content = PreviewContent::Loading;
 
         if kind == PreviewKind::Image && target.size > PREVIEW_IMAGE_MAX_BYTES {
-            preview.content = PreviewContent::Error(format!(
-                "图片大小 {} 超过上限 {}，已跳过预览",
-                format_size(target.size),
-                format_size(PREVIEW_IMAGE_MAX_BYTES)
-            ));
+            preview.content = PreviewContent::Error(
+                rust_i18n::t!(
+                    "sftp.preview.image_too_large",
+                    size = format_size(target.size),
+                    max = format_size(PREVIEW_IMAGE_MAX_BYTES)
+                )
+                .to_string(),
+            );
             cx.notify();
             return;
         }
@@ -184,7 +187,7 @@ impl AppShell {
         if target.key.is_remote {
             let Some(connection_id) = connection_id else {
                 preview.content =
-                    PreviewContent::Error("SSH 连接尚未就绪，无法读取预览".to_string());
+                    PreviewContent::Error(rust_i18n::t!("sftp.preview.ssh_not_ready").to_string());
                 cx.notify();
                 return;
             };
@@ -238,7 +241,10 @@ impl AppShell {
                             let (lines, truncated) = text_preview_lines(&bytes, truncated);
                             PreviewContent::Text { lines, truncated }
                         }
-                        Err(error) => PreviewContent::Error(format!("读取本地文件失败: {error}")),
+                        Err(error) => PreviewContent::Error(
+                            rust_i18n::t!("sftp.preview.local_read_failed", error = error)
+                                .to_string(),
+                        ),
                     };
                 }
             }
@@ -282,8 +288,9 @@ impl AppShell {
                 PreviewKind::Image => {
                     if bytes.is_empty() {
                         preview.op_id = None;
-                        preview.content =
-                            PreviewContent::Error("远端图片内容为空，无法预览".to_string());
+                        preview.content = PreviewContent::Error(
+                            rust_i18n::t!("sftp.preview.remote_empty").to_string(),
+                        );
                     } else {
                         preview.content = PreviewContent::Loading;
                         preview.decode_task = Some(Self::spawn_preview_image_thumbnail(
@@ -316,22 +323,27 @@ impl AppShell {
                         PreviewImageInput::Remote(bytes) => bytes,
                         PreviewImageInput::Local { path, size } => {
                             if size > PREVIEW_IMAGE_MAX_BYTES {
-                                return Err(format!(
-                                    "图片大小 {} 超过上限 {}，已跳过预览",
-                                    format_size(size),
-                                    format_size(PREVIEW_IMAGE_MAX_BYTES)
-                                ));
+                                return Err(rust_i18n::t!(
+                                    "sftp.preview.image_too_large",
+                                    size = format_size(size),
+                                    max = format_size(PREVIEW_IMAGE_MAX_BYTES)
+                                )
+                                .to_string());
                             }
-                            let bytes = std::fs::read(&path)
-                                .map_err(|error| format!("读取本地图片失败: {error}"))?;
+                            let bytes = std::fs::read(&path).map_err(|error| {
+                                rust_i18n::t!("sftp.preview.local_image_read_failed", error = error)
+                                    .to_string()
+                            })?;
                             if u64::try_from(bytes.len()).unwrap_or(u64::MAX)
                                 > PREVIEW_IMAGE_MAX_BYTES
                             {
-                                return Err(format!(
-                                    "图片大小 {} 超过上限 {}，已跳过预览",
-                                    format_size(u64::try_from(bytes.len()).unwrap_or(u64::MAX)),
-                                    format_size(PREVIEW_IMAGE_MAX_BYTES)
-                                ));
+                                return Err(rust_i18n::t!(
+                                    "sftp.preview.image_too_large",
+                                    size =
+                                        format_size(u64::try_from(bytes.len()).unwrap_or(u64::MAX)),
+                                    max = format_size(PREVIEW_IMAGE_MAX_BYTES)
+                                )
+                                .to_string());
                             }
                             bytes
                         }

@@ -363,12 +363,8 @@ pub(crate) fn parse_terminal_key_bindings(text: &str) -> Result<Vec<TerminalKeyB
     let bindings = TerminalKeyBinding::parse_multiline(text)?;
     let mut seen: HashMap<KeybindingKeystroke, String> = HashMap::with_capacity(bindings.len());
     for binding in &bindings {
-        let keystroke = Keystroke::parse(&binding.keys).map_err(|_| {
-            format!(
-                "按键组合「{}」无法解析，请使用 ctrl-shift-left、alt-backspace、f1 这类写法",
-                binding.keys
-            )
-        })?;
+        let keystroke = Keystroke::parse(&binding.keys)
+            .map_err(|_| rust_i18n::t!("keymap.parse_failed", keys = binding.keys).to_string())?;
         let parsed = KeybindingKeystroke::from_keystroke(keystroke);
         let modifiers = parsed.modifiers();
         let has_modifier = modifiers.control
@@ -378,16 +374,15 @@ pub(crate) fn parse_terminal_key_bindings(text: &str) -> Result<Vec<TerminalKeyB
             || modifiers.function;
         let key = parsed.key();
         if !has_modifier && (key.chars().count() == 1 || key == "space") {
-            return Err(format!(
-                "按键组合「{}」没有修饰键，会覆盖正常字符输入，请加 ctrl/alt/shift",
-                binding.keys
-            ));
+            return Err(rust_i18n::t!("keymap.missing_modifier", keys = binding.keys).to_string());
         }
         if let Some(previous) = seen.insert(parsed, binding.keys.clone()) {
-            return Err(format!(
-                "按键组合「{}」重复绑定（前一条为「{}」）",
-                binding.keys, previous
-            ));
+            return Err(rust_i18n::t!(
+                "keymap.duplicate",
+                keys = binding.keys,
+                previous = previous
+            )
+            .to_string());
         }
     }
     Ok(bindings)

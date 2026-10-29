@@ -160,10 +160,13 @@ impl AppShell {
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.set_status(format!(
-                "已在系统文件管理器中打开: {}",
-                local_path.display()
-            ));
+            panel.set_status(
+                rust_i18n::t!(
+                    "sftp.nav.revealed_local_path",
+                    path = local_path.display().to_string().as_str()
+                )
+                .to_string(),
+            );
             cx.notify();
         }
     }
@@ -177,14 +180,20 @@ impl AppShell {
     ) {
         if !target.is_file() {
             if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-                panel.set_local_error("请先选择一个本地文件进行编辑".to_string());
+                panel.set_local_error(rust_i18n::t!("sftp.row.select_local_to_edit").to_string());
                 cx.notify();
             }
             return;
         }
         crate::audit::reveal_in_file_manager(target.clone());
         if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-            panel.set_status(format!("已调用系统程序打开: {}", target.display()));
+            panel.set_status(
+                rust_i18n::t!(
+                    "sftp.nav.opened_with_default",
+                    path = target.display().to_string().as_str()
+                )
+                .to_string(),
+            );
             cx.notify();
         }
     }

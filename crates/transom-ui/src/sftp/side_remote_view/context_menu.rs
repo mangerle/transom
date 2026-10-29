@@ -45,7 +45,7 @@ pub(super) fn build_side_remote_context_menu(
         let cur_dir = current_dir;
         return menu
             .item(
-                PopupMenuItem::new("返回上一级")
+                PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
                     .icon(IconName::ArrowUp)
                     .on_click({
                         let app = app_entity.clone();
@@ -63,7 +63,7 @@ pub(super) fn build_side_remote_context_menu(
                     }),
             )
             .item(
-                PopupMenuItem::new("刷新")
+                PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
                     .icon(IconName::RefreshCw)
                     .on_click({
                         let app = app_entity.clone();
@@ -87,7 +87,7 @@ pub(super) fn build_side_remote_context_menu(
     let name_tr = entry_name;
 
     menu.item(
-        PopupMenuItem::new("下载到本地")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.download_to_local").to_string())
             .icon(IconName::Download)
             .on_click({
                 let app = app_entity.clone();
@@ -123,7 +123,7 @@ pub(super) fn build_side_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("流式复制到主远端")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_to_main_remote").to_string())
             .icon(IconName::ArrowLeftRight)
             .on_click({
                 let app = app_entity.clone();
@@ -155,7 +155,7 @@ pub(super) fn build_side_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("复制条目 (Ctrl+C)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_entries").to_string())
             .icon(IconName::Copy)
             .on_click({
                 let app = app_entity.clone();
@@ -170,7 +170,10 @@ pub(super) fn build_side_remote_context_menu(
                                     is_dir,
                                 }],
                             });
-                            panel.set_status(format!("已复制条目: {path_tr}"));
+                            panel.set_status(
+                                rust_i18n::t!("sftp.menu.entries_copied", path = path_tr.as_str())
+                                    .to_string(),
+                            );
                             cx.notify();
                         }
                     });
@@ -178,7 +181,7 @@ pub(super) fn build_side_remote_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("复制绝对路径")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_abs_path").to_string())
             .icon(IconName::Copy)
             .on_click({
                 let app = app_entity.clone();
@@ -186,7 +189,10 @@ pub(super) fn build_side_remote_context_menu(
                     cx.write_to_clipboard(ClipboardItem::new_string(path_cp.clone()));
                     app.update(cx, |this, cx| {
                         if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
-                            panel.set_status(format!("已复制远端路径: {path_cp}"));
+                            panel.set_status(
+                                rust_i18n::t!("sftp.menu.remote_path_copied", path = path_cp)
+                                    .to_string(),
+                            );
                             cx.notify();
                         }
                     });

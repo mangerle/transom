@@ -67,12 +67,19 @@ impl AppShell {
                         .bg(p.muted)
                         .child(progress_bar)
                         .when_some(props.total_speed_bps, |this, speed| {
+                            let speed_text = format_speed(speed);
                             this.child(
                                 h_flex()
                                     .justify_between()
                                     .text_xs()
                                     .text_color(p.muted_foreground)
-                                    .child(format!("总传输速率: {}", format_speed(speed)))
+                                    .child(
+                                        rust_i18n::t!(
+                                            "sftp.queue.total_speed",
+                                            speed = speed_text.as_str()
+                                        )
+                                        .to_string(),
+                                    )
                                     .child(format!("{:.1}%", percent)),
                             )
                         })
@@ -94,12 +101,20 @@ impl AppShell {
                 .map(|s| format!(" · {}", format_speed(s)))
                 .unwrap_or_default();
             let progress_str = if props.active_count > 0 {
-                format!(
-                    "{} 个任务传输中{speed_suffix} · {progress_str}",
-                    props.active_count
+                rust_i18n::t!(
+                    "sftp.queue.active_progress",
+                    count = props.active_count,
+                    suffix = speed_suffix.as_str(),
+                    progress = progress_str.as_str()
                 )
+                .to_string()
             } else if props.paused_count > 0 {
-                format!("已暂停 {} 个任务 · {progress_str}", props.paused_count)
+                rust_i18n::t!(
+                    "sftp.queue.paused_progress",
+                    count = props.paused_count,
+                    progress = progress_str.as_str()
+                )
+                .to_string()
             } else {
                 progress_str
             };
@@ -117,7 +132,7 @@ impl AppShell {
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Pause)
-                                .tooltip("暂停全部传输")
+                                .tooltip(rust_i18n::t!("sftp.queue.pause_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.sftp_pause_all(tab_id, cx);
                                 })),
@@ -127,7 +142,7 @@ impl AppShell {
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::X)
-                                .tooltip("取消全部传输")
+                                .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.sftp_cancel_all(tab_id, cx);
                                 })),
@@ -143,7 +158,7 @@ impl AppShell {
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Play)
-                                .tooltip("继续全部传输")
+                                .tooltip(rust_i18n::t!("sftp.queue.resume_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.sftp_resume_all(tab_id, cx);
                                 })),
@@ -153,7 +168,7 @@ impl AppShell {
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::X)
-                                .tooltip("取消全部传输")
+                                .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.sftp_cancel_all(tab_id, cx);
                                 })),

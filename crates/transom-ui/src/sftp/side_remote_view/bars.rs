@@ -44,7 +44,7 @@ impl AppShell {
             .xsmall()
             .icon(IconName::Plus)
             .selected(open)
-            .tooltip("并列挂载其他已连接会话");
+            .tooltip(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string());
 
         // 收集当前标签页的连接与排除信息
         let current_tab = self.workspace.tab(tab_id);
@@ -134,7 +134,7 @@ impl AppShell {
                     .items_center()
                     .text_xs()
                     .text_color(palette.muted_foreground)
-                    .child("暂无其他已连接的远端会话")
+                    .child(rust_i18n::t!("sftp.sidebar.no_candidates").to_string())
                     .into_any_element();
             }
 
@@ -145,7 +145,7 @@ impl AppShell {
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(palette.muted_foreground)
-                    .child("已连接的会话 (点击挂载)"),
+                    .child(rust_i18n::t!("sftp.sidebar.candidates_header").to_string()),
             );
             for (conn_id, display_name, initial_path) in active_candidates.clone() {
                 let app = app_menu.clone();
@@ -207,7 +207,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::PanelLeftOpen)
-            .tooltip("展开本地文件列")
+            .tooltip(rust_i18n::t!("sftp.sidebar.expand_local").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sftp_toggle_local_collapse(tab_id, cx);
             }));
@@ -232,7 +232,7 @@ impl AppShell {
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(p.muted_foreground)
-                    .child("本地"),
+                    .child(rust_i18n::t!("sftp.local_title").to_string()),
             )
             .into_any_element()
     }
@@ -248,7 +248,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::PanelLeftOpen)
-            .tooltip("展开主远端列")
+            .tooltip(rust_i18n::t!("sftp.sidebar.expand_remote").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sftp_toggle_remote_collapse(tab_id, cx);
             }));
@@ -275,7 +275,7 @@ impl AppShell {
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(p.muted_foreground)
-                    .child("远端"),
+                    .child(rust_i18n::t!("sftp.sidebar.remote_column").to_string()),
             )
             .into_any_element()
     }
@@ -293,7 +293,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::PanelRightOpen)
-            .tooltip("展开远端列")
+            .tooltip(rust_i18n::t!("sftp.sidebar.expand_side_remote").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sftp_toggle_side_remote_collapse(tab_id, side_index, cx);
             }));
@@ -302,7 +302,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::X)
-            .tooltip("关闭并列远端")
+            .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.sftp_close_side_remote(tab_id, side_index, cx);
             }));

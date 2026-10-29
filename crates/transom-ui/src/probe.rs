@@ -168,7 +168,7 @@ impl AppShell {
             .iter()
             .find(|session| session.id == session_id)
             .map(|session| session.name.clone())
-            .unwrap_or_else(|| format!("会话 {session_id}"))
+            .unwrap_or_else(|| rust_i18n::t!("probe.session_fallback", id = session_id).to_string())
     }
 
     /// 该会话是否有在途拨测。

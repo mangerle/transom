@@ -103,7 +103,7 @@ impl AppShell {
                             .gap_2()
                             .items_center()
                             .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).child(
-                                format!("{} ({})", rust_i18n::t!("sftp.queue"), queue.len()),
+                                format!("{} ({})", rust_i18n::t!("sftp.queue.title"), queue.len()),
                             ))
                             .child(
                                 h_flex()
@@ -155,9 +155,17 @@ impl AppShell {
                                                             .checksum_algorithm
                                                             .label();
                                                         this.status = Some(if checked {
-                                                            format!("已开启传输后 {algo} 校验")
+                                                            rust_i18n::t!(
+                                                                "sftp.queue.verify_on",
+                                                                algo = algo
+                                                            )
+                                                            .to_string()
                                                         } else {
-                                                            format!("已关闭传输后 {algo} 校验")
+                                                            rust_i18n::t!(
+                                                                "sftp.queue.verify_off",
+                                                                algo = algo
+                                                            )
+                                                            .to_string()
                                                         });
                                                     }
                                                     Err(error) => {
@@ -172,8 +180,16 @@ impl AppShell {
                                 Button::new("sftp-concurrency")
                                     .ghost()
                                     .xsmall()
-                                    .label(format!("并发 {max_concurrent_transfers}"))
-                                    .tooltip("同时传输的任务数，点击切换 1-4")
+                                    .label(
+                                        rust_i18n::t!(
+                                            "sftp.queue.concurrency",
+                                            count = max_concurrent_transfers
+                                        )
+                                        .to_string(),
+                                    )
+                                    .tooltip(
+                                        rust_i18n::t!("sftp.queue.concurrency_tooltip").to_string(),
+                                    )
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.sftp_cycle_concurrency(cx);
                                     })),
@@ -188,8 +204,17 @@ impl AppShell {
                                         .ghost()
                                         .xsmall()
                                         .icon(IconName::RotateCw)
-                                        .label(format!("重试失败 ({failed_count})"))
-                                        .tooltip("一键重试队列中所有失败的传输任务")
+                                        .label(
+                                            rust_i18n::t!(
+                                                "sftp.queue.retry_failed",
+                                                count = failed_count
+                                            )
+                                            .to_string(),
+                                        )
+                                        .tooltip(
+                                            rust_i18n::t!("sftp.queue.retry_all_tooltip")
+                                                .to_string(),
+                                        )
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.sftp_retry_all_failed(tab_id, cx);
                                         })),
@@ -200,7 +225,10 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::ListFilter)
-                                    .tooltip("传输过滤规则（仅对目录传输生效）")
+                                    .tooltip(
+                                        rust_i18n::t!("sftp.queue.filter_rules_tooltip")
+                                            .to_string(),
+                                    )
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.sftp_open_filter_modal(window, cx);
                                     })),
@@ -224,9 +252,9 @@ impl AppShell {
                                         IconName::ChevronUp
                                     })
                                     .tooltip(if queue_expanded {
-                                        "收起传输列表"
+                                        rust_i18n::t!("sftp.queue.collapse").to_string()
                                     } else {
-                                        "展开传输列表"
+                                        rust_i18n::t!("sftp.queue.expand").to_string()
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(panel) = this

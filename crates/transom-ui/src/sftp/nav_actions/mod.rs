@@ -249,9 +249,9 @@ impl AppShell {
         if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
             panel.show_hidden = !panel.show_hidden;
             panel.set_status(if panel.show_hidden {
-                "已显示隐藏文件".to_string()
+                rust_i18n::t!("sftp.nav.hidden_shown").to_string()
             } else {
-                "已隐藏点号文件".to_string()
+                rust_i18n::t!("sftp.nav.hidden_hidden").to_string()
             });
             cx.notify();
         }

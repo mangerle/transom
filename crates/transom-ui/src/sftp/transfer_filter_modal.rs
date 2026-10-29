@@ -29,7 +29,7 @@ impl AppShell {
             modal.error = Some(
                 error
                     .detail
-                    .unwrap_or_else(|| "传输过滤规则无效".to_string()),
+                    .unwrap_or_else(|| rust_i18n::t!("sftp.filter.invalid").to_string()),
             );
             let textarea = modal.textarea.clone();
             self.sftp_modals.filter = Some(modal);

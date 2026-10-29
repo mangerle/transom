@@ -245,16 +245,26 @@ impl AppShell {
         }
     }
 
-    pub(crate) fn toggle_language(&mut self, cx: &mut Context<Self>) {
-        self.settings.language = if self.settings.language == "zh-CN" {
-            "en".to_string()
-        } else {
-            "zh-CN".to_string()
-        };
-        set_locale(&self.settings.language);
+    /// 设置界面语言并立即落盘；空串表示跟随系统。
+    pub(crate) fn set_language(&mut self, language: String, cx: &mut Context<Self>) {
+        if self.settings.language == language {
+            return;
+        }
+        self.settings.language = language;
+        set_locale(&crate::i18n::resolve_language(&self.settings.language));
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             self.set_error(localized_error(&error));
         }
         cx.notify();
+    }
+
+    /// 活动栏的语言按钮：在中文与英文之间切换（跟随系统时以当前生效语言为起点）。
+    pub(crate) fn toggle_language(&mut self, cx: &mut Context<Self>) {
+        let next = if crate::i18n::resolve_language(&self.settings.language) == "zh-CN" {
+            "en"
+        } else {
+            "zh-CN"
+        };
+        self.set_language(next.to_string(), cx);
     }
 }

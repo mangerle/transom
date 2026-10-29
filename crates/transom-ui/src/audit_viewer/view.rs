@@ -210,7 +210,7 @@ impl AppShell {
         }
 
         let content_text = if filtered_lines.is_empty() && !viewer.content.is_empty() {
-            "(未找到匹配搜索的内容)".to_string()
+            rust_i18n::t!("audit_viewer.no_search_matches").to_string()
         } else {
             filtered_lines.join("\n")
         };

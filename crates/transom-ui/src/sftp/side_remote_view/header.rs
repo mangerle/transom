@@ -43,7 +43,7 @@ pub(super) fn render_side_remote_header(
         .ghost()
         .xsmall()
         .icon(IconName::PanelRightClose)
-        .tooltip("收起此列")
+        .tooltip(rust_i18n::t!("sftp.sidebar.collapse_side").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
             this.sftp_toggle_side_remote_collapse(tab_id, side_index, cx);
         }));
@@ -52,7 +52,7 @@ pub(super) fn render_side_remote_header(
         .ghost()
         .xsmall()
         .icon(IconName::X)
-        .tooltip("关闭并列远端")
+        .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
             this.sftp_close_side_remote(tab_id, side_index, cx);
         }));
@@ -62,7 +62,7 @@ pub(super) fn render_side_remote_header(
         .ghost()
         .xsmall()
         .icon(IconName::ArrowUp)
-        .tooltip("上一级")
+        .tooltip(rust_i18n::t!("sftp.sidebar.go_up").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
             let parent = if path_val == "/" {
                 "/".to_string()
@@ -82,7 +82,7 @@ pub(super) fn render_side_remote_header(
         .ghost()
         .xsmall()
         .icon(IconName::RefreshCw)
-        .tooltip("刷新目录")
+        .tooltip(rust_i18n::t!("sftp.sidebar.refresh_dir").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
             this.request_sftp_list_for_connection(tab_id, connection_id, cur_path.clone(), cx);
         }));
@@ -92,7 +92,7 @@ pub(super) fn render_side_remote_header(
         .ghost()
         .xsmall()
         .icon(IconName::ArrowRight)
-        .tooltip("进入路径")
+        .tooltip(rust_i18n::t!("sftp.nav.enter_path").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
             let p = enter_path_input.read(cx).value().trim().to_string();
             if !p.is_empty() {

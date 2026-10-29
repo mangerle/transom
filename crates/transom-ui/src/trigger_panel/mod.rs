@@ -33,7 +33,7 @@ fn action_summary(action: &TriggerAction) -> String {
         TriggerAction::AutoResponse(t) => {
             format!("{}: {t}", rust_i18n::t!("trigger.action_auto_response"))
         }
-        TriggerAction::Unknown => "未知动作".to_string(),
+        TriggerAction::Unknown => rust_i18n::t!("trigger.action_unknown").to_string(),
     }
 }
 
@@ -71,7 +71,10 @@ impl AppShell {
         let base_id = edit.base_id;
 
         if pattern.is_empty() {
-            self.set_trigger_edit_error("正则表达式模式串不能为空".to_string(), cx);
+            self.set_trigger_edit_error(
+                rust_i18n::t!("trigger.error_pattern_empty").to_string(),
+                cx,
+            );
             return;
         }
 
@@ -82,7 +85,10 @@ impl AppShell {
             format!("(?i){pattern}")
         };
         if let Err(err) = Regex::new(&test_pattern) {
-            self.set_trigger_edit_error(format!("正则表达式语法错误: {err}"), cx);
+            self.set_trigger_edit_error(
+                rust_i18n::t!("trigger.error_pattern_invalid", error = err.to_string()).to_string(),
+                cx,
+            );
             return;
         }
 

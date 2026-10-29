@@ -109,7 +109,8 @@ pub(super) fn build_tab_context_menu(
                     let text = host.clone();
                     cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
                     copy_app.update(cx, |this, cx| {
-                        this.status = Some(format!("已复制主机地址: {text}"));
+                        this.status =
+                            Some(rust_i18n::t!("menu.copied_host", host = text).to_string());
                         cx.notify();
                     });
                 }),

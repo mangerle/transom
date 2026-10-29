@@ -406,7 +406,12 @@ impl SessionForm {
             auto_reconnect,
             agent_forward,
             mosh_server_path: text_input(window, cx, &mosh_server_path_val, "mosh-server"),
-            mosh_server_port: text_input(window, cx, &mosh_server_port_val, "留空自动分配"),
+            mosh_server_port: text_input(
+                window,
+                cx,
+                &mosh_server_port_val,
+                &rust_i18n::t!("form.mosh.port_placeholder"),
+            ),
             wol_mac: text_input(
                 window,
                 cx,

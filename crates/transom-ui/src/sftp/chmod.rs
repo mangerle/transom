@@ -55,7 +55,7 @@ impl AppShell {
         // 状态只声明"已下发"：Chmod 是异步往返，此刻列表里的权限徽章尚未更新，
         // 说"已生效"就是在骗用户；刷新目录后即可看到新值。
         if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-            panel.set_status(format!("已为 {count} 个远端条目下发执行权限变更"));
+            panel.set_status(rust_i18n::t!("sftp.chmod.granted_remote", count = count).to_string());
             cx.notify();
         }
     }
@@ -108,13 +108,18 @@ impl AppShell {
             return;
         };
         if let Some(first) = failures.first() {
-            panel.set_error(format!(
-                "赋予执行权限失败 {} 项，共 {} 项，首个失败路径: {first}",
-                failures.len(),
-                targets.len()
-            ));
+            panel.set_error(
+                rust_i18n::t!(
+                    "sftp.chmod.grant_failed",
+                    failed = failures.len(),
+                    total = targets.len(),
+                    first = first.as_str()
+                )
+                .to_string(),
+            );
         } else {
-            panel.set_status(format!("已为 {granted} 个本地条目赋予执行权限"));
+            panel
+                .set_status(rust_i18n::t!("sftp.chmod.granted_local", count = granted).to_string());
         }
         cx.notify();
     }
@@ -144,7 +149,12 @@ impl AppShell {
         let default_mode = if entry.is_dir { 0o755 } else { 0o644 };
         let permissions = entry.permissions.unwrap_or(default_mode) & 0o777;
         let octal_str = format_octal_permissions(permissions);
-        let octal_input = sftp_text_input(window, cx, &octal_str, "例如 755 或 644");
+        let octal_input = sftp_text_input(
+            window,
+            cx,
+            &octal_str,
+            &rust_i18n::t!("sftp.chmod.octal_placeholder"),
+        );
         octal_input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.chmod = Some(SftpChmodModalState {
             tab_id,
@@ -211,8 +221,7 @@ impl AppShell {
             match parse_octal_permissions(&input_text) {
                 Some(p) => p,
                 None => {
-                    modal.error =
-                        Some("无效的八进制权限码（请输入 000 - 777 之间的八进制数字）".to_string());
+                    modal.error = Some(rust_i18n::t!("sftp.chmod.octal_invalid").to_string());
                     let input = modal.octal_input.clone();
                     self.sftp_modals.chmod = Some(modal);
                     input.update(cx, |state, cx| state.focus(window, cx));

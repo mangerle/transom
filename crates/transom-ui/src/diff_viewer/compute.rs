@@ -65,7 +65,7 @@ impl AppShell {
         }
         let Some(prepared) = prepared else {
             viewer.phase = DiffPhase::Ready;
-            viewer.error = Some("差异计算线程启动失败".to_string());
+            viewer.error = Some(rust_i18n::t!("diff.error_compute_spawn").to_string());
             cx.notify();
             return;
         };

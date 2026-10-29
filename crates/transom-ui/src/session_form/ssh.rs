@@ -186,7 +186,11 @@ pub(crate) fn render_ssh_fields(
                 .justify_between()
                 .items_center()
                 .py_1()
-                .child(div().text_sm().child("SSH Agent 代理转发 (ssh -A)"))
+                .child(
+                    div()
+                        .text_sm()
+                        .child(rust_i18n::t!("form.agent_forward").to_string()),
+                )
                 .child(
                     Switch::new("toggle-agent-forward")
                         .small()

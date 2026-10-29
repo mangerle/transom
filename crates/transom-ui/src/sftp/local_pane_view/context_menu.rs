@@ -34,7 +34,7 @@ pub(super) fn build_local_context_menu(
     if is_parent_entry {
         return menu
             .item(
-                PopupMenuItem::new("返回上一级")
+                PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
                     .icon(IconName::ArrowUp)
                     .on_click({
                         let app = app_entity.clone();
@@ -46,7 +46,7 @@ pub(super) fn build_local_context_menu(
                     }),
             )
             .item(
-                PopupMenuItem::new("刷新")
+                PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
                     .icon(IconName::RefreshCw)
                     .on_click({
                         let app = app_entity;
@@ -73,7 +73,7 @@ pub(super) fn build_local_context_menu(
 
     if is_file {
         menu = menu.item(
-            PopupMenuItem::new("编辑")
+            PopupMenuItem::new(rust_i18n::t!("common.edit").to_string())
                 .icon(IconName::FilePen)
                 .on_click({
                     let app = app_entity.clone();
@@ -87,26 +87,32 @@ pub(super) fn build_local_context_menu(
     }
 
     if remote_available {
-        menu = menu.item(PopupMenuItem::new("上传").icon(IconName::Upload).on_click({
-            let app = app_entity.clone();
-            move |_, _, cx| {
-                app.update(cx, |this, cx| {
-                    if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-                        if panel.local.selection.contains(&p_up) {
-                            panel.set_local_primary(p_up.clone());
-                        } else {
-                            panel.select_local(p_up.clone());
-                        }
+        menu = menu.item(
+            PopupMenuItem::new(rust_i18n::t!("sftp.upload").to_string())
+                .icon(IconName::Upload)
+                .on_click({
+                    let app = app_entity.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            if let Some(panel) =
+                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                            {
+                                if panel.local.selection.contains(&p_up) {
+                                    panel.set_local_primary(p_up.clone());
+                                } else {
+                                    panel.select_local(p_up.clone());
+                                }
+                            }
+                            this.sftp_queue_upload(tab_id, cx);
+                        });
                     }
-                    this.sftp_queue_upload(tab_id, cx);
-                });
-            }
-        }));
+                }),
+        );
     }
 
     menu = menu
         .item(
-            PopupMenuItem::new("复制绝对路径")
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_abs_path").to_string())
                 .icon(IconName::Copy)
                 .on_click({
                     let app = app_entity.clone();
@@ -118,7 +124,13 @@ pub(super) fn build_local_context_menu(
                             if let Some(panel) =
                                 this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                             {
-                                panel.set_status(format!("已复制本地路径: {}", p_cp.display()));
+                                panel.set_status(
+                                    rust_i18n::t!(
+                                        "sftp.menu.local_path_copied",
+                                        path = p_cp.display()
+                                    )
+                                    .to_string(),
+                                );
                             }
                             cx.notify();
                         });
@@ -126,7 +138,7 @@ pub(super) fn build_local_context_menu(
                 }),
         )
         .item(
-            PopupMenuItem::new("创建软链接")
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.create_symlink").to_string())
                 .icon(IconName::Link2)
                 .on_click({
                     let app = app_entity.clone();
@@ -143,7 +155,7 @@ pub(super) fn build_local_context_menu(
                 }),
         )
         .item(
-            PopupMenuItem::new("查看属性")
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.properties").to_string())
                 .icon(IconName::Info)
                 .on_click({
                     let app = app_entity.clone();
@@ -159,7 +171,7 @@ pub(super) fn build_local_context_menu(
     #[cfg(unix)]
     {
         menu = menu.item(
-            PopupMenuItem::new("赋予执行权限")
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.grant_exec").to_string())
                 .icon(IconName::Terminal)
                 .on_click({
                     let app = app_entity.clone();
@@ -182,7 +194,7 @@ pub(super) fn build_local_context_menu(
     }
 
     menu.item(
-        PopupMenuItem::new("新建本地文件夹")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
             .icon(IconName::FolderPlus)
             .on_click({
                 let app = app_entity.clone();
@@ -194,7 +206,7 @@ pub(super) fn build_local_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("新建本地文件")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_file").to_string())
             .icon(IconName::FilePlus)
             .on_click({
                 let app = app_entity.clone();
@@ -206,7 +218,7 @@ pub(super) fn build_local_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("重命名")
+        PopupMenuItem::new(rust_i18n::t!("sftp.rename").to_string())
             .icon(IconName::Pencil)
             .on_click({
                 let app = app_entity.clone();
@@ -222,21 +234,26 @@ pub(super) fn build_local_context_menu(
                 }
             }),
     )
-    .item(PopupMenuItem::new("删除").icon(IconName::Trash).on_click({
-        let app = app_entity.clone();
-        move |_, _, cx| {
-            app.update(cx, |this, cx| {
-                if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                    && !panel.local.selection.contains(&p_del)
-                {
-                    panel.select_local(p_del.clone());
-                }
-                this.sftp_local_delete_selection(tab_id, cx);
-            });
-        }
-    }))
     .item(
-        PopupMenuItem::new("打开文件管理器")
+        PopupMenuItem::new(rust_i18n::t!("sftp.delete").to_string())
+            .icon(IconName::Trash)
+            .on_click({
+                let app = app_entity.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                            && !panel.local.selection.contains(&p_del)
+                        {
+                            panel.select_local(p_del.clone());
+                        }
+                        this.sftp_local_delete_selection(tab_id, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.open_file_manager").to_string())
             .icon(IconName::FolderOpen)
             .on_click({
                 let app = app_entity.clone();
@@ -248,7 +265,7 @@ pub(super) fn build_local_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("刷新")
+        PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
             .icon(IconName::RefreshCw)
             .on_click({
                 let app = app_entity.clone();
@@ -260,7 +277,7 @@ pub(super) fn build_local_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("复制条目 (Ctrl+C)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_entries").to_string())
             .icon(IconName::Copy)
             .on_click({
                 let app = app_entity.clone();
@@ -272,7 +289,7 @@ pub(super) fn build_local_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.paste_here").to_string())
             .icon(IconName::Clipboard)
             .on_click({
                 let app = app_entity;
@@ -296,7 +313,7 @@ pub(super) fn build_local_blank_context_menu(
     tab_id: TabId,
 ) -> PopupMenu {
     menu.item(
-        PopupMenuItem::new("返回上一级")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
             .icon(IconName::ArrowUp)
             .on_click({
                 let app = app.clone();
@@ -308,7 +325,7 @@ pub(super) fn build_local_blank_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("刷新")
+        PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
             .icon(IconName::RefreshCw)
             .on_click({
                 let app = app.clone();
@@ -320,7 +337,7 @@ pub(super) fn build_local_blank_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("新建本地文件夹")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
             .icon(IconName::FolderPlus)
             .on_click({
                 let app = app.clone();
@@ -332,7 +349,7 @@ pub(super) fn build_local_blank_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("新建本地文件")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_file").to_string())
             .icon(IconName::FilePlus)
             .on_click({
                 let app = app.clone();
@@ -344,7 +361,7 @@ pub(super) fn build_local_blank_context_menu(
             }),
     )
     .item(
-        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+        PopupMenuItem::new(rust_i18n::t!("sftp.menu.paste_here").to_string())
             .icon(IconName::Clipboard)
             .on_click(move |_, window, cx| {
                 app.update(cx, |this, cx| {

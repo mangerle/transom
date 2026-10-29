@@ -38,12 +38,15 @@ pub(crate) fn render_panel_status(
     let total_lines = editor.read(cx).text().lines_len();
     let busy = matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing);
     let caret = if item.phase == EditorPhase::Reading {
-        "行列待载入".to_string()
+        rust_i18n::t!("editor.status_caret_pending").to_string()
     } else {
-        format!(
-            "行 {} · 列 {} · 共 {} 行",
-            item.caret.0, item.caret.1, total_lines
+        rust_i18n::t!(
+            "editor.status_caret",
+            line = item.caret.0,
+            column = item.caret.1,
+            total = total_lines
         )
+        .to_string()
     };
     let encoding = item
         .remote_meta
@@ -83,9 +86,9 @@ pub(crate) fn render_panel_status(
         .when(!item.writable, |this| {
             let transcoded = item.remote_meta.is_some_and(|meta| meta.transcoded);
             let label = if transcoded {
-                "GBK · 只读预览"
+                rust_i18n::t!("editor.status_read_only_preview").to_string()
             } else {
-                "只读"
+                rust_i18n::t!("editor.status_read_only").to_string()
             };
             this.child(div().flex_none().text_color(p.danger).child(label))
         })
@@ -101,22 +104,26 @@ pub(crate) fn render_panel_status(
 fn render_phase(item: &EditorPanelState, p: &Palette) -> AnyElement {
     let busy = matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing);
     let label = match item.phase {
-        EditorPhase::Reading => "读取远端中…".to_string(),
-        EditorPhase::Idle if item.dirty => "未保存".to_string(),
-        EditorPhase::Idle => "无改动".to_string(),
-        EditorPhase::Writing if item.pending_sudo_probe.is_some() => "探测提权中…".to_string(),
-        EditorPhase::Writing => "回传中…".to_string(),
+        EditorPhase::Reading => rust_i18n::t!("editor.phase_reading").to_string(),
+        EditorPhase::Idle if item.dirty => rust_i18n::t!("editor.phase_unsaved").to_string(),
+        EditorPhase::Idle => rust_i18n::t!("editor.phase_clean").to_string(),
+        EditorPhase::Writing if item.pending_sudo_probe.is_some() => {
+            rust_i18n::t!("editor.phase_sudo_probe").to_string()
+        }
+        EditorPhase::Writing => rust_i18n::t!("editor.phase_uploading").to_string(),
         EditorPhase::Written => match item.written_size {
             // 带字节数：这是写完回读比对过的数字，用户据此判断"确实落盘了"。
-            Some(bytes) => format!("已回传远端（{}）", format_size(bytes)),
-            None => "已回传远端".to_string(),
+            Some(bytes) => {
+                rust_i18n::t!("editor.phase_uploaded_size", size = format_size(bytes)).to_string()
+            }
+            None => rust_i18n::t!("editor.phase_uploaded").to_string(),
         },
         EditorPhase::Failed => if item.conflict {
-            "远端已修改"
+            rust_i18n::t!("editor.phase_remote_changed")
         } else if item.dirty {
-            "回传失败"
+            rust_i18n::t!("editor.phase_upload_failed")
         } else {
-            "读取失败"
+            rust_i18n::t!("editor.phase_read_failed")
         }
         .to_string(),
     };
@@ -162,14 +169,14 @@ fn render_panel_actions(
         .ghost()
         .xsmall()
         .icon(IconName::Ellipsis)
-        .tooltip("更多操作")
+        .tooltip(rust_i18n::t!("editor.actions_more").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             let mut menu = menu;
             if can_diff {
                 let app = app.clone();
                 let editor = menu_editor.clone();
                 menu = menu.item(
-                    PopupMenuItem::new("对比差异")
+                    PopupMenuItem::new(rust_i18n::t!("editor.action_compare").to_string())
                         .icon(IconName::FileDiff)
                         .on_click(move |_, _, cx| {
                             app.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
@@ -180,7 +187,7 @@ fn render_panel_actions(
                 let app = app.clone();
                 let editor = menu_editor.clone();
                 menu = menu.item(
-                    PopupMenuItem::new("与本地对比")
+                    PopupMenuItem::new(rust_i18n::t!("editor.action_compare_local").to_string())
                         .icon(IconName::FileDiff)
                         .on_click(move |_, _, cx| {
                             app.update(cx, |this, cx| {
@@ -193,7 +200,7 @@ fn render_panel_actions(
                 let app = app.clone();
                 let editor = menu_editor.clone();
                 menu = menu.item(
-                    PopupMenuItem::new("放弃修改")
+                    PopupMenuItem::new(rust_i18n::t!("editor.action_revert").to_string())
                         .icon(IconName::RotateCcw)
                         .on_click(move |_, _, cx| {
                             app.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
@@ -218,7 +225,7 @@ fn render_primary_action(
             .ghost()
             .xsmall()
             .icon(IconName::Check)
-            .tooltip("保存并回传（Ctrl+S）")
+            .tooltip(rust_i18n::t!("editor.save_upload_tooltip").to_string())
             .disabled(!item.dirty || busy)
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.save_editor_panel(&action_editor, window, cx);
@@ -229,7 +236,7 @@ fn render_primary_action(
         .warning()
         .xsmall()
         .icon(IconName::Shield)
-        .tooltip("Sudo 提权保存")
+        .tooltip(rust_i18n::t!("editor.sudo_save").to_string())
         .disabled(!item.dirty || busy)
         .on_click(cx.listener(move |this, _, window, cx| {
             this.prompt_sudo_save(&action_editor, window, cx);

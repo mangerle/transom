@@ -25,7 +25,7 @@ impl TerminalView {
                         let app = menu_entity.clone();
                         menu = menu
                             .item(
-                                PopupMenuItem::new("粘贴")
+                                PopupMenuItem::new(rust_i18n::t!("common.paste").to_string())
                                     .icon(IconName::ClipboardPaste)
                                     .on_click(move |_, _, cx| {
                                         app.update(cx, |view, cx| {
@@ -41,16 +41,18 @@ impl TerminalView {
                     // 菜单项不写死键位：提示符跳跃是工作区动作，用户可在快捷键设置里
                     // 改绑，标签里嵌一个"(Cmd+Up)"会变成第二套口径。
                     menu.item(
-                        PopupMenuItem::new("跳转到上一条命令")
-                            .icon(IconName::ArrowUp)
-                            .on_click(move |_, _, cx| {
-                                app_prev.update(cx, |view, cx| {
-                                    view.scroll_to_previous_prompt(cx);
-                                });
-                            }),
+                        PopupMenuItem::new(
+                            rust_i18n::t!("terminal.menu.previous_prompt").to_string(),
+                        )
+                        .icon(IconName::ArrowUp)
+                        .on_click(move |_, _, cx| {
+                            app_prev.update(cx, |view, cx| {
+                                view.scroll_to_previous_prompt(cx);
+                            });
+                        }),
                     )
                     .item(
-                        PopupMenuItem::new("跳转到下一条命令")
+                        PopupMenuItem::new(rust_i18n::t!("terminal.menu.next_prompt").to_string())
                             .icon(IconName::ArrowDown)
                             .on_click(move |_, _, cx| {
                                 app_next.update(cx, |view, cx| {
@@ -60,13 +62,15 @@ impl TerminalView {
                     )
                     .item(PopupMenuItem::separator())
                     .item(
-                        PopupMenuItem::new("切换语义块视图 / 经典连续流")
-                            .icon(IconName::ListTree)
-                            .on_click(move |_, _, cx| {
-                                app.update(cx, |view, cx| {
-                                    view.toggle_block_view(cx);
-                                });
-                            }),
+                        PopupMenuItem::new(
+                            rust_i18n::t!("terminal.menu.toggle_block_view").to_string(),
+                        )
+                        .icon(IconName::ListTree)
+                        .on_click(move |_, _, cx| {
+                            app.update(cx, |view, cx| {
+                                view.toggle_block_view(cx);
+                            });
+                        }),
                     )
                 })
                 .into_any_element()

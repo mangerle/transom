@@ -42,10 +42,12 @@ impl AppShell {
         let baseline = item.baseline.to_string();
         let current = editor.read(cx).value().to_string();
         let language = item.language.clone();
+        let header_old = rust_i18n::t!("editor.diff_header_old");
+        let header_new = rust_i18n::t!("editor.diff_header_new");
         let patch = TextDiff::from_lines(&baseline, &current)
             .unified_diff()
             .context_radius(3)
-            .header("a/原内容", "b/当前内容")
+            .header(&header_old, &header_new)
             .to_string();
         let files = DiffFile::parse(&patch)
             .map(|files| {
@@ -104,16 +106,21 @@ pub(crate) fn render_diff_view(
         .text_xs()
         .text_color(p.muted_foreground)
         .child(
-            div()
-                .flex_1()
-                .child(format!("待回传变更：+{additions} 行，-{deletions} 行")),
+            div().flex_1().child(
+                rust_i18n::t!(
+                    "editor.diff_summary",
+                    additions = additions,
+                    deletions = deletions
+                )
+                .to_string(),
+            ),
         )
         .child(
             Button::new("editor-diff-back")
                 .ghost()
                 .compact()
                 .icon(IconName::Pencil)
-                .label("返回编辑")
+                .label(rust_i18n::t!("editor.diff_back").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.close_editor_diff(&back_editor, window, cx);
                 })),
@@ -123,7 +130,7 @@ pub(crate) fn render_diff_view(
                 .primary()
                 .compact()
                 .icon(IconName::Check)
-                .label("确认回传")
+                .label(rust_i18n::t!("editor.diff_confirm_upload").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.save_editor_panel(&save_editor, window, cx);
                 })),
@@ -142,7 +149,7 @@ pub(crate) fn render_diff_view(
             .justify_center()
             .text_sm()
             .text_color(p.muted_foreground)
-            .child("差异尚未生成")
+            .child(rust_i18n::t!("editor.diff_empty").to_string())
             .into_any_element(),
     };
     v_flex()

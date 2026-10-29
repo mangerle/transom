@@ -23,11 +23,12 @@ impl AppShell {
         let Some(viewer) = self.diff_viewer.as_ref() else {
             return div().into_any_element();
         };
-        let title = format!(
-            "本地：{}　远端：{}",
-            viewer.local_path.display(),
-            viewer.remote_path
-        );
+        let title = rust_i18n::t!(
+            "diff.title",
+            local = viewer.local_path.display().to_string(),
+            remote = viewer.remote_path.as_str()
+        )
+        .to_string();
         let body = render_body(viewer, p);
         let toolbar = render_toolbar(viewer, p, cx);
         let footer = render_footer(viewer, p, cx);
@@ -62,7 +63,7 @@ impl AppShell {
                             .ghost()
                             .compact()
                             .icon(IconName::Close)
-                            .tooltip("关闭对比")
+                            .tooltip(rust_i18n::t!("diff.close_tooltip").to_string())
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.close_diff_viewer(cx);
                             })),
@@ -87,9 +88,9 @@ fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
             .child(Spinner::new().small().color(p.primary))
             .child(
                 if viewer.local_text.is_some() && viewer.remote_text.is_some() {
-                    "正在计算差异…"
+                    rust_i18n::t!("diff.computing").to_string()
                 } else {
-                    "正在读取两侧内容…"
+                    rust_i18n::t!("diff.reading").to_string()
                 },
             )
             .into_any_element();
@@ -101,7 +102,7 @@ fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
             .justify_center()
             .text_sm()
             .text_color(p.muted_foreground)
-            .child("两侧内容完全一致，没有可合并的差异")
+            .child(rust_i18n::t!("diff.identical").to_string())
             .into_any_element();
     }
     match viewer.view.as_ref() {
@@ -118,7 +119,7 @@ fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
             .justify_center()
             .text_sm()
             .text_color(p.muted_foreground)
-            .child("差异视图尚未生成")
+            .child(rust_i18n::t!("diff.not_ready").to_string())
             .into_any_element(),
     }
 }
@@ -141,19 +142,27 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
         .text_xs()
         .text_color(p.muted_foreground)
         .child(
-            div()
-                .flex_1()
-                .child(format!("差异 {count} 处：+{additions} 行，−{deletions} 行")),
+            div().flex_1().child(
+                rust_i18n::t!(
+                    "diff.summary",
+                    count = count,
+                    additions = additions,
+                    deletions = deletions
+                )
+                .to_string(),
+            ),
         );
     if count > 0 {
         toolbar = toolbar
-            .child(div().child(format!("第 {}/{} 处", index + 1, count)))
+            .child(div().child(
+                rust_i18n::t!("diff.hunk_position", index = index + 1, count = count).to_string(),
+            ))
             .child(
                 Button::new("diff-prev-hunk")
                     .ghost()
                     .compact()
                     .icon(IconName::ArrowUp)
-                    .tooltip("上一处差异")
+                    .tooltip(rust_i18n::t!("diff.prev_hunk").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.step_diff_hunk(false, cx);
                     })),
@@ -163,7 +172,7 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
                     .ghost()
                     .compact()
                     .icon(IconName::ArrowDown)
-                    .tooltip("下一处差异")
+                    .tooltip(rust_i18n::t!("diff.next_hunk").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.step_diff_hunk(true, cx);
                     })),
@@ -175,9 +184,9 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
                 .ghost()
                 .compact()
                 .icon(IconName::Download)
-                .label("应用到本地")
+                .label(rust_i18n::t!("diff.apply_local").to_string())
                 .disabled(!ready || count == 0)
-                .tooltip("用远端当前变更块覆盖本地对应行")
+                .tooltip(rust_i18n::t!("diff.apply_local_tooltip").to_string())
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.request_diff_merge(MergeDirection::RightToLeft, cx);
                 })),
@@ -187,12 +196,12 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
                 .ghost()
                 .compact()
                 .icon(IconName::Upload)
-                .label("应用到远端")
+                .label(rust_i18n::t!("diff.apply_remote").to_string())
                 .disabled(!ready || count == 0 || merge_blocked)
                 .tooltip(if merge_blocked {
-                    "远端文件不可写回（非 UTF-8 文本或版本指纹缺失）"
+                    rust_i18n::t!("diff.apply_remote_blocked").to_string()
                 } else {
-                    "用本地当前变更块覆盖远端对应行"
+                    rust_i18n::t!("diff.apply_remote_tooltip").to_string()
                 })
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.request_diff_merge(MergeDirection::LeftToRight, cx);
@@ -205,8 +214,14 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
     let mut footer = h_flex().items_center().gap_2().min_h(px(30.0));
     if let Some(confirm) = viewer.confirm {
         let (source, target) = match confirm.direction {
-            MergeDirection::LeftToRight => ("本地", "远端"),
-            MergeDirection::RightToLeft => ("远端", "本地"),
+            MergeDirection::LeftToRight => (
+                rust_i18n::t!("diff.local").to_string(),
+                rust_i18n::t!("diff.remote").to_string(),
+            ),
+            MergeDirection::RightToLeft => (
+                rust_i18n::t!("diff.remote").to_string(),
+                rust_i18n::t!("diff.local").to_string(),
+            ),
         };
         let line = viewer
             .diff
@@ -219,19 +234,21 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
             .unwrap_or(0);
         footer = footer
             .child(
-                div()
-                    .flex_1()
-                    .text_xs()
-                    .text_color(p.warning)
-                    .child(format!(
-                        "确认用{source}内容覆盖{target}第 {line} 行附近的这一处变更？覆盖后无法从本应用撤销。"
-                    )),
+                div().flex_1().text_xs().text_color(p.warning).child(
+                    rust_i18n::t!(
+                        "diff.confirm_overwrite",
+                        source = source,
+                        target = target,
+                        line = line
+                    )
+                    .to_string(),
+                ),
             )
             .child(
                 Button::new("diff-merge-cancel")
                     .ghost()
                     .compact()
-                    .label("取消")
+                    .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.cancel_diff_merge(cx);
                     })),
@@ -241,7 +258,7 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                     .danger()
                     .compact()
                     .icon(IconName::Check)
-                    .label("确认覆盖")
+                    .label(rust_i18n::t!("diff.confirm_action").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.confirm_diff_merge(cx);
                     })),
@@ -259,7 +276,7 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                 Button::new("diff-error-close")
                     .ghost()
                     .compact()
-                    .label("关闭")
+                    .label(rust_i18n::t!("diff.close").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.close_diff_viewer(cx);
                     })),
@@ -272,13 +289,17 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                     .items_center()
                     .gap_2()
                     .child(Spinner::new().xsmall().color(p.primary))
-                    .child(div().text_xs().child("正在写回…")),
+                    .child(
+                        div()
+                            .text_xs()
+                            .child(rust_i18n::t!("diff.writing").to_string()),
+                    ),
             )
             .child(
                 Button::new("diff-writing-close")
                     .ghost()
                     .compact()
-                    .label("关闭")
+                    .label(rust_i18n::t!("diff.close").to_string())
                     .disabled(true),
             );
     } else {
@@ -288,13 +309,13 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                     .flex_1()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child("合并只影响当前选中的这一处变更；写入后会自动重新对比。"),
+                    .child(rust_i18n::t!("diff.merge_hint").to_string()),
             )
             .child(
                 Button::new("diff-footer-close")
                     .ghost()
                     .compact()
-                    .label("关闭")
+                    .label(rust_i18n::t!("diff.close").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.close_diff_viewer(cx);
                     })),

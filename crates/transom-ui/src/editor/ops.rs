@@ -60,7 +60,7 @@ impl AppShell {
         let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
         else {
             item.phase = EditorPhase::Failed;
-            item.error = Some("所属标签的连接已断开，无法探测提权能力".to_string());
+            item.error = Some(rust_i18n::t!("editor.error_tab_disconnected_probe").to_string());
             cx.notify();
             return;
         };
@@ -69,7 +69,7 @@ impl AppShell {
         item.sudo_probe_attempted = true;
         // 复用忙碌态阻止保存与关闭；状态栏按 pending_sudo_probe 显示"探测提权中"。
         item.phase = EditorPhase::Writing;
-        item.error = Some("正在探测远端提权能力…".to_string());
+        item.error = Some(rust_i18n::t!("editor.status_probing_sudo").to_string());
         if !self.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
@@ -79,7 +79,7 @@ impl AppShell {
             let item = &mut self.editors.panels[index];
             item.pending_sudo_probe = None;
             item.phase = EditorPhase::Failed;
-            item.error = Some("提权探测命令投递失败".to_string());
+            item.error = Some(rust_i18n::t!("editor.error_probe_dispatch").to_string());
         }
         cx.notify();
     }
@@ -115,8 +115,14 @@ impl AppShell {
             }
             SudoCapability::Unavailable { reason, detail } => {
                 self.editors.panels[index].phase = EditorPhase::Failed;
-                self.editors.panels[index].error =
-                    Some(format!("{}：{detail}", sudo_unavailable_text(reason)));
+                self.editors.panels[index].error = Some(
+                    rust_i18n::t!(
+                        "editor.sudo_unavailable",
+                        reason = sudo_unavailable_text(reason),
+                        detail = detail
+                    )
+                    .to_string(),
+                );
                 cx.notify();
             }
         }
@@ -137,12 +143,12 @@ impl AppShell {
         item.confirm = None;
         item.pending_sudo_probe = None;
         item.error = None;
-        let input = sftp_text_input(window, cx, "", "Sudo 口令（免密可留空）");
+        let input = sftp_text_input(window, cx, "", &rust_i18n::t!("editor.sudo_password_hint"));
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
-            title: "Sudo 提权保存".to_string(),
-            prompt: format!("目标文件「{file_name}」受系统权限保护，请输入 Sudo 提权密码："),
+            title: rust_i18n::t!("editor.sudo_save").to_string(),
+            prompt: rust_i18n::t!("editor.sudo_save_prompt", file_name = file_name).to_string(),
             input,
             target: SftpInputTarget::SudoElevation {
                 editor: editor.clone(),
@@ -225,8 +231,7 @@ impl AppShell {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
                 item.close_after_write = false;
-                item.error =
-                    Some("所属标签的连接已断开，无法回传，请复制内容后重新打开".to_string());
+                item.error = Some(rust_i18n::t!("editor.error_tab_disconnected_write").to_string());
             }
             self.focus_active_sftp_panel(window, cx);
             cx.notify();
@@ -299,7 +304,7 @@ impl AppShell {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
                 item.close_after_write = false;
-                item.error = Some("所属标签的连接已断开，无法发起提权写入".to_string());
+                item.error = Some(rust_i18n::t!("editor.error_tab_disconnected_sudo").to_string());
             }
             self.focus_active_sftp_panel(window, cx);
             cx.notify();
@@ -448,7 +453,8 @@ impl AppShell {
         item.conflict = true;
         item.confirm = None;
         item.close_after_write = false;
-        item.error = Some(format!("远端已被修改: {message}"));
+        item.error =
+            Some(rust_i18n::t!("editor.error_remote_changed", message = message).to_string());
         cx.notify();
     }
 
@@ -475,15 +481,17 @@ impl AppShell {
             // 探测失败：没有可继续的提权结论，直接回到失败态并保留远端原文。
             item.pending_sudo_probe = None;
             item.phase = EditorPhase::Failed;
-            item.error = Some(format!("探测远端提权能力失败：{message}"));
+            item.error = Some(
+                rust_i18n::t!("editor.error_sudo_probe_failed", message = message).to_string(),
+            );
             cx.notify();
             return;
         }
         let was_writing = item.phase == EditorPhase::Writing;
-        let (action, detail) = if item.phase == EditorPhase::Reading {
-            ("读取远端失败", message)
+        let detail = if item.phase == EditorPhase::Reading {
+            rust_i18n::t!("editor.error_read_failed", message = message).to_string()
         } else {
-            ("回传远端失败", message)
+            rust_i18n::t!("editor.error_write_failed", message = message).to_string()
         };
         let editor = item.editor.clone();
         let should_probe =
@@ -493,9 +501,9 @@ impl AppShell {
         item.phase = EditorPhase::Failed;
         item.written_size = None;
         item.close_after_write = false;
-        item.error = Some(format!("{action}: {detail}"));
+        item.error = Some(detail);
         if should_probe {
-            item.error = Some("远端拒绝写入，正在探测提权能力…".to_string());
+            item.error = Some(rust_i18n::t!("editor.status_probing_sudo_after_denied").to_string());
             self.request_sudo_probe(&editor, cx);
         } else if should_reask {
             item.phase = EditorPhase::Idle;
@@ -598,12 +606,12 @@ impl AppShell {
     }
 }
 
-/// 把提权不可用原因翻译成用户能行动的中文说明。
-fn sudo_unavailable_text(reason: SudoUnavailable) -> &'static str {
+/// 把提权不可用原因翻译成用户能读懂、可据以采取行动的说明。
+fn sudo_unavailable_text(reason: SudoUnavailable) -> String {
     match reason {
-        SudoUnavailable::NotInstalled => "远端未安装 sudo，无法提权写入",
-        SudoUnavailable::RequiresTty => "远端 sudo 要求 TTY，非交互通道无法提权",
-        SudoUnavailable::NotAuthorized => "当前用户不在远端 sudo 授权范围内",
-        SudoUnavailable::Other => "无法探测远端提权能力",
+        SudoUnavailable::NotInstalled => rust_i18n::t!("editor.sudo_not_installed").to_string(),
+        SudoUnavailable::RequiresTty => rust_i18n::t!("editor.sudo_requires_tty").to_string(),
+        SudoUnavailable::NotAuthorized => rust_i18n::t!("editor.sudo_not_authorized").to_string(),
+        SudoUnavailable::Other => rust_i18n::t!("editor.sudo_probe_failed_reason").to_string(),
     }
 }

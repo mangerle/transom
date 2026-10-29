@@ -61,7 +61,9 @@ impl AppShell {
                         source: SftpClipboardSource::Local,
                         entries,
                     });
-                    panel.set_status(format!("已复制本地 {count} 个条目，可粘贴至远端"));
+                    panel.set_status(
+                        rust_i18n::t!("sftp.sidebar.copied_local", count = count).to_string(),
+                    );
                     cx.notify();
                 }
             }
@@ -94,9 +96,9 @@ impl AppShell {
                         source: SftpClipboardSource::Remote(conn_id),
                         entries,
                     });
-                    panel.set_status(format!(
-                        "已复制主远端 {count} 个条目，可粘贴至本地或其他远端"
-                    ));
+                    panel.set_status(
+                        rust_i18n::t!("sftp.sidebar.copied_remote", count = count).to_string(),
+                    );
                     cx.notify();
                 }
             }
@@ -130,9 +132,10 @@ impl AppShell {
                             source: SftpClipboardSource::Remote(conn_id),
                             entries,
                         });
-                        panel.set_status(format!(
-                            "已复制并列远端 {count} 个条目，可粘贴至本地或其他远端"
-                        ));
+                        panel.set_status(
+                            rust_i18n::t!("sftp.sidebar.copied_side_remote", count = count)
+                                .to_string(),
+                        );
                         cx.notify();
                     }
                 }

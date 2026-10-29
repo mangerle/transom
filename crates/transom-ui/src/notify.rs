@@ -38,17 +38,21 @@ impl AppShell {
             .map(|tab| tab.display_name())
             .unwrap_or_default();
         let exit_text = match exit_code {
-            Some(0) => "退出码 0".to_string(),
-            Some(code) => format!("退出码 {code}"),
+            Some(0) => rust_i18n::t!("notify.exit_code_zero").to_string(),
+            Some(code) => rust_i18n::t!("notify.exit_code", code = code).to_string(),
             // 只有 A/B 标记的 shell 集成拿不到退出码，此时宁可不写也不写个假的 0。
-            None => "退出码未知".to_string(),
+            None => rust_i18n::t!("notify.exit_code_unknown").to_string(),
         };
+        let duration_text = format_command_duration(duration_ms);
         send_desktop_notification(
-            "Transom 命令执行完成",
-            &format!(
-                "{pane_name}｜用时 {}｜{exit_text}",
-                format_command_duration(duration_ms)
-            ),
+            rust_i18n::t!("notify.command_done_title").as_ref(),
+            rust_i18n::t!(
+                "notify.command_done_body",
+                pane = pane_name,
+                duration = duration_text,
+                exit = exit_text
+            )
+            .as_ref(),
         );
         self.status = Some(rust_i18n::t!("notify.command_done_status").to_string());
         cx.notify();
@@ -66,7 +70,7 @@ impl AppShell {
             return;
         }
         let summary = if title.is_empty() {
-            "Transom 通知".to_string()
+            rust_i18n::t!("notify.default_title").to_string()
         } else {
             format!("Transom · {title}")
         };
@@ -102,16 +106,22 @@ fn should_notify(
 fn format_command_duration(duration_ms: u64) -> String {
     let secs = duration_ms as f64 / 1000.0;
     if duration_ms < 60_000 {
-        return format!("{:.1} 秒", secs);
+        return format!("{:.1} {}", secs, rust_i18n::t!("notify.unit_second"));
     }
     let total_secs = duration_ms / 1000;
     let hours = total_secs / 3600;
     let minutes = (total_secs % 3600) / 60;
     let seconds = total_secs % 60;
     if hours > 0 {
-        return format!("{hours} 小时 {minutes} 分 {seconds} 秒");
+        return rust_i18n::t!(
+            "notify.duration_hms",
+            hours = hours,
+            minutes = minutes,
+            seconds = seconds
+        )
+        .to_string();
     }
-    format!("{minutes} 分 {seconds} 秒")
+    rust_i18n::t!("notify.duration_ms", minutes = minutes, seconds = seconds).to_string()
 }
 
 /// 校验阈值输入：越界或非法都返回 `None`，由调用方保留旧值。
@@ -130,12 +140,19 @@ mod tests {
 
     #[test]
     fn formats_duration_by_magnitude() {
-        assert_eq!(format_command_duration(0), "0.0 秒");
-        assert_eq!(format_command_duration(400), "0.4 秒");
-        assert_eq!(format_command_duration(12_400), "12.4 秒");
-        assert_eq!(format_command_duration(59_999), "60.0 秒");
-        assert_eq!(format_command_duration(65_000), "1 分 5 秒");
-        assert_eq!(format_command_duration(3_725_000), "1 小时 2 分 5 秒");
+        let seconds = |text: &str| format!("{text} {}", rust_i18n::t!("notify.unit_second"));
+        assert_eq!(format_command_duration(0), seconds("0.0"));
+        assert_eq!(format_command_duration(400), seconds("0.4"));
+        assert_eq!(format_command_duration(12_400), seconds("12.4"));
+        assert_eq!(format_command_duration(59_999), seconds("60.0"));
+        assert_eq!(
+            format_command_duration(65_000),
+            rust_i18n::t!("notify.duration_ms", minutes = 1, seconds = 5).to_string()
+        );
+        assert_eq!(
+            format_command_duration(3_725_000),
+            rust_i18n::t!("notify.duration_hms", hours = 1, minutes = 2, seconds = 5).to_string()
+        );
     }
 
     #[test]

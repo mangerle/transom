@@ -72,7 +72,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::ArrowUp)
-                                    .tooltip("返回上一级")
+                                    .tooltip(rust_i18n::t!("sftp.remote.go_up").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.sftp_go_up(tab_id, window, cx)
                                     })),
@@ -82,7 +82,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::RefreshCw)
-                                    .tooltip("刷新远程目录")
+                                    .tooltip(rust_i18n::t!("sftp.remote.refresh").to_string())
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.sftp_refresh(tab_id, cx)
                                     })),
@@ -92,7 +92,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::ArrowRight)
-                                    .tooltip("进入路径")
+                                    .tooltip(rust_i18n::t!("sftp.remote.enter_path").to_string())
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.sftp_enter_path(tab_id, cx)
                                     })),
@@ -102,7 +102,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::PanelLeftClose)
-                                    .tooltip("收起主远端列")
+                                    .tooltip(rust_i18n::t!("sftp.remote.collapse").to_string())
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.sftp_toggle_remote_collapse(tab_id, cx);
                                     })),
@@ -153,7 +153,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::FilePlus)
-                                    .tooltip("新建文件并编辑")
+                                    .tooltip(rust_i18n::t!("sftp.remote.new_file_edit").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.sftp_open_editor_new_file_modal(tab_id, window, cx);
                                     })),
@@ -163,7 +163,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::Search)
-                                    .tooltip("远程检索 (Find / Grep)")
+                                    .tooltip(rust_i18n::t!("sftp.remote.search").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.sftp_open_search_modal(tab_id, window, cx);
                                     })),
@@ -183,7 +183,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::FilePen)
-                                    .tooltip("编辑")
+                                    .tooltip(rust_i18n::t!("common.edit").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         let selected = this
                                             .workspace
@@ -206,7 +206,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::Settings)
-                                    .tooltip("修改权限 (Chmod)")
+                                    .tooltip(rust_i18n::t!("sftp.remote.chmod").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.sftp_open_chmod_modal(tab_id, window, cx);
                                     })),
@@ -232,9 +232,9 @@ impl AppShell {
                                     })
                                     .selected(show_hidden)
                                     .tooltip(if show_hidden {
-                                        "隐藏点号文件 (Ctrl+H)"
+                                        rust_i18n::t!("sftp.remote.hide_dotfiles").to_string()
                                     } else {
-                                        "显示隐藏文件 (Ctrl+H)"
+                                        rust_i18n::t!("sftp.remote.show_dotfiles").to_string()
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.sftp_toggle_hidden(tab_id, cx);
@@ -247,9 +247,9 @@ impl AppShell {
                                     .icon(IconName::ArrowLeftRight)
                                     .selected(sync_navigation)
                                     .tooltip(if sync_navigation {
-                                        "同步导航（已开启，点击关闭）"
+                                        rust_i18n::t!("sftp.remote.sync_nav_on").to_string()
                                     } else {
-                                        "同步导航（已关闭，点击开启）"
+                                        rust_i18n::t!("sftp.remote.sync_nav_off").to_string()
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(panel) = this
@@ -260,9 +260,9 @@ impl AppShell {
                                             panel.sync_navigation = !panel.sync_navigation;
                                             panel.set_status(
                                                 if panel.sync_navigation {
-                                                    "已开启双栏同步导航联动"
+                                                    rust_i18n::t!("sftp.remote.sync_nav_enabled")
                                                 } else {
-                                                    "已关闭双栏同步导航联动"
+                                                    rust_i18n::t!("sftp.remote.sync_nav_disabled")
                                                 }
                                                 .to_string(),
                                             );
@@ -275,7 +275,7 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::GitCompareArrows)
-                                    .tooltip("目录对比与增量同步")
+                                    .tooltip(rust_i18n::t!("sftp.sync.title").to_string())
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.sftp_open_sync_modal(tab_id, cx);
                                     })),
@@ -286,7 +286,7 @@ impl AppShell {
                                     .xsmall()
                                     .icon(IconName::Search)
                                     .selected(show_filter)
-                                    .tooltip("目录内模糊过滤 (Ctrl+F)")
+                                    .tooltip(rust_i18n::t!("sftp.remote.filter").to_string())
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.sftp_toggle_filter(tab_id, window, cx);
                                     })),

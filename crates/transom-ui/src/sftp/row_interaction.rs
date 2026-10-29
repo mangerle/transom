@@ -289,12 +289,22 @@ impl AppShell {
                 }
             }
         }
-        let (selected_count, noun) = match row.side {
-            SftpSide::Local => (panel.selected_local_paths().len(), "本地"),
-            SftpSide::Remote => (panel.selected_remote_paths().len(), "远端"),
+        let selected_count = match row.side {
+            SftpSide::Local => panel.selected_local_paths().len(),
+            SftpSide::Remote => panel.selected_remote_paths().len(),
         };
         if selected_count > 1 {
-            panel.queue.status = Some(format!("已选择 {selected_count} 个{noun}项目"));
+            panel.queue.status = Some(
+                match row.side {
+                    SftpSide::Local => {
+                        rust_i18n::t!("sftp.row.selected_local", count = selected_count)
+                    }
+                    SftpSide::Remote => {
+                        rust_i18n::t!("sftp.row.selected_remote", count = selected_count)
+                    }
+                }
+                .to_string(),
+            );
         }
         let name = row.name.clone();
         panel

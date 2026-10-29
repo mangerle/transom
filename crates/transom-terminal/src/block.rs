@@ -335,16 +335,22 @@ pub(crate) fn build_layout(
 pub(crate) fn banner_label(block: &CommandBlock) -> String {
     let rows = block.output_rows();
     let status = match block.exit_code {
-        Some(0) => "成功".to_string(),
-        Some(code) => format!("退出码 {code}"),
-        None => "已完成".to_string(),
+        Some(0) => rust_i18n::t!("terminal.block.status_success").to_string(),
+        Some(code) => rust_i18n::t!("terminal.block.status_exit_code", code = code).to_string(),
+        None => rust_i18n::t!("terminal.block.status_finished").to_string(),
     };
     let duration = block
         .duration_ms
         .map(format_duration)
         .map(|text| format!(" · {text}"))
         .unwrap_or_default();
-    format!("已折叠 {rows} 行 · {status}{duration}")
+    rust_i18n::t!(
+        "terminal.block.banner",
+        rows = rows,
+        status = status,
+        duration = duration
+    )
+    .to_string()
 }
 
 pub(crate) fn format_duration(millis: u64) -> String {
@@ -446,7 +452,15 @@ mod tests {
                 block_id, label, ..
             } => {
                 assert_eq!(*block_id, 0);
-                assert!(label.contains("已折叠 3 行"), "横幅: {label}");
+                // 断言按当前语言的横幅模板拼出期望值，避免测试依赖某一门语言。
+                let expected = rust_i18n::t!(
+                    "terminal.block.banner",
+                    rows = 3,
+                    status = rust_i18n::t!("terminal.block.status_success"),
+                    duration = " · 10ms"
+                )
+                .to_string();
+                assert!(label.contains(&expected), "横幅: {label}");
             }
             other => panic!("应为横幅: {other:?}"),
         }
@@ -507,8 +521,13 @@ mod tests {
             collapsed: true,
         };
         let label = banner_label(&block);
-        assert!(label.contains("已折叠 120 行"));
-        assert!(label.contains("退出码 2"));
-        assert!(label.contains("1m5s"));
+        let expected = rust_i18n::t!(
+            "terminal.block.banner",
+            rows = 120,
+            status = rust_i18n::t!("terminal.block.status_exit_code", code = 2),
+            duration = " · 1m5s"
+        )
+        .to_string();
+        assert_eq!(label, expected);
     }
 }

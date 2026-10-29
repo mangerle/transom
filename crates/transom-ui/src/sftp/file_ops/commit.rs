@@ -17,7 +17,7 @@ impl AppShell {
         let name = modal.input.read(cx).value().trim().to_string();
         if name.is_empty() {
             let mut modal = modal;
-            modal.error = Some("名称不能为空".to_string());
+            modal.error = Some(rust_i18n::t!("sftp.file_ops.name_empty").to_string());
             let input = modal.input.clone();
             self.sftp_modals.input = Some(modal);
             input.update(cx, |state, cx| state.focus(window, cx));
@@ -58,7 +58,10 @@ impl AppShell {
             match existing_is_dir {
                 Some(true) => {
                     let mut modal = modal;
-                    modal.error = Some(format!("同名目录已存在，无法创建文件：{name}"));
+                    modal.error = Some(
+                        rust_i18n::t!("sftp.file_ops.file_exists_as_dir", name = name.as_str())
+                            .to_string(),
+                    );
                     let input = modal.input.clone();
                     self.sftp_modals.input = Some(modal);
                     input.update(cx, |state, cx| state.focus(window, cx));
@@ -142,9 +145,18 @@ impl AppShell {
                 if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     let new_dir = panel.local.path.join(&name);
                     if let Err(err) = std::fs::create_dir_all(&new_dir) {
-                        panel.set_local_error(format!("新建本地文件夹失败: {err}"));
+                        panel.set_local_error(
+                            rust_i18n::t!("sftp.file_ops.local_mkdir_failed", error = err)
+                                .to_string(),
+                        );
                     } else {
-                        panel.set_status(format!("已成功创建本地文件夹: {name}"));
+                        panel.set_status(
+                            rust_i18n::t!(
+                                "sftp.file_ops.local_mkdir_created",
+                                name = name.as_str()
+                            )
+                            .to_string(),
+                        );
                         self.spawn_local_dir_refresh(tab_id, None, cx);
                     }
                     cx.notify();
@@ -154,7 +166,10 @@ impl AppShell {
                 if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     let new_file = panel.local.path.join(&name);
                     if new_file.exists() {
-                        panel.set_local_error(format!("本地文件已存在: {name}"));
+                        panel.set_local_error(
+                            rust_i18n::t!("sftp.file_ops.local_file_exists", name = name.as_str())
+                                .to_string(),
+                        );
                     } else {
                         match std::fs::OpenOptions::new()
                             .write(true)
@@ -162,12 +177,24 @@ impl AppShell {
                             .open(&new_file)
                         {
                             Ok(_) => {
-                                panel.set_status(format!("已成功创建本地文件: {name}"));
+                                panel.set_status(
+                                    rust_i18n::t!(
+                                        "sftp.file_ops.local_file_created",
+                                        name = name.as_str()
+                                    )
+                                    .to_string(),
+                                );
                                 self.spawn_local_dir_refresh(tab_id, Some(new_file.clone()), cx);
                                 crate::audit::reveal_in_file_manager(new_file);
                             }
                             Err(err) => {
-                                panel.set_local_error(format!("新建本地文件失败: {err}"));
+                                panel.set_local_error(
+                                    rust_i18n::t!(
+                                        "sftp.file_ops.local_file_create_failed",
+                                        error = err
+                                    )
+                                    .to_string(),
+                                );
                             }
                         }
                     }
@@ -179,9 +206,15 @@ impl AppShell {
                     if let Some(parent) = old_path.parent() {
                         let new_path = parent.join(&name);
                         if let Err(err) = std::fs::rename(&old_path, &new_path) {
-                            panel.set_local_error(format!("重命名本地文件失败: {err}"));
+                            panel.set_local_error(
+                                rust_i18n::t!("sftp.file_ops.local_rename_failed", error = err)
+                                    .to_string(),
+                            );
                         } else {
-                            panel.set_status(format!("已重命名为: {name}"));
+                            panel.set_status(
+                                rust_i18n::t!("sftp.file_ops.local_renamed", name = name.as_str())
+                                    .to_string(),
+                            );
                             self.spawn_local_dir_refresh(tab_id, Some(new_path), cx);
                         }
                     }
@@ -219,14 +252,18 @@ impl AppShell {
         let result =
             std::os::unix::fs::symlink(target_path, &link_path).map_err(|error| error.to_string());
         #[cfg(not(unix))]
-        let result = Err("当前平台暂不支持创建本地软链接".to_string());
+        let result = Err(rust_i18n::t!("sftp.file_ops.local_symlink_unsupported").to_string());
         match result {
             Ok(()) => {
-                panel.set_status(format!("已创建本地软链接: {name}"));
+                panel.set_status(
+                    rust_i18n::t!("sftp.file_ops.local_symlink_created", name = name).to_string(),
+                );
                 self.spawn_local_dir_refresh(tab_id, Some(link_path), cx);
             }
             Err(err) => {
-                panel.set_local_error(format!("创建本地软链接失败: {err}"));
+                panel.set_local_error(
+                    rust_i18n::t!("sftp.file_ops.local_symlink_failed", error = err).to_string(),
+                );
             }
         }
         cx.notify();

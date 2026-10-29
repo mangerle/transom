@@ -28,6 +28,7 @@ mod event_handlers;
 mod events;
 mod format;
 mod forward;
+mod i18n;
 mod identity;
 mod keymap;
 mod keys;
@@ -95,7 +96,7 @@ pub fn run(services: UiServices) {
             AppSettings::default()
         }
     };
-    let language = settings.language.clone();
+    let language = i18n::resolve_language(&settings.language);
     reassert_default_terminal(&settings);
     // 应用装配日志时还不知道配置值，这里补上用户设的级别。
     //

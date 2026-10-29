@@ -196,7 +196,7 @@ impl AppShell {
                     SharedString::from("bash"),
                     SharedString::from("zsh"),
                     SharedString::from("sh"),
-                    SharedString::from("本地终端"),
+                    SharedString::from(rust_i18n::t!("app.new_local").to_string()),
                 ]),
         );
 

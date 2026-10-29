@@ -254,10 +254,12 @@ impl AppShell {
         self.sync_drop_overlay(tab_id, cx);
         if let Some((dir, file_name, bytes)) = notify_info {
             let action = match dir {
-                TransferDirection::Upload => "上传完成",
-                TransferDirection::Download => "下载完成",
-                TransferDirection::Sync => "同步完成",
-                TransferDirection::RemoteCopy => "跨远端传输完成",
+                TransferDirection::Upload => rust_i18n::t!("sftp.handlers.notify_upload_done"),
+                TransferDirection::Download => rust_i18n::t!("sftp.handlers.notify_download_done"),
+                TransferDirection::Sync => rust_i18n::t!("sftp.handlers.notify_sync_done"),
+                TransferDirection::RemoteCopy => {
+                    rust_i18n::t!("sftp.handlers.notify_remote_copy_done")
+                }
             };
             send_desktop_notification(
                 &format!("Transom SFTP {action}"),
@@ -428,7 +430,10 @@ impl AppShell {
         }
         self.sync_drop_overlay(tab_id, cx);
         if let Some((file_name, err_msg)) = failed_notify {
-            send_desktop_notification("Transom SFTP 传输失败", &format!("{file_name}: {err_msg}"));
+            send_desktop_notification(
+                &rust_i18n::t!("sftp.handlers.notify_failed_title"),
+                &format!("{file_name}: {err_msg}"),
+            );
         }
         self.process_sftp_queue(tab_id, cx);
         true

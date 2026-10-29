@@ -144,8 +144,14 @@ impl AppShell {
                     "dropdown-monitor-width",
                     if is_wide { 600.0f32 } else { 420.0f32 },
                     vec![
-                        (420.0f32, "紧凑 (420px)".to_string()),
-                        (600.0f32, "宽幅 (600px)".to_string()),
+                        (
+                            420.0f32,
+                            rust_i18n::t!("monitor.settings.width_compact").to_string(),
+                        ),
+                        (
+                            600.0f32,
+                            rust_i18n::t!("monitor.settings.width_wide").to_string(),
+                        ),
                     ],
                     |this, width, cx| {
                         this.settings.monitor.drawer_width = width;
@@ -164,9 +170,18 @@ impl AppShell {
                     "dropdown-monitor-interval",
                     current_interval,
                     vec![
-                        (SampleIntervalMode::Fast, "1s (极速排查)".to_string()),
-                        (SampleIntervalMode::Normal, "3s (默认平稳)".to_string()),
-                        (SampleIntervalMode::Eco, "10s (节能降噪)".to_string()),
+                        (
+                            SampleIntervalMode::Fast,
+                            rust_i18n::t!("monitor.settings.interval_fast").to_string(),
+                        ),
+                        (
+                            SampleIntervalMode::Normal,
+                            rust_i18n::t!("monitor.settings.interval_normal").to_string(),
+                        ),
+                        (
+                            SampleIntervalMode::Eco,
+                            rust_i18n::t!("monitor.settings.interval_eco").to_string(),
+                        ),
                     ],
                     |this, mode, cx| {
                         this.set_monitor_interval_mode(mode, cx);

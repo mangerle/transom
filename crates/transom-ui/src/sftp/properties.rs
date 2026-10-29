@@ -36,7 +36,9 @@ impl AppShell {
             }
             Err(err) => {
                 if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-                    panel.set_local_error(format!("读取本地文件属性失败: {err}"));
+                    panel.set_local_error(
+                        rust_i18n::t!("sftp.properties.read_local_failed", error = err).to_string(),
+                    );
                 }
             }
         }
@@ -85,7 +87,7 @@ pub(crate) fn remote_file_properties(metadata: &RemoteMetadata) -> FilePropertie
     FileProperties {
         name,
         path: metadata.path.clone(),
-        kind: file_kind_text(metadata.is_symlink, metadata.is_dir).to_string(),
+        kind: file_kind_text(metadata.is_symlink, metadata.is_dir),
         size: if metadata.is_dir {
             None
         } else {
@@ -133,7 +135,7 @@ pub(crate) fn local_file_properties(path: &Path) -> Result<FileProperties, Strin
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| path.display().to_string()),
         path: path.display().to_string(),
-        kind: file_kind_text(is_symlink, metadata.is_dir()).to_string(),
+        kind: file_kind_text(is_symlink, metadata.is_dir()),
         size: if metadata.is_dir() {
             None
         } else {
@@ -148,14 +150,14 @@ pub(crate) fn local_file_properties(path: &Path) -> Result<FileProperties, Strin
     })
 }
 
-/// 文件类型的中文描述（符号链接优先于目录/文件判定）
-fn file_kind_text(is_symlink: bool, is_dir: bool) -> &'static str {
+/// 文件类型的本地化描述（符号链接优先于目录/文件判定）
+fn file_kind_text(is_symlink: bool, is_dir: bool) -> String {
     if is_symlink {
-        "符号链接"
+        rust_i18n::t!("sftp.properties.kind_symlink").to_string()
     } else if is_dir {
-        "文件夹"
+        rust_i18n::t!("sftp.properties.kind_directory").to_string()
     } else {
-        "文件"
+        rust_i18n::t!("sftp.properties.kind_file").to_string()
     }
 }
 
@@ -176,7 +178,7 @@ fn identity_text(name: Option<&str>, id: Option<u32>) -> Option<String> {
 pub(crate) fn format_unix_time(seconds: u32) -> String {
     match Local.timestamp_opt(i64::from(seconds), 0).single() {
         Some(datetime) => datetime.format("%Y-%m-%d %H:%M:%S").to_string(),
-        None => format!("{seconds} (Unix 时间戳)"),
+        None => rust_i18n::t!("sftp.properties.timestamp_suffix", seconds = seconds).to_string(),
     }
 }
 
@@ -255,10 +257,22 @@ mod tests {
 
     #[test]
     fn test_file_kind_text() {
-        assert_eq!(file_kind_text(true, true), "符号链接");
-        assert_eq!(file_kind_text(true, false), "符号链接");
-        assert_eq!(file_kind_text(false, true), "文件夹");
-        assert_eq!(file_kind_text(false, false), "文件");
+        assert_eq!(
+            file_kind_text(true, true),
+            rust_i18n::t!("sftp.properties.kind_symlink").to_string()
+        );
+        assert_eq!(
+            file_kind_text(true, false),
+            rust_i18n::t!("sftp.properties.kind_symlink").to_string()
+        );
+        assert_eq!(
+            file_kind_text(false, true),
+            rust_i18n::t!("sftp.properties.kind_directory").to_string()
+        );
+        assert_eq!(
+            file_kind_text(false, false),
+            rust_i18n::t!("sftp.properties.kind_file").to_string()
+        );
     }
 
     #[test]
@@ -290,7 +304,10 @@ mod tests {
         };
         let properties = remote_file_properties(&metadata);
         assert_eq!(properties.name, "app.log");
-        assert_eq!(properties.kind, "文件");
+        assert_eq!(
+            properties.kind,
+            rust_i18n::t!("sftp.properties.kind_file").to_string()
+        );
         assert_eq!(properties.size, Some(2048));
         assert_eq!(properties.owner.as_deref(), Some("root (0)"));
         assert_eq!(properties.group.as_deref(), Some("0"));

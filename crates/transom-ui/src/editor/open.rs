@@ -126,11 +126,13 @@ impl AppShell {
             EditGate::TooLarge { name, size } => {
                 self.editor_reject(
                     tab_id,
-                    format!(
-                        "{name}（{}）超过内置编辑器上限 {}：请在终端窗格用编辑器打开，或先下载到本地再编辑",
-                        format_size(size),
-                        format_size(max_bytes)
-                    ),
+                    rust_i18n::t!(
+                        "editor.error_too_large",
+                        name = name,
+                        size = format_size(size),
+                        max = format_size(max_bytes)
+                    )
+                    .to_string(),
                     cx,
                 );
                 return;
@@ -142,7 +144,11 @@ impl AppShell {
             } => (connection_id, name, permissions),
         };
         let Some(connection_id) = connection_id else {
-            self.editor_reject(tab_id, "SSH 连接尚未就绪，无法编辑远端文件".to_string(), cx);
+            self.editor_reject(
+                tab_id,
+                rust_i18n::t!("editor.error_no_connection").to_string(),
+                cx,
+            );
             return;
         };
 
@@ -181,7 +187,11 @@ impl AppShell {
                 max_bytes,
             },
         }) {
-            self.fail_editor_panel_by_op(op_id, "读取命令投递失败".to_string(), cx);
+            self.fail_editor_panel_by_op(
+                op_id,
+                rust_i18n::t!("editor.error_read_dispatch").to_string(),
+                cx,
+            );
         }
     }
 
@@ -429,7 +439,7 @@ impl AppShell {
         else {
             if let Some(item) = self.editor_panel_mut(editor) {
                 item.phase = EditorPhase::Failed;
-                item.error = Some("SSH 连接尚未就绪，无法读取远端文件".to_string());
+                item.error = Some(rust_i18n::t!("editor.error_no_connection_read").to_string());
             }
             cx.notify();
             return;
@@ -454,7 +464,11 @@ impl AppShell {
                 max_bytes,
             },
         }) {
-            self.fail_editor_panel_by_op(op_id, "读取命令投递失败".to_string(), cx);
+            self.fail_editor_panel_by_op(
+                op_id,
+                rust_i18n::t!("editor.error_read_dispatch").to_string(),
+                cx,
+            );
             return;
         }
         cx.notify();

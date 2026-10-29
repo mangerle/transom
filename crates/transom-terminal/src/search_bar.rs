@@ -42,7 +42,10 @@ impl TerminalView {
         let input = self
             .search_input
             .get_or_insert_with(|| {
-                cx.new(|cx| InputState::new(window, cx).placeholder("搜索终端输出"))
+                cx.new(|cx| {
+                    InputState::new(window, cx)
+                        .placeholder(rust_i18n::t!("terminal.search.placeholder").to_string())
+                })
             })
             .clone();
         // 输入事件驱动同步，而不是每帧去读输入框：既省掉一次锁与字符串拷贝，
@@ -202,7 +205,7 @@ impl TerminalView {
             .child(search_bar_button(
                 "terminal-search-regex",
                 IconName::Regex,
-                "正则表达式",
+                rust_i18n::t!("terminal.search.regex_tooltip").to_string(),
                 regex_mode,
                 SearchBarButton::Regex,
                 entity.clone(),
@@ -210,7 +213,7 @@ impl TerminalView {
             .child(search_bar_button(
                 "terminal-search-prev",
                 IconName::ChevronUp,
-                "上一个匹配 (Shift+Enter)",
+                rust_i18n::t!("terminal.search.prev_tooltip").to_string(),
                 false,
                 SearchBarButton::Prev,
                 entity.clone(),
@@ -218,7 +221,7 @@ impl TerminalView {
             .child(search_bar_button(
                 "terminal-search-next",
                 IconName::ChevronDown,
-                "下一个匹配 (Enter)",
+                rust_i18n::t!("terminal.search.next_tooltip").to_string(),
                 false,
                 SearchBarButton::Next,
                 entity.clone(),
@@ -226,7 +229,7 @@ impl TerminalView {
             .child(search_bar_button(
                 "terminal-search-close",
                 IconName::X,
-                "关闭搜索 (Esc)",
+                rust_i18n::t!("terminal.search.close_tooltip").to_string(),
                 false,
                 SearchBarButton::Close,
                 entity,
@@ -252,7 +255,7 @@ enum SearchBarButton {
 fn search_bar_button(
     id: &'static str,
     icon: IconName,
-    tooltip: &'static str,
+    tooltip: String,
     selected: bool,
     action: SearchBarButton,
     entity: Entity<TerminalView>,
@@ -276,21 +279,26 @@ fn search_bar_button(
 /// 检索栏状态文本：命中计数、无匹配、截断或正则错误。
 fn search_status_text(status: &SearchStatus) -> String {
     if let Some(error) = &status.error {
-        return format!("正则无效：{error}");
+        return rust_i18n::t!("terminal.search.invalid_regex", error = error.as_str()).to_string();
     }
     if !status.has_query {
-        return "输入关键词开始搜索".to_string();
+        return rust_i18n::t!("terminal.search.hint").to_string();
     }
     if status.stale {
         // 快照过期时明确告知为什么计数不再变，而不是让界面看起来"卡住没反应"。
-        return "输出中，稍后自动更新".to_string();
+        return rust_i18n::t!("terminal.search.stale").to_string();
     }
     if status.total == 0 {
-        return "没有匹配项".to_string();
+        return rust_i18n::t!("terminal.search.no_matches").to_string();
     }
     let suffix = if status.truncated { "+" } else { "" };
     if status.ordinal == 0 {
-        return format!("共 {}{suffix} 处匹配", status.total);
+        return rust_i18n::t!(
+            "terminal.search.match_count",
+            total = status.total,
+            suffix = suffix
+        )
+        .to_string();
     }
     format!("{} / {}{suffix}", status.ordinal, status.total)
 }

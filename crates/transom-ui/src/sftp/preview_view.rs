@@ -92,8 +92,14 @@ fn preview_card_position(preview: &SftpPreviewState, window: &Window) -> (f32, f
 
 fn preview_card_header(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
     let (icon, label) = match preview.kind {
-        PreviewKind::Image => (IconName::FileImage, "图片预览"),
-        PreviewKind::Text => (IconName::FileText, "文本预览"),
+        PreviewKind::Image => (
+            IconName::FileImage,
+            rust_i18n::t!("sftp.preview.image_label").to_string(),
+        ),
+        PreviewKind::Text => (
+            IconName::FileText,
+            rust_i18n::t!("sftp.preview.text_label").to_string(),
+        ),
     };
     h_flex()
         .gap_2()
@@ -126,8 +132,8 @@ fn preview_card_body(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
         PreviewContent::Pending => div().into_any_element(),
         PreviewContent::Loading => {
             let message = match preview.kind {
-                PreviewKind::Image => "正在生成缩略图…",
-                PreviewKind::Text => "正在读取预览…",
+                PreviewKind::Image => rust_i18n::t!("sftp.preview.loading_image").to_string(),
+                PreviewKind::Text => rust_i18n::t!("sftp.preview.loading_text").to_string(),
             };
             h_flex()
                 .h(px(64.0))
@@ -163,7 +169,7 @@ fn render_text_preview(lines: &[String], truncated: bool, p: &Palette) -> AnyEle
             div()
                 .text_size(px(12.0))
                 .text_color(p.muted_foreground)
-                .child("（空文件）"),
+                .child(rust_i18n::t!("sftp.preview.empty_file").to_string()),
         );
     } else {
         for (index, line) in lines.iter().enumerate() {
@@ -194,7 +200,7 @@ fn render_text_preview(lines: &[String], truncated: bool, p: &Palette) -> AnyEle
             div()
                 .text_size(px(11.0))
                 .text_color(p.muted_foreground)
-                .child("仅显示文件开头部分"),
+                .child(rust_i18n::t!("sftp.preview.head_only").to_string()),
         );
     }
     body.into_any_element()

@@ -31,7 +31,7 @@ impl AppShell {
             panel.queue.active_transfers.remove(&op_id);
             panel.recompute_progress();
             if panel.queue.active_transfers.is_empty() {
-                panel.set_status("传输已暂停".to_string());
+                panel.set_status(rust_i18n::t!("sftp.queue_actions.paused_one").to_string());
             }
             cx.notify();
         }
@@ -100,7 +100,7 @@ impl AppShell {
             panel.queue.active_transfers.remove(&op_id);
             panel.recompute_progress();
             if panel.queue.active_transfers.is_empty() {
-                panel.set_status("已取消传输".to_string());
+                panel.set_status(rust_i18n::t!("sftp.queue_actions.cancelled_one").to_string());
             }
             cx.notify();
         }
@@ -158,7 +158,7 @@ impl AppShell {
                     task.mode = TransferMode::Resume;
                 }
                 panel.queue.tasks.insert(0, task);
-                panel.set_status("已将传输任务置顶并优先开始传输".to_string());
+                panel.set_status(rust_i18n::t!("sftp.queue_actions.prioritized").to_string());
             }
             panel.recompute_progress();
             cx.notify();

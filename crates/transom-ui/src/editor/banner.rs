@@ -45,7 +45,7 @@ pub(crate) fn render_error_banner(
                     .warning()
                     .compact()
                     .icon(IconName::Shield)
-                    .label("使用 Sudo 提权保存")
+                    .label(rust_i18n::t!("editor.sudo_save_action").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.prompt_sudo_save(&sudo_editor, window, cx);
                     })),
@@ -78,14 +78,14 @@ pub(crate) fn render_conflict_banner(
                 .flex_1()
                 .text_xs()
                 .text_color(p.danger)
-                .child("远端文件在打开后已被修改，直接回传会覆盖这些改动"),
+                .child(rust_i18n::t!("editor.conflict_hint").to_string()),
         )
         .child(
             Button::new("editor-conflict-reload")
                 .ghost()
                 .compact()
                 .icon(IconName::RefreshCw)
-                .label("放弃本地并重新载入")
+                .label(rust_i18n::t!("editor.conflict_reload").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.redrive_editor_read(&reload_editor, cx);
                 })),
@@ -94,7 +94,7 @@ pub(crate) fn render_conflict_banner(
             Button::new("editor-conflict-overwrite")
                 .danger()
                 .compact()
-                .label("强制覆盖远端")
+                .label(rust_i18n::t!("editor.conflict_overwrite").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.overwrite_editor_panel_after_conflict(&force_editor, window, cx);
                 })),
@@ -103,7 +103,7 @@ pub(crate) fn render_conflict_banner(
             Button::new("editor-conflict-dismiss")
                 .ghost()
                 .compact()
-                .label("继续编辑")
+                .label(rust_i18n::t!("editor.conflict_continue").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.dismiss_editor_conflict(&dismiss_editor, window, cx);
                 })),
@@ -123,15 +123,15 @@ pub(crate) fn render_confirm_banner(
     let confirm_editor = editor.clone();
     let (message, cancel_label, confirm_label, confirm_id) = match kind {
         PanelConfirm::DiscardClose => (
-            "有未保存的修改，确定关闭并丢弃吗？",
-            "留下继续编辑",
-            "丢弃修改并关闭",
+            rust_i18n::t!("editor.confirm_discard_close").to_string(),
+            rust_i18n::t!("editor.confirm_keep_editing").to_string(),
+            rust_i18n::t!("editor.confirm_discard").to_string(),
             "editor-discard-close",
         ),
         PanelConfirm::Revert => (
-            "确定放弃全部未保存修改，恢复到最近回传的远端内容吗？该操作无法撤销。",
-            "取消",
-            "放弃修改",
+            rust_i18n::t!("editor.confirm_revert").to_string(),
+            rust_i18n::t!("common.cancel").to_string(),
+            rust_i18n::t!("editor.action_revert").to_string(),
             "editor-revert-confirm",
         ),
     };
@@ -160,7 +160,7 @@ pub(crate) fn render_confirm_banner(
                     .primary()
                     .compact()
                     .icon(IconName::Check)
-                    .label("保存并关闭")
+                    .label(rust_i18n::t!("editor.save_and_close").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.save_and_close_editor_panel(&save_close_editor, window, cx);
                     })),

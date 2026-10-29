@@ -228,10 +228,14 @@ impl AppShell {
                                 .justify_between()
                                 .text_xs()
                                 .text_color(p.muted_foreground)
-                                .child(format!(
-                                    "{:.1}s · {} 步",
-                                    entry.duration_secs, entry.step_count
-                                ))
+                                .child(
+                                    rust_i18n::t!(
+                                        "recorder.duration_steps",
+                                        seconds = format!("{:.1}", entry.duration_secs),
+                                        steps = entry.step_count
+                                    )
+                                    .to_string(),
+                                )
                                 .child(entry.modified_display.clone()),
                         ),
                 );

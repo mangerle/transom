@@ -91,7 +91,7 @@ impl AppShell {
             .child(
                 Button::new("confirm-sftp-delete")
                     .danger()
-                    .label("确认删除")
+                    .label(rust_i18n::t!("common.confirm_delete").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.sftp_confirm_delete(cx);
                         this.focus_active_sftp_panel(window, cx);
@@ -151,7 +151,7 @@ impl AppShell {
                 Button::new("save-sftp-filter")
                     .primary()
                     .icon(IconName::Check)
-                    .label("保存规则")
+                    .label(rust_i18n::t!("sftp.modals.filter_save").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.save_sftp_filter_modal(window, cx);
                     })),
@@ -160,7 +160,7 @@ impl AppShell {
         let dialog = Self::dialog_frame(
             "sftp-filter-modal",
             rust_i18n::t!("sftp.filter_rules").to_string(),
-            Some("仅对目录上传/下载生效；单文件传输不受影响。".to_string()),
+            Some(rust_i18n::t!("sftp.modals.filter_scope_hint").to_string()),
             content,
             Some(footer),
             px(560.0),
@@ -187,19 +187,19 @@ impl AppShell {
 
         let groups = [
             (
-                "所有者 (Owner)",
+                rust_i18n::t!("sftp.chmod.group_owner").to_string(),
                 (0o400, "chmod-ur"),
                 (0o200, "chmod-uw"),
                 (0o100, "chmod-ux"),
             ),
             (
-                "所属组 (Group)",
+                rust_i18n::t!("sftp.chmod.group_group").to_string(),
                 (0o040, "chmod-gr"),
                 (0o020, "chmod-gw"),
                 (0o010, "chmod-gx"),
             ),
             (
-                "其他用户 (Others)",
+                rust_i18n::t!("sftp.chmod.group_others").to_string(),
                 (0o004, "chmod-or"),
                 (0o002, "chmod-ow"),
                 (0o001, "chmod-ox"),
@@ -231,7 +231,7 @@ impl AppShell {
                             .items_center()
                             .child(
                                 Checkbox::new(r_id)
-                                    .label("读取 (r)")
+                                    .label(rust_i18n::t!("sftp.chmod.read").to_string())
                                     .checked(perms & r_mask != 0)
                                     .on_change(cx.listener(move |this, &checked, window, cx| {
                                         this.sftp_toggle_chmod_bit(r_mask, checked, window, cx);
@@ -239,7 +239,7 @@ impl AppShell {
                             )
                             .child(
                                 Checkbox::new(w_id)
-                                    .label("写入 (w)")
+                                    .label(rust_i18n::t!("sftp.chmod.write").to_string())
                                     .checked(perms & w_mask != 0)
                                     .on_change(cx.listener(move |this, &checked, window, cx| {
                                         this.sftp_toggle_chmod_bit(w_mask, checked, window, cx);
@@ -247,7 +247,7 @@ impl AppShell {
                             )
                             .child(
                                 Checkbox::new(x_id)
-                                    .label("执行 (x)")
+                                    .label(rust_i18n::t!("sftp.chmod.execute").to_string())
                                     .checked(perms & x_mask != 0)
                                     .on_change(cx.listener(move |this, &checked, window, cx| {
                                         this.sftp_toggle_chmod_bit(x_mask, checked, window, cx);
@@ -296,7 +296,7 @@ impl AppShell {
                                 div()
                                     .text_xs()
                                     .text_color(p.muted_foreground)
-                                    .child("八进制权限码:"),
+                                    .child(rust_i18n::t!("sftp.chmod.octal_label").to_string()),
                             )
                             .child(div().w(px(90.0)).child(Input::new(&octal_input).w_full()))
                             .child(
@@ -332,7 +332,7 @@ impl AppShell {
                 Button::new("save-sftp-chmod")
                     .primary()
                     .icon(IconName::Check)
-                    .label("应用权限")
+                    .label(rust_i18n::t!("sftp.chmod.apply").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.save_sftp_chmod_modal(window, cx);
                     })),
@@ -340,8 +340,8 @@ impl AppShell {
 
         let dialog = Self::dialog_frame(
             "sftp-chmod-modal",
-            format!("修改文件权限 (Chmod): {file_name}"),
-            Some(format!("远端路径: {remote_path}")),
+            rust_i18n::t!("sftp.chmod.title", name = file_name.as_str()).to_string(),
+            Some(rust_i18n::t!("sftp.chmod.remote_path", path = remote_path.as_str()).to_string()),
             content,
             Some(footer),
             px(520.0),
@@ -422,18 +422,31 @@ impl AppShell {
         let path = properties.path.clone();
 
         let mut rows: Vec<AnyElement> = Vec::with_capacity(9);
-        rows.push(property_row("名称", name.clone(), p));
-        rows.push(property_row("类型", properties.kind.clone(), p));
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_name").as_ref(),
+            name.clone(),
+            p,
+        ));
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_kind").as_ref(),
+            properties.kind.clone(),
+            p,
+        ));
         if let Some(size) = properties.size {
             rows.push(property_row(
-                "大小",
-                format!("{} ({} 字节)", format_size(size), size),
+                rust_i18n::t!("sftp.properties.label_size").as_ref(),
+                rust_i18n::t!(
+                    "sftp.properties.size_value",
+                    size = format_size(size),
+                    bytes = size
+                )
+                .to_string(),
                 p,
             ));
         }
         if let Some(permissions) = properties.permissions {
             rows.push(property_row(
-                "权限",
+                rust_i18n::t!("sftp.properties.label_permissions").as_ref(),
                 format!(
                     "{} ({})",
                     format_rwx_permissions(permissions),
@@ -443,19 +456,39 @@ impl AppShell {
             ));
         }
         if let Some(owner) = properties.owner.clone() {
-            rows.push(property_row("属主", owner, p));
+            rows.push(property_row(
+                rust_i18n::t!("sftp.properties.label_owner").as_ref(),
+                owner,
+                p,
+            ));
         }
         if let Some(group) = properties.group.clone() {
-            rows.push(property_row("属组", group, p));
+            rows.push(property_row(
+                rust_i18n::t!("sftp.properties.label_group").as_ref(),
+                group,
+                p,
+            ));
         }
         if let Some(modified) = properties.modified {
-            rows.push(property_row("修改时间", format_unix_time(modified), p));
+            rows.push(property_row(
+                rust_i18n::t!("sftp.properties.label_modified").as_ref(),
+                format_unix_time(modified),
+                p,
+            ));
         }
         if let Some(accessed) = properties.accessed {
-            rows.push(property_row("访问时间", format_unix_time(accessed), p));
+            rows.push(property_row(
+                rust_i18n::t!("sftp.properties.label_accessed").as_ref(),
+                format_unix_time(accessed),
+                p,
+            ));
         }
         if let Some(link_target) = properties.link_target.clone() {
-            rows.push(property_row("符号链接指向", link_target, p));
+            rows.push(property_row(
+                rust_i18n::t!("sftp.properties.label_link_target").as_ref(),
+                link_target,
+                p,
+            ));
         }
 
         let content = v_flex().gap_1().children(rows);
@@ -464,7 +497,7 @@ impl AppShell {
             Button::new("close-sftp-properties")
                 .ghost()
                 .icon(IconName::Close)
-                .label("关闭")
+                .label(rust_i18n::t!("app.close").to_string())
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.sftp_modals.properties = None;
                     this.focus_active_sftp_panel(window, cx);
@@ -472,10 +505,23 @@ impl AppShell {
                 })),
         );
 
+        let scope_label = if scope == "本地" {
+            rust_i18n::t!("sftp.local_title").to_string()
+        } else {
+            rust_i18n::t!("sftp.modals.scope_remote").to_string()
+        };
+
         let dialog = Self::dialog_frame(
             "sftp-properties-modal",
-            format!("属性: {name}"),
-            Some(format!("{scope}路径: {path}")),
+            rust_i18n::t!("sftp.properties.title", name = name.as_str()).to_string(),
+            Some(
+                rust_i18n::t!(
+                    "sftp.properties.subtitle",
+                    scope = scope_label,
+                    path = path.as_str()
+                )
+                .to_string(),
+            ),
             content,
             Some(footer),
             px(520.0),

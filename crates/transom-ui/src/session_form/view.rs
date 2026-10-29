@@ -156,7 +156,7 @@ impl AppShell {
         let Some(path) = rfd::FileDialog::new()
             .set_title(&title)
             .set_directory(crate::keys::default_ssh_dir())
-            .add_filter("OpenSSH 证书", &["pub"])
+            .add_filter(rust_i18n::t!("form.cert_filter").to_string(), &["pub"])
             .pick_file()
         else {
             return;
@@ -431,18 +431,18 @@ impl AppShell {
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child("Mosh 漫游协议参数配置"),
+                    .child(rust_i18n::t!("form.mosh.group").to_string()),
             )
             .child(
                 h_flex()
                     .gap_3()
                     .child(div().flex_1().child(Self::form_field(
-                        "远端 mosh-server 执行路径".to_string(),
+                        rust_i18n::t!("form.mosh.server_path").to_string(),
                         form.mosh_server_path.clone(),
                         p,
                     )))
                     .child(div().flex_1().child(Self::form_field(
-                        "远端 UDP 监听端口（默认 60000-61000 自动分配）".to_string(),
+                        rust_i18n::t!("form.mosh.server_port").to_string(),
                         form.mosh_server_port.clone(),
                         p,
                     ))),
@@ -451,7 +451,7 @@ impl AppShell {
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child("提示：Mosh 依赖远端已安装 mosh-server 且防火墙开放对应 UDP 端口范围；本地将优先通过 mosh-client 桥接漫游。"),
+                    .child(rust_i18n::t!("form.mosh.hint").to_string()),
             )
             .into_any_element()
     }

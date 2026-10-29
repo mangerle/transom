@@ -157,9 +157,9 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 常用等宽代码字体预设选项。
+    /// 常用等宽代码字体预设选项；左侧为文案键，右侧为写入输入框的字体族。
     pub(crate) const MONO_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
-        ("默认等宽 (JetBrains Mono)", ""),
+        ("settings.font_preset_default_mono", ""),
         ("JetBrains Mono", "JetBrains Mono"),
         ("Fira Code", "Fira Code"),
         ("Cascadia Code", "Cascadia Code"),
@@ -173,24 +173,24 @@ impl AppShell {
         ("Ubuntu Mono", "Ubuntu Mono"),
     ];
 
-    /// 常用中文字体预设选项。
+    /// 常用中文字体预设选项；左侧为文案键，右侧为写入输入框的字体族。
     pub(crate) const CJK_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
-        ("跟随系统回退", ""),
-        ("PingFang SC (苹方)", "PingFang SC"),
-        ("Microsoft YaHei (微软雅黑)", "Microsoft YaHei"),
-        ("Noto Sans CJK SC (思源黑体)", "Noto Sans CJK SC"),
-        ("Source Han Sans SC (思源黑体)", "Source Han Sans SC"),
-        ("WenQuanYi Micro Hei (文泉驿微米黑)", "WenQuanYi Micro Hei"),
-        ("Sarasa Gothic SC (更纱黑体)", "Sarasa Gothic SC"),
+        ("settings.font_preset_system_fallback", ""),
+        ("settings.font_preset_pingfang", "PingFang SC"),
+        ("settings.font_preset_yahei", "Microsoft YaHei"),
+        ("settings.font_preset_noto_cjk", "Noto Sans CJK SC"),
+        ("settings.font_preset_source_han", "Source Han Sans SC"),
+        ("settings.font_preset_wqy", "WenQuanYi Micro Hei"),
+        ("settings.font_preset_sarasa", "Sarasa Gothic SC"),
     ];
 
-    /// 常用 UI 界面字体预设选项。
+    /// 常用 UI 界面字体预设选项；左侧为文案键，右侧为写入输入框的字体族。
     pub(crate) const UI_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
-        ("跟随系统默认", ""),
+        ("settings.font_preset_system_default", ""),
         ("Inter", "Inter"),
         ("Segoe UI", "Segoe UI"),
-        ("PingFang SC (苹方)", "PingFang SC"),
-        ("Microsoft YaHei (微软雅黑)", "Microsoft YaHei"),
+        ("settings.font_preset_pingfang", "PingFang SC"),
+        ("settings.font_preset_yahei", "Microsoft YaHei"),
         ("Noto Sans", "Noto Sans"),
     ];
 
@@ -221,19 +221,19 @@ impl AppShell {
                             .dropdown_menu({
                                 let input = input.clone();
                                 move |mut menu, _window, cx| {
-                                    for &(name, value) in presets {
+                                    for &(name_key, value) in presets {
                                         let input = input.clone();
                                         let current_val = input.read(cx).value();
                                         let is_active = current_val == value
                                             || (value.is_empty() && current_val.trim().is_empty());
                                         menu = menu.item(
-                                            PopupMenuItem::new(name).checked(is_active).on_click(
-                                                move |_, window, cx| {
+                                            PopupMenuItem::new(rust_i18n::t!(name_key).to_string())
+                                                .checked(is_active)
+                                                .on_click(move |_, window, cx| {
                                                     input.update(cx, |inp, cx| {
                                                         inp.set_value(value, window, cx);
                                                     });
-                                                },
-                                            ),
+                                                }),
                                         );
                                     }
                                     menu
@@ -265,9 +265,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let picked = rfd::FileDialog::new()
-            .set_title("选择本地字体文件")
+            .set_title(rust_i18n::t!("settings.pick_font_title").to_string())
             .add_filter(
-                "字体文件 (*.ttf, *.otf, *.ttc, *.woff2)",
+                rust_i18n::t!("settings.font_file_filter").to_string(),
                 &["ttf", "otf", "ttc", "woff2"],
             )
             .pick_file();
@@ -302,7 +302,8 @@ impl AppShell {
             }
             Err(err) => {
                 log::error!("读取本地字体文件失败，路径: {:?}，原因: {err}", path);
-                self.status = Some(format!("读取字体文件失败: {err}"));
+                self.status =
+                    Some(rust_i18n::t!("settings.font_read_failed", error = err).to_string());
                 cx.notify();
             }
         }

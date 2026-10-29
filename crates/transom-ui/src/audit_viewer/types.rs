@@ -96,12 +96,12 @@ pub(crate) fn find_session_audit_logs(
 /// 从文件流式读取纯文本并剥离 ANSI 转义字符。
 pub(crate) fn read_log_content(path: &Path, max_bytes: usize) -> (String, bool) {
     let Ok(mut file) = std::fs::File::open(path) else {
-        return ("(无法打开日志文件)".to_string(), false);
+        return (rust_i18n::t!("audit_viewer.open_failed").to_string(), false);
     };
     let mut buffer = Vec::new();
     let mut take = (&mut file).take((max_bytes + 1) as u64);
     if take.read_to_end(&mut buffer).is_err() {
-        return ("(读取日志文件出错)".to_string(), false);
+        return (rust_i18n::t!("audit_viewer.read_failed").to_string(), false);
     }
     let is_truncated = buffer.len() > max_bytes;
     if is_truncated {

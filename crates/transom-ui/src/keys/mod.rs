@@ -53,10 +53,11 @@ impl KeyWizardState {
                 .default_value(default_path)
                 .placeholder("~/.ssh/id_ed25519")
         });
+        let passphrase_placeholder = rust_i18n::t!("keys.passphrase_placeholder").to_string();
         let passphrase_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .masked(true)
-                .placeholder("留空则不加密私钥")
+                .placeholder(passphrase_placeholder)
         });
         Self {
             ssh_dir,
@@ -137,7 +138,7 @@ impl AppShell {
         }
         let path_text = state.path.read(cx).value().trim().to_string();
         if path_text.is_empty() {
-            state.error = Some("请填写私钥保存路径".to_string());
+            state.error = Some(rust_i18n::t!("keys.error_path_empty").to_string());
             cx.notify();
             return;
         }
@@ -197,12 +198,15 @@ impl AppShell {
                     .keys
                     .iter()
                     .position(|key| key.path == generated.public_path);
-                state.message = Some(format!(
-                    "已生成 {} 密钥：{}（{}）",
-                    generated.public_key.algorithm,
-                    generated.private_path.display(),
-                    generated.public_key.fingerprint
-                ));
+                state.message = Some(
+                    rust_i18n::t!(
+                        "keys.generated",
+                        algorithm = generated.public_key.algorithm.as_str(),
+                        path = generated.private_path.display().to_string(),
+                        fingerprint = generated.public_key.fingerprint.as_str()
+                    )
+                    .to_string(),
+                );
                 state
                     .passphrase
                     .update(cx, |input, cx| input.set_value("", window, cx));
@@ -228,16 +232,16 @@ impl AppShell {
 
     pub(crate) fn copy_selected_key(&mut self, cx: &mut Context<Self>) {
         let Some(key) = self.selected_key().cloned() else {
-            self.set_key_error("请先选择一个公钥", cx);
+            self.set_key_error(rust_i18n::t!("keys.error_select_first").as_ref(), cx);
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(key.openssh));
-        self.set_key_notice("公钥已复制到剪贴板", cx);
+        self.set_key_notice(rust_i18n::t!("keys.copied").as_ref(), cx);
     }
 
     pub(crate) fn export_selected_key(&mut self, cx: &mut Context<Self>) {
         let Some(key) = self.selected_key().cloned() else {
-            self.set_key_error("请先选择一个公钥", cx);
+            self.set_key_error(rust_i18n::t!("keys.error_select_first").as_ref(), cx);
             return;
         };
         let file_name = key
@@ -246,9 +250,9 @@ impl AppShell {
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| "public_key.pub".to_string());
         let mut dialog = rfd::FileDialog::new()
-            .set_title("导出公钥")
+            .set_title(rust_i18n::t!("keys.export_title").to_string())
             .set_file_name(&file_name)
-            .add_filter("OpenSSH 公钥", &["pub"]);
+            .add_filter(rust_i18n::t!("keys.openssh_filter").to_string(), &["pub"]);
         if let Some(parent) = key.path.parent() {
             dialog = dialog.set_directory(parent);
         }
@@ -256,14 +260,20 @@ impl AppShell {
             return;
         };
         match std::fs::write(&target, format!("{}\n", key.openssh)) {
-            Ok(()) => self.set_key_notice(&format!("公钥已导出到 {}", target.display()), cx),
-            Err(error) => self.set_key_error(&format!("导出公钥失败: {error}"), cx),
+            Ok(()) => self.set_key_notice(
+                rust_i18n::t!("keys.exported", path = target.display().to_string()).as_ref(),
+                cx,
+            ),
+            Err(error) => self.set_key_error(
+                rust_i18n::t!("keys.export_failed", error = error.to_string()).as_ref(),
+                cx,
+            ),
         }
     }
 
     pub(crate) fn deploy_selected_key(&mut self, target: KeyTarget, cx: &mut Context<Self>) {
         let Some(key) = self.selected_key().cloned() else {
-            self.set_key_error("请先选择一个公钥", cx);
+            self.set_key_error(rust_i18n::t!("keys.error_select_first").as_ref(), cx);
             return;
         };
         let key_name = key
@@ -283,10 +293,17 @@ impl AppShell {
             return;
         };
         if sent {
-            state.message = Some(format!("正在部署 {key_name} 到 {} ...", target.title));
+            state.message = Some(
+                rust_i18n::t!(
+                    "keys.deploying",
+                    key = key_name.as_str(),
+                    host = target.title.as_str()
+                )
+                .to_string(),
+            );
             state.error = None;
         } else {
-            state.error = Some("发送部署请求失败，应用可能已退出".to_string());
+            state.error = Some(rust_i18n::t!("keys.deploy_send_failed").to_string());
         }
         cx.notify();
     }
@@ -304,7 +321,8 @@ impl AppShell {
                     state.message = None;
                 }
                 None => {
-                    state.message = Some(format!("公钥 {key_name} 已写入远端 authorized_keys"));
+                    state.message =
+                        Some(rust_i18n::t!("keys.deployed", key = key_name.as_str()).to_string());
                     state.error = None;
                 }
             }
@@ -313,7 +331,10 @@ impl AppShell {
         }
         match error {
             Some(error) => self.set_error(localized_error(&error)),
-            None => self.status = Some(format!("公钥 {key_name} 已部署")),
+            None => {
+                self.status =
+                    Some(rust_i18n::t!("keys.deployed_status", key = key_name.as_str()).to_string())
+            }
         }
         cx.notify();
     }

@@ -49,9 +49,9 @@ pub(crate) fn render_editor_list_popover(
         .icon(IconName::Files)
         .selected(open)
         .tooltip(if count > 0 {
-            format!("已打开的编辑器（{count}）")
+            rust_i18n::t!("editor.open_editors_tooltip", count = count).to_string()
         } else {
-            "已打开的编辑器".to_string()
+            rust_i18n::t!("editor.open_editors").to_string()
         });
 
     let app_open = app.clone();
@@ -87,7 +87,7 @@ fn render_editor_list_card(
             .py_4()
             .text_xs()
             .text_color(p.muted_foreground)
-            .child("当前标签没有打开的编辑文件")
+            .child(rust_i18n::t!("editor.list_empty").to_string())
             .into_any_element();
     }
     let rows: Vec<_> = panels

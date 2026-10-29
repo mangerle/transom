@@ -187,9 +187,9 @@ fn render_panel_header(
                 IconName::ChevronDown
             })
             .accessibility_label(if item.collapsed {
-                "展开面板"
+                rust_i18n::t!("editor.expand_panel").to_string()
             } else {
-                "折叠面板"
+                rust_i18n::t!("editor.collapse_panel").to_string()
             })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.toggle_editor_panel_collapsed(&fold_editor, cx);
@@ -209,9 +209,9 @@ fn render_panel_header(
                 IconName::Maximize2
             })
             .accessibility_label(if item.maximized {
-                "还原面板"
+                rust_i18n::t!("editor.restore_panel").to_string()
             } else {
-                "最大化面板"
+                rust_i18n::t!("editor.maximize_panel").to_string()
             })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.toggle_editor_panel_maximized(&zoom_editor, cx);
@@ -222,7 +222,7 @@ fn render_panel_header(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Close)
-                .accessibility_label("关闭面板")
+                .accessibility_label(rust_i18n::t!("editor.close_panel").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.request_close_editor_panel(&close_editor, window, cx);
                 })),
@@ -249,7 +249,10 @@ fn render_panel_body(
                 .text_sm()
                 .text_color(p.muted_foreground)
                 .child(Spinner::new().xsmall().color(p.muted_foreground))
-                .child(format!("正在读取 {}", item.remote_path))
+                .child(
+                    rust_i18n::t!("editor.reading_path", path = item.remote_path.as_str())
+                        .to_string(),
+                )
                 .into_any_element()
         } else {
             // 读取失败：占位之外给一条重试出口，瞬时网络抖动不必关面板重开。
@@ -262,12 +265,12 @@ fn render_panel_body(
                 .text_sm()
                 .text_color(p.muted_foreground)
                 .child(Icon::new(IconName::CircleAlert).xsmall())
-                .child("远端内容未载入，无法编辑")
+                .child(rust_i18n::t!("editor.not_loaded").to_string())
                 .child(
                     Button::new("editor-retry-read")
                         .compact()
                         .icon(IconName::RefreshCw)
-                        .label("重试读取")
+                        .label(rust_i18n::t!("editor.retry_read").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.redrive_editor_read(&retry_editor, cx);
                         })),

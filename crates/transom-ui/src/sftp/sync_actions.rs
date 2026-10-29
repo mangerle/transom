@@ -118,7 +118,7 @@ impl AppShell {
             .collect::<Vec<_>>();
 
         if items.is_empty() {
-            modal.error = Some("请至少勾选一个可同步项".to_string());
+            modal.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
             self.sftp_modals.sync = Some(modal);
             cx.notify();
             return;
@@ -140,9 +140,14 @@ impl AppShell {
             .and_then(|tab| tab.sftp_mut())
         {
             panel.queue.tasks.push(task);
-            panel.set_status(format!(
-                "已加入目录同步任务（上传 {upload_count} 项，下载 {download_count} 项）"
-            ));
+            panel.set_status(
+                rust_i18n::t!(
+                    "sftp.nav.sync_queued",
+                    upload = upload_count,
+                    download = download_count
+                )
+                .to_string(),
+            );
         }
         self.focus_active_sftp_panel(window, cx);
         cx.notify();

@@ -44,14 +44,24 @@ impl AppShell {
 
         let path_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.path").as_ref());
         let name_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref());
-        let remote_filter_input = sftp_text_input(window, cx, "", "过滤远程文件 (模糊匹配名称)...");
+        let remote_filter_input = sftp_text_input(
+            window,
+            cx,
+            "",
+            rust_i18n::t!("sftp.sidebar.filter_remote_placeholder").as_ref(),
+        );
         let local_path_input = sftp_text_input(
             window,
             cx,
             &local_path.display().to_string(),
             rust_i18n::t!("sftp.local_folder").as_ref(),
         );
-        let local_filter_input = sftp_text_input(window, cx, "", "过滤本地文件 (模糊匹配名称)...");
+        let local_filter_input = sftp_text_input(
+            window,
+            cx,
+            "",
+            rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
+        );
         let local_enter_sub = cx.subscribe_in(
             &local_path_input,
             window,

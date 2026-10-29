@@ -29,9 +29,8 @@ impl AppShell {
         let connection_id = tab.connection_id;
         let remote_dir = tab.sftp().map(|panel| panel.remote.path.clone());
         let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
-            self.status = Some(format!(
-                "无法解析代码链接的相对路径：{path}（打开 SFTP 面板后可提供远端工作目录）"
-            ));
+            self.status =
+                Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
             cx.notify();
             return;
         };
@@ -41,7 +40,8 @@ impl AppShell {
             if local.is_absolute() {
                 crate::audit::open_local_path(local);
             } else {
-                self.status = Some(format!("本地代码链接需要绝对路径：{resolved}"));
+                self.status =
+                    Some(rust_i18n::t!("editor.error_local_absolute", path = resolved).to_string());
                 cx.notify();
             }
             return;

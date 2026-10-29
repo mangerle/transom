@@ -146,9 +146,18 @@ impl SftpSideRemoteState {
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> Self {
-        let path_input = crate::palette::sftp_text_input(window, cx, &path, "远端路径...");
-        let filter_input =
-            crate::palette::sftp_text_input(window, cx, "", "过滤文件 (模糊匹配)...");
+        let path_input = crate::palette::sftp_text_input(
+            window,
+            cx,
+            &path,
+            rust_i18n::t!("sftp.sidebar.remote_path_placeholder").as_ref(),
+        );
+        let filter_input = crate::palette::sftp_text_input(
+            window,
+            cx,
+            "",
+            rust_i18n::t!("sftp.sidebar.filter_placeholder").as_ref(),
+        );
         Self {
             connection_id,
             title,

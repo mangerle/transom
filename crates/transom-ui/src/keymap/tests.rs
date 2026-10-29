@@ -84,9 +84,20 @@ fn accepts_modifier_and_function_keys() {
 #[test]
 fn rejects_plain_typing_override_and_duplicates() {
     let error = parse_terminal_key_bindings("a = \\e").unwrap_err();
-    assert!(error.contains("正常字符输入"), "错误: {error}");
+    assert!(
+        error.contains(rust_i18n::t!("keymap.missing_modifier", keys = "a").as_ref()),
+        "错误: {error}"
+    );
     let error = parse_terminal_key_bindings("space = \\e").unwrap_err();
-    assert!(error.contains("正常字符输入"), "错误: {error}");
+    assert!(
+        error.contains(rust_i18n::t!("keymap.missing_modifier", keys = "space").as_ref()),
+        "错误: {error}"
+    );
     let error = parse_terminal_key_bindings("ctrl-a = \\e\nctrl-a = \\x01").unwrap_err();
-    assert!(error.contains("重复绑定"), "错误: {error}");
+    assert!(
+        error.contains(
+            rust_i18n::t!("keymap.duplicate", keys = "ctrl-a", previous = "ctrl-a").as_ref()
+        ),
+        "错误: {error}"
+    );
 }

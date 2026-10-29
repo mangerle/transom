@@ -22,14 +22,15 @@ pub(crate) fn format_speed(bytes_per_sec: u64) -> String {
 
 /// 将剩余秒数格式化为可读的 ETA 文本（"剩余 mm:ss" 或 "剩余 hh:mm:ss"）。
 pub(crate) fn format_eta(secs: u64) -> String {
-    if secs >= 3600 {
+    let time = if secs >= 3600 {
         let hours = secs / 3600;
         let mins = (secs % 3600) / 60;
         let s = secs % 60;
-        format!("剩余 {hours:02}:{mins:02}:{s:02}")
+        format!("{hours:02}:{mins:02}:{s:02}")
     } else {
         let mins = secs / 60;
         let s = secs % 60;
-        format!("剩余 {mins:02}:{s:02}")
-    }
+        format!("{mins:02}:{s:02}")
+    };
+    rust_i18n::t!("sftp.queue.eta", time = time.as_str()).to_string()
 }

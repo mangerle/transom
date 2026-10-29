@@ -144,10 +144,10 @@ impl AppShell {
 
     fn activity_item_tooltip(&self, id: ActivityItemId, label: &str) -> String {
         if id == ActivityItemId::Language {
-            if self.settings.language == "zh-CN" {
-                "切换为英文 (Switch to English)".to_string()
+            if crate::i18n::resolve_language(&self.settings.language) == "zh-CN" {
+                rust_i18n::t!("activity.switch_to_english").to_string()
             } else {
-                "切换为中文 (Switch to Chinese)".to_string()
+                rust_i18n::t!("activity.switch_to_chinese").to_string()
             }
         } else if id == ActivityItemId::Sftp
             && self

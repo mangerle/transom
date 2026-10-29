@@ -49,10 +49,9 @@ impl AppShell {
         let count = targets.len();
         self.sftp_modals.confirm = Some(SftpConfirmModalState {
             action: SftpPendingDelete::Remote { tab_id, targets },
-            title: "删除远端项目".to_string(),
-            description: format!(
-                "将永久删除 {count} 个远端项目（目录按递归删除），此操作不可撤销。"
-            ),
+            title: rust_i18n::t!("sftp.file_ops.delete_remote_title").to_string(),
+            description: rust_i18n::t!("sftp.file_ops.delete_remote_body", count = count)
+                .to_string(),
         });
         cx.notify();
     }
@@ -71,7 +70,9 @@ impl AppShell {
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.set_status(format!("正在删除 {count} 个远端项目"));
+            panel.set_status(
+                rust_i18n::t!("sftp.file_ops.deleting_remote", count = count).to_string(),
+            );
             cx.notify();
         }
     }
@@ -133,18 +134,23 @@ impl AppShell {
     ) {
         let (title, prompt, target) = if is_remote {
             (
-                "新建远端文件夹".to_string(),
-                "请输入新建远端文件夹的名称:".to_string(),
+                rust_i18n::t!("sftp.file_ops.mkdir_remote_title").to_string(),
+                rust_i18n::t!("sftp.file_ops.mkdir_remote_prompt").to_string(),
                 SftpInputTarget::RemoteMkdir,
             )
         } else {
             (
-                "新建本地文件夹".to_string(),
-                "请输入新建本地文件夹的名称:".to_string(),
+                rust_i18n::t!("sftp.file_ops.mkdir_local_title").to_string(),
+                rust_i18n::t!("sftp.file_ops.mkdir_local_prompt").to_string(),
                 SftpInputTarget::LocalMkdir,
             )
         };
-        let input = sftp_text_input(window, cx, "", "文件夹名称");
+        let input = sftp_text_input(
+            window,
+            cx,
+            "",
+            &rust_i18n::t!("sftp.file_ops.folder_name_placeholder"),
+        );
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
@@ -165,12 +171,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let input = sftp_text_input(window, cx, "", "新文件名称");
+        let input = sftp_text_input(
+            window,
+            cx,
+            "",
+            &rust_i18n::t!("sftp.file_ops.new_file_placeholder"),
+        );
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
-            title: "新建远端文件".to_string(),
-            prompt: "输入新文件名称（在当前远端目录下创建）:".to_string(),
+            title: rust_i18n::t!("sftp.file_ops.new_remote_file_title").to_string(),
+            prompt: rust_i18n::t!("sftp.file_ops.new_remote_file_prompt").to_string(),
             input,
             target: SftpInputTarget::RemoteEditorNewFile,
             error: None,
@@ -185,12 +196,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let input = sftp_text_input(window, cx, "", "新文件名称");
+        let input = sftp_text_input(
+            window,
+            cx,
+            "",
+            &rust_i18n::t!("sftp.file_ops.new_file_placeholder"),
+        );
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
-            title: "新建本地文件".to_string(),
-            prompt: "输入新文件名称（在当前本地目录下创建）:".to_string(),
+            title: rust_i18n::t!("sftp.file_ops.new_local_file_title").to_string(),
+            prompt: rust_i18n::t!("sftp.file_ops.new_local_file_prompt").to_string(),
             input,
             target: SftpInputTarget::LocalNewFile,
             error: None,
@@ -221,8 +237,8 @@ impl AppShell {
                 .map(|(_, name)| name.to_string())
                 .unwrap_or_else(|| selected.clone());
             (
-                "重命名远端文件".to_string(),
-                "请输入新的名称:".to_string(),
+                rust_i18n::t!("sftp.file_ops.rename_remote_title").to_string(),
+                rust_i18n::t!("sftp.file_ops.rename_prompt").to_string(),
                 initial,
                 SftpInputTarget::RemoteRename { old_path: selected },
             )
@@ -235,13 +251,18 @@ impl AppShell {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
             (
-                "重命名本地文件".to_string(),
-                "请输入新的名称:".to_string(),
+                rust_i18n::t!("sftp.file_ops.rename_local_title").to_string(),
+                rust_i18n::t!("sftp.file_ops.rename_prompt").to_string(),
                 initial,
                 SftpInputTarget::LocalRename { old_path: selected },
             )
         };
-        let input = sftp_text_input(window, cx, &initial_value, "新名称");
+        let input = sftp_text_input(
+            window,
+            cx,
+            &initial_value,
+            &rust_i18n::t!("sftp.file_ops.rename_placeholder"),
+        );
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
@@ -288,8 +309,12 @@ impl AppShell {
                 return;
             };
             (
-                "创建远端软链接".to_string(),
-                format!("新链接将创建于当前远端目录，指向: {}", entry.path),
+                rust_i18n::t!("sftp.file_ops.symlink_remote_title").to_string(),
+                rust_i18n::t!(
+                    "sftp.file_ops.symlink_remote_prompt",
+                    path = entry.path.as_str()
+                )
+                .to_string(),
                 format!("{}.link", entry.name),
                 SftpInputTarget::RemoteSymlink {
                     target: entry.path.clone(),
@@ -304,15 +329,24 @@ impl AppShell {
                 .map(|name| format!("{}.link", name.to_string_lossy()))
                 .unwrap_or_else(|| "link".to_string());
             (
-                "创建本地软链接".to_string(),
-                format!("新链接将创建于当前本地目录，指向: {}", selected.display()),
+                rust_i18n::t!("sftp.file_ops.symlink_local_title").to_string(),
+                rust_i18n::t!(
+                    "sftp.file_ops.symlink_local_prompt",
+                    path = selected.display().to_string()
+                )
+                .to_string(),
                 initial_name,
                 SftpInputTarget::LocalSymlink {
                     target_path: selected,
                 },
             )
         };
-        let input = sftp_text_input(window, cx, &initial_value, "软链接名称");
+        let input = sftp_text_input(
+            window,
+            cx,
+            &initial_value,
+            &rust_i18n::t!("sftp.file_ops.symlink_name_placeholder"),
+        );
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
@@ -341,15 +375,18 @@ impl AppShell {
             return;
         };
         let parent_dir = panel.remote.path.clone();
-        let input = sftp_text_input(window, cx, &default_name, "归档文件名");
+        let input = sftp_text_input(
+            window,
+            cx,
+            &default_name,
+            &rust_i18n::t!("sftp.file_ops.archive_placeholder"),
+        );
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
-            title: "远程归档压缩".to_string(),
-            prompt: format!(
-                "将打包选中的 {} 项至当前目录，请输入归档文件名 (.tar.gz / .zip):",
-                source_paths.len()
-            ),
+            title: rust_i18n::t!("sftp.file_ops.archive_title").to_string(),
+            prompt: rust_i18n::t!("sftp.file_ops.archive_prompt", count = source_paths.len())
+                .to_string(),
             input,
             target: SftpInputTarget::RemoteArchive {
                 source_paths,
@@ -376,12 +413,17 @@ impl AppShell {
             return;
         };
         let parent_dir = panel.remote.path.clone();
-        let input = sftp_text_input(window, cx, &default_dir_name, "目标文件夹名称");
+        let input = sftp_text_input(
+            window,
+            cx,
+            &default_dir_name,
+            &rust_i18n::t!("sftp.file_ops.extract_placeholder"),
+        );
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
             tab_id,
-            title: "远程解压缩至新文件夹".to_string(),
-            prompt: "请输入解压目标子文件夹名称（将在当前目录下创建）:".to_string(),
+            title: rust_i18n::t!("sftp.file_ops.extract_title").to_string(),
+            prompt: rust_i18n::t!("sftp.file_ops.extract_prompt").to_string(),
             input,
             target: SftpInputTarget::RemoteExtract {
                 archive_path,

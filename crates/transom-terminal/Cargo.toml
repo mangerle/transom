@@ -23,6 +23,7 @@ log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 regex.workspace = true
+rust-i18n.workspace = true
 # Kitty 图形协议：base64 载荷解码与 PNG/RGB 像素解码。
 base64.workspace = true
 image.workspace = true

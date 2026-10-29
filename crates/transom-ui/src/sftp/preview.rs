@@ -333,29 +333,39 @@ fn decode_thumbnail(
 
     let dimensions = image::ImageReader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()
-        .map_err(|error| format!("无法识别图片格式: {error}"))?
+        .map_err(|error| {
+            rust_i18n::t!("sftp.preview.unrecognized_format", error = error).to_string()
+        })?
         .into_dimensions()
-        .map_err(|error| format!("读取图片尺寸失败: {error}"))?;
+        .map_err(|error| {
+            rust_i18n::t!("sftp.preview.read_dimensions_failed", error = error).to_string()
+        })?;
     let pixels = u64::from(dimensions.0).saturating_mul(u64::from(dimensions.1));
     if pixels > max_pixels {
-        return Err(format!(
-            "图片尺寸 {}x{}（{pixels} 像素）超过预览上限 {max_pixels} 像素",
-            dimensions.0, dimensions.1
-        ));
+        return Err(rust_i18n::t!(
+            "sftp.preview.too_many_pixels",
+            width = dimensions.0,
+            height = dimensions.1,
+            pixels = pixels,
+            max = max_pixels
+        )
+        .to_string());
     }
 
     let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()
-        .map_err(|error| format!("无法识别图片格式: {error}"))?;
+        .map_err(|error| {
+            rust_i18n::t!("sftp.preview.unrecognized_format", error = error).to_string()
+        })?;
     let mut decoder = reader
         .into_decoder()
-        .map_err(|error| format!("创建图片解码器失败: {error}"))?;
+        .map_err(|error| rust_i18n::t!("sftp.preview.decoder_failed", error = error).to_string())?;
     // 方向信息缺失时按不旋转处理，宁可保持原始方向也不要让预览失败。
     let orientation = decoder
         .orientation()
         .unwrap_or(image::metadata::Orientation::NoTransforms);
     let mut image = image::DynamicImage::from_decoder(decoder)
-        .map_err(|error| format!("解码图片失败: {error}"))?;
+        .map_err(|error| rust_i18n::t!("sftp.preview.decode_failed", error = error).to_string())?;
     image.apply_orientation(orientation);
 
     let image = if image.width() <= max_width && image.height() <= max_height {
@@ -474,7 +484,15 @@ mod tests {
     fn test_decode_thumbnail_rejects_too_many_pixels() {
         let bytes = encode_png(3, 3, [0, 0, 0, 255]);
         let error = decode_thumbnail(&bytes, 8, 10, 10).expect_err("9 像素超过上限 8");
-        assert!(error.contains("超过预览上限"));
+        let expected = rust_i18n::t!(
+            "sftp.preview.too_many_pixels",
+            width = 3,
+            height = 3,
+            pixels = 9,
+            max = 8
+        )
+        .to_string();
+        assert_eq!(error, expected);
     }
 
     #[test]

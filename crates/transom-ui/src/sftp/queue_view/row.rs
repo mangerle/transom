@@ -28,10 +28,10 @@ pub(super) fn render_queue_task_row(
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let dir_tag = match task.direction {
-        TransferDirection::Upload => "↑ 上传",
-        TransferDirection::Download => "↓ 下载",
-        TransferDirection::Sync => "↕ 同步",
-        TransferDirection::RemoteCopy => "⇋ 互传",
+        TransferDirection::Upload => rust_i18n::t!("sftp.queue.dir_upload").to_string(),
+        TransferDirection::Download => rust_i18n::t!("sftp.queue.dir_download").to_string(),
+        TransferDirection::Sync => rust_i18n::t!("sftp.queue.dir_sync").to_string(),
+        TransferDirection::RemoteCopy => rust_i18n::t!("sftp.queue.dir_remote_copy").to_string(),
     };
     let status_str = match &task.status {
         TransferStatus::Transferring => progress_percent(task).map_or_else(
@@ -53,7 +53,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::Pause)
-                        .tooltip("暂停传输")
+                        .tooltip(rust_i18n::t!("sftp.queue.pause_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_pause_task(tab_id, task_id, cx);
                         })),
@@ -63,7 +63,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::X)
-                        .tooltip("取消任务")
+                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_cancel_task(tab_id, task_id, cx);
                         })),
@@ -75,7 +75,7 @@ pub(super) fn render_queue_task_row(
                     .ghost()
                     .xsmall()
                     .icon(IconName::X)
-                    .tooltip("取消任务")
+                    .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.sftp_cancel_task(tab_id, task_id, cx);
                     })),
@@ -88,7 +88,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::ArrowUpToLine)
-                        .tooltip("置顶优先传输")
+                        .tooltip(rust_i18n::t!("sftp.queue.prioritize_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_prioritize_task(tab_id, task_id, cx);
                         })),
@@ -98,7 +98,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::Play)
-                        .tooltip("恢复传输")
+                        .tooltip(rust_i18n::t!("sftp.queue.resume_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_resume_task(tab_id, task_id, cx);
                         })),
@@ -108,7 +108,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::X)
-                        .tooltip("取消任务")
+                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_cancel_task(tab_id, task_id, cx);
                         })),
@@ -121,7 +121,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::ArrowUpToLine)
-                        .tooltip("置顶优先传输")
+                        .tooltip(rust_i18n::t!("sftp.queue.prioritize_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_prioritize_task(tab_id, task_id, cx);
                         })),
@@ -131,7 +131,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::X)
-                        .tooltip("取消任务")
+                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_cancel_task(tab_id, task_id, cx);
                         })),
@@ -144,7 +144,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::RotateCw)
-                        .tooltip("重试传输")
+                        .tooltip(rust_i18n::t!("sftp.queue.retry_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_resume_task(tab_id, task_id, cx);
                         })),
@@ -154,7 +154,7 @@ pub(super) fn render_queue_task_row(
                         .ghost()
                         .xsmall()
                         .icon(IconName::X)
-                        .tooltip("取消任务")
+                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_cancel_task(tab_id, task_id, cx);
                         })),
@@ -166,7 +166,7 @@ pub(super) fn render_queue_task_row(
                     .ghost()
                     .xsmall()
                     .icon(IconName::Trash)
-                    .tooltip("移除记录")
+                    .tooltip(rust_i18n::t!("sftp.overlay_remove").to_string())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.sftp_remove_task(tab_id, task_id, cx);
                     })),

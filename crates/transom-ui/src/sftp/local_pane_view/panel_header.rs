@@ -25,7 +25,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::X)
-            .tooltip("关闭面板")
+            .tooltip(rust_i18n::t!("sftp.nav.close_panel").to_string())
             .on_click(cx.listener(|this, _, _, cx| {
                 if let Some(tab_id) = this.workspace.active_tab
                     && let Some(tab) = this.workspace.tab_mut(tab_id)

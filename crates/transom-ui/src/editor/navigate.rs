@@ -60,7 +60,7 @@ impl AppShell {
         else {
             return;
         };
-        let input = sftp_text_input(window, cx, "", "行号，如 120");
+        let input = sftp_text_input(window, cx, "", &rust_i18n::t!("editor.goto_placeholder"));
         input.update(cx, |state, cx| state.focus(window, cx));
         // 输入框内按回车直接确认：订阅句柄随模态存亡，关闭模态即退订。
         let enter_sub =
@@ -96,7 +96,7 @@ impl AppShell {
         let raw = modal.input.read(cx).value().trim().to_string();
         let Some(line) = raw.parse::<usize>().ok().filter(|line| *line >= 1) else {
             if let Some(modal) = self.sftp_modals.goto_line.as_mut() {
-                modal.error = Some("请输入大于 0 的整数行号".to_string());
+                modal.error = Some(rust_i18n::t!("editor.goto_error").to_string());
             }
             cx.notify();
             return;
@@ -127,7 +127,7 @@ impl AppShell {
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(format!("目标行号（1 - {total}），超出范围将跳到最后一行")),
+                    .child(rust_i18n::t!("editor.goto_hint", total = total).to_string()),
             )
             .child(Input::new(&input).w_full())
             .when_some(error, |this, err| {
@@ -156,7 +156,7 @@ impl AppShell {
                 Button::new("editor-goto-confirm")
                     .primary()
                     .icon(IconName::Check)
-                    .label("跳转")
+                    .label(rust_i18n::t!("editor.goto_action").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.commit_editor_goto_line(window, cx);
                     })),
@@ -164,7 +164,7 @@ impl AppShell {
 
         let dialog = Self::dialog_frame(
             "editor-goto-line-modal",
-            "跳转到行",
+            rust_i18n::t!("editor.goto_title").to_string(),
             None,
             content,
             Some(footer),

@@ -4,7 +4,7 @@ use crate::sftp::SftpInputTarget;
 use std::path::{Component, Path};
 use transom_core::is_safe_file_name;
 
-/// 校验输入弹窗中的名称是否可以安全地参与路径拼接，非法时返回中文提示文本。
+/// 校验输入弹窗中的名称是否可以安全地参与路径拼接，非法时返回本地化提示文本。
 ///
 /// 设计原理（Why）：
 /// - 实现初衷：新建/重命名/软链接的名称会与当前目录直接拼接成完整路径，
@@ -29,12 +29,12 @@ pub(super) fn name_validation_error(target: &SftpInputTarget, name: &str) -> Opt
                 )
             })
         {
-            return Some("名称不能是绝对路径或包含 .. 路径片段（不允许逃逸当前目录）".to_string());
+            return Some(rust_i18n::t!("sftp.file_ops.name_absolute_or_parent").to_string());
         }
         return None;
     }
     if !is_safe_file_name(name) {
-        return Some("名称必须是单个文件名，不能包含路径分隔符、. 或 ..".to_string());
+        return Some(rust_i18n::t!("sftp.file_ops.name_single_file").to_string());
     }
     None
 }

@@ -103,7 +103,9 @@ fn default_allow_sha1_publickey_auth() -> bool {
 }
 
 fn default_language() -> String {
-    "zh-CN".to_string()
+    // 空串表示"跟随系统"：新建配置不再固定成中文。旧配置里已经写死的
+    // zh-CN/en 是用户当时的选择，反序列化后原样保留，不会被静默翻转。
+    String::new()
 }
 
 fn default_true() -> bool {

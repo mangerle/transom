@@ -38,22 +38,28 @@ impl TriggerEditState {
                 TriggerAction::AutoResponse(t) => (ActionKindChoice::AutoResponse, t.clone()),
                 _ => (ActionKindChoice::Bell, String::new()),
             };
+            let name_placeholder = rust_i18n::t!("trigger.name_placeholder");
+            let pattern_placeholder = rust_i18n::t!("trigger.pattern_placeholder");
+            let action_text_placeholder = rust_i18n::t!("trigger.action_text_placeholder");
             Self {
                 base_id: Some(rule.id),
-                name: text_input(window, cx, &rule.name, "如：监控错误告警或自动输入密码"),
-                pattern: text_input(window, cx, &rule.pattern, "正则表达式，如：(?i)password:"),
+                name: text_input(window, cx, &rule.name, name_placeholder.as_ref()),
+                pattern: text_input(window, cx, &rule.pattern, pattern_placeholder.as_ref()),
                 action_kind,
-                action_text: text_input(window, cx, &text, "应答内容或通知文本"),
+                action_text: text_input(window, cx, &text, action_text_placeholder.as_ref()),
                 case_sensitive: rule.case_sensitive,
                 error: None,
             }
         } else {
+            let name_placeholder = rust_i18n::t!("trigger.name_placeholder");
+            let pattern_placeholder = rust_i18n::t!("trigger.pattern_placeholder");
+            let action_text_placeholder = rust_i18n::t!("trigger.action_text_placeholder");
             Self {
                 base_id: None,
-                name: text_input(window, cx, "", "如：监控错误告警或自动输入密码"),
-                pattern: text_input(window, cx, "", "正则表达式，如：(?i)password:"),
+                name: text_input(window, cx, "", name_placeholder.as_ref()),
+                pattern: text_input(window, cx, "", pattern_placeholder.as_ref()),
                 action_kind: ActionKindChoice::AutoResponse,
-                action_text: text_input(window, cx, "", "应答内容或通知文本"),
+                action_text: text_input(window, cx, "", action_text_placeholder.as_ref()),
                 case_sensitive: false,
                 error: None,
             }

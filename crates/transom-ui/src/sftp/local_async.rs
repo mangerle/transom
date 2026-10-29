@@ -67,7 +67,10 @@ impl AppShell {
                         panel.clear_local_error();
                     }
                     Err(error) => {
-                        panel.set_local_error(format!("读取本地目录失败: {error}"));
+                        panel.set_local_error(
+                            rust_i18n::t!("sftp.local_async.read_dir_failed", error = error)
+                                .to_string(),
+                        );
                     }
                 }
                 cx.notify();
@@ -88,17 +91,15 @@ impl AppShell {
         };
         let paths = panel.selected_local_paths();
         if paths.is_empty() {
-            panel.set_local_error("请先选择一个本地项目".to_string());
+            panel.set_local_error(rust_i18n::t!("sftp.local_async.select_first").to_string());
             cx.notify();
             return;
         }
         let count = paths.len();
         self.sftp_modals.confirm = Some(SftpConfirmModalState {
             action: SftpPendingDelete::Local { tab_id, paths },
-            title: "删除本地项目".to_string(),
-            description: format!(
-                "将永久删除 {count} 个本地项目（目录按递归删除），不经回收站，此操作不可撤销。"
-            ),
+            title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
+            description: rust_i18n::t!("sftp.local_async.delete_body", count = count).to_string(),
         });
         cx.notify();
     }
@@ -122,7 +123,9 @@ impl AppShell {
             return;
         };
         panel.clear_local_error();
-        panel.set_status(format!("正在删除 {} 个本地项目...", paths.len()));
+        panel.set_status(
+            rust_i18n::t!("sftp.local_async.deleting", count = paths.len()).to_string(),
+        );
         let dir = panel.local.path.clone();
         cx.notify();
         cx.spawn(async move |this, cx| {
@@ -142,7 +145,10 @@ impl AppShell {
                     return;
                 };
                 if outcome.failures.is_empty() {
-                    panel.set_status(format!("已删除 {} 个本地项目", outcome.deleted));
+                    panel.set_status(
+                        rust_i18n::t!("sftp.local_async.deleted", count = outcome.deleted)
+                            .to_string(),
+                    );
                 } else {
                     let detail = outcome
                         .failures
@@ -156,11 +162,15 @@ impl AppShell {
                         outcome.deleted,
                         outcome.failures.len()
                     );
-                    panel.set_local_error(format!(
-                        "已删除 {} 个本地项目，{} 个失败：{detail}",
-                        outcome.deleted,
-                        outcome.failures.len()
-                    ));
+                    panel.set_local_error(
+                        rust_i18n::t!(
+                            "sftp.local_async.delete_partial",
+                            deleted = outcome.deleted,
+                            failed = outcome.failures.len(),
+                            detail = detail.as_str()
+                        )
+                        .to_string(),
+                    );
                 }
                 // 删除期间用户可能已导航到其他目录：只在目录未变时回填刷新
                 if panel.local.path == dir

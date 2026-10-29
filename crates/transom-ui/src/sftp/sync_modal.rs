@@ -72,7 +72,7 @@ impl AppShell {
                 .child(
                     div()
                         .text_sm()
-                        .child("正在扫描并比较本地与远端目录，请稍候..."),
+                        .child(rust_i18n::t!("sftp.sync.scanning").to_string()),
                 )
                 .into_any_element()
         } else if let Some(err) = error {
@@ -86,7 +86,7 @@ impl AppShell {
                     Button::new("retry-sftp-sync-scan")
                         .ghost()
                         .icon(IconName::RefreshCw)
-                        .label("重新扫描")
+                        .label(rust_i18n::t!("sftp.sync.rescan").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_open_sync_modal(tab_id, cx);
                         })),
@@ -98,12 +98,15 @@ impl AppShell {
                 .items_center()
                 .justify_center()
                 .gap_2()
-                .child(div().text_sm().child("两个目录内容一致，无需同步"))
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(format!("本次扫描排除 {skipped} 个条目")),
+                        .text_sm()
+                        .child(rust_i18n::t!("sftp.sync.identical").to_string()),
+                )
+                .child(
+                    div().text_xs().text_color(p.muted_foreground).child(
+                        rust_i18n::t!("sftp.sync.skipped_count", count = skipped).to_string(),
+                    ),
                 )
                 .into_any_element()
         } else {
@@ -189,10 +192,26 @@ impl AppShell {
                         .gap_2()
                         .text_xs()
                         .text_color(p.muted_foreground)
-                        .child(div().flex_1().child("相对路径"))
-                        .child(div().w(px(72.0)).child("差异"))
-                        .child(div().w(px(132.0)).child("本地"))
-                        .child(div().w(px(132.0)).child("远端")),
+                        .child(
+                            div()
+                                .flex_1()
+                                .child(rust_i18n::t!("sftp.sync.column_relative_path").to_string()),
+                        )
+                        .child(
+                            div()
+                                .w(px(72.0))
+                                .child(rust_i18n::t!("sftp.sync.column_status").to_string()),
+                        )
+                        .child(
+                            div()
+                                .w(px(132.0))
+                                .child(rust_i18n::t!("sftp.sync.column_local").to_string()),
+                        )
+                        .child(
+                            div()
+                                .w(px(132.0))
+                                .child(rust_i18n::t!("sftp.sync.column_remote").to_string()),
+                        ),
                 )
                 .child(
                     v_flex()
@@ -204,12 +223,17 @@ impl AppShell {
                         .child(list),
                 )
                 .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(format!(
-                            "差异 {diff_count} 项：待上传 {upload_count}，待下载 {download_count}，类型冲突 {conflict_count}；扫描排除 {skipped} 项"
-                        )),
+                    div().text_xs().text_color(p.muted_foreground).child(
+                        rust_i18n::t!(
+                            "sftp.sync.summary",
+                            diff = diff_count,
+                            upload = upload_count,
+                            download = download_count,
+                            conflict = conflict_count,
+                            skipped = skipped
+                        )
+                        .to_string(),
+                    ),
                 )
                 .into_any_element()
         };
@@ -231,7 +255,7 @@ impl AppShell {
                     Button::new("select-all-sftp-sync")
                         .ghost()
                         .xsmall()
-                        .label("全选")
+                        .label(rust_i18n::t!("sftp.sync.select_all").to_string())
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.sftp_select_all_sync(true, cx);
                         })),
@@ -240,7 +264,7 @@ impl AppShell {
                     Button::new("select-none-sftp-sync")
                         .ghost()
                         .xsmall()
-                        .label("全不选")
+                        .label(rust_i18n::t!("sftp.sync.select_none").to_string())
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.sftp_select_all_sync(false, cx);
                         })),
@@ -249,7 +273,7 @@ impl AppShell {
                     Button::new("start-sftp-sync")
                         .primary()
                         .icon(IconName::GitCompareArrows)
-                        .label(format!("开始同步 ({selected_count})"))
+                        .label(rust_i18n::t!("sftp.sync.start", count = selected_count).to_string())
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.start_sftp_sync(window, cx);
                         })),
@@ -258,8 +282,15 @@ impl AppShell {
 
         let dialog = Self::dialog_frame(
             "sftp-sync-modal",
-            "目录对比与增量同步",
-            Some(format!("本地: {local_root}  |  远端: {remote_root}")),
+            rust_i18n::t!("sftp.sync.title").to_string(),
+            Some(
+                rust_i18n::t!(
+                    "sftp.sync.subtitle",
+                    local = local_root.as_str(),
+                    remote = remote_root.as_str()
+                )
+                .to_string(),
+            ),
             content,
             Some(footer),
             rems(size::DIALOG_MAX_WIDTH),
@@ -270,13 +301,28 @@ impl AppShell {
     }
 }
 
-fn status_presentation(status: DirDiffStatus, p: &Palette) -> (&'static str, Hsla) {
+fn status_presentation(status: DirDiffStatus, p: &Palette) -> (String, Hsla) {
     match status {
-        DirDiffStatus::LocalOnly => ("仅本地", p.success),
-        DirDiffStatus::RemoteOnly => ("仅远端", p.sidebar_accent_foreground),
-        DirDiffStatus::LocalNewer => ("本地较新", p.success),
-        DirDiffStatus::RemoteNewer => ("远端较新", p.sidebar_accent_foreground),
-        DirDiffStatus::TypeMismatch => ("类型冲突", p.danger),
+        DirDiffStatus::LocalOnly => (
+            rust_i18n::t!("sftp.sync.status_local_only").to_string(),
+            p.success,
+        ),
+        DirDiffStatus::RemoteOnly => (
+            rust_i18n::t!("sftp.sync.status_remote_only").to_string(),
+            p.sidebar_accent_foreground,
+        ),
+        DirDiffStatus::LocalNewer => (
+            rust_i18n::t!("sftp.sync.status_local_newer").to_string(),
+            p.success,
+        ),
+        DirDiffStatus::RemoteNewer => (
+            rust_i18n::t!("sftp.sync.status_remote_newer").to_string(),
+            p.sidebar_accent_foreground,
+        ),
+        DirDiffStatus::TypeMismatch => (
+            rust_i18n::t!("sftp.sync.status_type_mismatch").to_string(),
+            p.danger,
+        ),
     }
 }
 
@@ -285,7 +331,7 @@ fn side_text(meta: Option<&transom_core::DirEntryMeta>) -> String {
         return "—".to_string();
     };
     if meta.is_dir {
-        return "目录".to_string();
+        return rust_i18n::t!("sftp.sync.side_directory").to_string();
     }
     let size = format_size(meta.size);
     match meta.mtime {

@@ -47,7 +47,9 @@ impl AppShell {
             .iter()
             .any(|s| s.connection_id == connection_id)
         {
-            panel.set_status(format!("该远端会话已挂载: {title}"));
+            panel.set_status(
+                rust_i18n::t!("sftp.sidebar.already_mounted", title = title.as_str()).to_string(),
+            );
             cx.notify();
             return;
         }
@@ -135,7 +137,14 @@ impl AppShell {
             params.is_dir,
         );
         panel.queue.tasks.push(task);
-        panel.set_status(format!("已添加跨远端传输任务: {src_path} → {tgt_path}"));
+        panel.set_status(
+            rust_i18n::t!(
+                "sftp.sidebar.remote_copy_queued",
+                src = src_path.as_str(),
+                tgt = tgt_path.as_str()
+            )
+            .to_string(),
+        );
         self.process_sftp_queue(tab_id, cx);
         cx.notify();
     }
@@ -187,9 +196,21 @@ impl AppShell {
         task.checksum_algorithm = checksum_algorithm;
         panel.queue.tasks.push(task);
         panel.set_status(match request.direction {
-            TransferDirection::Upload => format!("已加入上传: {}", request.remote_path),
-            TransferDirection::Download => format!("已加入下载: {}", request.remote_path),
-            _ => format!("已加入传输: {}", request.remote_path),
+            TransferDirection::Upload => rust_i18n::t!(
+                "sftp.sidebar.upload_queued_path",
+                path = request.remote_path.as_str()
+            )
+            .to_string(),
+            TransferDirection::Download => rust_i18n::t!(
+                "sftp.sidebar.download_queued_path",
+                path = request.remote_path.as_str()
+            )
+            .to_string(),
+            _ => rust_i18n::t!(
+                "sftp.sidebar.transfer_queued_path",
+                path = request.remote_path.as_str()
+            )
+            .to_string(),
         });
         self.process_sftp_queue(request.tab_id, cx);
         cx.notify();

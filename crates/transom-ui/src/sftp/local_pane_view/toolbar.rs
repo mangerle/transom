@@ -71,7 +71,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::ArrowUp)
-                        .tooltip("返回上一级")
+                        .tooltip(rust_i18n::t!("sftp.menu.go_up").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.sftp_local_go_up(tab_id, window, cx)
                         })),
@@ -81,7 +81,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::RefreshCw)
-                        .tooltip("刷新本地目录")
+                        .tooltip(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
                         .on_click(
                             cx.listener(move |this, _, _, cx| this.sftp_local_refresh(tab_id, cx)),
                         ),
@@ -91,7 +91,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::ArrowRight)
-                        .tooltip("进入路径")
+                        .tooltip(rust_i18n::t!("sftp.nav.enter_path").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.sftp_local_enter_path(tab_id, window, cx)
                         })),
@@ -103,7 +103,7 @@ pub(super) fn render_local_toolbar(
                             .xsmall()
                             .icon(IconName::FileDiff)
                             .disabled(!diff_ready)
-                            .tooltip("与远端当前目录的同名文件分栏对比")
+                            .tooltip(rust_i18n::t!("sftp.nav.diff_with_remote").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.sftp_open_local_diff(tab_id, cx);
                             })),
@@ -115,7 +115,7 @@ pub(super) fn render_local_toolbar(
                             .ghost()
                             .xsmall()
                             .icon(IconName::PanelLeftClose)
-                            .tooltip("收起本地文件列")
+                            .tooltip(rust_i18n::t!("sftp.sidebar.collapse_local").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.sftp_toggle_local_collapse(tab_id, cx);
                             })),
@@ -162,7 +162,7 @@ pub(super) fn render_local_toolbar(
                             .primary()
                             .xsmall()
                             .icon(IconName::Upload)
-                            .tooltip("上传")
+                            .tooltip(rust_i18n::t!("sftp.upload").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.sftp_queue_upload(tab_id, cx);
                             })),
@@ -173,7 +173,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::FolderPlus)
-                        .tooltip("新建本地文件夹")
+                        .tooltip(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.sftp_open_mkdir_modal(tab_id, false, window, cx);
                         })),
@@ -183,7 +183,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::FilePlus)
-                        .tooltip("新建本地文件")
+                        .tooltip(rust_i18n::t!("sftp.menu.new_local_file").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.sftp_open_local_new_file_modal(tab_id, window, cx);
                         })),
@@ -193,7 +193,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::Pencil)
-                        .tooltip("重命名")
+                        .tooltip(rust_i18n::t!("sftp.rename").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.sftp_open_rename_modal(tab_id, false, window, cx);
                         })),
@@ -203,7 +203,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::FilePen)
-                        .tooltip("编辑")
+                        .tooltip(rust_i18n::t!("common.edit").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             let selected = this
                                 .workspace
@@ -215,7 +215,9 @@ pub(super) fn render_local_toolbar(
                             } else if let Some(panel) =
                                 this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
                             {
-                                panel.set_local_error("请先选择一个本地文件进行编辑".to_string());
+                                panel.set_local_error(
+                                    rust_i18n::t!("sftp.row.select_local_to_edit").to_string(),
+                                );
                                 cx.notify();
                             }
                         })),
@@ -225,7 +227,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::Info)
-                        .tooltip("查看属性")
+                        .tooltip(rust_i18n::t!("sftp.menu.properties").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             let path =
                                 this.workspace
@@ -247,7 +249,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::Trash)
-                        .tooltip("删除")
+                        .tooltip(rust_i18n::t!("sftp.delete").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_local_delete_selection(tab_id, cx);
                         })),
@@ -257,7 +259,7 @@ pub(super) fn render_local_toolbar(
                         .ghost()
                         .xsmall()
                         .icon(IconName::FolderOpen)
-                        .tooltip("打开文件管理器")
+                        .tooltip(rust_i18n::t!("sftp.menu.open_file_manager").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_open_local_file_manager(tab_id, cx);
                         })),
@@ -273,9 +275,9 @@ pub(super) fn render_local_toolbar(
                         })
                         .selected(show_hidden)
                         .tooltip(if show_hidden {
-                            "隐藏点号文件 (Ctrl+H)"
+                            rust_i18n::t!("sftp.nav.hide_dotfiles").to_string()
                         } else {
-                            "显示隐藏文件 (Ctrl+H)"
+                            rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sftp_toggle_hidden(tab_id, cx);
@@ -287,7 +289,7 @@ pub(super) fn render_local_toolbar(
                         .xsmall()
                         .icon(IconName::Search)
                         .selected(show_filter)
-                        .tooltip("目录内模糊过滤 (Ctrl+F)")
+                        .tooltip(rust_i18n::t!("sftp.nav.toggle_filter").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.sftp_toggle_filter(tab_id, window, cx);
                         })),

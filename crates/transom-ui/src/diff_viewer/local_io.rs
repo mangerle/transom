@@ -15,28 +15,31 @@ use std::path::Path;
 
 /// 读取本地 UTF-8 文本文件。
 pub(crate) fn read_local_text(path: &Path) -> Result<String, String> {
-    let meta = std::fs::metadata(path)
-        .map_err(|error| format!("读取本地文件属性失败（{}）: {error}", path.display()))?;
+    let meta = std::fs::metadata(path).map_err(|error| {
+        rust_i18n::t!("diff.error_metadata", path = path.display(), error = error).to_string()
+    })?;
     if !meta.is_file() {
-        return Err(format!("不是普通文件：{}", path.display()));
+        return Err(rust_i18n::t!("diff.error_not_file", path = path.display()).to_string());
     }
     if meta.len() > super::MAX_DIFF_BYTES {
-        return Err(format!(
-            "本地文件超过对比上限（{} 字节）：{}",
-            super::MAX_DIFF_BYTES,
-            path.display()
-        ));
+        return Err(rust_i18n::t!(
+            "diff.error_too_large",
+            limit = super::MAX_DIFF_BYTES,
+            path = path.display()
+        )
+        .to_string());
     }
-    let bytes = std::fs::read(path)
-        .map_err(|error| format!("读取本地文件失败（{}）: {error}", path.display()))?;
+    let bytes = std::fs::read(path).map_err(|error| {
+        rust_i18n::t!("diff.error_read", path = path.display(), error = error).to_string()
+    })?;
     if bytes.len() as u64 > super::MAX_DIFF_BYTES {
         // 元数据与真实读取之间文件可能被追加；以真实字节数为准再拦一次。
-        return Err(format!(
-            "本地文件在读取期间超过对比上限：{}",
-            path.display()
-        ));
+        return Err(
+            rust_i18n::t!("diff.error_too_large_during_read", path = path.display()).to_string(),
+        );
     }
-    String::from_utf8(bytes).map_err(|_| format!("本地文件不是 UTF-8 文本：{}", path.display()))
+    String::from_utf8(bytes)
+        .map_err(|_| rust_i18n::t!("diff.error_not_utf8", path = path.display()).to_string())
 }
 
 /// 原子替换本地文本文件，保留原有权限位。
@@ -47,36 +50,55 @@ pub(crate) fn read_local_text(path: &Path) -> Result<String, String> {
 pub(crate) fn write_local_text(path: &Path, expected: &str, text: &str) -> Result<(), String> {
     let current = read_local_text(path)?;
     if current != expected {
-        return Err(format!(
-            "本地文件已被其他程序修改（{}），已取消本次合并",
-            path.display()
-        ));
+        return Err(rust_i18n::t!("diff.error_modified", path = path.display()).to_string());
     }
-    let meta = std::fs::metadata(path)
-        .map_err(|error| format!("读取本地文件属性失败（{}）: {error}", path.display()))?;
+    let meta = std::fs::metadata(path).map_err(|error| {
+        rust_i18n::t!("diff.error_metadata", path = path.display(), error = error).to_string()
+    })?;
     let parent = path
         .parent()
-        .ok_or_else(|| format!("无法确定文件所在目录：{}", path.display()))?;
+        .ok_or_else(|| rust_i18n::t!("diff.error_no_parent", path = path.display()).to_string())?;
     let name = path
         .file_name()
-        .ok_or_else(|| format!("非法文件路径：{}", path.display()))?
+        .ok_or_else(|| rust_i18n::t!("diff.error_bad_path", path = path.display()).to_string())?
         .to_string_lossy();
     let temp = parent.join(format!(".{name}.transom-tmp-{}", std::process::id()));
     let result = (|| {
-        std::fs::write(&temp, text)
-            .map_err(|error| format!("写入临时文件失败（{}）: {error}", temp.display()))?;
-        std::fs::set_permissions(&temp, meta.permissions())
-            .map_err(|error| format!("设置文件权限失败（{}）: {error}", temp.display()))?;
+        std::fs::write(&temp, text).map_err(|error| {
+            rust_i18n::t!(
+                "diff.error_temp_write",
+                path = temp.display(),
+                error = error
+            )
+            .to_string()
+        })?;
+        std::fs::set_permissions(&temp, meta.permissions()).map_err(|error| {
+            rust_i18n::t!(
+                "diff.error_set_permissions",
+                path = temp.display(),
+                error = error
+            )
+            .to_string()
+        })?;
         match std::fs::rename(&temp, path) {
             Ok(()) => Ok(()),
             Err(_) if cfg!(windows) => {
                 // Windows 不允许 rename 覆盖既有文件；回退路径牺牲原子性换取可用性。
-                std::fs::remove_file(path)
-                    .map_err(|error| format!("替换本地文件失败（{}）: {error}", path.display()))?;
-                std::fs::rename(&temp, path)
-                    .map_err(|error| format!("替换本地文件失败（{}）: {error}", path.display()))
+                std::fs::remove_file(path).map_err(|error| {
+                    rust_i18n::t!("diff.error_replace", path = path.display(), error = error)
+                        .to_string()
+                })?;
+                std::fs::rename(&temp, path).map_err(|error| {
+                    rust_i18n::t!("diff.error_replace", path = path.display(), error = error)
+                        .to_string()
+                })
             }
-            Err(error) => Err(format!("替换本地文件失败（{}）: {error}", path.display())),
+            Err(error) => {
+                Err(
+                    rust_i18n::t!("diff.error_replace", path = path.display(), error = error)
+                        .to_string(),
+                )
+            }
         }
     })();
     if result.is_err() {

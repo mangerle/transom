@@ -71,7 +71,9 @@ fn block_captures_fast_command_in_one_chunk() {
     assert!(output.contains("hi"), "输出: {output:?}");
     let markdown = engine.block_markdown(block.id).expect("Markdown 应可生成");
     assert!(markdown.starts_with("```console\n$ echo hi"));
-    assert!(markdown.contains("退出码 0"));
+    assert!(
+        markdown.contains(&rust_i18n::t!("terminal.block.status_exit_code", code = 0).to_string())
+    );
 }
 
 /// 折叠切换与视图开关不改变网格内容，但必须让下一帧全量重建行缓存；

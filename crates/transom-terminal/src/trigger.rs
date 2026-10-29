@@ -163,7 +163,11 @@ impl TriggerEngine {
                 }
                 TriggerAction::Notification(template) => {
                     let expanded = if template.trim().is_empty() {
-                        format!("命中触发器: {}", rule.name)
+                        rust_i18n::t!(
+                            "terminal.trigger.default_notification",
+                            name = rule.name.as_str()
+                        )
+                        .to_string()
                     } else {
                         expand_captures(template, &captures)
                     };
