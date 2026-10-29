@@ -27,8 +27,6 @@ impl AppShell {
         TitleBar::new()
             .h(rems(size::TOP_BAR_HEIGHT))
             .bg(p.title_bar)
-            .border_b_1()
-            .border_color(p.title_bar_border)
             .on_close_window(move |_, window, cx| {
                 app_entity.update(cx, |this, cx| {
                     this.close_app(window, cx);

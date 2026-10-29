@@ -37,7 +37,6 @@ pub(crate) struct Palette {
     pub(crate) tab_foreground: Hsla,
     pub(crate) tab_active_foreground: Hsla,
     pub(crate) title_bar: Hsla,
-    pub(crate) title_bar_border: Hsla,
     pub(crate) status_bar: Hsla,
     /// 主题强调色（设置页主题卡预览色点等场景）。
     pub(crate) primary: Hsla,
@@ -81,7 +80,6 @@ impl Palette {
             tab_foreground: theme.tab_foreground,
             tab_active_foreground: theme.tab_active_foreground,
             title_bar: theme.title_bar,
-            title_bar_border: theme.title_bar_border,
             status_bar: theme.status_bar,
             primary: theme.primary,
             warning: theme.warning,

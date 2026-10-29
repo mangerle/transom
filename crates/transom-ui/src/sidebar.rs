@@ -194,8 +194,6 @@ impl AppShell {
             .overflow_hidden()
             .bg(p.sidebar)
             .text_color(p.sidebar_foreground)
-            .border_r_1()
-            .border_color(p.sidebar_border)
             .child(header)
             .child(
                 v_flex()
