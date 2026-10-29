@@ -55,6 +55,11 @@ pub(crate) struct Palette {
     pub(crate) overlay: Hsla,
     pub(crate) popover: Hsla,
     pub(crate) popover_foreground: Hsla,
+    /// 编辑器画布底色：取自高亮主题的 `editor.background`，缺省回退到界面背景。
+    ///
+    /// 编辑面板的标题栏/状态栏用 `popover` 做外框，正文用这个色做画布，两者
+    /// 只差一档明度，用户看到的是"编辑器 + 一点外框"，而不是"弹窗里嵌输入框"。
+    pub(crate) editor_background: Hsla,
     /// 界面等宽字体族（SFTP 预览、指纹展示等逐字符对齐场景）。
     pub(crate) mono_font_family: SharedString,
     /// 界面等宽字号，随密度档位缩放。
@@ -99,6 +104,11 @@ impl Palette {
             overlay: theme.overlay,
             popover: theme.popover,
             popover_foreground: theme.popover_foreground,
+            editor_background: theme
+                .highlight_theme
+                .style
+                .editor_background
+                .unwrap_or(theme.background),
             mono_font_family: theme.mono_font_family.clone(),
             mono_font_size: theme.mono_font_size,
             radius: theme.radius_tokens(),

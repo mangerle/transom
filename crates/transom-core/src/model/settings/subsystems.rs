@@ -305,6 +305,15 @@ pub struct SftpSettings {
     /// 内置编辑器是否显示行号。
     #[serde(default = "default_true")]
     pub editor_line_numbers: bool,
+    /// 内置编辑器代码字号（px），默认 14。
+    ///
+    /// 设计原理（Why）：全局等宽字号由界面密度档位统一决定（见主题模块的
+    /// "字号权威"），但代码阅读的字号偏好与控件密度并不等价：密度放大是为了
+    /// 让所有控件好点，代码字号常常需要单独调整。这里只在编辑器控件层覆盖
+    /// `text_size`，不写进主题文件，因此不影响其他等宽场景。
+    /// 有效范围 9–40，越界按边界取值。
+    #[serde(default = "default_editor_font_size")]
+    pub editor_font_size: f32,
     /// 文件面板的显示排除规则（glob 文本，逐条匹配文件名）。
     ///
     /// 与传输过滤共用语法但语义不同：这里只影响面板可见性，不拦截传输。
@@ -340,6 +349,7 @@ impl Default for SftpSettings {
             max_concurrent_transfers: default_max_concurrent_transfers(),
             edit_max_bytes: default_edit_max_bytes(),
             editor_write_backup: false,
+            editor_font_size: default_editor_font_size(),
             editor_soft_wrap: true,
             editor_line_numbers: true,
             panel_hidden_patterns: String::new(),
@@ -353,6 +363,10 @@ fn default_max_concurrent_transfers() -> usize {
 
 fn default_edit_max_bytes() -> u64 {
     8 * 1024 * 1024
+}
+
+fn default_editor_font_size() -> f32 {
+    14.0
 }
 
 fn default_transfer_filter() -> String {

@@ -1,7 +1,7 @@
-//! SFTP 编辑面板的横幅区：冲突三选一横幅与破坏性操作二次确认横幅。
+//! SFTP 编辑面板的横幅区：错误提示、冲突三选一横幅与破坏性操作二次确认横幅。
 //!
 //! 面板状态在 `editor_panel.rs`，窗体动作在 `editor_actions.rs`，
-//! 回传在 `editor_ops.rs`，渲染外壳与状态栏在 `editor_view.rs`。
+//! 回传在 `editor_ops.rs`，渲染外壳在 `editor_view.rs`，状态栏在 `editor_status.rs`。
 
 use super::panel::PanelConfirm;
 use crate::app::AppShell;
@@ -10,8 +10,49 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::EditorState;
+use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+
+/// 错误横幅：读取/回传失败的现场文本；权限类错误附一条 Sudo 提权出口。
+///
+/// 文案来自 net 层的中文诊断，原样展示不做二次包装，避免把具体的远端路径、
+/// 字节数等现场信息吞掉。
+pub(crate) fn render_error_banner(
+    error: String,
+    editor: &Entity<EditorState>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let sudo_editor = editor.clone();
+    let is_permission = error.contains("Permission denied") || error.contains("权限");
+    h_flex()
+        .items_center()
+        .gap_2()
+        .px_2()
+        .py_1()
+        .rounded(p.radius.md)
+        .bg(p.muted)
+        .child(
+            Icon::new(IconName::CircleAlert)
+                .xsmall()
+                .text_color(p.danger),
+        )
+        .child(div().flex_1().text_xs().text_color(p.danger).child(error))
+        .when(is_permission, |this| {
+            this.child(
+                Button::new("editor-sudo-banner-btn")
+                    .warning()
+                    .compact()
+                    .icon(IconName::Shield)
+                    .label("使用 Sudo 提权保存")
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.prompt_sudo_save(&sudo_editor, window, cx);
+                    })),
+            )
+        })
+        .into_any_element()
+}
 
 /// 冲突横幅：远端已被修改时提供重新载入、强制覆盖、继续编辑三个出口。
 ///

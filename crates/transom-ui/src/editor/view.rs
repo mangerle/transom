@@ -1,28 +1,37 @@
-//! SFTP 编辑面板的视图：外壳定位、标题栏、编辑器主体与行列状态栏。
+//! SFTP 编辑面板的视图：外壳定位、标题栏、编辑器主体与状态栏。
 //!
 //! 面板状态与窗体动作在 `editor_panel.rs`，打开与读取在 `editor_open.rs`，
-//! 回传在 `editor_ops.rs`，关闭保护在 `editor_close.rs`。
+//! 回传在 `editor_ops.rs`，关闭保护在 `editor_close.rs`，状态栏在 `editor_status.rs`。
 //!
-//! 渲染入口之外全部是接收 `&EditorPanelState` 的自由函数：面板状态存在 `self` 里，
-//! 若渲染方法按 `&mut self` 取面板再挂 `cx.listener`，同一帧内会对 `self`
-//! 既读又写而被借用检查拒绝。图标一律取组件库资产，不用字符拟态。
+//! 设计原理（Why）：
+//! - 面板正文是"编辑器画布"而不是"嵌在弹窗里的输入框"：编辑器的输入框外框、
+//!   圆角与内边距全部关掉，正文区不留内边距，面板底色直接取主题的
+//!   `editor.background`。标题栏与状态栏用 `popover` 做外框，只比画布亮/暗一档，
+//!   形成"编辑器 + 一圈外框"的层次。
+//! - 横幅（错误、冲突、二次确认）是画布之外的附加信息，单独包一层内边距，
+//!   不让它们把编辑器挤成带边距的盒子。
+//! - 渲染入口之外全部是接收 `&EditorPanelState` 的自由函数：面板状态存在 `self` 里，
+//!   若渲染方法按 `&mut self` 取面板再挂 `cx.listener`，同一帧内会对 `self`
+//!   既读又写而被借用检查拒绝。图标一律取组件库资产，不用字符拟态。
 
-use super::banner::{render_confirm_banner, render_conflict_banner};
-use super::diff::{diff_entry_allowed, render_diff_view};
-use super::panel::{EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, clamp_axis};
+use super::banner::{render_confirm_banner, render_conflict_banner, render_error_banner};
+use super::diff::render_diff_view;
+use super::open::parent_dir;
+use super::panel::{
+    EditorPanelState, EditorPhase, PANEL_HEADER_HEIGHT, PANEL_KEEP_VISIBLE, clamp_axis,
+};
+use super::status::render_panel_status;
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::Palette;
-use crate::sftp::format_size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Editor, EditorState, RopeExt};
+use gpui_kit::component::input::{Editor, EditorState};
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::format_octal_permissions;
 
 impl AppShell {
     /// 渲染全部编辑面板；返回值按 Vec 顺序叠放，末尾即最上层。
@@ -32,10 +41,12 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
+        // 代码字号独立于界面密度；配置里的越界值按边界处理，避免极端值撑坏布局。
+        let font_size = self.settings.sftp.editor_font_size.clamp(9.0, 40.0);
         self.editors
             .panels
             .iter()
-            .map(|item| render_editor_panel(item, window, p, cx))
+            .map(|item| render_editor_panel(item, window, p, font_size, cx))
             .collect()
     }
 }
@@ -45,6 +56,7 @@ fn render_editor_panel(
     item: &EditorPanelState,
     window: &Window,
     p: &Palette,
+    font_size: f32,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let editor = item.editor.clone();
@@ -59,8 +71,8 @@ fn render_editor_panel(
         .rounded(p.radius.lg)
         .border_1()
         .border_color(p.border)
-        .bg(p.popover)
-        .text_color(p.popover_foreground)
+        .bg(p.editor_background)
+        .text_color(p.foreground)
         .shadow_2xl()
         // 面板自身遮挡下层命中；面板以外不加遮罩，终端与文件列表仍可操作。
         .occlude()
@@ -99,12 +111,15 @@ fn render_editor_panel(
     }
     frame
         .child(header)
-        .child(render_panel_body(item, &editor, p, cx))
+        .child(render_panel_body(item, &editor, p, font_size, cx))
         .child(render_panel_status(item, &editor, p, cx))
         .into_any_element()
 }
 
-/// 标题栏：文件图标 + 名称 + 远端路径 + 折叠/最大化/关闭。
+/// 标题栏：文件名 + 父目录面包屑 + 折叠/最大化/关闭。
+///
+/// 高度与折叠态一致，动作按钮用 xsmall 幽灵图标；文件名不再加粗，改走编辑器
+/// 标签的字号与字重，父目录降一档灰，视觉重心落在文件本身。
 fn render_panel_header(
     item: &EditorPanelState,
     editor: &Entity<EditorState>,
@@ -115,14 +130,15 @@ fn render_panel_header(
     let zoom_editor = editor.clone();
     let close_editor = editor.clone();
     let drag_editor = editor.clone();
+    let directory = parent_dir(&item.remote_path).unwrap_or("");
 
     h_flex()
+        .h(px(PANEL_HEADER_HEIGHT))
         .cursor_move()
         .items_center()
         .gap_2()
-        .px_3()
-        .py_2()
-        .bg(p.muted)
+        .px_2()
+        .bg(p.popover)
         .border_b_1()
         .border_color(p.border)
         .on_mouse_down(MouseButton::Left, {
@@ -143,16 +159,19 @@ fn render_panel_header(
             div()
                 .flex_none()
                 .text_sm()
-                .font_weight(FontWeight::BOLD)
+                .font_weight(FontWeight::MEDIUM)
                 .child(item.file_name.clone()),
         )
-        .child(
-            div()
-                .text_xs()
-                .truncate()
-                .text_color(p.muted_foreground)
-                .child(item.remote_path.clone()),
-        )
+        .when(!directory.is_empty(), |this| {
+            this.child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(directory.to_string()),
+            )
+        })
         .child(div().flex_1())
         .child(
             Button::new(if item.collapsed {
@@ -161,7 +180,7 @@ fn render_panel_header(
                 "editor-panel-collapse"
             })
             .ghost()
-            .compact()
+            .xsmall()
             .icon(if item.collapsed {
                 IconName::ChevronUp
             } else {
@@ -183,7 +202,7 @@ fn render_panel_header(
                 "editor-panel-maximize"
             })
             .ghost()
-            .compact()
+            .xsmall()
             .icon(if item.maximized {
                 IconName::Minimize2
             } else {
@@ -201,7 +220,7 @@ fn render_panel_header(
         .child(
             Button::new("editor-panel-close")
                 .ghost()
-                .compact()
+                .xsmall()
                 .icon(IconName::Close)
                 .accessibility_label("关闭面板")
                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -215,6 +234,7 @@ fn render_panel_body(
     item: &EditorPanelState,
     editor: &Entity<EditorState>,
     p: &Palette,
+    font_size: f32,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     // 未成功装载远端内容时不铺空编辑器：空缓冲区会被误认为"远端文件是空的"，
@@ -258,203 +278,32 @@ fn render_panel_body(
         // 保存前差异预览：替换编辑器主体，确认回传/返回编辑在预览工具行上。
         render_diff_view(item, p, cx)
     } else {
-        Editor::new(editor).w_full().flex_1().into_any_element()
+        // 编辑器铺满正文：去掉输入框自带的背景、圆角与边框，层次只由面板外框提供。
+        Editor::new(editor)
+            .appearance(false)
+            .bordered(false)
+            .text_size(px(font_size))
+            .w_full()
+            .flex_1()
+            .min_h_0()
+            .into_any_element()
     };
-    let body = v_flex().flex_1().gap_1().p_2().child(content);
-    let err_editor = editor.clone();
-    let body = body.when_some(item.error.clone(), |this, err| {
-        let is_permission = err.contains("Permission denied") || err.contains("权限");
-        this.child(
-            h_flex()
-                .items_center()
-                .gap_2()
-                .text_xs()
-                .text_color(p.danger)
-                .child(Icon::new(IconName::CircleAlert).xsmall())
-                .child(div().flex_1().child(err))
-                .when(is_permission, |this| {
-                    this.child(
-                        Button::new("editor-sudo-banner-btn")
-                            .warning()
-                            .compact()
-                            .icon(IconName::Shield)
-                            .label("使用 Sudo 提权保存")
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.prompt_sudo_save(&err_editor, window, cx);
-                            })),
-                    )
-                }),
-        )
-    });
-    let body = body.when(item.conflict, |this| {
-        this.child(render_conflict_banner(editor, p, cx))
-    });
-    let Some(kind) = item.confirm else {
+    let body = v_flex().flex_1().min_h_0().child(content);
+
+    let mut banners: Vec<AnyElement> = Vec::with_capacity(3);
+    if let Some(error) = item.error.clone() {
+        banners.push(render_error_banner(error, editor, p, cx));
+    }
+    if item.conflict {
+        banners.push(render_conflict_banner(editor, p, cx));
+    }
+    if let Some(kind) = item.confirm {
+        banners.push(render_confirm_banner(kind, editor, p, cx));
+    }
+    if banners.is_empty() {
         return body.into_any_element();
-    };
-    body.child(render_confirm_banner(kind, editor, p, cx))
-        .into_any_element()
-}
-
-/// 状态栏：行列与总行数、语言、权限、回传阶段与保存按钮。
-fn render_panel_status(
-    item: &EditorPanelState,
-    editor: &Entity<EditorState>,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
-    // 行列取自面板缓存：缓存随编辑器通知更新，此处再读一次反而拿到陈旧帧的值；
-    // 总行数没有缓存也无所谓，读取只是查 Rope 元数据，不触发重绘循环。
-    let total_lines = editor.read(cx).text().lines_len();
-    let caret = if item.phase == EditorPhase::Reading {
-        "行列待载入".to_string()
-    } else {
-        format!(
-            "行 {} · 列 {} · 共 {} 行",
-            item.caret.0, item.caret.1, total_lines
-        )
-    };
-    // 读取与回传都属于"有活 in flight"，转圈图标与按钮禁用共用同一判定。
-    let busy = matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing);
-    let phase_label = match item.phase {
-        EditorPhase::Reading => "读取远端中…".to_string(),
-        EditorPhase::Idle if item.dirty => "未保存".to_string(),
-        EditorPhase::Idle => "无改动".to_string(),
-        EditorPhase::Writing if item.pending_sudo_probe.is_some() => "探测提权中…".to_string(),
-        EditorPhase::Writing => "回传中…".to_string(),
-        EditorPhase::Written => match item.written_size {
-            // 带字节数：这是写完回读比对过的数字，用户据此判断"确实落盘了"。
-            Some(bytes) => format!("已回传远端（{}）", format_size(bytes)),
-            None => "已回传远端".to_string(),
-        },
-        EditorPhase::Failed => if item.conflict {
-            "远端已修改"
-        } else if item.dirty {
-            "回传失败"
-        } else {
-            "读取失败"
-        }
-        .to_string(),
-    };
-    let save_editor = editor.clone();
-    let revert_editor = editor.clone();
-    let diff_editor = editor.clone();
-    let local_diff_editor = editor.clone();
-
-    h_flex()
-        .items_center()
-        .gap_2()
-        .px_3()
-        .py_1()
-        .border_t_1()
-        .border_color(p.border)
-        .text_xs()
-        .text_color(p.muted_foreground)
-        .child(div().flex_none().child(caret))
-        .child(div().flex_none().child(item.language.clone()))
-        // 权限八进制与只读标记来自打开时刻的目录项快照，可能过期，仅作提示。
-        // GBK 转码内容单独标注编码与"只读预览"，只读原因一目了然。
-        .when_some(item.permissions, |this, permissions| {
-            this.child(
-                div()
-                    .flex_none()
-                    .child(format_octal_permissions(permissions)),
-            )
-        })
-        .when(!item.writable, |this| {
-            let transcoded = item.remote_meta.is_some_and(|meta| meta.transcoded);
-            let label = if transcoded {
-                "GBK · 只读预览"
-            } else {
-                "只读"
-            };
-            this.child(div().flex_none().text_color(p.danger).child(label))
-        })
-        .child(
-            h_flex()
-                .items_center()
-                .gap_1()
-                .flex_none()
-                .when(busy, |this| {
-                    this.child(Spinner::new().xsmall().color(p.muted_foreground))
-                })
-                .child(div().child(phase_label)),
-        )
-        .child(div().flex_1())
-        // 差异预览内已有"确认回传"，此处入口与预览互斥。
-        .when(diff_entry_allowed(item), |this| {
-            this.child(
-                Button::new("editor-show-diff")
-                    .ghost()
-                    .compact()
-                    .icon(IconName::FileDiff)
-                    .label("对比差异")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.show_editor_diff(&diff_editor, cx);
-                    })),
-            )
-        })
-        // 与本地文件对比：取远端基线（远端实际内容）而不是未保存缓冲区，
-        // 对比的是"磁盘上的两端"；面板新建、读取中或冲突期间不提供入口。
-        .when(
-            item.loaded && !item.new_file && !busy && !item.showing_diff && !item.conflict,
-            |this| {
-                this.child(
-                    Button::new("editor-local-diff")
-                        .ghost()
-                        .compact()
-                        .icon(IconName::FileDiff)
-                        .label("与本地对比")
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.open_editor_local_diff(&local_diff_editor, cx);
-                        })),
-                )
-            },
-        )
-        // 冲突期间恢复到的是过期基线（远端已是新内容），横幅上的"重新载入"才是
-        // 正确出口，因此此处不提供"放弃修改"以免误导。
-        .when(
-            item.dirty && !busy && !item.conflict && !item.showing_diff,
-            |this| {
-                this.child(
-                    Button::new("editor-revert")
-                        .ghost()
-                        .compact()
-                        .icon(IconName::RotateCcw)
-                        .label("放弃修改")
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.ask_revert_editor_panel(&revert_editor, cx);
-                        })),
-                )
-            },
-        )
-        .when(!item.writable, |this| {
-            let sudo_editor = editor.clone();
-            this.child(
-                Button::new("editor-sudo-save")
-                    .warning()
-                    .compact()
-                    .icon(IconName::Shield)
-                    .label("Sudo 提权保存")
-                    .disabled(!item.dirty || busy)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.prompt_sudo_save(&sudo_editor, window, cx);
-                    })),
-            )
-        })
-        .when(item.writable, |this| {
-            this.child(
-                Button::new("editor-save-upload")
-                    .primary()
-                    .compact()
-                    .icon(IconName::Check)
-                    .label("保存并回传")
-                    .disabled(!item.dirty || busy)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.save_editor_panel(&save_editor, window, cx);
-                    })),
-            )
-        })
+    }
+    body.child(v_flex().px_2().pb_2().gap_1().children(banners))
         .into_any_element()
 }
 

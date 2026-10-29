@@ -21,6 +21,7 @@ mod navigate;
 mod open;
 mod ops;
 mod panel;
+mod status;
 mod view;
 
 pub(crate) use close::PendingEditorClose;

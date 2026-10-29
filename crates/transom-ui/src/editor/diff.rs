@@ -99,7 +99,8 @@ pub(crate) fn render_diff_view(
     let toolbar = h_flex()
         .items_center()
         .gap_2()
-        .px_1()
+        .px_2()
+        .pt_1()
         .text_xs()
         .text_color(p.muted_foreground)
         .child(
