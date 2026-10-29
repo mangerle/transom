@@ -36,8 +36,8 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use transom_core::{
-    BlockViewSettings, TerminalControlHandle, TerminalInteraction, TerminalIo, TerminalProfile,
-    TerminalSize,
+    BlockViewSettings, SessionCleanup, TerminalControlHandle, TerminalInteraction, TerminalIo,
+    TerminalProfile, TerminalSize,
 };
 
 actions!(transom_terminal, [SendTab, SendBacktab]);
@@ -96,6 +96,9 @@ pub struct TerminalView {
     ///
     /// 新的目标尺寸会顶掉上一个计时（丢弃句柄即取消），因此连续拖拽只保留最后一个。
     resize_tick: Option<Task<()>>,
+    /// 会话级清理守卫：随视图存活，视图销毁时才释放会话的临时资源
+    /// （如本地 Shell 预装用的临时 rcfile 目录）。
+    _cleanup: SessionCleanup,
     _reader_task: Task<()>,
     _blink_task: Task<()>,
     /// Shell 集成轮询任务句柄；终态或视图回收后自行结束。
@@ -111,6 +114,11 @@ pub struct TerminalViewParams {
     pub interaction: TerminalInteraction,
     pub key_filter: Option<KeyFilter>,
     pub audit_path: Option<std::path::PathBuf>,
+    /// 是否启用 Shell 集成（提示符导航与退出码识别）。
+    ///
+    /// 随会话创建参数带入，而不是让视图回头去读设置：视图诞生时必须已经知道
+    /// 要不要集成，否则会先发一次探针再被设置关掉，探针本身是可见的。
+    pub shell_integration_enabled: bool,
 }
 
 impl TerminalView {
@@ -121,6 +129,7 @@ impl TerminalView {
             interaction,
             key_filter,
             audit_path,
+            shell_integration_enabled,
         } = params;
         cx.bind_keys([
             KeyBinding::new("tab", SendTab, Some(CONTEXT)),
@@ -139,7 +148,14 @@ impl TerminalView {
             reader,
             writer,
             control,
+            integration_preinstalled,
+            cleanup,
         } = io;
+        // 集成已在会话启动阶段预装时直接落终态：终端侧不再发探针，也不再注入。
+        let shell_integration = match integration_preinstalled {
+            Some(kind) => ShellIntegration::preinstalled(kind),
+            None => ShellIntegration::new(shell_integration_enabled),
+        };
         let (input_tx, reader_task) = Self::spawn_io_tasks(
             tasks::TerminalIoTaskParams {
                 reader,
@@ -204,7 +220,7 @@ impl TerminalView {
             cursor_blink_on: true,
             scroll_pixel_remainder: 0.0,
             command_tracker: CommandTracker::default(),
-            shell_integration: ShellIntegration::new(true),
+            shell_integration,
             user_typed: false,
             history_provider: None,
             input_line: String::new(),
@@ -219,6 +235,7 @@ impl TerminalView {
             hover_link: false,
             custom_keys,
             resize_tick: None,
+            _cleanup: cleanup,
             _reader_task: reader_task,
             _blink_task: blink_task,
             _integration_task: integration_task,

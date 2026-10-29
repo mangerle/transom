@@ -78,6 +78,7 @@ async fn handle_terminal_command(
                 secrets,
                 zmodem,
                 allow_sha1_publickey_auth,
+                shell_integration,
             } = *params;
             start_connect(
                 state,
@@ -97,6 +98,7 @@ async fn handle_terminal_command(
                         auto_receive: zmodem.auto_receive,
                     },
                     allow_sha1_publickey_auth,
+                    shell_integration,
                 },
             );
             LoopControl::Continue

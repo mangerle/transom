@@ -132,6 +132,18 @@ enum IntegrationPhase {
 }
 
 impl ShellIntegration {
+    /// 集成脚本已在会话启动阶段预装（如本地 Shell 经 rcfile 注入）。
+    ///
+    /// 直接落 `Active` 终态：终端侧不再发探针、不再注入。探针命令本身也会被终端
+    /// 回显，本地会话要做到零可见，就不能对终端有任何写入动作。
+    pub fn preinstalled(kind: ShellKind) -> Self {
+        Self {
+            phase: IntegrationPhase::Active(kind),
+            started_at: Instant::now(),
+            reported_shell: Some(kind.label().to_string()),
+        }
+    }
+
     /// 新建一轮集成；`enabled` 为 false 时直接落 `Disabled` 终态，不做任何写入。
     pub fn new(enabled: bool) -> Self {
         Self {

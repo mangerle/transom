@@ -81,6 +81,8 @@ impl AppShell {
         // 审计落盘按连接粒度开启：路径在派发前算好，读线程内才创建文件。
         let audit_path =
             crate::audit::audit_path_for(&self.workspace.tabs[index], self.settings.audit.enabled);
+        // 开关在闭包外取值：`cx.new` 的闭包里再读 `self` 会与外层借用冲突。
+        let shell_integration_enabled = self.settings.block_view.shell_integration;
         let terminal = cx.new(|cx| {
             TerminalView::new(
                 window,
@@ -91,6 +93,7 @@ impl AppShell {
                     interaction,
                     key_filter: Some(key_filter),
                     audit_path,
+                    shell_integration_enabled,
                 },
             )
         });

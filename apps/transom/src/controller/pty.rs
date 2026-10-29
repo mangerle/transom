@@ -13,7 +13,7 @@ use transom_net::{
 };
 use transom_zmodem::ZmodemConfig;
 
-use super::{Internal, ReadyConnection};
+use super::{Internal, ReadyConnection, local_shell};
 
 pub(super) struct UiPrompter {
     pub(super) tab_id: TabId,
@@ -89,6 +89,7 @@ impl AuthPrompter for UiPrompter {
 pub(super) fn open_local_pty(
     local: &LocalConnection,
     size: TerminalSize,
+    shell_integration: bool,
 ) -> Result<(TerminalIo, tokio::sync::oneshot::Receiver<()>), AppError> {
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
     use transom_core::{TerminalControl, TerminalControlHandle};
@@ -119,6 +120,17 @@ pub(super) fn open_local_pty(
     }
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
+    // 集成预装：能在启动参数里把钩子装好，就不必往终端写任何字节，
+    // 屏幕上不会出现注入痕迹，也没有一闪而过。
+    let preload = if shell_integration {
+        local_shell::prepare(&shell)
+    } else {
+        local_shell::LocalShellPreload::none()
+    };
+    command.args(&preload.args);
+    for (key, value) in &preload.env {
+        command.env(key, value);
+    }
 
     let mut child = pair
         .slave
@@ -176,7 +188,16 @@ pub(super) fn open_local_pty(
         })
         .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
 
-    let io = TerminalIo::new(reader, writer, control);
+    let mut io = TerminalIo::new(reader, writer, control);
+    if let Some(kind) = preload.kind {
+        io = io.with_preinstalled_integration(kind);
+        log::info!("本地 Shell 集成已通过启动参数预装，方言: {}", kind.label());
+    }
+    if let Some(cleanup) = preload.cleanup {
+        // 清理守卫随会话句柄释放：临时 rcfile 目录必须活到 Shell 读完启动文件，
+        // 又不能留在磁盘上等系统回收。
+        io.cleanup = cleanup;
+    }
     Ok((io, exit_rx))
 }
 
@@ -198,6 +219,8 @@ pub(super) struct ConnectDispatch {
     pub(super) zmodem: ZmodemConfig,
     /// 是否允许 SHA1（`ssh-rsa`）用户公钥认证（随命令携带）。
     pub(super) allow_sha1_publickey_auth: bool,
+    /// 是否启用 Shell 集成（随命令携带）；本地会话据此决定要不要用启动参数预装。
+    pub(super) shell_integration: bool,
 }
 
 /// 按连接类型派发建连：SSH 走认证握手，本地开 PTY，串口走阻塞线程池打开。
@@ -208,7 +231,9 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
         let outcome = match &dispatch.session.connection {
             Connection::Ssh(ssh) => connect_ssh_task(&dispatch, ssh).await,
             Connection::Mosh(mosh) => connect_mosh_task(&dispatch, mosh).await,
-            Connection::Local(local) => connect_local_task(local.clone(), dispatch.size).await,
+            Connection::Local(local) => {
+                connect_local_task(local.clone(), dispatch.size, dispatch.shell_integration).await
+            }
             Connection::Serial(serial) => connect_serial_task(serial.clone()).await,
             Connection::Telnet(telnet) => connect_telnet_task(telnet.clone(), dispatch.size).await,
             _ => Err(AppError::with_detail(
@@ -272,9 +297,10 @@ async fn connect_ssh_task(
 async fn connect_local_task(
     local: LocalConnection,
     size: TerminalSize,
+    shell_integration: bool,
 ) -> Result<ReadyConnection, AppError> {
     // PTY 创建与 Shell 启动是阻塞系统调用，禁止占用异步工作线程。
-    tokio::task::spawn_blocking(move || open_local_pty(&local, size))
+    tokio::task::spawn_blocking(move || open_local_pty(&local, size, shell_integration))
         .await
         .map_err(|error| {
             AppError::with_detail(

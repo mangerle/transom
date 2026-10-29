@@ -287,6 +287,8 @@ pub fn attach_zmodem(
         reader,
         writer,
         control,
+        integration_preinstalled,
+        cleanup,
     } = io;
     let shared = Arc::new(Shared {
         active: AtomicBool::new(false),
@@ -333,6 +335,10 @@ pub fn attach_zmodem(
             reader: Box::new(reader),
             writer: Box::new(writer_filter),
             control,
+            // 会话级标记与清理守卫必须原样带走：重组 io 不能让预装状态丢失，
+            // 也不能让临时资源提前释放。
+            integration_preinstalled,
+            cleanup,
         },
         ZmodemControl { tx: ctrl_tx },
     )

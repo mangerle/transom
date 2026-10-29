@@ -63,6 +63,37 @@ impl fmt::Debug for TerminalControlHandle {
     }
 }
 
+/// 会话级清理动作：随会话资源释放时执行一次。
+///
+/// 设计原理（Why）：会话建立过程中产生的临时资源（本地 Shell 预装用的临时 rcfile
+/// 目录等）必须活到 Shell 读完启动文件为止，又不能留在磁盘上等系统清理；
+/// 把清理动作挂在会话句柄上，由 RAII 保证"会话结束即回收"。
+pub struct SessionCleanup {
+    action: Option<Box<dyn FnOnce() + Send>>,
+}
+
+impl SessionCleanup {
+    /// 登记一个清理动作；`None` 表示本次会话不需要清理。
+    pub fn new(action: impl FnOnce() + Send + 'static) -> Self {
+        Self {
+            action: Some(Box::new(action)),
+        }
+    }
+
+    /// 不做任何清理的空守卫。
+    pub fn none() -> Self {
+        Self { action: None }
+    }
+}
+
+impl Drop for SessionCleanup {
+    fn drop(&mut self) {
+        if let Some(action) = self.action.take() {
+            action();
+        }
+    }
+}
+
 /// 与具体传输方式无关的终端字节流。
 ///
 /// 终端视图独占 `reader`/`writer` 的消费与生产；传输端持有 `control` 的
@@ -71,6 +102,13 @@ pub struct TerminalIo {
     pub reader: Box<dyn Read + Send>,
     pub writer: Box<dyn Write + Send>,
     pub control: TerminalControlHandle,
+    /// 集成脚本是否已在会话启动阶段预装（如本地 Shell 经 rcfile 注入），以及是哪个方言。
+    ///
+    /// 为 `Some` 时终端侧不再自行探测与注入：探针命令本身也会被终端回显，
+    /// 本地会话要做到零可见，就不能对终端有任何写入动作。
+    pub integration_preinstalled: Option<crate::protocol::shell_integration::ShellKind>,
+    /// 会话级清理动作：随本会话资源释放时执行（如本地 Shell 预装用的临时目录）。
+    pub cleanup: SessionCleanup,
 }
 
 impl TerminalIo {
@@ -83,7 +121,18 @@ impl TerminalIo {
             reader,
             writer,
             control,
+            integration_preinstalled: None,
+            cleanup: SessionCleanup::none(),
         }
+    }
+
+    /// 标记集成脚本已在会话启动阶段预装，终端侧不再自行探测与注入。
+    pub fn with_preinstalled_integration(
+        mut self,
+        kind: crate::protocol::shell_integration::ShellKind,
+    ) -> Self {
+        self.integration_preinstalled = Some(kind);
+        self
     }
 }
 

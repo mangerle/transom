@@ -25,6 +25,7 @@ mod commands;
 mod host_exec;
 mod internal;
 mod lifecycle;
+mod local_shell;
 mod pty;
 mod samplers;
 mod session_context;

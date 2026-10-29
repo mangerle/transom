@@ -295,6 +295,7 @@ impl AppShell {
             size,
             zmodem: self.settings.zmodem.clone(),
             allow_sha1_publickey_auth: self.settings.allow_sha1_publickey_auth,
+            shell_integration: self.settings.block_view.shell_integration,
         }));
         if !self.send_command(command) {
             self.remove_tab(tab_id);

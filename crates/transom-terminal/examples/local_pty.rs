@@ -75,6 +75,7 @@ impl Demo {
                     interaction: TerminalInteraction::default(),
                     key_filter: None,
                     audit_path: None,
+                    shell_integration_enabled: false,
                 },
             )
         });

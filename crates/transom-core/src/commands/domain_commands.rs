@@ -29,6 +29,11 @@ pub struct ConnectParams {
     pub secrets: ConnectionSecrets,
     pub zmodem: crate::protocol::zmodem::ZmodemSettings,
     pub allow_sha1_publickey_auth: bool,
+    /// 是否启用 Shell 集成（提示符导航与退出码识别）。
+    ///
+    /// 随命令携带而不是让控制器回读设置：控制器不持有设置文件句柄，
+    /// 与 zmodem 配置是同一套约定。本地会话据此决定要不要用启动参数预装集成脚本。
+    pub shell_integration: bool,
 }
 
 /// 终端建连与生命周期命令。

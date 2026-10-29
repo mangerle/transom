@@ -107,4 +107,6 @@ pub use protocol::traffic::{NetworkTraffic, TrafficCounter};
 pub use protocol::zmodem::{ZmodemDirection, ZmodemEvent, ZmodemFinished, ZmodemSettings};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};
 pub use storage::{BackupService, HistoryStore, SecretStore, SessionStore, SettingsStore};
-pub use transport::{TerminalControl, TerminalControlHandle, TerminalIo, TerminalSize};
+pub use transport::{
+    SessionCleanup, TerminalControl, TerminalControlHandle, TerminalIo, TerminalSize,
+};
