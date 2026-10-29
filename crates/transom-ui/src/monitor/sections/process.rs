@@ -123,10 +123,11 @@ impl AppShell {
                     ),
             );
 
-        // 进程列表行渲染
+        // 进程列表行渲染（无 gap 连续平铺斑马纹）
+        let mut list = v_flex().w_full();
         for (index, process) in processes.iter().enumerate() {
             let is_expanded = expanded_pid == Some(process.pid);
-            content = content.child(Self::render_process_item(
+            list = list.child(Self::render_process_item(
                 index,
                 process,
                 is_expanded,
@@ -134,6 +135,7 @@ impl AppShell {
                 p,
             ));
         }
+        content = content.child(list);
 
         CollapsibleCard::new(
             "card-processes",
@@ -170,7 +172,7 @@ impl AppShell {
         let safe_kill_app = app_entity.clone();
         let force_kill_app = app_entity.clone();
 
-        let mut row = v_flex().w_full().rounded_xs();
+        let mut row = v_flex().w_full();
 
         let list_item = ListItem::new(ElementId::Name(format!("process-row-{pid}").into()))
             .selected(is_expanded)
@@ -271,9 +273,12 @@ impl AppShell {
             }
         });
 
-        if index % 2 == 1 {
-            main_line = main_line.bg(p.muted.opacity(0.1));
-        }
+        let bg_color = if index % 2 == 1 {
+            p.muted
+        } else {
+            p.background.opacity(0.35)
+        };
+        main_line = main_line.bg(bg_color);
         row = row.child(main_line);
 
         // 点击展开完整命令行与启动参数
@@ -282,7 +287,7 @@ impl AppShell {
                 div()
                     .px_2()
                     .py_1()
-                    .bg(p.muted.opacity(0.35))
+                    .bg(p.muted)
                     .rounded_b_xs()
                     .border_l_2()
                     .border_color(p.primary)

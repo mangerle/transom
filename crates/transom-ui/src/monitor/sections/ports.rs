@@ -39,7 +39,7 @@ impl AppShell {
             content = content.child(
                 h_flex()
                     .gap_2()
-                    .px_1()
+                    .px_3()
                     .py_0p5()
                     .text_xs()
                     .text_color(p.muted_foreground)
@@ -49,6 +49,7 @@ impl AppShell {
                     .child(div().flex_1().child("所属进程")),
             );
 
+            let mut list = v_flex().w_full();
             for (idx, port) in stats.ports.iter().take(30).enumerate() {
                 let proc_text = match (&port.process_name, port.pid) {
                     (Some(name), Some(pid)) => format!("{name} ({pid})"),
@@ -94,11 +95,15 @@ impl AppShell {
                             ),
                     );
 
-                if idx % 2 == 1 {
-                    row = row.bg(p.muted.opacity(0.1));
-                }
-                content = content.child(row);
+                let bg_color = if idx % 2 == 1 {
+                    p.muted
+                } else {
+                    p.background.opacity(0.35)
+                };
+                row = row.bg(bg_color);
+                list = list.child(row);
             }
+            content = content.child(list);
         }
 
         CollapsibleCard::new("card-ports", IconName::Plug, "监听端口 (Ports)".to_string())
