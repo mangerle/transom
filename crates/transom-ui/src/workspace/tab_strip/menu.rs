@@ -25,6 +25,8 @@ pub(super) struct TabContextMenuParams {
     pub(super) entry_selected: bool,
     pub(super) touched_sets_count: usize,
     pub(super) selected_singles_count: usize,
+    /// 会话对端主机地址；本地终端与串口为 `None`，此时不渲染"复制主机地址"项。
+    pub(super) host: Option<String>,
 }
 
 /// 构建标签条目的右键上下文菜单。
@@ -50,6 +52,7 @@ pub(super) fn build_tab_context_menu(
         entry_selected,
         touched_sets_count,
         selected_singles_count,
+        host,
     } = params;
     let app = app_entity.clone();
     let mut menu = menu
@@ -93,7 +96,27 @@ pub(super) fn build_tab_context_menu(
                         });
                     }
                 }),
-        )
+        );
+
+    // 只有真有对端的会话才给这一项：本地终端与串口连地址都没有，宁可不显示，
+    // 也不给一个复制出空串的按钮。
+    if let Some(host) = host {
+        let copy_app = app.clone();
+        menu = menu.item(
+            PopupMenuItem::new(rust_i18n::t!("menu.copy_host").to_string())
+                .icon(IconName::Copy)
+                .on_click(move |_, _, cx| {
+                    let text = host.clone();
+                    cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                    copy_app.update(cx, |this, cx| {
+                        this.status = Some(format!("已复制主机地址: {text}"));
+                        cx.notify();
+                    });
+                }),
+        );
+    }
+
+    menu = menu
         .item(
             PopupMenuItem::new(rust_i18n::t!("recorder.toggle_recording").to_string())
                 .icon(IconName::Disc)

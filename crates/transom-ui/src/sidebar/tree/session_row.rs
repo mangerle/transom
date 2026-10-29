@@ -8,6 +8,7 @@ use super::{
     TINT_SELECTED, indent_padding,
 };
 use crate::app::AppShell;
+use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
 use gpui_kit::assets::IconName;
@@ -31,6 +32,9 @@ impl AppShell {
         let session_id = session.id;
         let folder_id = session.folder_id;
         let app_entity = cx.entity().clone();
+        // 右键菜单在渲染期就把地址算好带走：菜单闭包运行时会话行早已渲染完，
+        // 届时再回查 row 的借用不成立。
+        let menu_host = session_host(session).map(str::to_string);
         let (icon_name, detail_text) = match &session.connection {
             Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
             Connection::Mosh(mosh) => (
@@ -135,44 +139,64 @@ impl AppShell {
                                 }),
                         );
                     }
-                    menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.duplicate").to_string())
-                            .icon(IconName::Plus)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.duplicate_session(session_id, cx);
+                    menu = menu
+                        .item(
+                            PopupMenuItem::new(rust_i18n::t!("menu.duplicate").to_string())
+                                .icon(IconName::Plus)
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, _, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.duplicate_session(session_id, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            PopupMenuItem::new(rust_i18n::t!("menu.edit").to_string())
+                                .icon(IconName::Settings)
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, window, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.open_edit_session(session_id, window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            PopupMenuItem::new(rust_i18n::t!("audit_viewer.menu_item").to_string())
+                                .icon(IconName::FileText)
+                                .on_click({
+                                    let app = app.clone();
+                                    move |_, window, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.open_audit_viewer_for_session(
+                                                session_id, window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        );
+
+                    // 与标签栏同一口径：取不到地址（本地终端、串口）就不放这一项。
+                    if let Some(host) = menu_host.clone() {
+                        let copy_app = app.clone();
+                        menu = menu.item(
+                            PopupMenuItem::new(rust_i18n::t!("menu.copy_host").to_string())
+                                .icon(IconName::Copy)
+                                .on_click(move |_, _, cx| {
+                                    let text = host.clone();
+                                    cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                                    copy_app.update(cx, |this, cx| {
+                                        this.status = Some(format!("已复制主机地址: {text}"));
+                                        cx.notify();
                                     });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.edit").to_string())
-                            .icon(IconName::Settings)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_edit_session(session_id, window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("audit_viewer.menu_item").to_string())
-                            .icon(IconName::FileText)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_audit_viewer_for_session(session_id, window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(PopupMenuItem::separator())
-                    .item(
+                                }),
+                        );
+                    }
+
+                    menu.item(PopupMenuItem::separator()).item(
                         PopupMenuItem::new(rust_i18n::t!("menu.delete").to_string())
                             .icon(IconName::Trash)
                             .on_click({

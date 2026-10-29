@@ -4,7 +4,7 @@ mod auth_dialog;
 mod local_and_quick;
 mod secrets;
 
-pub(crate) use secrets::describe_target;
+pub(crate) use secrets::{describe_target, session_host};
 
 use crate::app::{AppShell, TabStatus, TerminalTab};
 use crate::palette::localized_error;

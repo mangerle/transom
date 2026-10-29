@@ -17,6 +17,7 @@ use super::badges::{
     PaneRow, build_tab_tooltip, build_tiled_group_badge, calculate_dot_color, connection_icon,
 };
 use super::menu::{TabContextMenuParams, build_tab_context_menu};
+use crate::connection::session_host;
 use crate::workspace::tab_drag::attach_tab_drag;
 
 /// 渲染标签栏中的单个条目（可以是单标签或并排组）。
@@ -174,6 +175,7 @@ pub(super) fn render_tab_entry(
     let menu_selection = selected_singles.clone();
     let touched_sets_count = touched_sets.len();
     let selected_singles_count = selected_singles.len();
+    let menu_host = session_host(&tab.session).map(str::to_string);
 
     let mut element = tab_element
         .tooltip(build_tab_tooltip(
@@ -212,6 +214,7 @@ pub(super) fn render_tab_entry(
                     entry_selected,
                     touched_sets_count,
                     selected_singles_count,
+                    host: menu_host.clone(),
                 },
             )
         });
