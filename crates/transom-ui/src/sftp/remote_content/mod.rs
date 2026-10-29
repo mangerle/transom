@@ -10,6 +10,7 @@ use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteFile, TabId};
@@ -38,7 +39,8 @@ impl AppShell {
             tab_conn_id,
             remote_scroll_handle,
         } = props;
-        if remote_entries.is_empty() && !loading {
+
+        let content = if remote_entries.is_empty() && !loading {
             div()
                 .p_3()
                 .text_xs()
@@ -47,87 +49,145 @@ impl AppShell {
                 .into_any_element()
         } else if remote_entries.is_empty() && loading {
             div()
-                .p_3()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("sftp.loading").to_string())
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .child(Spinner::new().color(p.primary))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("sftp.loading").to_string()),
+                )
                 .into_any_element()
         } else {
-            let remote_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); remote_entries.len()]);
-            let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
-                remote_entries
-                    .iter()
-                    .map(|entry| SftpRowPath::Remote(entry.path.clone()))
-                    .collect(),
-            );
-            let remote_entries_rc = std::rc::Rc::new(remote_entries);
-            let p = p.clone();
-            let app_entity = cx.entity().clone();
-            v_virtual_list(
-                cx.entity().clone(),
-                format!("sftp-remote-virtual-list-{tab_id}"),
-                remote_sizes,
-                move |this, range, _window, cx| {
-                    let (remote_selection, remote_primary) = this
-                        .workspace
-                        .tab(tab_id)
-                        .and_then(|tab| tab.sftp())
-                        .map(|panel| {
-                            (
-                                panel.remote.selection.clone(),
-                                panel.remote.selected.clone(),
-                            )
-                        })
-                        .unwrap_or_default();
-                    let app_entity = app_entity.clone();
-                    range
-                        .filter_map(|ix| {
-                            let entry = remote_entries_rc.get(ix)?;
-                            let entry_name = entry.name.clone();
-                            let entry_is_dir = entry.is_dir;
-                            let is_parent_entry = entry_name == "..";
-                            let is_selected = remote_selection.contains(&entry.path)
-                                || remote_primary.as_ref() == Some(&entry.path);
-                            let entry_path_cm = entry.path.clone();
-                            let app_cm = app_entity.clone();
-                            let row = this.sftp_file_row(
-                                SftpRowContext {
-                                    tab_id,
-                                    side: SftpSide::Remote,
-                                    index: ix,
-                                    path: SftpRowPath::Remote(entry.path.clone()),
-                                    name: entry.name.clone(),
-                                    is_dir: entry_is_dir,
-                                    is_parent: is_parent_entry,
-                                    size: entry.size,
-                                    permissions: entry.permissions,
-                                    selected: is_selected,
-                                    visible_paths: visible_paths.clone(),
-                                    source_connection_id: tab_conn_id,
-                                },
-                                &p,
-                                cx,
-                            );
-
-                            let row = row.context_menu(move |menu, _window, _cx| {
-                                build_remote_context_menu(
-                                    menu,
-                                    RemoteContextMenuProps {
-                                        app: app_cm.clone(),
-                                        tab_id,
-                                        entry_path: entry_path_cm.clone(),
-                                        is_dir: entry_is_dir,
-                                        is_parent_entry,
-                                    },
-                                )
-                            });
-                            Some(row.into_any_element())
-                        })
-                        .collect()
-                },
+            self.build_remote_virtual_list(
+                remote_entries.clone(),
+                tab_id,
+                tab_conn_id,
+                remote_scroll_handle,
+                p,
+                cx,
             )
-            .track_scroll(&remote_scroll_handle)
-            .into_any_element()
+        };
+
+        // 加载态视觉过渡：已有条目上覆盖轻量半透明遮罩与微型动态 Spinner，消除假死顿挫感
+        if loading && !remote_entries.is_empty() {
+            div()
+                .relative()
+                .size_full()
+                .child(content)
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(p.background.opacity(0.45))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .gap_2()
+                        .child(Spinner::new().color(p.primary))
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.foreground)
+                                .child(rust_i18n::t!("sftp.loading").to_string()),
+                        ),
+                )
+                .into_any_element()
+        } else {
+            content
         }
+    }
+
+    /// 构建远程文件虚拟滚动列表。
+    fn build_remote_virtual_list(
+        &self,
+        remote_entries: Vec<RemoteFile>,
+        tab_id: TabId,
+        tab_conn_id: Option<ConnectionId>,
+        remote_scroll_handle: VirtualListScrollHandle,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let remote_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); remote_entries.len()]);
+        let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
+            remote_entries
+                .iter()
+                .map(|entry| SftpRowPath::Remote(entry.path.clone()))
+                .collect(),
+        );
+        let remote_entries_rc = std::rc::Rc::new(remote_entries);
+        let p = p.clone();
+        let app_entity = cx.entity().clone();
+
+        v_virtual_list(
+            cx.entity().clone(),
+            format!("sftp-remote-virtual-list-{tab_id}"),
+            remote_sizes,
+            move |this, range, _window, cx| {
+                let (remote_selection, remote_primary) = this
+                    .workspace
+                    .tab(tab_id)
+                    .and_then(|tab| tab.sftp())
+                    .map(|panel| {
+                        (
+                            panel.remote.selection.clone(),
+                            panel.remote.selected.clone(),
+                        )
+                    })
+                    .unwrap_or_default();
+                let app_entity = app_entity.clone();
+                range
+                    .filter_map(|ix| {
+                        let entry = remote_entries_rc.get(ix)?;
+                        let entry_name = entry.name.clone();
+                        let entry_is_dir = entry.is_dir;
+                        let is_parent_entry = entry_name == "..";
+                        let is_selected = remote_selection.contains(&entry.path)
+                            || remote_primary.as_ref() == Some(&entry.path);
+                        let entry_path_cm = entry.path.clone();
+                        let app_cm = app_entity.clone();
+                        let row = this.sftp_file_row(
+                            SftpRowContext {
+                                tab_id,
+                                side: SftpSide::Remote,
+                                index: ix,
+                                path: SftpRowPath::Remote(entry.path.clone()),
+                                name: entry.name.clone(),
+                                is_dir: entry_is_dir,
+                                is_parent: is_parent_entry,
+                                size: entry.size,
+                                permissions: entry.permissions,
+                                selected: is_selected,
+                                visible_paths: visible_paths.clone(),
+                                source_connection_id: tab_conn_id,
+                            },
+                            &p,
+                            cx,
+                        );
+
+                        let row = row.context_menu(move |menu, _window, _cx| {
+                            build_remote_context_menu(
+                                menu,
+                                RemoteContextMenuProps {
+                                    app: app_cm.clone(),
+                                    tab_id,
+                                    entry_path: entry_path_cm.clone(),
+                                    is_dir: entry_is_dir,
+                                    is_parent_entry,
+                                },
+                            )
+                        });
+                        Some(row.into_any_element())
+                    })
+                    .collect()
+            },
+        )
+        .track_scroll(&remote_scroll_handle)
+        .into_any_element()
     }
 }

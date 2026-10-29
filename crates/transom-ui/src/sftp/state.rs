@@ -84,6 +84,16 @@ pub(crate) struct SftpInputModalState {
     pub(crate) error: Option<String>,
 }
 
+/// 远程目录条目短期缓存存活时间：60 秒。
+pub(crate) const SFTP_DIR_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// 远程目录条目短期缓存项：条目快照与缓存时间戳。
+#[derive(Clone, Debug)]
+pub(crate) struct RemoteDirCacheEntry {
+    pub(crate) entries: Vec<RemoteFile>,
+    pub(crate) cached_at: std::time::Instant,
+}
+
 /// SFTP 双栏中的活动栏位与主面板状态。
 /// 远端栏（主栏）的导航、条目与选择状态。
 pub(crate) struct SftpRemotePaneState {
@@ -101,6 +111,8 @@ pub(crate) struct SftpRemotePaneState {
     /// 是否折叠为竖条。
     pub(crate) collapsed: bool,
     pub(crate) loading: bool,
+    /// 远程目录短期内存缓存（SWR 机制），消除目录跳转顿挫感。
+    pub(crate) dir_cache: std::collections::HashMap<String, RemoteDirCacheEntry>,
 }
 
 /// 本地栏的导航、条目与选择状态。

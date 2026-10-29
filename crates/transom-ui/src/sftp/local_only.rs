@@ -77,6 +77,7 @@ impl AppShell {
                 scroll_handle: VirtualListScrollHandle::new(),
                 collapsed: false,
                 loading: false,
+                dir_cache: std::collections::HashMap::new(),
             },
             local: SftpLocalPaneState {
                 path: local_path,

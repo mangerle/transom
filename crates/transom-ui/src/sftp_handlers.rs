@@ -7,8 +7,8 @@ use crate::app::AppShell;
 use crate::palette::localized_error;
 use crate::sftp::TransferStatus;
 use crate::sftp::{
-    SftpPreviewResponse, SftpPropertiesModalState, format_size, remote_file_properties,
-    send_desktop_notification,
+    RemoteDirCacheEntry, SftpPreviewResponse, SftpPropertiesModalState, format_size,
+    remote_file_properties, send_desktop_notification,
 };
 use gpui_kit::*;
 use transom_core::{SftpAppEvent, TransferDirection};
@@ -36,6 +36,13 @@ impl AppShell {
             if let Some(panel) = tab.sftp_mut() {
                 if is_main_conn {
                     panel.remote.path = path.clone();
+                    panel.remote.dir_cache.insert(
+                        path.clone(),
+                        RemoteDirCacheEntry {
+                            entries: entries.clone(),
+                            cached_at: std::time::Instant::now(),
+                        },
+                    );
                     panel.remote.entries = entries;
                     panel.remote.loading = false;
                     panel.clear_error();

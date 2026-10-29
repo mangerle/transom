@@ -7,7 +7,9 @@
 mod init;
 mod local_nav;
 
-use super::{extract_candidate_path, extract_local_candidate_path, parent_remote};
+use super::{
+    SFTP_DIR_CACHE_TTL, extract_candidate_path, extract_local_candidate_path, parent_remote,
+};
 use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::*;
@@ -73,9 +75,12 @@ impl AppShell {
     pub(crate) fn sftp_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(path) = self
             .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
-            .map(|panel| panel.remote.path.clone())
+            .tab_mut(tab_id)
+            .and_then(|tab| tab.sftp_mut())
+            .map(|panel| {
+                panel.remote.dir_cache.remove(&panel.remote.path);
+                panel.remote.path.clone()
+            })
         else {
             return;
         };
@@ -114,6 +119,34 @@ impl AppShell {
         if let Some(local_target) = sync_local_target {
             self.sftp_local_navigate_only(tab_id, local_target, window, cx);
         }
+
+        // 1. 即时路径更新与 SWR 短期缓存命中呈现（消除点击假死感）
+        let mut update_path_input = None;
+        if let Some(tab) = self.workspace.tab_mut(tab_id)
+            && let Some(panel) = tab.sftp_mut()
+        {
+            panel.remote.path = path.clone();
+            panel.remote.loading = true;
+            if let Some(cached) = panel.remote.dir_cache.get(&path)
+                && cached.cached_at.elapsed() < SFTP_DIR_CACHE_TTL
+            {
+                // 命中有效缓存：瞬间 0ms 渲染目录内容
+                panel.remote.entries = cached.entries.clone();
+                let valid_paths = panel
+                    .remote
+                    .entries
+                    .iter()
+                    .map(|entry| entry.path.clone())
+                    .collect();
+                panel.sync_remote_selection(&valid_paths);
+            }
+            update_path_input = Some((panel.remote.path_input.clone(), path.clone()));
+        }
+        if let Some((input, path_str)) = update_path_input {
+            input.update(cx, |state, cx| state.set_value(path_str, window, cx));
+        }
+
+        // 2. 后台发起真实网络验证（Stale-While-Revalidate）
         self.request_sftp_list(tab_id, path, cx);
     }
 
