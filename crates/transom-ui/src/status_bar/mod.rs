@@ -175,44 +175,56 @@ impl AppShell {
         let mut bar = StatusBar::new()
             .h(rems(size::STATUS_BAR_HEIGHT))
             .bg(p.status_bar)
-            .border_color(p.border);
+            .border_color(p.border)
+            .px_0()
+            .py_0();
 
         if divider_x > px(0.0) {
             // 左段宽到侧栏右缘，连接状态过长时在段内截断；右段的左边框续上
             // 侧栏右边框，形成一条贯穿到窗口底边的分界线。
-            let left = h_flex()
-                .w(divider_x)
-                .flex_none()
-                .h_full()
-                .items_center()
-                .pl_3()
-                .pr_2()
-                .child(h_flex().flex_1().min_w_0().child(connection_pill));
-            let right = h_flex()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .items_center()
-                .gap_2()
-                .pr_3()
-                .border_l_1()
-                .border_color(p.sidebar_border)
-                .child(snippets_entry)
-                .child(broadcast_entry)
-                .child(recording_badge)
-                .child(front_zone)
-                .child(badges);
-            bar = bar.left(left).right(right);
+            bar = bar
+                .child(
+                    h_flex()
+                        .w(divider_x)
+                        .flex_none()
+                        .h_full()
+                        .items_center()
+                        .pl_3()
+                        .pr_2()
+                        .child(h_flex().flex_1().min_w_0().child(connection_pill)),
+                )
+                .child(
+                    h_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .items_center()
+                        .gap_2()
+                        .pr_3()
+                        .border_l_1()
+                        .border_color(p.sidebar_border)
+                        .child(snippets_entry)
+                        .child(broadcast_entry)
+                        .child(recording_badge)
+                        .child(front_zone)
+                        .child(badges),
+                );
         } else {
-            let right = h_flex()
-                .gap_2()
-                .items_center()
-                .child(snippets_entry)
-                .child(broadcast_entry)
-                .child(recording_badge)
-                .child(front_zone)
-                .child(badges);
-            bar = bar.left(connection_pill).right(right);
+            bar = bar.child(
+                h_flex()
+                    .flex_1()
+                    .h_full()
+                    .items_center()
+                    .pl_3()
+                    .pr_3()
+                    .gap_2()
+                    .child(connection_pill)
+                    .child(snippets_entry)
+                    .child(broadcast_entry)
+                    .child(recording_badge)
+                    .child(front_zone)
+                    .child(badges),
+            );
         }
 
         // 空白区与左侧固定状态都落到整条状态栏的兜底菜单；徽标自己的菜单
