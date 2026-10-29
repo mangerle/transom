@@ -131,7 +131,13 @@ impl AppShell {
                                 min_val, max_val, avg_val
                             ))),
                     )
-                    .child(render_percent_sparkline(&history, 44.0, mem_color, p.muted)),
+                    .child(render_percent_sparkline(
+                        &history,
+                        44.0,
+                        mem_color,
+                        p.muted,
+                        self.monitor.chart_type,
+                    )),
             );
         }
 

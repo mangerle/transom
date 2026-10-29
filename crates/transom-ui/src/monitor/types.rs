@@ -82,6 +82,16 @@ impl From<&transom_core::MonitorSettings> for MonitorSectionCollapse {
     }
 }
 
+/// 监控走势图渲染形态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum SparklineChartType {
+    /// 平滑折线面积图（默认）。
+    #[default]
+    Line,
+    /// 紧凑柱状图。
+    Bar,
+}
+
 /// 监控看板的界面状态。
 pub(crate) struct MonitorState {
     pub(crate) open: bool,
@@ -91,6 +101,8 @@ pub(crate) struct MonitorState {
     pub(crate) collapse: MonitorSectionCollapse,
     /// 采样频率档位。
     pub(crate) interval_mode: SampleIntervalMode,
+    /// 走势图渲染形态。
+    pub(crate) chart_type: SparklineChartType,
     /// 进程排序依据。
     pub(crate) sort: ProcessSort,
     pub(crate) processes: Vec<ProcessInfo>,
@@ -121,6 +133,7 @@ impl MonitorState {
             drawer_width: settings.drawer_width.clamp(360.0, 750.0),
             collapse: MonitorSectionCollapse::from(settings),
             interval_mode: SampleIntervalMode::Normal,
+            chart_type: SparklineChartType::default(),
             sort: ProcessSort::Cpu,
             processes: Vec::new(),
             expanded_process_pid: None,

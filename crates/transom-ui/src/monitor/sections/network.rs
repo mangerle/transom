@@ -128,6 +128,7 @@ impl AppShell {
                         p.primary,
                         p.sidebar_accent_foreground,
                         p.muted,
+                        self.monitor.chart_type,
                     )),
             );
         }

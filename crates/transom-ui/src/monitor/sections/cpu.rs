@@ -128,7 +128,13 @@ impl AppShell {
                             .text_color(p.muted_foreground)
                             .child("负载走势 (2分钟)"),
                     )
-                    .child(render_percent_sparkline(&history, 44.0, color, p.muted)),
+                    .child(render_percent_sparkline(
+                        &history,
+                        44.0,
+                        color,
+                        p.muted,
+                        self.monitor.chart_type,
+                    )),
             );
         }
 

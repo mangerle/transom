@@ -1,7 +1,7 @@
 //! 监控抽屉容器视图与组装管道。
 
 use crate::app::AppShell;
-use crate::monitor::types::SampleIntervalMode;
+use crate::monitor::types::{SampleIntervalMode, SparklineChartType};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
@@ -163,6 +163,27 @@ impl AppShell {
                                         this.set_monitor_interval_mode(SampleIntervalMode::Eco, cx);
                                     })),
                             ),
+                    )
+                    // 走势图形态切换（折线面积图 / 柱状图）
+                    .child(
+                        Button::new("monitor-toggle-chart-type")
+                            .ghost()
+                            .xsmall()
+                            .icon(match self.monitor.chart_type {
+                                SparklineChartType::Line => IconName::ChartLine,
+                                SparklineChartType::Bar => IconName::ChartBar,
+                            })
+                            .tooltip(match self.monitor.chart_type {
+                                SparklineChartType::Line => "当前：折线图（点击切换为柱状图）",
+                                SparklineChartType::Bar => "当前：柱状图（点击切换为折线图）",
+                            })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.monitor.chart_type = match this.monitor.chart_type {
+                                    SparklineChartType::Line => SparklineChartType::Bar,
+                                    SparklineChartType::Bar => SparklineChartType::Line,
+                                };
+                                cx.notify();
+                            })),
                     )
                     // 刷新按钮
                     .child(
