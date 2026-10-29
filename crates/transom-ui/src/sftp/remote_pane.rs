@@ -296,6 +296,7 @@ impl AppShell {
             )
             .child({
                 let app_drop = cx.entity().clone();
+                let app_upload_drop = cx.entity().clone();
                 let dir_drop = remote_current_dir.clone();
                 let drop_bg = p.sidebar_accent.opacity(0.3);
                 let drop_border = p.primary;
@@ -307,6 +308,22 @@ impl AppShell {
                     .p_2()
                     .drag_over::<SftpDragItem>(move |style, _, _, _| {
                         style.bg(drop_bg).border_2().border_color(drop_border)
+                    })
+                    // 操作系统文件拖入的落点：高亮与内部跨列拖拽保持一致，
+                    // 用户在同一块区域看到同样的反馈，不需要分辨来源。
+                    .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                        style.bg(drop_bg).border_2().border_color(drop_border)
+                    })
+                    // 外部路径与 SftpDragItem 按 TypeId 各自派发，互不抢占；
+                    // 复用终端网格那条入队链路，目标目录即本列当前目录。
+                    .on_drop(move |paths: &ExternalPaths, window, cx| {
+                        let dropped = paths.paths().to_vec();
+                        if dropped.is_empty() {
+                            return;
+                        }
+                        app_upload_drop.update(cx, move |this, cx| {
+                            this.handle_dropped_files(tab_id, &dropped, window, cx);
+                        });
                     })
                     .on_drop(move |drag: &SftpDragItem, _window, cx| {
                         let item = drag.clone();
