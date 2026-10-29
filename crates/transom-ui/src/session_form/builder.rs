@@ -151,6 +151,7 @@ impl SessionForm {
             .map(|ssh| ssh.options.clone())
             .unwrap_or_default();
         options.auto_reconnect = self.auto_reconnect;
+        options.agent_forward = self.agent_forward;
         // MAC 只在非空时校验：留空是"不启用唤醒"的合法表达，不该报错。
         // 填错必须挡下——静默保留旧值会让用户以为改成功了。
         options.wol_mac = match transom_core::normalize_mac(&self.wol_mac.read(cx).value()) {

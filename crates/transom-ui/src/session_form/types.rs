@@ -85,6 +85,8 @@ pub(crate) struct SessionForm {
     pub save_passphrase: bool,
     /// 意外断线后自动重连（见 AppShell::schedule_auto_reconnect）。
     pub auto_reconnect: bool,
+    /// 启用 SSH Agent 代理转发（对应 ssh -A）。
+    pub agent_forward: bool,
     /// 关机主机的网卡 MAC，供 Wake-on-LAN 使用；留空表示不启用唤醒。
     pub wol_mac: Entity<InputState>,
     /// 可选的凭据模板清单（打开表单时从目录快照而来）。

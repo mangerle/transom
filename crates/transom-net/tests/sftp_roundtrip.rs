@@ -54,6 +54,7 @@ async fn sftp_list_upload_download_and_mutations() {
             allow_keyboard_interactive: false,
 
             auto_reconnect: false,
+            agent_forward: false,
             wol_mac: None,
         },
         proxy_jump: None,

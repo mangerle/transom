@@ -320,6 +320,7 @@ impl SessionForm {
             .unwrap_or_default();
         let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
             || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
+        let agent_forward = ssh.is_some_and(|ssh| ssh.options.agent_forward);
         // 只有 SSH 会话有 MAC 字段（见 HostAction::wake_for），回填同口径。
         let wol_mac = ssh
             .and_then(|ssh| ssh.options.wol_mac.clone())
@@ -380,6 +381,7 @@ impl SessionForm {
             save_password,
             save_passphrase,
             auto_reconnect,
+            agent_forward,
             wol_mac: text_input(
                 window,
                 cx,

@@ -82,6 +82,10 @@ pub struct SessionOptions {
     /// 老会话文件没有该字段，按关闭降级。
     #[serde(default)]
     pub auto_reconnect: bool,
+    /// 是否启用 SSH Agent 代理转发（对应 ssh -A）。
+    /// 在多跳堡垒机场景下将本地 SSH Agent 安全转发至下游远端主机。
+    #[serde(default)]
+    pub agent_forward: bool,
     /// 关机主机的网卡 MAC（规范化为 `aa:bb:cc:dd:ee:ff`），供 Wake-on-LAN 使用。
     ///
     /// 存文本而非新类型：单个手写坏值只会让这一条会话的唤醒失败并给出明确
@@ -97,6 +101,7 @@ impl Default for SessionOptions {
             keepalive_secs: 30,
             allow_keyboard_interactive: true,
             auto_reconnect: false,
+            agent_forward: false,
             wol_mac: None,
         }
     }

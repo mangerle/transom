@@ -155,6 +155,7 @@ fn ssh_connection(host: &str, port: u16, user: &str) -> SshConnection {
             keepalive_secs: 0,
             allow_keyboard_interactive: false,
             auto_reconnect: false,
+            agent_forward: false,
             wol_mac: None,
         },
         proxy_jump: None,

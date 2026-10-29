@@ -132,6 +132,8 @@ pub(crate) struct ClientHandler {
     pub(crate) remote_forward_slots: Arc<Semaphore>,
     /// TOFU 指纹确认走认证提示通道，与凭据索取共用同一条 UI 往返链路。
     pub(crate) prompter: Arc<dyn AuthPrompter>,
+    /// 是否允许 SSH Agent 代理转发。
+    pub(crate) enable_agent_forward: bool,
 }
 
 impl client::Handler for ClientHandler {
@@ -255,4 +257,71 @@ impl client::Handler for ClientHandler {
         self.forward_tasks.track(listen_port, forward_task);
         Ok(())
     }
+
+    async fn server_channel_open_agent_forward(
+        &mut self,
+        channel: Channel<Msg>,
+        reply: client::ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        if !self.enable_agent_forward {
+            log::warn!("收到远端 SSH Agent 转发请求，但本会话未启用 agent_forward，已拒绝");
+            reply
+                .reject(ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        }
+
+        let Ok(permit) = Arc::clone(&self.remote_forward_slots).try_acquire_owned() else {
+            log::warn!("远端通道数已达上限，拒绝 SSH Agent 转发通道");
+            reply.reject(ChannelOpenFailure::ResourceShortage).await;
+            return Ok(());
+        };
+
+        let auth_sock = std::env::var("SSH_AUTH_SOCK").ok();
+        let Some(auth_sock) = auth_sock.filter(|s| !s.trim().is_empty()) else {
+            log::warn!("远端请求 SSH Agent 转发，但本地未检测到有效的 $SSH_AUTH_SOCK 环境变量");
+            reply.reject(ChannelOpenFailure::ConnectFailed).await;
+            return Ok(());
+        };
+
+        reply.accept().await;
+        let mut channel_stream = channel.into_stream();
+
+        tokio::spawn(async move {
+            let _permit = permit;
+            match connect_local_agent(&auth_sock).await {
+                Ok(mut local_stream) => {
+                    log::debug!("SSH Agent 转发通道已建立并桥接至本地套接字: {auth_sock}");
+                    let _ =
+                        tokio::io::copy_bidirectional(&mut local_stream, &mut channel_stream).await;
+                }
+                Err(err) => {
+                    log::warn!("连接本地 SSH Agent 套接字失败: {auth_sock}，原因: {err}");
+                    let _ = channel_stream.shutdown().await;
+                }
+            }
+        });
+
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
+type AgentStream = tokio::net::UnixStream;
+
+#[cfg(unix)]
+async fn connect_local_agent(path: &str) -> std::io::Result<AgentStream> {
+    tokio::net::UnixStream::connect(path).await
+}
+
+#[cfg(not(unix))]
+type AgentStream = tokio::net::TcpStream;
+
+#[cfg(not(unix))]
+async fn connect_local_agent(_path: &str) -> std::io::Result<AgentStream> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "非 Unix 平台暂不支持 SSH Agent Unix 套接字转发",
+    ))
 }

@@ -158,28 +158,47 @@ pub(crate) fn render_ssh_fields(
             );
     }
 
-    fields = fields.child(
-        h_flex()
-            .justify_between()
-            .items_center()
-            .py_1()
-            .child(
-                div()
-                    .text_sm()
-                    .child(rust_i18n::t!("form.auto_reconnect").to_string()),
-            )
-            .child(
-                Switch::new("toggle-auto-reconnect")
-                    .small()
-                    .checked(form.auto_reconnect)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
-                            form.auto_reconnect = checked;
-                        }
-                        cx.notify();
-                    })),
-            ),
-    );
+    fields = fields
+        .child(
+            h_flex()
+                .justify_between()
+                .items_center()
+                .py_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .child(rust_i18n::t!("form.auto_reconnect").to_string()),
+                )
+                .child(
+                    Switch::new("toggle-auto-reconnect")
+                        .small()
+                        .checked(form.auto_reconnect)
+                        .on_click(cx.listener(|this, &checked, _, cx| {
+                            if let Some(form) = this.modals.form.as_mut() {
+                                form.auto_reconnect = checked;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(
+            h_flex()
+                .justify_between()
+                .items_center()
+                .py_1()
+                .child(div().text_sm().child("SSH Agent 代理转发 (ssh -A)"))
+                .child(
+                    Switch::new("toggle-agent-forward")
+                        .small()
+                        .checked(form.agent_forward)
+                        .on_click(cx.listener(|this, &checked, _, cx| {
+                            if let Some(form) = this.modals.form.as_mut() {
+                                form.agent_forward = checked;
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
 
     fields = fields
         .child(AppShell::form_field(

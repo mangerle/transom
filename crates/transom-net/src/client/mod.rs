@@ -108,6 +108,10 @@ pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, App
         channel.set_env(false, "COLORTERM", "truecolor"),
     )
     .await;
+    if connection.options.agent_forward {
+        // 请求开启 SSH Agent 代理转发（对应 ssh -A）
+        let _ = tokio::time::timeout(Duration::from_secs(5), channel.agent_forward(false)).await;
+    }
     with_timeout(
         CHANNEL_REQUEST_TIMEOUT,
         ErrorCode::ChannelFailed,

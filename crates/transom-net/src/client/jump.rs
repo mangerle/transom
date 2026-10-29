@@ -274,6 +274,7 @@ where
         forward_tasks,
         remote_forward_slots: Arc::new(Semaphore::new(REMOTE_FORWARD_LIMIT)),
         prompter: prompter.clone(),
+        enable_agent_forward: connection.options.agent_forward,
     };
     let mut session = client::connect_stream(config, transport, handler)
         .await

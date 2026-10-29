@@ -100,6 +100,7 @@ async fn password_auth_pty_and_tofu_roundtrip() {
             allow_keyboard_interactive: true,
 
             auto_reconnect: false,
+            agent_forward: false,
             wol_mac: None,
         },
         proxy_jump: None,

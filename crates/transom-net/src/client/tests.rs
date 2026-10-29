@@ -109,6 +109,7 @@ async fn handler_records_unknown_and_rejects_changed_keys() {
             answers: Ok(Vec::new()),
             host_key: true,
         }),
+        enable_agent_forward: false,
     };
 
     assert!(handler.check_server_key(&server_key).await.unwrap());
@@ -139,6 +140,7 @@ async fn handler_rejected_host_key_is_not_recorded() {
             answers: Ok(Vec::new()),
             host_key: false,
         }),
+        enable_agent_forward: false,
     };
     assert!(handler.check_server_key(&server_key).await.is_err());
     assert!(
@@ -294,4 +296,16 @@ async fn remote_forward_tasks_lifecycle_management() {
     // 全量中止：收割所有遗留任务
     tracker.abort_all();
     assert_eq!(tracker.active_count(), 0);
+}
+
+#[tokio::test]
+async fn session_options_agent_forward_round_trip() {
+    let json = r#"{"connect_timeout_secs":15,"keepalive_secs":30,"allow_keyboard_interactive":true,"auto_reconnect":false,"agent_forward":true}"#;
+    let options: transom_core::SessionOptions = serde_json::from_str(json).unwrap();
+    assert!(options.agent_forward);
+
+    // 缺省 agent_forward 时通过 #[serde(default)] 默认为 false
+    let without_agent = r#"{"connect_timeout_secs":15,"keepalive_secs":30,"allow_keyboard_interactive":true,"auto_reconnect":false}"#;
+    let default_options: transom_core::SessionOptions = serde_json::from_str(without_agent).unwrap();
+    assert!(!default_options.agent_forward);
 }
