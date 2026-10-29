@@ -306,6 +306,7 @@ async fn session_options_agent_forward_round_trip() {
 
     // 缺省 agent_forward 时通过 #[serde(default)] 默认为 false
     let without_agent = r#"{"connect_timeout_secs":15,"keepalive_secs":30,"allow_keyboard_interactive":true,"auto_reconnect":false}"#;
-    let default_options: transom_core::SessionOptions = serde_json::from_str(without_agent).unwrap();
+    let default_options: transom_core::SessionOptions =
+        serde_json::from_str(without_agent).unwrap();
     assert!(!default_options.agent_forward);
 }

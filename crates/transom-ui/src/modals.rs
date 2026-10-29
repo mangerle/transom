@@ -210,6 +210,10 @@ impl AppShell {
                     format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
                     IconName::Server,
                 ),
+                Connection::Mosh(mosh) => (
+                    format!("Mosh: {}@{}:{}", mosh.username, mosh.host, mosh.ssh_port),
+                    IconName::Radio,
+                ),
                 Connection::Telnet(telnet) => (
                     format!("Telnet: {}:{}", telnet.host, telnet.port),
                     IconName::Network,

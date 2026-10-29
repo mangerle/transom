@@ -28,6 +28,10 @@ impl SessionForm {
                 let built = self.build_ssh_connection(cx)?;
                 (built.connection, built.password, built.key_passphrase)
             }
+            ConnectionChoice::Mosh => {
+                let built = self.build_mosh_connection(cx)?;
+                (built.connection, built.password, built.key_passphrase)
+            }
             ConnectionChoice::Serial => (
                 Connection::Serial(self.build_serial_connection(cx)?),
                 None,
@@ -48,13 +52,15 @@ impl SessionForm {
         session.startup = startup;
         session.connection = connection;
         session.identity_id = match self.connection {
-            // 只有 SSH 有“用户名 + 认证方式”这组身份概念，其它类型忽略模板。
-            ConnectionChoice::Ssh => self.identity_choice,
+            // 只有 SSH 与 Mosh 有“用户名 + 认证方式”这组身份概念，其它类型忽略模板。
+            ConnectionChoice::Ssh | ConnectionChoice::Mosh => self.identity_choice,
             _ => None,
         };
         // 出站代理对网络型连接有意义；串口与本地终端没有网络出口。
         session.proxy = match self.connection {
-            ConnectionChoice::Ssh | ConnectionChoice::Telnet => self.build_proxy(cx)?,
+            ConnectionChoice::Ssh | ConnectionChoice::Telnet | ConnectionChoice::Mosh => {
+                self.build_proxy(cx)?
+            }
             ConnectionChoice::Serial => None,
         };
         session.icon = self.icon;
@@ -292,6 +298,99 @@ impl SessionForm {
             parity: self.serial_parity,
             stop_bits: self.serial_stop_bits,
             flow_control: self.serial_flow_control,
+        })
+    }
+
+    fn build_mosh_connection(
+        &self,
+        cx: &mut Context<impl Sized>,
+    ) -> Result<SshConnectionBuild, String> {
+        let host = self.host.read(cx).value().trim().to_string();
+        if host.is_empty() {
+            return Err(rust_i18n::t!("form.error_host").to_string());
+        }
+        let port = match self.port.read(cx).value().trim().parse::<u16>() {
+            Ok(port) if port > 0 => port,
+            _ => 22,
+        };
+        let username = self.username.read(cx).value().trim().to_string();
+        if username.is_empty() {
+            return Err(rust_i18n::t!("form.error_username").to_string());
+        }
+
+        let key_path = self.key_path.read(cx).value().trim().to_string();
+        if self.auth == AuthChoice::PrivateKey && key_path.is_empty() {
+            return Err(rust_i18n::t!("form.error_key").to_string());
+        }
+
+        let mut options = self
+            .base
+            .as_ref()
+            .and_then(|session| match &session.connection {
+                Connection::Mosh(mosh) => Some(mosh.options.clone()),
+                Connection::Ssh(ssh) => Some(ssh.options.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        options.auto_reconnect = self.auto_reconnect;
+        options.agent_forward = self.agent_forward;
+
+        let auth = match self.auth {
+            AuthChoice::Password => AuthMethod::Password {
+                save: self.save_password,
+            },
+            AuthChoice::PrivateKey => AuthMethod::PrivateKey {
+                path: PathBuf::from(&key_path),
+                cert_path: None,
+                save_passphrase: self.save_passphrase,
+            },
+            AuthChoice::Agent => AuthMethod::Agent,
+        };
+
+        let password = match auth {
+            AuthMethod::Password { .. } => {
+                let value = self.password.read(cx).value().to_string();
+                (!value.is_empty()).then(|| Zeroizing::new(value))
+            }
+            _ => None,
+        };
+        let key_passphrase = match auth {
+            AuthMethod::PrivateKey { .. } => {
+                let value = self.passphrase.read(cx).value().to_string();
+                (!value.is_empty()).then(|| Zeroizing::new(value))
+            }
+            _ => None,
+        };
+
+        let server_path = {
+            let p = self.mosh_server_path.read(cx).value().trim().to_string();
+            if p.is_empty() {
+                "mosh-server".to_string()
+            } else {
+                p
+            }
+        };
+        let server_port = self
+            .mosh_server_port
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<u16>()
+            .ok()
+            .filter(|&p| p > 0);
+
+        Ok(SshConnectionBuild {
+            connection: Connection::Mosh(transom_core::MoshConnection {
+                host,
+                ssh_port: port,
+                username,
+                server_port,
+                server_path,
+                auth,
+                options,
+            }),
+            password,
+            key_passphrase,
         })
     }
 }

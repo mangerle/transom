@@ -9,6 +9,7 @@ use transom_core::{
 pub(crate) fn describe_target(session: &Session) -> String {
     match &session.connection {
         Connection::Ssh(ssh) => format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
+        Connection::Mosh(mosh) => format!("mosh {}@{}:{}", mosh.username, mosh.host, mosh.ssh_port),
         Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
         Connection::Local(local) => {
             format!("本地终端 {}", local.shell.as_deref().unwrap_or("sh"))
@@ -25,10 +26,12 @@ pub(crate) fn collect_connection_secrets(
 ) -> (ConnectionSecrets, Option<String>) {
     let mut secrets = ConnectionSecrets::default();
     let mut error = None;
-    let Connection::Ssh(ssh) = &session.connection else {
-        return (secrets, error);
+    let auth = match &session.connection {
+        Connection::Ssh(ssh) => &ssh.auth,
+        Connection::Mosh(mosh) => &mosh.auth,
+        _ => return (secrets, error),
     };
-    match &ssh.auth {
+    match auth {
         AuthMethod::Password { .. } => {
             let key = SecretKey::new(session.secret_owner(), SecretKind::Password);
             match secret_store.get(&key) {

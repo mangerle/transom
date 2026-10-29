@@ -8,8 +8,8 @@ mod ssh;
 mod tests;
 
 pub use connection::{
-    Connection, LocalConnection, SerialConnection, SerialDataBits, SerialFlowControl, SerialParity,
-    SerialStopBits, TelnetConnection, TelnetOptions, TextEncoding,
+    Connection, LocalConnection, MoshConnection, SerialConnection, SerialDataBits,
+    SerialFlowControl, SerialParity, SerialStopBits, TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use entity::{BlockViewOverride, Session, StartupCommands};
 pub use ssh::{AuthMethod, ProxyJumpConfig, SessionOptions, SshConnection, SshHop};

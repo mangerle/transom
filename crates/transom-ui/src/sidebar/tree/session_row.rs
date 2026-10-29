@@ -33,6 +33,10 @@ impl AppShell {
         let app_entity = cx.entity().clone();
         let (icon_name, detail_text) = match &session.connection {
             Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
+            Connection::Mosh(mosh) => (
+                IconName::Radio,
+                format!("mosh {}@{}", mosh.username, mosh.host),
+            ),
             Connection::Telnet(telnet) => (
                 IconName::Network,
                 format!("Telnet: {}:{}", telnet.host, telnet.port),

@@ -25,6 +25,7 @@ impl SessionForm {
         let connection = match base.as_ref().map(|session| &session.connection) {
             Some(Connection::Serial(_)) => ConnectionChoice::Serial,
             Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
+            Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
             _ => ConnectionChoice::Ssh,
         };
         let serial = base.as_ref().and_then(|session| match &session.connection {
@@ -39,44 +40,48 @@ impl SessionForm {
             Connection::Ssh(ssh) => Some(ssh),
             _ => None,
         });
-        let (auth, save_password, save_passphrase, key_path, cert_path) =
-            match ssh.map(|ssh| &ssh.auth) {
-                Some(AuthMethod::Password { save }) => (
-                    AuthChoice::Password,
-                    *save,
-                    false,
-                    String::new(),
-                    String::new(),
-                ),
-                Some(AuthMethod::PrivateKey {
-                    path,
-                    cert_path,
-                    save_passphrase,
-                }) => (
-                    AuthChoice::PrivateKey,
-                    false,
-                    *save_passphrase,
-                    path.display().to_string(),
-                    cert_path
-                        .as_ref()
-                        .map(|path| path.display().to_string())
-                        .unwrap_or_default(),
-                ),
-                Some(AuthMethod::Agent) => (
-                    AuthChoice::Agent,
-                    false,
-                    false,
-                    String::new(),
-                    String::new(),
-                ),
-                _ => (
-                    AuthChoice::Password,
-                    true,
-                    false,
-                    String::new(),
-                    String::new(),
-                ),
-            };
+        let mosh = base.as_ref().and_then(|session| match &session.connection {
+            Connection::Mosh(mosh) => Some(mosh),
+            _ => None,
+        });
+        let auth_source = ssh.map(|s| &s.auth).or_else(|| mosh.map(|m| &m.auth));
+        let (auth, save_password, save_passphrase, key_path, cert_path) = match auth_source {
+            Some(AuthMethod::Password { save }) => (
+                AuthChoice::Password,
+                *save,
+                false,
+                String::new(),
+                String::new(),
+            ),
+            Some(AuthMethod::PrivateKey {
+                path,
+                cert_path,
+                save_passphrase,
+            }) => (
+                AuthChoice::PrivateKey,
+                false,
+                *save_passphrase,
+                path.display().to_string(),
+                cert_path
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_default(),
+            ),
+            Some(AuthMethod::Agent) => (
+                AuthChoice::Agent,
+                false,
+                false,
+                String::new(),
+                String::new(),
+            ),
+            _ => (
+                AuthChoice::Password,
+                true,
+                false,
+                String::new(),
+                String::new(),
+            ),
+        };
         let startup_commands = base
             .as_ref()
             .map(|session| session.startup.to_multiline())
@@ -87,6 +92,10 @@ impl SessionForm {
                 Connection::Ssh(ssh) => {
                     Some((ssh.options.connect_timeout_secs, ssh.options.keepalive_secs))
                 }
+                Connection::Mosh(mosh) => Some((
+                    mosh.options.connect_timeout_secs,
+                    mosh.options.keepalive_secs,
+                )),
                 Connection::Telnet(telnet) => Some((
                     telnet.options.connect_timeout_secs,
                     telnet.options.keepalive_secs,
@@ -242,6 +251,10 @@ impl SessionForm {
             Connection::Ssh(ssh) => Some(ssh),
             _ => None,
         });
+        let mosh = base.as_ref().and_then(|session| match &session.connection {
+            Connection::Mosh(mosh) => Some(mosh),
+            _ => None,
+        });
         let telnet = base.as_ref().and_then(|session| match &session.connection {
             Connection::Telnet(telnet) => Some(telnet),
             _ => None,
@@ -252,10 +265,12 @@ impl SessionForm {
             .unwrap_or_default();
         let host = ssh
             .map(|ssh| ssh.host.clone())
+            .or_else(|| mosh.map(|mosh| mosh.host.clone()))
             .or_else(|| telnet.map(|telnet| telnet.host.clone()))
             .unwrap_or_default();
         let port = ssh
             .map(|ssh| ssh.port)
+            .or_else(|| mosh.map(|mosh| mosh.ssh_port))
             .or_else(|| telnet.map(|telnet| telnet.port))
             .unwrap_or(match connection {
                 ConnectionChoice::Telnet => 23,
@@ -264,6 +279,7 @@ impl SessionForm {
             .to_string();
         let username = ssh
             .map(|ssh| ssh.username.clone())
+            .or_else(|| mosh.map(|mosh| mosh.username.clone()))
             .unwrap_or_else(default_username);
         // Self 字面量会移走 base，需要读的字段先取出来。
         let identity_choice = base.as_ref().and_then(|session| session.identity_id);
@@ -319,12 +335,19 @@ impl SessionForm {
             .map(|session| session.color)
             .unwrap_or_default();
         let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
+            || mosh.is_some_and(|mosh| mosh.options.auto_reconnect)
             || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
-        let agent_forward = ssh.is_some_and(|ssh| ssh.options.agent_forward);
+        let agent_forward = ssh.is_some_and(|ssh| ssh.options.agent_forward)
+            || mosh.is_some_and(|mosh| mosh.options.agent_forward);
         // 只有 SSH 会话有 MAC 字段（见 HostAction::wake_for），回填同口径。
         let wol_mac = ssh
             .and_then(|ssh| ssh.options.wol_mac.clone())
             .unwrap_or_default();
+        let mosh_server_path_val =
+            mosh.map_or_else(|| "mosh-server".to_string(), |m| m.server_path.clone());
+        let mosh_server_port_val = mosh
+            .and_then(|m| m.server_port)
+            .map_or_else(String::new, |p| p.to_string());
 
         Self {
             base,
@@ -382,6 +405,8 @@ impl SessionForm {
             save_passphrase,
             auto_reconnect,
             agent_forward,
+            mosh_server_path: text_input(window, cx, &mosh_server_path_val, "mosh-server"),
+            mosh_server_port: text_input(window, cx, &mosh_server_port_val, "留空自动分配"),
             wol_mac: text_input(
                 window,
                 cx,

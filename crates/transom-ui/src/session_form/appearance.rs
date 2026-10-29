@@ -26,6 +26,7 @@ pub(crate) fn default_icon_for(connection: ConnectionChoice) -> IconName {
         ConnectionChoice::Ssh => IconName::Server,
         ConnectionChoice::Serial => IconName::Cable,
         ConnectionChoice::Telnet => IconName::Network,
+        ConnectionChoice::Mosh => IconName::Radio,
     }
 }
 

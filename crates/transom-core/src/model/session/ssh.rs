@@ -72,7 +72,7 @@ pub enum AuthMethod {
     Agent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionOptions {
     pub connect_timeout_secs: u64,
     /// `0` disables keepalive messages.

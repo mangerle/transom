@@ -104,6 +104,7 @@ impl AppShell {
                     Connection::Local(_) => IconName::Terminal,
                     Connection::Serial(_) => IconName::Cable,
                     Connection::Telnet(_) => IconName::Network,
+                    Connection::Mosh(_) => IconName::Radio,
                     _ => IconName::Server,
                 };
                 (title, dot_color, tab_icon)

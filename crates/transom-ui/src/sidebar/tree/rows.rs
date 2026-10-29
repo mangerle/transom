@@ -157,6 +157,7 @@ fn subtree_counts(
 fn session_matches(session: &Session, query: &str, folder_path: &str) -> bool {
     let endpoint = match &session.connection {
         Connection::Ssh(ssh) => format!("{} {} {}", ssh.username, ssh.host, ssh.port),
+        Connection::Mosh(mosh) => format!("mosh {} {} {}", mosh.username, mosh.host, mosh.ssh_port),
         Connection::Telnet(telnet) => format!("telnet {} {}", telnet.host, telnet.port),
         Connection::Local(local) => {
             format!("local {}", local.shell.as_deref().unwrap_or("sh"))

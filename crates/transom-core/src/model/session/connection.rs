@@ -1,6 +1,6 @@
 //! 串口、Telnet、本地 Shell 连接契约与连接总枚举。
 
-use super::ssh::SshConnection;
+use super::ssh::{AuthMethod, SessionOptions, SshConnection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -24,6 +24,56 @@ pub enum Connection {
     Local(LocalConnection),
     Serial(SerialConnection),
     Telnet(TelnetConnection),
+    Mosh(MoshConnection),
+}
+
+/// Mosh（Mobile Shell）连接参数。
+///
+/// 核心特性：
+/// 1. 引导阶段：通过 SSH 连接在远端启动 `mosh-server`；
+/// 2. 漫游阶段：基于 UDP 与状态同步协议（SSP），在网络漫游切换与高丢包弱网下保持终端不中断并即时回显。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MoshConnection {
+    /// 目标主机地址（域名或 IP）。
+    pub host: String,
+    /// 用于引导 mosh-server 的 SSH 端口，默认 22。
+    #[serde(default = "default_mosh_ssh_port")]
+    pub ssh_port: u16,
+    /// 登录用户名。
+    pub username: String,
+    /// 远端 mosh-server UDP 端口；若为 None 则由远端自动分配（默认 60000-61000 范围）。
+    #[serde(default)]
+    pub server_port: Option<u16>,
+    /// 远端 mosh-server 执行路径，默认 "mosh-server"。
+    #[serde(default = "default_mosh_server_path")]
+    pub server_path: String,
+    /// SSH 引导认证方式。
+    pub auth: AuthMethod,
+    /// SSH 引导连接选项。
+    #[serde(default)]
+    pub options: SessionOptions,
+}
+
+fn default_mosh_ssh_port() -> u16 {
+    22
+}
+
+fn default_mosh_server_path() -> String {
+    "mosh-server".to_string()
+}
+
+impl MoshConnection {
+    pub fn new(host: impl Into<String>, username: impl Into<String>) -> Self {
+        Self {
+            host: host.into(),
+            ssh_port: 22,
+            username: username.into(),
+            server_port: None,
+            server_path: default_mosh_server_path(),
+            auth: AuthMethod::Agent,
+            options: SessionOptions::default(),
+        }
+    }
 }
 
 /// 串口连接参数，默认 115200 8N1、无流控。

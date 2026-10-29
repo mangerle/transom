@@ -4,10 +4,13 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use transom_core::{
     AppError, AppEvent, Connection, ConnectionId, ConnectionSecrets, ErrorCode, KnownHostsStore,
-    LocalConnection, OutboundProxy, PromptInfo, SerialConnection, Session, SshConnection, SshHop,
-    TabId, TelnetConnection, TerminalAppEvent, TerminalIo, TerminalSize,
+    LocalConnection, MoshConnection, OutboundProxy, PromptInfo, SerialConnection, Session,
+    SshConnection, SshHop, TabId, TelnetConnection, TerminalAppEvent, TerminalIo, TerminalSize,
 };
-use transom_net::{AuthPrompter, SshConnectParams, connect_ssh, connect_telnet, open_serial};
+use transom_net::{
+    AuthPrompter, SshConnectParams, build_mosh_server_command, check_local_mosh_client,
+    connect_ssh, connect_telnet, open_serial, parse_mosh_server_output,
+};
 use transom_zmodem::ZmodemConfig;
 
 use super::{Internal, ReadyConnection};
@@ -204,6 +207,7 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
     tokio::spawn(async move {
         let outcome = match &dispatch.session.connection {
             Connection::Ssh(ssh) => connect_ssh_task(&dispatch, ssh).await,
+            Connection::Mosh(mosh) => connect_mosh_task(&dispatch, mosh).await,
             Connection::Local(local) => connect_local_task(local.clone(), dispatch.size).await,
             Connection::Serial(serial) => connect_serial_task(serial.clone()).await,
             Connection::Telnet(telnet) => connect_telnet_task(telnet.clone(), dispatch.size).await,
@@ -308,4 +312,121 @@ async fn connect_telnet_task(
             io: connected.io,
             join: connected.exit,
         })
+}
+
+async fn connect_mosh_task(
+    dispatch: &ConnectDispatch,
+    mosh: &MoshConnection,
+) -> Result<ReadyConnection, AppError> {
+    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+    use transom_core::TerminalControlHandle;
+
+    // 1. 引导阶段：建立 SSH 连接并在远端执行 mosh-server
+    let ssh_equiv = SshConnection {
+        host: mosh.host.clone(),
+        port: mosh.ssh_port,
+        username: mosh.username.clone(),
+        auth: mosh.auth.clone(),
+        options: mosh.options.clone(),
+        proxy_jump: None,
+    };
+    let prompter = Arc::new(UiPrompter {
+        tab_id: dispatch.tab_id,
+        connection_id: dispatch.connection_id,
+        event_tx: dispatch.event_tx.clone(),
+    });
+    let params = SshConnectParams {
+        connection: &ssh_equiv,
+        jumps: &dispatch.jumps,
+        size: dispatch.size,
+        credentials: dispatch.secrets.clone(),
+        prompter,
+        known_hosts: dispatch.known_hosts.clone(),
+        proxy: dispatch.proxy.clone(),
+        allow_sha1_publickey_auth: dispatch.allow_sha1_publickey_auth,
+    };
+    let ssh_session = connect_ssh(params).await?;
+    let cmd = build_mosh_server_command(&mosh.server_path, mosh.server_port);
+    log::info!("正在通过 SSH 引导远端 mosh-server，执行命令: {cmd}");
+    let output = ssh_session.remote.exec_command_capture(&cmd).await?;
+    let info = parse_mosh_server_output(&output.stdout)?;
+    log::info!("远端 mosh-server 启动成功，UDP 监听端口: {}", info.udp_port);
+
+    // 2. 本地客户端检查
+    if !check_local_mosh_client() {
+        return Err(AppError::with_detail(
+            ErrorCode::Configuration,
+            format!(
+                "远端 mosh-server 已成功启动（UDP 端口: {}），但本地未检测到 mosh-client。请先通过系统包管理器安装 mosh（例如 apt/brew/dnf install mosh）",
+                info.udp_port
+            ),
+        ));
+    }
+
+    // 3. 本地启动 mosh-client 桥接伪终端
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: dispatch.size.rows,
+            cols: dispatch.size.cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| {
+            AppError::with_detail(ErrorCode::Io, format!("创建 Mosh 本地伪终端失败: {e}"))
+        })?;
+
+    let mut command = CommandBuilder::new("mosh-client");
+    command.env("MOSH_KEY", &info.session_key);
+    command.env("TERM", "xterm-256color");
+    command.env("COLORTERM", "truecolor");
+    command.arg(&mosh.host);
+    command.arg(info.udp_port.to_string());
+
+    let mut child = pair.slave.spawn_command(command).map_err(|e| {
+        AppError::with_detail(ErrorCode::Io, format!("启动本地 mosh-client 失败: {e}"))
+    })?;
+    drop(pair.slave);
+
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
+
+    let (control, mut control_rx) = TerminalControlHandle::channel(16);
+    let master = pair.master;
+    std::thread::Builder::new()
+        .name("transom-mosh-pty-control".into())
+        .spawn(move || {
+            while let Some(message) = control_rx.blocking_recv() {
+                match message {
+                    transom_core::TerminalControl::Resize(size) => {
+                        let _ = master.resize(PtySize {
+                            rows: size.rows,
+                            cols: size.cols,
+                            pixel_width: 0,
+                            pixel_height: 0,
+                        });
+                    }
+                    transom_core::TerminalControl::Close => break,
+                }
+            }
+        })
+        .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
+
+    let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+    std::thread::Builder::new()
+        .name("transom-mosh-exit".into())
+        .spawn(move || {
+            let _ = child.wait();
+            let _ = exit_tx.send(());
+        })
+        .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
+
+    let io = TerminalIo::new(reader, writer, control);
+    Ok(ReadyConnection::Local { io, join: exit_rx })
 }

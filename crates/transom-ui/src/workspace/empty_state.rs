@@ -176,6 +176,10 @@ impl AppShell {
         let session_id = session.id;
         let (default_icon, detail_text) = match &session.connection {
             Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
+            Connection::Mosh(mosh) => (
+                IconName::Radio,
+                format!("mosh {}@{}", mosh.username, mosh.host),
+            ),
             Connection::Telnet(telnet) => (
                 IconName::Network,
                 format!("{}:{}", telnet.host, telnet.port),

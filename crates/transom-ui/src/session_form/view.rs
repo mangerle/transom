@@ -47,6 +47,11 @@ impl AppShell {
             ConnectionChoice::Ssh => {
                 content = content.child(render_ssh_fields(form, cx, p));
             }
+            ConnectionChoice::Mosh => {
+                content = content
+                    .child(render_ssh_fields(form, cx, p))
+                    .child(Self::render_mosh_specific_card(form, p));
+            }
             ConnectionChoice::Serial => {
                 content = content.child(render_serial_fields(form, cx, p));
             }
@@ -321,6 +326,18 @@ impl AppShell {
                                 }
                                 cx.notify();
                             })),
+                    )
+                    .child(
+                        Button::new("conn-mosh")
+                            .small()
+                            .label("Mosh")
+                            .selected(form.connection == ConnectionChoice::Mosh)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(form) = this.modals.form.as_mut() {
+                                    form.connection = ConnectionChoice::Mosh;
+                                }
+                                cx.notify();
+                            })),
                     ),
             )
             .into_any_element()
@@ -402,6 +419,39 @@ impl AppShell {
                             .text_color(p.muted_foreground)
                             .child(rust_i18n::t!("form.block_view_hint").to_string()),
                     ),
+            )
+            .into_any_element()
+    }
+
+    /// Mosh 协议专属设置卡片（UDP 监听端口、mosh-server 远端路径）。
+    fn render_mosh_specific_card(form: &super::types::SessionForm, p: &Palette) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child("Mosh 漫游协议参数配置"),
+            )
+            .child(
+                h_flex()
+                    .gap_3()
+                    .child(div().flex_1().child(Self::form_field(
+                        "远端 mosh-server 执行路径".to_string(),
+                        form.mosh_server_path.clone(),
+                        p,
+                    )))
+                    .child(div().flex_1().child(Self::form_field(
+                        "远端 UDP 监听端口（默认 60000-61000 自动分配）".to_string(),
+                        form.mosh_server_port.clone(),
+                        p,
+                    ))),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child("提示：Mosh 依赖远端已安装 mosh-server 且防火墙开放对应 UDP 端口范围；本地将优先通过 mosh-client 桥接漫游。"),
             )
             .into_any_element()
     }
