@@ -130,6 +130,16 @@ pub enum SftpOperation {
         force: bool,
         backup: bool,
     },
+    /// 通过 Sudo 提权通道将文本内容流式写入远端并原子替换。
+    ///
+    /// 解决非 root 登录时编辑保存只读/系统配置文件的权限限制。
+    /// `password` 为可选的 sudo 鉴权口令（若配置免密则为 None）。
+    SudoWriteText {
+        path: String,
+        content: Vec<u8>,
+        expected: Option<RemoteTextMeta>,
+        password: Option<String>,
+    },
     /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径
     Symlink {
         target: String,

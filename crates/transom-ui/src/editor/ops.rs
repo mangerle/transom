@@ -19,7 +19,38 @@ use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
 use transom_core::{RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
 
+use crate::palette::sftp_text_input;
+use crate::sftp::{SftpInputModalState, SftpInputTarget};
+
 impl AppShell {
+    /// 唤起 Sudo 提权保存弹窗。
+    pub(crate) fn prompt_sudo_save(
+        &mut self,
+        editor: &Entity<EditorState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(item) = self.editor_panel_mut(editor) else {
+            return;
+        };
+        let tab_id = item.tab_id;
+        let file_name = item.file_name.clone();
+        item.confirm = None;
+        let input = sftp_text_input(window, cx, "", "Sudo 口令（免密可留空）");
+        input.update(cx, |state, cx| state.focus(window, cx));
+        self.sftp_modals.input = Some(SftpInputModalState {
+            tab_id,
+            title: "Sudo 提权保存".to_string(),
+            prompt: format!("目标文件「{file_name}」受系统权限保护，请输入 Sudo 提权密码："),
+            input,
+            target: SftpInputTarget::SudoElevation {
+                editor: editor.clone(),
+            },
+            error: None,
+        });
+        cx.notify();
+    }
+
     /// 保存：把整份缓冲区连同版本指纹交给独立写回通道，面板保持打开等待结果。
     pub(crate) fn save_editor_panel(
         &mut self,
@@ -135,6 +166,75 @@ impl AppShell {
             if force {
                 item.conflict = false;
             }
+        }
+        cx.notify();
+    }
+
+    /// 执行 Sudo 提权写入提交：通过独立 Sudo 通道以标准流灌入并原子替换。
+    pub(crate) fn submit_sudo_editor_write(
+        &mut self,
+        editor: &Entity<EditorState>,
+        password: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(item) = self
+            .editors
+            .panels
+            .iter()
+            .find(|item| item.editor == *editor)
+        else {
+            return;
+        };
+        if !item.loaded || matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing) {
+            return;
+        }
+        let tab_id = item.tab_id;
+        let remote_path = item.remote_path.clone();
+        let expected = item.remote_meta;
+        let content = editor.read(cx).value();
+        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
+        else {
+            if let Some(item) = self.editor_panel_mut(editor) {
+                item.phase = EditorPhase::Failed;
+                item.close_after_write = false;
+                item.error = Some("所属标签的连接已断开，无法发起提权写入".to_string());
+            }
+            self.focus_active_sftp_panel(window, cx);
+            cx.notify();
+            return;
+        };
+
+        let op_id = TransferId::new();
+        if let Err(error) = self.services.command_tx.try_send(
+            SftpCommand::Sftp {
+                tab_id,
+                connection_id,
+                op_id,
+                op: SftpOperation::SudoWriteText {
+                    path: remote_path,
+                    content: content.as_bytes().to_vec(),
+                    expected,
+                    password,
+                },
+            }
+            .into(),
+        ) {
+            if let Some(item) = self.editor_panel_mut(editor) {
+                item.phase = EditorPhase::Failed;
+                item.close_after_write = false;
+                item.error = Some(crate::app::command_send_error_text(error));
+            }
+            self.focus_active_sftp_panel(window, cx);
+            cx.notify();
+            return;
+        }
+
+        if let Some(item) = self.editor_panel_mut(editor) {
+            item.pending_op = Some(op_id);
+            item.phase = EditorPhase::Writing;
+            item.error = None;
+            item.confirm = None;
         }
         cx.notify();
     }

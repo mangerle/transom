@@ -83,6 +83,10 @@ pub(crate) enum SftpInputTarget {
         archive_path: String,
         parent_dir: String,
     },
+    /// Sudo 提权保存：输入提权密码并写入远端
+    SudoElevation {
+        editor: Entity<gpui_kit::component::input::EditorState>,
+    },
 }
 
 pub(crate) struct SftpInputModalState {

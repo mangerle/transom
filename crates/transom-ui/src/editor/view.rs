@@ -261,15 +261,29 @@ fn render_panel_body(
         Editor::new(editor).w_full().flex_1().into_any_element()
     };
     let body = v_flex().flex_1().gap_1().p_2().child(content);
+    let err_editor = editor.clone();
     let body = body.when_some(item.error.clone(), |this, err| {
+        let is_permission = err.contains("Permission denied") || err.contains("权限");
         this.child(
             h_flex()
                 .items_center()
-                .gap_1()
+                .gap_2()
                 .text_xs()
                 .text_color(p.danger)
                 .child(Icon::new(IconName::CircleAlert).xsmall())
-                .child(err),
+                .child(div().flex_1().child(err))
+                .when(is_permission, |this| {
+                    this.child(
+                        Button::new("editor-sudo-banner-btn")
+                            .warning()
+                            .compact()
+                            .icon(IconName::Shield)
+                            .label("使用 Sudo 提权保存")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.prompt_sudo_save(&err_editor, window, cx);
+                            })),
+                    )
+                }),
         )
     });
     let body = body.when(item.conflict, |this| {
@@ -395,17 +409,33 @@ fn render_panel_status(
                 )
             },
         )
-        .child(
-            Button::new("editor-save-upload")
-                .primary()
-                .compact()
-                .icon(IconName::Check)
-                .label("保存并回传")
-                .disabled(!item.dirty || busy || !item.writable)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.save_editor_panel(&save_editor, window, cx);
-                })),
-        )
+        .when(!item.writable, |this| {
+            let sudo_editor = editor.clone();
+            this.child(
+                Button::new("editor-sudo-save")
+                    .warning()
+                    .compact()
+                    .icon(IconName::Shield)
+                    .label("Sudo 提权保存")
+                    .disabled(!item.dirty || busy)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.prompt_sudo_save(&sudo_editor, window, cx);
+                    })),
+            )
+        })
+        .when(item.writable, |this| {
+            this.child(
+                Button::new("editor-save-upload")
+                    .primary()
+                    .compact()
+                    .icon(IconName::Check)
+                    .label("保存并回传")
+                    .disabled(!item.dirty || busy)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.save_editor_panel(&save_editor, window, cx);
+                    })),
+            )
+        })
         .into_any_element()
 }
 

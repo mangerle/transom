@@ -6,6 +6,7 @@ pub(crate) mod dir;
 pub(crate) mod hash;
 mod ops;
 pub(crate) mod scan;
+pub mod sudo_write;
 pub(crate) mod sync;
 pub(crate) mod text;
 mod transfer;

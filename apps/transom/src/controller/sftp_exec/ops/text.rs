@@ -157,3 +157,88 @@ pub(super) async fn handle_write_text(
         }
     }
 }
+
+pub(super) async fn handle_sudo_write_text(
+    ctx: &SftpExecutionContext,
+    path: String,
+    content: Vec<u8>,
+    expected: Option<RemoteTextMeta>,
+    password: Option<String>,
+) {
+    let Some(ref remote) = ctx.remote else {
+        let _ = ctx
+            .event_tx
+            .send_async(
+                SftpAppEvent::SftpTextFailed {
+                    tab_id: ctx.tab_id,
+                    connection_id: ctx.connection_id,
+                    op_id: ctx.op_id,
+                    error: AppError::with_detail(
+                        ErrorCode::SftpFailed,
+                        "当前连接缺少底层的 SSH 交互通道，无法发起 Sudo 提权写入",
+                    ),
+                }
+                .into(),
+            )
+            .await;
+        return;
+    };
+
+    let write_res =
+        transom_net::exec_sudo_write(remote, &path, &content, password.as_deref()).await;
+
+    match write_res {
+        Ok(()) => {
+            // 写入成功后，查询最新大小与修改时间同步给 UI 缓存
+            let stat_res = ctx.client.stat(&path).await;
+            let meta = match stat_res {
+                Ok(stat) => RemoteTextMeta {
+                    size: stat.size,
+                    mtime: stat.mtime,
+                    bom: expected.is_some_and(|m| m.bom),
+                    crlf: expected.is_some_and(|m| m.crlf),
+                    transcoded: false,
+                },
+                Err(_) => RemoteTextMeta {
+                    size: content.len() as u64,
+                    mtime: Some(
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs() as u32,
+                    ),
+                    bom: expected.is_some_and(|m| m.bom),
+                    crlf: expected.is_some_and(|m| m.crlf),
+                    transcoded: false,
+                },
+            };
+
+            let _ = ctx
+                .event_tx
+                .send_async(
+                    SftpAppEvent::SftpTextWritten {
+                        tab_id: ctx.tab_id,
+                        connection_id: ctx.connection_id,
+                        op_id: ctx.op_id,
+                        meta,
+                    }
+                    .into(),
+                )
+                .await;
+        }
+        Err(error) => {
+            let _ = ctx
+                .event_tx
+                .send_async(
+                    SftpAppEvent::SftpTextFailed {
+                        tab_id: ctx.tab_id,
+                        connection_id: ctx.connection_id,
+                        op_id: ctx.op_id,
+                        error,
+                    }
+                    .into(),
+                )
+                .await;
+        }
+    }
+}

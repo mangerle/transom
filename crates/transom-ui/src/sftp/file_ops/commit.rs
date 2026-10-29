@@ -130,6 +130,14 @@ impl AppShell {
                 };
                 self.send_sftp_op(tab_id, op, cx);
             }
+            SftpInputTarget::SudoElevation { editor } => {
+                let password = if name.trim().is_empty() {
+                    None
+                } else {
+                    Some(name)
+                };
+                self.submit_sudo_editor_write(&editor, password, window, cx);
+            }
             SftpInputTarget::LocalMkdir => {
                 if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                     let new_dir = panel.local.path.join(&name);

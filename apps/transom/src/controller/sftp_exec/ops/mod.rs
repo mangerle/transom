@@ -20,7 +20,7 @@ use self::fs::{
 use self::query::{handle_list, handle_stat};
 use self::search::handle_search;
 use self::sync::{handle_compare_dirs, handle_sync_dirs};
-use self::text::{handle_preview, handle_read_text, handle_write_text};
+use self::text::{handle_preview, handle_read_text, handle_sudo_write_text, handle_write_text};
 use self::transfer::{handle_download, handle_download_dir, handle_upload, handle_upload_dir};
 pub(super) use super::progress::throttled_progress;
 use transom_core::{AppEvent, ConnectionId, SftpOperation, TabId, TransferId};
@@ -117,6 +117,12 @@ pub(crate) async fn execute_sftp_op(ctx: SftpExecutionContext, op: SftpOperation
             force,
             backup,
         } => handle_write_text(&ctx, path, content, expected, force, backup).await,
+        SftpOperation::SudoWriteText {
+            path,
+            content,
+            expected,
+            password,
+        } => handle_sudo_write_text(&ctx, path, content, expected, password).await,
         SftpOperation::Symlink { target, link_path } => {
             handle_symlink(&ctx, target, link_path).await
         }
