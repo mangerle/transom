@@ -36,7 +36,30 @@ impl TerminalView {
                             .item(PopupMenuItem::separator());
                     }
                     let app = menu_entity.clone();
+                    let app_prev = menu_entity.clone();
+                    let app_next = menu_entity.clone();
+                    // 菜单项不写死键位：提示符跳跃是工作区动作，用户可在快捷键设置里
+                    // 改绑，标签里嵌一个"(Cmd+Up)"会变成第二套口径。
                     menu.item(
+                        PopupMenuItem::new("跳转到上一条命令")
+                            .icon(IconName::ArrowUp)
+                            .on_click(move |_, _, cx| {
+                                app_prev.update(cx, |view, cx| {
+                                    view.scroll_to_previous_prompt(cx);
+                                });
+                            }),
+                    )
+                    .item(
+                        PopupMenuItem::new("跳转到下一条命令")
+                            .icon(IconName::ArrowDown)
+                            .on_click(move |_, _, cx| {
+                                app_next.update(cx, |view, cx| {
+                                    view.scroll_to_next_prompt(cx);
+                                });
+                            }),
+                    )
+                    .item(PopupMenuItem::separator())
+                    .item(
                         PopupMenuItem::new("切换语义块视图 / 经典连续流")
                             .icon(IconName::ListTree)
                             .on_click(move |_, _, cx| {

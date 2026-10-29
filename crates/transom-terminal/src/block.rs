@@ -179,6 +179,23 @@ impl BlockStore {
         self.blocks.iter().find(|block| block.id == id)
     }
 
+    /// 查找位于指定绝对行之前的最近一条命令提示符绝对行号。
+    pub(crate) fn previous_prompt_line(&self, current_abs_line: i64) -> Option<i64> {
+        self.blocks
+            .iter()
+            .rev()
+            .map(|b| b.prompt_line)
+            .find(|&line| line < current_abs_line)
+    }
+
+    /// 查找位于指定绝对行之后的最近一条命令提示符绝对行号。
+    pub(crate) fn next_prompt_line(&self, current_abs_line: i64) -> Option<i64> {
+        self.blocks
+            .iter()
+            .map(|b| b.prompt_line)
+            .find(|&line| line > current_abs_line)
+    }
+
     /// 覆盖某绝对行的命令块（提示符、命令与输出行都算块内）。
     ///
     /// 空输出块的 `output_end_line` 位于输出起点之前，区间下界必须取

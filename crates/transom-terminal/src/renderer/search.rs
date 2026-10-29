@@ -81,14 +81,20 @@ impl TerminalRenderer {
         ));
     }
 
-    /// 绘制右侧刻度带：把整个缓冲区的命中分布压缩到一屏高度内，并提供点击跳转的靶区。
+    /// 绘制右侧刻度带：把整个缓冲区的标记分布压缩到一屏高度内，并提供点击跳转的靶区。
+    ///
+    /// 一条刻度带最多同时承载两类标记：检索命中用前景强调色、失败命令用红色。
+    /// 分色是必要的——两类标记的跳转目标不同（命中行 vs 命令提示符行），
+    /// 用户在毫秒级的点击里没时间读文字说明，颜色就是他判断"我要点哪个"的唯一依据。
     pub(crate) fn paint_search_strip(
         &self,
         bounds: Bounds<Pixels>,
-        paint: &SearchPaint,
+        paint: Option<&SearchPaint>,
+        failures: &[f32],
         window: &mut Window,
     ) {
-        if paint.ticks.is_empty() {
+        let hits = paint.map(|paint| paint.ticks.as_slice()).unwrap_or(&[]);
+        if hits.is_empty() && failures.is_empty() {
             return;
         }
         let strip = Self::search_strip_bounds(bounds);
@@ -96,23 +102,34 @@ impl TerminalRenderer {
         track.a *= 0.1;
         window.paint_quad(fill(strip, track));
 
-        let mut tick = self.color(self.palette.cursor);
-        tick.a = 0.85;
-        // 刻度按命中条数均分高度并夹到最小 2px，命中很多时仍能看清分布而不是糊成一条线。
-        let height = (strip.size.height / paint.ticks.len() as f32).max(px(2.0));
+        // 刻度按标记条数均分高度并夹到最小 2px，标记很多时仍能看清分布而不是糊成一条线。
+        let height = (strip.size.height / (hits.len() + failures.len()).max(1) as f32).max(px(2.0));
         let width = (strip.size.width - SEARCH_TICK_INSET * 2.0).max(px(1.0));
-        for fraction in &paint.ticks {
-            let y = strip.origin.y + strip.size.height * *fraction - height / 2.0;
-            window.paint_quad(fill(
-                Bounds {
-                    origin: Point {
-                        x: strip.origin.x + SEARCH_TICK_INSET,
-                        y,
+        for (fractions, color) in [
+            (hits, {
+                let mut color = self.color(self.palette.cursor);
+                color.a = 0.85;
+                color
+            }),
+            (failures, {
+                let mut color = self.palette_colors.ansi[1];
+                color.a = 0.9;
+                color
+            }),
+        ] {
+            for fraction in fractions {
+                let y = strip.origin.y + strip.size.height * *fraction - height / 2.0;
+                window.paint_quad(fill(
+                    Bounds {
+                        origin: Point {
+                            x: strip.origin.x + SEARCH_TICK_INSET,
+                            y,
+                        },
+                        size: Size { width, height },
                     },
-                    size: Size { width, height },
-                },
-                tick,
-            ));
+                    color,
+                ));
+            }
         }
     }
 }

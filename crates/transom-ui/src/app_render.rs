@@ -196,6 +196,8 @@ impl Render for AppShell {
             .on_action(cx.listener(Self::on_toggle_immersive))
             .on_action(cx.listener(Self::on_search_buffer))
             .on_action(cx.listener(Self::on_toggle_block_view))
+            .on_action(cx.listener(Self::on_prev_prompt))
+            .on_action(cx.listener(Self::on_next_prompt))
             .on_action(cx.listener(Self::on_toggle_snippets))
             .on_action(cx.listener(Self::on_split_right))
             .on_action(cx.listener(Self::on_split_down))

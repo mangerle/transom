@@ -33,6 +33,13 @@ pub struct BlockViewSettings {
     /// 输出超过该行数时自动折叠；`0` 表示从不自动折叠。
     #[serde(default = "default_block_collapse_rows")]
     pub auto_collapse_rows: usize,
+    /// 是否向远端 Shell 自动注入 OSC 133 集成脚本。
+    ///
+    /// 语义块的数据源就是这些标记：不注入时，只有本来就发了 133 的 Shell
+    /// （自带 starship/wezterm 集成那类）才有块。单独成开关，是因为
+    /// "愿意看块"与"愿意让客户端往会话里写命令"是两件事，后者要用户明确同意。
+    #[serde(default = "default_true")]
+    pub shell_integration: bool,
 }
 
 impl Default for BlockViewSettings {
@@ -41,6 +48,7 @@ impl Default for BlockViewSettings {
             enabled: true,
             style: BlockViewStyle::Card,
             auto_collapse_rows: default_block_collapse_rows(),
+            shell_integration: true,
         }
     }
 }

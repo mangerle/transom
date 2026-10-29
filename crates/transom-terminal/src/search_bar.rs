@@ -113,18 +113,18 @@ impl TerminalView {
         }
     }
 
-    /// 检索栏打开时，鼠标落在右侧刻度带上的处理：按比例跳到最近的命中。
+    /// 刻度带点击：检索开着时按命中跳转，关闭时按失败标记跳最近一条报错命令。
     ///
-    /// 返回 `true` 表示这次点击已被检索消费，不应再触发文本选择。
+    /// 归属规则写在代码里而不是靠猜：搜索栏展开期间用户的意图明确是"找文本"，
+    /// 此时刻度带整体让给检索；搜索栏收起后同一列刻度回到"报错分布"的语义。
+    ///
+    /// 返回 `true` 表示这次点击已被刻度带消费，不应再触发文本选择。
     pub(crate) fn search_strip_click(
         &mut self,
         position: Point<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.search_open {
-            return false;
-        }
         let Some(strip) = self.state.metrics.lock().search_strip else {
             return false;
         };
@@ -133,10 +133,14 @@ impl TerminalView {
         }
         let fraction =
             (f32::from(position.y) - f32::from(strip.origin.y)) / f32::from(strip.size.height);
-        self.state.engine.lock().search_select_by_fraction(fraction);
-        // 跳转后把焦点还给输入框，否则下一次回车会落回终端而不是继续查找。
-        if let Some(input) = self.search_input.as_ref() {
-            input.update(cx, |state, cx| state.focus(window, cx));
+        if self.search_open {
+            self.state.engine.lock().search_select_by_fraction(fraction);
+            // 跳转后把焦点还给输入框，否则下一次回车会落回终端而不是继续查找。
+            if let Some(input) = self.search_input.as_ref() {
+                input.update(cx, |state, cx| state.focus(window, cx));
+            }
+        } else {
+            self.state.engine.lock().scroll_to_failure_near(fraction);
         }
         cx.notify();
         true

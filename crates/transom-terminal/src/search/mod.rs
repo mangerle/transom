@@ -8,6 +8,4 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use types::{
-    Hit, RowPaint, SearchPaint, SearchState, SearchStatus, prefill_from_selection,
-};
+pub(crate) use types::{RowPaint, SearchPaint, SearchState, SearchStatus, prefill_from_selection};

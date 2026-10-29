@@ -187,13 +187,14 @@ impl AppShell {
         content.into_any_element()
     }
 
-    /// 语义块视图组：全局开关、外观样式与自动折叠阈值。
+    /// 语义块视图组：全局开关、Shell 集成注入、外观样式与自动折叠阈值。
     pub(crate) fn render_settings_block_view(
         &mut self,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let enabled = self.settings.block_view.enabled;
+        let integrate = self.settings.block_view.shell_integration;
         let style = self.settings.block_view.style;
         let rows_input = self.modals.settings.block_collapse_rows.clone();
         v_flex()
@@ -205,6 +206,18 @@ impl AppShell {
                     .checked(enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.block_view.enabled = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.shell_integration_enable",
+                Some("settings.shell_integration_enable_desc"),
+                Switch::new("toggle-shell-integration")
+                    .checked(integrate)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.block_view.shell_integration = checked;
                         cx.notify();
                     }))
                     .into_any_element(),

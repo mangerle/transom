@@ -296,9 +296,8 @@ impl TerminalRenderer {
         window: &mut Window,
         cx: &mut App,
     ) {
-        if let Some(paint) = ctx.request.search {
-            self.paint_search_strip(ctx.bounds, paint, window);
-        }
+        // 空刻度由绘制函数自己短路，这里不再重复判一次。
+        self.paint_search_strip(ctx.bounds, ctx.request.search, ctx.request.failures, window);
 
         if let Some((text, marked_range)) = ctx.request.ime.filter(|(text, _)| !text.is_empty()) {
             self.paint_ime(

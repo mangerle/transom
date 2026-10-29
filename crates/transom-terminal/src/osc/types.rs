@@ -25,6 +25,13 @@ pub(crate) enum OscEvent {
     CommandRecorded { command: String },
     /// 程序显式请求的桌面通知（OSC 777）。
     Notify { title: String, body: String },
+    /// Shell 集成探针的回报（`OSC 777;transom;shell=<路径>`）。
+    ///
+    /// 值为空串表示远端 `$SHELL` 未设置；空串与"没有回报"是两种不同结论，
+    /// 前者说明探针确实被执行了，只是拿不到方言，必须区分才能停止重试。
+    ShellReport { shell: String },
+    /// 注入脚本自报已安装钩子（`OSC 777;transom;ready=<方言>`）。
+    IntegrationReady { shell: String },
 }
 
 /// 一条已完成命令的归并结果。
@@ -72,6 +79,8 @@ impl CommandTracker {
                 })
             }
             OscEvent::Notify { .. } => None,
+            // 集成握手不参与"命令耗时/退出码"归并：它发生在任何命令边界之外。
+            OscEvent::ShellReport { .. } | OscEvent::IntegrationReady { .. } => None,
         }
     }
 }

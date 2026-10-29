@@ -345,7 +345,12 @@ impl SearchState {
             }
         }
 
-        let ticks = crate::search_ticks::build_ticks(&self.hits, top, bottom, tick_rows);
+        let ticks = crate::search_ticks::build_ticks(
+            self.hits.iter().map(|hit| hit.start.line.0),
+            top,
+            bottom,
+            tick_rows,
+        );
         SearchPaint {
             rows: row_paints,
             ticks,

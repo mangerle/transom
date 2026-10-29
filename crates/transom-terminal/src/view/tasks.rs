@@ -196,6 +196,15 @@ impl TerminalView {
                 OscEvent::CommandRecorded { command } => {
                     cx.emit(TerminalEvent::CommandRecorded { command });
                 }
+                // 集成握手不进命令归并：它标记的是"脚本装好了"，不是"命令跑完了"。
+                OscEvent::ShellReport { shell } => self.on_integration_signal(
+                    crate::shell_integration::IntegrationSignal::ShellReport { shell },
+                    cx,
+                ),
+                OscEvent::IntegrationReady { shell } => self.on_integration_signal(
+                    crate::shell_integration::IntegrationSignal::Ready { shell },
+                    cx,
+                ),
                 event => {
                     if let Some(tracked) = self.command_tracker.on_event(&event, now) {
                         cx.emit(TerminalEvent::CommandFinished {

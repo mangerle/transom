@@ -1,5 +1,6 @@
 mod block;
 mod input;
+mod integration;
 mod menu;
 mod paint;
 mod tasks;
@@ -20,6 +21,7 @@ use crate::input::{focus_bytes, paste_bytes};
 use crate::osc::CommandTracker;
 use crate::record::RecorderHandle;
 use crate::renderer::TerminalRenderer;
+use crate::shell_integration::ShellIntegration;
 use alacritty_terminal::event::Event;
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point as AlacPoint};
@@ -64,6 +66,11 @@ pub struct TerminalView {
     pub(crate) search_input: Option<Entity<InputState>>,
     /// 命令生命周期归并：把 OSC 133 的零散标记算成"一条命令跑了多久"。
     command_tracker: CommandTracker,
+    /// Shell 集成流程控制器；进入终态（已生效或已放弃）后轮询任务自行退出。
+    shell_integration: ShellIntegration,
+    /// 用户是否已亲自按键过。一旦按键，本轮不再注入：写进去的字节会拼到用户
+    /// 半截的命令行上，把那条命令毁掉。状态机宁可不装也不毁命令。
+    user_typed: bool,
     /// 命令历史候选查询；未挂接时建议功能整体不生效。
     pub(crate) history_provider: Option<HistoryProvider>,
     /// 本地跟踪的当前输入行，只用于取建议前缀。
@@ -83,6 +90,8 @@ pub struct TerminalView {
     custom_keys: Vec<(KeybindingKeystroke, Vec<u8>)>,
     _reader_task: Task<()>,
     _blink_task: Task<()>,
+    /// Shell 集成轮询任务句柄；终态或视图回收后自行结束。
+    _integration_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
     recorder: RecorderHandle,
 }
@@ -167,6 +176,9 @@ impl TerminalView {
             }
         });
 
+        // Shell 集成：低频轮询到安全时机后注入 OSC 133 钩子，终态后任务自行退出。
+        let integration_task = Self::spawn_integration_task(cx);
+
         Self {
             state,
             profile,
@@ -184,6 +196,8 @@ impl TerminalView {
             cursor_blink_on: true,
             scroll_pixel_remainder: 0.0,
             command_tracker: CommandTracker::default(),
+            shell_integration: ShellIntegration::new(true),
+            user_typed: false,
             history_provider: None,
             input_line: String::new(),
             suggestions: Vec::new(),
@@ -197,6 +211,7 @@ impl TerminalView {
             custom_keys,
             _reader_task: reader_task,
             _blink_task: blink_task,
+            _integration_task: integration_task,
             _focus_subscriptions: vec![on_focus, on_blur],
             recorder,
         }

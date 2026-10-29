@@ -85,15 +85,20 @@ fn prepare_canvas(
     let (size, resized) = sync_grid(&mut engine, &renderer, &inputs.control, bounds);
     let cols = size.cols;
     let rows = size.rows;
+    // 刻度带行桶按像素高度折算，两种标记共用同一套分桶口径。
+    let tick_rows = (f32::from(bounds.size.height) / SEARCH_TICK_PIXELS).max(1.0) as usize;
     // 检索重扫放在尺寸变更之后：缩放会重排折行、让快照作废，
     // 放在数据流路径里又会把刷屏变成卡顿，所以只在渲染帧里按冷却触发。
     let search = if inputs.search_open {
         engine.refresh_search(std::time::Instant::now());
-        let tick_rows = (f32::from(bounds.size.height) / SEARCH_TICK_PIXELS).max(1.0) as usize;
         engine.search_paint(tick_rows)
     } else {
         None
     };
+    let search_ticks = search.as_ref().is_some_and(|paint| !paint.ticks.is_empty());
+    // 失败命令标记常驻：报错分布是用户随时想看的信息，不该因为搜索栏开着就消失。
+    // 检索命中画在它之上，点击归属由"搜索栏是否开着"决定，见 `search_strip_click`。
+    let failure_ticks = engine.failure_ticks(tick_rows);
     // 损伤集合必须在持锁的准备阶段取走并重置：它是"上次取走之后全部变化"
     // 的完整窗口。折行重排与外观重建让行号、字体度量整体失效，无论内核报
     // 了什么都提升为全量。
@@ -102,10 +107,8 @@ fn prepare_canvas(
         damage = DamageInfo::Full;
     }
     // 刻度带只有在真的画了刻度时才登记靶区，否则会白白吃掉一列点击。
-    let strip = search
-        .as_ref()
-        .filter(|paint| !paint.ticks.is_empty())
-        .map(|_| TerminalRenderer::search_strip_bounds(bounds));
+    let strip = (search_ticks || !failure_ticks.is_empty())
+        .then(|| TerminalRenderer::search_strip_bounds(bounds));
     let metrics = build_metrics(&renderer, bounds, strip, cols as usize, rows as usize);
     *state.metrics.lock() = metrics;
     let layout = engine
@@ -115,6 +118,7 @@ fn prepare_canvas(
     let graphics = engine.graphics_placements();
     PreparedTerminal {
         search,
+        failure_ticks,
         damage,
         block_layout: layout,
         graphics,
@@ -149,6 +153,7 @@ fn submit_canvas_paint(
             ime,
             blink_visible: inputs.cursor_blink_on,
             search: prepared.search.as_ref(),
+            failures: &prepared.failure_ticks,
             block_layout: prepared.block_layout.as_deref(),
             block_style: inputs.block_style,
             graphics: &prepared.graphics,

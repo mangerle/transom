@@ -41,6 +41,8 @@ actions!(
         ToggleSnippets,
         SearchBuffer,
         ToggleBlockView,
+        PrevPrompt,
+        NextPrompt,
         SplitRight,
         SplitDown,
         ClosePane,
@@ -97,6 +99,8 @@ bind_fn!(bind_toggle_forward, ToggleForward);
 bind_fn!(bind_toggle_immersive, ToggleImmersive);
 bind_fn!(bind_search_buffer, SearchBuffer);
 bind_fn!(bind_toggle_block_view, ToggleBlockView);
+bind_fn!(bind_prev_prompt, PrevPrompt);
+bind_fn!(bind_next_prompt, NextPrompt);
 bind_fn!(bind_toggle_snippets, ToggleSnippets);
 bind_fn!(bind_split_right, SplitRight);
 bind_fn!(bind_split_down, SplitDown);
@@ -196,6 +200,21 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_toggle_block_view",
         defaults: &["$app-shift-b"],
         bind: bind_toggle_block_view,
+    },
+    // 提示符跳跃默认落在 `$app-方向`：macOS 是 Cmd+方向，其他平台展开成
+    // Ctrl+Shift+方向。刻意不占裸 Ctrl+方向——那在 bash/zsh 的 readline 里是
+    // 历史搜索与翻页键，吞掉它等于废掉 Shell 自己的功能，而这个动作随时可改键。
+    ShortcutSpec {
+        id: "prev_prompt",
+        label_key: "settings.shortcut_prev_prompt",
+        defaults: &["$app-up"],
+        bind: bind_prev_prompt,
+    },
+    ShortcutSpec {
+        id: "next_prompt",
+        label_key: "settings.shortcut_next_prompt",
+        defaults: &["$app-down"],
+        bind: bind_next_prompt,
     },
     ShortcutSpec {
         id: "split_right",

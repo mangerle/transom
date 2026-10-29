@@ -23,6 +23,8 @@ pub(crate) struct PaintRequest<'a> {
     pub(crate) blink_visible: bool,
     /// 检索命中绘制数据；`None` 表示当前没有可用快照（未开启或已失效）。
     pub(crate) search: Option<&'a SearchPaint>,
+    /// 失败命令刻度；与检索刻度互斥，见 [`crate::view`] 的刻度带说明。
+    pub(crate) failures: &'a [f32],
     /// 语义块折叠后的可见行映射；`None` 表示经典连续流。
     pub(crate) block_layout: Option<&'a BlockLayout>,
     /// 语义块外观样式（卡片/极简）。

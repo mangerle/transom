@@ -2,6 +2,7 @@
 
 use super::types::{MAX_PAYLOAD_BYTES, OSC_INTRO, OscEvent};
 use crate::sequence_scanner::SequenceScanner;
+use crate::shell_integration::HANDSHAKE_TOKEN;
 
 /// OSC 扫描器：序列边界复用通用骨架，载荷语义在本模块解析。
 pub(crate) struct OscScanner {
@@ -42,11 +43,37 @@ fn emit(bytes: &[u8], offset: usize, events: &mut Vec<(usize, OscEvent)>) {
     };
     let parse = match code {
         "133" => parse_command_marker(params),
-        "777" => parse_notify(params),
+        // 777 是"自定义通知"约定段：先试本客户端的集成握手，再退回桌面通知。
+        "777" => parse_integration_handshake(params).or_else(|| parse_notify(params)),
         _ => None,
     };
     if let Some(event) = parse {
         events.push((offset, event));
+    }
+}
+
+/// OSC 777 的 `transom;<键>=<值>` 握手：注入脚本与探针的回报通道。
+///
+/// 与桌面通知共用 777 段，靠首段关键字区分，两条路径互不干扰。回报走 OSC 而非
+/// 普通 stdout，是为了让探测在屏幕上完全不落地——只有 Shell 回显的那行命令本身可见。
+///
+/// 局限：`$SHELL` 路径里含分号时会在分号处截断（Unix 合法但极罕见），截断后仍
+/// 能在候选方言里匹配，不至于误判成别的方言。
+fn parse_integration_handshake(params: &str) -> Option<OscEvent> {
+    let mut parts = params.split(';');
+    if parts.next()? != HANDSHAKE_TOKEN {
+        return None;
+    }
+    let value = parts.next()?;
+    match value.strip_prefix("shell=") {
+        Some(shell) => Some(OscEvent::ShellReport {
+            shell: shell.to_string(),
+        }),
+        None => value
+            .strip_prefix("ready=")
+            .map(|shell| OscEvent::IntegrationReady {
+                shell: shell.to_string(),
+            }),
     }
 }
 

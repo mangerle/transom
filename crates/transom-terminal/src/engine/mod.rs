@@ -78,6 +78,11 @@ pub struct TerminalEngine {
     graphics: GraphicsStore,
     /// 最近一次收到字节流的时刻，用于把重扫推迟到输出停歇之后。
     pub(crate) last_write: Option<Instant>,
+    /// 是否收到过至少一条 OSC 133 命令边界标记。
+    ///
+    /// 这是"远端 Shell 已有自带集成"的唯一证据：引擎据此决定要不要注入脚本，
+    /// 装了重复钩子会让同一条命令产生两套块，宁可少做也不能做错。
+    pub(crate) shell_markers_seen: bool,
     /// 缓冲区纪元：任何新写入或网格重建都会推进，用于判定命中快照是否失效。
     ///
     /// 之所以只记"变过"而不做行号平移：`Line` 是相对视口底部的编号，新行滚入时全部
@@ -123,6 +128,7 @@ impl TerminalEngine {
             graphics: GraphicsStore::default(),
             search: SearchState::default(),
             last_write: None,
+            shell_markers_seen: false,
             epoch: 0,
         }
     }
@@ -244,6 +250,16 @@ impl TerminalEngine {
     ///
     /// 调用时内核已消费到该标记所在字节，网格光标即标记发生时的位置。
     fn handle_marker(&mut self, event: &OscEvent) {
+        // 任何一条命令边界标记都证明远端已经在发 133，注入决策据此一次定死。
+        if matches!(
+            event,
+            OscEvent::PromptStart
+                | OscEvent::CommandStart
+                | OscEvent::PreExec { .. }
+                | OscEvent::CommandFinish { .. }
+        ) {
+            self.shell_markers_seen = true;
+        }
         match event {
             OscEvent::PromptStart => {
                 let line = self.cursor_absolute_line();
@@ -280,7 +296,11 @@ impl TerminalEngine {
                     );
                 }
             }
-            OscEvent::CommandRecorded { .. } | OscEvent::Notify { .. } => {}
+            // 命令记录、桌面通知与集成握手都不改变网格上的块边界：握手只喂状态机。
+            OscEvent::CommandRecorded { .. }
+            | OscEvent::Notify { .. }
+            | OscEvent::ShellReport { .. }
+            | OscEvent::IntegrationReady { .. } => {}
         }
     }
 

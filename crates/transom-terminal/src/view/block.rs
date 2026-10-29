@@ -21,11 +21,15 @@ impl TerminalView {
         // 开关本身也改变可见行映射，必须让下一帧重建整屏行缓存。
         engine.mark_block_layout_dirty();
         drop(engine);
+        // 语义块的数据源就是 Shell 集成：同一组设置里带上注入开关，关掉后不再往
+        // 远端写任何东西（已在途或已生效的轮次不受影响）。设置还没下发时按默认开启。
+        let integrate = settings.is_none_or(|settings| settings.shell_integration);
         self.block_view = settings;
         if !self.block_view.is_some_and(|settings| settings.enabled) {
             self.hover_block = None;
             *self.state.block_layout.lock() = None;
         }
+        self.set_shell_integration_enabled(integrate);
         cx.notify();
     }
 
@@ -47,6 +51,24 @@ impl TerminalView {
         if self.state.engine.lock().toggle_block(id) {
             cx.notify();
         }
+    }
+
+    /// 视口跳跃至上一个命令提示符起始位置；返回是否真的动了。
+    pub fn scroll_to_previous_prompt(&mut self, cx: &mut Context<Self>) -> bool {
+        let moved = self.state.engine.lock().scroll_to_previous_prompt();
+        if moved {
+            cx.notify();
+        }
+        moved
+    }
+
+    /// 视口跳跃至下一个命令提示符起始位置；返回是否真的动了。
+    pub fn scroll_to_next_prompt(&mut self, cx: &mut Context<Self>) -> bool {
+        let moved = self.state.engine.lock().scroll_to_next_prompt();
+        if moved {
+            cx.notify();
+        }
+        moved
     }
 
     pub(super) fn copy_block_output(&mut self, id: u64, cx: &mut Context<Self>) {

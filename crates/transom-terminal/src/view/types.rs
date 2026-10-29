@@ -34,6 +34,8 @@ pub(crate) struct LayoutMetrics {
 pub(crate) struct PreparedTerminal {
     /// 本帧可用的检索绘制数据；`None` 表示无检索或快照已失效。
     pub(crate) search: Option<crate::search::SearchPaint>,
+    /// 失败命令（非 0 退出码）在刻度带上的位置；检索开启时为空，两者不共用刻度语义。
+    pub(crate) failure_ticks: Vec<f32>,
     /// 本帧需要重建行缓存的损伤集合。
     pub(crate) damage: crate::renderer::DamageInfo,
     /// 本帧的语义块折叠映射；`None` 表示经典连续流。

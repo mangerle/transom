@@ -42,6 +42,11 @@ impl TerminalView {
             return;
         }
 
+        // 能走到这里就说明这次按键属于终端输入域（应用级快捷键已被 key_filter
+        // 截走）。记下它，Shell 集成便不再尝试注入：往半截命令行里写字节会直接
+        // 毁掉用户正在敲的那条命令，宁可少一套语义块。
+        self.user_typed = true;
+
         // 自定义映射优先于终端默认编码，也允许覆盖 Ctrl+Shift+C/V；
         // 应用级快捷键已在 key_filter 之前被保留，不会在这里被吃掉。
         if let Some(bytes) = self.custom_key_sequence(&event.keystroke) {
@@ -56,6 +61,7 @@ impl TerminalView {
 
         let key = event.keystroke.key.to_lowercase();
         let modifiers = event.keystroke.modifiers;
+
         if (modifiers.platform && key == "c")
             || (modifiers.control && modifiers.shift && key == "c")
         {
@@ -117,6 +123,8 @@ impl TerminalView {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // 与 on_key_down 同源：Tab 也是用户亲自敲进 Shell 的按键。
+        self.user_typed = true;
         if self.write_input(b"\t") {
             self.state.engine.lock().scroll_to_bottom();
             cx.notify();
@@ -129,6 +137,7 @@ impl TerminalView {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.user_typed = true;
         if self.write_input(b"\x1b[Z") {
             self.state.engine.lock().scroll_to_bottom();
             cx.notify();

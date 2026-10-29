@@ -23,7 +23,7 @@ fn clamps_spans_outside_viewport() {
 
 #[test]
 fn ticks_bucket_by_pixel_row() {
-    let hits = vec![
+    let hits = [
         Hit {
             start: Point::new(Line(-9), Column(0)),
             end: Point::new(Line(-9), Column(3)),
@@ -34,20 +34,31 @@ fn ticks_bucket_by_pixel_row() {
         },
     ];
     // 10 行缓冲、2 个命中落在同一像素桶时只保留一条刻度。
-    let ticks = crate::search_ticks::build_ticks(&hits, Line(-9), Line(0), 4);
+    let ticks = crate::search_ticks::build_ticks(
+        hits.iter().map(|hit| hit.start.line.0),
+        Line(-9),
+        Line(0),
+        4,
+    );
     assert_eq!(ticks.len(), 1);
-    let many = crate::search_ticks::build_ticks(&hits, Line(-9), Line(0), 100);
+    let many = crate::search_ticks::build_ticks(
+        hits.iter().map(|hit| hit.start.line.0),
+        Line(-9),
+        Line(0),
+        100,
+    );
     assert_eq!(many.len(), 2);
 }
 
 #[test]
 fn empty_tick_rows_yields_no_ticks() {
-    let hits = vec![Hit {
+    let hits = [Hit {
         start: Point::new(Line(0), Column(0)),
         end: Point::new(Line(0), Column(1)),
     }];
-    assert!(crate::search_ticks::build_ticks(&hits, Line(-1), Line(0), 0).is_empty());
-    assert!(crate::search_ticks::build_ticks(&hits, Line(0), Line(0), 10).is_empty());
+    let lines = || hits.iter().map(|hit| hit.start.line.0);
+    assert!(crate::search_ticks::build_ticks(lines(), Line(-1), Line(0), 0).is_empty());
+    assert!(crate::search_ticks::build_ticks(lines(), Line(0), Line(0), 10).is_empty());
 }
 
 #[test]

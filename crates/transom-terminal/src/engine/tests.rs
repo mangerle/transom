@@ -1,6 +1,7 @@
 use super::*;
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::SelectionType;
+use std::time::Duration;
 use transom_core::BlockViewSettings;
 
 /// shell 集成只给边界标记（绝大多数 bash/zsh 配置）时，命令文本按
@@ -123,6 +124,7 @@ fn block_auto_collapses_and_layout_shows_banner() {
         enabled: true,
         style: transom_core::BlockViewStyle::Card,
         auto_collapse_rows: 1,
+        shell_integration: true,
     };
     let layout = engine
         .build_block_layout(Some(&settings))
@@ -519,4 +521,159 @@ fn invalid_query_keeps_engine_usable() {
     assert!(engine.search_select(true).is_none());
     engine.clear_search();
     assert!(!engine.search_status().has_query);
+}
+
+/// 构造三条命令，退出码依次为 0/2/1，每条 4 行输出，制造足够历史供滚动与刻度断言。
+fn three_commands(engine: &mut TerminalEngine) -> Vec<i64> {
+    let mut prompts = Vec::with_capacity(3);
+    for index in 0..3u32 {
+        engine.process(
+            format!(
+                "\x1b]133;A\x1b\\$ cmd{index}\r\nout-a\r\n\x1b]133;C\x1b\\out-b\r\n\x1b]133;D;{index}\x1b\\"
+            )
+            .as_bytes(),
+        );
+        let block = engine
+            .command_blocks()
+            .last()
+            .cloned()
+            .expect("每条命令都应收尾成块");
+        prompts.push(block.prompt_line);
+    }
+    engine.process(b"\x1b]133;A\x1b\\$ ");
+    prompts
+}
+
+/// 只有非 0 退出码的命令进刻度带：成功命令不该被标成错误。
+#[test]
+fn failure_ticks_marks_only_nonzero_exits() {
+    let (mut engine, _events) = engine(40, 3);
+    three_commands(&mut engine);
+    let ticks = engine.failure_ticks(64);
+    assert_eq!(ticks.len(), 2, "退出码 2 与 1 各出一条刻度");
+    assert!(
+        ticks.iter().all(|f| *f >= 0.0 && *f <= 1.0),
+        "刻度必须落在缓冲区比例区间内: {ticks:?}"
+    );
+}
+
+/// 刻度位置要能反查回对应命令：点击刻度跳的就是那条命令的提示符行。
+#[test]
+fn failure_click_jumps_to_nearest_failed_prompt() {
+    let (mut engine, _events) = engine(40, 3);
+    let prompts = three_commands(&mut engine);
+    // 取第二条失败命令（退出码 2）的刻度比例点击，应精确落到它的提示符行。
+    let ticks = engine.failure_ticks(512);
+    let fraction = *ticks.first().expect("应有失败刻度");
+    assert!(
+        engine.scroll_to_failure_near(fraction),
+        "点击刻度必须真的移动视口"
+    );
+    assert_eq!(
+        engine.current_display_abs_line(),
+        prompts[1],
+        "应跳到第一条失败命令的提示符"
+    );
+    // 贴回底部后再点一次最靠下的刻度，命中第二条失败命令。
+    engine.scroll_to_bottom();
+    let fraction = *ticks.last().expect("应有失败刻度");
+    assert!(engine.scroll_to_failure_near(fraction));
+    assert_eq!(engine.current_display_abs_line(), prompts[2]);
+}
+
+/// 没有任何失败命令时刻度为空，且点击不产生虚假的"跳转成功"。
+#[test]
+fn no_failures_yields_empty_ticks_and_no_jump() {
+    let (mut engine, _events) = engine(40, 3);
+    engine.process(
+        b"\x1b]133;A\x1b\\$ ok\r\n\x1b]133;C\x1b\\done\r\n\x1b]133;D;0\x1b\\\x1b]133;A\x1b\\$ ",
+    );
+    assert!(engine.failure_ticks(64).is_empty());
+    assert!(!engine.scroll_to_failure_near(0.5));
+}
+
+/// 滚动缓冲容量为 0 时块记录整体不可靠，失败标记必须跟着失效而不是画错行。
+#[test]
+fn saturated_buffer_drops_failure_marks() {
+    let (tx, _rx) = flume::bounded(16);
+    let profile = TerminalProfile {
+        scrollback: 0,
+        ..TerminalProfile::default()
+    };
+    let mut engine = TerminalEngine::new(TerminalSize::new(40, 3), &profile, tx);
+    engine.process(b"\x1b]133;A\x1b\\$ bad\r\n\x1b]133;C\x1b\\boom\r\n\x1b]133;D;1\x1b\\");
+    assert!(engine.failure_ticks(64).is_empty());
+    assert!(!engine.scroll_to_failure_near(0.5));
+    assert!(!engine.scroll_to_previous_prompt());
+}
+
+/// 贴在底部时"上一条"的基准是光标行而不是视口顶行：否则短缓冲里第一次按键就静默无效。
+#[test]
+fn prompt_navigation_walks_back_and_forth() {
+    let (mut engine, _events) = engine(40, 3);
+    three_commands(&mut engine);
+    assert_eq!(engine.display_offset(), 0, "新命令输出后应贴底");
+    assert!(
+        engine.scroll_to_previous_prompt(),
+        "应跳回最近一条已完成命令的提示符"
+    );
+    assert!(engine.display_offset() > 0, "跳转后视口必须真的移动");
+    assert!(
+        engine.scroll_to_next_prompt(),
+        "已在最后一条提示符上再按下一条应回到实时提示符"
+    );
+    assert_eq!(engine.display_offset(), 0);
+    assert!(
+        !engine.scroll_to_next_prompt(),
+        "已经贴底时不得谎报跳转成功"
+    );
+}
+
+/// 反复按上一条要逐条回退，最后停在最早一条命令上而不是抖动。
+#[test]
+fn prompt_navigation_walks_through_every_block() {
+    let (mut engine, _events) = engine(40, 3);
+    let prompts = three_commands(&mut engine);
+    let mut visited = Vec::new();
+    for _ in 0..4 {
+        if !engine.scroll_to_previous_prompt() {
+            break;
+        }
+        visited.push(engine.current_display_abs_line());
+    }
+    assert_eq!(
+        visited,
+        vec![prompts[2], prompts[1], prompts[0]],
+        "应逐条回退到最早一条命令后停止"
+    );
+}
+
+/// 集成注入的时机判据：收到过输出、输出停歇、收到过 133 标记，都必须如实反映。
+#[test]
+fn integration_gates_report_real_session_state() {
+    let (mut engine, _events) = engine(40, 3);
+    assert!(!engine.output_started(), "没收到字节前不算已开始");
+    assert!(!engine.output_idle(Instant::now(), Duration::from_millis(0)));
+    assert!(!engine.shell_markers_seen());
+    engine.process(b"\x1b]133;A\x1b\\$ ");
+    assert!(engine.output_started());
+    assert!(engine.shell_markers_seen(), "收到 A 即证明远端在发 133");
+    assert!(engine.output_idle(Instant::now(), Duration::from_millis(0)));
+    assert!(!engine.output_idle(Instant::now(), Duration::from_secs(60 * 60)));
+}
+
+/// 集成握手回报不参与命令边界采集：它没有网格位置，混进去会造出假块。
+#[test]
+fn handshake_markers_do_not_create_blocks() {
+    let (mut engine, _events) = engine(40, 3);
+    engine.process(b"hello\r\n\x1b]777;transom;shell=/bin/bash\x07");
+    assert_eq!(engine.command_blocks().count(), 0);
+    let events = engine.take_osc_events();
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, OscEvent::ShellReport { shell } if shell == "/bin/bash")),
+        "握手事件必须原样交给视图层: {events:?}"
+    );
+    assert!(!engine.shell_markers_seen(), "握手不是 133 标记");
 }

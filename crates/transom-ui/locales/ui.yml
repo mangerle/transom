@@ -1660,6 +1660,12 @@ settings:
   block_view_rows_hint:
     en: Outputs longer than this are folded into a banner. Changes apply to open panes immediately.
     zh-CN: 输出超过该行数时自动折叠为横幅；保存后立即作用于已打开窗格。
+  shell_integration_enable:
+    en: Auto-install shell integration
+    zh-CN: 自动注入 Shell 集成
+  shell_integration_enable_desc:
+    en: Detect the remote login shell with an invisible OSC probe, then install OSC 133 command markers for block view, prompt navigation and failure marks. Nothing is written once you have typed in the session.
+    zh-CN: 先用一条不产生任何屏幕输出的 OSC 探针探测远端登录 Shell，再安装 OSC 133 命令标记，为语义块、提示符跳转与失败标记提供数据。本轮只在会话结束前尝试一次；只要你已经亲自敲过键就不再写入。
   proxy_mode:
     en: Proxy protocol
     zh-CN: 代理协议
@@ -2125,6 +2131,12 @@ settings:
   shortcut_toggle_block_view:
     en: Toggle Semantic Block View
     zh-CN: 切换语义块视图
+  shortcut_prev_prompt:
+    en: Previous Command Prompt
+    zh-CN: 跳到上一条命令提示符
+  shortcut_next_prompt:
+    en: Next Command Prompt
+    zh-CN: 跳到下一条命令提示符
   shortcut_zoom_pane:
     en: Maximize Focused Pane
     zh-CN: 最大化当前窗格
@@ -2751,6 +2763,13 @@ trigger:
 
 
 
+prompt_nav:
+  no_prev_prompt:
+    en: No earlier command prompt in this buffer
+    zh-CN: 当前缓冲区里没有更早的命令提示符
+  no_next_prompt:
+    en: Already at the newest prompt
+    zh-CN: 已经在最新的提示符上
 block_view_status:
   enabled:
     en: Switched to semantic block view

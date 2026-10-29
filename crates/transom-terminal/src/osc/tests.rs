@@ -232,3 +232,52 @@ fn sequences_repeat_without_cross_talk() {
         vec![OscEvent::CommandStart]
     );
 }
+
+/// Shell 集成握手（`OSC 777;transom;…`）与桌面通知共用 777 段，靠首段关键字分流。
+#[test]
+fn parses_shell_integration_handshake() {
+    assert_eq!(
+        collect(&[b"\x1b]777;transom;shell=/usr/bin/zsh\x07"]),
+        vec![OscEvent::ShellReport {
+            shell: "/usr/bin/zsh".to_string()
+        }]
+    );
+    assert_eq!(
+        collect(&[b"\x1b]777;transom;ready=bash\x1b\\"]),
+        vec![OscEvent::IntegrationReady {
+            shell: "bash".to_string()
+        }]
+    );
+    // 空值仍是一条有效回报：它证明探针确实被执行了，与"没有回报"是两种结论。
+    assert_eq!(
+        collect(&[b"\x1b]777;transom;shell=\x07"]),
+        vec![OscEvent::ShellReport {
+            shell: String::new()
+        }]
+    );
+}
+
+/// 回报可能跨读缓冲到达，半条序列不能被误判成通知或丢弃后丢事件。
+#[test]
+fn handshake_survives_chunk_boundary() {
+    assert_eq!(
+        collect(&[b"\x1b]777;transom;sh", b"ell=/bin/bash\x07"]),
+        vec![OscEvent::ShellReport {
+            shell: "/bin/bash".to_string()
+        }]
+    );
+}
+
+/// 未知握手子命令与真实通知都不能串台。
+#[test]
+fn handshake_does_not_shadow_notify() {
+    assert!(collect(&[b"\x1b]777;transom;bogus=1\x07"]).is_empty());
+    let notify = format!("\x1b]777;notify;{};{}\x07", "构建完成", "目标已生成");
+    assert_eq!(
+        collect(&[notify.as_bytes()]),
+        vec![OscEvent::Notify {
+            title: "构建完成".to_string(),
+            body: "目标已生成".to_string()
+        }]
+    );
+}
