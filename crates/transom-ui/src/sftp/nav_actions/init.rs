@@ -7,12 +7,14 @@
 use crate::app::{AppShell, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
+use crate::sftp::columns::ColumnWidthMemory;
 use crate::sftp::{
     DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
     SftpQueueState, SftpRemotePaneState, extract_candidate_path,
 };
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
@@ -220,6 +222,11 @@ impl AppShell {
             active_pane: SftpActivePane::default(),
             focus_handle: cx.focus_handle(),
             hover_preview: None,
+            // 分栏状态由面板自己持有：折叠期间分栏组不渲染，
+            // 窗口的 keyed state 会被回收，列宽必须另有去处。
+            column_state: cx.new(|_| ResizableState::default()),
+            column_widths: ColumnWidthMemory::default(),
+            restored_width: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         });
         if open {

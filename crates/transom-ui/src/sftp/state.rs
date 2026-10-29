@@ -1,5 +1,6 @@
 //! SFTP 双栏文件面板状态、选择状态机与各模态弹窗状态数据结构。
 
+use super::columns::{ColumnWidthMemory, SftpColumnId};
 use super::overlay::DropOverlayState;
 use super::preview::SftpPreviewState;
 use super::quick_paths::LocalQuickPaths;
@@ -8,6 +9,7 @@ use super::side_remote::{SftpActivePane, SftpClipboardData, SftpSideRemoteState}
 use super::task::TransferTask;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::{InputState, TextareaState};
+use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
@@ -200,10 +202,36 @@ pub(crate) struct SftpPanelState {
     pub(crate) focus_handle: FocusHandle,
     /// 当前悬停预览；同一时刻只保留一个目标，切换目标或离开行时整体释放。
     pub(crate) hover_preview: Option<SftpPreviewState>,
+    /// 多列分栏状态：由面板自己持有，跨帧保留用户拖出来的列宽。
+    pub(crate) column_state: Entity<ResizableState>,
+    /// 各列宽度记忆（像素，按列身份），折叠时展开列按它固定宽度。
+    pub(crate) column_widths: ColumnWidthMemory,
+    /// 折叠前 SFTP 面板的整体宽度，展开时恢复用。
+    pub(crate) restored_width: Option<f32>,
     pub(crate) _subscriptions: Vec<Subscription>,
 }
 
 impl SftpPanelState {
+    /// 当前展开列的身份，顺序与渲染一致（本地 | 远端 | 并列远端）。
+    ///
+    /// 宽度记忆按下标对应分栏组的面板顺序，而分栏组里只有展开的列，
+    /// 所以这里给出的顺序必须与渲染时构造分栏组的顺序严格一致。
+    pub(crate) fn expanded_column_ids(&self) -> Vec<SftpColumnId> {
+        let mut ids = Vec::new();
+        if !self.local.collapsed {
+            ids.push(SftpColumnId::Local);
+        }
+        if !self.local.only && !self.remote.collapsed {
+            ids.push(SftpColumnId::Remote);
+        }
+        for (index, side) in self.side_remotes.iter().enumerate() {
+            if !side.collapsed {
+                ids.push(SftpColumnId::Side(index));
+            }
+        }
+        ids
+    }
+
     /// 设置面板级状态消息；后续消息会整体替换，不做自动过期。
     pub(crate) fn set_status(&mut self, message: impl Into<String>) {
         self.queue.status = Some(message.into());

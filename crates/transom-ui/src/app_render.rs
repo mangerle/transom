@@ -42,6 +42,9 @@ impl Render for AppShell {
             sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
         }
         let plan = self.plan_workspace_layout(window, cx);
+        // 折叠状态变化时把 SFTP 面板同步到内容宽度：必须赶在分组构建之前，
+        // 本帧的面板尺寸才能反映新的宽度。
+        self.sync_sftp_panel_width(window, cx);
         let panels_state = if plan.side_left {
             self.workspace_panels_left.clone()
         } else {

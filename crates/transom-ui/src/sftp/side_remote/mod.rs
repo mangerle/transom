@@ -84,6 +84,8 @@ impl AppShell {
         index: usize,
         cx: &mut Context<Self>,
     ) {
+        // 折叠前先记下当前列宽：折叠后分栏组不再渲染，尺寸无处可取。
+        self.remember_sftp_column_widths(tab_id, cx);
         if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
             && let Some(side) = panel.side_remotes.get_mut(index)
         {
@@ -94,6 +96,8 @@ impl AppShell {
 
     /// 切换本地列的展开与折叠。
     pub(crate) fn sftp_toggle_local_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        // 折叠前先记下当前列宽：折叠后分栏组不再渲染，尺寸无处可取。
+        self.remember_sftp_column_widths(tab_id, cx);
         if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
             panel.local.collapsed = !panel.local.collapsed;
             cx.notify();
@@ -102,6 +106,8 @@ impl AppShell {
 
     /// 切换主远端列的展开与折叠。
     pub(crate) fn sftp_toggle_remote_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        // 折叠前先记下当前列宽：折叠后分栏组不再渲染，尺寸无处可取。
+        self.remember_sftp_column_widths(tab_id, cx);
         if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
             panel.remote.collapsed = !panel.remote.collapsed;
             cx.notify();

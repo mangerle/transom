@@ -90,6 +90,8 @@ pub struct AppShell {
     pub(crate) pending_notices: PendingNotices,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
     pub(crate) immersive: bool,
+    /// SFTP 面板上次同步到的目标宽度；目标变了才调整面板宽度。
+    pub(crate) sftp_panel_width_target: Option<f32>,
     /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
     pub(crate) shortcut_recording: ShortcutRecordingState,
 }
@@ -299,6 +301,7 @@ impl AppShell {
             status: None,
             pending_notices,
             immersive: false,
+            sftp_panel_width_target: None,
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
                 applied_keys: applied_shortcut_keys,

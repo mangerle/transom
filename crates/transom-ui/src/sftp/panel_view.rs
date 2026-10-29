@@ -1,6 +1,7 @@
 //! SFTP 双栏文件管理器主面板视图渲染。
 
 use super::TransferStatus;
+use super::columns::{SftpColumn, SftpColumnId};
 use super::file_row::{insert_parent_local_entry, insert_parent_remote_entry};
 use super::local_pane_view::SftpLocalPaneProps;
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
@@ -11,10 +12,9 @@ use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::resizable::{h_resizable, resizable_panel};
 use gpui_kit::*;
 use transom_core::{RemoteFile, TransferFilter};
 
@@ -212,32 +212,35 @@ impl AppShell {
             cx,
         );
 
-        let mut expanded_panels: Vec<AnyElement> = Vec::new();
-        if !local_collapsed {
-            expanded_panels.push(local_pane);
-        }
-        if !is_local_only && !remote_collapsed {
-            expanded_panels.push(remote_pane);
+        // 列按固定次序编排：本地 | 远端 | 并列远端。折叠条占住自己那一列的位置，
+        // 展开列宽度保持不变，多出来的空间留在最右侧。
+        let mut columns: Vec<SftpColumn> = Vec::new();
+        columns.push(SftpColumn {
+            id: SftpColumnId::Local,
+            content: (!local_collapsed).then_some(local_pane),
+        });
+        if !is_local_only {
+            columns.push(SftpColumn {
+                id: SftpColumnId::Remote,
+                content: (!remote_collapsed).then_some(remote_pane),
+            });
         }
         for (side_index, is_collapsed, _) in &side_remotes_info {
-            if !*is_collapsed {
-                expanded_panels.push(self.render_sftp_side_remote_pane(tab_id, *side_index, p, cx));
-            }
+            columns.push(SftpColumn {
+                id: SftpColumnId::Side(*side_index),
+                content: (!*is_collapsed)
+                    .then(|| self.render_sftp_side_remote_pane(tab_id, *side_index, p, cx)),
+            });
         }
 
-        let is_all_collapsed = expanded_panels.is_empty();
+        let is_all_collapsed = columns.iter().all(|column| column.content.is_none());
         let header =
             self.render_sftp_panel_top_header(tab_id, is_all_collapsed, is_local_only, p, cx);
-        let columns_container = self.render_sftp_columns_container(
-            tab_id,
-            expanded_panels,
-            local_collapsed,
-            remote_collapsed,
-            is_local_only,
-            &side_remotes_info,
-            p,
-            cx,
-        );
+        let side_titles: Vec<(usize, String)> = side_remotes_info
+            .iter()
+            .map(|(index, _, title)| (*index, title.clone()))
+            .collect();
+        let columns_container = self.render_sftp_columns(tab_id, columns, &side_titles, p, cx);
 
         let mut panel_element = v_flex()
             .id(ElementId::Name("sftp-panel-container".into()))
@@ -388,68 +391,5 @@ impl AppShell {
             };
             self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx)
         }
-    }
-
-    /// 渲染 SFTP 双栏/多栏及其折叠条容器。
-    #[allow(clippy::too_many_arguments)]
-    fn render_sftp_columns_container(
-        &self,
-        tab_id: transom_core::TabId,
-        mut expanded_panels: Vec<AnyElement>,
-        local_collapsed: bool,
-        remote_collapsed: bool,
-        is_local_only: bool,
-        side_remotes_info: &[(usize, bool, String)],
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let center_content: Option<AnyElement> = match expanded_panels.len() {
-            0 => None,
-            1 => expanded_panels.pop().map(|pane| {
-                div()
-                    .size_full()
-                    .overflow_hidden()
-                    .child(pane)
-                    .into_any_element()
-            }),
-            _ => {
-                let mut resizable =
-                    h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
-                for pane in expanded_panels {
-                    resizable = resizable.child(resizable_panel().child(pane));
-                }
-                Some(resizable.into_any_element())
-            }
-        };
-
-        let mut columns_container = h_flex().size_full().overflow_hidden();
-
-        if let Some(content) = center_content {
-            columns_container =
-                columns_container.child(div().flex_1().h_full().overflow_hidden().child(content));
-        }
-
-        if local_collapsed {
-            columns_container =
-                columns_container.child(self.render_sftp_local_collapsed_bar(tab_id, p, cx));
-        }
-        if !is_local_only && remote_collapsed {
-            columns_container =
-                columns_container.child(self.render_sftp_remote_collapsed_bar(tab_id, p, cx));
-        }
-        for (side_index, is_collapsed, side_title) in side_remotes_info {
-            if *is_collapsed {
-                columns_container =
-                    columns_container.child(self.render_sftp_side_remote_collapsed_bar(
-                        tab_id,
-                        *side_index,
-                        side_title,
-                        p,
-                        cx,
-                    ));
-            }
-        }
-
-        columns_container.into_any_element()
     }
 }

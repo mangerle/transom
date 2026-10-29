@@ -4,6 +4,7 @@
 //! 通过 `local_only` 模式在外层裁掉远端相关内容。所有跳转、重命名、删除、
 //! 过滤和快捷键仍走现有本地实现，行为与 SFTP 左栏一致。
 
+use super::columns::ColumnWidthMemory;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::{
     DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
@@ -15,6 +16,7 @@ use crate::palette::{Palette, sftp_text_input};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
@@ -117,6 +119,9 @@ impl AppShell {
             active_pane: SftpActivePane::Local,
             focus_handle: cx.focus_handle(),
             hover_preview: None,
+            column_state: cx.new(|_| ResizableState::default()),
+            column_widths: ColumnWidthMemory::default(),
+            restored_width: None,
             _subscriptions: vec![local_enter_sub],
         });
         // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
