@@ -32,7 +32,7 @@ pub enum TerminalEvent {
     CommandRecorded {
         command: String,
     },
-    /// 终端程序通过 OSC 777 显式请求的桌面通知。
+    /// 终端程序通过 OSC 777 或 OSC 9 显式请求的桌面通知。
     DesktopNotification {
         title: String,
         body: String,

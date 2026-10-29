@@ -45,6 +45,8 @@ fn emit(bytes: &[u8], offset: usize, events: &mut Vec<(usize, OscEvent)>) {
         "133" => parse_command_marker(params),
         // 7 是 xterm 系当前工作目录的事实标准：`file://<host>/<路径>`。
         "7" => parse_cwd(params),
+        // 9 同时被通知、进度与 ConEmu cwd 复用，必须按子码分流。
+        "9" => parse_osc9(params),
         // 777 是"自定义通知"约定段：先试本客户端的集成握手，再退回桌面通知。
         "777" => parse_integration_handshake(params).or_else(|| parse_notify(params)),
         _ => None,
@@ -155,6 +157,24 @@ fn hex_value(byte: u8) -> Option<u8> {
         b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
     }
+}
+
+/// OSC 9：iTerm2 约定的桌面通知 `9;<正文>`。
+///
+/// 该码被多个协议复用：`9;4;...` 是进度（ConEmu/Windows Terminal），
+/// `9;9;<path>` 是 ConEmu 的 cwd 上报。两者都不属于通知：进度暂未实现，
+/// cwd 由 OSC 7 统一承载，这里显式忽略，避免被当成正文弹出。
+fn parse_osc9(params: &str) -> Option<OscEvent> {
+    if params.starts_with("4;") || params.starts_with("9;") {
+        return None;
+    }
+    if params.trim().is_empty() {
+        return None;
+    }
+    Some(OscEvent::Notify {
+        title: String::new(),
+        body: params.to_string(),
+    })
 }
 
 /// OSC 777：`notify;标题;正文` 或 `notify;title=..;body=..;icon=..`。

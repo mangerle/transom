@@ -134,6 +134,30 @@ fn osc7_survives_chunk_boundary() {
 }
 
 #[test]
+fn parses_osc9_notifications_and_ignores_reserved_subcodes() {
+    assert_eq!(
+        collect(&[b"\x1b]9;build finished\x07"]),
+        vec![OscEvent::Notify {
+            title: String::new(),
+            body: "build finished".to_string()
+        }]
+    );
+    // 正文可以自带分号，不能在第一个分号处截断。
+    assert_eq!(
+        collect(&[b"\x1b]9;hello;world\x07"]),
+        vec![OscEvent::Notify {
+            title: String::new(),
+            body: "hello;world".to_string()
+        }]
+    );
+    // 9;4 是进度、9;9 是 ConEmu cwd：都不属于通知，不能弹窗。
+    assert_eq!(collect(&[b"\x1b]9;4;1;50\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;9;/home/user\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;   \x07"]), vec![]);
+}
+
+#[test]
 fn ignores_other_escape_sequences_and_unknown_osc() {
     assert_eq!(collect(&[b"\x1b[31mred\x1b[0m"]), vec![]);
     assert_eq!(

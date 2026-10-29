@@ -28,7 +28,7 @@ pub(crate) enum OscEvent {
     /// 这是 cwd 的事实标准通道；窗口标题（OSC 0/2）只描述"终端里在跑什么"，
     /// 不再拿来猜路径。
     Cwd { path: String },
-    /// 程序显式请求的桌面通知（OSC 777）。
+    /// 程序显式请求的桌面通知（OSC 777 / OSC 9）。
     Notify { title: String, body: String },
     /// Shell 集成探针的回报（`OSC 777;transom;shell=<路径>`）。
     ///
