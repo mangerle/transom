@@ -5,6 +5,7 @@
 
 mod context_menu;
 
+pub(super) use self::context_menu::build_remote_blank_context_menu;
 use self::context_menu::{RemoteContextMenuProps, build_remote_context_menu};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::app::AppShell;

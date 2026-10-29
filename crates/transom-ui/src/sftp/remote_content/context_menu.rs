@@ -401,3 +401,64 @@ pub(crate) fn build_remote_context_menu(
             }),
     )
 }
+
+/// 远程列空白区域（未命中任何条目）的目录级右键菜单。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：菜单此前只挂在 28px 高的行元素上，目录不满一屏时点下方空白毫无响应，
+///   而"返回上一级、刷新、新建、粘贴"本来就是目录级动作，与选中的条目无关；
+/// - 核心优势：gpui 的 `context_menu` 在自身 bounds 上命中，且子元素优先响应并停止冒泡，
+///   所以容器这一层只在空白处生效，条目上的行菜单不会被它抢走；
+/// - 代价与局限：这里刻意只收目录级动作。条目动作（下载、重命名、Chmod 等）仍归行菜单，
+///   避免同一功能在两个位置给出不同的可用集合。
+pub(crate) fn build_remote_blank_context_menu(
+    menu: PopupMenu,
+    app: Entity<AppShell>,
+    tab_id: TabId,
+) -> PopupMenu {
+    menu.item(
+        PopupMenuItem::new("返回上一级")
+            .icon(IconName::ArrowUp)
+            .on_click({
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_go_up(tab_id, window, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("刷新")
+            .icon(IconName::RefreshCw)
+            .on_click({
+                let app = app.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_refresh(tab_id, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("新建远端文件夹")
+            .icon(IconName::FolderPlus)
+            .on_click({
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_open_mkdir_modal(tab_id, true, window, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+            .icon(IconName::Clipboard)
+            .on_click(move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_paste_clipboard(tab_id, window, cx);
+                });
+            }),
+    )
+}

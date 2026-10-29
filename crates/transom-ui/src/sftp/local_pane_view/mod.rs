@@ -11,7 +11,9 @@ mod context_menu;
 mod panel_header;
 mod toolbar;
 
-use self::context_menu::{LocalContextMenuProps, build_local_context_menu};
+use self::context_menu::{
+    LocalContextMenuProps, build_local_blank_context_menu, build_local_context_menu,
+};
 use self::toolbar::{LocalToolbarProps, render_local_toolbar};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use super::side_remote::SftpDragItem;
@@ -157,6 +159,7 @@ impl AppShell {
         );
 
         let app_local_drop = cx.entity().clone();
+        let app_blank_menu = cx.entity().clone();
         let drop_bg = p.sidebar_accent.opacity(0.3);
         let drop_border = p.primary;
         let drop_container = v_flex()
@@ -207,7 +210,11 @@ impl AppShell {
                 });
             })
             .child(local_content)
-            .vertical_scrollbar(&local_scroll_handle);
+            .vertical_scrollbar(&local_scroll_handle)
+            // 空白区右键给目录级动作：行元素上的菜单命中时优先并停止冒泡，不会互抢。
+            .context_menu(move |menu, _window, _cx| {
+                build_local_blank_context_menu(menu, app_blank_menu.clone(), tab_id)
+            });
 
         v_flex()
             .size_full()

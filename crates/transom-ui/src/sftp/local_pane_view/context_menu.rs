@@ -284,3 +284,72 @@ pub(super) fn build_local_context_menu(
             }),
     )
 }
+
+/// 本地列空白区域的目录级右键菜单。
+///
+/// 设计原理（Why）：与远程列同一口径——菜单原先只挂在行上，目录不满一屏时下方空白
+/// 点不出任何东西。这里只放与选中条目无关的目录级动作；"上传"需要以条目为源，
+/// 仍归行菜单，空白区不放一个必然报错的入口。
+pub(super) fn build_local_blank_context_menu(
+    menu: PopupMenu,
+    app: Entity<AppShell>,
+    tab_id: TabId,
+) -> PopupMenu {
+    menu.item(
+        PopupMenuItem::new("返回上一级")
+            .icon(IconName::ArrowUp)
+            .on_click({
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_local_go_up(tab_id, window, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("刷新")
+            .icon(IconName::RefreshCw)
+            .on_click({
+                let app = app.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_local_refresh(tab_id, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("新建本地文件夹")
+            .icon(IconName::FolderPlus)
+            .on_click({
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_open_mkdir_modal(tab_id, false, window, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("新建本地文件")
+            .icon(IconName::FilePlus)
+            .on_click({
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_open_local_new_file_modal(tab_id, window, cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("粘贴至此处 (Ctrl+V)")
+            .icon(IconName::Clipboard)
+            .on_click(move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_paste_clipboard(tab_id, window, cx);
+                });
+            }),
+    )
+}

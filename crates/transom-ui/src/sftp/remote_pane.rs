@@ -4,6 +4,7 @@
 //! "布局编排"与"行内交互"混为一体；拆到独立文件后，主函数只剩列的
 //! 组合，行渲染的输入以结构体显式传递。
 
+use super::remote_content::build_remote_blank_context_menu;
 use super::side_remote::{SftpDragItem, SftpRemoteCopyParams};
 use crate::app::AppShell;
 use crate::editor::render_editor_list_popover;
@@ -13,6 +14,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::separator::Separator;
 use gpui_kit::component::{Sizable, VirtualListScrollHandle};
@@ -297,6 +299,7 @@ impl AppShell {
             .child({
                 let app_drop = cx.entity().clone();
                 let app_upload_drop = cx.entity().clone();
+                let app_blank_menu = cx.entity().clone();
                 let dir_drop = remote_current_dir.clone();
                 let drop_bg = p.sidebar_accent.opacity(0.3);
                 let drop_border = p.primary;
@@ -381,6 +384,12 @@ impl AppShell {
                     })
                     .child(remote_content)
                     .vertical_scrollbar(&remote_scroll_handle)
+                    // 空白区右键给目录级动作：行元素上的菜单命中时优先并停止冒泡，
+                    // 只有落在条目之外的地方才用得到这一份。放在链尾是因为
+                    // `context_menu` 返回包装元素，之后不能再接滚动条扩展。
+                    .context_menu(move |menu, _window, _cx| {
+                        build_remote_blank_context_menu(menu, app_blank_menu.clone(), tab_id)
+                    })
             })
             .into_any_element()
     }
