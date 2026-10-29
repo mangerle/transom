@@ -83,6 +83,7 @@ pub(crate) fn build_remote_context_menu(
     let p_cp = entry_path.clone();
     let p_sym = entry_path.clone();
     let p_prop = entry_path.clone();
+    let p_exec = entry_path.clone();
     let p_chmod = entry_path.clone();
     let p_ren = entry_path.clone();
     let p_del = entry_path.clone();
@@ -279,6 +280,27 @@ pub(crate) fn build_remote_context_menu(
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
                         this.sftp_request_remote_properties(tab_id, p_prop.clone(), cx);
+                    });
+                }
+            }),
+    )
+    .item(
+        PopupMenuItem::new("赋予执行权限")
+            .icon(IconName::Terminal)
+            .on_click({
+                let app = app.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                        {
+                            if panel.remote.selection.contains(&p_exec) {
+                                panel.set_remote_primary(p_exec.clone());
+                            } else {
+                                panel.select_remote(p_exec.clone());
+                            }
+                        }
+                        this.sftp_grant_remote_exec(tab_id, cx);
                     });
                 }
             }),

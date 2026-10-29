@@ -65,6 +65,8 @@ pub(super) fn build_local_context_menu(
     let p_cp = entry_path.clone();
     let p_sym = entry_path.clone();
     let p_prop = entry_path.clone();
+    #[cfg(unix)]
+    let p_exec = entry_path.clone();
     let p_ren = entry_path.clone();
     let p_del = entry_path;
     let mut menu = menu;
@@ -152,6 +154,32 @@ pub(super) fn build_local_context_menu(
                     }
                 }),
         );
+
+    // 执行位是 Unix 语义：Windows 下整个菜单项不出现，而不是点击后报"不支持"。
+    #[cfg(unix)]
+    {
+        menu = menu.item(
+            PopupMenuItem::new("赋予执行权限")
+                .icon(IconName::Terminal)
+                .on_click({
+                    let app = app_entity.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            if let Some(panel) =
+                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                            {
+                                if panel.local.selection.contains(&p_exec) {
+                                    panel.set_local_primary(p_exec.clone());
+                                } else {
+                                    panel.select_local(p_exec.clone());
+                                }
+                            }
+                            this.sftp_grant_local_exec(tab_id, cx);
+                        });
+                    }
+                }),
+        );
+    }
 
     menu.item(
         PopupMenuItem::new("新建本地文件夹")
