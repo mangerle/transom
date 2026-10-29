@@ -1,7 +1,8 @@
 //! 终端画布绘制过程：尺寸同步、损伤跟踪、预计算与 GPUI 提交。
 
 use super::{
-    LayoutMetrics, PreparedTerminal, SEARCH_TICK_PIXELS, TerminalRenderState, TerminalView,
+    LayoutMetrics, PendingResize, PreparedTerminal, RESIZE_DEBOUNCE, ResizeDecision,
+    SEARCH_TICK_PIXELS, TerminalRenderState, TerminalView, decide_resize,
 };
 use crate::engine::TerminalEngine;
 use crate::renderer::{DamageInfo, PaintRequest, TerminalRenderer};
@@ -9,6 +10,7 @@ use gpui_kit::*;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 use transom_core::{
     BlockViewSettings, BlockViewStyle, TerminalControlHandle, TerminalProfile, TerminalSize,
 };
@@ -20,6 +22,8 @@ struct CanvasPrepaintInputs {
     control: TerminalControlHandle,
     search_open: bool,
     block_view: Option<BlockViewSettings>,
+    /// 视图实体：登记待下发尺寸时用它排一次去抖计时。
+    entity: Entity<TerminalView>,
 }
 
 /// 绘制阶段的只读输入：只做输入挂接与已准备数据的提交。
@@ -42,6 +46,7 @@ impl TerminalView {
             control: self.control.clone(),
             search_open: self.search_open,
             block_view: self.block_view,
+            entity: cx.entity(),
         };
         let paint_inputs = CanvasPaintInputs {
             state: self.state.clone(),
@@ -86,7 +91,20 @@ fn prepare_canvas(
     }
     let renderer = state.renderer.read();
     let mut engine = state.engine.lock();
-    let (size, resized) = sync_grid(&mut engine, &renderer, &inputs.control, bounds);
+    let (size, resized, scheduled) = sync_grid(
+        &mut engine,
+        &renderer,
+        &inputs.control,
+        bounds,
+        &state.pending_resize,
+        Instant::now(),
+    );
+    if scheduled {
+        // 登记了新的待下发尺寸：排一次去抖计时，到点唤醒一帧让尺寸真正落地。
+        inputs
+            .entity
+            .update(cx, |this, cx| this.schedule_resize_tick(cx));
+    }
     let cols = size.cols;
     let rows = size.rows;
     // 刻度带行桶按像素高度折算，两种标记共用同一套分桶口径。
@@ -169,35 +187,67 @@ fn submit_canvas_paint(
     );
 }
 
-/// 同步渲染器网格与 PTY 尺寸；返回尺寸以及是否发生了缩放。
+/// 同步渲染器网格与 PTY 尺寸；返回当前生效尺寸、是否发生了缩放、是否登记了待下发尺寸。
+///
+/// 去抖语义：目标尺寸与当前不一致时不会立刻下发，而是登记进 `pending` 并等尺寸稳定
+/// `RESIZE_DEBOUNCE`；这期间尺寸又变了就重新计时。只有稳定下来的那一个尺寸会被真正
+/// 下发，避免拖拽与面板动画的中间尺寸逐个下发、把远端输出的换行标记写坏。
 fn sync_grid(
     engine: &mut TerminalEngine,
     renderer: &TerminalRenderer,
     control: &TerminalControlHandle,
     bounds: Bounds<Pixels>,
-) -> (TerminalSize, bool) {
+    pending: &parking_lot::Mutex<Option<PendingResize>>,
+    now: Instant,
+) -> (TerminalSize, bool, bool) {
     let (cols, rows) = renderer.grid_size(bounds);
-    let size = TerminalSize::new(cols, rows);
-    if engine.size() == size {
-        return (size, false);
+    let target = TerminalSize::new(cols, rows);
+
+    let mut guard = pending.lock();
+    match decide_resize(engine.size(), target, guard.as_ref(), now) {
+        ResizeDecision::Unchanged => {
+            // 已经一致：没有等待中的尺寸变化。
+            let _ = guard.take();
+            drop(guard);
+            return (engine.size(), false, false);
+        }
+        ResizeDecision::Restart => {
+            // 新的目标尺寸：重新计时，等它稳定下来。
+            *guard = Some(PendingResize {
+                size: target,
+                deadline: now + RESIZE_DEBOUNCE,
+            });
+            return (engine.size(), false, true);
+        }
+        ResizeDecision::Wait => {
+            // 还在去抖窗口内，继续等待。
+            return (engine.size(), false, false);
+        }
+        ResizeDecision::Ready => {
+            let _ = guard.take();
+        }
     }
-    engine.resize(size);
-    // 尺寸同步失败会直接导致网格与 PTY 失配（提示符错位），
-    // 因此不再静默忽略，按警告记录并给出排查方向。
-    if control.resize(size) {
+    drop(guard);
+
+    // 下发顺序：先通知 PTY/远端新尺寸，程序才会按新宽度重画与输出；
+    // 本地网格紧接着重排历史，把"程序仍按旧宽度输出"的窗口压到最短。
+    if control.resize(target) {
         log::debug!(
             "终端网格尺寸已更新并同步至 PTY，列数: {}，行数: {}",
-            size.cols,
-            size.rows
+            target.cols,
+            target.rows
         );
     } else {
+        // 尺寸同步失败会直接导致网格与 PTY 失配（提示符错位），
+        // 因此不再静默忽略，按警告记录并给出排查方向。
         log::warn!(
             "PTY 窗口尺寸同步失败（控制通道已断开），画面可能持续错位，请重连会话，列数: {}，行数: {}",
-            size.cols,
-            size.rows
+            target.cols,
+            target.rows
         );
     }
-    (size, true)
+    engine.resize(target);
+    (target, true, false)
 }
 
 /// 由绘制边界与字形度量生成布局快照，供输入命中与绘制共用。

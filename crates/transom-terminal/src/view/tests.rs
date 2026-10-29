@@ -47,3 +47,49 @@ fn ime_column_maps_cells_to_utf16_index() {
     assert_eq!(ime_column_to_utf16_index("ab\u{20BB7}", 9), 4);
     assert_eq!(ime_column_to_utf16_index("", 3), 0);
 }
+
+/// 尺寸去抖判定：目标尺寸稳定满窗口才下发，中途换尺寸重新计时。
+///
+/// 这条语义是终端错位修复的核心：中间尺寸一旦下发，程序就会在旧宽度下继续输出，
+/// 本地网格却已按新宽度重排，软换行标记就此写错且无法复原。
+#[test]
+fn resize_debounce_applies_only_after_size_settles() {
+    use crate::view::types::{PendingResize, RESIZE_DEBOUNCE, ResizeDecision, decide_resize};
+    use std::time::Instant;
+    use transom_core::TerminalSize;
+
+    let current = TerminalSize::new(80, 24);
+    let target = TerminalSize::new(60, 24);
+    let now = Instant::now();
+
+    assert_eq!(
+        decide_resize(current, target, None, now),
+        ResizeDecision::Restart,
+        "首次出现目标尺寸只重新计时，不下发"
+    );
+
+    let pending = PendingResize {
+        size: target,
+        deadline: now + RESIZE_DEBOUNCE,
+    };
+    assert_eq!(
+        decide_resize(current, target, Some(&pending), now),
+        ResizeDecision::Wait,
+        "去抖窗口内不下发"
+    );
+    assert_eq!(
+        decide_resize(current, target, Some(&pending), now + RESIZE_DEBOUNCE),
+        ResizeDecision::Ready,
+        "尺寸稳定满窗口才下发"
+    );
+    assert_eq!(
+        decide_resize(current, TerminalSize::new(40, 24), Some(&pending), now),
+        ResizeDecision::Restart,
+        "中途换成别的尺寸要重新计时"
+    );
+    assert_eq!(
+        decide_resize(target, target, Some(&pending), now),
+        ResizeDecision::Unchanged,
+        "尺寸已经一致时不做任何动作"
+    );
+}

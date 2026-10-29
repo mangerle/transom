@@ -12,8 +12,9 @@ mod types;
 pub(crate) use input::build_custom_keys;
 pub use types::KeyFilter;
 pub(crate) use types::{
-    CONTEXT, LayoutMetrics, PreparedTerminal, READ_BUFFER_BYTES, READ_CHANNEL_CAPACITY,
-    SEARCH_TICK_PIXELS, TerminalRenderState,
+    CONTEXT, LayoutMetrics, PendingResize, PreparedTerminal, READ_BUFFER_BYTES,
+    READ_CHANNEL_CAPACITY, RESIZE_DEBOUNCE, ResizeDecision, SEARCH_TICK_PIXELS,
+    TerminalRenderState, decide_resize,
 };
 
 use crate::engine::TerminalEngine;
@@ -91,6 +92,10 @@ pub struct TerminalView {
     hover_link: bool,
     /// 已解析的自定义按键映射；键盘热路径只做遍历匹配。
     custom_keys: Vec<(KeybindingKeystroke, Vec<u8>)>,
+    /// 尺寸去抖计时任务：到点唤醒一帧，让待下发的网格尺寸真正落地。
+    ///
+    /// 新的目标尺寸会顶掉上一个计时（丢弃句柄即取消），因此连续拖拽只保留最后一个。
+    resize_tick: Option<Task<()>>,
     _reader_task: Task<()>,
     _blink_task: Task<()>,
     /// Shell 集成轮询任务句柄；终态或视图回收后自行结束。
@@ -213,6 +218,7 @@ impl TerminalView {
             hover_block: None,
             hover_link: false,
             custom_keys,
+            resize_tick: None,
             _reader_task: reader_task,
             _blink_task: blink_task,
             _integration_task: integration_task,
@@ -224,6 +230,17 @@ impl TerminalView {
     /// 从设置重载当前终端的触发器规则。
     pub fn reload_triggers(&mut self, settings: &transom_core::TriggerSettings) {
         self.state.trigger_engine.lock().reload(settings);
+    }
+
+    /// 排一次尺寸去抖计时：到点唤醒一帧，让预绘制阶段把待下发尺寸真正落地。
+    ///
+    /// 每次登记新的目标尺寸都会顶掉上一个计时（丢弃句柄即取消），
+    /// 所以连续拖拽过程中只有稳定后的最后一个尺寸会被真正下发。
+    fn schedule_resize_tick(&mut self, cx: &mut Context<Self>) {
+        self.resize_tick = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(RESIZE_DEBOUNCE).await;
+            let _ = this.update(cx, |_, cx| cx.notify());
+        }));
     }
 
     fn tick_cursor_blink(&mut self, window: &mut Window, cx: &mut Context<Self>) {
