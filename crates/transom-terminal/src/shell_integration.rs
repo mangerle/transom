@@ -27,118 +27,15 @@
 
 use std::time::{Duration, Instant};
 
-/// 支持自动集成的 Shell 类型。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShellKind {
-    Bash,
-    Zsh,
-    Fish,
-    /// 未识别的方言：不注入，避免把 bash 语法喂给别的解释器。
-    Other,
-}
-
-impl ShellKind {
-    /// 用于日志与回报标记的稳定名称。
-    pub fn label(self) -> &'static str {
-        match self {
-            ShellKind::Bash => "bash",
-            ShellKind::Zsh => "zsh",
-            ShellKind::Fish => "fish",
-            ShellKind::Other => "other",
-        }
-    }
-
-    /// 由登录 shell 路径推断方言。
-    pub fn from_path(path: &str) -> Option<Self> {
-        match detect_shell(path) {
-            ShellKind::Other => None,
-            kind => Some(kind),
-        }
-    }
-}
-
-/// 根据 Shell 可执行文件路径推断类型。
-pub fn detect_shell(shell_path: &str) -> ShellKind {
-    let lower = shell_path.to_ascii_lowercase();
-    // 只看路径末段：`/usr/local/bin/fish` 里含 "fish"，而 `/bin/sh` 含 "sh" 太宽。
-    let name = lower.rsplit('/').next().unwrap_or(lower.as_str());
-    if name.contains("zsh") {
-        ShellKind::Zsh
-    } else if name.contains("fish") {
-        ShellKind::Fish
-    } else if name.contains("bash") {
-        ShellKind::Bash
-    } else {
-        ShellKind::Other
-    }
-}
-
-/// 探测用 OSC 载荷前缀：`OSC 777;transom;<键>=<值>`，与 `notify` 分支互不重叠。
-pub const HANDSHAKE_TOKEN: &str = "transom";
-
-/// 探针命令：让 Shell 把 `$SHELL` 通过 OSC 报回来。
-///
-/// 三个刻意的设计：`printf` 的 `\033`/`\007` 由格式化解释，命令文本里不含真实控制
-/// 字节；行首空格让 bash/zsh 在 `HISTCONTROL=ignorespace` 下不进历史；`\r` 提交。
-pub fn probe_command() -> &'static [u8] {
-    // 原始字节串不解析转义，所以回车要作为普通字符串段单独拼进来。
-    concat!(r#" printf '\033]777;transom;shell=%s\007' "$SHELL""#, "\r").as_bytes()
-}
-
-/// Bash 集成脚本（单行）。
-///
-/// 用 `TRANSOM_SI_PENDING` 给 `DEBUG` 陷阱去重：陷阱对同一条命令的每个简单命令都会
-/// 触发，只有提示符落位后的第一次才代表"命令开始执行"。`$?` 必须在任何别的命令改写
-/// 它之前取走，所以先 `local` 存住。末尾的 `777;transom;ready=` 回报是"确实装上了"的
-/// 唯一凭据，各方言各自内联（`concat!` 只接受字面量，故不做公共常量）。
-pub const BASH_INTEGRATION_SCRIPT: &str = concat!(
-    r#"if [ -n "${BASH_VERSION:-}" ] && [ -z "${TRANSOM_SI:-}" ]; then "#,
-    r#"export TRANSOM_SI=1; "#,
-    r#"__transom_pre() { if [ -n "${TRANSOM_SI_PENDING:-}" ]; then TRANSOM_SI_PENDING=; "#,
-    r#"printf '\033]133;C\007'; fi; }; "#,
-    r#"__transom_post() { local __transom_ret=$?; TRANSOM_SI_PENDING=1; "#,
-    r#"printf '\033]133;D;%d\007\033]133;A\007' "$__transom_ret"; }; "#,
-    r#"PROMPT_COMMAND="__transom_post${PROMPT_COMMAND:+;$PROMPT_COMMAND}"; "#,
-    r#"trap '__transom_pre' DEBUG; "#,
-    r#"printf '\033]777;transom;ready=bash\007'"#,
-    "; fi",
-    "\r"
-);
-
-/// Zsh 集成脚本（单行）。`preexec`/`precmd` 是原生钩子，不需要 DEBUG 陷阱去重。
-pub const ZSH_INTEGRATION_SCRIPT: &str = concat!(
-    r#"if [ -n "${ZSH_VERSION:-}" ] && [ -z "${TRANSOM_SI:-}" ]; then "#,
-    r#"export TRANSOM_SI=1; "#,
-    r#"__transom_pre() { printf '\033]133;C\007'; }; "#,
-    r#"__transom_post() { local __transom_ret=$?; "#,
-    r#"printf '\033]133;D;%d\007\033]133;A\007' "$__transom_ret"; }; "#,
-    r#"autoload -Uz add-zsh-hook && add-zsh-hook precmd __transom_post "#,
-    r#"&& add-zsh-hook preexec __transom_pre && "#,
-    r#"printf '\033]777;transom;ready=zsh\007'"#,
-    "; fi",
-    "\r"
-);
-
-/// Fish 集成脚本（单行）。`fish_postexec` 事件里的 `$status` 即刚结束命令的退出码。
-pub const FISH_INTEGRATION_SCRIPT: &str = concat!(
-    r#"if not set -q TRANSOM_SI; set -gx TRANSOM_SI 1; "#,
-    r#"function __transom_pre --on-event fish_preexec; "#,
-    r#"printf '\033]133;C\007'; end; "#,
-    r#"function __transom_post --on-event fish_postexec; "#,
-    r#"printf '\033]133;D;%d\007\033]133;A\007' $status; end; "#,
-    r#"printf '\033]777;transom;ready=fish\007'"#,
-    "; end",
-    "\r"
-);
+// 集成脚本与方言识别属于"对外的线格式"，统一放在协议层：本地 Shell 预装与
+// 远程会话注入用的是同一份脚本，两处各留一份必然漂移。
+pub use transom_core::protocol::shell_integration::{
+    HANDSHAKE_TOKEN, ShellKind, detect_shell, probe_command,
+};
 
 /// 获取指定 Shell 的集成注入脚本；未识别方言返回 `None`。
 pub fn get_integration_script(kind: ShellKind) -> Option<&'static [u8]> {
-    match kind {
-        ShellKind::Bash => Some(BASH_INTEGRATION_SCRIPT.as_bytes()),
-        ShellKind::Zsh => Some(ZSH_INTEGRATION_SCRIPT.as_bytes()),
-        ShellKind::Fish => Some(FISH_INTEGRATION_SCRIPT.as_bytes()),
-        ShellKind::Other => None,
-    }
+    transom_core::protocol::shell_integration::integration_script(kind).map(str::as_bytes)
 }
 
 /// 集成推进过程中的外部观察量，由视图每帧/每次定时采集。
@@ -412,6 +309,9 @@ impl ShellIntegration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use transom_core::protocol::shell_integration::{
+        BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_SCRIPT, ZSH_INTEGRATION_SCRIPT,
+    };
 
     fn ctx_at(now: Instant) -> IntegrationContext {
         IntegrationContext {
@@ -668,7 +568,7 @@ mod tests {
             assert!(script.contains("133;D"), "缺少结束标记: {script}");
             assert!(script.contains("777;transom;"), "缺少 ready 回报: {script}");
             assert!(script.contains(ready));
-            assert!(script.ends_with("\r"), "脚本必须自带回车: {script}");
+            assert!(script.ends_with("\n"), "脚本必须自带换行: {script}");
             assert_eq!(
                 script.lines().count(),
                 1,
@@ -684,7 +584,7 @@ mod tests {
     fn test_probe_command_shape() {
         let probe = probe_command();
         let text = std::str::from_utf8(probe).expect("探针必须是合法 UTF-8");
-        assert!(text.ends_with('\r'));
+        assert!(text.ends_with('\n'));
         assert_eq!(text.lines().count(), 1);
         assert!(text.contains("777;transom;shell=%s"));
         // 控制字节必须以 `\033` 形式交给 printf 解释，命令文本本身不含裸 ESC。

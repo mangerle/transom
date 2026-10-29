@@ -8,6 +8,7 @@ pub mod proxy;
 pub mod sftp;
 pub mod sftp_filter;
 pub mod sftp_sync;
+pub mod shell_integration;
 pub mod ssh_config;
 pub mod ssh_url;
 pub mod sync;
