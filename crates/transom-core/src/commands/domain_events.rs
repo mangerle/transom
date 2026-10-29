@@ -13,7 +13,7 @@ use crate::ids::{ConnectionId, SessionId, TabId, TransferId};
 use crate::model::forward::ForwardStatus;
 use crate::model::host::HostOutcome;
 use crate::prompt::PromptInfo;
-use crate::protocol::sftp::{RemoteFile, RemoteMetadata, RemoteTextMeta};
+use crate::protocol::sftp::{RemoteFile, RemoteMetadata, RemoteSearchResultItem, RemoteTextMeta};
 use crate::protocol::sftp_sync::DirComparison;
 use crate::protocol::sync::{GitSyncResult, SyncPushReport};
 use crate::protocol::system_stats::ProcessInfo;
@@ -137,6 +137,12 @@ pub enum SftpAppEvent {
         connection_id: ConnectionId,
         op_id: TransferId,
         comparison: DirComparison,
+    },
+    SftpSearchResults {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        items: Vec<RemoteSearchResultItem>,
     },
     SftpFailed {
         tab_id: TabId,

@@ -56,6 +56,7 @@ pub(crate) struct SftpModals {
     pub(crate) sync: Option<SftpSyncModalState>,
     pub(crate) goto_line: Option<EditorGotoLineModalState>,
     pub(crate) confirm: Option<SftpConfirmModalState>,
+    pub(crate) search: Option<super::SftpSearchModalState>,
 }
 
 impl AppShell {

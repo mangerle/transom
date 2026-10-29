@@ -8,6 +8,7 @@
 mod archive;
 mod fs;
 mod query;
+mod search;
 mod sync;
 mod text;
 mod transfer;
@@ -17,6 +18,7 @@ use self::fs::{
     handle_chmod, handle_delete, handle_delete_many, handle_mkdir, handle_rename, handle_symlink,
 };
 use self::query::{handle_list, handle_stat};
+use self::search::handle_search;
 use self::sync::{handle_compare_dirs, handle_sync_dirs};
 use self::text::{handle_preview, handle_read_text, handle_write_text};
 use self::transfer::{handle_download, handle_download_dir, handle_upload, handle_upload_dir};
@@ -140,5 +142,6 @@ pub(crate) async fn execute_sftp_op(ctx: SftpExecutionContext, op: SftpOperation
             archive_path,
             dest_dir,
         } => handle_extract(&ctx, archive_path, dest_dir).await,
+        SftpOperation::Search { query } => handle_search(&ctx, query).await,
     }
 }

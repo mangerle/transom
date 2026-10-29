@@ -1,5 +1,6 @@
 //! SFTP 业务操作枚举定义。
 
+use super::search::RemoteSearchQuery;
 use super::transfer::{ChecksumAlgorithm, VerifyMode};
 use super::types::{RemoteDeleteTarget, RemoteTextMeta};
 use crate::ids::ConnectionId;
@@ -168,6 +169,10 @@ pub enum SftpOperation {
     Extract {
         archive_path: String,
         dest_dir: String,
+    },
+    /// 远程递归检索文件或内容
+    Search {
+        query: RemoteSearchQuery,
     },
 }
 

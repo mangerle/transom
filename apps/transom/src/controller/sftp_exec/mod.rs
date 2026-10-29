@@ -5,6 +5,4 @@ mod ops;
 mod progress;
 mod remote_transfer;
 
-pub(crate) use dispatch::{
-    SftpDispatch, SpawnSftpOpParams, dispatch_sftp_op, spawn_sftp_op,
-};
+pub(crate) use dispatch::{SftpDispatch, SpawnSftpOpParams, dispatch_sftp_op, spawn_sftp_op};

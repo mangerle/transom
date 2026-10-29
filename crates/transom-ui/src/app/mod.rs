@@ -282,6 +282,7 @@ impl AppShell {
                 filter: None,
                 sync: None,
                 goto_line: None,
+                search: None,
             },
             broadcast: BroadcastBarState {
                 open: false,

@@ -99,6 +99,13 @@ impl AppShell {
                 self.note_editor_text_conflict(op_id, localized_error(&error), cx);
                 true
             }
+            SftpAppEvent::SftpSearchResults { items, .. } => {
+                if let Some(ref mut modal) = self.sftp_modals.search {
+                    modal.is_searching = false;
+                    modal.results = items;
+                }
+                true
+            }
             SftpAppEvent::SftpDirCompared { .. } => self.on_sftp_dir_compared(event),
             SftpAppEvent::SftpFailed { .. } => self.on_sftp_failed(event, cx),
         };

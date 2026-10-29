@@ -157,6 +157,16 @@ impl AppShell {
                                     })),
                             )
                             .child(
+                                Button::new("sftp-search")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::Search)
+                                    .tooltip("远程检索 (Find / Grep)")
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.sftp_open_search_modal(tab_id, window, cx);
+                                    })),
+                            )
+                            .child(
                                 Button::new("sftp-rename")
                                     .ghost()
                                     .xsmall()
