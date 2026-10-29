@@ -38,7 +38,7 @@ impl AppShell {
         self.workspace
             .tabs
             .retain(|tab| tab.session_id != session_id);
-        self.prune_editor_panels();
+        self.prune_tab_overlays();
         let tiled_focus = self.active_tiling().and_then(|tiled| tiled.focused_group());
         let mut replacement = None;
         for tab_id in removed_tabs {

@@ -164,6 +164,9 @@ impl AppShell {
         if self.sftp_modals.goto_line.is_some() {
             overlays.push(self.render_editor_goto_line_modal(window, cx, &p));
         }
+        if self.diff_viewer.is_some() {
+            overlays.push(self.render_diff_viewer(window, cx, &p));
+        }
         if self.sftp_modals.search.is_some() {
             overlays.push(self.render_sftp_search_modal(window, cx, &p));
         }

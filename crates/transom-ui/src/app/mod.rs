@@ -80,6 +80,8 @@ pub struct AppShell {
     pub(crate) editors: EditorManager,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
     pub(crate) sftp_modals: SftpModals,
+    /// 远程与本地文件分栏对比面板；同一时刻至多一个。
+    pub(crate) diff_viewer: Option<crate::diff_viewer::DiffViewerState>,
     /// 底部广播输入条：目标集合、单行/多行输入与展开状态。
     pub(crate) broadcast: BroadcastBarState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
@@ -274,6 +276,7 @@ impl AppShell {
             probe_badges: HashMap::new(),
             monitor,
             editors: EditorManager::new(),
+            diff_viewer: None,
             sftp_modals: SftpModals {
                 chmod: None,
                 confirm: None,

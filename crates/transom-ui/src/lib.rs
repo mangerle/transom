@@ -22,6 +22,7 @@ mod cast_player;
 mod chrome;
 mod cloud_sync;
 mod connection;
+mod diff_viewer;
 mod editor;
 mod event_handlers;
 mod events;

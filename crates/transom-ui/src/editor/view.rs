@@ -338,6 +338,7 @@ fn render_panel_status(
     let save_editor = editor.clone();
     let revert_editor = editor.clone();
     let diff_editor = editor.clone();
+    let local_diff_editor = editor.clone();
 
     h_flex()
         .items_center()
@@ -392,6 +393,23 @@ fn render_panel_status(
                     })),
             )
         })
+        // 与本地文件对比：取远端基线（远端实际内容）而不是未保存缓冲区，
+        // 对比的是"磁盘上的两端"；面板新建、读取中或冲突期间不提供入口。
+        .when(
+            item.loaded && !item.new_file && !busy && !item.showing_diff && !item.conflict,
+            |this| {
+                this.child(
+                    Button::new("editor-local-diff")
+                        .ghost()
+                        .compact()
+                        .icon(IconName::FileDiff)
+                        .label("与本地对比")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_editor_local_diff(&local_diff_editor, cx);
+                        })),
+                )
+            },
+        )
         // 冲突期间恢复到的是过期基线（远端已是新内容），横幅上的"重新载入"才是
         // 正确出口，因此此处不提供"放弃修改"以免误导。
         .when(

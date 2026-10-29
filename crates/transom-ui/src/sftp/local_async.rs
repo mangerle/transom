@@ -209,7 +209,7 @@ fn delete_local_paths(paths: &[PathBuf]) -> LocalDeleteOutcome {
 /// 执行器同时承担缩略图解码等短任务，占住其工作线程会拖慢其它后台工作。
 /// 专用线程只跑这一件事，发送结果后立即退出；异步侧收到结果即 join，
 /// 线程生命周期全程可追踪，不产生脱缰线程。
-fn spawn_blocking_local<T, F>(job: F) -> impl std::future::Future<Output = Option<T>>
+pub(crate) fn spawn_blocking_local<T, F>(job: F) -> impl std::future::Future<Output = Option<T>>
 where
     T: Send + 'static,
     F: FnOnce() -> T + Send + 'static,

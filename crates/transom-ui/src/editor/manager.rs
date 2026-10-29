@@ -24,10 +24,6 @@ impl EditorManager {
         Self::default()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.panels.is_empty()
-    }
-
     pub(crate) fn len(&self) -> usize {
         self.panels.len()
     }

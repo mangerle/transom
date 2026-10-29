@@ -82,21 +82,32 @@ impl AppShell {
                 meta,
                 ..
             } => {
-                self.apply_editor_text(op_id, content, meta, window, cx);
+                // 对比面板与编辑器共用同一条只读通道，按在途请求归属分发。
+                if !self.diff_handle_remote_read(op_id, &content, meta, cx) {
+                    self.apply_editor_text(op_id, content, meta, window, cx);
+                }
                 true
             }
             SftpAppEvent::SftpTextWritten { op_id, meta, .. } => {
-                self.note_editor_text_written(op_id, meta, window, cx);
+                if !self.diff_handle_remote_written(op_id, meta, window, cx) {
+                    self.note_editor_text_written(op_id, meta, window, cx);
+                }
                 true
             }
             SftpAppEvent::SftpTextFailed { op_id, error, .. } => {
                 // 编辑读写失败只回到面板内显示，不写远端栏错误、不进传输队列统计。
-                self.note_editor_text_failed(op_id, localized_error(&error), cx);
+                let message = localized_error(&error);
+                if !self.diff_handle_remote_failure(op_id, &message, false, cx) {
+                    self.note_editor_text_failed(op_id, message, cx);
+                }
                 true
             }
             SftpAppEvent::SftpTextConflict { op_id, error, .. } => {
                 // 版本指纹拦截不是普通失败：面板要弹出三选一冲突横幅。
-                self.note_editor_text_conflict(op_id, localized_error(&error), cx);
+                let message = localized_error(&error);
+                if !self.diff_handle_remote_failure(op_id, &message, true, cx) {
+                    self.note_editor_text_conflict(op_id, message, cx);
+                }
                 true
             }
             SftpAppEvent::SftpSearchResults { items, .. } => {

@@ -38,6 +38,7 @@ pub use model::catalog::{
     SessionCatalog, SessionFolder, SyncMergeReport, merge_catalogs,
 };
 pub use model::color::Rgb;
+pub use model::file_diff::{DEFAULT_CONTEXT_LINES, DiffHunk, FileDiff, MergeDirection};
 pub use model::forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,
     TargetAddress,

@@ -36,6 +36,7 @@ mod transfer_filter_modal;
 mod transfer_presentation;
 
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
+pub(crate) use self::local_async::spawn_blocking_local;
 pub(crate) use self::local_listing::LocalDirectoryLister;
 pub(crate) use self::modals::{
     EditorGotoLineModalState, SftpConfirmModalState, SftpModals, SftpPendingDelete,

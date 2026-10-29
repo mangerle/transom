@@ -29,6 +29,8 @@ pub(super) struct LocalToolbarProps<'a> {
     pub(super) local_filter_input: &'a Entity<InputState>,
     pub(super) quick_paths: &'a LocalQuickPaths,
     pub(super) remote_available: bool,
+    /// 当前是否恰好选中一个本地文件，且远端目录存在同名文件。
+    pub(super) diff_ready: bool,
 }
 
 /// 渲染本地文件面板顶部的双行工具栏与快速路径跳转。
@@ -44,6 +46,7 @@ pub(super) fn render_local_toolbar(
     let local_filter_input = props.local_filter_input;
     let quick_paths = props.quick_paths;
     let remote_available = props.remote_available;
+    let diff_ready = props.diff_ready;
 
     v_flex()
         .p_2()
@@ -93,6 +96,19 @@ pub(super) fn render_local_toolbar(
                             this.sftp_local_enter_path(tab_id, window, cx)
                         })),
                 )
+                .when(remote_available, |this| {
+                    this.child(
+                        Button::new("local-diff-remote")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::FileDiff)
+                            .disabled(!diff_ready)
+                            .tooltip("与远端当前目录的同名文件分栏对比")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.sftp_open_local_diff(tab_id, cx);
+                            })),
+                    )
+                })
                 .when(remote_available, |this| {
                     this.child(
                         Button::new("local-collapse")

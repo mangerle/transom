@@ -138,6 +138,9 @@ impl AppShell {
             .into_any_element()
         };
 
+        // 对比入口只在"选中单个本地文件且远端有同名文件"时可用；
+        // 目录、多选与远端缺失都置灰，避免点击后才发现没有对手方。
+        let diff_ready = remote_available && self.diff_entry_ready(tab_id);
         let toolbar = render_local_toolbar(
             LocalToolbarProps {
                 tab_id,
@@ -147,6 +150,7 @@ impl AppShell {
                 local_filter_input: &local_filter_input,
                 quick_paths: &quick_paths,
                 remote_available,
+                diff_ready,
             },
             p,
             cx,

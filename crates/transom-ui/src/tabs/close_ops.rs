@@ -126,7 +126,7 @@ impl AppShell {
             self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
         self.workspace.tabs.retain(|tab| !panes.contains(&tab.id));
-        self.prune_editor_panels();
+        self.prune_tab_overlays();
         self.prune_tilings();
 
         let active_removed = self
@@ -186,7 +186,7 @@ impl AppShell {
 
         self.send_command(TerminalCommand::CloseTab { tab_id });
         self.workspace.tabs.retain(|tab| tab.id != tab_id);
-        self.prune_editor_panels();
+        self.prune_tab_overlays();
         let replacement = self.detach_pane_from_group(tab_id);
         self.prune_tilings();
         if let Some(next) = replacement {
@@ -205,7 +205,7 @@ impl AppShell {
             .and_then(|group| self.tiling_of_group(group))
             .and_then(|tiled| tiled.focused_group());
         self.workspace.tabs.retain(|tab| tab.id != tab_id);
-        self.prune_editor_panels();
+        self.prune_tab_overlays();
         let replacement = self.detach_pane_from_group(tab_id);
         self.prune_tilings();
         if was_active {

@@ -69,6 +69,8 @@ rfd = "0.15"
 notify-rust = "4"
 chrono = "0.4"
 globset = "0.4"
+# 文件行差异：Myers 算法实现，core 产出 hunk 契约，UI 复用同一结果渲染。
+similar = "2.7"
 # 只启用缩略图解码需要的格式，与 gpui 已启用的图片能力保持一致；
 # 不引入 AVIF 等额外编解码器，避免为悬停预览扩大编译与二进制体积。
 image = { version = "0.25", default-features = false, features = [
