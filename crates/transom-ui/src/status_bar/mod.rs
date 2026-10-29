@@ -189,7 +189,7 @@ impl AppShell {
                         .flex_none()
                         .h_full()
                         .items_center()
-                        .pl_3()
+                        .pl_2()
                         .pr_2()
                         .child(h_flex().flex_1().min_w_0().child(connection_pill)),
                 )
@@ -215,7 +215,7 @@ impl AppShell {
                     .flex_1()
                     .h_full()
                     .items_center()
-                    .pl_3()
+                    .pl_2()
                     .pr_3()
                     .gap_2()
                     .child(connection_pill)

@@ -27,24 +27,31 @@ impl AppShell {
         TitleBar::new()
             .h(rems(size::TOP_BAR_HEIGHT))
             .bg(p.title_bar)
+            .pl_2()
             .on_close_window(move |_, window, cx| {
                 app_entity.update(cx, |this, cx| {
                     this.close_app(window, cx);
                 });
             })
             .child(
-                h_flex().w_full().h_full().items_center().px_3().child(
-                    h_flex()
-                        .items_center()
-                        .gap_2()
-                        .child(brand::logo_mark(LOGO_SIZE, window, cx))
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::BOLD)
-                                .child(rust_i18n::t!("app.name").to_string()),
-                        ),
-                ),
+                h_flex()
+                    .w_full()
+                    .h_full()
+                    .items_center()
+                    .pl_0()
+                    .pr_2()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_2()
+                            .child(brand::logo_mark(LOGO_SIZE, window, cx))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(rust_i18n::t!("app.name").to_string()),
+                            ),
+                    ),
             )
             .into_any_element()
     }
