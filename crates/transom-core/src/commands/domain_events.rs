@@ -13,7 +13,9 @@ use crate::ids::{ConnectionId, SessionId, TabId, TransferId};
 use crate::model::forward::ForwardStatus;
 use crate::model::host::HostOutcome;
 use crate::prompt::PromptInfo;
-use crate::protocol::sftp::{RemoteFile, RemoteMetadata, RemoteSearchResultItem, RemoteTextMeta};
+use crate::protocol::sftp::{
+    RemoteFile, RemoteMetadata, RemoteSearchResultItem, RemoteTextMeta, SudoCapability,
+};
 use crate::protocol::sftp_sync::DirComparison;
 use crate::protocol::sync::{GitSyncResult, SyncPushReport};
 use crate::protocol::system_stats::ProcessInfo;
@@ -131,6 +133,14 @@ pub enum SftpAppEvent {
         connection_id: ConnectionId,
         op_id: TransferId,
         error: AppError,
+    },
+    /// 远端提权能力探测结果：界面据此决定是弹口令框、直接提交写入，还是就地说明
+    /// 为什么提权不可用。
+    SudoProbed {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        capability: SudoCapability,
     },
     SftpDirCompared {
         tab_id: TabId,

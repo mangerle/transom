@@ -320,6 +320,7 @@ fn render_panel_status(
         EditorPhase::Reading => "读取远端中…".to_string(),
         EditorPhase::Idle if item.dirty => "未保存".to_string(),
         EditorPhase::Idle => "无改动".to_string(),
+        EditorPhase::Writing if item.pending_sudo_probe.is_some() => "探测提权中…".to_string(),
         EditorPhase::Writing => "回传中…".to_string(),
         EditorPhase::Written => match item.written_size {
             // 带字节数：这是写完回读比对过的数字，用户据此判断"确实落盘了"。

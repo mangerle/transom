@@ -17,14 +17,113 @@ use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
-use transom_core::{RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
+use transom_core::{
+    ErrorCode, RemoteTextMeta, SftpCommand, SftpOperation, SudoCapability, SudoUnavailable, TabId,
+    TransferId,
+};
 
 use crate::palette::sftp_text_input;
 use crate::sftp::{SftpInputModalState, SftpInputTarget};
 
 impl AppShell {
-    /// 唤起 Sudo 提权保存弹窗。
+    /// 提权保存入口：先探测远端能力，再决定直接提交还是弹口令框。
+    ///
+    /// 手动按钮与"权限拒绝后自动重试"共用这一入口，保证两条路径的弹窗策略一致：
+    /// 免密场景完全不问，必须口令时才让用户输入。
     pub(crate) fn prompt_sudo_save(
+        &mut self,
+        editor: &Entity<EditorState>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.request_sudo_probe(editor, cx);
+    }
+
+    /// 向远端发起提权能力探测；结果由 [`Self::on_sudo_probed`] 回填。
+    fn request_sudo_probe(&mut self, editor: &Entity<EditorState>, cx: &mut Context<Self>) {
+        let Some(index) = self
+            .editors
+            .panels
+            .iter()
+            .position(|item| item.editor == *editor)
+        else {
+            return;
+        };
+        let item = &mut self.editors.panels[index];
+        if !item.loaded
+            || item.pending_sudo_probe.is_some()
+            || matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing)
+        {
+            return;
+        }
+        let tab_id = item.tab_id;
+        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
+        else {
+            item.phase = EditorPhase::Failed;
+            item.error = Some("所属标签的连接已断开，无法探测提权能力".to_string());
+            cx.notify();
+            return;
+        };
+        let op_id = TransferId::new();
+        item.pending_sudo_probe = Some(op_id);
+        item.sudo_probe_attempted = true;
+        // 复用忙碌态阻止保存与关闭；状态栏按 pending_sudo_probe 显示"探测提权中"。
+        item.phase = EditorPhase::Writing;
+        item.error = Some("正在探测远端提权能力…".to_string());
+        if !self.send_command(SftpCommand::Sftp {
+            tab_id,
+            connection_id,
+            op_id,
+            op: SftpOperation::ProbeSudo,
+        }) {
+            let item = &mut self.editors.panels[index];
+            item.pending_sudo_probe = None;
+            item.phase = EditorPhase::Failed;
+            item.error = Some("提权探测命令投递失败".to_string());
+        }
+        cx.notify();
+    }
+
+    /// 提权探测结果：免密直接写、需要口令才弹框、不可用则说明原因。
+    pub(crate) fn on_sudo_probed(
+        &mut self,
+        op_id: TransferId,
+        capability: SudoCapability,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self
+            .editors
+            .panels
+            .iter()
+            .position(|item| item.pending_sudo_probe == Some(op_id))
+        else {
+            return;
+        };
+        let editor = self.editors.panels[index].editor.clone();
+        self.editors.panels[index].pending_sudo_probe = None;
+        match capability {
+            SudoCapability::Passwordless => {
+                self.editors.panels[index].phase = EditorPhase::Idle;
+                self.editors.panels[index].error = None;
+                self.submit_sudo_editor_write(&editor, None, window, cx);
+            }
+            SudoCapability::PasswordRequired => {
+                self.editors.panels[index].phase = EditorPhase::Idle;
+                self.editors.panels[index].error = None;
+                self.open_sudo_password_modal(&editor, window, cx);
+            }
+            SudoCapability::Unavailable { reason, detail } => {
+                self.editors.panels[index].phase = EditorPhase::Failed;
+                self.editors.panels[index].error =
+                    Some(format!("{}：{detail}", sudo_unavailable_text(reason)));
+                cx.notify();
+            }
+        }
+    }
+
+    /// 打开 Sudo 口令输入框；只在探测确认"必须口令"或票据失效后失败时调用。
+    fn open_sudo_password_modal(
         &mut self,
         editor: &Entity<EditorState>,
         window: &mut Window,
@@ -36,6 +135,8 @@ impl AppShell {
         let tab_id = item.tab_id;
         let file_name = item.file_name.clone();
         item.confirm = None;
+        item.pending_sudo_probe = None;
+        item.error = None;
         let input = sftp_text_input(window, cx, "", "Sudo 口令（免密可留空）");
         input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.input = Some(SftpInputModalState {
@@ -215,6 +316,10 @@ impl AppShell {
                     path: remote_path,
                     content: content.as_bytes().to_vec(),
                     expected,
+                    // 普通提权保存仍受版本指纹保护；强制覆盖只由冲突横幅显式触发，
+                    // 提权通道不提供绕过入口。
+                    force: false,
+                    backup: self.settings.sftp.editor_write_backup,
                     password,
                 },
             }
@@ -235,6 +340,7 @@ impl AppShell {
             item.phase = EditorPhase::Writing;
             item.error = None;
             item.confirm = None;
+            item.pending_sudo_probe = None;
         }
         cx.notify();
     }
@@ -347,30 +453,56 @@ impl AppShell {
     }
 
     /// 读取或回传失败：错误就地显示；读取失败面板保持空缓冲区，回传失败内容原样保留。
+    ///
+    /// 写回失败且错误码是权限拒绝时，自动转入提权探测而不是只留一条错误文本：
+    /// 这是唯一有明确恢复路径的失败。探测只自动走一次，避免提权仍被拒时形成循环；
+    /// sudo 票据失效（`AuthFailed`）则直接重新询问口令。
     pub(crate) fn note_editor_text_failed(
         &mut self,
         op_id: TransferId,
         message: String,
+        code: ErrorCode,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self
-            .editors
-            .panels
-            .iter_mut()
-            .find(|item| item.pending_op == Some(op_id))
-        else {
+        let Some(index) = self.editors.panels.iter().position(|item| {
+            item.pending_op == Some(op_id) || item.pending_sudo_probe == Some(op_id)
+        }) else {
             return;
         };
+        let item = &mut self.editors.panels[index];
+        if item.pending_sudo_probe == Some(op_id) {
+            // 探测失败：没有可继续的提权结论，直接回到失败态并保留远端原文。
+            item.pending_sudo_probe = None;
+            item.phase = EditorPhase::Failed;
+            item.error = Some(format!("探测远端提权能力失败：{message}"));
+            cx.notify();
+            return;
+        }
+        let was_writing = item.phase == EditorPhase::Writing;
         let (action, detail) = if item.phase == EditorPhase::Reading {
             ("读取远端失败", message)
         } else {
             ("回传远端失败", message)
         };
+        let editor = item.editor.clone();
+        let should_probe =
+            was_writing && code == ErrorCode::PermissionDenied && !item.sudo_probe_attempted;
+        let should_reask = was_writing && code == ErrorCode::AuthFailed;
         item.pending_op = None;
         item.phase = EditorPhase::Failed;
         item.written_size = None;
         item.close_after_write = false;
         item.error = Some(format!("{action}: {detail}"));
+        if should_probe {
+            item.error = Some("远端拒绝写入，正在探测提权能力…".to_string());
+            self.request_sudo_probe(&editor, cx);
+        } else if should_reask {
+            item.phase = EditorPhase::Idle;
+            item.error = None;
+            self.open_sudo_password_modal(&editor, window, cx);
+            return;
+        }
         cx.notify();
     }
 
@@ -463,5 +595,15 @@ impl AppShell {
         self.editors.panels.retain(|item| item.editor != *editor);
         self.focus_active_sftp_panel(window, cx);
         cx.notify();
+    }
+}
+
+/// 把提权不可用原因翻译成用户能行动的中文说明。
+fn sudo_unavailable_text(reason: SudoUnavailable) -> &'static str {
+    match reason {
+        SudoUnavailable::NotInstalled => "远端未安装 sudo，无法提权写入",
+        SudoUnavailable::RequiresTty => "远端 sudo 要求 TTY，非交互通道无法提权",
+        SudoUnavailable::NotAuthorized => "当前用户不在远端 sudo 授权范围内",
+        SudoUnavailable::Other => "无法探测远端提权能力",
     }
 }

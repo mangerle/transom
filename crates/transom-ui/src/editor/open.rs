@@ -319,6 +319,8 @@ impl AppShell {
             remote_meta,
             new_file,
             pending_goto: None,
+            pending_sudo_probe: None,
+            sudo_probe_attempted: false,
             caret,
             dirty: false,
             loaded,

@@ -26,6 +26,12 @@ pub enum ErrorCode {
     ChannelFailed,
     /// SFTP 文件协议操作失败。
     SftpFailed,
+    /// 远端拒绝授权本次操作（`SSH_FX_PERMISSION_DENIED`）。
+    ///
+    /// 单独成码而不是混在 [`Self::SftpFailed`] 里靠文案判断：权限拒绝有一条独立的
+    /// 恢复路径（提示提权保存），而"文案里恰好出现 Permission denied"依赖远端
+    /// locale 与实现，中文系统的 SFTP 服务器根本不会回这句话。
+    PermissionDenied,
     /// SFTP 传输后完整性校验失败（大小不一致或哈希指纹不匹配）。
     SftpVerifyFailed,
     /// 编辑回传前发现远端文件已被修改（版本指纹不一致），拒绝覆盖。

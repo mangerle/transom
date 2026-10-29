@@ -119,10 +119,32 @@ impl SftpClient {
     }
 }
 
+/// 把 SFTP 协议错误转成本模块的领域错误。
+///
+/// 权限拒绝必须单独成码：它是唯一有后续动作的失败（界面要据此提供提权入口），
+/// 而服务器回的文本随实现与 locale 变化——中文系统不会回 "Permission denied"，
+/// 靠字符串匹配等于在部分机器上这个功能根本不存在。状态码是协议规定的，可靠。
 pub(crate) fn sftp_error(error: russh_sftp::client::error::Error) -> AppError {
+    if let russh_sftp::client::error::Error::Status(status) = &error
+        && status.status_code == russh_sftp::protocol::StatusCode::PermissionDenied
+    {
+        return AppError::with_detail(
+            ErrorCode::PermissionDenied,
+            format!(
+                "远端拒绝授权本次操作，路径状态码: {:?}，说明: {}",
+                status.status_code, status.error_message
+            ),
+        );
+    }
     AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
 }
 
 pub(crate) fn sftp_io_error(error: std::io::Error) -> AppError {
+    if error.kind() == std::io::ErrorKind::PermissionDenied {
+        return AppError::with_detail(
+            ErrorCode::PermissionDenied,
+            format!("远端拒绝授权读写操作，原因: {error}"),
+        );
+    }
     AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
 }

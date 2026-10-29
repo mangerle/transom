@@ -91,3 +91,39 @@ impl RemoteTextMeta {
         )
     }
 }
+
+/// 无法提权的具体原因。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SudoUnavailable {
+    /// 远端没有 `sudo` 可执行文件。
+    NotInstalled,
+    /// sudoers 要求 TTY（`requiretty`），非交互 exec 通道无法提权。
+    RequiresTty,
+    /// 该用户不在 sudo 授权范围内。
+    NotAuthorized,
+    /// 其他原因：探测命令本身失败。
+    Other,
+}
+
+/// 远端提权能力探测结果。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：口令框"该不该弹"必须由远端事实决定，而不是先弹了再说。免密
+///   （NOPASSWD 或票据未过期）时直接写，符合"能不问就不问"的认证时序约定；
+/// - 探测走 `sudo -n`（非交互）：它在需要口令时立即以错误退出，绝不会挂在
+///   一个没人应答的口令提示上，也不会把任何口令写进数据流；
+/// - 代价与局限：探测只验证"该用户能否 sudo"，不覆盖按命令粒度授权的 sudoers
+///   规则；真正写入时若被该规则拒绝，仍会以 [`SudoUnavailable::NotAuthorized`]
+///   的形式在结果里报出来，不会静默。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SudoCapability {
+    /// 可提权且无需口令：直接提交写入。
+    Passwordless,
+    /// 可提权但必须口令。
+    PasswordRequired,
+    /// 不可提权，附带远端原文供排查。
+    Unavailable {
+        reason: SudoUnavailable,
+        detail: String,
+    },
+}

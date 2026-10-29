@@ -94,6 +94,13 @@ pub(crate) struct EditorPanelState {
     /// 与"跳转到行"模态的即时跳转分开：从终端代码链接打开文件时内容还没拉回，
     /// 只能先把目标行记在面板上，等 `SftpTextRead` 落地后再移动光标。
     pub(crate) pending_goto: PendingGoto,
+    /// 在途提权能力探测的操作 ID；结果事件按它回填到本面板。
+    pub(crate) pending_sudo_probe: Option<TransferId>,
+    /// 本面板是否已经自动探测过一次提权能力。
+    ///
+    /// 权限拒绝后自动"探测→密码less→再写"只能走一次：如果提权写入仍被拒绝，
+    /// 再探测只会得到同一个结论并形成循环，第二次必须把错误交给用户判断。
+    pub(crate) sudo_probe_attempted: bool,
     /// 缓存的光标行列（1 基），随编辑器通知更新。
     ///
     /// 状态栏不能直接在渲染时读 `cursor_position()`：光标移动只重绘编辑器实体，

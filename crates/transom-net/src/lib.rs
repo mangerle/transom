@@ -31,6 +31,6 @@ pub use sftp::check_file::{
     CHECK_FILE_HANDLE_EXT, CHECK_FILE_NAME_EXT, CheckFileRequest, CheckFileResponse,
     decode_check_file_reply,
 };
-pub use sftp::sudo_write::exec_sudo_write;
+pub use sftp::sudo_write::{SudoWriteReport, SudoWriteRequest, probe_sudo, sudo_write};
 pub use system_stats::StatsSamplerState;
 pub use telnet::{TelnetSession, connect_telnet};

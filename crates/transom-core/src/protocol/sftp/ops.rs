@@ -130,16 +130,27 @@ pub enum SftpOperation {
         force: bool,
         backup: bool,
     },
-    /// 通过 Sudo 提权通道将文本内容流式写入远端并原子替换。
+    /// 通过 Sudo 提权通道把内容经标准流管道灌入远端并原子替换。
     ///
-    /// 解决非 root 登录时编辑保存只读/系统配置文件的权限限制。
-    /// `password` 为可选的 sudo 鉴权口令（若配置免密则为 None）。
+    /// 解决非 root 登录时编辑保存系统配置文件的权限限制：`SFTP` 写不了的路径，
+    /// 改用一条 `sudo` exec 通道走 `tee`。`password` 为 `None` 表示按免密
+    /// （NOPASSWD 或票据未过期）提交；`expected` 与 `force` 的语义与
+    /// [`Self::WriteText`] 完全一致——提权不是绕过并发检查的理由，恰恰相反，
+    /// 提权写入能覆盖任何人的改动，更要判指纹。
     SudoWriteText {
         path: String,
         content: Vec<u8>,
         expected: Option<RemoteTextMeta>,
+        force: bool,
+        /// 替换前是否把原文件备份为 `<path>.transom-bak`，与普通写回的设置同源。
+        backup: bool,
         password: Option<String>,
     },
+    /// 探测远端能否提权、以及需要不需要口令。
+    ///
+    /// 单独成一个操作而不是在写入里"顺便告诉界面"：口令框该不该弹要在弹之前知道，
+    /// 免密场景必须完全不问。
+    ProbeSudo,
     /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径
     Symlink {
         target: String,

@@ -96,9 +96,10 @@ impl AppShell {
             }
             SftpAppEvent::SftpTextFailed { op_id, error, .. } => {
                 // 编辑读写失败只回到面板内显示，不写远端栏错误、不进传输队列统计。
+                let code = error.code;
                 let message = localized_error(&error);
                 if !self.diff_handle_remote_failure(op_id, &message, false, cx) {
-                    self.note_editor_text_failed(op_id, message, cx);
+                    self.note_editor_text_failed(op_id, message, code, window, cx);
                 }
                 true
             }
@@ -118,6 +119,12 @@ impl AppShell {
                 true
             }
             SftpAppEvent::SftpDirCompared { .. } => self.on_sftp_dir_compared(event),
+            SftpAppEvent::SudoProbed {
+                op_id, capability, ..
+            } => {
+                self.on_sudo_probed(op_id, capability, window, cx);
+                true
+            }
             SftpAppEvent::SftpFailed { .. } => self.on_sftp_failed(event, cx),
         };
         if should_notify {

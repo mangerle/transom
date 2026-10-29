@@ -16,4 +16,6 @@ pub use path::{
 };
 pub use search::{RemoteSearchQuery, RemoteSearchResultItem};
 pub use transfer::{ChecksumAlgorithm, TransferDirection, TransferSummary, VerifyMode};
-pub use types::{RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta};
+pub use types::{
+    RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SudoCapability, SudoUnavailable,
+};

@@ -96,6 +96,40 @@ impl SftpClient {
     /// 版本指纹不一致返回 `ErrorCode::SftpTextConflict`；备份文件无法写入、
     /// 打开、写入、刷新失败，或写回后远端大小与提交字节数不一致时返回
     /// `ErrorCode::SftpFailed`。
+    /// 为 Sudo 提权写入做与普通写回一致的冲突检查与载荷形态还原。
+    ///
+    /// 提权通道绕过了 SFTP 的写接口，但"是否覆盖他人改动""BOM/CRLF 是否原样
+    /// 保留"这两件事不能绕过：前者返回 `SftpTextConflict` 让界面走冲突横幅，
+    /// 后者保证提权保存一次不会把文件行尾整体换掉。
+    ///
+    /// # Errors
+    /// 远端 stat 失败返回 `SftpFailed`；版本指纹不一致返回 `SftpTextConflict`。
+    pub async fn prepare_sudo_write(
+        &self,
+        path: &str,
+        content: &[u8],
+        expected: Option<RemoteTextMeta>,
+        force: bool,
+    ) -> Result<Vec<u8>, AppError> {
+        if let Some(expected) = expected
+            && !force
+        {
+            let metadata = self.session.metadata(path).await.map_err(sftp_error)?;
+            if let Some(current) = remote_text_meta_of(metadata.size, metadata.mtime)
+                && expected.conflicts_with(&current)
+            {
+                return Err(AppError::with_detail(
+                    ErrorCode::SftpTextConflict,
+                    format!(
+                        "文件 {path} 自打开后已被修改：当前 {} 字节（mtime {:?}），打开时 {} 字节（mtime {:?}）",
+                        current.size, current.mtime, expected.size, expected.mtime
+                    ),
+                ));
+            }
+        }
+        Ok(restore_write_payload(content, expected.as_ref()))
+    }
+
     pub async fn write_text(
         &self,
         path: &str,

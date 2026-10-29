@@ -762,6 +762,9 @@ error:
   sftp_failed:
     en: SFTP error
     zh-CN: SFTP 错误
+  permission_denied:
+    en: Permission denied by the remote host
+    zh-CN: 远端拒绝授权
   sftp_verify_failed:
     en: File verification mismatch
     zh-CN: 文件传输完整性校验不一致

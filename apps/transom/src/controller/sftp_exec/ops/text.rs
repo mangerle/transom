@@ -158,61 +158,77 @@ pub(super) async fn handle_write_text(
     }
 }
 
-pub(super) async fn handle_sudo_write_text(
-    ctx: &SftpExecutionContext,
-    path: String,
-    content: Vec<u8>,
-    expected: Option<RemoteTextMeta>,
-    password: Option<String>,
-) {
+/// 提权写入的输入集合：路径、内容、指纹、强制标记、备份意图与口令必须成套出现。
+pub(super) struct SudoWriteSpec {
+    pub(super) path: String,
+    pub(super) content: Vec<u8>,
+    pub(super) expected: Option<RemoteTextMeta>,
+    pub(super) force: bool,
+    pub(super) backup: bool,
+    pub(super) password: Option<String>,
+}
+
+pub(super) async fn handle_sudo_write_text(ctx: &SftpExecutionContext, spec: SudoWriteSpec) {
     let Some(ref remote) = ctx.remote else {
-        let _ = ctx
-            .event_tx
-            .send_async(
-                SftpAppEvent::SftpTextFailed {
-                    tab_id: ctx.tab_id,
-                    connection_id: ctx.connection_id,
-                    op_id: ctx.op_id,
-                    error: AppError::with_detail(
-                        ErrorCode::SftpFailed,
-                        "当前连接缺少底层的 SSH 交互通道，无法发起 Sudo 提权写入",
-                    ),
-                }
-                .into(),
-            )
-            .await;
+        emit_text_failed(
+            ctx,
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                "当前连接缺少底层的 SSH 交互通道，无法发起 Sudo 提权写入",
+            ),
+        )
+        .await;
         return;
     };
 
-    let write_res =
-        transom_net::exec_sudo_write(remote, &path, &content, password.as_deref()).await;
+    // 提权通道绕过 SFTP 写接口，但并发指纹与 BOM/CRLF 还原必须与普通写回同一口径。
+    let payload = match ctx
+        .client
+        .prepare_sudo_write(&spec.path, &spec.content, spec.expected, spec.force)
+        .await
+    {
+        Ok(payload) => payload,
+        Err(error) if error.code == ErrorCode::SftpTextConflict => {
+            emit_text_conflict(ctx, error).await;
+            return;
+        }
+        Err(error) => {
+            emit_text_failed(ctx, error).await;
+            return;
+        }
+    };
 
-    match write_res {
-        Ok(()) => {
-            // 写入成功后，查询最新大小与修改时间同步给 UI 缓存
-            let stat_res = ctx.client.stat(&path).await;
-            let meta = match stat_res {
+    let request = transom_net::SudoWriteRequest {
+        target: &spec.path,
+        payload: &payload,
+        password: spec.password.as_deref(),
+        backup: spec.backup,
+    };
+    match transom_net::sudo_write(remote, &request).await {
+        Ok(report) => {
+            // 写入成功后查询最新大小与修改时间同步给 UI 缓存；stat 失败时用提交
+            // 字节数兜底，避免把一次成功写入显示成失败。
+            let meta = match ctx.client.stat(&spec.path).await {
                 Ok(stat) => RemoteTextMeta {
                     size: stat.size,
                     mtime: stat.mtime,
-                    bom: expected.is_some_and(|m| m.bom),
-                    crlf: expected.is_some_and(|m| m.crlf),
+                    bom: spec.expected.is_some_and(|m| m.bom),
+                    crlf: spec.expected.is_some_and(|m| m.crlf),
                     transcoded: false,
                 },
                 Err(_) => RemoteTextMeta {
-                    size: content.len() as u64,
+                    size: report.bytes,
                     mtime: Some(
                         std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs() as u32,
                     ),
-                    bom: expected.is_some_and(|m| m.bom),
-                    crlf: expected.is_some_and(|m| m.crlf),
+                    bom: spec.expected.is_some_and(|m| m.bom),
+                    crlf: spec.expected.is_some_and(|m| m.crlf),
                     transcoded: false,
                 },
             };
-
             let _ = ctx
                 .event_tx
                 .send_async(
@@ -226,19 +242,68 @@ pub(super) async fn handle_sudo_write_text(
                 )
                 .await;
         }
-        Err(error) => {
+        Err(error) => emit_text_failed(ctx, error).await,
+    }
+}
+
+/// 探测远端提权能力：结果决定界面是直接写、弹口令框还是说明不可用。
+pub(super) async fn handle_probe_sudo(ctx: &SftpExecutionContext) {
+    let Some(ref remote) = ctx.remote else {
+        emit_text_failed(
+            ctx,
+            AppError::with_detail(
+                ErrorCode::SftpFailed,
+                "当前连接缺少底层的 SSH 交互通道，无法探测提权能力",
+            ),
+        )
+        .await;
+        return;
+    };
+    match transom_net::probe_sudo(remote).await {
+        Ok(capability) => {
             let _ = ctx
                 .event_tx
                 .send_async(
-                    SftpAppEvent::SftpTextFailed {
+                    SftpAppEvent::SudoProbed {
                         tab_id: ctx.tab_id,
                         connection_id: ctx.connection_id,
                         op_id: ctx.op_id,
-                        error,
+                        capability,
                     }
                     .into(),
                 )
                 .await;
         }
+        Err(error) => emit_text_failed(ctx, error).await,
     }
+}
+
+async fn emit_text_failed(ctx: &SftpExecutionContext, error: AppError) {
+    let _ = ctx
+        .event_tx
+        .send_async(
+            SftpAppEvent::SftpTextFailed {
+                tab_id: ctx.tab_id,
+                connection_id: ctx.connection_id,
+                op_id: ctx.op_id,
+                error,
+            }
+            .into(),
+        )
+        .await;
+}
+
+async fn emit_text_conflict(ctx: &SftpExecutionContext, error: AppError) {
+    let _ = ctx
+        .event_tx
+        .send_async(
+            SftpAppEvent::SftpTextConflict {
+                tab_id: ctx.tab_id,
+                connection_id: ctx.connection_id,
+                op_id: ctx.op_id,
+                error,
+            }
+            .into(),
+        )
+        .await;
 }
