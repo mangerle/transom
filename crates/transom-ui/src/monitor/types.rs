@@ -110,6 +110,9 @@ pub(crate) struct MonitorState {
     pub(crate) expanded_process_pid: Option<u32>,
     pub(crate) error: Option<String>,
     pub(crate) filter: Entity<InputState>,
+    /// 监听端口筛选框：端口表按 5 秒一轮刷新，条目常常超过一屏，
+    /// 与进程筛选分开持有，避免两个列表共用一个词互相把对方的结果筛空。
+    pub(crate) ports_filter: Entity<InputState>,
     /// CPU 历史走势（0.0 ~ 100.0）。
     pub(crate) cpu_history: VecDeque<f32>,
     /// 内存使用率历史走势（0.0 ~ 100.0）。
@@ -141,6 +144,10 @@ impl MonitorState {
             filter: cx.new(|cx| {
                 InputState::new(window, cx)
                     .placeholder(rust_i18n::t!("monitor.filter_placeholder").to_string())
+            }),
+            ports_filter: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder(rust_i18n::t!("monitor.ports_filter_placeholder").to_string())
             }),
             cpu_history: VecDeque::with_capacity(HISTORY_POINTS),
             mem_history: VecDeque::with_capacity(HISTORY_POINTS),

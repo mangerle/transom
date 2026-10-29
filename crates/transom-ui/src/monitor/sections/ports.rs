@@ -5,9 +5,11 @@ use crate::monitor::components::CollapsibleCard;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
+use gpui_kit::component::input::Input;
 use gpui_kit::component::list::ListItem;
 use gpui_kit::*;
-use transom_core::SystemStats;
+use transom_core::{PortListeningInfo, SystemStats};
 
 impl AppShell {
     /// 渲染监听端口监控卡片。
@@ -18,14 +20,39 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let collapsed = self.monitor.collapse.ports;
-        let count = stats.ports.len();
+        let total = stats.ports.len();
+        // 采样每轮整体替换 stats，筛选词只存在输入框里，因此刷新不会打断正在输入的条件。
+        let query = self.monitor.ports_filter.read(cx).value().to_lowercase();
+        let matched: Vec<&PortListeningInfo> = stats
+            .ports
+            .iter()
+            .filter(|port| {
+                query.is_empty()
+                    || port.port.to_string().contains(&query)
+                    || port.protocol.to_lowercase().contains(&query)
+                    || port.bind_addr.to_lowercase().contains(&query)
+                    || port
+                        .process_name
+                        .as_ref()
+                        .is_some_and(|name| name.to_lowercase().contains(&query))
+            })
+            .collect();
 
         let summary = div()
             .text_xs()
             .text_color(p.muted_foreground)
-            .child(format!("{count} 个监听端口"));
+            .child(if query.is_empty() {
+                format!("{total} 个监听端口")
+            } else {
+                format!("命中 {} / 共 {total} 个监听端口", matched.len())
+            });
 
         let mut content = v_flex().gap_1();
+
+        // 输入框常驻在数据有无之前：没采到数据时也留着，免得用户以为是筛选功能坏了。
+        if total > 0 {
+            content = content.child(Input::new(&self.monitor.ports_filter).small());
+        }
 
         if stats.ports.is_empty() {
             content = content.child(
@@ -33,6 +60,13 @@ impl AppShell {
                     .text_xs()
                     .text_color(p.muted_foreground)
                     .child("暂无监听端口数据或无权限读取"),
+            );
+        } else if matched.is_empty() {
+            content = content.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(format!("没有匹配 \"{query}\" 的监听端口")),
             );
         } else {
             // 表头
@@ -50,7 +84,7 @@ impl AppShell {
             );
 
             let mut list = v_flex().w_full();
-            for (idx, port) in stats.ports.iter().take(30).enumerate() {
+            for (idx, port) in matched.iter().take(30).enumerate() {
                 let proc_text = match (&port.process_name, port.pid) {
                     (Some(name), Some(pid)) => format!("{name} ({pid})"),
                     (Some(name), None) => name.clone(),

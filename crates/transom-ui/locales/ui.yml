@@ -2225,6 +2225,9 @@ monitor:
   filter_placeholder:
     en: Filter by name, user or PID
     zh-CN: 按名称、用户或 PID 过滤
+  ports_filter_placeholder:
+    en: Filter by port, protocol, address or process
+    zh-CN: 按端口、协议、地址或进程过滤
   user:
     en: User
     zh-CN: 用户
