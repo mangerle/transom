@@ -15,6 +15,7 @@ use crate::shell_integration::{
 };
 use gpui_kit::*;
 use std::time::{Duration, Instant};
+use transom_core::protocol::shell_integration::injection_payload;
 
 /// 状态机检查周期。250ms 足够让用户在第一次回车之前就装好钩子，
 /// 又不会在早已结束的轮次上形成有感知的空转。
@@ -98,7 +99,7 @@ impl TerminalView {
 
     /// 把状态机动作落到 PTY 上。
     fn apply_integration_action(&mut self, action: IntegrationAction, cx: &mut Context<Self>) {
-        let bytes: Option<&'static [u8]> = match action {
+        let command: Option<&'static str> = match action {
             IntegrationAction::Probe => {
                 log::debug!("Shell 集成：发送登录 Shell 探针");
                 Some(probe_command())
@@ -108,15 +109,18 @@ impl TerminalView {
             }
             IntegrationAction::None => None,
         };
-        let Some(bytes) = bytes else {
+        let Some(command) = command else {
             cx.notify();
             return;
         };
+        // 载荷把命令与清行命令合成一条：命令是写进标准输入的，执行后它的回显会留在
+        // 屏上，一整段几百字符的脚本留在那里极其扎眼。预装路径不走这里（见协议层说明）。
+        let payload = injection_payload(command);
         // 走 write_input 但不置 user_typed：那是"用户亲自按键"的标记，
         // 自己写进去的脚本不能反过来把自己的时机判死。
         // 写失败说明通道已断（写入线程会随之上报 Exit），这里不额外造状态，
         // 下一轮检查自然按"会话已结束"落终态。
-        if !self.write_input(bytes) {
+        if !self.write_input(&payload) {
             log::warn!("Shell 集成写入通道已断开，本轮放弃");
         }
         cx.notify();

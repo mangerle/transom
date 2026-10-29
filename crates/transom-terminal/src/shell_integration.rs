@@ -33,9 +33,11 @@ pub use transom_core::protocol::shell_integration::{
     HANDSHAKE_TOKEN, ShellKind, detect_shell, probe_command,
 };
 
-/// 获取指定 Shell 的集成注入脚本；未识别方言返回 `None`。
-pub fn get_integration_script(kind: ShellKind) -> Option<&'static [u8]> {
-    transom_core::protocol::shell_integration::integration_script(kind).map(str::as_bytes)
+/// 获取指定 Shell 的集成注入命令；未识别方言返回 `None`。
+///
+/// 返回的是命令文本而非字节：行结束符与末尾的清行命令由注入载荷统一拼装。
+pub fn get_integration_script(kind: ShellKind) -> Option<&'static str> {
+    transom_core::protocol::shell_integration::integration_script(kind)
 }
 
 /// 集成推进过程中的外部观察量，由视图每帧/每次定时采集。
@@ -421,7 +423,7 @@ mod tests {
         );
         assert_eq!(
             get_integration_script(ShellKind::Zsh),
-            Some(ZSH_INTEGRATION_SCRIPT.as_bytes())
+            Some(ZSH_INTEGRATION_SCRIPT)
         );
         assert_eq!(
             integration.on_signal(
@@ -580,7 +582,10 @@ mod tests {
             assert!(script.contains("133;D"), "缺少结束标记: {script}");
             assert!(script.contains("777;transom;"), "缺少 ready 回报: {script}");
             assert!(script.contains(ready));
-            assert!(script.ends_with("\n"), "脚本必须自带换行: {script}");
+            assert!(
+                !script.ends_with('\n'),
+                "脚本本体不带换行：注入路径要与清行命令拼成一条，预装路径按行写入: {script}"
+            );
             assert_eq!(
                 script.lines().count(),
                 1,
@@ -594,9 +599,11 @@ mod tests {
 
     #[test]
     fn test_probe_command_shape() {
-        let probe = probe_command();
-        let text = std::str::from_utf8(probe).expect("探针必须是合法 UTF-8");
-        assert!(text.ends_with('\n'));
+        let text = probe_command();
+        assert!(
+            !text.ends_with('\n'),
+            "探针不带行结束：换行由注入载荷统一补"
+        );
         assert_eq!(text.lines().count(), 1);
         assert!(text.contains("777;transom;shell=%s"));
         // 控制字节必须以 `\033` 形式交给 printf 解释，命令文本本身不含裸 ESC。

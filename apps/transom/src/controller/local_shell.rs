@@ -64,7 +64,7 @@ fn prepare_bash() -> Result<LocalShellPreload, String> {
     write_file(
         &rcfile,
         &format!(
-            "# 由 Transom 生成的临时 rcfile：先加载用户原有配置，再装 Shell 集成钩子。\n{}{script}",
+            "# 由 Transom 生成的临时 rcfile：先加载用户原有配置，再装 Shell 集成钩子。\n{}{script}\n",
             source_user_file(".bashrc")
         ),
     )?;
@@ -93,7 +93,7 @@ fn prepare_zsh() -> Result<LocalShellPreload, String> {
     }
     write_file(
         &dir.join(".zshrc"),
-        &format!("{}{script}", source_user_file(".zshrc")),
+        &format!("{}{script}\n", source_user_file(".zshrc")),
     )?;
     let zdotdir = dir.to_string_lossy().into_owned();
     Ok(LocalShellPreload {

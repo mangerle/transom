@@ -60,12 +60,11 @@ pub const HANDSHAKE_TOKEN: &str = "transom";
 /// 探针命令：让 Shell 把 `$SHELL` 通过 OSC 报回来。
 ///
 /// 三个刻意的设计：`printf` 的 `\033`/`\007` 由格式化解释，命令文本里不含真实控制
-/// 字节；行首空格让 bash/zsh 在 `HISTCONTROL=ignorespace` 下不进历史；结尾用 LF
-/// 提交整行——CR 只在 tty 的 ICRNL 打开时才被行规程转成行结束，否则整行会留在
-/// 内核输入缓冲里被回显在命令行上，既不执行也污染用户的输入行。
-pub fn probe_command() -> &'static [u8] {
-    // 原始字节串不解析转义，所以换行要作为普通字符串段单独拼进来。
-    concat!(r#" printf '\033]777;transom;shell=%s\007' "$SHELL""#, "\n").as_bytes()
+/// 字节；行首空格让 bash/zsh 在 `HISTCONTROL=ignorespace` 下不进历史；不带行结束符——
+/// 注入路径由 `injection_payload` 统一补上换行与清行命令，预装路径由调用方按
+/// rcfile 的逐行格式补换行。
+pub fn probe_command() -> &'static str {
+    r#" printf '\033]777;transom;shell=%s\007' "$SHELL""#
 }
 
 /// Bash 集成脚本（单行）。
@@ -88,8 +87,7 @@ pub const BASH_INTEGRATION_SCRIPT: &str = concat!(
     r#"PROMPT_COMMAND="__transom_post${PROMPT_COMMAND:+;$PROMPT_COMMAND}"; "#,
     r#"trap '__transom_pre' DEBUG; "#,
     r#"printf '\033]777;transom;ready=bash\007'"#,
-    "; fi",
-    "\n"
+    "; fi"
 );
 
 /// Zsh 集成脚本（单行）。`preexec`/`precmd` 是原生钩子，不需要 DEBUG 陷阱去重。
@@ -104,8 +102,7 @@ pub const ZSH_INTEGRATION_SCRIPT: &str = concat!(
     r#"autoload -Uz add-zsh-hook && add-zsh-hook precmd __transom_post "#,
     r#"&& add-zsh-hook preexec __transom_pre && "#,
     r#"printf '\033]777;transom;ready=zsh\007'"#,
-    "; fi",
-    "\n"
+    "; fi"
 );
 
 /// Fish 集成脚本（单行）。`fish_postexec` 事件里的 `$status` 即刚结束命令的退出码。
@@ -118,9 +115,35 @@ pub const FISH_INTEGRATION_SCRIPT: &str = concat!(
     r#"function __transom_post --on-event fish_postexec; "#,
     r#"printf '\033]133;D;%d\007\033]133;A\007' $status; end; "#,
     r#"printf '\033]777;transom;ready=fish\007'"#,
-    "; end",
-    "\n"
+    "; end"
 );
+
+/// 注入命令末尾追加的清行命令：执行后擦掉这条命令自己的回显行。
+///
+/// 设计原理（Why）：
+/// - 命令是写进 Shell 标准输入的，Shell 会把执行过的命令留在屏幕上。注入的是一整段
+///   几百字符的脚本，留在屏上极其扎眼；执行完顺手擦掉这一行，屏幕上就只剩提示符；
+/// - 必须是 Shell 命令而不是裸控制字节：裸字节接在命令后面会被 Shell 当成命令的
+///   一部分（转义序列不是合法命令名），整条命令会直接语法错误；
+/// - 必须与被注入的命令同处一条：单独再发一条清行命令，它自己的回显同样会留在
+///   屏上，只能再擦再擦；命令内部执行 printf 则只擦掉整条命令的回显行。
+///
+/// 只在"写标准输入"这条注入路径上追加：预装走 rcfile，脚本在那里执行时上一行是
+/// 用户自己的输出，擦掉会误伤。已滚入 scrollback 的历史同样擦不掉。
+pub const INJECTION_CLEANUP: &str = "; printf '\\033[1A\\033[2K'";
+
+/// 生成注入用的命令字节：命令本体 + 末尾的清行命令 + 换行。
+///
+/// 换行用 LF 而不是 CR：CR 只在 tty 的 ICRNL 打开时才会被行规程转成行结束，
+/// 一旦 ICRNL 被关，CR 不会结束整行，命令会留在内核输入缓冲里被回显在命令行上，
+/// 既不执行也污染用户的输入行。LF 两种模式下都能真正提交这一行。
+pub fn injection_payload(command: &str) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(command.len() + INJECTION_CLEANUP.len() + 1);
+    bytes.extend_from_slice(command.as_bytes());
+    bytes.extend_from_slice(INJECTION_CLEANUP.as_bytes());
+    bytes.push(b'\n');
+    bytes
+}
 
 /// 取指定方言的集成脚本；`Other` 没有等价脚本，返回 `None`。
 pub fn integration_script(kind: ShellKind) -> Option<&'static str> {
@@ -135,8 +158,8 @@ pub fn integration_script(kind: ShellKind) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_SCRIPT, ShellKind, ZSH_INTEGRATION_SCRIPT,
-        detect_shell, probe_command,
+        BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_SCRIPT, INJECTION_CLEANUP, ShellKind,
+        ZSH_INTEGRATION_SCRIPT, detect_shell, injection_payload, probe_command,
     };
 
     /// 每份脚本都必须：自带解释器判定、幂等保护、发 A/C/D 标记、回报 ready。
@@ -153,8 +176,8 @@ mod tests {
             assert!(script.contains("777;transom;"), "缺少 ready 回报: {script}");
             assert!(script.contains(ready));
             assert!(
-                script.ends_with("\n"),
-                "脚本必须自带换行，CR 在 ICRNL 关闭时不会结束整行: {script}"
+                !script.ends_with('\n'),
+                "脚本本体不带换行：注入路径要把它与清行命令拼成一条，预装路径按行写入: {script}"
             );
             assert_eq!(
                 script.lines().count(),
@@ -164,17 +187,31 @@ mod tests {
         }
     }
 
-    /// 探针同样必须以换行收尾，否则会留在内核输入缓冲里被回显。
+    /// 探针本身不带换行，行结束由注入载荷统一补。
     #[test]
-    fn probe_command_ends_with_newline() {
-        let probe = probe_command();
-        let text = std::str::from_utf8(probe).expect("探针必须是合法 UTF-8");
-        assert!(text.ends_with('\n'));
+    fn probe_command_carries_no_line_ending() {
+        let text = probe_command();
+        assert!(!text.ends_with('\n'));
         assert_eq!(text.lines().count(), 1);
         assert!(text.contains("777;transom;shell=%s"));
         // 控制字节必须以 `\033` 形式交给 printf 解释，命令文本本身不含裸 ESC。
         assert!(!text.contains('\x1b'));
         assert!(!text.contains('\x07'));
+    }
+
+    /// 注入载荷：命令与清行命令合成一条，并以换行收尾。
+    ///
+    /// 清行必须与命令同处一条：单独再发一条清行命令，它自己的回显同样会留在屏上。
+    #[test]
+    fn injection_payload_appends_cleanup_to_same_command() {
+        let payload = injection_payload(probe_command());
+        let text = std::str::from_utf8(&payload).expect("注入载荷必须是合法 UTF-8");
+        assert!(text.ends_with('\n'), "载荷必须以换行收尾才能被 Shell 提交");
+        assert!(
+            text.contains(INJECTION_CLEANUP),
+            "清行命令必须与被注入命令同处一条"
+        );
+        assert_eq!(text.lines().count(), 1, "清行命令不能另起一行");
     }
 
     /// 方言识别只看路径末段，`/bin/sh` 不能被误判成 bash。
