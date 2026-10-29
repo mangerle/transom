@@ -45,8 +45,6 @@ pub(crate) struct Palette {
     pub(crate) warning: Hsla,
     pub(crate) danger: Hsla,
     pub(crate) danger_foreground: Hsla,
-    pub(crate) danger_hover: Hsla,
-    pub(crate) danger_active: Hsla,
     pub(crate) success: Hsla,
     /// 模态遮罩底色：自带透明度，随主题明暗变化。
     pub(crate) overlay: Hsla,
@@ -89,8 +87,6 @@ impl Palette {
             warning: theme.warning,
             danger: theme.danger,
             danger_foreground: theme.danger_foreground,
-            danger_hover: theme.danger_hover,
-            danger_active: theme.danger_active,
             success: theme.success,
             overlay: theme.overlay,
             popover: theme.popover,

@@ -30,8 +30,6 @@ pub(crate) mod size {
     pub const STATUS_BAR_HEIGHT: f32 = 1.75;
     /// 窗格标题条高度（标准档 28px）。
     pub const PANE_HEADER_HEIGHT: f32 = 1.75;
-    /// 顶栏窗口按钮边长（标准档 30px）。
-    pub const WINDOW_BUTTON_SIZE: f32 = 1.875;
     /// 活动栏宽度（标准档 48px）；状态栏按列分段时用它加侧栏宽定位分界线。
     pub const ACTIVITY_BAR_WIDTH: f32 = 3.0;
     /// 活动栏按钮边长（标准档 34px）。
