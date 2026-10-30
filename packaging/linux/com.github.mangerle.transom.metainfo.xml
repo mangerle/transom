@@ -51,6 +51,7 @@
     <keyword>remote</keyword>
   </keywords>
   <releases>
+    <release version="1.5.0" date="2026-10-30"/>
     <release version="1.4.0" date="2026-10-29"/>
     <release version="1.3.0" date="2026-10-29"/>
     <release version="1.2.0" date="2026-10-28"/>

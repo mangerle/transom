@@ -8106,7 +8106,7 @@ dependencies = [
 
 [[package]]
 name = "transom"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8128,7 +8128,7 @@ dependencies = [
 
 [[package]]
 name = "transom-core"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "async-trait",
  "globset",
@@ -8146,7 +8146,7 @@ dependencies = [
 
 [[package]]
 name = "transom-crypto"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "argon2 0.5.3",
  "base64 0.22.1",
@@ -8161,7 +8161,7 @@ dependencies = [
 
 [[package]]
 name = "transom-net"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -8188,7 +8188,7 @@ dependencies = [
 
 [[package]]
 name = "transom-platform"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "directories",
  "tempfile",
@@ -8196,7 +8196,7 @@ dependencies = [
 
 [[package]]
 name = "transom-store"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "keyring",
  "log",
@@ -8213,7 +8213,7 @@ dependencies = [
 
 [[package]]
 name = "transom-sync"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -8236,7 +8236,7 @@ dependencies = [
 
 [[package]]
 name = "transom-terminal"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "alacritty_terminal",
  "base64 0.22.1",
@@ -8256,7 +8256,7 @@ dependencies = [
 
 [[package]]
 name = "transom-ui"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "chrono",
  "directories",
@@ -8284,7 +8284,7 @@ dependencies = [
 
 [[package]]
 name = "transom-zmodem"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "flume",
  "log",
