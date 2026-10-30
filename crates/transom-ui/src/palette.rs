@@ -66,6 +66,9 @@ pub(crate) struct Palette {
     pub(crate) mono_font_size: Pixels,
     /// 圆角档位（由主题的 radius/radius_lg 派生），容器级圆角统一从这里取值，
     /// 主题即可控制全局圆角；装饰性圆点仍用 rounded_full。
+    ///
+    /// 浮层容器（对话框、浮窗、命令面板等）固定取 `none` 保持直角：这些面板
+    /// 尺寸大且贴近底窗边缘，圆角会在四角切出底色缺口，故不随主题变化。
     pub(crate) radius: RadiusTokens,
     /// 分割线覆盖色；`None` 表示各区域沿用自身原有的边界色。
     pub(crate) divider_color: Option<Hsla>,
@@ -154,7 +157,7 @@ impl AppShell {
             .max_h(rems(size::DIALOG_MAX_HEIGHT))
             .gap_4()
             .p_6()
-            .rounded(p.radius.xl)
+            .rounded(p.radius.none)
             .bg(p.popover)
             .text_color(p.popover_foreground)
             .border_1()

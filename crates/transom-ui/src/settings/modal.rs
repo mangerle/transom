@@ -70,7 +70,7 @@ impl AppShell {
             .bg(p.popover)
             .border_1()
             .border_color(p.border)
-            .rounded(p.radius.lg)
+            .rounded(p.radius.none)
             .shadow_lg()
             .overflow_hidden()
             .on_mouse_down(MouseButton::Left, |_, _, _| {})

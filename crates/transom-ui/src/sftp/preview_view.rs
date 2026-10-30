@@ -46,7 +46,7 @@ impl AppShell {
             .w(px(PREVIEW_CARD_WIDTH))
             .gap_2()
             .p_3()
-            .rounded(p.radius.lg)
+            .rounded(p.radius.none)
             .border_1()
             .border_color(p.border)
             .bg(p.popover)

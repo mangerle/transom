@@ -38,7 +38,7 @@ impl AppShell {
             .h(relative(0.88))
             .gap_2()
             .p_4()
-            .rounded(p.radius.xl)
+            .rounded(p.radius.none)
             .bg(p.popover)
             .text_color(p.popover_foreground)
             .border_1()

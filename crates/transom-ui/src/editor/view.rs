@@ -69,7 +69,7 @@ fn render_editor_panel(
         .absolute()
         .flex_col()
         .overflow_hidden()
-        .rounded(p.radius.lg)
+        .rounded(p.radius.none)
         .border_1()
         .border_color(p.border)
         .bg(p.editor_background)

@@ -310,7 +310,7 @@ impl AppShell {
                 .w(rems(22.0))
                 .gap_1()
                 .p_2()
-                .rounded(p.radius.lg)
+                .rounded(p.radius.none)
                 .bg(p.popover)
                 .border_1()
                 .border_color(p.border)

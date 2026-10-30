@@ -146,7 +146,7 @@ impl AppShell {
             .w(px(440.0))
             .gap_3()
             .p_6()
-            .rounded(p.radius.xl)
+            .rounded(p.radius.none)
             .bg(p.popover)
             .text_color(p.popover_foreground)
             .border_1()
