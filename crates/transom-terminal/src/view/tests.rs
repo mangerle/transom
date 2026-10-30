@@ -1,5 +1,7 @@
 use crate::view::build_custom_keys;
-use crate::view_ime::ime_column_to_utf16_index;
+use crate::view_ime::{
+    ime_caret_index_for_query, ime_column_to_utf16_index, ime_utf16_index_to_column_cells,
+};
 use gpui_kit::Keystroke;
 use transom_core::TerminalKeyBinding;
 
@@ -46,6 +48,38 @@ fn ime_column_maps_cells_to_utf16_index() {
     // 越过组合文本末尾收敛到全长
     assert_eq!(ime_column_to_utf16_index("ab\u{20BB7}", 9), 4);
     assert_eq!(ime_column_to_utf16_index("", 3), 0);
+}
+
+/// IME 定位折算：UTF-16 下标折算成末端列数，与反方向折算保持同一宽度假设。
+///
+/// 组合文本自绘在光标格起始处，输入法层以选区末端询问组字光标位置，
+/// 该折算决定候选窗随组字文本右移的偏移量。
+#[test]
+fn ime_utf16_index_maps_to_column_cells() {
+    // "ab\u{20BB7}" 的格占用为 1+1+2；UTF-16 长度为 4（增补平面汉字占两个码元）。
+    assert_eq!(ime_utf16_index_to_column_cells("ab\u{20BB7}", 0), 0);
+    assert_eq!(ime_utf16_index_to_column_cells("ab\u{20BB7}", 1), 1);
+    assert_eq!(ime_utf16_index_to_column_cells("ab\u{20BB7}", 2), 2);
+    assert_eq!(ime_utf16_index_to_column_cells("ab\u{20BB7}", 4), 4);
+    // 越过组合文本末尾收敛到全长列数
+    assert_eq!(ime_utf16_index_to_column_cells("ab\u{20BB7}", 9), 4);
+    assert_eq!(ime_utf16_index_to_column_cells("", 3), 0);
+}
+
+/// 候选窗定位下标：落在组合文本内的查询统一取组字光标，范围外保持原样。
+///
+/// GPUI 会把查询收敛到组字行首，若不改判，单行组字时候选窗会停在组字起点。
+#[test]
+fn ime_caret_index_prefers_composition_end() {
+    let marked = 0..5;
+    // 组字内任意查询（含行首探测用的 0..0 与光标 5..5）都折算到组字光标
+    assert_eq!(ime_caret_index_for_query(&(0..0), Some(&marked)), 5);
+    assert_eq!(ime_caret_index_for_query(&(3..3), Some(&marked)), 5);
+    assert_eq!(ime_caret_index_for_query(&(0..5), Some(&marked)), 5);
+    // 无组合文本时保持请求下标
+    assert_eq!(ime_caret_index_for_query(&(2..2), None), 2);
+    // 组合文本范围之外的查询不受影响
+    assert_eq!(ime_caret_index_for_query(&(9..9), Some(&marked)), 9);
 }
 
 /// 尺寸去抖判定：目标尺寸稳定满窗口才下发，中途换尺寸重新计时。
