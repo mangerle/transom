@@ -1,6 +1,6 @@
 //! 终端键鼠事件处理、选区拖拽与滚动响应。
 
-use super::{SendBacktab, SendTab, TerminalView};
+use super::{SendBacktab, SendTab, TerminalCopy, TerminalPaste, TerminalView};
 use crate::input::{
     KeyEventKind, MouseButtonCode, encode_mouse, keystroke_event_to_bytes, tab_bytes,
 };
@@ -71,18 +71,9 @@ impl TerminalView {
         let key = event.keystroke.key.to_lowercase();
         let modifiers = event.keystroke.modifiers;
 
-        if (modifiers.platform && key == "c")
-            || (modifiers.control && modifiers.shift && key == "c")
-        {
-            self.copy_selection(cx);
-            return;
-        }
-        if (modifiers.platform && key == "v")
-            || (modifiers.control && modifiers.shift && key == "v")
-        {
-            self.paste_from_clipboard(cx);
-            return;
-        }
+        // 复制/粘贴的键位不在这里硬编码：它们登记在应用的可改键表里（默认 `$app-c`
+        // /`$app-v`，非 macOS 展开为 Ctrl+Shift+…），命中保留键后由本视图的
+        // `on_action_terminal_copy` / `on_action_terminal_paste` 处理，用户可改键。
         // 纯 Ctrl+V 默认被拦下，既不发给 Shell 也不改写成粘贴：`^V` 一旦落到
         // readline 就布置了一次性引用插入，紧接着的括号粘贴会把标记的开头 ESC
         // 变成 `^[[200~` 字面残字并污染那条命令行。拦下即从源头消除误伤。
@@ -189,6 +180,35 @@ impl TerminalView {
         {
             cx.notify();
         }
+    }
+
+    /// 快捷键"终端复制"入口。
+    ///
+    /// 键盘复制模式下顺带退出：模式内的 `Ctrl+Shift+C` 原本就是"抠完即交回
+    /// 控制权"，退出时 `exit_copy_mode` 会清空选区，所以必须先复制再退出。
+    pub(super) fn on_action_terminal_copy(
+        &mut self,
+        _: &TerminalCopy,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.copy_selection(cx);
+        if self.copy_mode_active() {
+            self.exit_copy_mode(cx);
+        }
+    }
+
+    /// 快捷键"终端粘贴"入口：先退出复制模式，避免粘贴内容被当成模式内按键解释。
+    pub(super) fn on_action_terminal_paste(
+        &mut self,
+        _: &TerminalPaste,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_mode_active() {
+            self.exit_copy_mode(cx);
+        }
+        self.paste_from_clipboard(cx);
     }
 
     pub(super) fn on_action_send_tab(

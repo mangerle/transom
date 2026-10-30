@@ -44,4 +44,7 @@ pub use shell_integration::{
     ShellIntegration, ShellKind, detect_shell, get_integration_script, probe_command,
 };
 pub use trigger::{CompiledTrigger, TriggerEngine, TriggerMatchResult};
-pub use view::{KeyFilter, TerminalView, TerminalViewParams};
+pub use view::{
+    CONTEXT as TERMINAL_CONTEXT, KeyFilter, TerminalCopy, TerminalPaste, TerminalView,
+    TerminalViewParams,
+};

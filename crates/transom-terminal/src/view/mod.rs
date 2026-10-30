@@ -34,14 +34,18 @@ use transom_core::{
     BlockViewSettings, SessionCleanup, TerminalControlHandle, TerminalInteraction, TerminalIo,
     TerminalProfile, TerminalSize,
 };
-pub use types::KeyFilter;
+/// `CONTEXT` 对外以 `TERMINAL_CONTEXT` 暴露：应用侧的可改键表需要按同一上下文
+/// 注册终端专属动作，裸名 `CONTEXT` 在 crate 之外无法辨认它指的是哪个域。
+pub use types::{CONTEXT, KeyFilter};
 pub(crate) use types::{
-    CONTEXT, LayoutMetrics, PendingResize, PreparedTerminal, READ_BUFFER_BYTES,
-    READ_CHANNEL_CAPACITY, RESIZE_DEBOUNCE, ResizeDecision, SEARCH_TICK_PIXELS,
-    TerminalRenderState, decide_resize,
+    LayoutMetrics, PendingResize, PreparedTerminal, READ_BUFFER_BYTES, READ_CHANNEL_CAPACITY,
+    RESIZE_DEBOUNCE, ResizeDecision, SEARCH_TICK_PIXELS, TerminalRenderState, decide_resize,
 };
 
-actions!(transom_terminal, [SendTab, SendBacktab]);
+actions!(
+    transom_terminal,
+    [SendTab, SendBacktab, TerminalCopy, TerminalPaste]
+);
 
 pub struct TerminalView {
     /// 终端渲染与引擎核心状态聚合容器。
@@ -546,6 +550,8 @@ impl Render for TerminalView {
             .key_context(CONTEXT)
             .on_action(cx.listener(Self::on_action_send_tab))
             .on_action(cx.listener(Self::on_action_send_backtab))
+            .on_action(cx.listener(Self::on_action_terminal_copy))
+            .on_action(cx.listener(Self::on_action_terminal_paste))
             .on_key_down(cx.listener(Self::on_key_down))
             .on_key_up(cx.listener(Self::on_key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))

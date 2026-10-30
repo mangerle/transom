@@ -3100,6 +3100,21 @@ settings:
   shortcut_copy_mode:
     en: Terminal Copy Mode
     zh-CN: 终端复制模式
+  shortcut_terminal_copy:
+    en: Copy Terminal Selection
+    zh-CN: 复制终端选区
+  shortcut_terminal_paste:
+    en: Paste into Terminal
+    zh-CN: 粘贴到终端
+  shortcut_sftp_filter:
+    en: Focus SFTP Filter Box
+    zh-CN: 聚焦文件面板过滤框
+  shortcut_save_editor:
+    en: Save File in Editor
+    zh-CN: 保存编辑器中的文件
+  shortcut_go_to_line:
+    en: Go to Line in Editor
+    zh-CN: 编辑器跳转到行
   shortcut_toggle_block_view:
     en: Toggle Semantic Block View
     zh-CN: 切换语义块视图
