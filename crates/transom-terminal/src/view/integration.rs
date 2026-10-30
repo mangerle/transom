@@ -24,9 +24,10 @@ const INTEGRATION_POLL: Duration = Duration::from_millis(250);
 
 /// 提示符落位判定：输出至少停歇这么久才动手。
 ///
-/// 比检索重扫的停歇窗口短得多——这里等的不是"刷屏结束"而是"登录画屏结束"，
-/// 等太久只会在慢机器上彻底错过窗口。
-const OUTPUT_IDLE_WINDOW: Duration = Duration::from_millis(400);
+/// 比检索重扫的停歇窗口短，但不能短到把登录脚本的短暂停顿当成提示符：
+/// 探针写进尚未就绪的 Shell 会被启动脚本吞掉。1 秒是延迟与命中率之间的
+/// 折中；慢机器仍可能错过，但比 400ms 稳得多。
+const OUTPUT_IDLE_WINDOW: Duration = Duration::from_secs(1);
 
 impl TerminalView {
     /// 启动集成轮询任务；句柄必须由视图持有，避免脱缰任务。

@@ -103,8 +103,9 @@ pub enum IntegrationAction {
 /// 登录慢（MOTD、LDAP、Kerberos）的机器上，提示符可能要十几秒才出现，给足余量；
 /// 但绝不能无限等——一个永不落地的定时器是资源泄漏。
 const WAIT_DEADLINE: Duration = Duration::from_secs(60);
-/// 探针/注入回报的等待上限。一次 SSH 往返加 Shell 解析，5 秒不回即视为失败。
-const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
+/// 探针/注入回报的等待上限。一次 SSH 往返、Shell 启动脚本与登录画屏都可能
+/// 拖慢回报；10 秒仍未回报才放弃，减少慢机器上的误判。
+const REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// 一轮 Shell 集成的状态机。
 ///
