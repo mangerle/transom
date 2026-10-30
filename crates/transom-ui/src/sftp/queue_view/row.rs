@@ -5,6 +5,7 @@
 //! - 核心优势：降低主队列容器的圈复杂度，避免大 match 结构膨胀。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::{TransferKind, TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
@@ -181,8 +182,8 @@ pub(super) fn render_queue_task_row(
         .gap_2()
         .items_center()
         .text_xs()
-        .border_b_1()
-        .border_color(p.sidebar_border)
+        .border_color(p.divider(p.sidebar_border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .hover(|style| style.bg(p.muted))
         .child(
             div()

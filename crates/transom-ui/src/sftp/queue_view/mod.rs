@@ -73,17 +73,26 @@ impl AppShell {
             .filter(|t| matches!(t.status, TransferStatus::Failed(_)))
             .count();
 
-        v_flex()
-            .border_color(p.divider(p.sidebar_border))
-            .divider_edge(DividerEdge::Top, p.divider_width)
+        let mut queue_pane = v_flex();
+        // 队列收起时没有拖拽条，顶部分割线由容器边框提供；展开时视觉线由
+        // 拖拽条自己绘制，避免边框与命中带叠成「线 + 空白条」或拖拽时双倍粗。
+        if !queue_expanded {
+            queue_pane = queue_pane
+                .border_color(p.divider(p.sidebar_border))
+                .divider_edge(DividerEdge::Top, p.divider_width);
+        }
+        queue_pane
             .when(queue_expanded, |this| {
                 this.child(
                     h_flex()
                         .id(ElementId::Name("sftp-queue-splitter".into()))
                         .w_full()
-                        .h(px(3.0))
+                        // 视觉高度与分割线档位一致，命中带不再额外占一行空白。
+                        .h(px(p.divider_width.pixels()))
                         .cursor_row_resize()
-                        .hover(|s| s.bg(p.sidebar_border))
+                        .bg(p.divider(p.sidebar_border))
+                        // hover 只换色提示可拖拽，不加高、不叠边框。
+                        .hover(|s| s.bg(p.muted_foreground))
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, event: &MouseDownEvent, _, cx| {
@@ -275,6 +284,10 @@ impl AppShell {
                     v_flex()
                         .id(ElementId::Name("sftp-queue-list".into()))
                         .h(px(queue_height))
+                        // 标题栏与第一个任务行之间补一条线：行与行之间本来就有
+                        // 底线，列表顶部不画会让标题栏和首行直接贴在一起。
+                        .border_color(p.divider(p.sidebar_border))
+                        .divider_edge(DividerEdge::Top, p.divider_width)
                         .overflow_y_scrollbar()
                         .children(queue_rows),
                 )
