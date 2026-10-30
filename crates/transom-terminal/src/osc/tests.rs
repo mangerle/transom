@@ -517,3 +517,33 @@ fn handshake_does_not_shadow_notify() {
         }]
     );
 }
+
+#[test]
+fn parses_osc52_clipboard_store() {
+    // 系统剪贴板（c）写入：BEL 与 ST 两种终止方式都要识别。
+    assert_eq!(
+        collect(&[b"\x1b]52;c;aGVsbG8=\x07"]),
+        vec![OscEvent::ClipboardStore {
+            text: "hello".to_string()
+        }]
+    );
+    // 空选择区等价于系统剪贴板；载荷允许跨块到达。
+    assert_eq!(
+        collect(&[b"\x1b]52;;5L2g5", b"aW9\x1b\\"]),
+        vec![OscEvent::ClipboardStore {
+            text: "你好".to_string()
+        }]
+    );
+}
+
+#[test]
+fn ignores_osc52_reads_primary_and_invalid_payload() {
+    // 读请求（?）、主选择区（p/s）、空载荷与非 base64 一律不产生事件。
+    assert_eq!(collect(&[b"\x1b]52;c;?\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]52;p;aGVsbG8=\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]52;s;aGVsbG8=\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]52;c;\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]52;c;!!!\x07"]), vec![]);
+    // 解码后不是合法 UTF-8 时整条丢弃，不能写出半截文本。
+    assert_eq!(collect(&[b"\x1b]52;c;/w==\x07"]), vec![]);
+}

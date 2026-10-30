@@ -26,6 +26,8 @@ pub(crate) struct ModalHub {
     pub(crate) batch_edit: Option<BatchEditForm>,
     pub(crate) auth_prompt: Option<AuthPromptState>,
     pub(crate) host_key_confirm: Option<HostKeyConfirmState>,
+    /// 远端 OSC 52 写剪贴板的待裁决请求（默认拒绝，按会话授权）。
+    pub(crate) clipboard_request: Option<crate::clipboard_prompt::ClipboardWritePrompt>,
     pub(crate) pending_credential: Option<PendingCredential>,
     pub(crate) known_hosts: KnownHostsModalState,
     pub(crate) settings: SettingsModalState,
@@ -62,6 +64,7 @@ impl ModalHub {
             batch_edit: None,
             auth_prompt: None,
             host_key_confirm: None,
+            clipboard_request: None,
             pending_credential: None,
             known_hosts,
             settings,

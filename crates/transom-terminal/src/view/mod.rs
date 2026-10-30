@@ -70,6 +70,11 @@ pub struct TerminalView {
     command_tracker: CommandTracker,
     /// 运行期标题门控：区分提示符标题与命令/TUI 标题。
     title_gate: TitleGate,
+    /// 本会话是否已被用户授权写入本地剪贴板（OSC 52）。
+    ///
+    /// 只活在视图里，不落盘：断开重连会创建新视图，授权随之失效，避免一次
+    /// 批准变成永久放行。默认拒绝，远端请求必须先经过宿主的确认弹窗。
+    remote_clipboard_allowed: bool,
     /// Shell 集成流程控制器；进入终态（已生效或已放弃）后轮询任务自行退出。
     shell_integration: ShellIntegration,
     /// 用户是否已亲自按键过。一旦按键，本轮不再注入：写进去的字节会拼到用户
@@ -223,6 +228,7 @@ impl TerminalView {
             scroll_pixel_remainder: 0.0,
             command_tracker: CommandTracker::default(),
             title_gate: TitleGate::default(),
+            remote_clipboard_allowed: false,
             shell_integration,
             user_typed: false,
             history_provider: None,
@@ -250,6 +256,14 @@ impl TerminalView {
     /// 从设置重载当前终端的触发器规则。
     pub fn reload_triggers(&mut self, settings: &transom_core::TriggerSettings) {
         self.state.trigger_engine.lock().reload(settings);
+    }
+
+    /// 用户在本会话内允许远端写入本地剪贴板（OSC 52）。
+    ///
+    /// 只提升当前视图的授权位：不触发重绘、不写剪贴板——待写入的内容由宿主
+    /// 在批准时自行落盘，这里只负责让后续请求不再进入确认流程。
+    pub fn allow_remote_clipboard_write(&mut self) {
+        self.remote_clipboard_allowed = true;
     }
 
     /// 排一次尺寸去抖计时：到点唤醒一帧，让预绘制阶段把待下发尺寸真正落地。

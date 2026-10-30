@@ -19,6 +19,13 @@ pub enum TerminalEvent {
     Bell,
     Exit,
     ClipboardStored,
+    /// 远端程序请求写入本地剪贴板，尚未获得本会话授权。
+    ///
+    /// 宿主收到后必须弹一次显式确认；用户在确认框里允许后，本会话内的后续
+    /// 写入直接生效，不再重复询问。拒绝只作用于当前这一次请求。
+    ClipboardWriteRequest {
+        text: String,
+    },
     /// Shell 集成报告一条命令跑完了：退出码可能为 `None`（老集成只发提示符标记），
     /// 耗时由集成上报或按本地计时测得，单位毫秒。
     CommandFinished {

@@ -1911,6 +1911,31 @@ known_hosts:
   host_port:
     en: Host & Port
     zh-CN: 主机与端口
+clipboard_consent:
+  title:
+    en: Remote clipboard write request
+    zh-CN: 远端请求写入剪贴板
+  subtitle:
+    en: OSC 52 is denied unless you allow it for this session.
+    zh-CN: OSC 52 默认拒绝，只有本会话明确允许后才会生效。
+  hint:
+    en: A program in session "%{session}" wants to replace your local clipboard.
+    zh-CN: 会话「%{session}」中的程序请求覆盖本地剪贴板。
+  preview:
+    en: "Contents to copy (%{count} characters):"
+    zh-CN: 待写入内容（%{count} 个字符）：
+  allow:
+    en: Allow for this session
+    zh-CN: 允许本会话写入
+  deny:
+    en: Deny
+    zh-CN: 拒绝
+  allowed:
+    en: Clipboard write allowed for this session
+    zh-CN: 已允许本会话写入剪贴板
+  denied:
+    en: Clipboard write denied
+    zh-CN: 已拒绝本次剪贴板写入
 batch:
   select_mode:
     en: Select Sessions

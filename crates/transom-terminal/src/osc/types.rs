@@ -3,7 +3,11 @@
 use std::time::Instant;
 
 /// OSC 载荷缓冲上限。
-pub(crate) const MAX_PAYLOAD_BYTES: usize = 4096;
+///
+/// 取 128 KiB 是为了承载 OSC 52 剪贴板写入：base64 会膨胀约三分之一，实际
+/// 可传文本约 96 KiB，覆盖 tmux 等常见的剪贴板转发用量级。上限仍必须存在：
+/// 未终止的序列会持续占用缓冲，不设界就是一条内存耗尽通道。
+pub(crate) const MAX_PAYLOAD_BYTES: usize = 128 * 1024;
 
 pub(crate) const OSC_INTRO: u8 = 0x5d;
 
@@ -30,6 +34,11 @@ pub(crate) enum OscEvent {
     Cwd { path: String },
     /// 程序显式请求的桌面通知（OSC 777 / OSC 9）。
     Notify { title: String, body: String },
+    /// 远端程序请求写入本地剪贴板（OSC 52），已解码为文本。
+    ///
+    /// 是否真的写入由终端视图按会话授权决定，解析层只负责解出内容：读请求
+    /// （`?`）与主选择区（`p`/`s`）在解析阶段就被丢弃，不会到达这里。
+    ClipboardStore { text: String },
     /// Shell 集成探针的回报（`OSC 777;transom;shell=<路径>`）。
     ///
     /// 值为空串表示远端 `$SHELL` 未设置；空串与"没有回报"是两种不同结论，
@@ -202,6 +211,8 @@ impl CommandTracker {
                 })
             }
             OscEvent::Notify { .. } => None,
+            // 剪贴板请求与命令耗时无关，也不构成边界。
+            OscEvent::ClipboardStore { .. } => None,
             // 集成握手不参与"命令耗时/退出码"归并：它发生在任何命令边界之外。
             OscEvent::ShellReport { .. } | OscEvent::IntegrationReady { .. } => None,
         }

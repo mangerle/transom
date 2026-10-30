@@ -3,6 +3,8 @@
 use super::types::{MAX_PAYLOAD_BYTES, OSC_INTRO, OscEvent};
 use crate::sequence_scanner::SequenceScanner;
 use crate::shell_integration::HANDSHAKE_TOKEN;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 
 /// OSC 扫描器：序列边界复用通用骨架，载荷语义在本模块解析。
 pub(crate) struct OscScanner {
@@ -47,6 +49,8 @@ fn emit(bytes: &[u8], offset: usize, events: &mut Vec<(usize, OscEvent)>) {
         "7" => parse_cwd(params),
         // 9 同时被通知、进度与 ConEmu cwd 复用，必须按子码分流。
         "9" => parse_osc9(params),
+        // 52 是远端写本地剪贴板的标准通道，默认不写、按会话授权。
+        "52" => parse_clipboard(params),
         // 777 是"自定义通知"约定段：先试本客户端的集成握手，再退回桌面通知。
         "777" => parse_integration_handshake(params).or_else(|| parse_notify(params)),
         _ => None,
@@ -157,6 +161,34 @@ fn hex_value(byte: u8) -> Option<u8> {
         b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
     }
+}
+
+/// OSC 52：`52;<选择区>;<base64 文本 | ?>`。
+///
+/// 设计原理（Why）：
+/// - 只接受系统剪贴板（选择区为 `c` 或空）：GPUI 只有一套剪贴板，把主选择区
+///   （`p`/`s`）也映射过去，会让中键粘贴类工具造成意外覆盖；
+/// - 读请求（`?`）一律丢弃：本地剪贴板进入远端属于更高一级的隐私让渡，
+///   当前不提供，也就不该留下"稍后可能响应"的半实现；
+/// - 解码失败或解码后不是合法 UTF-8 时整条丢弃：畸形序列不该产生半截文本。
+///
+/// 代价与局限：超过载荷上限的写入会被扫描器整体丢弃，远端只会看到"没生效"，
+/// 没有任何回执——OSC 52 协议本身就没有失败反馈。
+fn parse_clipboard(params: &str) -> Option<OscEvent> {
+    let (selection, payload) = params.split_once(';')?;
+    if !(selection.is_empty() || selection == "c") {
+        return None;
+    }
+    let payload = payload.trim();
+    if payload.is_empty() || payload == "?" {
+        return None;
+    }
+    let bytes = BASE64_STANDARD.decode(payload).ok()?;
+    let text = String::from_utf8(bytes).ok()?;
+    if text.is_empty() {
+        return None;
+    }
+    Some(OscEvent::ClipboardStore { text })
 }
 
 /// OSC 9：iTerm2 约定的桌面通知 `9;<正文>`。

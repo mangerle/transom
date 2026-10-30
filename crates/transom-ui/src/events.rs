@@ -285,6 +285,9 @@ impl AppShell {
             TerminalEvent::ClipboardStored => {
                 self.status = Some(rust_i18n::t!("status.copied").to_string());
             }
+            TerminalEvent::ClipboardWriteRequest { text } => {
+                self.request_clipboard_permission(tab_id, text.clone(), cx);
+            }
             TerminalEvent::Exit => {
                 if let Some(tab) = self.workspace.tab_mut(tab_id)
                     && !matches!(tab.status, TabStatus::Failed(_))

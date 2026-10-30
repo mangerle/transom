@@ -161,15 +161,13 @@ impl TerminalView {
                     }
                 }
                 Event::Bell => cx.emit(TerminalEvent::Bell),
-                Event::ClipboardStore(_, text) => {
-                    cx.write_to_clipboard(ClipboardItem::new_string(text));
-                    cx.emit(TerminalEvent::ClipboardStored);
-                }
-                Event::ClipboardLoad(_, formatter) => {
-                    if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                        let bytes = formatter(&text);
-                        self.write_input(bytes.as_bytes());
-                    }
+                // OSC 52 由旁路扫描器接管，内核侧策略已关闭；这条分支只在
+                // 未来重新启用内核通道时兜底，仍然遵守同一套会话授权。
+                Event::ClipboardStore(_, text) => self.on_remote_clipboard_store(&text, cx),
+                // 本地剪贴板进入远端属于更高一级的隐私让渡，当前一律拒绝：
+                // 不回写、不提示，行为与主流终端默认档一致。
+                Event::ClipboardLoad(_, _) => {
+                    log::debug!("已拒绝远端 OSC 52 剪贴板读取请求");
                 }
                 Event::ColorRequest(index, formatter) => {
                     let rgb = self.ansi_rgb(index);
@@ -214,6 +212,9 @@ impl TerminalView {
                 OscEvent::Notify { title, body } => {
                     cx.emit(TerminalEvent::DesktopNotification { title, body });
                 }
+                OscEvent::ClipboardStore { text } => {
+                    self.on_remote_clipboard_store(&text, cx);
+                }
                 OscEvent::CommandRecorded { command } => {
                     cx.emit(TerminalEvent::CommandRecorded { command });
                 }
@@ -235,6 +236,21 @@ impl TerminalView {
                     }
                 }
             }
+        }
+    }
+
+    /// 处理远端剪贴板写入：已授权直接落盘，未授权转成宿主确认请求。
+    ///
+    /// 为什么由视图而不是宿主直接写：授权状态是"每个连接一份"的运行期事实，
+    /// 视图生命周期与连接一致；宿主只负责在首次请求时收集用户的决定。
+    fn on_remote_clipboard_store(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.remote_clipboard_allowed {
+            cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+            cx.emit(TerminalEvent::ClipboardStored);
+        } else {
+            cx.emit(TerminalEvent::ClipboardWriteRequest {
+                text: text.to_string(),
+            });
         }
     }
 

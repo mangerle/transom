@@ -16,7 +16,7 @@ const MAX_PENDING_OSC_EVENTS: usize = 64;
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point};
 use alacritty_terminal::term::cell::{Cell, Flags};
-use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
+use alacritty_terminal::term::{Config, Osc52, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{
     CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle, Processor,
 };
@@ -113,6 +113,10 @@ impl TerminalEngine {
                 },
                 blinking: profile.cursor_blink,
             },
+            // OSC 52 由本 crate 的旁路扫描器接管（见 `osc::parse_clipboard`），
+            // 内核这一路必须关闭：否则上游默认的 `OnlyCopy` 会在未经授权时
+            // 直接写本地剪贴板，绕过"按会话授权"的策略。读请求两条路径都拒绝。
+            osc52: Osc52::Disabled,
             ..Default::default()
         };
         let dimensions = TermDimensions::new(size.cols as usize, size.rows as usize);
@@ -300,11 +304,13 @@ impl TerminalEngine {
                     );
                 }
             }
-            // 命令记录、cwd 上报、桌面通知与集成握手都不改变网格上的块边界：
-            // 握手只喂状态机，cwd 只改应用层目录状态。
+            // 命令记录、cwd 上报、桌面通知、剪贴板请求与集成握手都不改变网格上的
+            // 块边界：握手只喂状态机，cwd 只改应用层目录状态，剪贴板请求由视图
+            // 层处理。
             OscEvent::CommandRecorded { .. }
             | OscEvent::Cwd { .. }
             | OscEvent::Notify { .. }
+            | OscEvent::ClipboardStore { .. }
             | OscEvent::ShellReport { .. }
             | OscEvent::IntegrationReady { .. } => {}
         }

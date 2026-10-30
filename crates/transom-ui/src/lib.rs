@@ -20,6 +20,7 @@ mod brand;
 mod broadcast;
 mod cast_player;
 mod chrome;
+mod clipboard_prompt;
 mod cloud_sync;
 mod connection;
 mod diff_viewer;

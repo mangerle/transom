@@ -119,6 +119,9 @@ impl AppShell {
         if self.modals.host_key_confirm.is_some() {
             overlays.push(self.render_host_key_confirm(window, cx, &p));
         }
+        if self.modals.clipboard_request.is_some() {
+            overlays.push(self.render_clipboard_prompt(window, cx, &p));
+        }
         if self.modals.known_hosts.open {
             overlays.push(self.render_known_hosts_modal(window, cx, &p));
         }
