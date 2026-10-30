@@ -164,7 +164,16 @@ impl CommandTracker {
     /// 处理一个 OSC 事件；`now` 由调用方注入，便于测试。
     pub(crate) fn on_event(&mut self, event: &OscEvent, now: Instant) -> Option<TrackedCommand> {
         match event {
+            // `B` 是提示符区里的命令开始标记，部分集成会给；我们的 bash/zsh/fish
+            // 钩子只发 `C`（PreExec）。两者都作为计时起点，但 `C` 才是命令真正
+            // 开始执行的时刻，后到时覆盖 `B`，避免把用户输入的时间算进耗时。
             OscEvent::CommandStart => {
+                if self.started_at.is_none() {
+                    self.started_at = Some(now);
+                }
+                None
+            }
+            OscEvent::PreExec { .. } => {
                 self.started_at = Some(now);
                 None
             }
@@ -182,7 +191,7 @@ impl CommandTracker {
                     duration_ms: measured,
                 })
             }
-            OscEvent::PreExec { .. } | OscEvent::CommandRecorded { .. } => None,
+            OscEvent::CommandRecorded { .. } => None,
             OscEvent::Cwd { .. } => None,
             OscEvent::PromptStart => {
                 let started_at = self.started_at.take()?;

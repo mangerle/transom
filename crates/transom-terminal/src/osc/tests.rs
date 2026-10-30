@@ -298,6 +298,60 @@ fn title_gate_rejects_common_prompt_title_shapes_even_while_command_runs() {
 }
 
 #[test]
+fn tracker_starts_on_preexec_because_shell_hooks_do_not_send_b() {
+    let mut tracker = CommandTracker::default();
+    let t0 = Instant::now();
+    // 我们的 bash/zsh/fish 钩子只发 133;C（PreExec），不发 133;B。
+    assert_eq!(
+        tracker.on_event(&OscEvent::PreExec { command: None }, t0),
+        None
+    );
+    let done = tracker
+        .on_event(
+            &OscEvent::CommandFinish {
+                exit_code: Some(0),
+                duration_ms: None,
+            },
+            t0 + Duration::from_secs(15),
+        )
+        .expect("C 之后应能结算命令");
+    assert_eq!(done.exit_code, Some(0));
+    assert!(
+        (14_900..=15_100).contains(&done.duration_ms),
+        "实测 {:?}",
+        done.duration_ms
+    );
+}
+
+#[test]
+fn tracker_prefers_preexec_over_earlier_command_start() {
+    let mut tracker = CommandTracker::default();
+    let t0 = Instant::now();
+    assert_eq!(tracker.on_event(&OscEvent::CommandStart, t0), None);
+    assert_eq!(
+        tracker.on_event(
+            &OscEvent::PreExec { command: None },
+            t0 + Duration::from_secs(2)
+        ),
+        None
+    );
+    let done = tracker
+        .on_event(
+            &OscEvent::CommandFinish {
+                exit_code: Some(1),
+                duration_ms: None,
+            },
+            t0 + Duration::from_secs(5),
+        )
+        .expect("应以 PreExec 为计时起点");
+    assert!(
+        (2_900..=3_100).contains(&done.duration_ms),
+        "应只计算命令执行阶段的 3 秒，实测 {:?}",
+        done.duration_ms
+    );
+}
+
+#[test]
 fn tracker_measures_prompt_to_prompt_when_only_ab_markers() {
     let mut tracker = CommandTracker::default();
     let t0 = Instant::now();
