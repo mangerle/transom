@@ -151,6 +151,14 @@ fn injection_cleanup(lines: usize) -> String {
     cleanup
 }
 
+/// 一次注入载荷：字节本体与清行命令需要上移的行数。
+#[derive(Debug, Clone)]
+pub struct InjectionPayload {
+    pub bytes: Vec<u8>,
+    /// 命令回显在终端里占用的视觉行数；客户端摘掉回显后据此丢弃清行输出。
+    pub cleanup_moves: usize,
+}
+
 /// 生成注入用的命令字节：命令本体 + 末尾的清行命令 + 换行。
 ///
 /// `columns` 是终端列宽，`prompt_columns` 是注入时提示符占用的列数（光标所在列）。
@@ -160,7 +168,7 @@ fn injection_cleanup(lines: usize) -> String {
 /// 换行用 LF 而不是 CR：CR 只在 tty 的 ICRNL 打开时才会被行规程转成行结束，
 /// 一旦 ICRNL 被关，CR 不会结束整行，命令会留在内核输入缓冲里被回显在命令行上，
 /// 既不执行也污染用户的输入行。LF 两种模式下都能真正提交这一行。
-pub fn injection_payload(command: &str, columns: usize, prompt_columns: usize) -> Vec<u8> {
+pub fn injection_payload(command: &str, columns: usize, prompt_columns: usize) -> InjectionPayload {
     let columns = columns.max(20);
     let prefix = prompt_columns.saturating_add(command.chars().count());
     // 清行命令本身也会被回显，长度会随行数变化；迭代到行数稳定，避免算少一行。
@@ -174,7 +182,10 @@ pub fn injection_payload(command: &str, columns: usize, prompt_columns: usize) -
             bytes.extend_from_slice(command.as_bytes());
             bytes.extend_from_slice(cleanup.as_bytes());
             bytes.push(b'\n');
-            return bytes;
+            return InjectionPayload {
+                bytes,
+                cleanup_moves: lines,
+            };
         }
         lines = next;
     }
@@ -245,13 +256,14 @@ mod tests {
     #[test]
     fn injection_payload_appends_cleanup_to_same_command() {
         let payload = injection_payload(probe_command(), 80, 20);
-        let text = std::str::from_utf8(&payload).expect("注入载荷必须是合法 UTF-8");
+        let text = std::str::from_utf8(&payload.bytes).expect("注入载荷必须是合法 UTF-8");
         assert!(text.ends_with('\n'), "载荷必须以换行收尾才能被 Shell 提交");
         assert!(
             text.contains("\\033[1A\\033[2K"),
             "清行命令必须与被注入命令同处一条"
         );
         assert_eq!(text.lines().count(), 1, "清行命令不能另起一行");
+        assert!(payload.cleanup_moves >= 1);
     }
 
     /// 窄终端里脚本会折成多行，清行命令必须按实际行数上移，不能只擦最后一行。
@@ -259,12 +271,13 @@ mod tests {
     fn injection_payload_clears_every_wrapped_line() {
         let long_command = "x".repeat(600);
         let payload = injection_payload(&long_command, 80, 20);
-        let text = std::str::from_utf8(&payload).expect("注入载荷必须是合法 UTF-8");
+        let text = std::str::from_utf8(&payload.bytes).expect("注入载荷必须是合法 UTF-8");
         let moves = text.matches("\\033[1A\\033[2K").count();
         assert!(
             moves >= 7,
             "600 字符在 80 列里至少折成 8 行，实际只清 {moves} 行: {text}"
         );
+        assert_eq!(payload.cleanup_moves, moves);
         assert_eq!(text.lines().count(), 1, "清行命令不能另起一行");
     }
 

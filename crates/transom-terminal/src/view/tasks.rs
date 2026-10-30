@@ -39,6 +39,7 @@ impl TerminalView {
             state,
         } = params;
         let recorder_for_reader = recorder.clone();
+        let filter_state = state.clone();
         let (bytes_tx, bytes_rx) = flume::bounded::<Vec<u8>>(READ_CHANNEL_CAPACITY);
         let exit_tx = event_tx.clone();
 
@@ -51,12 +52,18 @@ impl TerminalView {
                     match reader.read(&mut buffer) {
                         Ok(0) => break,
                         Ok(count) => {
-                            let slice = &buffer[..count];
+                            // 注入脚本的回显在进入网格前摘掉：命令照常执行，
+                            // 但用户不会先看到整段脚本闪一下。
+                            let filtered = filter_state.silent_echo.lock().filter(&buffer[..count]);
+                            if filtered.is_empty() {
+                                continue;
+                            }
+                            let slice = filtered.as_slice();
                             if let Some(audit) = audit.as_mut() {
                                 audit.record(slice);
                             }
                             recorder_for_reader.record_output(slice);
-                            if bytes_tx.send(slice.to_vec()).is_err() {
+                            if bytes_tx.send(filtered).is_err() {
                                 break;
                             }
                         }

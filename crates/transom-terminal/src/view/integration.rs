@@ -10,6 +10,7 @@
 //!   视图被回收时 `update` 返回 `Err`，循环同样退出。
 
 use super::TerminalView;
+use super::silent_echo::MARKER;
 use crate::shell_integration::{
     IntegrationAction, IntegrationContext, IntegrationSignal, probe_command,
 };
@@ -123,12 +124,24 @@ impl TerminalView {
                 engine.cursor_point().column.0,
             )
         };
-        let payload = injection_payload(command, columns, prompt_columns);
+        // 开头加一个无副作用的 `true <标记>`：客户端按这个包装前缀摘掉整行回显，
+        // 避免远端行编辑器在脚本中间插入重绘/ANSI 时精确匹配失效。行首空格保留，
+        // 让 bash/zsh 不把注入命令写进历史。
+        let wrapper = format!(" true {MARKER}");
+        let marked = format!("{wrapper};{command}");
+        let payload = injection_payload(&marked, columns, prompt_columns);
+        // 回显过滤器按整行缓冲识别标记：只要这一行出现标记就整行摘除，
+        // 不依赖命令前缀是否被 ANSI/重绘切断。
+        self.state
+            .silent_echo
+            .lock()
+            .arm(MARKER.as_bytes(), payload.cleanup_moves);
         // 走 write_input 但不置 user_typed：那是"用户亲自按键"的标记，
         // 自己写进去的脚本不能反过来把自己的时机判死。
         // 写失败说明通道已断（写入线程会随之上报 Exit），这里不额外造状态，
         // 下一轮检查自然按"会话已结束"落终态。
-        if !self.write_input(&payload) {
+        if !self.write_input(&payload.bytes) {
+            self.state.silent_echo.lock().disarm();
             log::warn!("Shell 集成写入通道已断开，本轮放弃");
         }
         cx.notify();

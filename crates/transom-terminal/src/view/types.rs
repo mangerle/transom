@@ -1,5 +1,6 @@
 //! 终端视图布局度量与预备帧类型定义。
 
+use super::silent_echo::SilentEcho;
 use crate::block::BlockLayout;
 use crate::kitty_graphics::GraphicsPlacement;
 use gpui_kit::*;
@@ -111,6 +112,8 @@ pub(crate) struct TerminalRenderState {
     pub(crate) row_cache: parking_lot::Mutex<Vec<crate::renderer::RowVisual>>,
     pub(crate) block_layout: parking_lot::Mutex<Option<Arc<BlockLayout>>>,
     pub(crate) trigger_engine: parking_lot::Mutex<crate::trigger::TriggerEngine>,
+    /// 注入命令回显过滤器：读取线程据此把 Shell 回显的整段脚本摘掉。
+    pub(crate) silent_echo: parking_lot::Mutex<SilentEcho>,
     /// 本帧终端画布的命中盒：悬停超链接时用它把系统光标切成手型。
     ///
     /// GPUI 的光标样式必须挂在具体 hitbox 上，且 hitbox 只在预备帧生成；
@@ -136,6 +139,7 @@ impl TerminalRenderState {
             row_cache: parking_lot::Mutex::new(Vec::new()),
             block_layout: parking_lot::Mutex::new(None),
             trigger_engine: parking_lot::Mutex::new(crate::trigger::TriggerEngine::default()),
+            silent_echo: parking_lot::Mutex::new(SilentEcho::default()),
             canvas_hitbox: parking_lot::Mutex::new(None),
             pending_resize: parking_lot::Mutex::new(None),
         }

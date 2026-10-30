@@ -4,18 +4,11 @@ mod integration;
 mod links;
 mod menu;
 mod paint;
+mod silent_echo;
 mod tasks;
 #[cfg(test)]
 mod tests;
 mod types;
-
-pub(crate) use input::build_custom_keys;
-pub use types::KeyFilter;
-pub(crate) use types::{
-    CONTEXT, LayoutMetrics, PendingResize, PreparedTerminal, READ_BUFFER_BYTES,
-    READ_CHANNEL_CAPACITY, RESIZE_DEBOUNCE, ResizeDecision, SEARCH_TICK_PIXELS,
-    TerminalRenderState, decide_resize,
-};
 
 use crate::engine::TerminalEngine;
 use crate::event::{HistoryProvider, TerminalEvent};
@@ -32,12 +25,19 @@ use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
+pub(crate) use input::build_custom_keys;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use transom_core::{
     BlockViewSettings, SessionCleanup, TerminalControlHandle, TerminalInteraction, TerminalIo,
     TerminalProfile, TerminalSize,
+};
+pub use types::KeyFilter;
+pub(crate) use types::{
+    CONTEXT, LayoutMetrics, PendingResize, PreparedTerminal, READ_BUFFER_BYTES,
+    READ_CHANNEL_CAPACITY, RESIZE_DEBOUNCE, ResizeDecision, SEARCH_TICK_PIXELS,
+    TerminalRenderState, decide_resize,
 };
 
 actions!(transom_terminal, [SendTab, SendBacktab]);
