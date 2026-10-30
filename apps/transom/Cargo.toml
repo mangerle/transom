@@ -29,6 +29,9 @@ flume.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
 log.workspace = true
+# `exec:` 深链载荷用 JSON 承载 argv：参数里可能出现空格、引号与换行，
+# 行分隔的朴素编码无法无损表达。
+serde_json.workspace = true
 fern.workspace = true
 # 日志时间戳格式化；工作区内已有同一版本，不新增编译单元。
 chrono.workspace = true

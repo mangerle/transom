@@ -43,3 +43,6 @@ MimeType=x-scheme-handler/ssh;
 # 目录拼成 --dir=<路径> 显式传给 Exec（缺该键时 launcher 只会自己 cd，已有
 # 实例的交接路径拿不到目录）。
 X-TerminalArgDir=--dir=
+# 命令执行规范：`xdg-terminal-exec <命令...>` 与 `-e <命令...>` 都会把命令
+# 按 argv 追加在 -e 之后；应用侧解析为"在该目录下直接执行命令"。
+X-TerminalArgExec=-e

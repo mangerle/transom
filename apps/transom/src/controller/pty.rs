@@ -114,15 +114,30 @@ pub(super) fn open_local_pty(
         })
     });
 
-    let mut command = CommandBuilder::new(&shell);
+    // `X-TerminalArgExec`：按 argv 原样执行，不经 Shell 拼串。空 argv 视为
+    // 未指定（防御脏配置），回落到交互式 Shell。
+    let exec_argv = local
+        .command
+        .as_ref()
+        .filter(|argv| !argv.is_empty())
+        .cloned();
+    let mut command = match &exec_argv {
+        Some(argv) => {
+            let mut builder = CommandBuilder::new(&argv[0]);
+            builder.args(&argv[1..]);
+            builder
+        }
+        None => CommandBuilder::new(&shell),
+    };
     if let Some(dir) = &local.working_dir {
         command.cwd(dir);
     }
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
     // 集成预装：能在启动参数里把钩子装好，就不必往终端写任何字节，
-    // 屏幕上不会出现注入痕迹，也没有一闪而过。
-    let preload = if shell_integration {
+    // 屏幕上不会出现注入痕迹，也没有一闪而过。命令执行模式下不预装：
+    // 目标程序不是交互式 Shell，注入的 rcfile 参数会落到它头上。
+    let preload = if shell_integration && exec_argv.is_none() {
         local_shell::prepare(&shell)
     } else {
         local_shell::LocalShellPreload::none()
@@ -138,7 +153,7 @@ pub(super) fn open_local_pty(
         .map_err(|e| AppError::with_detail(ErrorCode::Io, format!("启动本地 Shell 失败: {e}")))?;
     drop(pair.slave);
     log::info!(
-        "本地伪终端已就绪，Shell: {shell}，尺寸: {}x{}，工作目录: {:?}",
+        "本地伪终端已就绪，Shell: {shell}，尺寸: {}x{}，工作目录: {:?}，执行命令: {exec_argv:?}",
         size.cols,
         size.rows,
         local.working_dir

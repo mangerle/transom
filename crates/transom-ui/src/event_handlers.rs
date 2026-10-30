@@ -82,7 +82,13 @@ impl AppShell {
         let audit_path =
             crate::audit::audit_path_for(&self.workspace.tabs[index], self.settings.audit.enabled);
         // 开关在闭包外取值：`cx.new` 的闭包里再读 `self` 会与外层借用冲突。
-        let shell_integration_enabled = self.settings.block_view.shell_integration;
+        // 命令执行标签（X-TerminalArgExec）不是交互式 Shell：集成探针会直接写进
+        // 目标程序，必须关闭，否则 htop 这类全屏程序会收到一串注入序列。
+        let exec_local = matches!(
+            &self.workspace.tabs[index].session.connection,
+            transom_core::Connection::Local(local) if local.command.is_some()
+        );
+        let shell_integration_enabled = self.settings.block_view.shell_integration && !exec_local;
         let terminal = cx.new(|cx| {
             TerminalView::new(
                 window,

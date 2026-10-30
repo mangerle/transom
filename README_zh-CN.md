@@ -166,7 +166,7 @@ cargo test
 
 ## 路线图
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 117 项评估过的能力及其完成状态，清单内项目均已实现或由终端内核原生支持。清单之外的已知缺口：尚未提供签名安装包；外部工具经 `xdg-terminal-exec -- <命令>` 请求"在终端里执行这条命令"时，transom 只会打开终端而不执行该命令（启动器按未声明 `X-TerminalArgExec` 的条目注入默认 `-e <命令>`，transom 未实现该语义）。
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 117 项评估过的能力及其完成状态，清单内项目均已实现或由终端内核原生支持。清单之外的已知缺口：尚未提供签名安装包。
 
 ## 参与贡献
 

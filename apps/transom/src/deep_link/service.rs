@@ -1,7 +1,7 @@
 //! 实例套接字生命周期管理与请求监听转发。
 
-use super::types::{DIR_LINE_PREFIX, LaunchRequest, request_lines};
-use anyhow::{Context as _, anyhow};
+use super::types::{DIR_LINE_PREFIX, EXEC_LINE_PREFIX, LaunchRequest, request_lines};
+use anyhow::{Context as _, anyhow, bail};
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::net::{UnixListener as StdUnixListener, UnixStream as StdUnixStream};
@@ -15,7 +15,11 @@ use transom_platform::paths;
 
 /// 单条深链请求的字节上限：地址串远小于此，超限即视为异常输入截断丢弃，
 /// 避免对端用长报文撑大读取侧内存。
-pub(crate) const MAX_REQUEST_BYTES: u64 = 4096;
+///
+/// 16 KiB 是为 `exec:` 载荷留的余量：命令 argv 经 JSON 转义后可能显著变长
+/// （文件管理器拼出的 `bash -c "..."` 常见上 KiB），但仍远小于任何合理的
+/// 交互式启动请求。
+pub(crate) const MAX_REQUEST_BYTES: u64 = 16 * 1024;
 
 /// 等待一次请求写入的超时：本地对端进程假死时不能永久占住接收循环。
 pub(crate) const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
@@ -189,7 +193,7 @@ fn accept_request(request: &str, event_tx: &flume::Sender<AppEvent>) -> anyhow::
     Ok(())
 }
 
-/// 把一行请求文本洗成 [`DeepLinkRequest`]：协议只认三种形态，其余一律拒绝。
+/// 把一行请求文本洗成 [`DeepLinkRequest`]：协议只认四种形态，其余一律拒绝。
 fn parse_request_line(request: &str) -> anyhow::Result<DeepLinkRequest> {
     if request.is_empty() {
         return Ok(DeepLinkRequest::Activate);
@@ -198,6 +202,9 @@ fn parse_request_line(request: &str) -> anyhow::Result<DeepLinkRequest> {
         return Ok(DeepLinkRequest::Ssh {
             url: request.to_string(),
         });
+    }
+    if let Some(payload) = request.strip_prefix(EXEC_LINE_PREFIX) {
+        return parse_exec_line(payload);
     }
     if let Some(path) = request.strip_prefix(DIR_LINE_PREFIX) {
         let candidate = Path::new(path);
@@ -211,4 +218,34 @@ fn parse_request_line(request: &str) -> anyhow::Result<DeepLinkRequest> {
         ));
     }
     Err(anyhow!("深链请求协议形态未知，已拒绝，原始输入: {request}"))
+}
+
+/// 解析 `exec:` 载荷：`{"command": [argv...], "dir": "/path" | null}`。
+///
+/// 校验口径与目录请求一致：命令不能为空、目录必须存在且为绝对路径。目录
+/// 失效时只丢目录、保留命令——用户要的"跑这条命令"仍然成立，落一个错误的
+/// 工作目录比不启动更糟。
+fn parse_exec_line(payload: &str) -> anyhow::Result<DeepLinkRequest> {
+    let value: serde_json::Value = serde_json::from_str(payload)
+        .with_context(|| format!("命令请求载荷不是合法 JSON，原始输入: {payload}"))?;
+    let command: Vec<String> = value
+        .get("command")
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    if command.is_empty() {
+        bail!("命令请求缺少可执行命令，原始输入: {payload}");
+    }
+    let dir = value
+        .get("dir")
+        .and_then(serde_json::Value::as_str)
+        .map(PathBuf::from)
+        .filter(|candidate| candidate.is_absolute() && candidate.is_dir());
+    Ok(DeepLinkRequest::Exec { command, dir })
 }

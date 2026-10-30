@@ -69,7 +69,8 @@ pub(super) fn preference_paths_in(
 ///
 /// `Exec` 用绝对路径并保留 `%u`：launcher 拉起时把 `ssh://` 地址作为单个
 /// 参数传入。`X-TerminalArgDir=--dir=` 让 launcher 把目标目录显式拼成选项
-/// 参数（理由见上级模块头），由 `apps/transom` 的
+/// 参数（理由见上级模块头），`X-TerminalArgExec=-e` 让
+/// `xdg-terminal-exec <命令>` 能在这里跑起来，二者都由 `apps/transom` 的
 /// `deep_link::request_from_args` 解析。`Icon` 用不带扩展名的主题名，指向
 /// 上级模块安装的 `hicolor/scalable/apps/{APP_ID}.svg`。
 pub fn desktop_entry_content(exe: &std::path::Path) -> String {
@@ -90,7 +91,8 @@ pub fn desktop_entry_content(exe: &std::path::Path) -> String {
          StartupNotify=true\n\
          StartupWMClass={app_id}\n\
          MimeType=x-scheme-handler/ssh;\n\
-         X-TerminalArgDir=--dir=\n",
+         X-TerminalArgDir=--dir=\n\
+         X-TerminalArgExec=-e\n",
         exe = exe.display(),
         app_id = APP_ID,
     )
@@ -220,6 +222,11 @@ mod tests {
         assert!(
             content.contains("X-TerminalArgDir=--dir="),
             "条目必须声明 X-TerminalArgDir，否则已运行实例开不出带目录的标签"
+        );
+        // 命令规范同理：没有该键时 xdg-terminal-exec 的命令会被丢掉。
+        assert!(
+            content.contains("X-TerminalArgExec=-e"),
+            "条目必须声明 X-TerminalArgExec，否则 xdg-terminal-exec <命令> 跑不起来"
         );
     }
 

@@ -149,6 +149,7 @@ impl AppShell {
             Connection::Local(transom_core::LocalConnection {
                 shell: None,
                 working_dir: None,
+                command: None,
             }),
         );
         let session_id = dummy_session.id;

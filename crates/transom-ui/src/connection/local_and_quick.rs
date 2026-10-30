@@ -36,7 +36,7 @@ impl AppShell {
     }
 
     pub(crate) fn open_local_terminal(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.spawn_local_terminal(None, cx);
+        self.spawn_local_command(None, None, cx);
     }
 
     /// 新开一个本地终端标签。
@@ -45,12 +45,37 @@ impl AppShell {
         working_dir: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        let title = match working_dir.as_deref().and_then(|dir| {
-            dir.file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-        }) {
-            Some(name) => format!("{} · {name}", rust_i18n::t!("app.new_local")),
-            None => rust_i18n::t!("app.new_local").to_string(),
+        self.spawn_local_command(None, working_dir, cx);
+    }
+
+    /// 新开一个本地终端标签，可选地在其中直接执行命令（`X-TerminalArgExec`）。
+    ///
+    /// 命令按 argv 原样交给 PTY 层执行，不拼 Shell 字符串：launcher 已经完成
+    /// 分词，再拼一次会破坏含空格、引号与 `$` 的参数。标题取命令行的前一段，
+    /// 让用户一眼看出这个标签不是普通 Shell。
+    pub(crate) fn spawn_local_command(
+        &mut self,
+        command: Option<Vec<String>>,
+        working_dir: Option<std::path::PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        let title = match (
+            &command,
+            working_dir.as_deref().and_then(|dir| {
+                dir.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+            }),
+        ) {
+            (Some(argv), _) => {
+                let line = argv.join(" ");
+                let mut short: String = line.chars().take(40).collect();
+                if line.chars().count() > 40 {
+                    short.push('…');
+                }
+                format!("{} · {short}", rust_i18n::t!("app.new_local"))
+            }
+            (None, Some(name)) => format!("{} · {name}", rust_i18n::t!("app.new_local")),
+            (None, None) => rust_i18n::t!("app.new_local").to_string(),
         };
         let tab_id = TabId::new();
         let session = Session::new(
@@ -58,6 +83,7 @@ impl AppShell {
             transom_core::Connection::Local(LocalConnection {
                 shell: self.settings.local_shell.clone(),
                 working_dir,
+                command,
             }),
         );
         self.create_local_group(tab_id, session.id, &session.name);
@@ -101,6 +127,9 @@ impl AppShell {
         match request {
             DeepLinkRequest::Ssh { url } => self.connect_quick_host(&url, cx),
             DeepLinkRequest::Dir { path } => self.spawn_local_terminal(Some(path), cx),
+            DeepLinkRequest::Exec { command, dir } => {
+                self.spawn_local_command(Some(command), dir, cx);
+            }
             DeepLinkRequest::Activate => cx.notify(),
         }
     }

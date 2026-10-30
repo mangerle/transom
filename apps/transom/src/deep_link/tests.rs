@@ -1,7 +1,7 @@
 //! 深链与单实例测试用例。
 
 use super::service::{MAX_REQUEST_BYTES, accept_stream, acquire_primary_at, probe_alive};
-use super::types::{LaunchRequest, request_from_args};
+use super::types::{LaunchRequest, request_from_args, request_lines};
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 use tokio::net::UnixStream;
@@ -231,6 +231,128 @@ async fn accept_ignores_immediate_eof() {
     assert!(rx.is_empty());
 }
 
+#[test]
+fn request_from_args_collects_exec_command_verbatim() {
+    // `-e` 之后的一切都属于命令：以 - 开头的参数、空格与引号都原样保留。
+    let request = request_from_args(vec![
+        "transom".to_string(),
+        "--dir=/tmp".to_string(),
+        "-e".to_string(),
+        "bash".to_string(),
+        "-c".to_string(),
+        "echo hello world".to_string(),
+    ]);
+    assert_eq!(
+        request.command,
+        Some(vec![
+            "bash".to_string(),
+            "-c".to_string(),
+            "echo hello world".to_string()
+        ])
+    );
+    // `--` 是 xdg-terminal-exec 的另一种分隔写法。
+    let request = request_from_args(vec![
+        "transom".to_string(),
+        "--".to_string(),
+        "htop".to_string(),
+    ]);
+    assert_eq!(request.command, Some(vec!["htop".to_string()]));
+    // 分隔符后没有命令时不产生执行请求。
+    let request = request_from_args(vec!["transom".to_string(), "-e".to_string()]);
+    assert_eq!(request.command, None);
+}
+
+#[tokio::test]
+async fn accept_delivers_exec_request_with_dir() {
+    let dir = temp_dir("exec");
+    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (tx, rx) = channel();
+    let payload = format!(
+        "exec:{}\n",
+        serde_json::json!({
+            "command": ["htop", "-d", "5"],
+            "dir": dir.display().to_string(),
+        })
+    );
+    let write = async {
+        client.write_all(payload.as_bytes()).await.unwrap();
+        client.shutdown().await.unwrap();
+    };
+    let read = async { accept_stream(&mut server, &tx).await };
+    let ((), result) = tokio::join!(write, read);
+    result.unwrap();
+    match rx.recv().unwrap() {
+        AppEvent::DeepLink {
+            request: DeepLinkRequest::Exec { command, dir: got },
+        } => {
+            assert_eq!(command, vec!["htop", "-d", "5"]);
+            assert_eq!(got.as_deref(), Some(dir.as_path()));
+        }
+        _ => panic!("应投递命令执行请求"),
+    }
+    let _ = std::fs::remove_dir(&dir);
+}
+
+#[tokio::test]
+async fn accept_rejects_exec_without_command() {
+    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (tx, rx) = channel();
+    let write = async {
+        client
+            .write_all(b"exec:{\"command\":[],\"dir\":null}\n")
+            .await
+            .unwrap();
+        client.shutdown().await.unwrap();
+    };
+    let read = async { accept_stream(&mut server, &tx).await };
+    let ((), result) = tokio::join!(write, read);
+    assert!(result.is_err(), "空命令请求必须报错");
+    assert!(rx.is_empty(), "非法请求不得产生事件");
+}
+
+#[tokio::test]
+async fn forwarded_exec_request_encodes_command_and_dir_in_one_line() {
+    let dir = temp_dir("exec-forward");
+    let request = LaunchRequest {
+        urls: Vec::new(),
+        dir: Some(dir.clone()),
+        command: Some(vec![
+            "bash".to_string(),
+            "-c".to_string(),
+            "printf 'hi; there\\n'".to_string(),
+        ]),
+    };
+    // 单实例转发的载荷：命令与目录合并为一行，避免主实例先开一个空 Shell 标签。
+    let lines = request_lines(&request);
+    assert_eq!(lines.len(), 1, "命令请求只应产生一行");
+    assert!(lines[0].starts_with("exec:"));
+
+    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (tx, rx) = channel();
+    let payload = format!("{}\n", lines[0]);
+    let write = async {
+        client.write_all(payload.as_bytes()).await.unwrap();
+        client.shutdown().await.unwrap();
+    };
+    let read = async { accept_stream(&mut server, &tx).await };
+    let ((), result) = tokio::join!(write, read);
+    result.unwrap();
+    match rx.recv().unwrap() {
+        AppEvent::DeepLink {
+            request: DeepLinkRequest::Exec { command, dir: got },
+        } => {
+            assert_eq!(
+                command,
+                vec!["bash", "-c", "printf 'hi; there\\n'"],
+                "分号与引号必须原样保留"
+            );
+            assert_eq!(got.as_deref(), Some(dir.as_path()));
+        }
+        _ => panic!("应投递命令执行请求"),
+    }
+    let _ = std::fs::remove_dir(&dir);
+}
+
 #[tokio::test]
 async fn accept_caps_oversized_request() {
     let (mut client, mut server) = UnixStream::pair().unwrap();
@@ -286,6 +408,7 @@ fn second_instance_forwards_requests_to_running_primary() {
     let request = LaunchRequest {
         urls: vec!["ssh://root@host.example:2222".to_string()],
         dir: Some(dir.clone()),
+        command: None,
     };
     let second = acquire_primary_at(&path, &request).unwrap();
     assert!(second.is_none(), "已有实例在跑时不应再成为主实例");

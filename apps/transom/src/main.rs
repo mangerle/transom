@@ -111,7 +111,15 @@ impl StartupRequest {
                 request: DeepLinkRequest::Ssh { url },
             })
             .collect();
-        if let Some(path) = self.dir {
+        if let Some(command) = self.command {
+            // 命令请求自带可选目录：整条请求只开一个标签，不能再单独发 Dir。
+            events.push(AppEvent::DeepLink {
+                request: DeepLinkRequest::Exec {
+                    command,
+                    dir: self.dir,
+                },
+            });
+        } else if let Some(path) = self.dir {
             events.push(AppEvent::DeepLink {
                 request: DeepLinkRequest::Dir { path },
             });

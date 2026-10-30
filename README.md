@@ -166,7 +166,7 @@ cargo test
 
 ## Roadmap
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 117 evaluated capabilities with per-item completion status; every listed item is either implemented or natively supported today. Known gaps outside that list: no signed installers yet, and a request to "run this command in a terminal" (`xdg-terminal-exec -- <cmd>`) opens Transom without running the command — the launcher injects its default `-e <cmd>` for entries that don't declare `X-TerminalArgExec`, and that semantic is not implemented.
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 117 evaluated capabilities with per-item completion status; every listed item is either implemented or natively supported today. Known gaps outside that list: no signed installers yet.
 
 ## Contributing
 

@@ -8,6 +8,14 @@ use std::path::PathBuf;
 pub struct LocalConnection {
     pub shell: Option<String>,
     pub working_dir: Option<PathBuf>,
+    /// 启动后直接执行的命令（`X-TerminalArgExec` / `-e <命令>`）。
+    ///
+    /// `None` 表示打开交互式 Shell；`Some(argv)` 表示在 PTY 里直接执行该
+    /// 程序，argv 原样传递、不经过 Shell 拼串——launcher 已完成分词，再拼
+    /// 一次会破坏含空格与引号的参数。一次性启动请求不会落盘，只有会话表单
+    /// 保存的本地会话才可能长期携带它。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<Vec<String>>,
 }
 
 impl LocalConnection {
