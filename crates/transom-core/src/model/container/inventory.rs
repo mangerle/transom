@@ -173,6 +173,9 @@ pub struct ContainerDetails {
     pub finished_at: Option<String>,
     #[serde(default)]
     pub exit_code: Option<i64>,
+    /// 健康检查结果（`starting`/`healthy`/`unhealthy`）；镜像没写 HEALTHCHECK 时为 `None`。
+    #[serde(default)]
+    pub health: Option<String>,
     #[serde(default)]
     pub restart_policy: Option<String>,
     #[serde(default)]
@@ -184,6 +187,18 @@ pub struct ContainerDetails {
     /// 原始 inspect JSON（格式化后），用于“高级信息”折叠区。
     #[serde(default)]
     pub inspect: String,
+}
+
+impl ContainerDetails {
+    /// 健康状态展示文本；没有健康检查时给「未配置」，避免界面留白看不出新。
+    pub fn health_label(&self) -> String {
+        self.health.clone().unwrap_or_else(|| "none".to_string())
+    }
+
+    /// 是否处于「不健康」，界面据此决定状态点颜色。
+    pub fn is_unhealthy(&self) -> bool {
+        self.health.as_deref() == Some("unhealthy")
+    }
 }
 
 /// 容器资源统计快照。

@@ -4569,6 +4569,18 @@ container:
     env_placeholder:
       en: FOO=bar,BAZ=1
       zh-CN: FOO=bar,BAZ=1
+    health:
+      en: Health check
+      zh-CN: 健康检查
+    health_placeholder:
+      en: pg_isready (shell form; empty means none)
+      zh-CN: pg_isready（Shell 形式；留空表示不配置）
+    health_interval:
+      en: Health interval (seconds)
+      zh-CN: 健康检查间隔（秒）
+    health_interval_placeholder:
+      en: empty uses the engine default of 30s
+      zh-CN: 留空用引擎默认 30 秒
     restart:
       en: Restart policy
       zh-CN: 重启策略
@@ -4782,6 +4794,9 @@ container:
       en: Custom CLI
       zh-CN: 自定义 CLI
   field:
+    health:
+      en: Health
+      zh-CN: 健康状态
     containers:
       en: Containers
       zh-CN: 成员容器

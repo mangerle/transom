@@ -901,6 +901,8 @@ pub(crate) struct ContainerRunForm {
     pub(crate) ports: Entity<InputState>,
     pub(crate) binds: Entity<InputState>,
     pub(crate) env: Entity<InputState>,
+    pub(crate) health: Entity<InputState>,
+    pub(crate) health_interval: Entity<InputState>,
     pub(crate) restart: Option<String>,
     /// 校验或引擎返回的错误提示，展示在表单底部。
     pub(crate) error: Option<String>,
@@ -921,6 +923,13 @@ impl ContainerRunForm {
             ports: run_input("container.run.ports_placeholder", None, window, cx),
             binds: run_input("container.run.binds_placeholder", None, window, cx),
             env: run_input("container.run.env_placeholder", None, window, cx),
+            health: run_input("container.run.health_placeholder", None, window, cx),
+            health_interval: run_input(
+                "container.run.health_interval_placeholder",
+                None,
+                window,
+                cx,
+            ),
             restart: None,
             error: None,
         }
@@ -940,6 +949,10 @@ impl ContainerRunForm {
             ports: parse_ports(&read(&self.ports))?,
             binds: split_list(&read(&self.binds)),
             restart: self.restart.clone(),
+            health_cmd: Some(read(&self.health)),
+            // 间隔留空或写非数字都按引擎默认处理：这不是必须填对的字段，
+            // 报错打断提交流程不值得，真正的非法值（0 秒）由 spec 校验拦下。
+            health_interval_secs: read(&self.health_interval).parse::<u64>().ok(),
         };
         spec.validate().map_err(|error| error.to_string())?;
         Ok(spec)

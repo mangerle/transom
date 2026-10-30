@@ -308,6 +308,15 @@ pub struct InspectState {
     pub started_at: Option<String>,
     #[serde(rename = "FinishedAt", default)]
     pub finished_at: Option<String>,
+    #[serde(rename = "Health", default)]
+    pub health: Option<HealthInfo>,
+}
+
+/// `State.Health`：只有镜像声明了 HEALTHCHECK 才出现。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct HealthInfo {
+    #[serde(rename = "Status", default)]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -383,7 +392,12 @@ impl ContainerInspect {
             working_dir: config.working_dir.filter(|dir| !dir.is_empty()),
             env: config.env.unwrap_or_default(),
             state: ContainerState::from_api(state.status.as_deref().unwrap_or_default()),
-            status: state.status.unwrap_or_default(),
+            status: state.status.clone().unwrap_or_default(),
+            health: state
+                .health
+                .as_ref()
+                .and_then(|health| health.status.clone())
+                .filter(|status| !status.is_empty()),
             created: parse_rfc3339_secs(self.created.as_deref()).unwrap_or(0),
             started_at: state.started_at,
             finished_at: state.finished_at,

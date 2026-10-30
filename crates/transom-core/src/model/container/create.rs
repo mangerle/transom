@@ -51,6 +51,12 @@ pub struct ContainerCreateSpec {
     /// 重启策略：`no`/`on-failure`/`always`/`unless-stopped`；留空按 `no`。
     #[serde(default)]
     pub restart: Option<String>,
+    /// 健康检查命令；按 `CMD-SHELL` 下发，留空表示不配置健康检查。
+    #[serde(default)]
+    pub health_cmd: Option<String>,
+    /// 健康检查间隔（秒）；留空走引擎默认 30 秒。
+    #[serde(default)]
+    pub health_interval_secs: Option<u64>,
 }
 
 impl ContainerCreateSpec {
@@ -106,6 +112,17 @@ impl ContainerCreateSpec {
         }
         self.binds.retain(|bind| !bind.is_empty());
         self.env.retain(|env| !env.is_empty());
+        self.health_cmd = self
+            .health_cmd
+            .take()
+            .map(|cmd| cmd.trim().to_string())
+            .filter(|cmd| !cmd.is_empty());
+        if self.health_cmd.is_none() {
+            self.health_interval_secs = None;
+        }
+        if self.health_interval_secs == Some(0) {
+            return Err("健康检查间隔必须大于 0 秒".to_string());
+        }
         if let Some(restart) = self.restart.as_deref()
             && !Self::RESTART_POLICIES.contains(&restart)
         {
@@ -175,6 +192,8 @@ mod tests {
             }],
             binds: vec!["data:/usr/share/nginx/html:ro".to_string()],
             restart: Some("always".to_string()),
+            health_cmd: Some("pg_isready".to_string()),
+            health_interval_secs: Some(5),
         }
     }
 
@@ -238,6 +257,28 @@ mod tests {
         let mut item = spec();
         item.restart = Some("never".to_string());
         assert!(item.validate().is_err(), "重启策略必须在允许集合内");
+    }
+
+    /// 健康检查留空要归一化成 `None`，否则会下发一个空命令的检查项，容器永远不健康。
+    #[test]
+    fn health_interval_requires_a_command() {
+        let mut item = spec();
+        item.health_interval_secs = Some(0);
+        assert!(item.validate().is_err(), "间隔为 0 会被引擎拒绝");
+
+        let mut item = spec();
+        item.health_cmd = None;
+        item.health_interval_secs = Some(5);
+        item.validate().expect("没有命令时间隔无意义");
+        assert_eq!(item.health_interval_secs, None, "间隔必须跟着命令一起清掉");
+    }
+
+    #[test]
+    fn blank_health_command_becomes_none() {
+        let mut item = spec();
+        item.health_cmd = Some("   ".to_string());
+        item.validate().expect("空白健康检查不算非法");
+        assert_eq!(item.health_cmd, None);
     }
 
     #[test]

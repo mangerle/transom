@@ -262,6 +262,10 @@ enum ContainerCommand {
   收集，先解析成强类型 spec 再由 `ContainerCreateSpec::validate` 校验，镜像行右键
   直接进入并预填镜像名。CLI 兜底后端明确返回「不支持」，因为 `docker run` 拼参数
   有引号风险且拿不到新容器 ID；
+- 健康状态：inspect 的 `State.Health.Status` 解析为 `ContainerDetails.health`，
+  详情标题行给一个带颜色的状态点（healthy 绿、unhealthy 红、starting 弱色），
+  基础信息里单列一行；运行容器表单可填健康检查命令与间隔，命令留空时显式下发
+  `NONE`，避免继承镜像自带的 HEALTHCHECK 被误判；
 - 容器详情页签：基础信息、日志、终端、统计、文件预览；日志页签可切换尾部行数
   档位（100/500/5000/全量）、跟随、引擎时间戳、「最新在前」与「复制全部」；
   最新在前用于跟随场景：纯文本块没有滚到底的自动滚动能力，反转顺序让最新日志
@@ -345,7 +349,8 @@ cargo run -p transom-container --example docker_smoke
 ```
 
 结论：Docker 29.1.3 / API 1.52（Ubuntu 26.04，systemd cgroup + overlayfs）
-76 步全部通过（含「列表接口必须带挂载明细」的断言，界面靠它算在用卷），
+77 步全部通过（含「列表接口必须带挂载明细」的断言，界面靠它算在用卷；以及
+创建时给 2 秒间隔、最终跑到 `healthy` 的健康检查闭环），
 覆盖发现与协商、容器列表/详情、创建并启动容器（含端口、挂载、
 环境变量、同名 409 冲突与重命名，非法名称单独用 `InvalidName` 报错而不是复用
 路径错误）、统计两次采样、日志全量与
@@ -354,7 +359,7 @@ stderr 分流、日志时间戳、实时跟随与取消、exec 建立/尺寸/回
 /详情/重复拉取、卷与网络的创建详情删除、Compose 标签聚合、容器路径防线、
 启停状态闭环。
 
-真机暴露的 6 个问题（均已修在 `transom-container`，各带回归测试）：
+真机暴露的 7 个问题（均已修在 `transom-container`，各带回归测试）：
 
 | 现象 | 原因 | 处置 |
 | :--- | :--- | :--- |
@@ -363,6 +368,7 @@ stderr 分流、日志时间戳、实时跟随与取消、exec 建立/尺寸/回
 | 要全量日志却拿到 0 字节 | REST 与 CLI 都把 `tail=0` 理解成「最后 0 行」 | `tail_token`：0 翻译成 `all` |
 | 一次性 exec 打出 500 告警 | 无 TTY 的 exec 不支持 resize；短命令在 resize 到达前已退出 | 仅 TTY 设初始尺寸、控制任务丢弃无 TTY 的 Resize、日志降为 debug |
 | 侧栏出现两条等价 Docker | `/run` 是 `/var/run` 的符号链接；且 CLI 兜底与 socket 同时可用 | unix 端点按真实路径去重；同种类有 REST 就剔除 CLI |
+| `Healthcheck` 写在 `HostConfig` 里会被守护进程静默丢弃：创建成功但 `Config.Healthcheck` 为空 | 该字段属于顶层 Config 而不是 HostConfig，且超时必须落在 `[1ms, 间隔]` 区间内，否则创建返回 400 | 移到顶层并按间隔一半夹取超时；真机断言最终 `healthy` |
 | 列目录偶发「connection closed before message completed」 | 归档泵任务只搬走 `response.body`，连接守卫随 `RawResponse` 在函数返回时析构并中止驱动任务，分块响应被截断 | `http::pump_body` 整体接管响应，守卫与响应体同生命周期；模拟引擎用 40 条目分块 tar 做回归 |
 
 仍未覆盖：三栏界面、全屏模态、容器表单的保存与测试连接、exec 终端的交互

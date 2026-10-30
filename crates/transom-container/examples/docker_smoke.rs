@@ -1089,6 +1089,9 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
         }],
         binds: vec!["transom-smoke-vol:/mnt/data".to_string()],
         restart: Some("no".to_string()),
+        // 健康检查走 CMD-SHELL：busybox 一定有 sh，能稳定跑出 healthy。
+        health_cmd: Some("exit 0".to_string()),
+        health_interval_secs: Some(2),
     };
     let mut check = spec.clone();
     report.check(
@@ -1152,6 +1155,8 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
             ),
         );
     }
+    health_reaches_healthy(engine, &id, report).await;
+
     let renamed = format!("{name}-renamed");
     if step(
         report,
@@ -1194,4 +1199,31 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
         |_| format!("{} 已删除", name),
     )
     .await;
+}
+
+/// 健康检查闭环：创建时给的 2 秒间隔必须真被引擎采纳，最终跑到 `healthy`。
+///
+/// 这里同时验证三件事：`Healthcheck` 放对位置（顶层 Config）、间隔与超时的纳秒
+/// 换算没踩到引擎约束（超时不得大于间隔、不得小于 1 毫秒）、`State.Health.Status`
+/// 被解析进我们的详情模型。
+async fn health_reaches_healthy(engine: &Engine, id: &str, report: &mut Report) {
+    let mut last = String::from("(无健康检查)");
+    for _ in 0..24 {
+        let Ok(details) = engine.inspect_container(id).await else {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            continue;
+        };
+        if let Some(health) = details.health.clone() {
+            last = health;
+            if last == "healthy" {
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    report.check(
+        last == "healthy",
+        "健康检查闭环",
+        format!("最终状态 {last}（创建时给的间隔 2 秒）"),
+    );
 }

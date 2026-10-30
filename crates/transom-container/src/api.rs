@@ -300,6 +300,10 @@ impl DockerApi {
             "Image": spec.image,
             "Env": spec.env,
             "Cmd": spec.command,
+            // 健康检查属于顶层 Config，不在 HostConfig 里：真机验证过放错位置会被
+            // 守护进程静默丢弃（创建成功但 Config.Healthcheck 为 null）。
+            // 留空时显式下发 NONE，避免继承镜像自带的 HEALTHCHECK 造成误判。
+            "Healthcheck": healthcheck(spec),
             "HostConfig": {
                 "Binds": spec.binds,
                 "PortBindings": port_bindings(&spec.ports),
@@ -856,6 +860,28 @@ fn handle_pull_line(
         progress(detail.current.unwrap_or(0), detail.total);
     }
     Ok(None)
+}
+
+/// 组装创建请求里的 `Healthcheck`：`Interval`/`Timeout` 按纳秒下发。
+///
+/// 设计原理（Why）：引擎对 `Healthcheck` 的字段要求是「Test 必填」，间隔与超时
+/// 留空走默认 30 秒；界面允许只填命令，因此这两个字段独立可空。
+fn healthcheck(spec: &transom_core::ContainerCreateSpec) -> serde_json::Value {
+    let test = match spec.health_cmd.as_deref() {
+        Some(cmd) => serde_json::json!(["CMD-SHELL", cmd]),
+        None => serde_json::json!(["NONE"]),
+    };
+    let mut value = serde_json::json!({ "Test": test });
+    if let Some(seconds) = spec.health_interval_secs.filter(|seconds| *seconds > 0) {
+        let nanos = seconds.saturating_mul(1_000_000_000);
+        value["Interval"] = serde_json::json!(nanos);
+        // 真机约束：超时不得大于间隔，也不得小于 1 毫秒，否则创建直接 400。
+        // 取间隔的一半再夹到 [1ms, interval] 区间内，两者都能满足。
+        let timeout = (nanos / 2).clamp(1_000_000, nanos);
+        value["Timeout"] = serde_json::json!(timeout);
+        value["Retries"] = serde_json::json!(3);
+    }
+    value
 }
 
 /// 把端口映射列表折叠成 Docker 的 `PortBindings` 形态：`{"80/tcp":[{"HostPort":"8080"}]}`。

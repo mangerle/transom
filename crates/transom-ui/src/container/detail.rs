@@ -147,6 +147,7 @@ impl AppShell {
                 section,
                 title,
                 container: &selected_container,
+                details: &details,
                 image: &selected_image,
                 volume: &selected_volume,
                 network: &selected_network,
@@ -241,12 +242,34 @@ impl AppShell {
             section,
             title,
             container,
+            details,
             image,
             volume,
             network,
             compose,
             all_containers,
         } = view;
+        // 健康状态点：healthy 绿、unhealthy 红、starting 等其他状态弱色。
+        // 只在镜像声明了 HEALTHCHECK 时出现，没声明就不制造噪声。
+        let health_chip: Option<AnyElement> = details
+            .as_ref()
+            .and_then(|details| details.health.clone())
+            .map(|health| {
+                let color = if health == "healthy" {
+                    p.success
+                } else if health == "unhealthy" {
+                    p.danger
+                } else {
+                    p.muted_foreground
+                };
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .flex_none()
+                    .child(div().size_2().rounded_full().bg(color))
+                    .child(div().text_xs().text_color(p.muted_foreground).child(health))
+                    .into_any_element()
+            });
         let mut actions = h_flex().gap_1().items_center().flex_shrink_0();
         match section {
             ContainerSection::Containers => {
@@ -443,7 +466,8 @@ impl AppShell {
                             .font_weight(FontWeight::BOLD)
                             .truncate()
                             .child(title),
-                    ),
+                    )
+                    .children(health_chip),
             )
             .child(actions)
             .into_any_element()
@@ -674,6 +698,11 @@ fn render_container_overview(
         .collect::<Vec<_>>()
         .join("\n");
     rows = rows.child(kv(p, rust_i18n::t!("container.field.mounts"), mounts));
+    rows = rows.child(kv(
+        p,
+        rust_i18n::t!("container.field.health"),
+        details.health_label(),
+    ));
     if !details.env.is_empty() {
         rows = rows.child(kv(
             p,
@@ -1366,6 +1395,8 @@ struct ContainerHeaderView<'a> {
     section: ContainerSection,
     title: String,
     container: &'a Option<ContainerSummary>,
+    /// 容器详情：健康状态只有 inspect 才有，标题行要显示它。
+    details: &'a Option<ContainerDetails>,
     image: &'a Option<transom_core::ContainerImageSummary>,
     volume: &'a Option<transom_core::ContainerVolumeSummary>,
     network: &'a Option<transom_core::ContainerNetworkSummary>,
