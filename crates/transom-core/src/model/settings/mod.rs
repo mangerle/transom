@@ -24,7 +24,7 @@ pub use subsystems::{
 pub use sync::{GitSyncSettings, SyncEndpoint, SyncSettings};
 pub use window::{
     BellStyle, PanelSide, SavedLayout, SavedTabGroup, SavedTabTiling, SidebarStartup, SplitAxis,
-    StartupTabs, WindowBackgroundMode, WindowSettings,
+    StartupTabs, TabPosition, WindowBackgroundMode, WindowSettings,
 };
 
 use crate::model::layout::{ActivityBarLayout, StatusBarLayout};

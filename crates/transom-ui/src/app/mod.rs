@@ -32,7 +32,8 @@ use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppSettings, PanelSide, SessionCatalog, SessionId, StartupTabs, UiThemeMode,
+    AppCommand, AppSettings, PanelSide, SessionCatalog, SessionId, StartupTabs, TabPosition,
+    UiThemeMode,
 };
 
 pub(crate) use types::*;
@@ -62,6 +63,10 @@ pub struct AppShell {
     pub(crate) workspace_panels: Entity<ResizableState>,
     /// 停靠左/右各自独立的列宽状态。
     pub(crate) workspace_panels_left: Entity<ResizableState>,
+    /// 纵向标签面板的搜索框状态。
+    pub(crate) vertical_tabs_search: Entity<InputState>,
+    /// 左侧槽位当前是否显示纵向标签面板；为假时槽位显示会话树或收起。
+    pub(crate) vertical_tabs_open: bool,
     /// 统一托管的应用顶层交互模态与表单集合。
     pub(crate) modals: ModalHub,
     /// 统一纳管的应用外壳后台任务与事件订阅。
@@ -136,6 +141,7 @@ impl AppShell {
         settings.activity_bar.normalize();
         settings.status_bar.normalize();
         settings.appearance.normalize();
+        settings.window.normalize();
         cx.bind_keys(keymap::bindings(&settings.shortcuts));
         let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
             &settings.shortcuts,
@@ -169,6 +175,10 @@ impl AppShell {
             TextareaState::new(window, cx)
                 .submit_on_enter(true)
                 .placeholder(rust_i18n::t!("broadcast.multi_placeholder").to_string())
+        });
+        let vertical_tabs_search = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("tab.vertical_search").to_string())
         });
         let workspace_panels = cx.new(|_| ResizableState::default());
         let workspace_panels_left = cx.new(|_| ResizableState::default());
@@ -243,6 +253,8 @@ impl AppShell {
         );
         let terminal_appearance_subscriptions = vec![window_transparency_sub];
         let sidebar_visible = settings.window.sidebar_visible_at_startup();
+        // 左侧标签模式启动即以标签面板作为槽位主视图；顶部模式该标志无效。
+        let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;
         let monitor = crate::monitor::MonitorState::new(window, &settings.monitor, cx);
 
         let mut this = Self {
@@ -254,6 +266,8 @@ impl AppShell {
             workspace: WorkspaceState::new(),
             workspace_panels,
             workspace_panels_left,
+            vertical_tabs_search,
+            vertical_tabs_open,
             modals: ModalHub::new(
                 KnownHostsModalState {
                     open: false,
@@ -325,6 +339,16 @@ impl AppShell {
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
                     this.broadcast_send(window, cx);
+                }
+            },
+        )
+        .detach();
+        // 搜索词变化时整壳重绘，纵向标签列表的过滤结果才会跟着输入实时更新。
+        cx.subscribe(
+            &this.vertical_tabs_search,
+            |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
                 }
             },
         )

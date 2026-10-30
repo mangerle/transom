@@ -8,6 +8,7 @@ mod tab_drag;
 mod tab_strip;
 mod tiled;
 mod tiling_menu;
+mod vertical_tabs;
 
 pub use self::state::WorkspaceState;
 
@@ -18,7 +19,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{TabId, TabPosition};
 
 impl AppShell {
     pub(crate) fn render_main(
@@ -36,12 +37,14 @@ impl AppShell {
         });
         let content = self.render_active_content(window, cx, p);
 
+        // 标签位置为左侧时，主区始终不绘制顶部横向条：切换标签只走活动栏
+        // 的"标签"条目与快捷键，避免打开会话树时又冒出一条横向标签栏。
         let mut main = v_flex()
             .flex_1()
             .h_full()
             .overflow_hidden()
             .bg(p.background);
-        if !self.immersive {
+        if !self.immersive && self.settings.window.tab_position != TabPosition::Left {
             main = main.child(self.render_tab_strip(p, cx));
         }
         if let Some(tab_id) = disconnected_tab {

@@ -2,7 +2,7 @@
 
 mod badges;
 mod item;
-mod menu;
+pub(crate) mod menu;
 
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};

@@ -10,27 +10,27 @@ use gpui_kit::*;
 use transom_core::{GroupId, SplitAxis, TabId};
 
 /// 标签条目右键上下文菜单的配置参数对象。
-pub(super) struct TabContextMenuParams {
-    pub(super) active_pane: TabId,
-    pub(super) session_id: transom_core::SessionId,
-    pub(super) is_local: bool,
-    pub(super) pane_count: usize,
-    pub(super) tile_enabled: bool,
-    pub(super) group_id: GroupId,
-    pub(super) this_set_id: Option<TilingId>,
-    pub(super) show_add_to_tiling: bool,
-    pub(super) menu_selection: Vec<GroupId>,
-    pub(super) show_multi_tile: bool,
-    pub(super) palette: Palette,
-    pub(super) entry_selected: bool,
-    pub(super) touched_sets_count: usize,
-    pub(super) selected_singles_count: usize,
+pub(crate) struct TabContextMenuParams {
+    pub(crate) active_pane: TabId,
+    pub(crate) session_id: transom_core::SessionId,
+    pub(crate) is_local: bool,
+    pub(crate) pane_count: usize,
+    pub(crate) tile_enabled: bool,
+    pub(crate) group_id: GroupId,
+    pub(crate) this_set_id: Option<TilingId>,
+    pub(crate) show_add_to_tiling: bool,
+    pub(crate) menu_selection: Vec<GroupId>,
+    pub(crate) show_multi_tile: bool,
+    pub(crate) palette: Palette,
+    pub(crate) entry_selected: bool,
+    pub(crate) touched_sets_count: usize,
+    pub(crate) selected_singles_count: usize,
     /// 会话对端主机地址；本地终端与串口为 `None`，此时不渲染"复制主机地址"项。
-    pub(super) host: Option<String>,
+    pub(crate) host: Option<String>,
 }
 
 /// 构建标签条目的右键上下文菜单。
-pub(super) fn build_tab_context_menu(
+pub(crate) fn build_tab_context_menu(
     menu: PopupMenu,
     window: &mut Window,
     cx: &mut Context<PopupMenu>,

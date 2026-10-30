@@ -66,8 +66,8 @@ pub use model::settings::{
     DividerColor, DividerSettings, DividerWidth, GitSyncSettings, HistorySettings, LogLevel,
     LogSettings, MonitorSettings, PanelSide, SavedLayout, SavedTabGroup, SavedTabTiling,
     SftpSettings, ShortcutSettings, SidebarStartup, Snippet, SnippetSettings, SplitAxis,
-    StartupTabs, SyncEndpoint, SyncSettings, UiDensity, UiThemeMode, WindowBackgroundMode,
-    WindowSettings,
+    StartupTabs, SyncEndpoint, SyncSettings, TabPosition, UiDensity, UiThemeMode,
+    WindowBackgroundMode, WindowSettings,
 };
 pub use model::terminal::TerminalHighlight;
 pub use model::terminal::{

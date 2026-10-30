@@ -82,6 +82,9 @@ impl AppShell {
                     this.toggle_session_selection(session_id, !selected, cx);
                 } else if event.click_count() >= 2 {
                     this.connect_session(session_id, window, cx);
+                    // 连接入口在会话树，连接完成后用户要看的是终端列表：
+                    // 左侧标签模式自动把槽位切到标签面板。
+                    this.reveal_vertical_tabs_panel(cx);
                 } else {
                     this.sidebar.tree_selection = Some(session_id);
                     cx.notify();
@@ -117,6 +120,7 @@ impl AppShell {
                                 move |_, window, cx| {
                                     app.update(cx, |this, cx| {
                                         this.connect_session(session_id, window, cx);
+                                        this.reveal_vertical_tabs_panel(cx);
                                     });
                                 }
                             }),

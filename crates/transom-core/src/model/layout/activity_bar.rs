@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum ActivityItemId {
     Sessions,
+    /// 纵向终端标签面板；与会话树共用左侧槽位，同一时间只显示一个。
+    Tabs,
     QuickOpen,
     Forwards,
     Sftp,
@@ -31,8 +33,9 @@ impl ActivityItemId {
     /// `ToggleSnippets` 快捷键上，活动栏再放一个是重复入口。旧设置文件里残留的
     /// `"snippets"` 条目会经 `#[serde(other)]` 归为 `Unknown` 并被 `normalize`
     /// 剔除，因此不需要数据迁移。
-    pub const DEFAULT_ORDER: [Self; 10] = [
+    pub const DEFAULT_ORDER: [Self; 11] = [
         Self::Sessions,
+        Self::Tabs,
         Self::QuickOpen,
         Self::Forwards,
         Self::Sftp,
@@ -45,7 +48,7 @@ impl ActivityItemId {
     ];
 
     /// 默认顶部条目数量，也是 `split_at` 的默认值。
-    pub const DEFAULT_SPLIT_AT: usize = 5;
+    pub const DEFAULT_SPLIT_AT: usize = 6;
 
     /// 供界面元素 ID 与设置项复用的稳定键名。
     ///
@@ -54,6 +57,7 @@ impl ActivityItemId {
     pub const fn key(self) -> &'static str {
         match self {
             Self::Sessions => "sessions",
+            Self::Tabs => "tabs",
             Self::QuickOpen => "quick_open",
             Self::Forwards => "forwards",
             Self::Sftp => "sftp",

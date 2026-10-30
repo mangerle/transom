@@ -6,7 +6,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
-use transom_core::PanelSide;
+use transom_core::{PanelSide, TabPosition};
 
 impl AppShell {
     /// 标签页组：关闭按钮与最后标签退出行为（紧凑双列卡片并排）。
@@ -86,11 +86,52 @@ impl AppShell {
                     })),
             );
 
-        h_flex()
+        let position_row = Self::setting_row(
+            "settings.tab_position",
+            Some("settings.tab_position_desc"),
+            Self::setting_dropdown(
+                "dropdown-tab-position",
+                self.settings.window.tab_position,
+                vec![
+                    (
+                        TabPosition::Top,
+                        rust_i18n::t!("settings.tab_position_top").to_string(),
+                    ),
+                    (
+                        TabPosition::Left,
+                        rust_i18n::t!("settings.tab_position_left").to_string(),
+                    ),
+                ],
+                |this, position, cx| {
+                    if this.settings.window.tab_position == position {
+                        return;
+                    }
+                    this.settings.window.tab_position = position;
+                    // 切到左侧时把左侧槽位直接切到标签面板并展开，否则用户看到
+                    // 仍是顶部条或会话树，像是切换没有生效；切回顶部时清掉
+                    // 面板标志，下次切回左侧从干净状态开始。
+                    this.vertical_tabs_open = position == TabPosition::Left;
+                    if position == TabPosition::Left {
+                        this.sidebar.visible = true;
+                    }
+                    this.persist_layout_settings(cx);
+                },
+                cx,
+            ),
+            p,
+        );
+
+        v_flex()
             .w_full()
-            .gap_3()
-            .child(close_btn_card)
-            .child(quit_on_close_card)
+            .gap_2()
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_3()
+                    .child(close_btn_card)
+                    .child(quit_on_close_card),
+            )
+            .child(position_row)
             .into_any_element()
     }
 

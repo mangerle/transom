@@ -22,7 +22,8 @@ pub(super) struct TabDragPreview {
 }
 
 impl TabDragPreview {
-    fn new(title: String, icon: IconName) -> Self {
+    /// 构造跟随鼠标的预览卡片；纵向标签面板复用同一份预览实现。
+    pub(super) fn new(title: String, icon: IconName) -> Self {
         Self { title, icon }
     }
 }
@@ -111,7 +112,12 @@ fn tab_reorder_half(
 /// `groups` 的数组顺序就是标签栏显示顺序，因此换序无需额外序号字段；活动标签、
 /// 窗格布局与焦点都不受影响。锚点下标在摘走自身后会左移一位，必须同步修正，
 /// 否则插队位置会偏一格——这也是把纯计算单独抽出来便于单测的原因。
-fn reorder_groups(groups: &mut Vec<TabGroup>, dragged: GroupId, anchor: GroupId, after: bool) {
+pub(super) fn reorder_groups(
+    groups: &mut Vec<TabGroup>,
+    dragged: GroupId,
+    anchor: GroupId,
+    after: bool,
+) {
     let Some(anchor_index) = groups.iter().position(|group| group.id == anchor) else {
         return;
     };

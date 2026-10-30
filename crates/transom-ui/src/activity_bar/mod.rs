@@ -25,7 +25,7 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use metrics::METRICS;
-use transom_core::{ActivityItemId, Connection};
+use transom_core::{ActivityItemId, Connection, TabPosition};
 
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 
@@ -36,8 +36,18 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let top: Vec<ActivityItemId> = self.settings.activity_bar.top_items().collect();
-        let bottom: Vec<ActivityItemId> = self.settings.activity_bar.bottom_items().collect();
+        let top: Vec<ActivityItemId> = self
+            .settings
+            .activity_bar
+            .top_items()
+            .filter(|id| self.activity_item_available(*id))
+            .collect();
+        let bottom: Vec<ActivityItemId> = self
+            .settings
+            .activity_bar
+            .bottom_items()
+            .filter(|id| self.activity_item_available(*id))
+            .collect();
         let mut top_children = Vec::with_capacity(top.len());
         for id in top {
             top_children.push(self.render_activity_item(window, id, p, cx));
@@ -166,9 +176,18 @@ impl AppShell {
         }
     }
 
+    /// 条目在当前上下文是否可展示。
+    ///
+    /// 纵向标签条目只在"标签位置 = 左侧"时有意义；顶部模式下直接不渲染，
+    /// 避免保留一个点击无反应的图标。设置页仍保留该条目，方便用户调整顺序。
+    fn activity_item_available(&self, id: ActivityItemId) -> bool {
+        id != ActivityItemId::Tabs || self.settings.window.tab_position == TabPosition::Left
+    }
+
     fn activity_item_selected(&self, id: ActivityItemId) -> bool {
         match id {
-            ActivityItemId::Sessions => self.sidebar.visible,
+            ActivityItemId::Sessions => self.sidebar.visible && !self.vertical_tabs_open,
+            ActivityItemId::Tabs => self.sidebar.visible && self.vertical_tabs_open,
             ActivityItemId::Forwards => self
                 .workspace
                 .active_tab
@@ -214,7 +233,26 @@ impl AppShell {
     ) {
         match id {
             ActivityItemId::Sessions => {
-                self.sidebar.toggle_visible();
+                // 会话树与标签面板共用左侧槽位：点击非当前视图时切过去，
+                // 点击当前视图时收起槽位，与原有的侧栏开关习惯一致。
+                if self.sidebar.visible && !self.vertical_tabs_open {
+                    self.sidebar.visible = false;
+                } else {
+                    self.sidebar.visible = true;
+                    self.vertical_tabs_open = false;
+                }
+                cx.notify();
+            }
+            ActivityItemId::Tabs => {
+                if self.settings.window.tab_position != TabPosition::Left {
+                    return;
+                }
+                if self.sidebar.visible && self.vertical_tabs_open {
+                    self.sidebar.visible = false;
+                } else {
+                    self.sidebar.visible = true;
+                    self.vertical_tabs_open = true;
+                }
                 cx.notify();
             }
             ActivityItemId::QuickOpen => self.toggle_quick_open(window, cx),
@@ -242,6 +280,7 @@ mod labels {
     pub(crate) fn activity_item_icon(id: ActivityItemId) -> IconName {
         match id {
             ActivityItemId::Sessions => IconName::Server,
+            ActivityItemId::Tabs => IconName::Terminal,
             ActivityItemId::QuickOpen => IconName::Search,
             ActivityItemId::Forwards => IconName::ArrowLeftRight,
             ActivityItemId::Sftp => IconName::Folder,
@@ -258,6 +297,7 @@ mod labels {
     pub(crate) fn activity_item_label(id: ActivityItemId) -> String {
         let key = match id {
             ActivityItemId::Sessions => "app.sessions",
+            ActivityItemId::Tabs => "activity.tabs",
             ActivityItemId::QuickOpen => "app.quick_open",
             ActivityItemId::Forwards => "forward.title",
             ActivityItemId::Sftp => "sftp.title",

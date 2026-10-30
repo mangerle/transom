@@ -85,6 +85,9 @@ app:
     en: Restore
     zh-CN: 还原
 activity:
+  tabs:
+    en: Tabs
+    zh-CN: 标签
   language:
     en: Language
     zh-CN: 语言
@@ -159,6 +162,25 @@ tab:
   pane_count:
     en: '%{title} · %{count} panes'
     zh-CN: '%{title} · %{count} 个窗格'
+  vertical_search:
+    en: Search tabs
+    zh-CN: 搜索标签
+  vertical_empty:
+    en: No open terminals
+    zh-CN: 没有打开的终端
+  vertical_empty_hint:
+    en: Connect a session and it will appear here.
+    zh-CN: 连接会话后会显示在这里。
+  vertical_no_matches:
+    en: No tabs match your search
+    zh-CN: 没有匹配的标签
+  vertical_no_matches_hint:
+    en: Try another session name, host, or tab number.
+    zh-CN: 尝试其他会话名、主机地址或标签序号。
+vertical_tabs:
+  open_session_tree:
+    en: Show Session Tree
+    zh-CN: 打开会话树
 broadcast:
   title:
     en: Broadcast Input
@@ -2569,6 +2591,9 @@ settings:
   show_tab_close_button_desc:
     en: Show the close button on each tab.
     zh-CN: 在每个标签页上显示关闭按钮。
+  tab_position_desc:
+    en: Show terminal tabs as a top bar, or as a left panel switched with the session tree.
+    zh-CN: 终端标签显示为顶部的横向条，或左侧与会话树切换的面板。
   close_window_on_all_tabs_closed_desc:
     en: Quit the app when the last tab is closed.
     zh-CN: 关闭最后一个标签页时退出应用，而不是留一个空窗口。
@@ -2932,6 +2957,15 @@ settings:
   show_tab_close_button:
     en: Show Close Button on Tabs
     zh-CN: 在标签页上显示关闭按钮
+  tab_position:
+    en: Tab Placement
+    zh-CN: 标签位置
+  tab_position_top:
+    en: Top Bar
+    zh-CN: 顶部横条
+  tab_position_left:
+    en: Left Panel
+    zh-CN: 左侧面板
   close_window_on_all_tabs_closed:
     en: Close Window When All Tabs Are Closed
     zh-CN: 所有标签页关闭时退出应用

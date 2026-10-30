@@ -40,7 +40,13 @@ impl Render for AppShell {
             .fixed()
             .visible(self.sidebar.visible);
         if self.sidebar.visible {
-            sidebar_panel = sidebar_panel.child(self.render_sidebar(window, cx, &p));
+            // 左侧槽位一次只承载一种内容：纵向标签面板或会话树。
+            let content = if self.show_vertical_tabs_panel() {
+                self.render_vertical_tabs_panel(&p, cx)
+            } else {
+                self.render_sidebar(window, cx, &p)
+            };
+            sidebar_panel = sidebar_panel.child(content);
         }
         let plan = self.plan_workspace_layout(window, cx);
         // 折叠状态变化时把 SFTP 面板同步到内容宽度：必须赶在分组构建之前，

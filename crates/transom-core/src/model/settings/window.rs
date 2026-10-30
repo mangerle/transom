@@ -37,11 +37,43 @@ impl PanelSide {
     }
 }
 
+/// 终端标签的排列位置。
+///
+/// 设计原理（Why）：参照 Warp 的垂直标签模式，标签可以从顶部横向条切换为
+/// 主区左侧的纵向面板；默认仍是顶部，避免改变既有用户的空间习惯。
+/// 左侧模式下主区顶部不再绘制横向标签条，纵向面板折叠时回退到横向条，
+/// 两种形态互斥，保证任何时刻都有切换标签的入口。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TabPosition {
+    /// 主区顶部的横向标签条（默认）。
+    #[default]
+    Top,
+    /// 主区左侧的纵向标签面板；面板折叠时回退到顶部横向条。
+    Left,
+    /// 反序列化兜底：未知值按顶部处理。
+    #[serde(other)]
+    Unknown,
+}
+
+impl TabPosition {
+    /// 归一化兜底值：写盘前洗成合法状态，保证持久化文件永远可回读。
+    pub(crate) fn normalized(self) -> Self {
+        match self {
+            TabPosition::Unknown => TabPosition::Top,
+            position => position,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowSettings {
     /// 是否在标签页上显示关闭按钮
     #[serde(default = "default_true")]
     pub show_tab_close_button: bool,
+    /// 终端标签的排列位置：顶部横向条或主区左侧纵向面板。
+    #[serde(default)]
+    pub tab_position: TabPosition,
     /// 所有标签页关闭时是否退出主程序
     #[serde(default)]
     pub close_window_on_all_tabs_closed: bool,
@@ -322,6 +354,7 @@ impl Default for WindowSettings {
     fn default() -> Self {
         Self {
             show_tab_close_button: true,
+            tab_position: TabPosition::Top,
             close_window_on_all_tabs_closed: false,
             bell_style: BellStyle::default(),
             desktop_notifications: true,
@@ -346,6 +379,13 @@ impl Default for WindowSettings {
     }
 }
 
+impl WindowSettings {
+    /// 写盘前归一化兜底值，保证持久化状态合法。
+    pub fn normalize(&mut self) {
+        self.tab_position = self.tab_position.normalized();
+    }
+}
+
 fn default_notify_threshold_secs() -> u64 {
     10
 }
@@ -365,6 +405,21 @@ fn default_true() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 标签位置默认顶部；未知值在归一化时回退顶部，合法值原样往返。
+    #[test]
+    fn tab_position_defaults_to_top_and_normalizes_unknown() {
+        let mut settings = WindowSettings::default();
+        assert_eq!(settings.tab_position, TabPosition::Top);
+
+        settings.tab_position = TabPosition::Unknown;
+        settings.normalize();
+        assert_eq!(settings.tab_position, TabPosition::Top);
+
+        let restored: WindowSettings =
+            serde_json::from_str(r#"{"tab_position":"left"}"#).expect("必须成功反序列化");
+        assert_eq!(restored.tab_position, TabPosition::Left);
+    }
 
     #[test]
     fn test_window_settings_recent_sessions_default_and_roundtrip() {
