@@ -173,7 +173,10 @@ pub enum DividerWidth {
 }
 
 impl DividerWidth {
-    /// 全部可选档位，供设置页按固定顺序枚举。
+    /// 全部可选档位（不含兜底变体），按像素从细到粗排列。
+    ///
+    /// 设置页已改用 1/2/3 步进器，不再按此枚举出下拉；保留它给测试钉住
+    /// "档位顺序 ↔ 像素宽度"的对应关系。
     pub const ALL: [DividerWidth; 3] = [
         DividerWidth::Hairline,
         DividerWidth::Medium,
@@ -186,15 +189,6 @@ impl DividerWidth {
             DividerWidth::Hairline | DividerWidth::Unknown => 1.0,
             DividerWidth::Medium => 2.0,
             DividerWidth::Thick => 3.0,
-        }
-    }
-
-    /// 设置页展示用的本地化键。
-    pub fn label_key(self) -> &'static str {
-        match self {
-            DividerWidth::Hairline | DividerWidth::Unknown => "settings.divider_width_hairline",
-            DividerWidth::Medium => "settings.divider_width_medium",
-            DividerWidth::Thick => "settings.divider_width_thick",
         }
     }
 

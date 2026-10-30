@@ -128,60 +128,67 @@ impl AppShell {
         let port = self.modals.settings.proxy.port.clone();
         let username = self.modals.settings.proxy.username.clone();
         let password = self.modals.settings.proxy.password.clone();
+        // 代理模式与全页其它枚举项统一走下拉：三档选项长度不一，分段按钮
+        // 长短参差且窄面板下会把整行占满，下拉的控件宽度稳定、靠右对齐。
+        let mode_control = Self::setting_dropdown(
+            "dropdown-proxy-kind",
+            kind,
+            vec![
+                (
+                    ProxyProtocol::Direct,
+                    rust_i18n::t!("form.proxy_direct").to_string(),
+                ),
+                (
+                    ProxyProtocol::Socks5,
+                    rust_i18n::t!("form.proxy_socks5").to_string(),
+                ),
+                (
+                    ProxyProtocol::Http,
+                    rust_i18n::t!("form.proxy_http").to_string(),
+                ),
+            ],
+            |this, protocol, cx| {
+                this.modals.settings.proxy.kind = protocol;
+                cx.notify();
+            },
+            cx,
+        );
         let mut content = v_flex().gap_2().child(Self::setting_row(
             "settings.proxy_mode",
             Some("settings.proxy_mode_desc"),
-            h_flex()
-                .gap_1()
-                .children(
-                    [
-                        ("proxy-direct", "form.proxy_direct", ProxyProtocol::Direct),
-                        ("proxy-socks5", "form.proxy_socks5", ProxyProtocol::Socks5),
-                        ("proxy-http", "form.proxy_http", ProxyProtocol::Http),
-                    ]
-                    .into_iter()
-                    .map(|(id, key, protocol)| {
-                        Button::new(id)
-                            .small()
-                            .label(rust_i18n::t!(key).to_string())
-                            .selected(kind == protocol)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.modals.settings.proxy.kind = protocol;
-                                cx.notify();
-                            }))
-                    }),
-                )
-                .into_any_element(),
+            mode_control,
             p,
         ));
         if kind != ProxyProtocol::Direct {
             content = content
-                .child(Self::form_field(
-                    rust_i18n::t!("settings.proxy_host").to_string(),
-                    host,
+                .child(Self::setting_field_row(
+                    Self::form_field(rust_i18n::t!("settings.proxy_host").to_string(), host, p),
+                    None,
                     p,
                 ))
-                .child(Self::form_field(
-                    rust_i18n::t!("settings.proxy_port").to_string(),
-                    port,
+                .child(Self::setting_field_row(
+                    Self::form_field(rust_i18n::t!("settings.proxy_port").to_string(), port, p),
+                    None,
                     p,
                 ))
-                .child(Self::form_field(
-                    rust_i18n::t!("settings.proxy_username").to_string(),
-                    username,
+                .child(Self::setting_field_row(
+                    Self::form_field(
+                        rust_i18n::t!("settings.proxy_username").to_string(),
+                        username,
+                        p,
+                    ),
+                    None,
                     p,
                 ))
-                .child(Self::secret_field(
-                    rust_i18n::t!("settings.proxy_password").to_string(),
-                    password,
+                .child(Self::setting_field_row(
+                    Self::secret_field(
+                        rust_i18n::t!("settings.proxy_password").to_string(),
+                        password,
+                        p,
+                    ),
+                    Some(rust_i18n::t!("settings.proxy_auth_hint").to_string()),
                     p,
-                ))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("settings.proxy_auth_hint").to_string()),
-                );
+                ));
         }
         content.into_any_element()
     }
@@ -255,17 +262,15 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::form_field(
-                rust_i18n::t!("settings.block_view_rows").to_string(),
-                rows_input,
+            .child(Self::setting_field_row(
+                Self::form_field(
+                    rust_i18n::t!("settings.block_view_rows").to_string(),
+                    rows_input,
+                    p,
+                ),
+                Some(rust_i18n::t!("settings.block_view_rows_hint").to_string()),
                 p,
             ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("settings.block_view_rows_hint").to_string()),
-            )
             .into_any_element()
     }
 
@@ -320,36 +325,40 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        v_flex()
-            .gap_2()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("backup.settings_hint").to_string()),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Button::new("backup-export")
-                            .small()
-                            .icon(IconName::Download)
-                            .label(rust_i18n::t!("backup.export_action").to_string())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_backup_export(window, cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("backup-import")
-                            .small()
-                            .icon(IconName::Upload)
-                            .label(rust_i18n::t!("backup.import_action").to_string())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_backup_import(window, cx);
-                            })),
-                    ),
-            )
-            .into_any_element()
+        Self::setting_frame(
+            v_flex()
+                .w_full()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("backup.settings_hint").to_string()),
+                )
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(
+                            Button::new("backup-export")
+                                .small()
+                                .icon(IconName::Download)
+                                .label(rust_i18n::t!("backup.export_action").to_string())
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_backup_export(window, cx);
+                                })),
+                        )
+                        .child(
+                            Button::new("backup-import")
+                                .small()
+                                .icon(IconName::Upload)
+                                .label(rust_i18n::t!("backup.import_action").to_string())
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_backup_import(window, cx);
+                                })),
+                        ),
+                )
+                .into_any_element(),
+            p,
+        )
     }
 }

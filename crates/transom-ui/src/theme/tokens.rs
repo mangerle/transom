@@ -61,8 +61,12 @@ pub(crate) mod size {
     pub const DIALOG_MAX_WIDTH: f32 = 47.5;
     /// 通用弹窗最大高度（标准档 640px）。
     pub const DIALOG_MAX_HEIGHT: f32 = 40.0;
-    /// 设置弹窗宽度（标准档 1088px）。
-    pub const SETTINGS_DIALOG_WIDTH: f32 = 68.0;
+    /// 设置弹窗宽度（标准档 896px）。
+    ///
+    /// 收窄自 1088px：设置行是"左标题 + 右控件"的两列结构，面板越宽，两列之间
+    /// 的空白越显眼，输入类控件也被拉得越长；896px 下内容区仍有 644px，够放
+    /// 快捷键行的标签、按键与操作按钮。
+    pub const SETTINGS_DIALOG_WIDTH: f32 = 56.0;
     /// 设置弹窗高度（标准档 736px）。
     pub const SETTINGS_DIALOG_HEIGHT: f32 = 46.0;
 }

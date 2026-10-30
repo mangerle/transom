@@ -1,6 +1,8 @@
 //! 偏好设置中心的模态弹窗状态回填、全局代理表单组装与设置持久化动作。
 
-use super::read_font_family;
+use super::font_select::{
+    CJK_DEFAULT_KEY, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select, selected_font,
+};
 use crate::app::AppShell;
 use crate::palette::localized_error;
 use crate::settings::{ProxyProtocol, WindowAppearanceSnapshot};
@@ -26,23 +28,32 @@ impl AppShell {
         let profile = self.settings.terminal_profile.clone();
         // 界面主题与密度在弹窗内即时预览，取消时凭这份快照恢复。
         self.modals.settings.appearance_snapshot = Some(self.settings.appearance.clone());
-        self.modals.settings.font_family.update(cx, |input, cx| {
-            input.set_value(profile.font_family.unwrap_or_default(), window, cx);
-        });
-        self.modals.settings.ui_font_family.update(cx, |input, cx| {
-            input.set_value(
-                self.settings
-                    .appearance
-                    .ui_font_family
-                    .clone()
-                    .unwrap_or_default(),
-                window,
-                cx,
-            );
-        });
-        self.modals.settings.cjk_font.update(cx, |input, cx| {
-            input.set_value(profile.cjk_font_family.unwrap_or_default(), window, cx);
-        });
+        // 字体清单可能在本进程之外变化（例如系统装了新字体）：开弹窗时按
+        // 当前系统字体重建选项，再按配置值回填，避免下拉里看不到已存的族名。
+        let mono_default = rust_i18n::t!(MONO_DEFAULT_KEY).to_string();
+        reset_font_select(
+            &self.modals.settings.font_family,
+            &mono_default,
+            profile.font_family.as_deref(),
+            window,
+            cx,
+        );
+        let ui_default = rust_i18n::t!(UI_DEFAULT_KEY).to_string();
+        reset_font_select(
+            &self.modals.settings.ui_font_family,
+            &ui_default,
+            self.settings.appearance.ui_font_family.as_deref(),
+            window,
+            cx,
+        );
+        let cjk_default = rust_i18n::t!(CJK_DEFAULT_KEY).to_string();
+        reset_font_select(
+            &self.modals.settings.cjk_font,
+            &cjk_default,
+            profile.cjk_font_family.as_deref(),
+            window,
+            cx,
+        );
         let font_size = self.settings.terminal_profile.font_size.to_string();
         self.modals.settings.font_size.update(cx, |input, cx| {
             input.set_value(&font_size, window, cx);
@@ -51,6 +62,12 @@ impl AppShell {
         self.modals.settings.line_height.update(cx, |input, cx| {
             input.set_value(&line_height, window, cx);
         });
+        // 分割线粗细步进器回填当前档位（1/2/3 像素）；配置可能在弹窗之外被改过。
+        let divider_width = self.settings.appearance.divider.width.pixels().to_string();
+        self.modals
+            .settings
+            .divider_width
+            .update(cx, |input, cx| input.set_value(divider_width, window, cx));
         // 旧配置里可能存着"不透明"档：窗口背景现在只有透明与毛玻璃两档，
         // 直接按透明处理，界面上也不会出现两个按钮都没选中的状态。
         if self.settings.window.window_background == transom_core::WindowBackgroundMode::Opaque {
@@ -313,7 +330,7 @@ impl AppShell {
     fn collect_interface_preferences(&mut self, cx: &mut Context<Self>) {
         // 界面字体族：留空表示跟随主题。
         self.settings.appearance.ui_font_family =
-            read_font_family(&self.modals.settings.ui_font_family, cx);
+            selected_font(&self.modals.settings.ui_font_family, cx);
         // 文件面板显示排除：原样保存（glob 语法与传输过滤一致，非法规则在
         // 匹配时被静默跳过，不阻断保存）。
         self.settings.sftp.panel_hidden_patterns = self
@@ -360,9 +377,9 @@ impl AppShell {
     /// 终端字体、尺寸、高亮、滚动与通知阈值。
     fn collect_terminal_profile(&mut self, cx: &mut Context<Self>) {
         self.settings.terminal_profile.font_family =
-            read_font_family(&self.modals.settings.font_family, cx);
+            selected_font(&self.modals.settings.font_family, cx);
         self.settings.terminal_profile.cjk_font_family =
-            read_font_family(&self.modals.settings.cjk_font, cx);
+            selected_font(&self.modals.settings.cjk_font, cx);
         // 关键词列表先解析再清洗（去空、不分大小写去重、限长限条数），
         // 让"界面上看到的"与"存进文件的"是同一份。
         self.settings.terminal_profile.highlight.keywords = transom_core::TerminalHighlight {

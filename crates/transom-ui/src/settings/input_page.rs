@@ -74,17 +74,15 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::form_field(
-                rust_i18n::t!("settings.word_separators").to_string(),
-                self.modals.settings.word_separators.clone(),
+            .child(Self::setting_field_row(
+                Self::form_field(
+                    rust_i18n::t!("settings.word_separators").to_string(),
+                    self.modals.settings.word_separators.clone(),
+                    p,
+                ),
+                Some(rust_i18n::t!("settings.word_separators_note").to_string()),
                 p,
             ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("settings.word_separators_note").to_string()),
-            )
             .into_any_element()
     }
 

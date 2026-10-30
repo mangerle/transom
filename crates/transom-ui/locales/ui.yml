@@ -2395,6 +2395,18 @@ settings:
   font_imported_success:
     en: 'Successfully loaded font: %{name}'
     zh-CN: 已成功加载字体：%{name}
+  font_default_mono_label:
+    en: Default Mono (follows app)
+    zh-CN: 默认等宽（跟随应用）
+  font_missing_suffix:
+    en: ' (not installed)'
+    zh-CN: （未安装）
+  font_load_failed:
+    en: 'Failed to load font file: %{error}'
+    zh-CN: '加载字体文件失败: %{error}'
+  font_import_no_new_family:
+    en: The font file did not register a new font family. It may already be installed or unsupported.
+    zh-CN: 字体文件没有注册新的字体族：可能已安装，或文件格式不受支持。
   font_size:
     en: Font Size
     zh-CN: 字体大小
@@ -2957,17 +2969,8 @@ settings:
     en: Divider Width
     zh-CN: 分割线粗细
   divider_width_desc:
-    en: Hairline matches the current look; wider lines also thicken the draggable splitter.
-    zh-CN: 发丝线与现有观感一致；加宽同时作用于静态分隔线与可拖拽分割条。
-  divider_width_hairline:
-    en: 1 px
-    zh-CN: 1 像素
-  divider_width_medium:
-    en: 2 px
-    zh-CN: 2 像素
-  divider_width_thick:
-    en: 3 px
-    zh-CN: 3 像素
+    en: In pixels (1-3). Hairline matches the current look; wider lines also thicken the draggable splitter.
+    zh-CN: 单位：像素（1–3）。发丝线与现有观感一致；加宽同时作用于静态分隔线与可拖拽分割条。
   terminal_font_group:
     en: Terminal Font
     zh-CN: 终端字体

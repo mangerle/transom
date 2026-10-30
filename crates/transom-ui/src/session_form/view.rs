@@ -196,31 +196,24 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 文件夹字段：一个可编辑下拉框。
+    /// 文件夹字段：可输入，也可从既有目录里选一个，不做搜索/过滤。
     ///
     /// 文件夹本质是自由路径，候选只是既有目录的快捷方式，所以没有拆成
     /// "只读选择器 + 隐藏输入"：输入框始终可编辑，Popover 只负责把候选
     /// 挂在下方。展开时把焦点交给输入框自己的 FocusHandle，避免弹层抢走
-    /// 焦点打断键入；候选随输入实时过滤，输入框实体自身的刷新带不动弹层
-    /// 内容，故由 AppShell 观察输入变化后重渲染（见 install_session_form）。
+    /// 焦点打断键入；候选保持完整清单，开始键入路径时收起弹层（见
+    /// install_session_form），不把输入当成过滤词。
     fn render_folder_field(
         form: &super::types::SessionForm,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let query = form.folder_path.read(cx).value().trim().to_lowercase();
-        let options: Vec<String> = form
-            .folder_options
-            .iter()
-            .filter(|path| query.is_empty() || path.to_lowercase().contains(&query))
-            .cloned()
-            .collect();
+        let options = form.folder_options.clone();
         let focus = form.folder_path.read(cx).focus_handle(cx);
         let app = cx.entity().clone();
         let toggle_app = app.clone();
         let content_app = app.clone();
         let content_palette = p.clone();
-        let has_query = !query.is_empty();
 
         let popover = Popover::new("session-form-folder-popover")
             .anchor(Anchor::TopLeft)
@@ -247,7 +240,7 @@ impl AppShell {
                 ),
             )
             .content(move |_, _, _cx| {
-                Self::render_folder_options(&content_app, &options, has_query, &content_palette)
+                Self::render_folder_options(&content_app, &options, &content_palette)
             });
 
         v_flex()
@@ -262,11 +255,10 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 文件夹候选列表：根层级固定置顶，其余是当前输入过滤后的既有路径。
+    /// 文件夹候选列表：根层级固定置顶，其余是全部既有路径。
     fn render_folder_options(
         app: &Entity<AppShell>,
         options: &[String],
-        has_query: bool,
         p: &Palette,
     ) -> AnyElement {
         let root_app = app.clone();
@@ -305,18 +297,13 @@ impl AppShell {
             ));
         }
         if options.is_empty() {
-            let hint = if has_query {
-                rust_i18n::t!("form.folder_no_match").to_string()
-            } else {
-                rust_i18n::t!("form.folder_empty").to_string()
-            };
             list = list.child(
                 div()
                     .px_2()
                     .py_1()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(hint),
+                    .child(rust_i18n::t!("form.folder_empty").to_string()),
             );
         }
         div()

@@ -15,6 +15,10 @@ use gpui_kit::component::slider::SliderState;
 use gpui_kit::*;
 use transom_core::{AppSettings, AppearanceSettings, WindowBackgroundMode};
 
+use super::font_select::{
+    CJK_DEFAULT_KEY, FontSelect, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, new_font_select,
+};
+
 /// 窗口外观的即时快照：设置弹窗取消时用于回滚透明与背景模式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct WindowAppearanceSnapshot {
@@ -53,11 +57,12 @@ pub(crate) struct SettingsModalState {
     /// 由渲染侧读取本字段。关闭弹窗时清空，下一次从菜单打开仍回到上次位置。
     pub(crate) jump_page: Option<usize>,
     pub(crate) key_wizard: Option<KeyWizardState>,
-    pub(crate) font_family: Entity<InputState>,
-    pub(crate) ui_font_family: Entity<InputState>,
+    /// 字体族是封闭取值：只能从系统已安装的字体里选，不能手输自由文本。
+    pub(crate) font_family: Entity<FontSelect>,
+    pub(crate) ui_font_family: Entity<FontSelect>,
     pub(crate) panel_hidden_patterns: Entity<InputState>,
     pub(crate) max_concurrent_transfers: Entity<InputState>,
-    pub(crate) cjk_font: Entity<InputState>,
+    pub(crate) cjk_font: Entity<FontSelect>,
     pub(crate) font_size: Entity<InputState>,
     pub(crate) line_height: Entity<InputState>,
     pub(crate) scrollback: Entity<InputState>,
@@ -66,6 +71,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) block_collapse_rows: Entity<InputState>,
     pub(crate) terminal_key_bindings: Entity<TextareaState>,
     pub(crate) highlight_keywords: Entity<InputState>,
+    /// 分割线粗细步进器：1/2/3 像素，改动即时预览。
+    pub(crate) divider_width: Entity<InputState>,
     pub(crate) window_transparency: Entity<SliderState>,
     pub(crate) window_appearance_snapshot: Option<WindowAppearanceSnapshot>,
     pub(crate) appearance_snapshot: Option<AppearanceSettings>,
@@ -82,26 +89,20 @@ impl SettingsModalState {
         cx: &mut Context<AppShell>,
         settings: &AppSettings,
     ) -> Self {
-        let settings_font_family_val = settings
-            .terminal_profile
-            .font_family
-            .clone()
-            .unwrap_or_default();
-        let settings_font_family = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("settings.font_family_hint").to_string())
-                .default_value(settings_font_family_val)
-        });
-        let settings_ui_font_val = settings
-            .appearance
-            .ui_font_family
-            .clone()
-            .unwrap_or_default();
-        let settings_ui_font_family = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("settings.ui_font_family_hint").to_string())
-                .default_value(settings_ui_font_val)
-        });
+        let mono_default = rust_i18n::t!(MONO_DEFAULT_KEY).to_string();
+        let settings_font_family = new_font_select(
+            &mono_default,
+            settings.terminal_profile.font_family.as_deref(),
+            window,
+            cx,
+        );
+        let ui_default = rust_i18n::t!(UI_DEFAULT_KEY).to_string();
+        let settings_ui_font_family = new_font_select(
+            &ui_default,
+            settings.appearance.ui_font_family.as_deref(),
+            window,
+            cx,
+        );
         let settings_panel_hidden = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("settings.panel_hidden_hint").to_string())
@@ -115,16 +116,13 @@ impl SettingsModalState {
                 .placeholder("3")
                 .default_value(settings.sftp.max_concurrent_transfers.to_string())
         });
-        let settings_cjk_font_val = settings
-            .terminal_profile
-            .cjk_font_family
-            .clone()
-            .unwrap_or_default();
-        let settings_cjk_font = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("settings.cjk_font_hint").to_string())
-                .default_value(settings_cjk_font_val)
-        });
+        let cjk_default = rust_i18n::t!(CJK_DEFAULT_KEY).to_string();
+        let settings_cjk_font = new_font_select(
+            &cjk_default,
+            settings.terminal_profile.cjk_font_family.as_deref(),
+            window,
+            cx,
+        );
         let font_size_val = settings.terminal_profile.font_size.to_string();
         let settings_font_size = cx.new(|cx| {
             InputState::new(window, cx)
@@ -234,6 +232,16 @@ impl SettingsModalState {
                     .default_value(proxy_pass_val)
             }),
         };
+        // 分割线粗细只有 1/2/3px 三档，用步进器而不是下拉：数值小且连续，
+        // 键盘上下键与加减按钮都能直接调，和字号/行高的操作手感一致。
+        let divider_width = cx.new(|cx| {
+            InputState::new(window, cx)
+                .min(1.0)
+                .max(3.0)
+                .step(1.0)
+                .placeholder("2")
+                .default_value(settings.appearance.divider.width.pixels().to_string())
+        });
         // 窗口整体透明度是连续量：滑块比输入框直观，拖动时还能即时预览。
         let window_transparency = cx.new(|_| {
             SliderState::new()
@@ -263,6 +271,7 @@ impl SettingsModalState {
             block_collapse_rows: settings_block_collapse_rows,
             terminal_key_bindings: settings_terminal_key_bindings,
             highlight_keywords: settings_highlight_keywords,
+            divider_width,
             window_transparency,
             window_appearance_snapshot: None,
             appearance_snapshot: None,

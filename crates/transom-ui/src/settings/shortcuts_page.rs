@@ -1,6 +1,7 @@
 //! 偏好设置中的快捷键自定义页。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
@@ -44,11 +45,12 @@ impl AppShell {
                             }
                         }));
                 h_flex()
+                    .w_full()
                     .justify_between()
                     .items_center()
-                    .py_1p5()
-                    .border_b_1()
-                    .border_color(p.border)
+                    .py_2()
+                    .border_color(p.divider(p.border))
+                    .divider_edge(DividerEdge::Bottom, p.divider_width)
                     .child(
                         div()
                             .text_sm()

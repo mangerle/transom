@@ -51,33 +51,47 @@ impl AppShell {
             ));
         }
 
-        v_flex()
-            .gap_2p5()
-            .child(
-                v_flex()
-                    .gap_2()
-                    .children(Self::render_two_column_grid(cards)),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .justify_between()
-                    .items_center()
-                    .pt_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("settings.activity_bar_note").to_string()),
-                    )
-                    .child(
-                        Button::new("activity-restore-default")
-                            .small()
-                            .label(rust_i18n::t!("activity.restore_default").to_string())
-                            .on_click(cx.listener(|this, _, _, cx| this.restore_activity_bar(cx))),
-                    ),
-            )
-            .into_any_element()
+        // 显隐卡自带边框，不按行画线；卡片网格与恢复按钮作为一项，在组末补一条。
+        Self::setting_frame(
+            v_flex()
+                .w_full()
+                .gap_2p5()
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .children(Self::render_two_column_grid(cards)),
+                )
+                .child(
+                    // 说明是长句：左列必须 flex_1 + min_w_0 才会在列内换行，
+                    // 按钮固定不收缩；缺这两条时长文案会把按钮挤出面板后一起被裁。
+                    h_flex()
+                        .w_full()
+                        .justify_between()
+                        .items_center()
+                        .gap_4()
+                        .pt_1()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("settings.activity_bar_note").to_string()),
+                        )
+                        .child(
+                            div().flex_none().child(
+                                Button::new("activity-restore-default")
+                                    .small()
+                                    .label(rust_i18n::t!("activity.restore_default").to_string())
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.restore_activity_bar(cx)),
+                                    ),
+                            ),
+                        ),
+                )
+                .into_any_element(),
+            p,
+        )
     }
 
     pub(crate) fn render_settings_status_bar(
@@ -108,33 +122,45 @@ impl AppShell {
             ));
         }
 
-        v_flex()
-            .gap_2p5()
-            .child(
-                v_flex()
-                    .gap_2()
-                    .children(Self::render_two_column_grid(cards)),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .justify_between()
-                    .items_center()
-                    .pt_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("settings.status_bar_note").to_string()),
-                    )
-                    .child(
-                        Button::new("status-restore-default")
-                            .small()
-                            .label(rust_i18n::t!("activity.restore_default").to_string())
-                            .on_click(cx.listener(|this, _, _, cx| this.restore_status_bar(cx))),
-                    ),
-            )
-            .into_any_element()
+        Self::setting_frame(
+            v_flex()
+                .w_full()
+                .gap_2p5()
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .children(Self::render_two_column_grid(cards)),
+                )
+                .child(
+                    // 同活动栏：说明在左列内换行，恢复按钮固定靠右不被挤出。
+                    h_flex()
+                        .w_full()
+                        .justify_between()
+                        .items_center()
+                        .gap_4()
+                        .pt_1()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("settings.status_bar_note").to_string()),
+                        )
+                        .child(
+                            div().flex_none().child(
+                                Button::new("status-restore-default")
+                                    .small()
+                                    .label(rust_i18n::t!("activity.restore_default").to_string())
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.restore_status_bar(cx)),
+                                    ),
+                            ),
+                        ),
+                )
+                .into_any_element(),
+            p,
+        )
     }
 
     /// 双列并排重排：将单列表项两两拼装成一行双列网格。

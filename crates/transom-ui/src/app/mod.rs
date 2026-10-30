@@ -251,7 +251,19 @@ impl AppShell {
                 _ => {}
             },
         );
-        let terminal_appearance_subscriptions = vec![window_transparency_sub];
+        // 分割线粗细步进器：手输与加减按钮都发 Change，统一走即时预览；
+        // 弹窗打开时的回填同样会触发一次，值相同时不产生任何副作用。
+        let settings_divider_width = settings_modal.divider_width.clone();
+        let divider_width_sub = cx.subscribe_in(
+            &settings_divider_width,
+            window,
+            |this, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.apply_divider_width_from_input(cx);
+                }
+            },
+        );
+        let terminal_appearance_subscriptions = vec![window_transparency_sub, divider_width_sub];
         let sidebar_visible = settings.window.sidebar_visible_at_startup();
         // 左侧标签模式启动即以标签面板作为槽位主视图；顶部模式该标志无效。
         let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;

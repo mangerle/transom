@@ -3,6 +3,7 @@
 use crate::app::AppShell;
 use crate::palette::localized_error;
 use crate::session_form::SessionForm;
+use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
 use transom_core::{
     AppError, Connection, ErrorCode, SecretKey, SecretKind, SecretStore, Session, SessionId,
@@ -144,19 +145,21 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 装载会话表单，并订阅文件夹输入变化。
+    /// 装载会话表单，并处理文件夹输入与候选弹层的关系。
     ///
-    /// 文件夹字段是可编辑下拉，候选要在键入时实时过滤；Popover 的内容
-    /// 只在宿主实体重渲染时才重建，输入框实体自身的刷新带不动它，所以
-    /// 在下拉展开期间把输入变化转成 AppShell 的 notify（未展开时不打扰）。
+    /// 文件夹字段是"输入或选择"：候选不随输入过滤。展开后一旦开始键入
+    /// 路径，就把候选收起，避免一个不动的列表挡住表单；选中与清空仍由
+    /// 字段自身收起。
     pub(crate) fn install_session_form(&mut self, form: SessionForm, cx: &mut Context<Self>) {
-        cx.observe(&form.folder_path, |this, _, cx| {
-            let open = this
-                .modals
-                .form
-                .as_ref()
-                .is_some_and(|form| form.folder_open);
-            if open {
+        cx.subscribe(&form.folder_path, |this, _, event, cx| {
+            if !matches!(event, InputEvent::Change) {
+                return;
+            }
+            let Some(form) = this.modals.form.as_mut() else {
+                return;
+            };
+            if form.folder_open {
+                form.folder_open = false;
                 cx.notify();
             }
         })

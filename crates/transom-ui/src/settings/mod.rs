@@ -4,6 +4,8 @@ mod about_page;
 mod actions;
 mod appearance_page;
 mod files_page;
+mod font_field;
+mod font_select;
 mod general_page;
 mod input_page;
 mod layout_page;
@@ -16,16 +18,19 @@ mod shortcuts_page;
 mod startup_page;
 mod sync_page;
 mod terminal_page;
+mod terminal_themes;
 mod window_page;
 
+pub(crate) use font_field::FontFieldSpec;
 pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearanceSnapshot};
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::Button;
-use gpui_kit::component::input::{Input, InputState, NumberInput};
+use gpui_kit::component::input::{InputState, NumberInput};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::slider::SliderValue;
 use gpui_kit::component::tooltip::Tooltip;
@@ -58,13 +63,6 @@ pub(crate) fn page_entries() -> Vec<(&'static str, IconName)> {
     ]
 }
 
-/// 读取字体族输入框：留空表示"不指定"，交给默认字体或系统回退。
-pub(super) fn read_font_family(input: &Entity<InputState>, cx: &App) -> Option<String> {
-    let value = input.read(cx).value();
-    let trimmed = value.trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
 /// 滑块取值折算成百分比整数。
 ///
 /// 区间滑块返回的是范围，这里只用单值档；出现范围时退回 0，避免把区间下界
@@ -80,22 +78,49 @@ impl AppShell {
     /// Zed 风格设置行：左侧标题与说明、右侧控件。
     ///
     /// 全设置页的开关/按钮行共用这一构造，行高与对齐才一致；说明文字用弱色
-    /// 小字，缺省时标题与控件垂直居中。输入类行仍用 `form_field` 纵排（输入框
-    /// 需要完整宽度，且多带独立说明）。
+    /// 小字，缺省时标题与控件垂直居中。多行输入行仍用 `form_field` 纵排（输入框
+    /// 需要完整宽度，且多带独立说明）；字体族行的文案是运行期组装的，走
+    /// [`Self::setting_text_row`]，骨架与这里完全相同。
     ///
     /// 宽度约束是这里的重点：左列必须 `flex_1 + min_w_0`，控件必须 `flex_none`。
     /// 少任一条，弹性布局就会按内容固有宽度排版——一句长中文说明能把整行撑到比
     /// 面板内容区还宽，右侧开关/按钮被推到面板外截断（审计目录、命令历史、日志
     /// 目录都踩过这个坑）。左列拿到有界宽度后说明文字自然换行，而不是溢出裁切。
+    ///
+    /// 行距与分割线也在这里统一：上下各 8px，底部一条分割线；粗细与颜色取外观
+    /// 设置里的「分割线」档位（与弹窗页头线同一来源），改设置不必再改这里。
+    /// 自定义行（表单、卡片）走 [`Self::setting_frame`]、
+    /// [`Self::setting_field_row`]，保证全页节奏相同。
     pub(crate) fn setting_row(
         title_key: &'static str,
         description_key: Option<&'static str>,
         control: AnyElement,
         p: &Palette,
     ) -> AnyElement {
+        Self::setting_text_row(
+            rust_i18n::t!(title_key).to_string(),
+            description_key.map(|key| rust_i18n::t!(key).to_string()),
+            control,
+            p,
+        )
+    }
+
+    /// 与 [`Self::setting_row`] 同构，但标题与说明由调用方传入已本地化文本。
+    ///
+    /// 字体族行需要运行期组装的文案（`FontFieldSpec` 里的 `String`），又必须和
+    /// 其它行共用同一套行距、分割线与"左列弹性、右列不收缩"的宽度约束；另写
+    /// 一份骨架的话，两处对齐与分割线迟早会漂。
+    pub(crate) fn setting_text_row(
+        title: String,
+        description: Option<String>,
+        control: AnyElement,
+        p: &Palette,
+    ) -> AnyElement {
         h_flex()
             .w_full()
-            .py_1()
+            .py_2()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .justify_between()
             .items_center()
             .gap_4()
@@ -104,18 +129,53 @@ impl AppShell {
                     .flex_1()
                     .min_w_0()
                     .gap_0p5()
-                    .child(div().text_sm().child(rust_i18n::t!(title_key).to_string()))
-                    .when_some(description_key, |this, key| {
+                    .child(div().text_sm().child(title))
+                    .when_some(description, |this, description| {
                         this.child(
                             div()
                                 .text_xs()
                                 .text_color(p.muted_foreground)
-                                .child(rust_i18n::t!(key).to_string()),
+                                .child(description),
                         )
                     }),
             )
             .child(div().flex_none().child(control))
             .into_any_element()
+    }
+
+    /// 设置行外框：统一行距并在行底画一条分割线。
+    ///
+    /// 为什么把线画在行上而不是在行间插线元素：每组最后一行也要有线（组标题
+    /// 负责与下一组分隔），插线方案就得维护"最后一行不插"的游标，或者多一个
+    /// 尾线分支；边框随行高走，天然没有这个状态。
+    pub(crate) fn setting_frame(content: AnyElement, p: &Palette) -> AnyElement {
+        v_flex()
+            .w_full()
+            .py_2()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
+            .child(content)
+            .into_any_element()
+    }
+
+    /// 带分割线的输入行：输入框与其说明同属一行。
+    ///
+    /// 说明必须和输入框一起画线：它解释的是这个输入框的格式或口径，落到线下面
+    /// 会被读成下一项的内容。
+    pub(crate) fn setting_field_row(
+        field: AnyElement,
+        note: Option<String>,
+        p: &Palette,
+    ) -> AnyElement {
+        let inner = v_flex()
+            .w_full()
+            .gap_1()
+            .child(field)
+            .when_some(note, |this, note| {
+                this.child(div().text_xs().text_color(p.muted_foreground).child(note))
+            })
+            .into_any_element();
+        Self::setting_frame(inner, p)
     }
 
     /// 数字步进器控件（直接复用 gpui-kit 内置的 NumberInput 组件）：
@@ -135,6 +195,27 @@ impl AppShell {
         current_value: T,
         options: Vec<(T, String)>,
         on_change: impl Fn(&mut Self, T, &mut Context<Self>) + 'static + Clone,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        Self::setting_dropdown_with_window(
+            id,
+            current_value,
+            options,
+            move |this, value, _window, cx| on_change(this, value, cx),
+            cx,
+        )
+    }
+
+    /// 需要窗口句柄的下拉：切项时要回填其它输入框的调用方用这条。
+    ///
+    /// 输入框回填（`InputState::set_value`）必须拿窗口句柄，而菜单项的点击
+    /// 回调本身就带 `&mut Window`；有这条变体，调用方不必为拿窗口把切换动作
+    /// 绕成事件或推迟到下一帧。
+    pub(crate) fn setting_dropdown_with_window<T: Clone + PartialEq + 'static>(
+        id: impl Into<ElementId>,
+        current_value: T,
+        options: Vec<(T, String)>,
+        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let app = cx.entity().clone();
@@ -161,11 +242,11 @@ impl AppShell {
                         menu = menu.item(
                             PopupMenuItem::new(label.clone())
                                 .checked(is_selected)
-                                .on_click(move |_, _, cx| {
+                                .on_click(move |_, window, cx| {
                                     let val = val.clone();
                                     let on_change = on_change.clone();
                                     app.update(cx, |this, cx| {
-                                        on_change(this, val, cx);
+                                        on_change(this, val, window, cx);
                                     });
                                 }),
                         );
@@ -174,158 +255,6 @@ impl AppShell {
                 }
             })
             .into_any_element()
-    }
-
-    /// 常用等宽代码字体预设选项；左侧为文案键，右侧为写入输入框的字体族。
-    pub(crate) const MONO_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
-        ("settings.font_preset_default_mono", ""),
-        ("JetBrains Mono", "JetBrains Mono"),
-        ("Fira Code", "Fira Code"),
-        ("Cascadia Code", "Cascadia Code"),
-        ("Cascadia Mono", "Cascadia Mono"),
-        ("Hack", "Hack"),
-        ("Source Code Pro", "Source Code Pro"),
-        ("Consolas", "Consolas"),
-        ("Menlo", "Menlo"),
-        ("Monaco", "Monaco"),
-        ("DejaVu Sans Mono", "DejaVu Sans Mono"),
-        ("Ubuntu Mono", "Ubuntu Mono"),
-    ];
-
-    /// 常用中文字体预设选项；左侧为文案键，右侧为写入输入框的字体族。
-    pub(crate) const CJK_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
-        ("settings.font_preset_system_fallback", ""),
-        ("settings.font_preset_pingfang", "PingFang SC"),
-        ("settings.font_preset_yahei", "Microsoft YaHei"),
-        ("settings.font_preset_noto_cjk", "Noto Sans CJK SC"),
-        ("settings.font_preset_source_han", "Source Han Sans SC"),
-        ("settings.font_preset_wqy", "WenQuanYi Micro Hei"),
-        ("settings.font_preset_sarasa", "Sarasa Gothic SC"),
-    ];
-
-    /// 常用 UI 界面字体预设选项；左侧为文案键，右侧为写入输入框的字体族。
-    pub(crate) const UI_FONT_PRESETS: &'static [(&'static str, &'static str)] = &[
-        ("settings.font_preset_system_default", ""),
-        ("Inter", "Inter"),
-        ("Segoe UI", "Segoe UI"),
-        ("settings.font_preset_pingfang", "PingFang SC"),
-        ("settings.font_preset_yahei", "Microsoft YaHei"),
-        ("Noto Sans", "Noto Sans"),
-    ];
-
-    /// 字体配置复合行：左侧标签，下方是输入框 + 下拉预设选择按钮 + 本地字体导入按钮。
-    pub(crate) fn setting_font_field(
-        id: &'static str,
-        label: String,
-        input: Entity<InputState>,
-        presets: &'static [(&'static str, &'static str)],
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        v_flex()
-            .gap_1()
-            .child(div().text_xs().text_color(p.muted_foreground).child(label))
-            .child(
-                h_flex()
-                    .w_full()
-                    .gap_1p5()
-                    .items_center()
-                    .child(div().flex_1().min_w_0().child(Input::new(&input).w_full()))
-                    .child(
-                        Button::new(format!("{id}-presets"))
-                            .outline()
-                            .small()
-                            .icon(IconName::ChevronsUpDown)
-                            .tooltip(rust_i18n::t!("settings.preset_fonts_tooltip").to_string())
-                            .dropdown_menu({
-                                let input = input.clone();
-                                move |mut menu, _window, cx| {
-                                    for &(name_key, value) in presets {
-                                        let input = input.clone();
-                                        let current_val = input.read(cx).value();
-                                        let is_active = current_val == value
-                                            || (value.is_empty() && current_val.trim().is_empty());
-                                        menu = menu.item(
-                                            PopupMenuItem::new(rust_i18n::t!(name_key).to_string())
-                                                .checked(is_active)
-                                                .on_click(move |_, window, cx| {
-                                                    input.update(cx, |inp, cx| {
-                                                        inp.set_value(value, window, cx);
-                                                    });
-                                                }),
-                                        );
-                                    }
-                                    menu
-                                }
-                            }),
-                    )
-                    .child(
-                        Button::new(format!("{id}-import"))
-                            .outline()
-                            .small()
-                            .icon(IconName::FolderOpen)
-                            .tooltip(rust_i18n::t!("settings.import_font_tooltip").to_string())
-                            .on_click(cx.listener({
-                                let input = input.clone();
-                                move |this, _, window, cx| {
-                                    this.import_local_font_file(&input, window, cx);
-                                }
-                            })),
-                    ),
-            )
-            .into_any_element()
-    }
-
-    /// 唤起系统文件选择器导入外部字体文件（.ttf, .otf, .ttc 等），动态加载并填入输入框。
-    pub(crate) fn import_local_font_file(
-        &mut self,
-        input: &Entity<InputState>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let picked = rfd::FileDialog::new()
-            .set_title(rust_i18n::t!("settings.pick_font_title").to_string())
-            .add_filter(
-                rust_i18n::t!("settings.font_file_filter").to_string(),
-                &["ttf", "otf", "ttc", "woff2"],
-            )
-            .pick_file();
-
-        let Some(path) = picked else {
-            return;
-        };
-
-        match std::fs::read(&path) {
-            Ok(bytes) => {
-                let font_name = path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "CustomFont".to_string());
-
-                if let Err(err) = cx
-                    .text_system()
-                    .add_fonts(vec![std::borrow::Cow::Owned(bytes)])
-                {
-                    log::warn!("加载外部字体文件失败，路径: {:?}，原因: {err}", path);
-                } else {
-                    log::info!("成功注册本地字体: {}，路径: {:?}", font_name, path);
-                }
-
-                input.update(cx, |inp, cx| {
-                    inp.set_value(&font_name, window, cx);
-                });
-                self.status = Some(
-                    rust_i18n::t!("settings.font_imported_success", name = font_name).to_string(),
-                );
-                cx.notify();
-            }
-            Err(err) => {
-                log::error!("读取本地字体文件失败，路径: {:?}，原因: {err}", path);
-                self.status =
-                    Some(rust_i18n::t!("settings.font_read_failed", error = err).to_string());
-                cx.notify();
-            }
-        }
     }
 
     /// 路径型设置值：定宽截断，完整路径挂在悬停 tooltip 上。

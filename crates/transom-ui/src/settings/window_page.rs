@@ -1,6 +1,7 @@
 //! 偏好设置中心之标签页、面板停靠与窗口记忆配置页渲染。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -9,7 +10,10 @@ use gpui_kit::*;
 use transom_core::{PanelSide, TabPosition};
 
 impl AppShell {
-    /// 标签页组：关闭按钮与最后标签退出行为（紧凑双列卡片并排）。
+    /// 标签页组：关闭按钮与最后标签退出行为（两张开关卡上下排列）。
+    ///
+    /// 两张卡不并排：说明文案是长句，半宽时右卡会被挤断成两行，两张卡的
+    /// 行数与高度不齐；一卡一行后说明保持单行，也与其他组的纵向节奏一致。
     pub(crate) fn render_settings_tabs(
         &mut self,
         p: &Palette,
@@ -17,7 +21,7 @@ impl AppShell {
     ) -> AnyElement {
         let close_btn_card =
             h_flex()
-                .flex_1()
+                .w_full()
                 .min_w_0()
                 .justify_between()
                 .items_center()
@@ -53,7 +57,7 @@ impl AppShell {
                 );
 
         let quit_on_close_card = h_flex()
-            .flex_1()
+            .w_full()
             .min_w_0()
             .justify_between()
             .items_center()
@@ -125,9 +129,12 @@ impl AppShell {
             .w_full()
             .gap_2()
             .child(
-                h_flex()
+                v_flex()
                     .w_full()
-                    .gap_3()
+                    .gap_2()
+                    .py_2()
+                    .border_color(p.divider(p.border))
+                    .divider_edge(DividerEdge::Bottom, p.divider_width)
                     .child(close_btn_card)
                     .child(quit_on_close_card),
             )

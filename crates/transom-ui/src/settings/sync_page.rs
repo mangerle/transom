@@ -4,51 +4,52 @@ use crate::app::AppShell;
 use crate::cloud_sync::DEFAULT_SYNC_DIRECTORY;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
+use gpui_kit::component::input::InputState;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::SyncEndpoint;
 
+/// 同步页输入行：标签 + 输入框，带分割线。
+///
+/// 本页说明文字都跨多个字段（凭据口径、Git 权限要求），由调用方单独挂在
+/// 对应的那一行上，不随辅助函数硬绑某个输入框。
+fn sync_form_row(label_key: &'static str, input: Entity<InputState>, p: &Palette) -> AnyElement {
+    AppShell::setting_field_row(
+        AppShell::form_field(rust_i18n::t!(label_key).to_string(), input, p),
+        None,
+        p,
+    )
+}
+
 impl AppShell {
     /// 云同步组：端点选择、拓扑配置、同步口令与上传下载动作。
     ///
-    /// 端点类型点击即改设置内存态（保存时落盘），字段值始终从输入框现读，
+    /// 端点类型选中即改设置内存态（保存时落盘），字段值始终从输入框现读，
     /// 因此"填完直接点上传"不需要先按保存。
     pub(crate) fn render_settings_cloud_sync(
         &mut self,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_kind = if self.settings.sync.git.is_some() {
-            "git"
-        } else {
-            match self.settings.sync.endpoint {
-                Some(SyncEndpoint::Webdav { .. }) => "webdav",
-                Some(SyncEndpoint::S3 { .. }) => "s3",
-                None => "off",
-            }
-        };
+        let current_kind = self.sync_endpoint_kind();
 
-        let endpoint_buttons = [
-            ("sync-kind-off", "sync.endpoint_off", "off"),
-            ("sync-kind-webdav", "sync.endpoint_webdav", "webdav"),
-            ("sync-kind-s3", "sync.endpoint_s3", "s3"),
-            ("sync-kind-git", "sync.endpoint_git", "git"),
-        ]
-        .into_iter()
-        .map(|(id, key, kind)| {
-            Button::new(id)
-                .small()
-                .label(rust_i18n::t!(key).to_string())
-                .selected(current_kind == kind)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.switch_sync_endpoint(kind, window, cx);
-                }))
-        })
-        .collect::<Vec<_>>();
-        let endpoint_buttons = h_flex().gap_1().children(endpoint_buttons);
+        // 四种端点类型走下拉：与全页其它枚举项一致，长标签（WebDAV、Git 仓库）
+        // 不会把整行占满；切换要回填表单输入框，所以用带窗口句柄的变体。
+        let endpoint_control = Self::setting_dropdown_with_window(
+            "dropdown-sync-endpoint",
+            current_kind,
+            vec![
+                ("off", rust_i18n::t!("sync.endpoint_off").to_string()),
+                ("webdav", rust_i18n::t!("sync.endpoint_webdav").to_string()),
+                ("s3", rust_i18n::t!("sync.endpoint_s3").to_string()),
+                ("git", rust_i18n::t!("sync.endpoint_git").to_string()),
+            ],
+            |this, kind, window, cx| this.switch_sync_endpoint(kind, window, cx),
+            cx,
+        );
 
         let form = &self.modals.settings.sync_form;
         let mut content = v_flex()
@@ -56,7 +57,7 @@ impl AppShell {
             .child(Self::setting_row(
                 "sync.endpoint",
                 Some("sync.endpoint_desc"),
-                endpoint_buttons.into_any_element(),
+                endpoint_control,
                 p,
             ))
             .child(
@@ -68,80 +69,55 @@ impl AppShell {
 
         match current_kind {
             "off" => {
-                content = content.child(
+                content = content.child(Self::setting_frame(
                     div()
-                        .py_3()
+                        .w_full()
                         .text_xs()
                         .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("sync.sync_disabled_hint").to_string()),
-                );
+                        .child(rust_i18n::t!("sync.sync_disabled_hint").to_string())
+                        .into_any_element(),
+                    p,
+                ));
             }
             "webdav" => {
                 content = content
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.webdav_url").to_string(),
-                        form.webdav_url.clone(),
-                        p,
-                    ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.username").to_string(),
+                    .child(sync_form_row("sync.webdav_url", form.webdav_url.clone(), p))
+                    .child(sync_form_row(
+                        "sync.username",
                         form.webdav_username.clone(),
                         p,
                     ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.password").to_string(),
+                    .child(sync_form_row(
+                        "sync.password",
                         form.webdav_password.clone(),
                         p,
                     ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.directory").to_string(),
-                        form.directory.clone(),
-                        p,
-                    ));
+                    .child(sync_form_row("sync.directory", form.directory.clone(), p));
             }
             "s3" => {
                 content = content
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.s3_endpoint").to_string(),
+                    .child(sync_form_row(
+                        "sync.s3_endpoint",
                         form.s3_endpoint.clone(),
                         p,
                     ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.region").to_string(),
-                        form.s3_region.clone(),
-                        p,
-                    ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.bucket").to_string(),
-                        form.s3_bucket.clone(),
-                        p,
-                    ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.access_key").to_string(),
+                    .child(sync_form_row("sync.region", form.s3_region.clone(), p))
+                    .child(sync_form_row("sync.bucket", form.s3_bucket.clone(), p))
+                    .child(sync_form_row(
+                        "sync.access_key",
                         form.s3_access_key.clone(),
                         p,
                     ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.secret").to_string(),
-                        form.s3_secret.clone(),
-                        p,
-                    ))
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.directory").to_string(),
-                        form.directory.clone(),
-                        p,
-                    ));
+                    .child(sync_form_row("sync.secret", form.s3_secret.clone(), p))
+                    .child(sync_form_row("sync.directory", form.directory.clone(), p));
             }
             "git" => {
                 let stepper = Self::setting_stepper(&form.git_interval, px(110.0));
                 content = content
-                    .child(Self::form_field(
-                        rust_i18n::t!("sync.git_remote").to_string(),
-                        form.git_remote.clone(),
-                        p,
-                    ))
-                    .child(
+                    .child(sync_form_row("sync.git_remote", form.git_remote.clone(), p))
+                    .child(Self::setting_frame(
                         h_flex()
+                            .w_full()
                             .gap_4()
                             .items_center()
                             .child(div().flex_1().child(Self::form_field(
@@ -160,37 +136,34 @@ impl AppShell {
                                             .child(rust_i18n::t!("sync.git_interval").to_string()),
                                     )
                                     .child(stepper),
-                            ),
-                    )
-                    .child(Self::secret_field(
-                        rust_i18n::t!("sync.git_token").to_string(),
-                        form.git_token.clone(),
+                            )
+                            .into_any_element(),
                         p,
                     ))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("sync.git_hint").to_string()),
-                    );
+                    .child(Self::setting_field_row(
+                        Self::secret_field(
+                            rust_i18n::t!("sync.git_token").to_string(),
+                            form.git_token.clone(),
+                            p,
+                        ),
+                        Some(rust_i18n::t!("sync.git_hint").to_string()),
+                        p,
+                    ));
             }
             _ => {}
         }
 
         // 只要启用了任一同步方式（WebDAV / S3 / Git），就展示同步口令
         if current_kind != "off" {
-            content = content
-                .child(Self::form_field(
+            content = content.child(Self::setting_field_row(
+                Self::form_field(
                     rust_i18n::t!("sync.passphrase").to_string(),
                     form.passphrase.clone(),
                     p,
-                ))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("sync.passphrase_hint").to_string()),
-                );
+                ),
+                Some(rust_i18n::t!("sync.passphrase_hint").to_string()),
+                p,
+            ));
         }
 
         // WebDAV 或 S3 提供包含密钥开关、状态行与上传/下载操作
@@ -209,9 +182,10 @@ impl AppShell {
                         .into_any_element(),
                     p,
                 ))
-                .child(self.sync_status_row(p))
-                .child(
+                .child(Self::setting_frame(self.sync_status_row(p), p))
+                .child(Self::setting_frame(
                     h_flex()
+                        .w_full()
                         .gap_2()
                         .child(
                             Button::new("sync-push-now")
@@ -230,18 +204,22 @@ impl AppShell {
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.start_cloud_sync_pull(window, cx);
                                 })),
-                        ),
-                );
+                        )
+                        .into_any_element(),
+                    p,
+                ));
         } else if current_kind == "git" {
-            content = content.child(
+            content = content.child(Self::setting_frame(
                 Button::new("sync-git-now")
                     .small()
                     .icon(IconName::GitBranch)
                     .label(rust_i18n::t!("sync.git_sync_now").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.start_git_sync(window, cx);
-                    })),
-            );
+                    }))
+                    .into_any_element(),
+                p,
+            ));
         }
 
         content.into_any_element()
@@ -275,14 +253,33 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 切换端点类型：切到未配置的类型时置默认拓扑并回填输入框；
-    /// 点击当前类型不动作，避免误清空输入框里尚未保存的编辑。
+    /// 当前生效的同步端点类型：Git 优先（`git` 有值时端点字段恒为空）。
+    fn sync_endpoint_kind(&self) -> &'static str {
+        if self.settings.sync.git.is_some() {
+            "git"
+        } else {
+            match self.settings.sync.endpoint {
+                Some(SyncEndpoint::Webdav { .. }) => "webdav",
+                Some(SyncEndpoint::S3 { .. }) => "s3",
+                None => "off",
+            }
+        }
+    }
+
+    /// 切换端点类型：切到未配置的类型时置默认拓扑并回填输入框。
+    ///
+    /// 选中当前类型直接返回：末尾的 `fill_sync_form` 会用设置值覆盖全部输入框，
+    /// 不拦这一下就会把用户尚未保存的编辑冲掉；下拉里重新点当前项是常见操作，
+    /// 必须幂等。
     fn switch_sync_endpoint(
         &mut self,
         kind: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if kind == self.sync_endpoint_kind() {
+            return;
+        }
         match kind {
             "off" => {
                 self.settings.sync.endpoint = None;

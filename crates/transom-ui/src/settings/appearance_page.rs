@@ -1,7 +1,8 @@
 //! 偏好设置中心之界面主题、明暗模式与密度档位配置页渲染。
 
-use super::slider_percent;
+use super::{FontFieldSpec, slider_percent};
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::window_appearance::DEFAULT_WINDOW_TRANSPARENCY;
 use gpui_kit::assets::IconName;
@@ -39,9 +40,12 @@ impl AppShell {
         let active_name = cx.theme().theme_name().clone();
 
         let mode_row = h_flex()
+            .w_full()
             .justify_between()
             .items_center()
-            .py_1()
+            .py_2()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .child(
                 div()
                     .text_sm()
@@ -71,9 +75,12 @@ impl AppShell {
             ));
 
         let density_row = h_flex()
+            .w_full()
             .justify_between()
             .items_center()
-            .py_1()
+            .py_2()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .child(
                 div()
                     .text_sm()
@@ -169,36 +176,41 @@ impl AppShell {
             (true, Some(PaletteMode::Light)) | (false, Some(PaletteMode::Dark))
         );
 
+        // 主题卡自带边框，不按行画线；说明、卡片与反差提示同属一项，在组末补一条。
+        let card_block =
+            v_flex()
+                .w_full()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("settings.ui_theme_note").to_string()),
+                )
+                .children(cards)
+                .when(contrast_hint, |this| {
+                    this.child(
+                        h_flex()
+                            .gap_2()
+                            .items_start()
+                            .child(
+                                Icon::new(IconName::TriangleAlert)
+                                    .size_3()
+                                    .text_color(p.warning),
+                            )
+                            .child(
+                                div().flex_1().text_xs().text_color(p.warning).child(
+                                    rust_i18n::t!("settings.appearance_contrast").to_string(),
+                                ),
+                            ),
+                    )
+                });
+
         v_flex()
             .gap_3()
             .child(mode_row)
             .child(density_row)
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("settings.ui_theme_note").to_string()),
-            )
-            .child(v_flex().gap_2().children(cards))
-            .when(contrast_hint, |this| {
-                this.child(
-                    h_flex()
-                        .gap_2()
-                        .items_start()
-                        .child(
-                            Icon::new(IconName::TriangleAlert)
-                                .size_3()
-                                .text_color(p.warning),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_xs()
-                                .text_color(p.warning)
-                                .child(rust_i18n::t!("settings.appearance_contrast").to_string()),
-                        ),
-                )
-            })
+            .child(Self::setting_frame(card_block.into_any_element(), p))
             .into_any_element()
     }
 
@@ -211,19 +223,15 @@ impl AppShell {
         v_flex()
             .gap_2()
             .child(Self::setting_font_field(
-                "ui-font-family",
-                rust_i18n::t!("settings.ui_font_family").to_string(),
-                self.modals.settings.ui_font_family.clone(),
-                Self::UI_FONT_PRESETS,
+                FontFieldSpec {
+                    id: "ui-font-family",
+                    label: rust_i18n::t!("settings.ui_font_family").to_string(),
+                    select: self.modals.settings.ui_font_family.clone(),
+                    note_key: Some("settings.ui_font_note"),
+                },
                 p,
                 cx,
             ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("settings.ui_font_note").to_string()),
-            )
             .into_any_element()
     }
 
@@ -267,18 +275,9 @@ impl AppShell {
                 cx,
             ))
             .into_any_element();
-        let width_control = Self::setting_dropdown(
-            "dropdown-divider-width",
-            divider.width,
-            DividerWidth::ALL
-                .into_iter()
-                .map(|width| (width, rust_i18n::t!(width.label_key()).to_string()))
-                .collect(),
-            |this, width, cx| {
-                this.update_appearance(|appearance| appearance.divider.width = width, cx);
-            },
-            cx,
-        );
+        // 粗细是 1/2/3 的连续小数值：步进器比下拉少一次点击，和字号/行高一致；
+        // 量纲写在说明文案里，输入框内只留数字，避免控件被单位挤窄。
+        let width_control = Self::setting_stepper(&self.modals.settings.divider_width, px(110.0));
         v_flex()
             .gap_2()
             .child(Self::setting_row(
@@ -294,6 +293,28 @@ impl AppShell {
                 p,
             ))
             .into_any_element()
+    }
+
+    /// 分割线粗细步进器变化：解析为档位后立即全局预览。
+    ///
+    /// 与颜色下拉共用 [`AppShell::update_appearance`] 这条写路径，保存/取消的
+    /// 落盘与回滚语义因此完全一致；输到一半的非法数字（空值、越界）不落地，
+    /// 避免界面闪一帧错误线宽。
+    pub(crate) fn apply_divider_width_from_input(&mut self, cx: &mut Context<Self>) {
+        let value = self
+            .modals
+            .settings
+            .divider_width
+            .read(cx)
+            .value()
+            .to_string();
+        let Some(width) = divider_width_from_value(&value) else {
+            return;
+        };
+        if self.settings.appearance.divider.width == width {
+            return;
+        }
+        self.update_appearance(|appearance| appearance.divider.width = width, cx);
     }
 
     /// 窗口外观组：背景模式与整体透明度。
@@ -421,6 +442,24 @@ impl AppShell {
     }
 }
 
+/// 步进器数值 → 分割线档位：只认 1..=3 的整数值，其余输入一律不生效。
+///
+/// 输入框允许用户敲出任意数字（含删空重输的中间态与小数点），先把文本收敛
+/// 成枚举再写入偏好，运行期与落盘侧拿到的就永远是合法档位，不需要调用方再
+/// 校验；`2.0` 这类整数值照常接受，`2.5`、越界与脏字符则保持原档位。
+fn divider_width_from_value(value: &str) -> Option<DividerWidth> {
+    let pixels = value.trim().parse::<f64>().ok()?;
+    if pixels.fract() != 0.0 {
+        return None;
+    }
+    match pixels as i32 {
+        1 => Some(DividerWidth::Hairline),
+        2 => Some(DividerWidth::Medium),
+        3 => Some(DividerWidth::Thick),
+        _ => None,
+    }
+}
+
 /// 从主题配置解析三个预览色点（背景、前景、强调色）；解析失败显示透明点。
 ///
 /// 主题文件的颜色值是字符串（hex 或 Tailwind 名），交给 gpui-kit 的解析器
@@ -441,4 +480,32 @@ fn theme_color_dots(config: &ThemeConfig) -> AnyElement {
                 .bg(color.unwrap_or(transparent_black()))
         }))
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::divider_width_from_value;
+    use transom_core::DividerWidth;
+
+    #[test]
+    fn divider_width_value_maps_to_three_steps() {
+        assert_eq!(divider_width_from_value("1"), Some(DividerWidth::Hairline));
+        assert_eq!(divider_width_from_value(" 2 "), Some(DividerWidth::Medium));
+        assert_eq!(divider_width_from_value("3"), Some(DividerWidth::Thick));
+    }
+
+    #[test]
+    fn divider_width_value_accepts_integer_like_decimals() {
+        assert_eq!(divider_width_from_value("2.0"), Some(DividerWidth::Medium));
+        assert_eq!(divider_width_from_value("3.00"), Some(DividerWidth::Thick));
+    }
+
+    #[test]
+    fn divider_width_value_rejects_out_of_range_and_garbage() {
+        assert_eq!(divider_width_from_value("0"), None);
+        assert_eq!(divider_width_from_value("4"), None);
+        assert_eq!(divider_width_from_value(""), None);
+        assert_eq!(divider_width_from_value("2.5"), None);
+        assert_eq!(divider_width_from_value("2px"), None);
+    }
 }
