@@ -750,6 +750,12 @@ pub(crate) struct ContainerUiState {
     pub(crate) discovery: Option<ContainerDiscovery>,
     /// 正在进行的发现请求，避免连点重复探测。
     pub(crate) discovering: bool,
+    /// 已按下一次「删除连接」、等待第二次确认的档案 ID。
+    ///
+    /// 设计原理（Why）：删除引擎连接会连带关掉用它打开的工作区标签，属于
+    /// 不可逆动作；市场工具都要求二次确认，而这里只有一条待确认记录，
+    /// 用弹条反而更啰嗦。
+    pub(crate) pending_delete: Option<transom_core::EngineProfileId>,
 }
 
 impl ContainerUiState {

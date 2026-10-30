@@ -4499,6 +4499,10 @@ sidebar:
     en: 'Host address copied: %{host}'
     zh-CN: '已复制主机地址: %{host}'
 container:
+  notice:
+    dismiss:
+      en: Dismiss
+      zh-CN: 关闭提示
   badge:
     in_use:
       en: In use
@@ -4734,6 +4738,12 @@ container:
     discover:
       en: Discover engines
       zh-CN: 发现引擎
+    delete_hint:
+      en: Delete this connection (containers in the engine are untouched)
+      zh-CN: 删除这条连接（不动引擎里的容器）
+    confirm_delete:
+      en: Click again to confirm
+      zh-CN: 再点一次确认删除
   discovery:
     title:
       en: Engines found on this machine

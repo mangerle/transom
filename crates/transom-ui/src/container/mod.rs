@@ -1137,6 +1137,31 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 删除引擎连接：第一次点只武装，第二次才真删；档案变化即解除武装。
+    pub(crate) fn request_delete_profile(
+        &mut self,
+        id: transom_core::EngineProfileId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let armed = self.containers.pending_delete == Some(id);
+        self.containers.pending_delete = None;
+        if !armed {
+            self.containers.pending_delete = Some(id);
+            cx.notify();
+            return;
+        }
+        self.delete_container_profile(id, window, cx);
+    }
+
+    /// 清掉头部提示（成功回执与错误都走这一条）。
+    pub(crate) fn dismiss_container_notice(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.notice = None;
+        }
+        cx.notify();
+    }
+
     /// 切换容器勾选状态（多选）。
     pub(crate) fn toggle_container_check(
         &mut self,
@@ -1423,6 +1448,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.containers.pending_delete = None;
         self.catalog.engines.retain(|profile| profile.id != id);
         self.persist_catalog();
         let tabs: Vec<TabId> = self

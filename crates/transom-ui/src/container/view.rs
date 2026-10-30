@@ -29,6 +29,7 @@ impl AppShell {
         let states = self.container_profile_states();
         let discovery = self.containers.discovery.clone();
         let discovering = self.containers.discovering;
+        let pending_delete = self.containers.pending_delete;
 
         let mut rows = v_flex().gap_0p5().p_2();
         if let Some(discovery) = discovery {
@@ -120,10 +121,20 @@ impl AppShell {
                         ))
                         .ghost()
                         .xsmall()
-                        .icon(IconName::Trash)
+                        .icon(if pending_delete == Some(id) {
+                            IconName::CircleAlert
+                        } else {
+                            IconName::Trash
+                        })
+                        .when(pending_delete == Some(id), |button| {
+                            button.label(
+                                rust_i18n::t!("container.sidebar.confirm_delete").to_string(),
+                            )
+                        })
+                        .tooltip(rust_i18n::t!("container.sidebar.delete_hint").to_string())
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
-                                this.delete_container_profile(id, window, cx);
+                                this.request_delete_profile(id, window, cx);
                             },
                         )),
                     ),
@@ -528,7 +539,23 @@ impl AppShell {
                         )
                     })
                     .when_some(notice, |this, notice| {
-                        this.child(div().text_xs().text_color(p.muted_foreground).child(notice))
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .truncate()
+                                .child(notice.clone()),
+                        )
+                        .child(
+                            Button::new("container-notice-dismiss")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Close)
+                                .tooltip(rust_i18n::t!("container.notice.dismiss").to_string())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.dismiss_container_notice(tab_id, cx);
+                                })),
+                        )
                     }),
             )
             .child(
