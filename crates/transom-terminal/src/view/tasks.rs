@@ -25,11 +25,14 @@ pub(super) struct TerminalIoTaskParams<'a> {
 }
 
 impl TerminalView {
-    /// 启动后台读取线程与写入线程，返回通道发送端与任务句柄。
+    /// 启动后台读取线程与写入线程，返回输入发送端、输出接收端副本与任务句柄。
+    ///
+    /// 输出接收端要额外交回一份：粘贴前视图需要先把已到达的输出并入引擎，
+    /// 才能按最新的终端模式决定粘贴编码（见 `TerminalView::encode_paste`）。
     pub(super) fn spawn_io_tasks(
         params: TerminalIoTaskParams<'_>,
         cx: &mut Context<Self>,
-    ) -> (flume::Sender<Vec<u8>>, Task<()>) {
+    ) -> (flume::Sender<Vec<u8>>, flume::Receiver<Vec<u8>>, Task<()>) {
         let TerminalIoTaskParams {
             mut reader,
             mut writer,
@@ -102,47 +105,55 @@ impl TerminalView {
             let _ = exit_tx.try_send(Event::Exit);
         }
 
-        let state_for_reader = state.clone();
+        let reader_rx = bytes_rx.clone();
         let reader_task = cx.spawn(async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
-            while let Ok(bytes) = bytes_rx.recv_async().await {
-                let matches = state_for_reader.trigger_engine.lock().process_bytes(&bytes);
-                let updated = this.update(cx, |view, cx| {
-                    view.state.engine.lock().process(&bytes);
-                    for m in matches {
-                        match &m.action {
-                            transom_core::TriggerAction::AutoResponse(reply) => {
-                                let mut to_send = reply.clone();
-                                if !to_send.ends_with('\r') && !to_send.ends_with('\n') {
-                                    to_send.push('\r');
-                                }
-                                view.write_input(to_send.as_bytes());
-                            }
-                            transom_core::TriggerAction::Bell => {
-                                cx.emit(TerminalEvent::Bell);
-                            }
-                            transom_core::TriggerAction::Notification(body) => {
-                                cx.emit(TerminalEvent::DesktopNotification {
-                                    title: m.name.clone(),
-                                    body: body.clone(),
-                                });
-                            }
-                            _ => {}
-                        }
-                        cx.emit(TerminalEvent::TriggerFired {
-                            rule_name: m.name,
-                            action: m.action,
-                        });
-                    }
-                    cx.notify();
-                });
-                if updated.is_err() {
+            while let Ok(bytes) = reader_rx.recv_async().await {
+                if this
+                    .update(cx, |view, cx| view.apply_output(&bytes, cx))
+                    .is_err()
+                {
                     return;
                 }
             }
             let _ = this.update(cx, |view, cx| view.mark_exited(cx));
         });
 
-        (input_tx, reader_task)
+        (input_tx, bytes_rx, reader_task)
+    }
+
+    /// 把一批终端输出并入引擎，并处理触发器命中。
+    ///
+    /// 读取任务与粘贴前的排空共用这一条路径：两边各写一份的话，触发器与
+    /// 引擎的处理顺序会分叉，排空时吞掉的字节就再也不会触发规则。
+    pub(super) fn apply_output(&mut self, bytes: &[u8], cx: &mut Context<Self>) {
+        let matches = self.state.trigger_engine.lock().process_bytes(bytes);
+        self.state.engine.lock().process(bytes);
+        for m in matches {
+            match &m.action {
+                transom_core::TriggerAction::AutoResponse(reply) => {
+                    let mut to_send = reply.clone();
+                    if !to_send.ends_with('\r') && !to_send.ends_with('\n') {
+                        to_send.push('\r');
+                    }
+                    self.write_input(to_send.as_bytes());
+                }
+                transom_core::TriggerAction::Bell => {
+                    cx.emit(TerminalEvent::Bell);
+                }
+                transom_core::TriggerAction::Notification(body) => {
+                    cx.emit(TerminalEvent::DesktopNotification {
+                        title: m.name.clone(),
+                        body: body.clone(),
+                    });
+                }
+                _ => {}
+            }
+            cx.emit(TerminalEvent::TriggerFired {
+                rule_name: m.name,
+                action: m.action,
+            });
+        }
+        cx.notify();
     }
 
     pub(super) fn process_events(&mut self, cx: &mut Context<Self>) {
