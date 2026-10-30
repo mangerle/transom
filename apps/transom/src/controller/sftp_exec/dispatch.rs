@@ -95,7 +95,10 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
     }
 
     let is_transfer = op.is_transfer();
-    let (owner_tab, remote, cached) = if let Some(session) = sessions.get(&tab_id)
+    // 资源（远端句柄与 SFTP 客户端缓存）按连接归属查找，事件与任务登记却必须
+    // 留在发起请求的标签上：并列远端列挂在请求标签的面板里，若按归属标签派发，
+    // 列表、进度与完成事件都会落到另一标签的主远端，发起列永远收不到回填。
+    let (remote, cached) = if let Some(session) = sessions.get(&tab_id)
         && session.connection_id == connection_id
         && let Some(ref remote) = session.remote
     {
@@ -104,20 +107,20 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         } else {
             session.sftp_client.clone()
         };
-        (tab_id, remote.clone(), cached)
-    } else if let Some((owner_tab, remote, client)) =
-        find_session_by_connection(sessions, connection_id).and_then(|(tab_id, session)| {
+        (remote.clone(), cached)
+    } else if let Some((_owner_tab, remote, client)) =
+        find_session_by_connection(sessions, connection_id).and_then(|(owner_tab, session)| {
             session.remote.clone().map(|remote| {
                 let cached = if is_transfer {
                     session.transfer_sftp_client.clone()
                 } else {
                     session.sftp_client.clone()
                 };
-                (tab_id, remote, cached)
+                (owner_tab, remote, cached)
             })
         })
     {
-        (owner_tab, remote, client)
+        (remote, client)
     } else {
         send_sftp_not_ready(
             &event_tx,
@@ -134,7 +137,7 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
             sftp_tasks,
             event_tx,
             SpawnSftpOpParams {
-                tab_id: owner_tab,
+                tab_id,
                 connection_id,
                 op_id,
                 client,
@@ -145,11 +148,12 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
         None => {
             // 打开阶段也登记任务：否则用户取消或关闭标签时，句柄不在表里，
             // 取消命令无处 abort，删除/覆盖上传会在"取消之后"继续执行。
+            // 登记键与取消命令一致，使用发起请求的标签。
             let handle = tokio::spawn(async move {
                 let result = SftpClient::open(&remote).await;
                 let _ = internal_tx
                     .send_async(Internal::SftpReady {
-                        tab_id: owner_tab,
+                        tab_id,
                         connection_id,
                         op_id,
                         op,
@@ -158,7 +162,7 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
                     .await;
             });
             sftp_tasks.retain(|_, handle| !handle.is_finished());
-            sftp_tasks.insert((owner_tab, op_id), handle);
+            sftp_tasks.insert((tab_id, op_id), handle);
         }
     }
 }

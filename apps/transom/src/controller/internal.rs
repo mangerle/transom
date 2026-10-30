@@ -449,16 +449,19 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
         return;
     };
     if requested_tab != owner_tab {
-        log::debug!("SFTP 连接归属已变化，请求窗格: {requested_tab}，当前窗格: {owner_tab}");
+        log::debug!(
+            "SFTP 客户端按连接归属缓存，事件回报给请求窗格，请求窗格: {requested_tab}，归属窗格: {owner_tab}"
+        );
     }
-    // 打开期间可能已被取消或标签已关闭：任务表里没有该操作时丢弃已建立的
-    // 客户端，避免"点了取消，删除/覆盖上传仍然执行"。
-    if !state.sftp_tasks.contains_key(&(owner_tab, op_id)) {
-        log::debug!("SFTP 操作在打开期间已被取消，丢弃已建立的客户端，窗格: {owner_tab}");
+    // 打开期间可能已被取消或标签已关闭：按请求标签登记的任务不存在时丢弃
+    // 已建立的客户端。取消命令携带的正是请求标签，键必须与之一致，
+    // 归属标签只用来落地客户端缓存与远端句柄。
+    if !state.sftp_tasks.contains_key(&(requested_tab, op_id)) {
+        log::debug!("SFTP 操作在打开期间已被取消，丢弃已建立的客户端，窗格: {requested_tab}");
         drop(result);
         return;
     }
-    state.sftp_tasks.remove(&(owner_tab, op_id));
+    state.sftp_tasks.remove(&(requested_tab, op_id));
     match result {
         Ok(client) => {
             if let Some(session) = state.sessions.get_mut(&owner_tab) {
@@ -476,7 +479,7 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
                 &mut state.sftp_tasks,
                 ctx.event_tx.clone(),
                 sftp_exec::SpawnSftpOpParams {
-                    tab_id: owner_tab,
+                    tab_id: requested_tab,
                     connection_id,
                     op_id,
                     client,
@@ -499,7 +502,7 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
                     &mut state.sftp_tasks,
                     ctx.event_tx.clone(),
                     sftp_exec::SpawnSftpOpParams {
-                        tab_id: owner_tab,
+                        tab_id: requested_tab,
                         connection_id,
                         op_id,
                         client: fallback_client,
@@ -513,7 +516,7 @@ async fn handle_sftp_ready(state: &mut ControllerState, ctx: &ControllerCtx, int
                 .event_tx
                 .send_async(
                     SftpAppEvent::SftpFailed {
-                        tab_id: owner_tab,
+                        tab_id: requested_tab,
                         connection_id,
                         op_id,
                         error,
