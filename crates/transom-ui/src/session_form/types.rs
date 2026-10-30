@@ -55,6 +55,8 @@ pub(crate) struct SessionForm {
     pub name: Entity<InputState>,
     /// 以 `/` 分隔的文件夹路径，保存时解析为稳定的文件夹节点。
     pub folder_path: Entity<InputState>,
+    /// 文件夹候选下拉的展开状态，由 Popover 的受控开关回写。
+    pub folder_open: bool,
     /// 可选的文件夹路径清单，供下拉快速选择。
     pub folder_options: Vec<String>,
     pub connection: ConnectionChoice,

@@ -358,6 +358,7 @@ impl SessionForm {
                 &folder_path,
                 &rust_i18n::t!("form.folder_placeholder"),
             ),
+            folder_open: false,
             folder_options,
             connection,
             host: text_input(window, cx, &host, &rust_i18n::t!("form.host_placeholder")),

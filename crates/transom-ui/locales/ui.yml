@@ -518,8 +518,14 @@ form:
     en: Optional group
     zh-CN: 可选分组
   folder_placeholder:
-    en: Optional, nested with / (e.g. Prod/Database)
-    zh-CN: 可选，用 / 分隔层级（如 生产/数据库）
+    en: Optional, e.g. Prod/Database
+    zh-CN: 可选，如 生产/数据库
+  folder_no_match:
+    en: No matching folder; the typed path is created on save
+    zh-CN: 没有匹配的文件夹，保存时按输入的路径新建
+  folder_empty:
+    en: No folders yet; type a path to create one
+    zh-CN: 还没有文件夹，输入路径即可新建
   host_placeholder:
     en: example.com
     zh-CN: example.com

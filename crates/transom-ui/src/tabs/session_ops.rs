@@ -127,7 +127,7 @@ impl AppShell {
     }
 
     pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.modals.form = Some(SessionForm::new(
+        let form = SessionForm::new(
             window,
             cx,
             crate::session_form::SessionFormInit {
@@ -139,8 +139,29 @@ impl AppShell {
                 global_proxy: self.settings.proxy.clone(),
                 block_view: transom_core::BlockViewOverride::FollowGlobal,
             },
-        ));
+        );
+        self.install_session_form(form, cx);
         cx.notify();
+    }
+
+    /// 装载会话表单，并订阅文件夹输入变化。
+    ///
+    /// 文件夹字段是可编辑下拉，候选要在键入时实时过滤；Popover 的内容
+    /// 只在宿主实体重渲染时才重建，输入框实体自身的刷新带不动它，所以
+    /// 在下拉展开期间把输入变化转成 AppShell 的 notify（未展开时不打扰）。
+    pub(crate) fn install_session_form(&mut self, form: SessionForm, cx: &mut Context<Self>) {
+        cx.observe(&form.folder_path, |this, _, cx| {
+            let open = this
+                .modals
+                .form
+                .as_ref()
+                .is_some_and(|form| form.folder_open);
+            if open {
+                cx.notify();
+            }
+        })
+        .detach();
+        self.modals.form = Some(form);
     }
 
     pub(crate) fn open_edit_session(
@@ -177,7 +198,7 @@ impl AppShell {
             },
         );
         self.prefill_secrets(&mut form, window, cx);
-        self.modals.form = Some(form);
+        self.install_session_form(form, cx);
         if is_serial {
             self.refresh_serial_ports(window, cx);
         }

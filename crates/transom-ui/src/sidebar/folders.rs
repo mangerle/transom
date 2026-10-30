@@ -129,7 +129,7 @@ impl AppShell {
         if let Some(folder_path) = path {
             form.apply_folder_selection(&folder_path, &defaults, window, cx);
         }
-        self.modals.form = Some(form);
+        self.install_session_form(form, cx);
         cx.notify();
     }
 
