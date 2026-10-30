@@ -299,12 +299,26 @@ fn dedupe(candidates: Vec<EngineCandidate>) -> Vec<EngineCandidate> {
     let mut seen = std::collections::HashSet::with_capacity(candidates.len());
     let mut unique = Vec::with_capacity(candidates.len());
     for candidate in candidates {
-        let key = (candidate.kind, candidate.endpoint.describe());
+        let key = (candidate.kind, endpoint_key(&candidate.endpoint));
         if seen.insert(key) {
             unique.push(candidate);
         }
     }
     unique
+}
+
+/// 去重键：unix socket 按解析后的真实路径归一。
+///
+/// 设计原理（Why）：`/run` 通常是 `/var/run` 的符号链接，真机上两个已知路径
+/// 都存在并指向同一个守护进程；不归一就会在界面里列出两条完全等价的引擎，
+/// 用户无法分辨也删不掉重复项。归一失败（无权限、路径不存在）时退回原描述，
+/// 宁可多列一项也不漏掉一个可用引擎。
+fn endpoint_key(endpoint: &ContainerEndpoint) -> String {
+    if let ContainerEndpoint::Unix { path } = endpoint {
+        let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+        return format!("unix://{}", resolved.display());
+    }
+    endpoint.describe()
 }
 
 /// 显式端点是否在当前平台可用；用于给会话表单一个提前拒绝的机会。
@@ -327,10 +341,9 @@ pub fn validate_endpoint(endpoint: &ContainerEndpoint) -> Result<(), ContainerEr
 
 #[cfg(test)]
 mod tests {
-    use super::parse_endpoint;
+    use super::{endpoint_key, parse_endpoint};
     use std::path::PathBuf;
     use transom_core::ContainerEndpoint;
-
     #[test]
     fn parses_common_endpoint_forms() {
         assert_eq!(
@@ -357,5 +370,29 @@ mod tests {
         ));
         assert_eq!(parse_endpoint("   "), None);
         assert_eq!(parse_endpoint("relative/path"), None);
+    }
+
+    /// 真机回归：`/run/docker.sock` 与 `/var/run/docker.sock` 是同一个文件，
+    /// 去重键必须归一到真实路径，否则界面会出现两条等价引擎。
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_socket_paths_share_one_key() {
+        let dir = tempfile::tempdir().expect("临时目录必须可建");
+        let real = dir.path().join("docker.sock");
+        std::fs::write(&real, b"").expect("占位文件必须可写");
+        let link = dir.path().join("run.sock");
+        std::os::unix::fs::symlink(&real, &link).expect("符号链接必须可建");
+        assert_eq!(
+            endpoint_key(&ContainerEndpoint::Unix { path: real.clone() }),
+            endpoint_key(&ContainerEndpoint::Unix { path: link })
+        );
+        // 解析不了的路径退回原描述：宁可多列一项，也不能把可用引擎藏起来。
+        let missing = dir.path().join("missing.sock");
+        assert_eq!(
+            endpoint_key(&ContainerEndpoint::Unix {
+                path: missing.clone()
+            }),
+            format!("unix://{}", missing.display())
+        );
     }
 }

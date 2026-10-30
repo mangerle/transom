@@ -27,6 +27,9 @@ pub type LogSink<'a> = dyn FnMut(Vec<u8>) + Send + 'a;
 
 /// 拉取容器日志；`follow` 为真时持续到取消或容器结束。
 ///
+/// `tail` 是要取的尾部行数，`0` 表示全量：引擎把数值 0 理解为「最后 0 行」，
+/// 真机验证过这会返回空响应，因此这里统一翻译成引擎的 `all` 语义。
+///
 /// # Errors
 /// 引擎不支持、容器不存在、连接中断或协议帧异常时返回 [`ContainerError`]。
 pub async fn stream_logs(
@@ -40,6 +43,7 @@ pub async fn stream_logs(
     if let Some(cli) = engine.cli_backend_ref() {
         return cli_logs(cli, container, tail, follow, cancel, sink).await;
     }
+    let tail = tail_token(tail);
     let api = engine.http()?;
     let tty = api.container_tty(container).await?;
     let path = format!(
@@ -149,6 +153,18 @@ impl Demux {
     }
 }
 
+/// 把界面的尾部行数翻译成引擎的 `tail` 取值。
+///
+/// 设计原理（Why）：0 在 REST 与 CLI 里都表示「最后 0 行」而不是「全部」，
+/// 直接透传会让「看全部日志」的入口拿到空结果；`all` 是两种后端共同的语义。
+fn tail_token(tail: usize) -> String {
+    if tail == 0 {
+        "all".to_string()
+    } else {
+        tail.to_string()
+    }
+}
+
 async fn cli_logs(
     cli: &crate::cli::CliBackend,
     container: &str,
@@ -157,7 +173,7 @@ async fn cli_logs(
     cancel: &Arc<AtomicBool>,
     sink: &mut LogSink<'_>,
 ) -> Result<(), ContainerError> {
-    let mut args = vec!["logs".to_string(), "--tail".to_string(), tail.to_string()];
+    let mut args = vec!["logs".to_string(), "--tail".to_string(), tail_token(tail)];
     if follow {
         args.push("--follow".to_string());
     }
@@ -234,7 +250,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Demux;
+    use super::{Demux, tail_token};
 
     fn frame(stream: u8, payload: &[u8]) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(8 + payload.len());
@@ -284,5 +300,12 @@ mod tests {
         input.extend_from_slice(&u32::MAX.to_be_bytes());
         let mut output = Vec::new();
         assert!(demux.feed(&input, &mut output).is_err());
+    }
+
+    /// 真机回归：`tail=0` 会被引擎当作「最后 0 行」，必须翻译成 `all`。
+    #[test]
+    fn zero_tail_means_all_lines() {
+        assert_eq!(tail_token(0), "all");
+        assert_eq!(tail_token(200), "200");
     }
 }

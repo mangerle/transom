@@ -267,6 +267,10 @@ impl Engine {
 ///
 /// 返回 `(可用引擎, 失败摘要)`。失败摘要用于界面提示「Docker 未启动」这类
 /// 可操作信息，不包含凭证。
+///
+/// CLI 兜底不单独成项（Why）：候选清单里 CLI 永远排在最后，只有同种类没有任何
+/// 可用 REST 端点时它才是唯一入口；若两者都可用就并存两条 Docker 条目，用户在
+/// 界面里既分不清也删不掉，而 CLI 后端还少 resize 与归档能力。
 pub async fn discover_all() -> (Vec<Engine>, Vec<String>) {
     let mut candidates =
         discovery::candidates(ContainerEngineKind::Docker, &ContainerEndpoint::Auto);
@@ -297,7 +301,25 @@ pub async fn discover_all() -> (Vec<Engine>, Vec<String>) {
             }
         }
     }
+    drop_cli_fallbacks(&mut engines);
     (engines, failures)
+}
+
+/// 同种类已有 REST 端点时，剔除该种类的 CLI 兜底引擎。
+fn drop_cli_fallbacks(engines: &mut Vec<Engine>) {
+    let http_kinds: Vec<ContainerEngineKind> = engines
+        .iter()
+        .filter(|engine| !engine.info.cli_backend)
+        .map(|engine| engine.info.engine.kind)
+        .collect();
+    let before = engines.len();
+    engines.retain(|engine| {
+        !engine.info.cli_backend || !http_kinds.contains(&engine.info.engine.kind)
+    });
+    let dropped = before - engines.len();
+    if dropped > 0 {
+        log::debug!("容器引擎发现已剔除 {dropped} 个 CLI 兜底候选，同种类已有可用的 REST 端点");
+    }
 }
 
 /// 探测一个显式端点；供「自动发现失败后用户手动指定」使用。
@@ -356,10 +378,15 @@ fn cli_for(kind: ContainerEngineKind, endpoint: &ContainerEndpoint) -> Option<Cl
 
 #[cfg(test)]
 mod tests {
-    use super::transport_for;
+    use super::{Engine, EngineBackend, transport_for};
+    use crate::api::DockerApi;
+    use crate::cli::CliBackend;
+    use crate::discovery::CliSpec;
     use crate::transport::EngineTransport;
     use std::path::PathBuf;
-    use transom_core::ContainerEndpoint;
+    use transom_core::{
+        ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind, ContainerEngineRef,
+    };
 
     #[test]
     fn unix_endpoint_builds_unix_transport() {
@@ -368,5 +395,50 @@ mod tests {
         });
         assert!(matches!(transport, Some(EngineTransport::Unix { .. })));
         assert!(transport_for(&ContainerEndpoint::Auto).is_none());
+    }
+
+    fn stub_engine(kind: ContainerEngineKind, cli_backend: bool) -> Engine {
+        let backend = if cli_backend {
+            EngineBackend::Cli(CliBackend::new(
+                kind,
+                CliSpec {
+                    program: "docker".to_string(),
+                    prefix: Vec::new(),
+                },
+            ))
+        } else {
+            EngineBackend::Http(DockerApi::new(
+                EngineTransport::Unix {
+                    path: PathBuf::from("/nonexistent/docker.sock"),
+                },
+                None,
+            ))
+        };
+        Engine {
+            info: ContainerEngineInfo {
+                engine: ContainerEngineRef::auto(kind),
+                version: "1.0".to_string(),
+                api_version: "1.52".to_string(),
+                platform: "linux/amd64".to_string(),
+                cli_backend,
+            },
+            backend,
+        }
+    }
+
+    /// 真机回归：本机同时存在 socket 与 CLI 入口时，只保留 REST 引擎。
+    #[test]
+    fn cli_fallback_is_dropped_when_rest_engine_exists() {
+        let mut engines = vec![
+            stub_engine(ContainerEngineKind::Docker, false),
+            stub_engine(ContainerEngineKind::Docker, true),
+            stub_engine(ContainerEngineKind::Podman, true),
+        ];
+        super::drop_cli_fallbacks(&mut engines);
+        assert_eq!(engines.len(), 2);
+        assert!(!engines[0].info.cli_backend);
+        // Podman 只有 CLI 命中时必须保留，否则用户彻底没有入口。
+        assert_eq!(engines[1].info.engine.kind, ContainerEngineKind::Podman);
+        assert!(engines[1].info.cli_backend);
     }
 }

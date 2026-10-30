@@ -4,12 +4,26 @@
 //! `transom-core` 的强类型；引擎字段增删或大小写差异不会扩散到控制器与界面。
 
 use serde::Deserialize;
+use serde::de::Deserializer;
 use std::collections::HashMap;
 use transom_core::{
     ContainerDetails, ContainerImageDetails, ContainerImageSummary, ContainerMount,
     ContainerNetworkAttachment, ContainerNetworkDetails, ContainerNetworkSummary, ContainerPort,
     ContainerState, ContainerStats, ContainerSummary, ContainerVolumeSummary, short_id,
 };
+
+/// 把线格式里的 `null` 收敛成空集合。
+///
+/// 设计与原因（Why）：引擎对「无标签」的数据卷返回 `"Labels": null` 而不是 `{}`，
+/// 而 `#[serde(default)]` 只兜底「键缺失」，键存在但为 null 会直接报类型错误。
+/// 这类字段只用于展示，空集合就是合法语义，不值得为它新增错误分支。
+fn null_as_empty<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 /// `GET /version` 响应（只取需要的字段）。
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -22,6 +36,12 @@ pub struct VersionResponse {
     pub platform: Option<PlatformInfo>,
     #[serde(rename = "Components", default)]
     pub components: Option<Vec<ComponentInfo>>,
+    /// 引擎运行系统；`Platform.Name` 为空时用于兜底展示。
+    #[serde(rename = "Os", default)]
+    pub os: Option<String>,
+    /// 引擎架构；与 `Os` 一起构成兜底平台名。
+    #[serde(rename = "Arch", default)]
+    pub arch: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -55,20 +75,34 @@ impl VersionResponse {
             .any(|name| name.to_ascii_lowercase().contains("podman"))
     }
 
-    /// 界面展示的平台名；缺省时回落到 "Docker/Podman"。
+    /// 界面展示的平台名。
+    ///
+    /// 兜底次序（Why）：真机 Docker 29 的 `/version` 把 `Platform.Name` 返回成
+    /// 空串（键存在但无内容），直接展示会得到一片空白；因此先取非空的平台名，
+    /// 再回落到 `os/arch`，最后才是通用文案。
     pub fn platform_name(&self) -> String {
-        self.platform
-            .as_ref()
-            .and_then(|platform| platform.name.clone())
-            .or_else(|| {
-                self.components
-                    .as_deref()
-                    .unwrap_or_default()
-                    .first()
-                    .and_then(|component| component.name.clone())
-            })
-            .unwrap_or_else(|| "Docker/Podman".to_string())
+        non_blank(
+            self.platform
+                .as_ref()
+                .and_then(|platform| platform.name.as_deref()),
+        )
+        .unwrap_or_else(|| {
+            match (
+                non_blank(self.os.as_deref()),
+                non_blank(self.arch.as_deref()),
+            ) {
+                (Some(os), Some(arch)) => format!("{os}/{arch}"),
+                (Some(os), None) | (None, Some(os)) => os,
+                (None, None) => "Docker/Podman".to_string(),
+            }
+        })
     }
+}
+
+/// 取非空白文本；键存在但为空串时按缺失处理。
+fn non_blank(value: Option<&str>) -> Option<String> {
+    let trimmed = value?.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 /// `GET /containers/json` 列表项。
@@ -88,7 +122,7 @@ pub struct ContainerListItem {
     pub state: String,
     #[serde(rename = "Status", default)]
     pub status: String,
-    #[serde(rename = "Labels", default)]
+    #[serde(rename = "Labels", default, deserialize_with = "null_as_empty")]
     pub labels: HashMap<String, String>,
     #[serde(rename = "Mounts", default)]
     pub mounts: Vec<MountItem>,
@@ -259,7 +293,7 @@ pub struct ContainerConfig {
     pub user: Option<String>,
     #[serde(rename = "WorkingDir", default)]
     pub working_dir: Option<String>,
-    #[serde(rename = "Labels", default)]
+    #[serde(rename = "Labels", default, deserialize_with = "null_as_empty")]
     pub labels: HashMap<String, String>,
 }
 
@@ -290,7 +324,7 @@ pub struct RestartPolicy {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct NetworkSettings {
     /// 形如 `{"80/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]}`。
-    #[serde(rename = "Ports", default)]
+    #[serde(rename = "Ports", default, deserialize_with = "null_as_empty")]
     pub ports: HashMap<String, Option<Vec<PortBinding>>>,
 }
 
@@ -387,7 +421,7 @@ pub struct VolumeItem {
     pub mountpoint: String,
     #[serde(rename = "CreatedAt", default)]
     pub created_at: Option<String>,
-    #[serde(rename = "Labels", default)]
+    #[serde(rename = "Labels", default, deserialize_with = "null_as_empty")]
     pub labels: HashMap<String, String>,
 }
 
@@ -725,7 +759,10 @@ pub struct ProgressDetail {
 
 #[cfg(test)]
 mod tests {
-    use super::{ContainerInspect, ContainerListItem, ImageListItem, VersionResponse};
+    use super::{
+        ContainerInspect, ContainerListItem, ImageListItem, NetworkSettings, VersionResponse,
+        VolumeItem,
+    };
     use transom_core::ContainerState;
 
     #[test]
@@ -765,10 +802,41 @@ mod tests {
         assert_eq!(version.platform_name(), "Podman Engine");
     }
 
+    /// 真机回归：Docker 29 返回 `"Platform":{"Name":""}`，展示必须落到 `os/arch`，
+    /// 且空平台名不能被误判成 Podman。
+    #[test]
+    fn blank_platform_falls_back_to_os_arch() {
+        let json = r#"{"Version":"29.1.3","ApiVersion":"1.52","Platform":{"Name":""},"Os":"linux","Arch":"amd64","Components":[{"Name":"Engine"}]}"#;
+        let version: VersionResponse =
+            serde_json::from_str(json).expect("Docker 29 版本响应必须能反序列化");
+        assert!(!version.is_podman());
+        assert_eq!(version.platform_name(), "linux/amd64");
+
+        let bare: VersionResponse =
+            serde_json::from_str(r#"{"Version":"1"}"#).expect("裸版本必须能反序列化");
+        assert_eq!(bare.platform_name(), "Docker/Podman");
+    }
+
     #[test]
     fn inspect_tty_flag_defaults_to_false() {
         let inspect: ContainerInspect =
             serde_json::from_str(r#"{"Id":"x","Config":{}}"#).expect("检视必须能反序列化");
         assert!(!inspect.config.expect("配置存在").tty);
+    }
+
+    /// 真机回归：Docker 对无标签数据卷返回 `"Labels": null`，端口未映射时
+    /// `"Ports": null`；两者都必须收敛成空集合而不是报解析错误。
+    #[test]
+    fn null_labels_and_ports_deserialize_as_empty() {
+        let volume: VolumeItem = serde_json::from_str(
+            r#"{"Name":"plain","Driver":"local","Mountpoint":"/var/lib/docker/volumes/plain/_data","CreatedAt":"2026-10-30T23:25:09+08:00","Labels":null,"Options":null,"Scope":"local"}"#,
+        )
+        .expect("空标签数据卷必须能反序列化");
+        assert!(volume.labels.is_empty());
+        assert_eq!(volume.into_summary().name, "plain");
+
+        let settings: NetworkSettings =
+            serde_json::from_str(r#"{"Ports":null}"#).expect("空端口必须能反序列化");
+        assert!(settings.ports.is_empty());
     }
 }

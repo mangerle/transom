@@ -73,9 +73,15 @@ async fn http_exec(
         .await?;
     let stream = api.start_exec_stream(&exec_id).await?;
     // 初始尺寸：exec 创建时使用引擎默认尺寸，启动后立即校正一次。
-    if let Err(error) = api.resize_exec(&exec_id, size.cols, size.rows).await {
-        log::warn!(
-            "容器 exec 初始尺寸设置失败，容器: {}，尺寸: {}x{}，原因: {error}",
+    // 只在 TTY 会话上设置：无 TTY 的 exec 调 resize 会被引擎拒绝（真机返回
+    // 500），既没有意义又会在日志里留下无关告警。
+    // 一次性命令可能在 resize 到达前就已退出，此时保持引擎默认尺寸即可，
+    // 属于预期降级，不打扰 warn 级日志。
+    if connection.tty
+        && let Err(error) = api.resize_exec(&exec_id, size.cols, size.rows).await
+    {
+        log::debug!(
+            "容器 exec 初始尺寸未生效，容器: {}，尺寸: {}x{}，原因: {error}",
             connection.container,
             size.cols,
             size.rows
@@ -150,10 +156,16 @@ async fn http_exec(
 
     let control_api = api.clone();
     let control_exec_id = exec_id.clone();
+    let control_tty = connection.tty;
     let control_task = tokio::spawn(async move {
         while let Some(message) = control_rx.recv().await {
             match message {
                 TerminalControl::Resize(size) => {
+                    // 无 TTY 的 exec 不支持改尺寸：终端每次重绘都会发 Resize，
+                    // 这里不拦就会按帧产生 500 告警，直接静默丢弃。
+                    if !control_tty {
+                        continue;
+                    }
                     if let Err(error) = control_api
                         .resize_exec(&control_exec_id, size.cols, size.rows)
                         .await

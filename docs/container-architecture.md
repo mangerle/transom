@@ -287,3 +287,45 @@ WSLC CLI、Podman machine）、TLS/SSH 端点、Compose CLI 级操作。
 | REST 为主、CLI 兜底 | 结构化、resize、流式日志 | 需自建 HTTP 客户端与桥接 |
 | 详情页签内嵌 TerminalView | 符合“终端/日志/统计/文件”并列的交互 | 终端生命周期要跟随页签 |
 | 统计 3 秒轮询且仅可见时运行 | 避免后台打满守护进程 | 切回页签首帧可能稍旧 |
+
+## 13. 真机验收（Linux，2026-10-30）
+
+模拟引擎只能证明协议解析，真实守护进程上的归档路径、HTTP 升级、统计差分、
+标签聚合与响应里的空值习惯必须由 `crates/transom-container/examples/docker_smoke.rs`
+跑一遍。它是人工验收工具（会真的启停容器、在容器 `/tmp` 读写临时文件），
+不进 CI；每一步都有 20 秒兜底超时，失败只记录不中断，末尾按失败数决定退出码。
+
+夹具（需要能访问引擎端点的身份）：
+
+```sh
+docker pull docker.m.daocloud.io/library/busybox:1.36
+docker volume create transom-smoke-vol
+docker network create transom-smoke-net
+# 主进程持续产出日志，跟随验证才有意义：docker logs 只收 PID 1 的输出，
+# exec 的标准输出不进日志流。
+docker run -d --name transom-smoke -v transom-smoke-vol:/mnt/data \
+  --network transom-smoke-net docker.m.daocloud.io/library/busybox:1.36 \
+  sh -c 'echo hello-stdout; echo hello-stderr >&2; i=0; while true; do i=$((i+1)); echo "tick-$i"; sleep 1; done'
+# 编排项目：工程名 transom-demo，服务定义见夹具文件
+docker compose -p transom-demo -f crates/transom-container/examples/fixtures/docker-compose.yml up -d
+cargo run -p transom-container --example docker_smoke
+```
+
+结论：Docker 29.1.3 / API 1.52（Ubuntu 26.04，systemd cgroup + overlayfs）
+56 步全部通过，覆盖发现与协商、容器列表/详情、统计两次采样、日志全量与
+stderr 分流、实时跟随与取消、exec 建立/尺寸/回显/结束通知、归档列目录与
+预览与上传下载与重命名删除、镜像列表/详情/重复拉取、卷与网络的创建详情
+删除、Compose 标签聚合、容器路径防线、启停状态闭环。
+
+真机暴露的 5 个问题（均已修在 `transom-container`，各带回归测试）：
+
+| 现象 | 原因 | 处置 |
+| :--- | :--- | :--- |
+| 数据卷详情解析失败 | Docker 对无标签卷返回 `"Labels": null`，而 `#[serde(default)]` 只兜底「键缺失」 | `null_as_empty` 反序列化器覆盖 Labels/Ports |
+| 平台列一片空白 | Docker 29 的 `/version` 把 `Platform.Name` 返回成空串 | 空白按缺失处理，回落到 `os/arch` |
+| 要全量日志却拿到 0 字节 | REST 与 CLI 都把 `tail=0` 理解成「最后 0 行」 | `tail_token`：0 翻译成 `all` |
+| 一次性 exec 打出 500 告警 | 无 TTY 的 exec 不支持 resize；短命令在 resize 到达前已退出 | 仅 TTY 设初始尺寸、控制任务丢弃无 TTY 的 Resize、日志降为 debug |
+| 侧栏出现两条等价 Docker | `/run` 是 `/var/run` 的符号链接；且 CLI 兜底与 socket 同时可用 | unix 端点按真实路径去重；同种类有 REST 就剔除 CLI |
+
+仍未覆盖：三栏界面、全屏模态、容器表单的保存与测试连接、exec 终端的交互
+手感——这些要以能访问 socket 的用户身份运行应用本体后在真实窗口里验收。
