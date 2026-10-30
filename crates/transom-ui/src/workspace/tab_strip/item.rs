@@ -58,6 +58,10 @@ pub(super) fn render_tab_entry(
     let is_local = matches!(tab.session.connection, Connection::Local(_));
     let active = shell.workspace.active_tab == Some(active_pane);
     let tiled_paired = composite;
+    // 底边由条目内的绝对定位色条绘制，内边距预留同一高度，保证各条目
+    // 的内容区一致，不会因活动条目的强调线更粗而上下错位。
+    let divider_px = p.divider_width.pixels();
+    let accent_px = divider_px.max(2.0);
 
     let selection_groups = match &tiled_set {
         Some(tiled) => tiled.occupied_groups(),
@@ -125,6 +129,7 @@ pub(super) fn render_tab_entry(
         .relative()
         .h_full()
         .px_2p5()
+        .pb(px(divider_px))
         .gap_1p5()
         .items_center()
         .max_w(rems(size::TAB_MAX_WIDTH))
@@ -276,6 +281,25 @@ pub(super) fn render_tab_entry(
         element = element.child(close_btn);
     }
 
+    // 标签栏底边按条目分段：活动条目用强调色顶替自己那段，并排配对条目用
+    // 弱化色，其余用分割线色。强调线不低于 2px，避免发丝档下被压低消失。
+    let (bar_height, bar_color) = if active {
+        (accent_px, p.primary)
+    } else if tiled_paired {
+        (divider_px, p.muted_foreground.opacity(0.6))
+    } else {
+        (divider_px, p.divider(p.border))
+    };
+    element = element.child(
+        div()
+            .absolute()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .h(px(bar_height))
+            .bg(bar_color),
+    );
+
     if entry_selected {
         element = element.child(
             div()
@@ -284,23 +308,6 @@ pub(super) fn render_tab_entry(
                 .border_1()
                 .border_color(p.primary)
                 .rounded(p.radius.sm),
-        );
-    }
-
-    if active || tiled_paired {
-        let (height, color) = if active {
-            (px(2.0), p.primary)
-        } else {
-            (px(1.0), p.muted_foreground.opacity(0.6))
-        };
-        element = element.child(
-            div()
-                .absolute()
-                .bottom_0()
-                .left_0()
-                .right_0()
-                .h(height)
-                .bg(color),
         );
     }
 

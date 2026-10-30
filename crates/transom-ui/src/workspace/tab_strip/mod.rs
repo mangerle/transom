@@ -15,13 +15,13 @@ use gpui_kit::*;
 impl AppShell {
     /// 渲染主工作区顶部标签栏。
     pub(super) fn render_tab_strip(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        // 底边不画在容器上：活动标签的强调线要顶替自己那一段底边，容器级
+        // 边框无法被条目内元素覆盖，改为条目与右侧空白区各自画一段。
         let mut tab_strip = h_flex()
             .h(rems(size::TAB_BAR_HEIGHT))
             .items_center()
             .bg(p.tab_bar)
-            .border_color(p.divider(p.border))
             .overflow_hidden();
-        tab_strip = tab_strip.divider_edge(DividerEdge::Bottom, p.divider_width);
         let app_entity = cx.entity().clone();
         // 并排菜单在每个标签上都显示：条目不足两个时置灰，避免用户以为功能
         // 不存在；右键标签时由 `tile_tab` 取标签栏左边那一条作搭档，左边是
@@ -40,9 +40,12 @@ impl AppShell {
             .child(
                 div()
                     .h_full()
+                    .flex_1()
                     .px_1p5()
                     .flex()
                     .items_center()
+                    .border_color(p.divider(p.border))
+                    .divider_edge(DividerEdge::Bottom, p.divider_width)
                     .child(badges::tab_strip_button(
                         badges::TabStripButtonProps {
                             id: "tab-strip-quick-new",
