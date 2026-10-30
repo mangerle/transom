@@ -4824,6 +4824,15 @@ container:
       en: No containers belong to this project
       zh-CN: 该项目下没有容器
   logs:
+    tail_all:
+      en: All
+      zh-CN: 全量
+    timestamps:
+      en: Timestamps
+      zh-CN: 时间戳
+    copy:
+      en: Copy all
+      zh-CN: 复制全部
     follow:
       en: Follow
       zh-CN: 跟随
@@ -4863,6 +4872,15 @@ container:
       en: Processes
       zh-CN: 进程数
   files:
+    new_dir:
+      en: New folder
+      zh-CN: 新建目录
+    new_dir_placeholder:
+      en: Folder name
+      zh-CN: 目录名称
+    new_dir_invalid:
+      en: Folder name cannot be empty or contain / and ..
+      zh-CN: 目录名称不能为空，也不能包含 / 或 ..
     upload:
       en: Upload
       zh-CN: 上传

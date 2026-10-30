@@ -9,6 +9,7 @@
 //! - 普通请求的驱动任务挂在响应守卫上：响应体读完或调用方放弃时立即中止，
 //!   不留下无人回收的后台任务。
 
+use crate::bridge::BridgeItem;
 use crate::error::ContainerError;
 use crate::transport::{EngineStream, EngineTransport};
 use bytes::Bytes;
@@ -92,6 +93,48 @@ pub async fn request(
         headers: parts.headers,
         body,
         _connection: ConnectionGuard(Some(driver)),
+    })
+}
+
+/// 把响应体泵进阻塞侧通道，并返回泵任务。
+///
+/// 设计原理（Why）：连接驱动任务的生命周期挂在响应守卫上，而归档与镜像进度这类
+/// 响应要边收边解析、可能持续数分钟。若调用方只把 `response.body` 搬进自己的任务，
+/// `RawResponse` 会在函数返回时析构并中止驱动任务，真机表现为读取中途报
+/// 「connection closed before message completed」，且因为取决于服务端发完数据的快慢
+/// 而呈偶发。这里要求整体接管响应，守卫与响应体同生同灭。
+///
+/// 代价：调用方不再能读状态码与响应头，只适用于「已经判定 2xx」之后的流式读取。
+pub fn pump_body(
+    response: RawResponse,
+    sender: flume::Sender<BridgeItem>,
+) -> tokio::task::JoinHandle<()> {
+    let RawResponse {
+        status: _,
+        headers: _,
+        body,
+        _connection,
+    } = response;
+    // 守卫留在任务内部：解析结束或任务被中止时才释放连接。
+    tokio::spawn(async move {
+        let _connection = _connection;
+        let mut body = std::pin::pin!(body);
+        while let Some(frame) = body.frame().await {
+            match frame {
+                Ok(frame) => {
+                    let Ok(data) = frame.into_data() else {
+                        continue;
+                    };
+                    if sender.send_async(Ok(data.to_vec())).await.is_err() {
+                        break;
+                    }
+                }
+                Err(error) => {
+                    let _ = sender.send_async(Err(error.to_string())).await;
+                    break;
+                }
+            }
+        }
     })
 }
 

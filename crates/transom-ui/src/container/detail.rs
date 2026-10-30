@@ -1,7 +1,9 @@
 //! 容器详情区：基础信息、日志、终端、统计与文件预览。
 
 use crate::app::AppShell;
-use crate::container::types::{ContainerConfirm, ContainerDetailTab, ContainerSection};
+use crate::container::types::{
+    ContainerConfirm, ContainerDetailTab, ContainerSection, LOG_TAIL_CHOICES,
+};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -38,6 +40,8 @@ impl AppShell {
         let network_details = workspace.network_details.clone();
         let logs = workspace.logs.clone();
         let logs_follow = workspace.logs_follow;
+        let logs_tail = workspace.logs_tail;
+        let logs_timestamps = workspace.logs_timestamps;
         let stats = workspace.stats.clone();
         let terminal = workspace
             .terminal
@@ -50,6 +54,8 @@ impl AppShell {
             workspace.files.loading,
             workspace.files.rename_from.clone(),
             workspace.files.rename_input.clone(),
+            workspace.files.new_dir_open,
+            workspace.files.new_dir_input.clone(),
         );
         let status_text = workspace.notice.clone();
 
@@ -107,9 +113,17 @@ impl AppShell {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
                 render_container_overview(details.as_ref(), status_text.as_deref(), p)
             }
-            (ContainerSection::Containers, ContainerDetailTab::Logs) => {
-                render_logs(tab_id, &logs, logs_follow, p, cx)
-            }
+            (ContainerSection::Containers, ContainerDetailTab::Logs) => render_logs(
+                ContainerLogsView {
+                    tab_id,
+                    logs: &logs,
+                    follow: logs_follow,
+                    tail: logs_tail,
+                    timestamps: logs_timestamps,
+                },
+                p,
+                cx,
+            ),
             (ContainerSection::Containers, ContainerDetailTab::Terminal) => {
                 render_terminal(tab_id, terminal, p, cx)
             }
@@ -125,6 +139,8 @@ impl AppShell {
                     loading: files.3,
                     rename_from: files.4.as_deref(),
                     rename_input: files.5.as_ref(),
+                    new_dir_open: files.6,
+                    new_dir_input: files.7.as_ref(),
                 },
                 p,
                 cx,
@@ -874,17 +890,70 @@ fn render_network_detail(
     scroll_body(rows, p).into_any_element()
 }
 
-fn render_logs(
+/// 日志页签渲染参数。
+struct ContainerLogsView<'a> {
     tab_id: TabId,
-    logs: &str,
+    logs: &'a str,
     follow: bool,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
+    tail: usize,
+    timestamps: bool,
+}
+
+fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+    let ContainerLogsView {
+        tab_id,
+        logs,
+        follow,
+        tail,
+        timestamps,
+    } = view;
+    let mut tails = h_flex().gap_0p5().items_center();
+    for choice in LOG_TAIL_CHOICES {
+        tails = tails.child(
+            Button::new(ElementId::Name(
+                format!("container-logs-tail-{choice}").into(),
+            ))
+            .ghost()
+            .xsmall()
+            .selected(choice == tail)
+            .label(if choice == 0 {
+                rust_i18n::t!("container.logs.tail_all").to_string()
+            } else {
+                choice.to_string()
+            })
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.set_container_logs_tail(tab_id, choice);
+                cx.notify();
+            })),
+        );
+    }
     let toolbar = h_flex()
         .gap_2()
         .p_2()
         .items_center()
+        .child(tails)
+        .child(
+            Button::new("container-logs-timestamps")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Clock)
+                .label(rust_i18n::t!("container.logs.timestamps").to_string())
+                .selected(timestamps)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.toggle_container_logs_timestamps(tab_id);
+                    cx.notify();
+                })),
+        )
+        .child(
+            Button::new("container-logs-copy")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Copy)
+                .label(rust_i18n::t!("container.logs.copy").to_string())
+                .on_click(cx.listener(move |this, _, _window, cx| {
+                    this.copy_container_logs(tab_id, cx);
+                })),
+        )
         .child(
             Button::new("container-logs-follow")
                 .xsmall()
@@ -1136,6 +1205,65 @@ struct ContainerFilesView<'a> {
     loading: bool,
     rename_from: Option<&'a str>,
     rename_input: Option<&'a Entity<InputState>>,
+    new_dir_open: bool,
+    new_dir_input: Option<&'a Entity<InputState>>,
+}
+
+/// 「新建目录」条：在当前目录下建子目录，上传与整理都要先有目录。
+fn render_new_dir_bar(
+    tab_id: TabId,
+    input: Option<&Entity<InputState>>,
+    _p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let Some(input) = input.cloned() else {
+        return div().into_any_element();
+    };
+    h_flex()
+        .gap_1()
+        .items_center()
+        .child(Input::new(&input).flex_1().min_w_0())
+        .child(
+            Button::new("container-file-mkdir-confirm")
+                .primary()
+                .xsmall()
+                .icon(IconName::Plus)
+                .label(rust_i18n::t!("container.create").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.submit_container_mkdir(tab_id, window, cx);
+                })),
+        )
+        .child(
+            Button::new("container-file-mkdir-cancel")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Close)
+                .label(rust_i18n::t!("common.cancel").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.toggle_container_mkdir(tab_id, window, cx);
+                })),
+        )
+        .into_any_element()
+}
+
+/// tar 头里的权限位转成常见的 `rwxr-xr-x` 形式，只保留读写执行九位。
+fn mode_label(mode: u32) -> String {
+    const BITS: [(char, u32); 9] = [
+        ('r', 0o400),
+        ('w', 0o200),
+        ('x', 0o100),
+        ('r', 0o040),
+        ('w', 0o020),
+        ('x', 0o010),
+        ('r', 0o004),
+        ('w', 0o002),
+        ('x', 0o001),
+    ];
+    let mut text = String::with_capacity(9);
+    for (glyph, bit) in BITS {
+        text.push(if mode & bit != 0 { glyph } else { '-' });
+    }
+    text
 }
 
 fn render_files(
@@ -1151,6 +1279,8 @@ fn render_files(
         loading,
         rename_from,
         rename_input,
+        new_dir_open,
+        new_dir_input,
     } = view;
     let current_path = if path.is_empty() { "/" } else { path };
     let parent = parent_path(current_path);
@@ -1197,8 +1327,29 @@ fn render_files(
                 cx.notify();
             })),
     );
+    crumbs = crumbs.child(
+        Button::new("container-file-mkdir")
+            .ghost()
+            .xsmall()
+            .icon(IconName::FolderPlus)
+            .label(rust_i18n::t!("container.files.new_dir").to_string())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.toggle_container_mkdir(tab_id, window, cx);
+            })),
+    );
 
     let rename_bar = render_rename_bar(tab_id, rename_from, rename_input, p, cx);
+    let mkdir_bar = new_dir_open.then(|| render_new_dir_bar(tab_id, new_dir_input, p, cx));
+
+    // 目录优先、再按名称：归档接口按 tar 顺序返回，用户习惯是先看目录。
+    let mut ordered: Vec<&ContainerFileEntry> = entries.iter().collect();
+    ordered.sort_by(|left, right| {
+        let left_dir = left.kind == ContainerFileKind::Directory;
+        let right_dir = right.kind == ContainerFileKind::Directory;
+        right_dir
+            .cmp(&left_dir)
+            .then_with(|| left.name.cmp(&right.name))
+    });
 
     let mut list = v_flex().gap_0p5();
     if loading {
@@ -1209,7 +1360,7 @@ fn render_files(
                 .child(rust_i18n::t!("container.loading").to_string()),
         );
     }
-    for entry in entries {
+    for entry in ordered {
         let entry_path = entry.path.clone();
         let entry_name = entry.name.clone();
         let is_dir = entry.kind == ContainerFileKind::Directory;
@@ -1237,6 +1388,23 @@ fn render_files(
             .child(
                 div()
                     .text_xs()
+                    .flex_none()
+                    .text_color(p.muted_foreground)
+                    .child(mode_label(entry.mode)),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .flex_none()
+                    .text_color(p.muted_foreground)
+                    .child(entry.modified.map(format_unix).unwrap_or_default()),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .flex_none()
+                    .w(px(64.0))
+                    .text_right()
                     .text_color(p.muted_foreground)
                     .child(if is_dir {
                         String::new()
@@ -1332,6 +1500,7 @@ fn render_files(
             .p_2()
             .flex_none()
             .child(crumbs)
+            .children(mkdir_bar)
             .children(rename_bar)
             .child(
                 div()

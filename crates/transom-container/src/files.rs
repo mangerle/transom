@@ -13,7 +13,7 @@ use crate::error::ContainerError;
 use crate::http;
 use bytes::Bytes;
 use futures::StreamExt;
-use http_body_util::{BodyExt, StreamBody};
+use http_body_util::StreamBody;
 use hyper::body::Frame;
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -257,6 +257,37 @@ pub async fn upload(
     Ok(total)
 }
 
+/// 在容器内创建目录（`mkdir -p`）。
+///
+/// 设计原理（Why）：归档 API 只能把 tar 解到已存在的目录里，父目录不存在时上传
+/// 直接失败；因此新建目录必须走 exec，并以 argv 传参、不经过 Shell，避免注入。
+///
+/// # Errors
+/// 路径非法、命令失败或退出码非零时返回 [`ContainerError`]。
+pub async fn create_dir(
+    engine: &Engine,
+    container: &str,
+    path: &str,
+    cancel: &Arc<AtomicBool>,
+) -> Result<(), ContainerError> {
+    let api = engine.http()?;
+    let path = validate_container_path(path)?;
+    let command = vec![
+        "mkdir".to_string(),
+        "-p".to_string(),
+        "--".to_string(),
+        path.clone(),
+    ];
+    let code = api.run_command(container, &command, cancel).await?;
+    if code != 0 {
+        return Err(ContainerError::File {
+            path,
+            message: format!("mkdir 退出码: {code}"),
+        });
+    }
+    Ok(())
+}
+
 /// 删除容器内文件或目录。
 ///
 /// # Errors
@@ -345,25 +376,8 @@ async fn open_archive(
         });
     }
     let (sender, reader) = output_channel(8);
-    let task = tokio::spawn(async move {
-        let mut body = std::pin::pin!(response.body);
-        while let Some(frame) = body.frame().await {
-            match frame {
-                Ok(frame) => {
-                    let Ok(data) = frame.into_data() else {
-                        continue;
-                    };
-                    if sender.send_async(Ok(data.to_vec())).await.is_err() {
-                        break;
-                    }
-                }
-                Err(error) => {
-                    let _ = sender.send_async(Err(error.to_string())).await;
-                    break;
-                }
-            }
-        }
-    });
+    // 整个 response 交给泵任务：只搬 body 会提前中止连接驱动，归档流会被截断。
+    let task = http::pump_body(response, sender);
     Ok((reader, task))
 }
 

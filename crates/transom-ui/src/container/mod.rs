@@ -15,6 +15,7 @@ pub(crate) use types::{
 use crate::app::{AppShell, TabContent, TabStatus, TerminalTab};
 use crate::container::types::row_key;
 use crate::palette::localized_error;
+use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::{
@@ -842,6 +843,8 @@ impl AppShell {
             return;
         };
         let follow = workspace.logs_follow;
+        let tail = workspace.logs_tail;
+        let timestamps = workspace.logs_timestamps;
         workspace.logs.clear();
         let request_id = ContainerRequestId::new();
         workspace.logs_request = Some(request_id);
@@ -852,23 +855,63 @@ impl AppShell {
                 tab_id,
                 request_id,
                 container,
-                tail: 500,
+                tail,
                 follow,
+                timestamps,
             },
         );
     }
 
-    pub(crate) fn toggle_container_logs_follow(&mut self, tab_id: TabId, follow: bool) {
+    /// 重开日志流：跟随、尾部行数与时间戳都要改才能生效，先取消旧流再拉新流。
+    fn restart_container_logs(&mut self, tab_id: TabId) {
         if let Some(request_id) = self
             .container_workspace_mut(tab_id)
             .and_then(|workspace| workspace.logs_request.take())
         {
             self.cancel_container_request(tab_id, request_id);
         }
+        self.ensure_container_logs(tab_id);
+    }
+
+    /// 切换日志尾部行数档位（0 表示全量）。
+    pub(crate) fn set_container_logs_tail(&mut self, tab_id: TabId, tail: usize) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            if workspace.logs_tail == tail {
+                return;
+            }
+            workspace.logs_tail = tail;
+        }
+        self.restart_container_logs(tab_id);
+    }
+
+    /// 开关日志时间戳：由引擎附带时间戳，界面不做二次格式化。
+    pub(crate) fn toggle_container_logs_timestamps(&mut self, tab_id: TabId) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.logs_timestamps = !workspace.logs_timestamps;
+        }
+        self.restart_container_logs(tab_id);
+    }
+
+    /// 把当前日志缓冲整体复制到剪贴板，便于贴到工单或聊天里。
+    pub(crate) fn copy_container_logs(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(text) = self
+            .container_workspace(tab_id)
+            .map(|workspace| workspace.logs.clone())
+        else {
+            return;
+        };
+        if text.is_empty() {
+            return;
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_container_logs_follow(&mut self, tab_id: TabId, follow: bool) {
         if let Some(workspace) = self.container_workspace_mut(tab_id) {
             workspace.logs_follow = follow;
         }
-        self.ensure_container_logs(tab_id);
+        self.restart_container_logs(tab_id);
     }
 
     pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId) {
@@ -1324,6 +1367,84 @@ impl AppShell {
     }
 
     /// 重命名容器内路径。
+    /// 展开或收起「新建目录」条；展开时才创建输入框，避免常驻实体。
+    pub(crate) fn toggle_container_mkdir(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        workspace.files.new_dir_open = !workspace.files.new_dir_open;
+        if workspace.files.new_dir_open && workspace.files.new_dir_input.is_none() {
+            let input = cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder(rust_i18n::t!("container.files.new_dir_placeholder").to_string())
+            });
+            workspace.files.new_dir_input = Some(input);
+        }
+        cx.notify();
+    }
+
+    /// 在容器当前目录里新建子目录：上传与整理文件都需要先有目录。
+    pub(crate) fn submit_container_mkdir(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let Some(input) = workspace.files.new_dir_input.clone() else {
+            return;
+        };
+        let name = input.read(cx).value().trim().to_string();
+        if name.is_empty() || name.contains('/') || name.contains("..") {
+            if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                workspace.notice =
+                    Some(rust_i18n::t!("container.files.new_dir_invalid").to_string());
+            }
+            cx.notify();
+            return;
+        }
+        let parent = if workspace.files.path.is_empty() {
+            "/".to_string()
+        } else {
+            workspace.files.path.clone()
+        };
+        let path = if parent.ends_with('/') {
+            format!("{parent}{name}")
+        } else {
+            format!("{parent}/{name}")
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.files.new_dir_open = false;
+        workspace.busy = true;
+        workspace
+            .files
+            .new_dir_input
+            .as_ref()
+            .iter()
+            .for_each(|input| input.update(cx, |input, cx| input.set_value("", window, cx)));
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::CreateDir {
+                tab_id,
+                request_id,
+                container,
+                path,
+            },
+        );
+        cx.notify();
+    }
+
     pub(crate) fn rename_container_path(&mut self, tab_id: TabId, from: String, to: String) {
         let Some(workspace) = self.container_workspace_mut(tab_id) else {
             return;

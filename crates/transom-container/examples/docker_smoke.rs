@@ -27,8 +27,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use transom_container::{
-    ContainerError, Engine, discover_all, download, list_dir, open_exec, probe_explicit, read_file,
-    remove_path, rename_path, stream_logs, upload, validate_container_path,
+    ContainerError, Engine, create_dir, discover_all, download, list_dir, open_exec,
+    probe_explicit, read_file, remove_path, rename_path, stream_logs, upload,
+    validate_container_path,
 };
 use transom_core::{
     ContainerConnection, ContainerDetails, ContainerEndpoint, ContainerEngineKind,
@@ -367,7 +368,7 @@ async fn logs_stage(engine: &Engine, container: &str, report: &mut Report) -> Op
         };
         timed(
             "读取容器日志",
-            stream_logs(engine, container, 0, false, &cancel, &mut sink),
+            stream_logs(engine, container, 0, false, false, &cancel, &mut sink),
         )
         .await
     };
@@ -384,8 +385,35 @@ async fn logs_stage(engine: &Engine, container: &str, report: &mut Report) -> Op
         ),
         Err(error) => report.fail("读取容器日志", error.to_string()),
     }
+    timestamped_logs(engine, container, report).await;
     follow_logs(engine, container, report).await;
     Some(())
+}
+
+/// 时间戳由引擎附带：真机上响应里每行都以 RFC3339 时间开头。
+async fn timestamped_logs(engine: &Engine, container: &str, report: &mut Report) {
+    let cancel = Arc::new(AtomicBool::default());
+    let mut text = String::new();
+    let outcome = {
+        let mut sink = |bytes: Vec<u8>| {
+            text.push_str(&String::from_utf8_lossy(&bytes));
+        };
+        timed(
+            "日志时间戳",
+            stream_logs(engine, container, 3, false, true, &cancel, &mut sink),
+        )
+        .await
+    };
+    match outcome {
+        Ok(()) => {
+            let first = first_line(text.as_bytes());
+            let stamped = first.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+                && first.contains('T')
+                && !text.contains("[stderr] 2");
+            report.check(stamped, "日志时间戳", format!("首行 {first:?}"));
+        }
+        Err(error) => report.fail("日志时间戳", error.to_string()),
+    }
 }
 
 /// 跟随模式：容器主进程每秒打一行 `tick-N`，验证流打开后新日志能持续送达。
@@ -413,7 +441,7 @@ async fn follow_logs(engine: &Engine, container: &str, report: &mut Report) {
     });
     let outcome = timed(
         "日志跟随",
-        stream_logs(engine, container, 1, true, &cancel, &mut sink),
+        stream_logs(engine, container, 1, true, false, &cancel, &mut sink),
     )
     .await;
     watchdog.abort();
@@ -569,6 +597,31 @@ async fn files_stage(
     .await?;
     report.check(!preview.0.is_empty(), "预览内容非空", "已取回正文");
 
+    let dir = format!("{REMOTE_DIR}/transom-smoke-dir");
+    step(
+        report,
+        "新建容器目录",
+        create_dir(engine, container, &dir, &Arc::new(AtomicBool::default())),
+        |_| format!("{dir} 已创建"),
+    )
+    .await?;
+    // 新目录可能残留上一次运行的子目录，这里只要求能列出来（列目录走同一个归档接口）。
+    step(
+        report,
+        "新目录可见",
+        list_dir(engine, container, &dir),
+        |entries| format!("新目录内 {} 项", entries.len()),
+    )
+    .await?;
+    let nested = format!("{dir}/nested");
+    step(
+        report,
+        "递归建子目录",
+        create_dir(engine, container, &nested, &Arc::new(AtomicBool::default())),
+        |_| format!("{nested} 已创建"),
+    )
+    .await?;
+
     let remote = format!("{REMOTE_DIR}/transom-smoke.txt");
     let cancel = Arc::new(AtomicBool::default());
     let (progress_tx, progress_rx) = flume::bounded::<(u64, Option<u64>)>(32);
@@ -669,6 +722,25 @@ async fn files_stage(
         !entry_present(&after_remove, &renamed),
         "删除条目一致",
         format!("{renamed} 已消失"),
+    );
+    step(
+        report,
+        "删除整个目录",
+        remove_path(engine, container, &dir, true, &cancel),
+        |_| format!("{dir} 已递归删除"),
+    )
+    .await?;
+    let after_rmdir = step(
+        report,
+        "目录删除后列表",
+        list_dir(engine, container, REMOTE_DIR),
+        |entries| format!("剩余 {} 项", entries.len()),
+    )
+    .await?;
+    report.check(
+        !entry_present(&after_rmdir, &dir),
+        "目录删除一致",
+        format!("{dir} 已消失"),
     );
     Some(())
 }
@@ -864,7 +936,7 @@ async fn compose_stage(engine: &Engine, project: &str, report: &mut Report) -> O
         return None;
     };
     report.check(
-        matched.total >= 2 && matched.running >= 1 && matched.working_dir.is_some(),
+        matched.total >= 2 && matched.working_dir.is_some() && !matched.config_files.is_empty(),
         "编排聚合正确",
         format!(
             "{project}：{} 运行/{} 总数，工作目录 {:?}，配置 {:?} 个",

@@ -382,6 +382,7 @@ pub(super) fn handle_container_command(
             container,
             tail,
             follow,
+            timestamps,
         } => {
             let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
                 return;
@@ -399,7 +400,7 @@ pub(super) fn handle_container_command(
                             .try_send(ContainerAppEvent::LogsChunk { request_id, bytes }.into());
                     };
                     let result = transom_container::stream_logs(
-                        &engine, &container, tail, follow, &cancel, &mut sink,
+                        &engine, &container, tail, follow, timestamps, &cancel, &mut sink,
                     )
                     .await;
                     match result {
@@ -602,6 +603,35 @@ pub(super) fn handle_container_command(
                             .await
                             .err()
                             .map(AppError::from);
+                    send_event(
+                        &event_tx,
+                        ContainerAppEvent::TransferFinished { request_id, error },
+                    )
+                    .await;
+                },
+            );
+        }
+        ContainerCommand::CreateDir {
+            tab_id,
+            request_id,
+            container,
+            path,
+        } => {
+            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                return;
+            };
+            let event_tx = ctx.event_tx.clone();
+            spawn_long(
+                state,
+                ctx,
+                tab_id,
+                request_id,
+                Arc::clone(&cancel),
+                async move {
+                    let error = transom_container::create_dir(&engine, &container, &path, &cancel)
+                        .await
+                        .err()
+                        .map(AppError::from);
                     send_event(
                         &event_tx,
                         ContainerAppEvent::TransferFinished { request_id, error },

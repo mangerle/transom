@@ -25,7 +25,7 @@ const CANCEL_TICK: Duration = Duration::from_millis(250);
 /// 日志输出回调：收到的是已经合并、可直接写入终端的字节。
 pub type LogSink<'a> = dyn FnMut(Vec<u8>) + Send + 'a;
 
-/// 拉取容器日志；`follow` 为真时持续到取消或容器结束。
+/// 拉取容器日志；`follow` 为真时持续到取消或容器结束，`timestamps` 为真时带上服务端时间戳。
 ///
 /// `tail` 是要取的尾部行数，`0` 表示全量：引擎把数值 0 理解为「最后 0 行」，
 /// 真机验证过这会返回空响应，因此这里统一翻译成引擎的 `all` 语义。
@@ -37,17 +37,18 @@ pub async fn stream_logs(
     container: &str,
     tail: usize,
     follow: bool,
+    timestamps: bool,
     cancel: &Arc<AtomicBool>,
     sink: &mut LogSink<'_>,
 ) -> Result<(), ContainerError> {
     if let Some(cli) = engine.cli_backend_ref() {
-        return cli_logs(cli, container, tail, follow, cancel, sink).await;
+        return cli_logs(cli, container, tail, follow, timestamps, cancel, sink).await;
     }
     let tail = tail_token(tail);
     let api = engine.http()?;
     let tty = api.container_tty(container).await?;
     let path = format!(
-        "/containers/{}/logs?stdout=1&stderr=1&tail={tail}&timestamps=0&follow={}",
+        "/containers/{}/logs?stdout=1&stderr=1&tail={tail}&timestamps={timestamps}&follow={}",
         http::percent_encode(container),
         u8::from(follow)
     );
@@ -170,10 +171,14 @@ async fn cli_logs(
     container: &str,
     tail: usize,
     follow: bool,
+    timestamps: bool,
     cancel: &Arc<AtomicBool>,
     sink: &mut LogSink<'_>,
 ) -> Result<(), ContainerError> {
     let mut args = vec!["logs".to_string(), "--tail".to_string(), tail_token(tail)];
+    if timestamps {
+        args.push("--timestamps".to_string());
+    }
     if follow {
         args.push("--follow".to_string());
     }

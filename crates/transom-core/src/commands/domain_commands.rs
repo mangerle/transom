@@ -239,6 +239,8 @@ pub enum ContainerCommand {
         container: String,
         tail: usize,
         follow: bool,
+        /// 是否让引擎附带服务端时间戳（`tail=0` 表示全量）。
+        timestamps: bool,
     },
     /// 开启/关闭统计轮询；同一容器重复开启会替换旧订阅。
     Stats {
@@ -295,5 +297,12 @@ pub enum ContainerCommand {
         container: String,
         from: String,
         to: String,
+    },
+    /// 在容器内创建目录：归档接口只能写入已存在的目录，上传前先建目录才可用。
+    CreateDir {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
     },
 }

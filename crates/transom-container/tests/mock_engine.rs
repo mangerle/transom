@@ -88,6 +88,120 @@ fn spawn_mock_engine(path: PathBuf) -> tokio::task::JoinHandle<()> {
     })
 }
 
+/// 构造一个包含 `count` 个文件的 tar，用于归档流式解析测试。
+fn build_tar(count: usize) -> Vec<u8> {
+    let mut builder = tar::Builder::new(Vec::new());
+    for index in 0..count {
+        let name = format!("tmp/file-{index}.txt");
+        let payload = format!("payload-{index}");
+        let mut header = tar::Header::new_gnu();
+        header.set_size(payload.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder
+            .append_data(
+                &mut header,
+                name,
+                std::io::Cursor::new(payload.into_bytes()),
+            )
+            .expect("写入 tar 条目");
+    }
+    builder.finish().expect("归档 tar");
+    builder.into_inner().expect("取出 tar 字节")
+}
+
+/// 分块流式返回 tar 的服务端：块很小且每块之间让出运行时，逼出真实的背压与
+/// 多帧读取；连接驱动必须活到最后一块，否则客户端会看到响应被截断。
+fn spawn_mock_archive_engine(
+    path: PathBuf,
+    payload: std::sync::Arc<Vec<u8>>,
+) -> tokio::task::JoinHandle<()> {
+    let listener = UnixListener::bind(&path).expect("绑定归档测试 socket");
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let payload = payload.clone();
+            tokio::spawn(async move {
+                let mut buffer = vec![0u8; 8 * 1024];
+                let Ok(count) = stream.read(&mut buffer).await else {
+                    return;
+                };
+                let head = String::from_utf8_lossy(&buffer[..count]).to_string();
+                if head.contains("/_ping") {
+                    let _ = stream
+                        .write_all(b"HTTP/1.1 200 OK\r\nAPI-Version: 1.41\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
+                        .await;
+                } else if head.contains("/version") {
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{VERSION_JSON}",
+                        VERSION_JSON.len()
+                    );
+                    let _ = stream.write_all(response.as_bytes()).await;
+                } else if head.contains("/archive") {
+                    let _ = stream
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Type: application/x-tar\r\nTransfer-Encoding: chunked\r\n\r\n",
+                        )
+                        .await;
+                    for chunk in payload.chunks(64) {
+                        let header = format!("{:x}\r\n", chunk.len());
+                        if stream.write_all(header.as_bytes()).await.is_err() {
+                            return;
+                        }
+                        if stream.write_all(chunk).await.is_err() {
+                            return;
+                        }
+                        if stream.write_all(b"\r\n").await.is_err() {
+                            return;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                    }
+                    let _ = stream.write_all(b"0\r\n\r\n").await;
+                } else {
+                    let _ = stream
+                        .write_all(
+                            b"HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                        )
+                        .await;
+                }
+                let _ = stream.shutdown().await;
+            });
+        }
+    })
+}
+
+/// 真机回归（同一缺陷在装有 Docker 的机器上偶发）：归档读取必须拿到完整响应。
+///
+/// 只把 `response.body` 搬进泵任务时，连接守卫会随 `RawResponse` 提前析构并中止
+/// 驱动任务，多帧响应会被截断成「connection closed before message completed」。
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn archive_listing_reads_every_chunked_frame() {
+    const ENTRIES: usize = 40;
+    let directory = tempfile::tempdir().expect("临时目录");
+    let socket = directory.path().join("docker.sock");
+    let server = spawn_mock_archive_engine(socket.clone(), std::sync::Arc::new(build_tar(ENTRIES)));
+
+    let engine = probe_explicit(
+        ContainerEngineKind::Docker,
+        &ContainerEndpoint::Unix { path: socket },
+    )
+    .await
+    .expect("探测归档模拟引擎");
+    let entries = transom_container::list_dir(&engine, "abc123", "/tmp")
+        .await
+        .expect("列目录必须读完整份 tar");
+    assert_eq!(
+        entries.len(),
+        ENTRIES,
+        "分块响应必须全部解析出来，缺项说明连接被提前中止"
+    );
+    assert!(entries.iter().any(|entry| entry.name == "file-0.txt"));
+
+    server.abort();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn probes_versioned_api_and_parses_containers() {
     let directory = tempfile::tempdir().expect("临时目录");

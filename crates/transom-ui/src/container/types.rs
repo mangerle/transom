@@ -20,6 +20,10 @@ use transom_terminal::TerminalView;
 
 /// 日志缓冲上限：超出后丢弃最旧部分，避免长时间跟随把内存吃满。
 pub(crate) const LOG_BUFFER_LIMIT: usize = 512 * 1024;
+/// 默认只取尾部 500 行：一次性拉全量日志会把大容器的输出灌进界面缓冲。
+pub(crate) const LOG_TAIL_DEFAULT: usize = 500;
+/// 日志尾部行数档位：与 Portainer/lazydocker 的取数习惯一致。
+pub(crate) const LOG_TAIL_CHOICES: [usize; 4] = [100, LOG_TAIL_DEFAULT, 5000, 0];
 
 /// 左侧功能菜单。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -330,6 +334,10 @@ pub(crate) struct ContainerFilesState {
     pub(crate) rename_from: Option<String>,
     /// 重命名输入框；首次点击重命名时创建，之后复用。
     pub(crate) rename_input: Option<Entity<InputState>>,
+    /// 新建目录条是否展开。
+    pub(crate) new_dir_open: bool,
+    /// 新建目录的名字输入框；首次展开时创建，之后复用。
+    pub(crate) new_dir_input: Option<Entity<InputState>>,
 }
 
 /// 待确认的删除操作：删除是破坏性动作，必须再点一次确认。
@@ -373,6 +381,10 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) network_details: Option<ContainerNetworkDetails>,
     pub(crate) logs: String,
     pub(crate) logs_follow: bool,
+    /// 日志尾部行数；0 表示全量（引擎侧 `all`）。
+    pub(crate) logs_tail: usize,
+    /// 是否让引擎附带服务端时间戳。
+    pub(crate) logs_timestamps: bool,
     pub(crate) logs_request: Option<ContainerRequestId>,
     pub(crate) stats: Option<ContainerStats>,
     pub(crate) stats_request: Option<ContainerRequestId>,
@@ -436,11 +448,17 @@ impl ContainerWorkspaceState {
             network_details: None,
             logs: String::new(),
             logs_follow: false,
+            logs_tail: LOG_TAIL_DEFAULT,
+            logs_timestamps: false,
             logs_request: None,
             stats: None,
             stats_request: None,
             terminal: None,
-            files: ContainerFilesState::default(),
+            files: ContainerFilesState {
+                new_dir_open: false,
+                new_dir_input: None,
+                ..ContainerFilesState::default()
+            },
             confirm: None,
             notice: None,
             busy: false,
