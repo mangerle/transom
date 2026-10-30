@@ -155,7 +155,7 @@ impl SilentEcho {
             // 对端没有回显时，真正的 OSC 输出会先出现；立即放行并停止过滤，
             // 否则 Shell 集成握手会被一直扣在缓冲区里。
             if byte == b']' && self.line.last() == Some(&0x1b) {
-                output.extend(self.line.drain(..));
+                output.append(&mut self.line);
                 output.push(byte);
                 self.target.clear();
                 self.end_target.clear();
@@ -173,13 +173,13 @@ impl SilentEcho {
             }
             if byte == b'\n' {
                 // 这一行没有开始标记，说明不是我们的注入回显，原样放行。
-                output.extend(self.line.drain(..));
+                output.append(&mut self.line);
                 self.target.clear();
                 self.end_target.clear();
                 continue;
             }
             if self.line.len() > LINE_LIMIT {
-                output.extend(self.line.drain(..));
+                output.append(&mut self.line);
                 self.target.clear();
                 self.end_target.clear();
             }
