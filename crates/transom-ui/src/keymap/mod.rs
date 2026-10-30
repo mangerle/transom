@@ -76,41 +76,65 @@ pub(crate) struct ShortcutSpec {
     pub(crate) label_key: &'static str,
     pub(crate) defaults: &'static [&'static str],
     bind: fn(&str) -> KeyBinding,
+    /// 动作实例工厂：命令面板据此派发真实 Action，并由组件自动关联键位提示。
+    ///
+    /// 为什么与 `bind` 分开：`KeyBinding::new` 要求具体的 Action 值，而面板需要
+    /// 装箱的 `Box<dyn Action>`；两处各生成一次，避免面板维护一份平行动作清单。
+    pub(crate) action: fn() -> Box<dyn Action>,
 }
 
 macro_rules! bind_fn {
-    ($name:ident, $action:ident) => {
-        fn $name(key: &str) -> KeyBinding {
+    ($bind:ident, $make:ident, $action:ident) => {
+        fn $bind(key: &str) -> KeyBinding {
             KeyBinding::new(key, $action, Some(WORKSPACE_ONLY))
+        }
+        fn $make() -> Box<dyn Action> {
+            Box::new($action)
         }
     };
 }
 
-bind_fn!(bind_new_session, NewSession);
-bind_fn!(bind_new_local, NewLocalTerminal);
-bind_fn!(bind_quick_open, QuickOpen);
-bind_fn!(bind_close_tab, CloseTab);
-bind_fn!(bind_next_tab, NextTab);
-bind_fn!(bind_prev_tab, PrevTab);
-bind_fn!(bind_reconnect, Reconnect);
-bind_fn!(bind_toggle_sidebar, ToggleSidebar);
-bind_fn!(bind_toggle_sftp, ToggleSftp);
-bind_fn!(bind_toggle_forward, ToggleForward);
-bind_fn!(bind_toggle_immersive, ToggleImmersive);
-bind_fn!(bind_search_buffer, SearchBuffer);
-bind_fn!(bind_toggle_block_view, ToggleBlockView);
-bind_fn!(bind_prev_prompt, PrevPrompt);
-bind_fn!(bind_next_prompt, NextPrompt);
-bind_fn!(bind_toggle_snippets, ToggleSnippets);
-bind_fn!(bind_split_right, SplitRight);
-bind_fn!(bind_split_down, SplitDown);
-bind_fn!(bind_close_pane, ClosePane);
-bind_fn!(bind_toggle_split_axis, ToggleSplitAxis);
-bind_fn!(bind_zoom_pane, ZoomPane);
-bind_fn!(bind_focus_pane_left, FocusPaneLeft);
-bind_fn!(bind_focus_pane_right, FocusPaneRight);
-bind_fn!(bind_focus_pane_up, FocusPaneUp);
-bind_fn!(bind_focus_pane_down, FocusPaneDown);
+bind_fn!(bind_new_session, action_new_session, NewSession);
+bind_fn!(bind_new_local, action_new_local, NewLocalTerminal);
+bind_fn!(bind_quick_open, action_quick_open, QuickOpen);
+bind_fn!(bind_close_tab, action_close_tab, CloseTab);
+bind_fn!(bind_next_tab, action_next_tab, NextTab);
+bind_fn!(bind_prev_tab, action_prev_tab, PrevTab);
+bind_fn!(bind_reconnect, action_reconnect, Reconnect);
+bind_fn!(bind_toggle_sidebar, action_toggle_sidebar, ToggleSidebar);
+bind_fn!(bind_toggle_sftp, action_toggle_sftp, ToggleSftp);
+bind_fn!(bind_toggle_forward, action_toggle_forward, ToggleForward);
+bind_fn!(
+    bind_toggle_immersive,
+    action_toggle_immersive,
+    ToggleImmersive
+);
+bind_fn!(bind_search_buffer, action_search_buffer, SearchBuffer);
+bind_fn!(
+    bind_toggle_block_view,
+    action_toggle_block_view,
+    ToggleBlockView
+);
+bind_fn!(bind_prev_prompt, action_prev_prompt, PrevPrompt);
+bind_fn!(bind_next_prompt, action_next_prompt, NextPrompt);
+bind_fn!(bind_toggle_snippets, action_toggle_snippets, ToggleSnippets);
+bind_fn!(bind_split_right, action_split_right, SplitRight);
+bind_fn!(bind_split_down, action_split_down, SplitDown);
+bind_fn!(bind_close_pane, action_close_pane, ClosePane);
+bind_fn!(
+    bind_toggle_split_axis,
+    action_toggle_split_axis,
+    ToggleSplitAxis
+);
+bind_fn!(bind_zoom_pane, action_zoom_pane, ZoomPane);
+bind_fn!(bind_focus_pane_left, action_focus_pane_left, FocusPaneLeft);
+bind_fn!(
+    bind_focus_pane_right,
+    action_focus_pane_right,
+    FocusPaneRight
+);
+bind_fn!(bind_focus_pane_up, action_focus_pane_up, FocusPaneUp);
+bind_fn!(bind_focus_pane_down, action_focus_pane_down, FocusPaneDown);
 
 static SPECS: &[ShortcutSpec] = &[
     ShortcutSpec {
@@ -118,72 +142,84 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_new_session",
         defaults: &["$app-n"],
         bind: bind_new_session,
+        action: action_new_session,
     },
     ShortcutSpec {
         id: "new_local",
         label_key: "settings.shortcut_new_local",
         defaults: &["$app-t"],
         bind: bind_new_local,
+        action: action_new_local,
     },
     ShortcutSpec {
         id: "quick_open",
         label_key: "settings.shortcut_quick_open",
         defaults: &["$app-k"],
         bind: bind_quick_open,
+        action: action_quick_open,
     },
     ShortcutSpec {
         id: "close_tab",
         label_key: "settings.shortcut_close_tab",
         defaults: &["$app-w"],
         bind: bind_close_tab,
+        action: action_close_tab,
     },
     ShortcutSpec {
         id: "next_tab",
         label_key: "settings.shortcut_next_tab",
         defaults: &["ctrl-tab"],
         bind: bind_next_tab,
+        action: action_next_tab,
     },
     ShortcutSpec {
         id: "prev_tab",
         label_key: "settings.shortcut_prev_tab",
         defaults: &["ctrl-shift-tab"],
         bind: bind_prev_tab,
+        action: action_prev_tab,
     },
     ShortcutSpec {
         id: "reconnect",
         label_key: "settings.shortcut_reconnect",
         defaults: &["$app-r"],
         bind: bind_reconnect,
+        action: action_reconnect,
     },
     ShortcutSpec {
         id: "toggle_sidebar",
         label_key: "settings.shortcut_toggle_sidebar",
         defaults: &["$app-b"],
         bind: bind_toggle_sidebar,
+        action: action_toggle_sidebar,
     },
     ShortcutSpec {
         id: "toggle_sftp",
         label_key: "settings.shortcut_toggle_sftp",
         defaults: &["$app-s"],
         bind: bind_toggle_sftp,
+        action: action_toggle_sftp,
     },
     ShortcutSpec {
         id: "toggle_forward",
         label_key: "settings.shortcut_toggle_forward",
         defaults: &["$app-p"],
         bind: bind_toggle_forward,
+        action: action_toggle_forward,
     },
     ShortcutSpec {
         id: "immersive",
         label_key: "settings.shortcut_immersive",
         defaults: &["f11", "alt-enter"],
         bind: bind_toggle_immersive,
+        action: action_toggle_immersive,
     },
     ShortcutSpec {
         id: "toggle_snippets",
         label_key: "settings.shortcut_toggle_snippets",
         defaults: &["$app-j"],
         bind: bind_toggle_snippets,
+        action: action_toggle_snippets,
     },
     // 终端缓冲区检索：默认 `$app-f`，与 SFTP 面板的 `secondary-f` 过滤框错开，
     // 且不会吞掉 shell 里 Ctrl+F 的光标前移；用户可在快捷键设置里改成别的键。
@@ -192,6 +228,7 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_terminal_search",
         defaults: &["$app-f"],
         bind: bind_search_buffer,
+        action: action_search_buffer,
     },
     // 语义块/经典连续流热切换：默认 `$app-shift-b`（Linux 为 Ctrl+Shift+B），
     // 与终端内 Ctrl+B（tmux 前缀）错开，不会误触复用器快捷键。
@@ -200,6 +237,7 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_toggle_block_view",
         defaults: &["$app-shift-b"],
         bind: bind_toggle_block_view,
+        action: action_toggle_block_view,
     },
     // 提示符跳跃默认落在 `$app-方向`：macOS 是 Cmd+方向，其他平台展开成
     // Ctrl+Shift+方向。刻意不占裸 Ctrl+方向——那在 bash/zsh 的 readline 里是
@@ -209,30 +247,35 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_prev_prompt",
         defaults: &["$app-up"],
         bind: bind_prev_prompt,
+        action: action_prev_prompt,
     },
     ShortcutSpec {
         id: "next_prompt",
         label_key: "settings.shortcut_next_prompt",
         defaults: &["$app-down"],
         bind: bind_next_prompt,
+        action: action_next_prompt,
     },
     ShortcutSpec {
         id: "split_right",
         label_key: "settings.shortcut_split_right",
         defaults: &["$app-d"],
         bind: bind_split_right,
+        action: action_split_right,
     },
     ShortcutSpec {
         id: "split_down",
         label_key: "settings.shortcut_split_down",
         defaults: &["$app-e"],
         bind: bind_split_down,
+        action: action_split_down,
     },
     ShortcutSpec {
         id: "close_pane",
         label_key: "settings.shortcut_close_pane",
         defaults: &["$app-x"],
         bind: bind_close_pane,
+        action: action_close_pane,
     },
     // 窗格导航与布局动作默认带 Alt：单纯 `$app-方向` 会吞掉 shell 里
     // Ctrl+方向 的按词跳字，`$app-alt-*` 则不与终端透传序列冲突。
@@ -241,36 +284,42 @@ static SPECS: &[ShortcutSpec] = &[
         label_key: "settings.shortcut_toggle_split_axis",
         defaults: &["$app-alt-o"],
         bind: bind_toggle_split_axis,
+        action: action_toggle_split_axis,
     },
     ShortcutSpec {
         id: "zoom_pane",
         label_key: "settings.shortcut_zoom_pane",
         defaults: &["$app-enter"],
         bind: bind_zoom_pane,
+        action: action_zoom_pane,
     },
     ShortcutSpec {
         id: "focus_pane_left",
         label_key: "settings.shortcut_focus_pane_left",
         defaults: &["$app-alt-left"],
         bind: bind_focus_pane_left,
+        action: action_focus_pane_left,
     },
     ShortcutSpec {
         id: "focus_pane_right",
         label_key: "settings.shortcut_focus_pane_right",
         defaults: &["$app-alt-right"],
         bind: bind_focus_pane_right,
+        action: action_focus_pane_right,
     },
     ShortcutSpec {
         id: "focus_pane_up",
         label_key: "settings.shortcut_focus_pane_up",
         defaults: &["$app-alt-up"],
         bind: bind_focus_pane_up,
+        action: action_focus_pane_up,
     },
     ShortcutSpec {
         id: "focus_pane_down",
         label_key: "settings.shortcut_focus_pane_down",
         defaults: &["$app-alt-down"],
         bind: bind_focus_pane_down,
+        action: action_focus_pane_down,
     },
 ];
 

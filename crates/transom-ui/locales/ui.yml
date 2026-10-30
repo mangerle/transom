@@ -64,8 +64,29 @@ app:
     en: Quick Open
     zh-CN: 快速打开
   quick_open_placeholder:
-    en: Type to search sessions, or paste a host to connect directly...
-    zh-CN: 输入关键字搜索会话，或填入主机地址直接连接...
+    en: Search sessions, actions, settings or themes; type > for actions only, or paste a host...
+    zh-CN: 搜索会话、动作、设置或主题，输入 > 只看动作，或填入主机地址直接连接...
+  palette_action_placeholder:
+    en: Action mode — search actions, settings pages, themes or snippets...
+    zh-CN: 动作模式 — 搜索动作、设置页、主题或快捷命令...
+  palette_actions:
+    en: Actions
+    zh-CN: 动作
+  palette_settings_pages:
+    en: Settings Pages
+    zh-CN: 设置页
+  palette_ui_themes:
+    en: Interface Themes
+    zh-CN: 界面主题
+  palette_terminal_themes:
+    en: Terminal Color Schemes
+    zh-CN: 终端配色
+  palette_snippets:
+    en: Snippets
+    zh-CN: 快捷命令
+  palette_empty:
+    en: No matching commands
+    zh-CN: 没有匹配的条目
   quick_connect:
     en: Connect directly to %{host} (without saving)
     zh-CN: 直接连接 %{host}（不保存会话）

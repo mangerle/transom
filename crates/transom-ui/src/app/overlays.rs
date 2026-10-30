@@ -129,7 +129,7 @@ impl AppShell {
             overlays.push(self.render_forward_confirm_modal(window, cx, &p));
         }
         if self.modals.show_quick_open {
-            overlays.push(self.render_quick_open_modal(window, cx, &p));
+            overlays.push(self.render_command_palette_modal(window, cx, &p));
         }
         if self.modals.settings.open {
             overlays.push(self.render_settings_modal(window, cx, &p));

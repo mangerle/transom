@@ -21,6 +21,8 @@ impl AppShell {
     }
 
     pub(crate) fn open_settings_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // 菜单/快捷键入口不指定页：清掉面板残留的跳页请求，回到组件上次的位置。
+        self.modals.settings.jump_page = None;
         let profile = self.settings.terminal_profile.clone();
         // 界面主题与密度在弹窗内即时预览，取消时凭这份快照恢复。
         self.modals.settings.appearance_snapshot = Some(self.settings.appearance.clone());
@@ -110,6 +112,23 @@ impl AppShell {
         self.fill_sync_form(window, cx);
         self.fill_proxy_form(window, cx);
         self.modals.settings.open = true;
+        cx.notify();
+    }
+
+    /// 从命令面板打开设置并直接定位到指定页。
+    ///
+    /// 复用 `open_settings_modal` 的全部回填逻辑，只追加跳页请求；页号越界时
+    /// 退化为普通打开，避免面板传入过期目录时弹出一个空内容区。
+    pub(crate) fn open_settings_page(
+        &mut self,
+        page: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_settings_modal(window, cx);
+        if page < super::page_entries().len() {
+            self.modals.settings.jump_page = Some(page);
+        }
         cx.notify();
     }
 
@@ -209,6 +228,7 @@ impl AppShell {
             self.apply_appearance_to_live_panes(cx);
         }
         self.modals.settings.open = false;
+        self.modals.settings.jump_page = None;
         cx.notify();
     }
 
@@ -244,6 +264,7 @@ impl AppShell {
             self.status = Some(rust_i18n::t!("status.ready").to_string());
         }
         self.modals.settings.open = false;
+        self.modals.settings.jump_page = None;
         cx.notify();
     }
 

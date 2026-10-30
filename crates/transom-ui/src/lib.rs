@@ -22,6 +22,7 @@ mod cast_player;
 mod chrome;
 mod clipboard_prompt;
 mod cloud_sync;
+mod command_palette;
 mod connection;
 mod diff_viewer;
 mod divider;

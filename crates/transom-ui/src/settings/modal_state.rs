@@ -46,6 +46,12 @@ pub(crate) struct ProxyFormInputs {
 /// 二十多个输入框句柄。
 pub(crate) struct SettingsModalState {
     pub(crate) open: bool,
+    /// 命令面板要求打开时直接定位的页签序号。
+    ///
+    /// `Settings` 组件的选中页由 keyed state 持有，只在状态首次创建时读取
+    /// `default_selected_index`；因此跳页通过"换一个带页号的组件 id"实现，
+    /// 由渲染侧读取本字段。关闭弹窗时清空，下一次从菜单打开仍回到上次位置。
+    pub(crate) jump_page: Option<usize>,
     pub(crate) key_wizard: Option<KeyWizardState>,
     pub(crate) font_family: Entity<InputState>,
     pub(crate) ui_font_family: Entity<InputState>,
@@ -241,6 +247,7 @@ impl SettingsModalState {
 
         Self {
             open: false,
+            jump_page: None,
             proxy,
             key_wizard: None,
             font_family: settings_font_family,

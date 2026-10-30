@@ -39,6 +39,25 @@ use transom_terminal::TerminalView;
 /// 右侧控件挤出面板；全文由 tooltip 给出。
 const PATH_VALUE_MAX_WIDTH: f32 = 12.0;
 
+/// 设置页目录：顺序必须与 `AppShell::build_settings_pages` 的装配顺序一致。
+///
+/// 命令面板据此列出可跳转的设置页；标题与图标复用页面自身的定义，避免两处
+/// 各写一份文案。`build_settings_pages` 里用 debug 断言守住顺序，出现漏改时
+/// 在开发期立即暴露，而不是让面板把用户跳到错误的页。
+pub(crate) fn page_entries() -> Vec<(&'static str, IconName)> {
+    vec![
+        ("settings.tab_appearance", IconName::Palette),
+        ("settings.tab_terminal", IconName::Terminal),
+        ("settings.tab_files", IconName::Folder),
+        ("settings.tab_mouse_clipboard", IconName::ArrowLeftRight),
+        ("settings.tab_shortcuts", IconName::Search),
+        ("settings.tab_window_layout", IconName::PanelLeft),
+        ("settings.tab_general", IconName::Globe),
+        ("settings.tab_monitor", IconName::Gauge),
+        ("settings.tab_about", IconName::Info),
+    ]
+}
+
 /// 读取字体族输入框：留空表示"不指定"，交给默认字体或系统回退。
 pub(super) fn read_font_family(input: &Entity<InputState>, cx: &App) -> Option<String> {
     let value = input.read(cx).value();

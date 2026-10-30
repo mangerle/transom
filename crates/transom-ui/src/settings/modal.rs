@@ -8,7 +8,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::setting::{SettingGroup, SettingItem, SettingPage, Settings};
+use gpui_kit::component::setting::{SelectIndex, SettingGroup, SettingItem, SettingPage, Settings};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 
@@ -56,9 +56,25 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let app_entity = cx.entity().clone();
-        let settings_component = Settings::new("app-settings")
+        // 跳页时换组件 id：`Settings` 的选中页存在 keyed state 里，只有首次创建
+        // 才读取默认页；用带页号的 id 让"从命令面板指定页"与"从菜单回到上次
+        // 位置"两条路径各自持有独立的组件状态。
+        let (settings_id, jump_index) = match self.modals.settings.jump_page {
+            Some(page) => (
+                format!("app-settings-page-{page}"),
+                Some(SelectIndex {
+                    page_ix: page,
+                    group_ix: None,
+                }),
+            ),
+            None => ("app-settings".to_string(), None),
+        };
+        let mut settings_component = Settings::new(settings_id)
             .sidebar_width(px(220.0))
             .pages(Self::build_settings_pages(&app_entity, p));
+        if let Some(index) = jump_index {
+            settings_component = settings_component.default_selected_index(index);
+        }
 
         // 尺寸随密度档位缩放；max_w/max_h 以 overlay 全屏为上限，宽松档下小
         // 窗口弹窗贴边而不被裁切，内容区自身可滚动。
@@ -107,6 +123,7 @@ impl AppShell {
                             .icon(IconName::X)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.modals.settings.open = false;
+                                this.modals.settings.jump_page = None;
                                 cx.notify();
                             })),
                     ),
@@ -171,6 +188,9 @@ impl AppShell {
 
     /// 构建偏好设置所有分类页面。
     fn build_settings_pages(app: &Entity<AppShell>, p: &Palette) -> Vec<SettingPage> {
+        // 命令面板的设置页目录与本函数的装配顺序必须一致（共 9 页）：
+        // 顺序不一致会让跳转落到错误页面，因此开发期直接断言。
+        debug_assert_eq!(super::page_entries().len(), 9);
         let page_appearance =
             SettingPage::new(rust_i18n::t!("settings.tab_appearance").to_string())
                 .icon(IconName::Palette)
