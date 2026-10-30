@@ -44,6 +44,13 @@ impl TerminalView {
             return;
         }
 
+        // 复制模式是模态的：所有按键都在模式内消费，绝不能写进远端。
+        // 应用级快捷键已在上面的 key_filter 处截走，退出组合键仍可用。
+        if self.copy_mode_active() {
+            self.handle_copy_mode_key(event, cx);
+            return;
+        }
+
         // 能走到这里就说明这次按键属于终端输入域（应用级快捷键已被 key_filter
         // 截走）。记下它，Shell 集成便不再尝试注入：往半截命令行里写字节会直接
         // 毁掉用户正在敲的那条命令，宁可少一套语义块。
@@ -154,6 +161,11 @@ impl TerminalView {
     /// 释放事件只服务协商了 `REPORT_EVENT_TYPES` 的应用；未协商时直接忽略，
     /// 传统终端没有"松开"这个概念。
     pub(super) fn on_key_up(&mut self, event: &KeyUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+        // 复制模式吃掉了 key down，release 也不能漏给远端：只上报按下不收
+        // 松开的程序会看到一组没有对应按下的释放事件。
+        if self.copy_mode_active() {
+            return;
+        }
         let mode = self.state.engine.lock().mode();
         if !mode.contains(TermMode::REPORT_EVENT_TYPES) {
             return;
@@ -205,6 +217,12 @@ impl TerminalView {
             return;
         }
         window.focus(&self.focus_handle, cx);
+        // 鼠标点击先退出复制模式，再按常规路径处理：用户点向某处时意思就是
+        // "回到这里"，继续停在旧光标上会被当成失灵。不做 return，本次点击
+        // 仍可正常起一个鼠标选区。
+        if self.copy_mode_active() {
+            self.exit_copy_mode(cx);
+        }
         if let Some(block_id) = self.banner_at_position(event.position) {
             self.toggle_block(block_id, cx);
             return;

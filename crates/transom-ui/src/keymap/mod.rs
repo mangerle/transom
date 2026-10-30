@@ -40,6 +40,7 @@ actions!(
         ToggleImmersive,
         ToggleSnippets,
         SearchBuffer,
+        ToggleCopyMode,
         ToggleBlockView,
         PrevPrompt,
         NextPrompt,
@@ -110,6 +111,11 @@ bind_fn!(
     ToggleImmersive
 );
 bind_fn!(bind_search_buffer, action_search_buffer, SearchBuffer);
+bind_fn!(
+    bind_toggle_copy_mode,
+    action_toggle_copy_mode,
+    ToggleCopyMode
+);
 bind_fn!(
     bind_toggle_block_view,
     action_toggle_block_view,
@@ -229,6 +235,16 @@ static SPECS: &[ShortcutSpec] = &[
         defaults: &["$app-f"],
         bind: bind_search_buffer,
         action: action_search_buffer,
+    },
+    // 键盘复制模式：默认 Ctrl+Shift+Space。选它是因为主流终端（kitty、
+    // Windows Terminal）都用这个组合进入选择模式，且不属于终端控制码；
+    // 用户仍可在快捷键设置里改键。
+    ShortcutSpec {
+        id: "copy_mode",
+        label_key: "settings.shortcut_copy_mode",
+        defaults: &["ctrl-shift-space"],
+        bind: bind_toggle_copy_mode,
+        action: action_toggle_copy_mode,
     },
     // 语义块/经典连续流热切换：默认 `$app-shift-b`（Linux 为 Ctrl+Shift+B），
     // 与终端内 Ctrl+B（tmux 前缀）错开，不会误触复用器快捷键。

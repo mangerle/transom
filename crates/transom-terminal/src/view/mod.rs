@@ -1,4 +1,5 @@
 mod block;
+mod copy_mode;
 mod input;
 mod integration;
 mod links;
@@ -75,6 +76,11 @@ pub struct TerminalView {
     /// 只活在视图里，不落盘：断开重连会创建新视图，授权随之失效，避免一次
     /// 批准变成永久放行。默认拒绝，远端请求必须先经过宿主的确认弹窗。
     remote_clipboard_allowed: bool,
+    /// 键盘复制模式的选区锚点：按 `v`/`V` 时的光标位置。
+    ///
+    /// 只在视图侧维护：内核的 `Selection` 只记录起点与终点，不知道"是否处于
+    /// 选择中"，而 `v` 的第二次按下要撤销选区，需要这个显式状态。
+    copy_anchor: Option<AlacPoint>,
     /// Shell 集成流程控制器；进入终态（已生效或已放弃）后轮询任务自行退出。
     shell_integration: ShellIntegration,
     /// 用户是否已亲自按键过。一旦按键，本轮不再注入：写进去的字节会拼到用户
@@ -229,6 +235,7 @@ impl TerminalView {
             command_tracker: CommandTracker::default(),
             title_gate: TitleGate::default(),
             remote_clipboard_allowed: false,
+            copy_anchor: None,
             shell_integration,
             user_typed: false,
             history_provider: None,

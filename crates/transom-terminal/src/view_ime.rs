@@ -54,6 +54,11 @@ impl EntityInputHandler for TerminalView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // 复制模式下平台仍会把普通字符当文本提交；这里必须挡住，否则按键
+        // 被模式吞掉、字符却绕道写进了远端。
+        if self.copy_mode_active() {
+            return;
+        }
         self.ime_marked_range = None;
         self.ime_text.clear();
         if !text.is_empty() {

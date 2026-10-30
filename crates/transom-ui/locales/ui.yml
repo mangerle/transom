@@ -1957,6 +1957,10 @@ clipboard_consent:
   denied:
     en: Clipboard write denied
     zh-CN: 已拒绝本次剪贴板写入
+copy_mode:
+  hint:
+    en: Copy mode — hjkl/wbe move, v/V select, y copy, Esc exit
+    zh-CN: 复制模式 — hjkl/wbe 移动，v/V 选择，y 复制，Esc 退出
 batch:
   select_mode:
     en: Select Sessions
@@ -3078,6 +3082,9 @@ settings:
   shortcut_terminal_search:
     en: Search Terminal Buffer
     zh-CN: 搜索终端缓冲区
+  shortcut_copy_mode:
+    en: Terminal Copy Mode
+    zh-CN: 终端复制模式
   shortcut_toggle_block_view:
     en: Toggle Semantic Block View
     zh-CN: 切换语义块视图

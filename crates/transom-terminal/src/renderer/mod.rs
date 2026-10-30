@@ -198,7 +198,14 @@ impl TerminalRenderer {
             .selection
             .as_ref()
             .and_then(|selection| selection.to_range(request.term));
-        let cursor = grid.cursor.point;
+        let vi_mode = request.term.mode().contains(TermMode::VI);
+        // 复制模式的光标由内核单独持有：它可以在历史缓冲里移动，而真实光标
+        // 永远停在提示符处；不切过来就看不到键盘移动的落点。
+        let cursor = if vi_mode {
+            request.term.vi_mode_cursor.point
+        } else {
+            grid.cursor.point
+        };
         let cursor_row = match request.block_layout {
             Some(layout) => layout.row_of_line(cursor.line).map(|row| row as i32),
             None => Some(cursor.line.0 + display_offset),
@@ -207,8 +214,10 @@ impl TerminalRenderer {
         let cursor_col = cursor.column.0;
         let cursor_style = request.term.cursor_style();
         let cursor_color = self.resolve(Color::Named(NamedColor::Cursor), colors);
-        let cursor_visible = request.blink_visible
-            && request.term.mode().contains(TermMode::SHOW_CURSOR)
+        // 复制模式光标常亮：TUI 常常隐藏真实光标或让它闪烁，而浏览历史时
+        // 用户需要随时确认"我当前停在哪一格"。
+        let cursor_visible = (vi_mode
+            || (request.blink_visible && request.term.mode().contains(TermMode::SHOW_CURSOR)))
             && cursor_style.shape != CursorShape::Hidden
             && cursor_row.is_some_and(|row| (0..rows as i32).contains(&row))
             && request.ime.is_none();

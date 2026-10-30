@@ -288,6 +288,17 @@ impl AppShell {
             TerminalEvent::ClipboardWriteRequest { text } => {
                 self.request_clipboard_permission(tab_id, text.clone(), cx);
             }
+            TerminalEvent::CopyModeChanged { active } => {
+                // 提示只在本次进入时写入；退出时只清理自己写的那条，避免覆盖
+                // 期间产生的其他状态消息。进入与退出可能来自按键、鼠标或复制
+                // 动作，统一在这里响应才不会漏掉某个出口。
+                let hint = rust_i18n::t!("copy_mode.hint").to_string();
+                if *active {
+                    self.status = Some(hint);
+                } else if self.status.as_deref() == Some(hint.as_str()) {
+                    self.status = None;
+                }
+            }
             TerminalEvent::Exit => {
                 if let Some(tab) = self.workspace.tab_mut(tab_id)
                     && !matches!(tab.status, TabStatus::Failed(_))

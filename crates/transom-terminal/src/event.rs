@@ -26,6 +26,12 @@ pub enum TerminalEvent {
     ClipboardWriteRequest {
         text: String,
     },
+    /// 键盘复制模式（vi 风格）进入或退出。
+    ///
+    /// 宿主据此在状态栏给出操作提示或清除提示；模式本身完全活在终端视图里。
+    CopyModeChanged {
+        active: bool,
+    },
     /// Shell 集成报告一条命令跑完了：退出码可能为 `None`（老集成只发提示符标记），
     /// 耗时由集成上报或按本地计时测得，单位毫秒。
     CommandFinished {

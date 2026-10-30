@@ -55,6 +55,7 @@ mod split;
 mod startup;
 mod status_bar;
 mod tabs;
+mod terminal_copy_mode;
 mod terminal_search;
 mod theme;
 mod tiling;

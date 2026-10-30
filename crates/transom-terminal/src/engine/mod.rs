@@ -73,6 +73,12 @@ pub struct TerminalEngine {
     blocks_saturated: bool,
     /// 块折叠/展开或视图开关改变了可见行映射：下一帧必须全量重建行缓存。
     block_layout_dirty: bool,
+    /// 复制光标移动/显隐等"内核不报损伤"的用户态变化：下一帧强制全量重绘。
+    ///
+    /// 内核的 damage 跟踪只覆盖网格内容与真实光标的新旧位置；复制光标是
+    /// 视图借内核 `vi_mode_cursor` 画出来的第二套光标，移动它不会产生任何
+    /// 损伤记录，不在这里补一次全量就会留下残影。
+    force_full_damage: bool,
     /// Kitty 图形协议解析器与已解码图像仓库。
     kitty: KittyParser,
     graphics: GraphicsStore,
@@ -117,7 +123,12 @@ impl TerminalEngine {
             // 内核这一路必须关闭：否则上游默认的 `OnlyCopy` 会在未经授权时
             // 直接写本地剪贴板，绕过"按会话授权"的策略。读请求两条路径都拒绝。
             osc52: Osc52::Disabled,
-            ..Default::default()
+            // 复制模式光标用空心块：与真实光标区分，用户一眼能看出当前是
+            // "浏览/选择"而不是"输入"状态。不闪烁，避免移动时干扰阅读。
+            vi_mode_cursor_style: Some(AlacCursorStyle {
+                shape: AlacCursorShape::HollowBlock,
+                blinking: false,
+            }),
         };
         let dimensions = TermDimensions::new(size.cols as usize, size.rows as usize);
         let term = Term::new(config, &dimensions, TerminalEventProxy::new(event_tx));
@@ -132,6 +143,7 @@ impl TerminalEngine {
             scrollback_limit: profile.scrollback,
             blocks_saturated: profile.scrollback == 0,
             block_layout_dirty: false,
+            force_full_damage: false,
             kitty: KittyParser::default(),
             graphics: GraphicsStore::default(),
             search: SearchState::default(),
@@ -423,8 +435,11 @@ impl TerminalEngine {
     /// 必须在持有引擎锁的渲染准备阶段调用，保证"上次取走之后"的窗口完整。
     pub(crate) fn take_damage(&mut self) -> DamageInfo {
         // 折叠/展开与块视图开关不改变网格内容，内核 damage 不会报告；若不
-        // 在此提升为全量，行缓存会沿用旧布局映射而画错行。
-        if std::mem::take(&mut self.block_layout_dirty) {
+        // 在此提升为全量，行缓存会沿用旧布局映射而画错行。复制光标同理：
+        // 它的位置不在内核损伤范围内。
+        if std::mem::take(&mut self.block_layout_dirty)
+            || std::mem::take(&mut self.force_full_damage)
+        {
             self.term.reset_damage();
             return DamageInfo::Full;
         }
