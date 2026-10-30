@@ -390,6 +390,10 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) stats_request: Option<ContainerRequestId>,
     pub(crate) terminal: Option<ContainerTerminalState>,
     pub(crate) files: ContainerFilesState,
+    /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
+    pub(crate) pending_select: Option<String>,
+    /// 统计是否自动刷新（引擎侧轮询）。
+    pub(crate) stats_enabled: bool,
     /// 待确认的删除动作。
     pub(crate) confirm: Option<ContainerConfirm>,
     /// 最近一条操作结果/错误提示。
@@ -454,6 +458,8 @@ impl ContainerWorkspaceState {
             stats: None,
             stats_request: None,
             terminal: None,
+            pending_select: None,
+            stats_enabled: true,
             files: ContainerFilesState {
                 new_dir_open: false,
                 new_dir_input: None,

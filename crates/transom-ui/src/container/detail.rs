@@ -43,6 +43,7 @@ impl AppShell {
         let logs_tail = workspace.logs_tail;
         let logs_timestamps = workspace.logs_timestamps;
         let stats = workspace.stats.clone();
+        let workspace_stats_enabled = workspace.stats_enabled;
         let terminal = workspace
             .terminal
             .as_ref()
@@ -128,7 +129,7 @@ impl AppShell {
                 render_terminal(tab_id, terminal, p, cx)
             }
             (ContainerSection::Containers, ContainerDetailTab::Stats) => {
-                render_stats(stats.as_ref(), p)
+                render_stats(tab_id, stats.as_ref(), workspace_stats_enabled, p, cx)
             }
             (ContainerSection::Containers, ContainerDetailTab::Files) => render_files(
                 tab_id,
@@ -146,17 +147,25 @@ impl AppShell {
                 cx,
             ),
             (ContainerSection::Compose, _) => {
-                render_compose_detail(selected_compose.as_ref(), &containers, p)
+                render_compose_detail(tab_id, selected_compose.as_ref(), &containers, p, cx)
             }
             (ContainerSection::Images, _) => {
                 render_image_detail(selected_image.as_ref(), image_details.as_ref(), p)
             }
-            (ContainerSection::Volumes, _) => {
-                render_volume_detail(selected_volume.as_ref(), volume_details.as_ref(), p)
-            }
-            (ContainerSection::Networks, _) => {
-                render_network_detail(selected_network.as_ref(), network_details.as_ref(), p)
-            }
+            (ContainerSection::Volumes, _) => render_volume_detail(
+                tab_id,
+                selected_volume.as_ref(),
+                volume_details.as_ref(),
+                p,
+                cx,
+            ),
+            (ContainerSection::Networks, _) => render_network_detail(
+                tab_id,
+                selected_network.as_ref(),
+                network_details.as_ref(),
+                p,
+                cx,
+            ),
         };
 
         v_flex()
@@ -655,10 +664,64 @@ fn render_container_overview(
     scroll_body(rows, p).into_any_element()
 }
 
+/// 关联容器行：卷、网络与编排详情里点名字直接跳到那个容器。
+///
+/// 设计原理（Why）：这三类详情天然带「谁在用我」的关系，原先只把名字拼成一段
+/// 文本，用户看到也只能再回列表用搜索找；跳转由 `reveal_container` 负责切分类与
+/// 延迟选中，因此这里只需要一个按钮。
+fn linked_containers(
+    tab_id: TabId,
+    title: String,
+    items: Vec<(String, String)>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let mut block = v_flex()
+        .gap_0p5()
+        .child(div().text_xs().text_color(p.muted_foreground).child(title));
+    if items.is_empty() {
+        block = block.child(
+            div()
+                .text_sm()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.linked.none").to_string()),
+        );
+    }
+    for (name, hint) in items {
+        let reveal_name = name.clone();
+        let mut row = h_flex()
+            .gap_2()
+            .items_center()
+            .child(
+                Icon::new(IconName::Container)
+                    .xsmall()
+                    .text_color(p.muted_foreground),
+            )
+            .child(
+                Button::new(ElementId::Name(
+                    format!("container-link-{name}-{tab_id}").into(),
+                ))
+                .ghost()
+                .xsmall()
+                .label(name)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.reveal_container(tab_id, reveal_name.clone(), cx);
+                })),
+            );
+        if !hint.is_empty() {
+            row = row.child(div().text_xs().text_color(p.muted_foreground).child(hint));
+        }
+        block = block.child(row);
+    }
+    block.into_any_element()
+}
+
 fn render_compose_detail(
+    tab_id: TabId,
     project: Option<&ComposeProject>,
     containers: &[ContainerSummary],
     p: &Palette,
+    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let Some(project) = project else {
         return centered_hint(
@@ -695,25 +758,22 @@ fn render_compose_detail(
                 .child(rust_i18n::t!("container.compose.no_containers").to_string()),
         );
     }
-    for member in members {
-        rows = rows.child(
-            h_flex()
-                .gap_2()
-                .p_1()
-                .child(Icon::new(IconName::Container).small())
-                .child(div().text_sm().child(member.name.clone()))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if member.state.is_running() {
-                            p.primary
-                        } else {
-                            p.muted_foreground
-                        })
-                        .child(member.status.clone()),
-                ),
-        );
-    }
+    let member_items = members
+        .iter()
+        .map(|member| {
+            (
+                member.name.clone(),
+                format!("{} · {}", member.state.key(), member.status),
+            )
+        })
+        .collect();
+    rows = rows.child(linked_containers(
+        tab_id,
+        rust_i18n::t!("container.field.containers").to_string(),
+        member_items,
+        p,
+        cx,
+    ));
     scroll_body(rows, p).into_any_element()
 }
 
@@ -790,9 +850,11 @@ fn render_image_detail(
 }
 
 fn render_volume_detail(
+    tab_id: TabId,
     summary: Option<&transom_core::ContainerVolumeSummary>,
     details: Option<&ContainerVolumeDetails>,
     p: &Palette,
+    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let (name, driver, mountpoint, created, labels, used_by) = if let Some(details) = details {
         (
@@ -834,18 +896,25 @@ fn render_volume_detail(
         ))
         .child(kv(p, rust_i18n::t!("container.field.created"), created))
         .child(kv(p, rust_i18n::t!("container.field.labels"), labels))
-        .child(kv(
+        .child(linked_containers(
+            tab_id,
+            rust_i18n::t!("container.field.used_by").to_string(),
+            used_by
+                .into_iter()
+                .map(|name| (name, String::new()))
+                .collect(),
             p,
-            rust_i18n::t!("container.field.used_by"),
-            used_by.join("\n"),
+            cx,
         ));
     scroll_body(rows, p).into_any_element()
 }
 
 fn render_network_detail(
+    tab_id: TabId,
     summary: Option<&transom_core::ContainerNetworkSummary>,
     details: Option<&ContainerNetworkDetails>,
     p: &Palette,
+    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let (id, name, driver, scope, subnet, gateway, connected) = if let Some(details) = details {
         (
@@ -873,11 +942,10 @@ fn render_network_detail(
             p,
         );
     };
-    let connected = connected
+    let connected_items = connected
         .iter()
-        .map(|item| format!("{} {}", item.name, item.ipv4.clone().unwrap_or_default()))
-        .collect::<Vec<_>>()
-        .join("\n");
+        .map(|item| (item.name.clone(), item.ipv4.clone().unwrap_or_default()))
+        .collect();
     let rows = v_flex()
         .gap_1p5()
         .child(kv(p, rust_i18n::t!("container.field.id"), id))
@@ -886,7 +954,13 @@ fn render_network_detail(
         .child(kv(p, rust_i18n::t!("container.field.scope"), scope))
         .child(kv(p, rust_i18n::t!("container.field.subnet"), subnet))
         .child(kv(p, rust_i18n::t!("container.field.gateway"), gateway))
-        .child(kv(p, rust_i18n::t!("container.field.connected"), connected));
+        .child(linked_containers(
+            tab_id,
+            rust_i18n::t!("container.field.connected").to_string(),
+            connected_items,
+            p,
+            cx,
+        ));
     scroll_body(rows, p).into_any_element()
 }
 
@@ -1034,9 +1108,33 @@ fn render_terminal(
         .into_any_element()
 }
 
-fn render_stats(stats: Option<&ContainerStats>, p: &Palette) -> AnyElement {
+fn render_stats(
+    tab_id: TabId,
+    stats: Option<&ContainerStats>,
+    enabled: bool,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let toolbar = h_flex().gap_1().p_2().items_center().child(
+        Button::new("container-stats-auto")
+            .ghost()
+            .xsmall()
+            .icon(IconName::RefreshCw)
+            .label(rust_i18n::t!("container.stats.auto").to_string())
+            .selected(enabled)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.toggle_container_stats(tab_id, cx);
+            })),
+    );
     let Some(stats) = stats else {
-        return centered_hint(rust_i18n::t!("container.stats.waiting").to_string(), p);
+        return v_flex()
+            .size_full()
+            .child(toolbar)
+            .child(centered_hint(
+                rust_i18n::t!("container.stats.waiting").to_string(),
+                p,
+            ))
+            .into_any_element();
     };
     let rows = v_flex()
         .gap_3()
@@ -1080,7 +1178,11 @@ fn render_stats(stats: Option<&ContainerStats>, p: &Palette) -> AnyElement {
             rust_i18n::t!("container.stats.pids").to_string(),
             stats.pids.to_string(),
         ));
-    scroll_body(rows, p).into_any_element()
+    v_flex()
+        .size_full()
+        .child(toolbar)
+        .child(scroll_body(rows, p))
+        .into_any_element()
 }
 
 fn stat_bar(label: String, value: String, ratio: f32, p: &Palette) -> AnyElement {

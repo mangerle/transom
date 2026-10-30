@@ -4502,6 +4502,10 @@ container:
   title:
     en: Containers
     zh-CN: 容器
+  linked:
+    none:
+      en: None
+      zh-CN: 无
   search:
     en: Search containers, images, volumes or networks
     zh-CN: 搜索容器、镜像、数据卷或网络
@@ -4697,6 +4701,9 @@ container:
       en: Custom CLI
       zh-CN: 自定义 CLI
   field:
+    containers:
+      en: Containers
+      zh-CN: 成员容器
     id:
       en: ID
       zh-CN: ID
@@ -4853,6 +4860,9 @@ container:
       en: Terminal session ended
       zh-CN: 终端会话已结束
   stats:
+    auto:
+      en: Auto refresh
+      zh-CN: 自动刷新
     waiting:
       en: Collecting stats…
       zh-CN: 正在采样统计…

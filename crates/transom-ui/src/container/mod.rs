@@ -122,8 +122,17 @@ impl AppShell {
                         workspace.selected = None;
                         workspace.details = None;
                     }
+                    // 跨分类跳转等着列表到位再按名字定位，避免用户点了两次。
+                    if let Some(name) = workspace.pending_select.take() {
+                        inspect_first = workspace
+                            .containers
+                            .iter()
+                            .find(|item| item.name == name)
+                            .map(|item| item.id.clone());
+                    }
                     if workspace.section == ContainerSection::Containers
                         && workspace.selected.is_none()
+                        && inspect_first.is_none()
                         && let Some(first) = workspace.containers.first()
                     {
                         inspect_first = Some(first.id.clone());
@@ -937,6 +946,66 @@ impl AppShell {
                 enabled: true,
             },
         );
+    }
+
+    /// 从编排/卷/网络详情跳到某个容器：必要时先切分类并拉列表。
+    pub(crate) fn reveal_container(&mut self, tab_id: TabId, name: String, cx: &mut Context<Self>) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let already_visible = workspace.section == ContainerSection::Containers
+            && workspace.containers.iter().any(|item| item.name == name);
+        if already_visible {
+            if let Some(id) = workspace
+                .containers
+                .iter()
+                .find(|item| item.name == name)
+                .map(|item| item.id.clone())
+            {
+                self.select_container_item(tab_id, id);
+                cx.notify();
+            }
+            return;
+        }
+        let need_list =
+            workspace.section != ContainerSection::Containers || workspace.containers.is_empty();
+        workspace.apply_section(ContainerSection::Containers);
+        workspace.pending_select = Some(name);
+        if need_list {
+            self.stop_container_streams(tab_id);
+            self.refresh_container_section(tab_id);
+        }
+        cx.notify();
+    }
+
+    /// 开关统计自动刷新：关掉时通知引擎停止轮询，界面保留最后一帧。
+    pub(crate) fn toggle_container_stats(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let enabled = !workspace.stats_enabled;
+        workspace.stats_enabled = enabled;
+        if enabled {
+            if workspace.stats_request.is_none() {
+                self.ensure_container_stats(tab_id);
+            }
+        } else if let Some(request_id) = workspace.stats_request.take() {
+            let cancel = request_id;
+            self.send_tracked(
+                tab_id,
+                cancel,
+                ContainerCommand::Stats {
+                    tab_id,
+                    request_id: cancel,
+                    container: container.clone(),
+                    enabled: false,
+                },
+            );
+        }
+        cx.notify();
     }
 
     pub(crate) fn ensure_container_files(&mut self, tab_id: TabId) {
