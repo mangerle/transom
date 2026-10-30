@@ -7,6 +7,7 @@
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
@@ -44,7 +45,7 @@ impl AppShell {
         right_actions = right_actions.child(close_btn);
 
         h_flex()
-            .h(px(32.0))
+            .h(rems(size::TAB_BAR_HEIGHT))
             .px_3()
             .items_center()
             .justify_between()

@@ -13,6 +13,7 @@ use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
@@ -397,7 +398,7 @@ impl AppShell {
     ) -> AnyElement {
         if is_all_collapsed {
             div()
-                .h(px(32.0))
+                .h(rems(size::TAB_BAR_HEIGHT))
                 .w_full()
                 .items_center()
                 .justify_center()

@@ -4,6 +4,7 @@ use super::ForwardKindChoice;
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
+use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -62,10 +63,13 @@ impl AppShell {
     }
 
     /// 端口转发面板顶栏标题与关闭按钮。
+    ///
+    /// 高度取标签栏 token 而不是靠内边距撑开：该面板与主区标签条、监控抽屉
+    /// 并排，三条横线必须在同一水平线上。
     fn render_forward_header(cx: &mut Context<Self>, p: &Palette) -> AnyElement {
         h_flex()
+            .h(rems(size::TAB_BAR_HEIGHT))
             .px_3()
-            .py_2()
             .items_center()
             .justify_between()
             .border_color(p.divider(p.sidebar_border))
