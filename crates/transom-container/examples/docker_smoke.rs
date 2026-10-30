@@ -32,9 +32,10 @@ use transom_container::{
     validate_container_path,
 };
 use transom_core::{
-    ContainerConnection, ContainerDetails, ContainerEndpoint, ContainerEngineKind,
-    ContainerFileEntry, ContainerFileKind, ContainerLifecycleAction, ContainerState,
-    ContainerStats, ContainerSummary, TerminalIo, TerminalSize, short_id,
+    ContainerConnection, ContainerCreateSpec, ContainerDetails, ContainerEndpoint,
+    ContainerEngineKind, ContainerFileEntry, ContainerFileKind, ContainerLifecycleAction,
+    ContainerPortPublish, ContainerState, ContainerStats, ContainerSummary, TerminalIo,
+    TerminalSize, short_id,
 };
 
 const DEFAULT_CONTAINER: &str = "transom-smoke";
@@ -175,6 +176,7 @@ async fn main() -> ExitCode {
     let _ = compose_stage(&engine, &options.project, &mut report).await;
     path_guard_stage(&mut report);
     let _ = lifecycle_stage(&engine, &options.container, &mut report).await;
+    run_stage(&engine, &options.image, &mut report).await;
 
     report.finish()
 }
@@ -1050,4 +1052,94 @@ fn init_logging() {
             log::LevelFilter::Info
         });
     });
+}
+
+/// 运行容器：创建 + 启动 + 名称冲突 + 清理，覆盖「把镜像跑起来」这条主路径。
+async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
+    let name = "transom-smoke-run";
+    let spec = ContainerCreateSpec {
+        name: name.to_string(),
+        image: image.to_string(),
+        command: vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "echo created-by-transom; sleep 120".to_string(),
+        ],
+        env: vec!["TRANSOM_SMOKE=1".to_string()],
+        ports: vec![ContainerPortPublish {
+            host: 18080,
+            container: 80,
+            protocol: "tcp".to_string(),
+        }],
+        binds: vec!["transom-smoke-vol:/mnt/data".to_string()],
+        restart: Some("no".to_string()),
+    };
+    let mut check = spec.clone();
+    report.check(
+        check.validate().is_ok(),
+        "运行参数校验",
+        format!("合法 spec 通过校验，镜像 {}", check.image),
+    );
+    let mut blank = ContainerCreateSpec::default();
+    report.check(
+        blank.validate().is_err(),
+        "空镜像被拒绝",
+        blank
+            .validate()
+            .err()
+            .unwrap_or_else(|| "未拒绝空镜像".to_string()),
+    );
+
+    let created = step(
+        report,
+        "创建容器",
+        engine.create_container(&spec),
+        |id| format!("新容器 {}", short_id(id)),
+    )
+    .await;
+    let Some(id) = created else {
+        return;
+    };
+    let conflict = engine.create_container(&spec).await;
+    report.check(
+        matches!(&conflict, Err(ContainerError::Api { status: 409, .. })),
+        "同名容器返回冲突",
+        format!("{:?}", conflict.err().map(|error| error.to_string())),
+    );
+
+    step(
+        report,
+        "启动新容器",
+        engine.lifecycle(&id, ContainerLifecycleAction::Start),
+        |_| format!("{} 已启动", name),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let details = step(
+        report,
+        "新容器详情",
+        engine.inspect_container(&id),
+        summarize_details,
+    )
+    .await;
+    if let Some(details) = details {
+        report.check(
+            details.state == ContainerState::Running && details.env.contains(&"TRANSOM_SMOKE=1".to_string()),
+            "新容器状态与环境",
+            format!(
+                "状态 {}，环境变量 {:?}，端口映射 {} 个，挂载 {} 个",
+                details.state.key(),
+                details.env,
+                details.ports.len(),
+                details.mounts.len()
+            ),
+        );
+    }
+    step(
+        report,
+        "删除新容器",
+        engine.lifecycle(&id, ContainerLifecycleAction::Remove { force: true }),
+        |_| format!("{} 已删除", name),
+    )
+    .await;
 }

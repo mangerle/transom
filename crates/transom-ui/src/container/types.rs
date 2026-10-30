@@ -10,11 +10,11 @@ use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::HashMap;
 use transom_core::{
-    ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
-    ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry, ContainerImageDetails,
-    ContainerImageSummary, ContainerNetworkDetails, ContainerNetworkSummary, ContainerRequestId,
-    ContainerStats, ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary,
-    EngineProfileId, TabId,
+    ComposeProject, ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
+    ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
+    ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails, ContainerNetworkSummary,
+    ContainerPortPublish, ContainerRequestId, ContainerStats, ContainerSummary,
+    ContainerVolumeDetails, ContainerVolumeSummary, EngineProfileId, TabId,
 };
 use transom_terminal::TerminalView;
 
@@ -238,6 +238,7 @@ pub(crate) enum RowAction {
     Start,
     Stop,
     Restart,
+    Run,
     Remove,
     CopyId,
     CopyName,
@@ -254,6 +255,7 @@ impl RowAction {
             Self::Start => "container.action.start",
             Self::Stop => "container.action.stop",
             Self::Restart => "container.action.restart",
+            Self::Run => "container.run.title",
             Self::Remove => "common.delete",
             Self::CopyId => "container.row.copy_id",
             Self::CopyName => "container.row.copy_name",
@@ -271,6 +273,7 @@ impl RowAction {
             Self::Start => IconName::Play,
             Self::Stop => IconName::Square,
             Self::Restart => IconName::RotateCw,
+            Self::Run => IconName::Play,
             Self::Remove => IconName::Trash,
             Self::CopyId => IconName::Copy,
             Self::CopyName => IconName::Copy,
@@ -294,6 +297,8 @@ impl RowAction {
                 target,
                 RowTarget::Container { .. } | RowTarget::Image(_) | RowTarget::Network(_)
             ),
+            // 只有镜像能「跑起来」；卷与网络没有运行语义。
+            Self::Run => matches!(target, RowTarget::Image(_)),
             Self::Overview | Self::Remove | Self::CopyName => true,
         }
     }
@@ -557,6 +562,8 @@ pub(crate) struct ContainerUiState {
     pub(crate) sidebar_open: bool,
     pub(crate) form: Option<ContainerFormState>,
     pub(crate) fullscreen: Option<TabId>,
+    /// 运行容器表单。
+    pub(crate) run_form: Option<ContainerRunForm>,
     /// 请求 ID → 所属工作区标签；事件按它路由。
     pub(crate) requests: HashMap<ContainerRequestId, TabId>,
     /// 最近一次「发现本机引擎」的结果面板。
@@ -686,6 +693,126 @@ impl EndpointChoice {
             }
         }
     }
+}
+
+/// 表单里的单行输入：占位符走 i18n，可选预填值。
+fn run_input(
+    placeholder: &'static str,
+    default: Option<String>,
+    window: &mut Window,
+    cx: &mut Context<crate::app::AppShell>,
+) -> Entity<InputState> {
+    cx.new(|cx| {
+        let state = InputState::new(window, cx).placeholder(rust_i18n::t!(placeholder).to_string());
+        match default {
+            Some(value) => state.default_value(value),
+            None => state,
+        }
+    })
+}
+
+/// 运行容器表单：把镜像跑起来的最小必要参数。
+///
+/// 设计原理（Why）：`docker run` 的参数面极大，界面只开放真正决定「能不能跑起来」
+/// 的六项（名称、镜像、命令、端口、挂载、环境变量、重启策略），其余走镜像与引擎
+/// 默认；文本框按 `docker run` 的常见写法收集，再解析成强类型 spec 交给引擎层校验，
+/// 这样用户写 `8080:80/tcp` 与 `8080:80` 都能得到同一个映射。
+pub(crate) struct ContainerRunForm {
+    /// 表单归属的工作区标签。
+    pub(crate) tab_id: TabId,
+    pub(crate) name: Entity<InputState>,
+    pub(crate) image: Entity<InputState>,
+    pub(crate) command: Entity<InputState>,
+    pub(crate) ports: Entity<InputState>,
+    pub(crate) binds: Entity<InputState>,
+    pub(crate) env: Entity<InputState>,
+    pub(crate) restart: Option<String>,
+    /// 校验或引擎返回的错误提示，展示在表单底部。
+    pub(crate) error: Option<String>,
+}
+
+impl ContainerRunForm {
+    pub(crate) fn new(
+        tab_id: TabId,
+        image_hint: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<crate::app::AppShell>,
+    ) -> Self {
+        Self {
+            tab_id,
+            name: run_input("container.run.name_placeholder", None, window, cx),
+            image: run_input("container.run.image_placeholder", image_hint, window, cx),
+            command: run_input("container.run.command_placeholder", None, window, cx),
+            ports: run_input("container.run.ports_placeholder", None, window, cx),
+            binds: run_input("container.run.binds_placeholder", None, window, cx),
+            env: run_input("container.run.env_placeholder", None, window, cx),
+            restart: None,
+            error: None,
+        }
+    }
+
+    /// 读取输入并解析成 spec；解析与校验错误直接返回中文提示。
+    ///
+    /// # Errors
+    /// 端口/挂载写法非法、spec 校验不通过时返回可直接展示的中文原因。
+    pub(crate) fn to_spec(&self, cx: &App) -> Result<ContainerCreateSpec, String> {
+        let read = |input: &Entity<InputState>| input.read(cx).value().trim().to_string();
+        let mut spec = ContainerCreateSpec {
+            name: read(&self.name),
+            image: read(&self.image),
+            command: split_argv(&read(&self.command)),
+            env: split_list(&read(&self.env)),
+            ports: parse_ports(&read(&self.ports))?,
+            binds: split_list(&read(&self.binds)),
+            restart: self.restart.clone(),
+        };
+        spec.validate().map_err(|error| error.to_string())?;
+        Ok(spec)
+    }
+}
+
+/// 逗号分隔列表：卷名、环境变量等都用它，空项直接丢弃。
+pub(crate) fn split_list(text: &str) -> Vec<String> {
+    text.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// 命令按空白切分为 argv；本工具不支持带引号的命令，避免把 Shell 语义搬进界面。
+pub(crate) fn split_argv(text: &str) -> Vec<String> {
+    text.split_whitespace().map(str::to_string).collect()
+}
+
+/// 解析端口映射：`8080:80`、`8080:80/udp`、`127.0.0.1:8080:80` 之外的写法一律拒绝。
+///
+/// 返回的 `host` 为 0 或协议不认识都属于非法输入，错误信息直接可展示。
+pub(crate) fn parse_ports(text: &str) -> Result<Vec<ContainerPortPublish>, String> {
+    let mut items = Vec::new();
+    for chunk in split_list(text) {
+        let (mapping, protocol) = match chunk.split_once('/') {
+            Some((mapping, protocol)) => (mapping, protocol.to_ascii_lowercase()),
+            None => (chunk.as_str(), "tcp".to_string()),
+        };
+        let mut parts = mapping.split(':').collect::<Vec<_>>();
+        if parts.len() != 2 {
+            return Err(rust_i18n::t!("container.run.port_format", item = chunk).to_string());
+        }
+        let host = parts[0].parse::<u16>().map_err(|_| {
+            rust_i18n::t!("container.run.port_number", value = parts[0].to_string()).to_string()
+        })?;
+        let container = parts[1].parse::<u16>().map_err(|_| {
+            rust_i18n::t!("container.run.port_number", value = parts[1].to_string()).to_string()
+        })?;
+        parts.clear();
+        items.push(ContainerPortPublish {
+            host,
+            container,
+            protocol,
+        });
+    }
+    Ok(items)
 }
 
 /// 容器表单状态。
@@ -843,6 +970,24 @@ mod tests {
             assert!(!keys.is_empty(), "{section:?} 必须有可用排序键");
             assert!(keys.contains(&ContainerSortKey::default_for(section)));
         }
+    }
+
+    #[test]
+    fn port_and_list_parsing_follows_run_flags() {
+        let ports = super::parse_ports("8080:80, 53:53/udp ,").expect("合法端口映射");
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[0].host, 8080);
+        assert_eq!(ports[0].protocol, "tcp");
+        assert_eq!(ports[1].container, 53);
+        assert_eq!(ports[1].protocol, "udp");
+        assert!(super::parse_ports("8080-80").is_err(), "缺分隔符必须报错");
+        assert!(super::parse_ports("abc:80").is_err(), "非数字端口必须报错");
+        assert_eq!(super::split_list("A=1,,B=2"), vec!["A=1", "B=2"]);
+        assert_eq!(
+            super::split_argv("  nginx   -g  daemon"),
+            vec!["nginx", "-g", "daemon"]
+        );
+        assert!(super::split_argv("").is_empty());
     }
 
     #[test]

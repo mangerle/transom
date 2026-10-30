@@ -19,8 +19,8 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use transom_container::{Engine, discover_all};
 use transom_core::{
-    AppError, ContainerAppEvent, ContainerCommand, ContainerEngineProfile, ContainerRequestId,
-    ErrorCode, TabId,
+    AppError, ContainerAppEvent, ContainerCommand, ContainerEngineProfile,
+    ContainerLifecycleAction, ContainerRequestId, ErrorCode, TabId,
 };
 
 /// 一个打开的工作区：引擎实例 + 可取消的长任务。
@@ -610,6 +610,24 @@ pub(super) fn handle_container_command(
                     .await;
                 },
             );
+        }
+        ContainerCommand::CreateContainer {
+            tab_id,
+            request_id,
+            spec,
+        } => {
+            let action = move |engine: Engine| async move {
+                let id = engine.create_container(&spec).await?;
+                // 创建后立刻启动：界面这一项的语义是「运行」，不是「创建了个停着的容器」。
+                engine
+                    .lifecycle(&id, ContainerLifecycleAction::Start)
+                    .await
+                    .inspect(|_| {
+                        log::info!("容器已创建并启动，镜像: {}，新容器: {}", spec.image, id)
+                    })?;
+                Ok(())
+            };
+            run_action(state, ctx, tab_id, request_id, action);
         }
         ContainerCommand::CreateDir {
             tab_id,

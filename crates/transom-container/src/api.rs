@@ -282,6 +282,67 @@ impl DockerApi {
         })
     }
 
+    /// 创建容器（不启动）并返回新容器 ID。
+    ///
+    /// 设计原理（Why）：`Cmd` 用 argv 而不是字符串，交给引擎 exec 形态解析，
+    /// 避免宿主侧拼 Shell；端口与挂载按 Docker 的 `PortBindings`/`Binds` 形态
+    /// 组装，空列表传空数组而不是 null，因为 Podman 对 null 的处理与 Docker
+    /// 不完全一致。
+    ///
+    /// # Errors
+    /// 引擎拒绝（镜像不存在、名称冲突、端口占用等）时返回 [`ContainerError::Api`]，
+    /// 响应体原文带上定位信息。
+    pub async fn create_container(
+        &self,
+        spec: &transom_core::ContainerCreateSpec,
+    ) -> Result<String, ContainerError> {
+        let payload = serde_json::json!({
+            "Image": spec.image,
+            "Env": spec.env,
+            "Cmd": spec.command,
+            "HostConfig": {
+                "Binds": spec.binds,
+                "PortBindings": port_bindings(&spec.ports),
+                "RestartPolicy": {
+                    "Name": spec.restart.clone().unwrap_or_else(|| "no".to_string()),
+                    "MaximumRetryCount": 0,
+                },
+            },
+        });
+        let path = if spec.name.is_empty() {
+            "/containers/create".to_string()
+        } else {
+            format!(
+                "/containers/create?name={}",
+                http::percent_encode(&spec.name)
+            )
+        };
+        let body = serde_json::to_vec(&payload).map_err(|error| ContainerError::Decode {
+            operation: "构造创建容器请求".to_string(),
+            message: error.to_string(),
+        })?;
+        let response = self
+            .send(Method::POST, &path, Some(body), "创建容器")
+            .await?;
+        if !response.status.is_success() {
+            let status = response.status;
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, "创建容器", body, &spec.image));
+        }
+        #[derive(serde::Deserialize)]
+        struct Created {
+            #[serde(rename = "Id", default)]
+            id: String,
+        }
+        let body = http::read_body_bytes(response.body, 4096).await?;
+        let created: Created =
+            serde_json::from_slice(&body).map_err(|error| ContainerError::Decode {
+                operation: "解析创建容器响应".to_string(),
+                message: format!("{error}: {}", String::from_utf8_lossy(&body)),
+            })?;
+        Ok(created.id)
+    }
+
     pub async fn create_volume(
         &self,
         name: &str,
@@ -756,9 +817,50 @@ fn handle_pull_line(
     Ok(None)
 }
 
+/// 把端口映射列表折叠成 Docker 的 `PortBindings` 形态：`{"80/tcp":[{"HostPort":"8080"}]}`。
+fn port_bindings(ports: &[transom_core::ContainerPortPublish]) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    for publish in ports {
+        let key = format!("{}/{}", publish.container, publish.protocol);
+        let entry = serde_json::json!({
+            "HostIp": "0.0.0.0",
+            "HostPort": publish.host.to_string(),
+        });
+        map.entry(key)
+            .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+            .as_array_mut()
+            .expect("PortBindings 值必须是数组")
+            .push(entry);
+    }
+    serde_json::Value::Object(map)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{normalize_api_prefix, split_reference};
+    use super::{normalize_api_prefix, port_bindings, split_reference};
+
+    #[test]
+    fn port_bindings_group_by_container_port_and_protocol() {
+        let bindings = port_bindings(&[
+            transom_core::ContainerPortPublish {
+                host: 8080,
+                container: 80,
+                protocol: "tcp".to_string(),
+            },
+            transom_core::ContainerPortPublish {
+                host: 5353,
+                container: 53,
+                protocol: "udp".to_string(),
+            },
+        ]);
+        assert_eq!(bindings["80/tcp"][0]["HostPort"], serde_json::json!("8080"));
+        assert_eq!(bindings["53/udp"][0]["HostPort"], serde_json::json!("5353"));
+        assert!(
+            port_bindings(&[])
+                .as_object()
+                .is_some_and(serde_json::Map::is_empty)
+        );
+    }
 
     #[test]
     fn api_prefix_accepts_docker_style_versions() {

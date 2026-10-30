@@ -715,6 +715,22 @@ impl AppShell {
                     cx.notify();
                 }
             }
+            RowAction::Run => {
+                let image = match &target {
+                    RowTarget::Image(id) => self
+                        .container_workspace(tab_id)
+                        .and_then(|workspace| {
+                            workspace
+                                .images
+                                .iter()
+                                .find(|image| &image.id == id)
+                                .map(|image| image.display_name())
+                        })
+                        .unwrap_or_else(|| transom_core::short_id(id)),
+                    _ => return,
+                };
+                self.open_container_run_form(tab_id, Some(image), window, cx);
+            }
             RowAction::CopyId | RowAction::CopyName => {}
         }
     }

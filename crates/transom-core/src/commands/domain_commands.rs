@@ -10,7 +10,7 @@
 
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
-    ContainerConnection, ContainerEngineProfile, ContainerLifecycleAction,
+    ContainerConnection, ContainerCreateSpec, ContainerEngineProfile, ContainerLifecycleAction,
 };
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
@@ -297,6 +297,12 @@ pub enum ContainerCommand {
         container: String,
         from: String,
         to: String,
+    },
+    /// 创建并启动容器（把镜像跑起来）。
+    CreateContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        spec: ContainerCreateSpec,
     },
     /// 在容器内创建目录：归档接口只能写入已存在的目录，上传前先建目录才可用。
     CreateDir {

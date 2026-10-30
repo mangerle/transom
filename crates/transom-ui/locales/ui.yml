@@ -4506,6 +4506,61 @@ container:
     none:
       en: None
       zh-CN: 无
+  run:
+    title:
+      en: Run a container
+      zh-CN: 运行容器
+    submit:
+      en: Run
+      zh-CN: 运行
+    submitting:
+      en: Creating container…
+      zh-CN: 正在创建容器…
+    image:
+      en: Image
+      zh-CN: 镜像
+    image_placeholder:
+      en: nginx:1.27
+      zh-CN: nginx:1.27
+    name:
+      en: Container name
+      zh-CN: 容器名
+    name_placeholder:
+      en: Leave empty to let the engine generate one
+      zh-CN: 留空由引擎生成随机名
+    command:
+      en: Command
+      zh-CN: 启动命令
+    command_placeholder:
+      en: nginx -g daemon off (space separated)
+      zh-CN: nginx -g daemon off（空格分隔）
+    ports:
+      en: Ports
+      zh-CN: 端口映射
+    ports_placeholder:
+      en: 8080:80, 53:53/udp
+      zh-CN: 8080:80, 53:53/udp
+    binds:
+      en: Mounts
+      zh-CN: 挂载
+    binds_placeholder:
+      en: data:/var/lib/data:ro
+      zh-CN: data:/var/lib/data:ro
+    env:
+      en: Environment
+      zh-CN: 环境变量
+    env_placeholder:
+      en: FOO=bar,BAZ=1
+      zh-CN: FOO=bar,BAZ=1
+    restart:
+      en: Restart policy
+      zh-CN: 重启策略
+    port_format:
+      en: 'Port mapping must be host:container, got: %{item}'
+      zh-CN: '端口映射要写成 宿主端口:容器端口，收到: %{item}'
+    port_number:
+      en: 'Port is not a number: %{value}'
+      zh-CN: '端口不是数字: %{value}'
   search:
     en: Search containers, images, volumes or networks
     zh-CN: 搜索容器、镜像、数据卷或网络

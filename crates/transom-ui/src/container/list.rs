@@ -135,6 +135,18 @@ impl AppShell {
             .items_center()
             .child(Input::new(params.search).flex_1().min_w_0());
         if section == ContainerSection::Containers {
+            toolbar = toolbar.child(
+                Button::new("container-run-open")
+                    .xsmall()
+                    .ghost()
+                    .icon(IconName::Play)
+                    .label(rust_i18n::t!("container.run.title").to_string())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_container_run_form(tab_id, None, window, cx);
+                    })),
+            );
+        }
+        if section == ContainerSection::Containers {
             for filter in ContainerStateFilter::ALL {
                 toolbar = toolbar.child(
                     Button::new(ElementId::Name(
@@ -436,6 +448,9 @@ fn row_actions(row: &ListRow) -> Vec<RowAction> {
         });
         actions.push(RowAction::Restart);
     }
+    if matches!(row.target, RowTarget::Image(_)) {
+        actions.push(RowAction::Run);
+    }
     actions.push(RowAction::CopyName);
     actions.push(RowAction::CopyId);
     actions.push(RowAction::Remove);
@@ -457,9 +472,8 @@ fn quick_actions(row: &ListRow) -> Vec<RowAction> {
             RowAction::Logs,
             RowAction::Terminal,
         ],
-        RowTarget::Image(_) | RowTarget::Volume(_) | RowTarget::Network(_) => {
-            vec![RowAction::CopyId, RowAction::Remove]
-        }
+        RowTarget::Image(_) => vec![RowAction::Run, RowAction::CopyId, RowAction::Remove],
+        RowTarget::Volume(_) | RowTarget::Network(_) => vec![RowAction::CopyId, RowAction::Remove],
         RowTarget::Compose(_) => vec![RowAction::Overview],
     };
     actions

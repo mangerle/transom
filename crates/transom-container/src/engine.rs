@@ -233,6 +233,28 @@ impl Engine {
         }
     }
 
+    /// 创建并启动容器；返回新容器 ID。
+    ///
+    /// 设计原理（Why）：只有 REST 后端能给出结构化的创建请求（端口、挂载、重启
+    /// 策略），CLI 兜底用 `docker run` 拼参数容易引入引号与转义问题，且我们的 CLI
+    /// 形态没有回读新容器 ID 的稳定输出，因此明确返回不支持，让界面给出可操作的
+    /// 提示而不是静默失败。
+    ///
+    /// # Errors
+    /// CLI 后端返回 [`ContainerError::Unsupported`]；引擎拒绝时透传
+    /// [`ContainerError::Api`]。
+    pub async fn create_container(
+        &self,
+        spec: &transom_core::ContainerCreateSpec,
+    ) -> Result<String, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.create_container(spec).await,
+            EngineBackend::Cli(_) => Err(ContainerError::Unsupported {
+                operation: "创建容器（需要引擎 REST 接口）".to_string(),
+            }),
+        }
+    }
+
     /// 拉取镜像；HTTP 后端上报进度，CLI 后端只在结束时返回。
     pub async fn pull_image(
         &self,

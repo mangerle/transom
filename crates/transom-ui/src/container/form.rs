@@ -4,7 +4,7 @@
 //! 表单只负责编辑端点与名称；“测试连接”走控制器探测，不在 UI 线程建连接。
 
 use crate::app::AppShell;
-use crate::container::types::{ContainerFormState, EndpointChoice};
+use crate::container::types::{ContainerFormState, ContainerRunForm, EndpointChoice};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -12,6 +12,9 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use transom_core::{ContainerCommand, ContainerEngineKind, ContainerRequestId};
+
+/// 重启策略档位：与引擎允许集合保持一致，留空表示 `no`。
+const RUN_RESTART_POLICIES: [&str; 4] = ["no", "on-failure", "always", "unless-stopped"];
 
 impl AppShell {
     /// 打开新建/编辑容器连接表单。
@@ -237,6 +240,175 @@ impl AppShell {
         }) && let Some(form) = self.containers.form.as_mut()
         {
             form.test_request = None;
+        }
+        cx.notify();
+    }
+
+    /// 打开「运行容器」表单；从镜像行进入时预填镜像引用。
+    pub(crate) fn open_container_run_form(
+        &mut self,
+        tab_id: transom_core::TabId,
+        image_hint: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.containers.run_form = Some(ContainerRunForm::new(tab_id, image_hint, window, cx));
+        cx.notify();
+    }
+
+    /// 关闭运行表单。
+    pub(crate) fn dismiss_container_run(&mut self, cx: &mut Context<Self>) {
+        self.containers.run_form = None;
+        cx.notify();
+    }
+
+    /// 渲染运行容器模态。
+    pub(crate) fn render_container_run_form(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(form) = self.containers.run_form.as_ref() else {
+            return div().into_any_element();
+        };
+        let tab_id = form.tab_id;
+        let restart = form.restart.clone();
+        let error = form.error.clone();
+        let mut content =
+            v_flex()
+                .gap_3()
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.image").to_string(),
+                    form.image.clone(),
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.name").to_string(),
+                    form.name.clone(),
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.command").to_string(),
+                    form.command.clone(),
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.ports").to_string(),
+                    form.ports.clone(),
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.binds").to_string(),
+                    form.binds.clone(),
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.env").to_string(),
+                    form.env.clone(),
+                    p,
+                ))
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("container.run.restart").to_string()),
+                        )
+                        .child(h_flex().gap_1().children(RUN_RESTART_POLICIES.iter().map(
+                            |policy| {
+                                Button::new(ElementId::Name(
+                                    format!("container-run-restart-{policy}").into(),
+                                ))
+                                .xsmall()
+                                .ghost()
+                                .selected(restart.as_deref() == Some(*policy))
+                                .label((*policy).to_string())
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        let Some(form) = this.containers.run_form.as_mut() else {
+                                            return;
+                                        };
+                                        form.restart = if form.restart.as_deref() == Some(*policy) {
+                                            None
+                                        } else {
+                                            Some((*policy).to_string())
+                                        };
+                                        cx.notify();
+                                    },
+                                ))
+                            },
+                        ))),
+                );
+        if let Some(error) = error {
+            content = content.child(div().text_xs().text_color(p.danger).child(error));
+        }
+
+        let footer = h_flex()
+            .gap_2()
+            .justify_end()
+            .child(
+                Button::new("container-run-cancel")
+                    .ghost()
+                    .label(rust_i18n::t!("common.cancel").to_string())
+                    .on_click(cx.listener(|this, _, _, cx| this.dismiss_container_run(cx))),
+            )
+            .child(
+                Button::new("container-run-submit")
+                    .primary()
+                    .icon(IconName::Play)
+                    .label(rust_i18n::t!("container.run.submit").to_string())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.submit_container_run(tab_id, cx);
+                    })),
+            );
+
+        let dialog = Self::dialog_frame(
+            "container-run-modal",
+            rust_i18n::t!("container.run.title").to_string(),
+            None,
+            content,
+            Some(footer),
+            px(560.0),
+            p,
+        );
+        Self::overlay(dialog, p)
+    }
+
+    /// 提交运行：解析并校验 spec 后交给控制器，错误就地展示。
+    pub(crate) fn submit_container_run(
+        &mut self,
+        tab_id: transom_core::TabId,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(form) = self.containers.run_form.as_ref() else {
+            return;
+        };
+        let spec = match form.to_spec(cx) {
+            Ok(spec) => spec,
+            Err(message) => {
+                if let Some(form) = self.containers.run_form.as_mut() {
+                    form.error = Some(message);
+                }
+                cx.notify();
+                return;
+            }
+        };
+        let request_id = ContainerRequestId::new();
+        self.containers.run_form = None;
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::CreateContainer {
+                tab_id,
+                request_id,
+                spec,
+            },
+        );
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.notice = Some(rust_i18n::t!("container.run.submitting").to_string());
         }
         cx.notify();
     }
