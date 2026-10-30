@@ -266,6 +266,22 @@ async fn list_stage(engine: &Engine, container: &str, report: &mut Report) -> Op
         "详情状态与列表一致",
         format!("{} 状态 {}", details.name, details.state.key()),
     );
+    // 列表接口必须带挂载明细：界面靠它算「哪些卷在用」，逐个 inspect 代价太高。
+    report.check(
+        !items
+            .iter()
+            .find(|item| item.name == container)
+            .is_some_and(|item| item.mounts.is_empty()),
+        "列表携带挂载明细",
+        format!(
+            "{} 个挂载",
+            items
+                .iter()
+                .find(|item| item.name == container)
+                .map(|item| item.mounts.len())
+                .unwrap_or_default()
+        ),
+    );
     Some(())
 }
 

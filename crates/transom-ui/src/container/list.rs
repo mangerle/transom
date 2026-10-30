@@ -11,9 +11,9 @@
 
 use crate::app::AppShell;
 use crate::container::types::{
-    ContainerBatchAction, ContainerSection, ContainerSortKey, ContainerStateFilter,
-    ContainerWorkspaceState, RowAction, RowTarget, SortFields, compare_fields, matches_query,
-    row_key,
+    ContainerBatchAction, ContainerQuickFilter, ContainerSection, ContainerSortKey,
+    ContainerStateFilter, ContainerWorkspaceState, RowAction, RowTarget, SortFields,
+    compare_fields, image_passes_filter, matches_query, row_key, volume_passes_filter,
 };
 use crate::format::format_size;
 use crate::palette::Palette;
@@ -40,6 +40,7 @@ struct ToolbarParams<'a> {
     section: ContainerSection,
     search: &'a Entity<InputState>,
     state_filter: ContainerStateFilter,
+    quick: ContainerQuickFilter,
     sort_key: ContainerSortKey,
     sort_desc: bool,
 }
@@ -81,6 +82,7 @@ impl AppShell {
         let selected = workspace.selected.clone();
         let checked = workspace.checked.clone();
         let batch_armed = workspace.batch_armed;
+        let quick = workspace.quick_filter;
         let query = workspace.query(cx).to_lowercase();
         let mut rows = collect_rows(section, workspace, &query, state_filter, &checked);
         let total = rows.len();
@@ -108,13 +110,14 @@ impl AppShell {
                 section,
                 search: &search,
                 state_filter,
+                quick,
                 sort_key,
                 sort_desc,
             },
             cx,
         );
         let body = render_rows(tab_id, &rows, &selected, p, cx);
-        let footer = render_footer(&rows, total, &query, state_filter, p);
+        let footer = render_footer(&rows, total, &query, state_filter, quick, p);
         let mut column = v_flex()
             .h_full()
             .gap_1p5()
@@ -185,6 +188,42 @@ impl AppShell {
                         cx.notify();
                     })),
                 );
+            }
+        }
+        if ContainerQuickFilter::for_section(params.section).len() > 1 {
+            // CLI 兜底后端拿不到挂载明细，「仅未使用卷」会把在用卷也说成空闲，
+            // 因此只有 REST 后端才给这个档位。
+            let cli_backend = self
+                .container_workspace(params.tab_id)
+                .and_then(|workspace| workspace.info.as_ref())
+                .is_some_and(|info| info.cli_backend);
+            for quick in ContainerQuickFilter::for_section(params.section) {
+                let selected_quick = *quick;
+                let quick_tab_id = params.tab_id;
+                // 状态要可见：不适用的档位置灰并说明原因，而不是悄悄收掉，
+                // 否则用户会以为这个功能不存在。
+                let unavailable =
+                    selected_quick == ContainerQuickFilter::UnusedVolumes && cli_backend;
+                let mut button = Button::new(ElementId::Name(
+                    format!("container-quick-{}", quick.label_key()).into(),
+                ))
+                .xsmall()
+                .ghost()
+                .selected(params.quick == selected_quick)
+                .label(rust_i18n::t!(selected_quick.label_key()).to_string());
+                button = if unavailable {
+                    // 上游按钮没有禁用态样式：不绑事件 + 悬停说明原因，档位仍然留在
+                    // 工具条上，用户既知道功能存在，也知道为什么点不动。
+                    button.tooltip(rust_i18n::t!("container.filter.unused_unavailable").to_string())
+                } else {
+                    button.on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(workspace) = this.container_workspace_mut(quick_tab_id) {
+                            workspace.quick_filter = selected_quick;
+                        }
+                        cx.notify();
+                    }))
+                };
+                toolbar = toolbar.child(button);
             }
         }
         let keys = ContainerSortKey::for_section(section);
@@ -279,6 +318,19 @@ fn collect_rows(
     filter: ContainerStateFilter,
     checked: &HashSet<String>,
 ) -> Vec<ListRow> {
+    let quick = workspace.quick_filter;
+    // 在用卷集合由已拉到的容器挂载计算：列表接口就带 Mounts，不需要逐个 inspect。
+    let used_volumes: HashSet<String> = if quick == ContainerQuickFilter::UnusedVolumes {
+        workspace
+            .containers
+            .iter()
+            .flat_map(|item| item.mounts.iter())
+            .filter(|mount| mount.kind == "volume")
+            .map(|mount| mount.source.clone())
+            .collect()
+    } else {
+        HashSet::default()
+    };
     match section {
         ContainerSection::Containers => workspace
             .containers
@@ -301,12 +353,14 @@ fn collect_rows(
             .images
             .iter()
             .filter(|item| matches_query(query, &[item.display_name(), short_id(&item.id)]))
+            .filter(|item| image_passes_filter(quick, &item.tags))
             .map(image_row_spec)
             .collect(),
         ContainerSection::Volumes => workspace
             .volumes
             .iter()
             .filter(|item| matches_query(query, &[item.name.clone(), item.driver.clone()]))
+            .filter(|item| volume_passes_filter(quick, used_volumes.contains(&item.name)))
             .map(volume_row_spec)
             .collect(),
         ContainerSection::Networks => workspace
@@ -686,9 +740,12 @@ fn render_footer(
     total: usize,
     query: &str,
     filter: ContainerStateFilter,
+    quick: ContainerQuickFilter,
     p: &Palette,
 ) -> AnyElement {
-    let filtered = !query.is_empty() || filter != ContainerStateFilter::All;
+    let filtered = !query.is_empty()
+        || filter != ContainerStateFilter::All
+        || quick != ContainerQuickFilter::All;
     if !filtered || rows.len() == total {
         return div().into_any_element();
     }

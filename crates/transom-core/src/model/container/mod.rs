@@ -113,6 +113,7 @@ mod tests {
             compose_project: None,
             compose_working_dir: None,
             compose_config_files: Vec::new(),
+            mounts: Vec::new(),
         }
     }
 }

@@ -86,6 +86,10 @@ pub struct ContainerSummary {
     /// Compose 项目的配置文件列表（来自容器标签）。
     #[serde(default)]
     pub compose_config_files: Vec<String>,
+    /// 容器的挂载列表；列表接口就返回，用于「哪些卷正被使用」这类筛选，
+    /// 不必对每个容器再发一次 inspect。
+    #[serde(default)]
+    pub mounts: Vec<ContainerMount>,
 }
 
 impl ContainerSummary {

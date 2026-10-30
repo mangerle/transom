@@ -4606,6 +4606,15 @@ container:
     stopped:
       en: Stopped
       zh-CN: 已停止
+    unused:
+      en: Unused volumes
+      zh-CN: 仅未使用卷
+    unused_unavailable:
+      en: CLI backend reports no mount details, so volume usage cannot be told apart
+      zh-CN: CLI 兜底后端拿不到挂载明细，无法判断卷是否在用
+    dangling:
+      en: Dangling images
+      zh-CN: 仅无标签镜像
   sort:
     name:
       en: Name

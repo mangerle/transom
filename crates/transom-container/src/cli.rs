@@ -487,6 +487,9 @@ impl CliContainer {
             compose_project,
             compose_working_dir,
             compose_config_files,
+            // CLI 的 `ps` 输出没有挂载明细，留空；界面上的「仅未使用卷」筛选在
+            // CLI 后端会被隐藏，避免把在用卷误判成空闲。
+            mounts: Vec::new(),
         }
     }
 }

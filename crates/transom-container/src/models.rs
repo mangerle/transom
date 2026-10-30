@@ -224,6 +224,7 @@ impl ContainerListItem {
             compose_project,
             compose_working_dir,
             compose_config_files,
+            mounts: self.mounts.into_iter().map(MountItem::into_mount).collect(),
         }
     }
 }

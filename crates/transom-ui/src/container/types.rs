@@ -137,6 +137,42 @@ impl ContainerStateFilter {
     }
 }
 
+/// 快捷筛选：卷与镜像的「清理视角」。
+///
+/// 设计原理（Why）：`docker volume ls --filter dangling=true` 与「悬空镜像」是
+/// 清理磁盘时的第一需求，界面上没有它就得靠用户在几百条里肉眼比对；这里复用已经
+/// 拉到本地的列表计算，不额外发请求。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ContainerQuickFilter {
+    #[default]
+    All,
+    /// 未被任何容器挂载的卷。
+    UnusedVolumes,
+    /// 没有任何标签的镜像。
+    DanglingImages,
+}
+
+impl ContainerQuickFilter {
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            Self::All => "container.filter.all",
+            Self::UnusedVolumes => "container.filter.unused",
+            Self::DanglingImages => "container.filter.dangling",
+        }
+    }
+
+    /// 该分类可用的快捷筛选；容器与网络没有这类清理语义。
+    pub(crate) fn for_section(section: ContainerSection) -> &'static [Self] {
+        match section {
+            ContainerSection::Volumes => &[Self::All, Self::UnusedVolumes],
+            ContainerSection::Images => &[Self::All, Self::DanglingImages],
+            ContainerSection::Containers
+            | ContainerSection::Networks
+            | ContainerSection::Compose => &[Self::All],
+        }
+    }
+}
+
 /// 列表排序键。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ContainerSortKey {
@@ -392,6 +428,22 @@ pub(crate) fn log_lines(text: &str, reversed: bool) -> Vec<&str> {
     lines
 }
 
+/// 快捷筛选是否放行该卷：`UnusedVolumes` 需要它没有被任何容器挂载。
+pub(crate) fn volume_passes_filter(filter: ContainerQuickFilter, in_use: bool) -> bool {
+    match filter {
+        ContainerQuickFilter::UnusedVolumes => !in_use,
+        _ => true,
+    }
+}
+
+/// 快捷筛选是否放行该镜像：`DanglingImages` 需要它没有任何标签。
+pub(crate) fn image_passes_filter(filter: ContainerQuickFilter, tags: &[String]) -> bool {
+    match filter {
+        ContainerQuickFilter::DanglingImages => tags.is_empty(),
+        _ => true,
+    }
+}
+
 /// 工作区连接状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ContainerWorkspaceStatus {
@@ -446,6 +498,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) create_input: Entity<InputState>,
     /// 状态筛选档位（仅容器分类）。
     pub(crate) state_filter: ContainerStateFilter,
+    /// 卷与镜像的清理视角。
+    pub(crate) quick_filter: ContainerQuickFilter,
     /// 当前排序键与方向。
     pub(crate) sort_key: ContainerSortKey,
     pub(crate) sort_desc: bool,
@@ -528,6 +582,7 @@ impl ContainerWorkspaceState {
             search,
             create_input,
             state_filter: ContainerStateFilter::All,
+            quick_filter: ContainerQuickFilter::All,
             sort_key: ContainerSortKey::default_for(ContainerSection::Containers),
             sort_desc: false,
             menu_split: cx.new(|_| ResizableState::default()),
@@ -645,6 +700,12 @@ impl ContainerWorkspaceState {
     /// 这类无效组合；同时收回不可用的详情页签并清掉旧选中项。
     pub(crate) fn apply_section(&mut self, section: ContainerSection) {
         self.section = section;
+        // 快捷筛选是分类专属的视角，跨分类留着会继续过滤出莫名其妙的空列表。
+        self.quick_filter = if ContainerQuickFilter::for_section(section).len() > 1 {
+            self.quick_filter
+        } else {
+            ContainerQuickFilter::All
+        };
         self.selected = None;
         self.details = None;
         self.image_details = None;
@@ -1007,8 +1068,8 @@ impl ContainerFormState {
 #[cfg(test)]
 mod tests {
     use super::{
-        ContainerSection, ContainerSortKey, ContainerStateFilter, SortFields, compare_fields,
-        matches_query,
+        ContainerQuickFilter, ContainerSection, ContainerSortKey, ContainerStateFilter, SortFields,
+        compare_fields, matches_query,
     };
 
     fn fields(name: &str, state: &str, created: i64, size: u64) -> SortFields {
@@ -1048,6 +1109,42 @@ mod tests {
             (false, false),
             "没有选中项就不下发"
         );
+    }
+
+    #[test]
+    fn quick_filters_only_apply_where_they_mean_something() {
+        assert_eq!(
+            ContainerQuickFilter::for_section(ContainerSection::Volumes),
+            [
+                ContainerQuickFilter::All,
+                ContainerQuickFilter::UnusedVolumes
+            ]
+        );
+        assert_eq!(
+            ContainerQuickFilter::for_section(ContainerSection::Containers),
+            [ContainerQuickFilter::All]
+        );
+        assert!(super::volume_passes_filter(ContainerQuickFilter::All, true));
+        assert!(!super::volume_passes_filter(
+            ContainerQuickFilter::UnusedVolumes,
+            true
+        ));
+        assert!(super::volume_passes_filter(
+            ContainerQuickFilter::UnusedVolumes,
+            false
+        ));
+        assert!(super::image_passes_filter(
+            ContainerQuickFilter::All,
+            &["nginx".to_string()]
+        ));
+        assert!(!super::image_passes_filter(
+            ContainerQuickFilter::DanglingImages,
+            &["nginx".to_string()]
+        ));
+        assert!(super::image_passes_filter(
+            ContainerQuickFilter::DanglingImages,
+            &[]
+        ));
     }
 
     #[test]
