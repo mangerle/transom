@@ -7,6 +7,7 @@
 
 use super::Internal;
 use super::ReadyConnection;
+use super::container_ops::{ContainerWorkspace, finish_task};
 use super::lifecycle::{
     Admission, AdoptConnection, admit_connection, adopt_connection, drop_local_stats,
 };
@@ -17,8 +18,8 @@ use super::samplers::{
 use super::sftp_exec;
 use super::state::{ControllerCtx, ControllerState};
 use transom_core::{
-    ConnectionId, ForwardAppEvent, ForwardState, ForwardStatus, SftpAppEvent, TabId,
-    TerminalAppEvent, TerminalIo,
+    ConnectionId, ContainerAppEvent, ForwardAppEvent, ForwardState, ForwardStatus, SftpAppEvent,
+    TabId, TerminalAppEvent, TerminalIo,
 };
 use transom_net::{SshRemote, SshSession};
 use transom_zmodem::ZmodemConfig;
@@ -37,7 +38,61 @@ pub(super) async fn handle_internal(
         } => handle_disconnected(state, ctx, tab_id, connection_id).await,
         Internal::SftpReady { .. } => handle_sftp_ready(state, ctx, internal).await,
         Internal::ForwardReady { .. } => handle_forward_ready(state, ctx, internal).await,
+        Internal::ContainerConnected { .. } => {
+            handle_container_connected(state, ctx, internal).await
+        }
+        Internal::ContainerTaskFinished { .. } => handle_container_finished(state, ctx, internal),
     }
+}
+
+/// 引擎工作区连接完成：保存引擎实例并通知界面。
+async fn handle_container_connected(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    internal: Internal,
+) {
+    let Internal::ContainerConnected { tab_id, result } = internal else {
+        return;
+    };
+    // 探测任务已经完成，句柄可以直接回收。
+    if let Some(handle) = state.container_connects.remove(&tab_id) {
+        handle.abort();
+    }
+    match result {
+        Ok(engine) => {
+            let info = engine.info.clone();
+            if let Some(mut previous) = state
+                .container_workspaces
+                .insert(tab_id, ContainerWorkspace::new(engine))
+            {
+                previous.shutdown();
+            }
+            let _ = ctx
+                .event_tx
+                .send_async(
+                    ContainerAppEvent::Connected {
+                        tab_id,
+                        info: Box::new(info),
+                    }
+                    .into(),
+                )
+                .await;
+        }
+        Err(error) => {
+            let _ = ctx
+                .event_tx
+                .send_async(ContainerAppEvent::ConnectFailed { tab_id, error }.into())
+                .await;
+        }
+    }
+}
+
+/// 容器长任务结束：回收可取消句柄与取消标志登记。
+fn handle_container_finished(state: &mut ControllerState, ctx: &ControllerCtx, internal: Internal) {
+    let Internal::ContainerTaskFinished { tab_id, request_id } = internal else {
+        return;
+    };
+    finish_task(state, ctx, tab_id, request_id);
 }
 
 /// 连接接入：先按连接意图裁决，再走统一的落地路径。

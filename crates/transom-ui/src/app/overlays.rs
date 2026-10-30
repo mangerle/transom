@@ -108,6 +108,12 @@ impl AppShell {
         if self.modals.show_quick_open {
             overlays.push(self.render_command_palette_modal(window, cx, &p));
         }
+        if let Some(tab_id) = self.containers.fullscreen {
+            overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
+        }
+        if self.containers.form.is_some() {
+            overlays.push(self.render_container_form(window, cx, &p));
+        }
         overlays
     }
 }

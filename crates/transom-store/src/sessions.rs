@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use transom_core::{
-    AppError, ErrorCode, Identity, Session, SessionCatalog, SessionFolder, SessionStore,
+    AppError, ContainerEngineProfile, ErrorCode, Identity, Session, SessionCatalog, SessionFolder,
+    SessionStore,
 };
 
 const SCHEMA_VERSION: u32 = 2;
@@ -21,6 +22,8 @@ struct SessionFileRef<'a> {
     /// 凭据模板与会话同文件存放：会话引用模板时，两者必须一起走才有意义，
     /// 拆成两个文件会多出一份"只同步了一半"的错配可能。
     identities: &'a [Identity],
+    /// 容器引擎连接：与终端会话共用同一份目录快照，随备份/同步一起流转。
+    engines: &'a [ContainerEngineProfile],
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +36,8 @@ struct SessionFileRaw {
     sessions: Vec<Value>,
     #[serde(default)]
     identities: Vec<Identity>,
+    #[serde(default)]
+    engines: Vec<ContainerEngineProfile>,
 }
 
 fn schema_version() -> u32 {
@@ -55,6 +60,7 @@ impl JsonSessionStore {
             folders: file.folders,
             sessions: Vec::with_capacity(file.sessions.len()),
             identities: file.identities,
+            engines: file.engines,
         };
         catalog.normalize();
         for value in file.sessions {
@@ -114,6 +120,7 @@ impl SessionStore for JsonSessionStore {
                 folders: &catalog.folders,
                 sessions: &catalog.sessions,
                 identities: &catalog.identities,
+                engines: &catalog.engines,
             },
         )
     }

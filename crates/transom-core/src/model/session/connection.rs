@@ -1,6 +1,7 @@
 //! 串口、Telnet、本地 Shell 连接契约与连接总枚举。
 
 use super::ssh::{AuthMethod, SessionOptions, SshConnection};
+use crate::model::container::ContainerEngineProfile;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -33,6 +34,8 @@ pub enum Connection {
     Serial(SerialConnection),
     Telnet(TelnetConnection),
     Mosh(MoshConnection),
+    /// 容器引擎管理工作区：打开的是三栏管理页，不建立终端连接。
+    ContainerEngine(ContainerEngineProfile),
 }
 
 /// Mosh（Mobile Shell）连接参数。

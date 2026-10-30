@@ -6,6 +6,8 @@ use crate::palette::Palette;
 use crate::pane_tree::LayoutNode;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
@@ -272,6 +274,38 @@ impl AppShell {
         }
         if let crate::app::TabContent::Monitor(target_id) = self.workspace.tabs[index].content {
             return self.render_monitor_tab_content(tab_id, target_id, window, cx, p);
+        }
+        if matches!(
+            &self.workspace.tabs[index].content,
+            crate::app::TabContent::Containers(_)
+        ) {
+            if self.containers.fullscreen == Some(tab_id) {
+                return v_flex()
+                    .size_full()
+                    .items_center()
+                    .justify_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("container.fullscreen.active").to_string()),
+                    )
+                    .child(
+                        Button::new(ElementId::Name(
+                            format!("container-exit-fullscreen-{tab_id}").into(),
+                        ))
+                        .small()
+                        .icon(IconName::Minimize)
+                        .label(rust_i18n::t!("container.fullscreen_exit").to_string())
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.containers.fullscreen = None;
+                            cx.notify();
+                        })),
+                    )
+                    .into_any_element();
+            }
+            return self.render_container_tab(tab_id, window, cx, p);
         }
         if let Some(terminal) = self.workspace.tabs[index].terminal() {
             // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的

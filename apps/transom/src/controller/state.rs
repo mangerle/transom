@@ -9,6 +9,7 @@
 //! 不再从主循环逐个透传或克隆。
 
 use super::Internal;
+use super::container_ops::ContainerWorkspace;
 use super::lifecycle::ConnectingTab;
 use super::samplers::LocalTrafficTabs;
 use super::session_context::ManagedSessionContext;
@@ -45,6 +46,12 @@ pub(super) struct ControllerState {
     /// 进程面板的一次性采样/终止任务：与主机动作同样纳入 JoinSet，
     /// 停机时统一等待，避免远端 exec 还在途时进程直接退出。
     pub(super) monitor_set: JoinSet<()>,
+    /// 打开的容器管理工作区，按标签索引。
+    pub(super) container_workspaces: HashMap<TabId, ContainerWorkspace>,
+    /// 正在探测的引擎连接任务：同标签重连会顶掉旧任务。
+    pub(super) container_connects: HashMap<TabId, tokio::task::JoinHandle<()>>,
+    /// 容器一次性查询（列表/检视/启停/卷/网络）：短任务集合，停机统一等待。
+    pub(super) container_ops: JoinSet<()>,
 }
 
 impl ControllerState {
@@ -62,6 +69,9 @@ impl ControllerState {
             local_traffic_task: None,
             host_action_tasks: JoinSet::new(),
             monitor_set: JoinSet::new(),
+            container_workspaces: HashMap::new(),
+            container_connects: HashMap::new(),
+            container_ops: JoinSet::new(),
         }
     }
 
@@ -121,6 +131,8 @@ pub(super) struct ControllerCtx {
     pub(super) event_tx: flume::Sender<AppEvent>,
     pub(super) internal_tx: flume::Sender<Internal>,
     pub(super) cloud_sync: Arc<CloudSyncService>,
+    /// 容器引擎接入服务：发现、探测与取消标志表。
+    pub(super) container: Arc<transom_container::ContainerService>,
     /// 主机动作的跨批次并发闸门：用户连点两次也不会翻倍占用在途连接数。
     pub(super) action_permits: Arc<tokio::sync::Semaphore>,
 }

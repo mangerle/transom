@@ -13,15 +13,17 @@
 use std::sync::Arc;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
+use transom_container::ContainerService;
 use transom_core::{
-    AppCommand, AppError, AppEvent, ConnectionId, ErrorCode, ForwardId, KnownHostsStore,
-    SecretStore, SftpOperation, TabId, TerminalCommand, TerminalIo, TransferId,
+    AppCommand, AppError, AppEvent, ConnectionId, ContainerRequestId, ErrorCode, ForwardId,
+    KnownHostsStore, SecretStore, SftpOperation, TabId, TerminalCommand, TerminalIo, TransferId,
 };
 use transom_net::{ForwardTask, SftpClient, SshSession};
 use transom_sync::CloudSyncService;
 use transom_zmodem::ZmodemConfig;
 
 mod commands;
+mod container_ops;
 mod host_exec;
 mod internal;
 mod lifecycle;
@@ -79,6 +81,7 @@ impl Controller {
             internal_rx,
             event_tx,
             cloud_sync,
+            container: Arc::new(ContainerService::new()),
             shutdown_tx,
         }));
         // 根控制器是整个应用的控制平面：panic 后命令与事件全部停摆，
@@ -195,6 +198,16 @@ enum Internal {
         rule_id: ForwardId,
         result: Result<ForwardTask, AppError>,
     },
+    /// 引擎工作区连接完成：主循环保存引擎实例并通知界面。
+    ContainerConnected {
+        tab_id: TabId,
+        result: Result<transom_container::Engine, AppError>,
+    },
+    /// 容器长任务（日志/统计/传输）自行结束，主循环回收任务句柄。
+    ContainerTaskFinished {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
 }
 
 /// 建连任务的完成形态：SSH 会话，或"IO + 退出通知"的本地/串口/Telnet。
@@ -242,6 +255,8 @@ struct ControlPlaneWiring {
     internal_rx: flume::Receiver<Internal>,
     event_tx: flume::Sender<AppEvent>,
     cloud_sync: Arc<CloudSyncService>,
+    /// 容器引擎接入服务：发现、探测与取消标志表。
+    container: Arc<ContainerService>,
     /// 主循环退出（含停机收尾完成）通知；`Controller::shutdown` 限时等待它。
     shutdown_tx: mpsc::Sender<()>,
 }
@@ -254,6 +269,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         internal_rx,
         event_tx,
         cloud_sync,
+        container,
         shutdown_tx,
     } = wiring;
     let ctx = ControllerCtx {
@@ -261,6 +277,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         event_tx,
         internal_tx,
         cloud_sync,
+        container,
         action_permits: Arc::new(tokio::sync::Semaphore::new(
             host_exec::MAX_CONCURRENT_ACTIONS,
         )),
@@ -272,6 +289,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         // 可变借用同字段并存，先取布尔快照。
         let has_host_actions = !state.host_action_tasks.is_empty();
         let has_monitors = !state.monitor_set.is_empty();
+        let has_container_ops = !state.container_ops.is_empty();
         let incoming = tokio::select! {
             command = command_rx.recv_async() => Incoming::Command(command),
             message = internal_rx.recv_async() => Incoming::Internal(message),
@@ -286,6 +304,12 @@ async fn run_controller(wiring: ControlPlaneWiring) {
             joined = state.monitor_set.join_next(), if has_monitors => {
                 if let Some(Err(error)) = joined {
                     log::error!("进程面板任务异常退出: {error}");
+                }
+                continue;
+            }
+            joined = state.container_ops.join_next(), if has_container_ops => {
+                if let Some(Err(error)) = joined {
+                    log::error!("容器一次性任务异常退出: {error}");
                 }
                 continue;
             }

@@ -83,6 +83,9 @@ pub struct SessionCatalog {
     /// 凭据模板清单；老目录文件没有该字段时按空清单降级。
     #[serde(default)]
     pub identities: Vec<crate::model::identity::Identity>,
+    /// 容器引擎连接清单；容器表单保存到这里，随备份/同步一起流转。
+    #[serde(default)]
+    pub engines: Vec<crate::model::container::ContainerEngineProfile>,
 }
 
 /// 拖拽落点的侧向：插到锚点条目之前或之后。

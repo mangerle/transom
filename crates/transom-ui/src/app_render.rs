@@ -44,8 +44,10 @@ impl Render for AppShell {
             .fixed()
             .visible(self.sidebar.visible);
         if self.sidebar.visible {
-            // 左侧槽位一次只承载一种内容：纵向标签面板或会话树。
-            let content = if self.show_vertical_tabs_panel() {
+            // 左侧槽位一次只承载一种内容：容器连接、纵向标签面板或会话树。
+            let content = if self.containers.sidebar_open {
+                self.render_container_sidebar(window, cx, &p)
+            } else if self.show_vertical_tabs_panel() {
                 self.render_vertical_tabs_panel(&p, cx)
             } else {
                 self.render_sidebar(window, cx, &p)

@@ -42,6 +42,7 @@ pub(super) fn connection_icon(connection: &Connection) -> IconName {
         Connection::Serial(_) => IconName::Cable,
         Connection::Telnet(_) => IconName::Network,
         Connection::Mosh(_) => IconName::Radio,
+        Connection::ContainerEngine(_) => IconName::Container,
         _ => IconName::Server,
     }
 }

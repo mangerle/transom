@@ -5,6 +5,7 @@
 //! 只负责"收事件、委托处理、判定是否停机"，新增命令不再触碰循环本体。
 
 use super::Internal;
+use super::container_ops::handle_container_command;
 use super::host_exec::run_batch;
 use super::lifecycle::{
     ConnectingTab, KeyDeployParams, ShutdownTables, deploy_key, drop_local_stats, shutdown_all,
@@ -58,6 +59,10 @@ pub(super) async fn handle_command(
             handle_zmodem_command(state, cmd);
             LoopControl::Continue
         }
+        AppCommand::Container(cmd) => {
+            handle_container_command(state, ctx, cmd);
+            LoopControl::Continue
+        }
     }
 }
 
@@ -104,7 +109,7 @@ async fn handle_terminal_command(
             LoopControl::Continue
         }
         TerminalCommand::CloseTab { tab_id } => {
-            close_tab(state, tab_id);
+            close_tab(state, ctx, tab_id);
             LoopControl::Continue
         }
         TerminalCommand::Shutdown => LoopControl::Shutdown,
@@ -401,7 +406,7 @@ async fn handle_forward_stop(
 }
 
 /// 关闭标签：注销连接意图与全部附属任务，优雅断开远端。
-fn close_tab(state: &mut ControllerState, tab_id: TabId) {
+fn close_tab(state: &mut ControllerState, ctx: &ControllerCtx, tab_id: TabId) {
     // 关闭即注销连接意图并取消建连任务：DNS/握手/认证等待中的连接随任务
     // 中止，迟到的完成结果被接入裁决拒收。
     if let Some(entry) = state.connecting.remove(&tab_id) {
@@ -418,6 +423,15 @@ fn close_tab(state: &mut ControllerState, tab_id: TabId) {
             true
         }
     });
+    // 容器工作区与终端会话互不影响，但同一标签关闭时必须一起回收。
+    if let Some(task) = state.container_connects.remove(&tab_id) {
+        task.abort();
+    }
+    if let Some(mut workspace) = state.container_workspaces.remove(&tab_id) {
+        for request_id in workspace.shutdown() {
+            ctx.container.finish(request_id);
+        }
+    }
 }
 
 /// 停机收尾：中止在途云同步、停全部后台任务、断开全部远端并限时等待。
@@ -442,5 +456,13 @@ pub(super) async fn shutdown(
     })
     .await;
     state.monitor_set.shutdown().await;
+    // 容器工作区：中止探测、长任务与一次性查询，不留脱缰任务。
+    for (_, handle) in state.container_connects.drain() {
+        handle.abort();
+    }
+    for (_, mut workspace) in state.container_workspaces.drain() {
+        workspace.shutdown();
+    }
+    state.container_ops.shutdown().await;
     let _ = shutdown_tx.send(());
 }

@@ -36,6 +36,9 @@ impl AppShell {
             AppEvent::Zmodem(zmodem_event) => {
                 self.dispatch_zmodem_event(zmodem_event, cx);
             }
+            AppEvent::Container(container_event) => {
+                self.dispatch_container_event(container_event, window, cx);
+            }
             AppEvent::DeepLink { request } => {
                 self.handle_deep_link(request, window, cx);
             }

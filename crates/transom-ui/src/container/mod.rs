@@ -1,0 +1,1146 @@
+//! 容器引擎管理工作区：状态、命令与事件路由。
+
+mod detail;
+mod form;
+mod types;
+mod view;
+
+pub(crate) use types::{
+    ContainerConfirm, ContainerDetailTab, ContainerFilesState, ContainerSection,
+    ContainerTerminalState, ContainerUiState, ContainerWorkspaceState, ContainerWorkspaceStatus,
+};
+
+use crate::app::{AppShell, TabContent, TabStatus, TerminalTab};
+use crate::palette::localized_error;
+use gpui_kit::*;
+use std::sync::Arc;
+use transom_core::{
+    Connection, ContainerAppEvent, ContainerCommand, ContainerConnection, ContainerEngineProfile,
+    ContainerLifecycleAction, ContainerRequestId, Session, TabId, TerminalSize,
+};
+use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
+
+impl AppShell {
+    /// 容器事件分发：先按请求 ID 找到工作区，再更新对应字段。
+    pub(crate) fn dispatch_container_event(
+        &mut self,
+        event: ContainerAppEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            ContainerAppEvent::Connected { tab_id, info } => {
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.status = ContainerWorkspaceStatus::Connected;
+                    workspace.info = Some(*info);
+                    workspace.notice = None;
+                }
+                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                    tab.status = TabStatus::Connected;
+                }
+                self.refresh_container_section(tab_id);
+            }
+            ContainerAppEvent::ConnectFailed { tab_id, error } => {
+                let message = localized_error(&error);
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.status = ContainerWorkspaceStatus::Failed(message.clone());
+                    workspace.notice = Some(message);
+                }
+                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                    tab.status = TabStatus::Failed(error);
+                }
+            }
+            ContainerAppEvent::TestFinished {
+                request_id,
+                info,
+                error,
+            } => {
+                if let Some(form) = self.containers.form.as_mut()
+                    && form.test_request == Some(request_id)
+                {
+                    form.test_request = None;
+                    match (info, error) {
+                        (Some(info), _) => {
+                            form.test_ok = true;
+                            form.test_status = Some(
+                                rust_i18n::t!(
+                                    "container.form.test_ok",
+                                    platform = info.platform,
+                                    version = info.version
+                                )
+                                .to_string(),
+                            );
+                        }
+                        (None, Some(error)) => {
+                            form.test_ok = false;
+                            form.test_status = Some(localized_error(&error));
+                        }
+                        (None, None) => {
+                            form.test_ok = false;
+                            form.test_status =
+                                Some(rust_i18n::t!("container.form.test_failed").to_string());
+                        }
+                    }
+                }
+            }
+            ContainerAppEvent::Disconnected { tab_id } => {
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.status = ContainerWorkspaceStatus::Disconnected;
+                }
+            }
+            ContainerAppEvent::ContainersListed {
+                request_id,
+                containers,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                let mut inspect_first = None;
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.compose = transom_core::compose_projects(&containers);
+                    workspace.containers = containers;
+                    workspace.busy = false;
+                    let valid = workspace
+                        .selected
+                        .as_deref()
+                        .is_some_and(|id| workspace.containers.iter().any(|item| item.id == id));
+                    if !valid {
+                        workspace.selected = None;
+                        workspace.details = None;
+                    }
+                    if workspace.section == ContainerSection::Containers
+                        && workspace.selected.is_none()
+                        && let Some(first) = workspace.containers.first()
+                    {
+                        inspect_first = Some(first.id.clone());
+                    }
+                }
+                if let Some(id) = inspect_first {
+                    self.select_container_item(tab_id, id);
+                }
+            }
+            ContainerAppEvent::ContainerInspected {
+                request_id,
+                details,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.selected = Some(details.id.clone());
+                    workspace.details = Some(*details);
+                }
+            }
+            ContainerAppEvent::ImagesListed { request_id, images } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.images = images;
+                    workspace.busy = false;
+                    let valid = workspace
+                        .selected
+                        .as_deref()
+                        .is_some_and(|id| workspace.images.iter().any(|item| item.id == id));
+                    if !valid {
+                        workspace.selected = workspace.images.first().map(|item| item.id.clone());
+                        workspace.image_details = None;
+                    }
+                }
+            }
+            ContainerAppEvent::ImageInspected {
+                request_id,
+                details,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.selected = Some(details.id.clone());
+                    workspace.image_details = Some(*details);
+                }
+            }
+            ContainerAppEvent::VolumesListed {
+                request_id,
+                volumes,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.volumes = volumes;
+                    workspace.busy = false;
+                    let valid = workspace
+                        .selected
+                        .as_deref()
+                        .is_some_and(|name| workspace.volumes.iter().any(|item| item.name == name));
+                    if !valid {
+                        workspace.selected =
+                            workspace.volumes.first().map(|item| item.name.clone());
+                        workspace.volume_details = None;
+                    }
+                }
+            }
+            ContainerAppEvent::VolumeInspected {
+                request_id,
+                details,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.selected = Some(details.summary.name.clone());
+                    workspace.volume_details = Some(*details);
+                }
+            }
+            ContainerAppEvent::NetworksListed {
+                request_id,
+                networks,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.networks = networks;
+                    workspace.busy = false;
+                    let valid = workspace
+                        .selected
+                        .as_deref()
+                        .is_some_and(|id| workspace.networks.iter().any(|item| item.id == id));
+                    if !valid {
+                        workspace.selected = workspace.networks.first().map(|item| item.id.clone());
+                        workspace.network_details = None;
+                    }
+                }
+            }
+            ContainerAppEvent::NetworkInspected {
+                request_id,
+                details,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.selected = Some(details.summary.id.clone());
+                    workspace.network_details = Some(*details);
+                }
+            }
+            ContainerAppEvent::ComposeProjectsListed {
+                request_id,
+                projects,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.compose = projects;
+                    workspace.busy = false;
+                }
+            }
+            ContainerAppEvent::ExecReady {
+                tab_id,
+                request_id,
+                io,
+                exit,
+            } => {
+                self.containers.requests.remove(&request_id);
+                drop(exit);
+                if self.workspace.tab(tab_id).is_none() {
+                    return;
+                }
+                let (terminal, subscription) =
+                    self.create_container_terminal(*io, tab_id, window, cx);
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.terminal = Some(ContainerTerminalState {
+                        view: terminal,
+                        _subscription: subscription,
+                    });
+                    workspace.detail_tab = ContainerDetailTab::Terminal;
+                    workspace.notice = None;
+                }
+            }
+            ContainerAppEvent::LogsChunk { request_id, bytes } => {
+                let Some(tab_id) = self.containers.tab_of(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id)
+                    && workspace.logs_request == Some(request_id)
+                {
+                    workspace.append_logs(&bytes);
+                }
+            }
+            ContainerAppEvent::LogsClosed { request_id } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id)
+                    && workspace.logs_request == Some(request_id)
+                {
+                    workspace.logs_request = None;
+                    workspace.logs_follow = false;
+                }
+            }
+            ContainerAppEvent::StatsUpdated {
+                request_id,
+                container: _,
+                stats,
+            } => {
+                let Some(tab_id) = self.containers.tab_of(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id)
+                    && workspace.stats_request == Some(request_id)
+                {
+                    workspace.stats = Some(stats);
+                }
+            }
+            ContainerAppEvent::DirListed {
+                request_id,
+                path,
+                entries,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.files.path = path;
+                    workspace.files.entries = entries;
+                    workspace.files.loading = false;
+                }
+            }
+            ContainerAppEvent::FilePreview {
+                request_id,
+                path,
+                content,
+                truncated,
+                ..
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.files.preview = Some((path, content, truncated));
+                }
+            }
+            ContainerAppEvent::TransferProgress {
+                request_id,
+                transferred,
+                total,
+            } => {
+                let Some(tab_id) = self.containers.tab_of(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.notice = Some(match total {
+                        Some(total) if total > 0 => format!(
+                            "{} / {}",
+                            crate::format::format_size(transferred),
+                            crate::format::format_size(total)
+                        ),
+                        _ => crate::format::format_size(transferred),
+                    });
+                }
+            }
+            ContainerAppEvent::ActionFinished { request_id, error } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                let mut refresh = false;
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.busy = false;
+                    workspace.confirm = None;
+                    match error {
+                        Some(error) => workspace.notice = Some(localized_error(&error)),
+                        None => {
+                            workspace.notice = None;
+                            refresh = true;
+                        }
+                    }
+                }
+                if refresh {
+                    self.refresh_container_section(tab_id);
+                }
+            }
+            ContainerAppEvent::TransferFinished { request_id, error } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                let mut refresh_files = None;
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    match error {
+                        Some(error) => workspace.notice = Some(localized_error(&error)),
+                        None => {
+                            workspace.notice = None;
+                            refresh_files = Some(workspace.files.path.clone());
+                        }
+                    }
+                }
+                if let Some(path) = refresh_files
+                    && !path.is_empty()
+                {
+                    self.load_container_dir(tab_id, path);
+                }
+            }
+            ContainerAppEvent::Failed { request_id, error } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.busy = false;
+                    workspace.files.loading = false;
+                    if workspace.logs_request == Some(request_id) {
+                        workspace.logs_request = None;
+                        workspace.logs_follow = false;
+                    }
+                    if workspace.stats_request == Some(request_id) {
+                        workspace.stats_request = None;
+                    }
+                    workspace.notice = Some(localized_error(&error));
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    fn container_workspace_mut(&mut self, tab_id: TabId) -> Option<&mut ContainerWorkspaceState> {
+        match &mut self.workspace.tab_mut(tab_id)?.content {
+            TabContent::Containers(state) => Some(state),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn container_workspace(&self, tab_id: TabId) -> Option<&ContainerWorkspaceState> {
+        match &self.workspace.tab(tab_id)?.content {
+            TabContent::Containers(state) => Some(state),
+            _ => None,
+        }
+    }
+
+    fn send_tracked(
+        &mut self,
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        command: ContainerCommand,
+    ) {
+        self.containers.track(request_id, tab_id);
+        if !self.send_command(command) {
+            self.containers.requests.remove(&request_id);
+        }
+    }
+
+    /// 打开（或聚焦）一个引擎连接的工作区标签。
+    pub(crate) fn open_engine_workspace(
+        &mut self,
+        profile: ContainerEngineProfile,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(existing) =
+            self.workspace
+                .tabs
+                .iter()
+                .find_map(|tab| match &tab.session.connection {
+                    Connection::ContainerEngine(existing) if existing.id == profile.id => {
+                        Some(tab.id)
+                    }
+                    _ => None,
+                })
+        {
+            self.activate_tab(existing, window, cx);
+            return;
+        }
+        let tab_id = TabId::new();
+        let session = Session::new(
+            profile.display_name(),
+            Connection::ContainerEngine(profile.clone()),
+        );
+        self.create_group(tab_id, session.id);
+        let mut tab = TerminalTab::pending(tab_id, session);
+        tab.status = TabStatus::Connecting;
+        tab.title = profile.display_name();
+        tab.content = TabContent::Containers(Box::new(ContainerWorkspaceState::new(
+            profile.clone(),
+            window,
+            cx,
+        )));
+        self.workspace.tabs.push(tab);
+        self.workspace.active_tab = Some(tab_id);
+        self.present_active_group();
+        self.send_command(ContainerCommand::Connect { tab_id, profile });
+        cx.notify();
+    }
+
+    /// 刷新当前分类的列表。
+    pub(crate) fn refresh_container_section(&mut self, tab_id: TabId) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let section = workspace.section;
+        workspace.busy = true;
+        let request_id = ContainerRequestId::new();
+        let command = match section {
+            ContainerSection::Containers | ContainerSection::Compose => {
+                ContainerCommand::ListContainers { tab_id, request_id }
+            }
+            ContainerSection::Images => ContainerCommand::ListImages { tab_id, request_id },
+            ContainerSection::Volumes => ContainerCommand::ListVolumes { tab_id, request_id },
+            ContainerSection::Networks => ContainerCommand::ListNetworks { tab_id, request_id },
+        };
+        self.send_tracked(tab_id, request_id, command);
+    }
+
+    /// 切换左侧分类：清空选中项并拉取该分类列表。
+    pub(crate) fn select_container_section(
+        &mut self,
+        tab_id: TabId,
+        section: ContainerSection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.stop_container_streams(tab_id);
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.section = section;
+            workspace.selected = None;
+            workspace.details = None;
+            workspace.image_details = None;
+            workspace.volume_details = None;
+            workspace.network_details = None;
+            workspace.detail_tab = ContainerDetailTab::Overview;
+            workspace.confirm = None;
+            workspace.normalize_detail_tab();
+            workspace
+                .create_input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        self.refresh_container_section(tab_id);
+        cx.notify();
+    }
+
+    /// 选中一个容器：停止旧订阅并拉取详情。
+    pub(crate) fn select_container_item(&mut self, tab_id: TabId, id: String) {
+        self.stop_container_streams(tab_id);
+        let request_id = ContainerRequestId::new();
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.selected = Some(id.clone());
+            workspace.details = None;
+            workspace.logs.clear();
+            workspace.stats = None;
+            workspace.files = ContainerFilesState::default();
+            workspace.detail_tab = ContainerDetailTab::Overview;
+            workspace.confirm = None;
+            workspace.notice = None;
+        }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::InspectContainer {
+                tab_id,
+                request_id,
+                container: id,
+            },
+        );
+    }
+
+    pub(crate) fn select_image_item(&mut self, tab_id: TabId, id: String) {
+        let request_id = ContainerRequestId::new();
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.selected = Some(id.clone());
+            workspace.image_details = None;
+            workspace.detail_tab = ContainerDetailTab::Overview;
+        }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::InspectImage {
+                tab_id,
+                request_id,
+                image: id,
+            },
+        );
+    }
+
+    pub(crate) fn select_volume_item(&mut self, tab_id: TabId, name: String) {
+        let request_id = ContainerRequestId::new();
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.selected = Some(name.clone());
+            workspace.volume_details = None;
+            workspace.detail_tab = ContainerDetailTab::Overview;
+        }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::InspectVolume {
+                tab_id,
+                request_id,
+                name,
+            },
+        );
+    }
+
+    pub(crate) fn select_network_item(&mut self, tab_id: TabId, id: String) {
+        let request_id = ContainerRequestId::new();
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.selected = Some(id.clone());
+            workspace.network_details = None;
+            workspace.detail_tab = ContainerDetailTab::Overview;
+        }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::InspectNetwork {
+                tab_id,
+                request_id,
+                network: id,
+            },
+        );
+    }
+
+    pub(crate) fn select_compose_item(&mut self, tab_id: TabId, name: String) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.selected = Some(name);
+            workspace.detail_tab = ContainerDetailTab::Overview;
+        }
+    }
+
+    /// 停止当前选中项的日志、统计与终端会话。
+    fn stop_container_streams(&mut self, tab_id: TabId) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let logs = workspace.logs_request.take();
+        let stats = workspace.stats_request.take();
+        workspace.terminal = None;
+        for request_id in [logs, stats].into_iter().flatten() {
+            self.containers.requests.remove(&request_id);
+            self.send_command(ContainerCommand::Cancel { tab_id, request_id });
+        }
+    }
+
+    /// 立即取消一个流式请求（切换页签时使用）。
+    pub(crate) fn cancel_container_request(
+        &mut self,
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    ) {
+        self.containers.requests.remove(&request_id);
+        self.send_command(ContainerCommand::Cancel { tab_id, request_id });
+    }
+
+    pub(crate) fn set_container_detail_tab(
+        &mut self,
+        tab_id: TabId,
+        tab: ContainerDetailTab,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let previous = workspace.detail_tab;
+        workspace.detail_tab = tab;
+        let logs = workspace.logs_request;
+        let stats = workspace.stats_request;
+
+        if previous == ContainerDetailTab::Logs
+            && tab != ContainerDetailTab::Logs
+            && let Some(request_id) = logs
+        {
+            self.cancel_container_request(tab_id, request_id);
+            if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                workspace.logs_request = None;
+                workspace.logs_follow = false;
+            }
+        }
+        if previous == ContainerDetailTab::Stats
+            && tab != ContainerDetailTab::Stats
+            && let Some(request_id) = stats
+        {
+            self.cancel_container_request(tab_id, request_id);
+            if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                workspace.stats_request = None;
+            }
+        }
+
+        match tab {
+            ContainerDetailTab::Logs => self.ensure_container_logs(tab_id),
+            ContainerDetailTab::Stats => self.ensure_container_stats(tab_id),
+            ContainerDetailTab::Files => self.ensure_container_files(tab_id),
+            ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, window, cx),
+            ContainerDetailTab::Overview => {}
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn ensure_container_logs(&mut self, tab_id: TabId) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        if workspace.logs_request.is_some() {
+            return;
+        }
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let follow = workspace.logs_follow;
+        workspace.logs.clear();
+        let request_id = ContainerRequestId::new();
+        workspace.logs_request = Some(request_id);
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::Logs {
+                tab_id,
+                request_id,
+                container,
+                tail: 500,
+                follow,
+            },
+        );
+    }
+
+    pub(crate) fn toggle_container_logs_follow(&mut self, tab_id: TabId, follow: bool) {
+        if let Some(request_id) = self
+            .container_workspace_mut(tab_id)
+            .and_then(|workspace| workspace.logs_request.take())
+        {
+            self.cancel_container_request(tab_id, request_id);
+        }
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.logs_follow = follow;
+        }
+        self.ensure_container_logs(tab_id);
+    }
+
+    pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        if workspace.stats_request.is_some() {
+            return;
+        }
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.stats_request = Some(request_id);
+        workspace.stats = None;
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::Stats {
+                tab_id,
+                request_id,
+                container,
+                enabled: true,
+            },
+        );
+    }
+
+    pub(crate) fn ensure_container_files(&mut self, tab_id: TabId) {
+        let path = self
+            .container_workspace_mut(tab_id)
+            .map(|workspace| workspace.files.path.clone())
+            .filter(|path| !path.is_empty())
+            .unwrap_or_else(|| "/".to_string());
+        self.load_container_dir(tab_id, path);
+    }
+
+    pub(crate) fn load_container_dir(&mut self, tab_id: TabId, path: String) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        workspace.files.loading = true;
+        workspace.files.preview = None;
+        let request_id = ContainerRequestId::new();
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::ListDir {
+                tab_id,
+                request_id,
+                container,
+                path,
+            },
+        );
+    }
+
+    pub(crate) fn ensure_container_terminal(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        if workspace.terminal.is_some() {
+            return;
+        }
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::ExecTerminal {
+                tab_id,
+                request_id,
+                options: ContainerConnection::new(container),
+                size: TerminalSize::new(100, 30),
+            },
+        );
+        let _ = (window, cx);
+    }
+
+    fn create_container_terminal(
+        &mut self,
+        io: transom_core::TerminalIo,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Entity<TerminalView>, Subscription) {
+        let mut profile = self.settings.terminal_profile.clone();
+        profile.background_transparency = self.settings.window.window_transparency;
+        let interaction = self.settings.terminal_interaction;
+        let reserved = self.shortcut_recording.filter.clone();
+        let key_filter: KeyFilter = Arc::new(move |keystroke| {
+            reserved
+                .read()
+                .iter()
+                .any(|binding| keystroke.should_match(binding))
+        });
+        let terminal = cx.new(|cx| {
+            TerminalView::new(
+                window,
+                cx,
+                transom_terminal::TerminalViewParams {
+                    io,
+                    profile,
+                    interaction,
+                    key_filter: Some(key_filter),
+                    audit_path: None,
+                    shell_integration_enabled: false,
+                },
+            )
+        });
+        let provider = self.history_provider.clone();
+        terminal.update(cx, |view, _cx| view.attach_history(provider));
+        let focus_handle = terminal.read(cx).focus_handle().clone();
+        window.focus(&focus_handle, cx);
+        let subscription = cx.subscribe_in(
+            &terminal,
+            window,
+            move |this, _, event: &TerminalEvent, _window, cx| {
+                if matches!(event, TerminalEvent::Exit) {
+                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                        workspace.terminal = None;
+                        workspace.notice =
+                            Some(rust_i18n::t!("container.terminal.closed").to_string());
+                    }
+                    cx.notify();
+                }
+            },
+        );
+        (terminal, subscription)
+    }
+
+    /// 保存引擎连接配置（新建或更新）。
+    pub(crate) fn save_container_profile(
+        &mut self,
+        profile: ContainerEngineProfile,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(existing) = self
+            .catalog
+            .engines
+            .iter_mut()
+            .find(|existing| existing.id == profile.id)
+        {
+            *existing = profile;
+        } else {
+            self.catalog.engines.push(profile);
+        }
+        self.persist_catalog();
+        cx.notify();
+    }
+
+    /// 删除引擎连接配置并关闭其工作区标签。
+    pub(crate) fn delete_container_profile(
+        &mut self,
+        id: transom_core::EngineProfileId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.catalog.engines.retain(|profile| profile.id != id);
+        self.persist_catalog();
+        let tabs: Vec<TabId> = self
+            .workspace
+            .tabs
+            .iter()
+            .filter_map(|tab| match &tab.session.connection {
+                Connection::ContainerEngine(profile) if profile.id == id => Some(tab.id),
+                _ => None,
+            })
+            .collect();
+        for tab_id in tabs {
+            self.close_tab(tab_id, window, cx);
+        }
+        cx.notify();
+    }
+
+    /// 取消当前分类里的删除确认。
+    pub(crate) fn cancel_container_confirm(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.confirm = None;
+        }
+        cx.notify();
+    }
+
+    /// 生命周期动作（启动/停止/重启/删除）。
+    pub(crate) fn container_lifecycle(
+        &mut self,
+        tab_id: TabId,
+        container: String,
+        action: ContainerLifecycleAction,
+        cx: &mut Context<Self>,
+    ) {
+        let request_id = ContainerRequestId::new();
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.busy = true;
+            workspace.notice = Some(
+                rust_i18n::t!("container.action.running", action = action.label()).to_string(),
+            );
+        }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::Lifecycle {
+                tab_id,
+                request_id,
+                container,
+                action,
+            },
+        );
+        cx.notify();
+    }
+
+    /// 删除镜像/卷/网络。
+    pub(crate) fn apply_container_confirm(
+        &mut self,
+        tab_id: TabId,
+        confirm: ContainerConfirm,
+        cx: &mut Context<Self>,
+    ) {
+        let request_id = ContainerRequestId::new();
+        let command = match confirm {
+            ContainerConfirm::Container(container) => ContainerCommand::Lifecycle {
+                tab_id,
+                request_id,
+                container,
+                action: ContainerLifecycleAction::Remove { force: false },
+            },
+            ContainerConfirm::Image(image) => ContainerCommand::RemoveImage {
+                tab_id,
+                request_id,
+                image,
+                force: false,
+            },
+            ContainerConfirm::Volume(name) => ContainerCommand::RemoveVolume {
+                tab_id,
+                request_id,
+                name,
+                force: false,
+            },
+            ContainerConfirm::Network(network) => ContainerCommand::RemoveNetwork {
+                tab_id,
+                request_id,
+                network,
+            },
+            ContainerConfirm::FilePath { path, recursive } => {
+                let Some(workspace) = self.container_workspace_mut(tab_id) else {
+                    return;
+                };
+                let Some(container) = workspace.selected_container_name() else {
+                    return;
+                };
+                ContainerCommand::RemovePath {
+                    tab_id,
+                    request_id,
+                    container,
+                    path,
+                    recursive,
+                }
+            }
+        };
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.busy = true;
+            workspace.confirm = None;
+        }
+        self.send_tracked(tab_id, request_id, command);
+        cx.notify();
+    }
+
+    /// 创建卷/网络，或拉取镜像（按当前分类解释输入框）。
+    pub(crate) fn submit_container_create(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let section = workspace.section;
+        let value = workspace.create_input.read(cx).value().trim().to_string();
+        if value.is_empty() {
+            return;
+        }
+        let request_id = ContainerRequestId::new();
+        let command = match section {
+            ContainerSection::Images => ContainerCommand::PullImage {
+                tab_id,
+                request_id,
+                reference: value,
+            },
+            ContainerSection::Volumes => ContainerCommand::CreateVolume {
+                tab_id,
+                request_id,
+                name: value,
+                driver: None,
+            },
+            ContainerSection::Networks => ContainerCommand::CreateNetwork {
+                tab_id,
+                request_id,
+                name: value,
+                driver: None,
+            },
+            _ => return,
+        };
+        workspace.busy = true;
+        workspace
+            .create_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.send_tracked(tab_id, request_id, command);
+        cx.notify();
+    }
+
+    /// 预览容器内文本文件。
+    pub(crate) fn preview_container_file(&mut self, tab_id: TabId, path: String) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::ReadFile {
+                tab_id,
+                request_id,
+                container,
+                path,
+                max_bytes: 1024 * 1024,
+            },
+        );
+    }
+
+    /// 下载容器内文件。
+    pub(crate) fn download_container_file(&mut self, tab_id: TabId, path: String) {
+        let Some(local_path) = rfd::FileDialog::new()
+            .set_file_name(path.rsplit('/').next().unwrap_or("download"))
+            .save_file()
+        else {
+            return;
+        };
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::Download {
+                tab_id,
+                request_id,
+                container,
+                path,
+                local_path,
+            },
+        );
+    }
+
+    /// 上传本地文件到当前目录。
+    pub(crate) fn upload_container_file(&mut self, tab_id: TabId) {
+        let Some(local_path) = rfd::FileDialog::new().pick_file() else {
+            return;
+        };
+        let Some(file_name) = local_path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+        else {
+            return;
+        };
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let directory = if workspace.files.path.is_empty() {
+            "/".to_string()
+        } else {
+            workspace.files.path.clone()
+        };
+        let target = if directory == "/" {
+            format!("/{file_name}")
+        } else {
+            format!("{directory}/{file_name}")
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::Upload {
+                tab_id,
+                request_id,
+                container,
+                path: target,
+                local_path,
+            },
+        );
+    }
+
+    /// 重命名容器内路径。
+    pub(crate) fn rename_container_path(&mut self, tab_id: TabId, from: String, to: String) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.files.rename_from = None;
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::Rename {
+                tab_id,
+                request_id,
+                container,
+                from,
+                to,
+            },
+        );
+    }
+}

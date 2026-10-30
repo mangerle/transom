@@ -81,6 +81,8 @@ pub struct AppShell {
     pub(crate) probe_badges: HashMap<SessionId, ProbeBadge>,
     /// 主机监控看板与进程管理器状态。
     pub(crate) monitor: crate::monitor::MonitorState,
+    /// 容器引擎连接侧栏、表单与工作区顶层状态。
+    pub(crate) containers: crate::container::ContainerUiState,
     /// 统一托管的远端文本编辑器管理器。
     pub(crate) editors: EditorManager,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
@@ -307,6 +309,7 @@ impl AppShell {
             history_provider,
             probe_badges: HashMap::new(),
             monitor,
+            containers: crate::container::ContainerUiState::default(),
             editors: EditorManager::new(),
             diff_viewer: None,
             sftp_modals: SftpModals {

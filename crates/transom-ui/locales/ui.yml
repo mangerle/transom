@@ -158,6 +158,9 @@ common:
   reconnect:
     en: Reconnect
     zh-CN: 重连
+  retry:
+    en: Retry
+    zh-CN: 重试
   copy:
     en: Copy
     zh-CN: 复制
@@ -4495,3 +4498,342 @@ sidebar:
   host_copied:
     en: 'Host address copied: %{host}'
     zh-CN: '已复制主机地址: %{host}'
+container:
+  title:
+    en: Containers
+    zh-CN: 容器
+  search:
+    en: Search containers, images, volumes or networks
+    zh-CN: 搜索容器、镜像、数据卷或网络
+  create_placeholder:
+    en: Name or image reference
+    zh-CN: 名称或镜像引用
+  create:
+    en: Create
+    zh-CN: 新建
+  pull:
+    en: Pull
+    zh-CN: 拉取
+  loading:
+    en: Loading…
+    zh-CN: 加载中…
+  fullscreen_exit:
+    en: Exit fullscreen
+    zh-CN: 退出全屏
+  filter:
+    running:
+      en: Running
+      zh-CN: 运行中
+  section:
+    compose:
+      en: Compose
+      zh-CN: 编排
+    containers:
+      en: Containers
+      zh-CN: 容器
+    images:
+      en: Images
+      zh-CN: 镜像
+    volumes:
+      en: Volumes
+      zh-CN: 数据卷
+    networks:
+      en: Networks
+      zh-CN: 网络
+  detail:
+    overview:
+      en: Overview
+      zh-CN: 基础信息
+    logs:
+      en: Logs
+      zh-CN: 日志
+    terminal:
+      en: Terminal
+      zh-CN: 终端
+    stats:
+      en: Stats
+      zh-CN: 统计
+    files:
+      en: Files
+      zh-CN: 文件
+    no_selection:
+      en: Nothing selected
+      zh-CN: 未选择项目
+    loading:
+      en: Loading details…
+      zh-CN: 正在加载详情…
+  state:
+    connecting:
+      en: Connecting to engine…
+      zh-CN: 正在连接引擎…
+    failed:
+      en: Connection failed
+      zh-CN: 连接失败
+    disconnected:
+      en: Engine disconnected
+      zh-CN: 引擎已断开
+  sidebar:
+    empty:
+      en: No engine connections yet. Create one to start managing containers.
+      zh-CN: 还没有引擎连接。新建一个即可开始管理容器。
+    new:
+      en: New engine connection
+      zh-CN: 新建引擎连接
+  form:
+    new_title:
+      en: New engine connection
+      zh-CN: 新建引擎连接
+    edit_title:
+      en: Edit engine connection
+      zh-CN: 编辑引擎连接
+    name:
+      en: Name
+      zh-CN: 名称
+    name_placeholder:
+      en: Local Docker
+      zh-CN: 本机 Docker
+    kind:
+      en: Engine
+      zh-CN: 引擎
+    endpoint:
+      en: Endpoint
+      zh-CN: 端点
+    endpoint_value:
+      en: Endpoint value
+      zh-CN: 端点值
+    endpoint_placeholder:
+      en: e.g. /var/run/docker.sock or tcp://127.0.0.1:2375
+      zh-CN: 例如 /var/run/docker.sock 或 tcp://127.0.0.1:2375
+    name_required:
+      en: Name is required
+      zh-CN: 请填写名称
+    endpoint_required:
+      en: Endpoint value is required for this type
+      zh-CN: 当前端点类型需要填写具体值
+    test:
+      en: Test connection
+      zh-CN: 测试连接
+    testing:
+      en: Testing…
+      zh-CN: 正在测试…
+    test_ok:
+      en: 'Connected: %{platform} %{version}'
+      zh-CN: '连接成功：%{platform} %{version}'
+    test_failed:
+      en: Connection failed
+      zh-CN: 连接失败
+  endpoint:
+    auto:
+      en: Auto detect
+      zh-CN: 自动发现
+    unix:
+      en: Unix socket
+      zh-CN: Unix socket
+    named_pipe:
+      en: Named pipe
+      zh-CN: 命名管道
+    tcp:
+      en: TCP
+      zh-CN: TCP
+    ssh:
+      en: SSH
+      zh-CN: SSH
+    wsl:
+      en: WSL distro
+      zh-CN: WSL 发行版
+    wslc:
+      en: WSLC
+      zh-CN: WSLC
+    cli:
+      en: Custom CLI
+      zh-CN: 自定义 CLI
+  field:
+    id:
+      en: ID
+      zh-CN: ID
+    image:
+      en: Image
+      zh-CN: 镜像
+    state:
+      en: State
+      zh-CN: 状态
+    command:
+      en: Command
+      zh-CN: 命令
+    entrypoint:
+      en: Entrypoint
+      zh-CN: 入口
+    user:
+      en: User
+      zh-CN: 用户
+    working_dir:
+      en: Working directory
+      zh-CN: 工作目录
+    restart:
+      en: Restart policy
+      zh-CN: 重启策略
+    created:
+      en: Created
+      zh-CN: 创建时间
+    started_at:
+      en: Started at
+      zh-CN: 启动时间
+    exit_code:
+      en: Exit code
+      zh-CN: 退出码
+    ports:
+      en: Ports
+      zh-CN: 端口
+    mounts:
+      en: Mounts
+      zh-CN: 挂载
+    env:
+      en: Environment
+      zh-CN: 环境变量
+    inspect:
+      en: Raw inspect
+      zh-CN: 原始 inspect
+    config_files:
+      en: Compose files
+      zh-CN: Compose 文件
+    tags:
+      en: Tags
+      zh-CN: 标签
+    size:
+      en: Size
+      zh-CN: 大小
+    os_arch:
+      en: OS / architecture
+      zh-CN: 系统 / 架构
+    layers:
+      en: Layers
+      zh-CN: 层数
+    name:
+      en: Name
+      zh-CN: 名称
+    driver:
+      en: Driver
+      zh-CN: 驱动
+    mountpoint:
+      en: Mountpoint
+      zh-CN: 挂载点
+    labels:
+      en: Labels
+      zh-CN: 标签
+    used_by:
+      en: Used by containers
+      zh-CN: 使用它的容器
+    scope:
+      en: Scope
+      zh-CN: 作用域
+    subnet:
+      en: Subnet
+      zh-CN: 子网
+    gateway:
+      en: Gateway
+      zh-CN: 网关
+    connected:
+      en: Connected containers
+      zh-CN: 已连接容器
+  action:
+    start:
+      en: Start
+      zh-CN: 启动
+    stop:
+      en: Stop
+      zh-CN: 停止
+    restart:
+      en: Restart
+      zh-CN: 重启
+    start_all:
+      en: Start all
+      zh-CN: 全部启动
+    stop_all:
+      en: Stop all
+      zh-CN: 全部停止
+    running:
+      en: '%{action} in progress…'
+      zh-CN: 正在%{action}…
+  confirm:
+    remove_container:
+      en: 'Remove container %{name}?'
+      zh-CN: 确认删除容器 %{name}？
+    remove_image:
+      en: 'Remove image %{name}?'
+      zh-CN: 确认删除镜像 %{name}？
+    remove_volume:
+      en: 'Remove volume %{name}?'
+      zh-CN: 确认删除数据卷 %{name}？
+    remove_network:
+      en: 'Remove network %{name}?'
+      zh-CN: 确认删除网络 %{name}？
+    remove_path:
+      en: 'Remove %{path}?'
+      zh-CN: 确认删除 %{path}？
+  compose:
+    no_containers:
+      en: No containers belong to this project
+      zh-CN: 该项目下没有容器
+  logs:
+    follow:
+      en: Follow
+      zh-CN: 跟随
+    clear:
+      en: Clear
+      zh-CN: 清空
+    empty:
+      en: No log output yet
+      zh-CN: 暂无日志
+  terminal:
+    hint:
+      en: Open an interactive shell inside this container.
+      zh-CN: 在该容器内打开交互式终端。
+    open:
+      en: Open terminal
+      zh-CN: 打开终端
+    closed:
+      en: Terminal session ended
+      zh-CN: 终端会话已结束
+  stats:
+    waiting:
+      en: Collecting stats…
+      zh-CN: 正在采样统计…
+    cpu:
+      en: CPU
+      zh-CN: CPU
+    memory:
+      en: Memory
+      zh-CN: 内存
+    network:
+      en: Network I/O
+      zh-CN: 网络 IO
+    block:
+      en: Block I/O
+      zh-CN: 块 IO
+    pids:
+      en: Processes
+      zh-CN: 进程数
+  files:
+    upload:
+      en: Upload
+      zh-CN: 上传
+    empty:
+      en: This directory is empty
+      zh-CN: 目录为空
+    truncated:
+      en: Preview truncated
+      zh-CN: 预览已截断
+    rename:
+      en: Rename
+      zh-CN: 重命名
+    rename_invalid:
+      en: Enter a file name without slashes
+      zh-CN: 请输入不含斜杠的文件名
+  transfer:
+    start:
+      en: Transfer started
+      zh-CN: 传输已开始
+  fullscreen:
+    active:
+      en: This workspace is displayed in fullscreen.
+      zh-CN: 该工作区正在全屏显示。

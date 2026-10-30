@@ -16,6 +16,8 @@ pub enum ActivityItemId {
     Sftp,
     /// 主机监控看板与进程管理器（Agentless，经 SSH exec 采样）。
     Monitor,
+    /// 容器引擎连接列表与管理入口。
+    Containers,
     Language,
     ImportSshConfig,
     KnownHosts,
@@ -33,13 +35,14 @@ impl ActivityItemId {
     /// `ToggleSnippets` 快捷键上，活动栏再放一个是重复入口。旧设置文件里残留的
     /// `"snippets"` 条目会经 `#[serde(other)]` 归为 `Unknown` 并被 `normalize`
     /// 剔除，因此不需要数据迁移。
-    pub const DEFAULT_ORDER: [Self; 11] = [
+    pub const DEFAULT_ORDER: [Self; 12] = [
         Self::Sessions,
         Self::Tabs,
         Self::QuickOpen,
         Self::Forwards,
         Self::Sftp,
         Self::Monitor,
+        Self::Containers,
         Self::Language,
         Self::ImportSshConfig,
         Self::KnownHosts,
@@ -48,7 +51,7 @@ impl ActivityItemId {
     ];
 
     /// 默认顶部条目数量，也是 `split_at` 的默认值。
-    pub const DEFAULT_SPLIT_AT: usize = 6;
+    pub const DEFAULT_SPLIT_AT: usize = 7;
 
     /// 供界面元素 ID 与设置项复用的稳定键名。
     ///
@@ -62,6 +65,7 @@ impl ActivityItemId {
             Self::Forwards => "forwards",
             Self::Sftp => "sftp",
             Self::Monitor => "monitor",
+            Self::Containers => "containers",
             Self::Language => "language",
             Self::ImportSshConfig => "import_ssh_config",
             Self::KnownHosts => "known_hosts",

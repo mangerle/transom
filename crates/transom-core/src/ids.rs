@@ -49,6 +49,11 @@ id_type!(ConnectionId);
 // 快捷命令条条目标识：编辑弹窗按它定位要替换哪一行，不能依赖数组下标。
 id_type!(SnippetId);
 id_type!(TransferId);
+// 容器管理请求标识：一次请求可能产生多个事件（日志分块、传输进度），
+// 界面据此丢弃已关闭视图的迟到结果。
+id_type!(ContainerRequestId);
+// 引擎连接配置标识：容器表单保存的连接按它定位与合并。
+id_type!(EngineProfileId);
 // 凭据模板标识：口令在钥匙串里按它归档，因此必须与会话 id 同为 UUID 新类型。
 id_type!(IdentityId);
 // 终端触发器规则标识：编辑/删除时唯一定位规则。

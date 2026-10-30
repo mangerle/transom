@@ -26,6 +26,9 @@ pub struct SyncMergeReport {
     pub folders_updated: usize,
     pub identities_added: usize,
     pub identities_updated: usize,
+    /// 引擎连接的新增/更新计数。
+    pub engines_added: usize,
+    pub engines_updated: usize,
     /// 需要人工关注的冲突条目数：三路两端都改，或无共同祖先时最终保留本机版本。
     pub conflicts: usize,
 }
@@ -113,11 +116,33 @@ pub fn merge_catalogs(
     );
     report.identities_added = identities.added;
     report.identities_updated = identities.updated;
+    let engines = merge_keyed(
+        base.map(|catalog| &catalog.engines[..]),
+        &local.engines,
+        &remote.engines,
+        |engine| engine.id,
+        |local, remote| {
+            if remote.updated_at > local.updated_at {
+                (remote.clone(), true)
+            } else if remote.updated_at < local.updated_at {
+                (local.clone(), false)
+            } else {
+                match preference {
+                    MergePreference::Local => (local.clone(), false),
+                    MergePreference::Remote => (remote.clone(), true),
+                }
+            }
+        },
+        &mut report.conflicts,
+    );
+    report.engines_added = engines.added;
+    report.engines_updated = engines.updated;
     (
         SessionCatalog {
             folders: folders.items,
             sessions: sessions.items,
             identities: identities.items,
+            engines: engines.items,
         },
         report,
     )
@@ -471,5 +496,36 @@ mod tests {
             "拉取时本机较新的编辑不得被旧远端覆盖"
         );
         assert_eq!(report.conflicts, 1, "保留本机较新版本属需要用户关注的差异");
+    }
+
+    #[test]
+    fn engine_profiles_merge_by_newer_timestamp() {
+        use crate::model::container::{
+            ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef,
+        };
+
+        let mut local_profile = ContainerEngineProfile::new(
+            "本机 Docker",
+            ContainerEngineRef::auto(ContainerEngineKind::Docker),
+        );
+        local_profile.updated_at = 10;
+        let mut remote_profile = local_profile.clone();
+        remote_profile.name = "远端 Docker".into();
+        remote_profile.updated_at = 20;
+        let local = SessionCatalog {
+            engines: vec![local_profile],
+            ..Default::default()
+        };
+        let remote = SessionCatalog {
+            engines: vec![remote_profile],
+            ..Default::default()
+        };
+
+        let (merged, report) = merge_catalogs(None, &local, &remote, MergePreference::Local);
+        assert_eq!(
+            merged.engines[0].name, "远端 Docker",
+            "配置合并与会话一致：时间戳较新者胜"
+        );
+        assert_eq!(report.engines_updated, 1);
     }
 }
