@@ -7,13 +7,13 @@ mod types;
 mod view;
 
 pub(crate) use types::{
-    ContainerConfirm, ContainerDetailTab, ContainerDiscovery, ContainerFilesState,
-    ContainerSection, ContainerTerminalState, ContainerUiState, ContainerWorkspaceState,
-    ContainerWorkspaceStatus, RowAction, RowTarget,
+    ContainerBatchAction, ContainerConfirm, ContainerDetailTab, ContainerDiscovery,
+    ContainerFilesState, ContainerSection, ContainerTerminalState, ContainerUiState,
+    ContainerWorkspaceState, ContainerWorkspaceStatus, RowAction, RowTarget,
 };
 
 use crate::app::{AppShell, TabContent, TabStatus, TerminalTab};
-use crate::container::types::row_key;
+use crate::container::types::{arm_or_fire, row_key};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -962,6 +962,51 @@ impl AppShell {
                 enabled: true,
             },
         );
+    }
+
+    /// 切换容器勾选状态（多选）。
+    pub(crate) fn toggle_container_check(
+        &mut self,
+        tab_id: TabId,
+        id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.toggle_checked(&id);
+        }
+        cx.notify();
+    }
+
+    /// 批量下发启停/删除；删除在同一批勾选下必须连点两次，避免误删一片。
+    pub(crate) fn run_container_batch(
+        &mut self,
+        tab_id: TabId,
+        action: ContainerBatchAction,
+        cx: &mut Context<Self>,
+    ) {
+        let names = {
+            let Some(workspace) = self.container_workspace_mut(tab_id) else {
+                return;
+            };
+            let names = workspace.checked_names();
+            if action.is_dangerous() {
+                let (armed, fire) = arm_or_fire(workspace.batch_armed, names.len());
+                workspace.batch_armed = armed;
+                if !fire {
+                    cx.notify();
+                    return;
+                }
+            }
+            workspace.checked.clear();
+            workspace.batch_armed = false;
+            names
+        };
+        // 每个容器一条独立命令：引擎侧本来就是按容器逐个处理，失败也只影响自己，
+        // 控制层按 request_id 回报，界面不需要额外的批量事务语义。
+        for name in names {
+            self.container_lifecycle(tab_id, name, action.lifecycle(), cx);
+        }
+        cx.notify();
     }
 
     /// 从编排/卷/网络详情跳到某个容器：必要时先切分类并拉列表。

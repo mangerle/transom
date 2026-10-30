@@ -8,7 +8,7 @@ use gpui_kit::Entity;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use transom_core::{
     ComposeProject, ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
     ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
@@ -312,6 +312,81 @@ pub(crate) fn row_key(target: &RowTarget) -> &str {
     }
 }
 
+/// 多选集合的翻转：勾选则加入，取消则移除。
+///
+/// 抽成自由函数只是为了能被单测覆盖——它决定批量操作的条数是否正确，
+/// 错一个就等于对用户少发或多发一次命令。
+pub(crate) fn toggle_membership(set: &mut HashSet<String>, id: &str) {
+    if !set.remove(id) {
+        set.insert(id.to_string());
+    }
+}
+
+/// 批量删除的武装状态：第一次点击只武装，第二次才真的下发。
+///
+/// 设计原理（Why）：批量删除一次影响 N 个容器，逐个弹确认条反而更糟；用
+/// 「同一批勾选状态下必须连点两次」达到等价保护，勾选变化即自动解除武装。
+pub(crate) fn arm_or_fire(armed: bool, count: usize) -> (bool, bool) {
+    if armed {
+        (false, count > 0)
+    } else {
+        (true, false)
+    }
+}
+
+/// 批量动作：一次作用在多条勾选上。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContainerBatchAction {
+    Start,
+    Stop,
+    Remove,
+}
+
+impl ContainerBatchAction {
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            Self::Start => "container.action.start",
+            Self::Stop => "container.action.stop",
+            Self::Remove => "common.delete",
+        }
+    }
+
+    pub(crate) fn lifecycle(self) -> transom_core::ContainerLifecycleAction {
+        match self {
+            Self::Start => transom_core::ContainerLifecycleAction::Start,
+            Self::Stop => transom_core::ContainerLifecycleAction::Stop,
+            // 批量删除用 force：勾选本身就代表「这些我不要了」，
+            // 停止中/僵死的容器用非 force 删除会整批失败。
+            Self::Remove => transom_core::ContainerLifecycleAction::Remove { force: true },
+        }
+    }
+
+    pub(crate) fn is_dangerous(self) -> bool {
+        matches!(self, Self::Remove)
+    }
+
+    pub(crate) fn icon(self) -> gpui_kit::assets::IconName {
+        match self {
+            Self::Start => gpui_kit::assets::IconName::Play,
+            Self::Stop => gpui_kit::assets::IconName::Square,
+            Self::Remove => gpui_kit::assets::IconName::Trash,
+        }
+    }
+}
+
+/// 按行切分日志正文；`reversed` 为真时最新在前。
+///
+/// 设计原理（Why）：跟随日志时最想知道的是「刚刚发生了什么」，而纯文本块没有
+/// 自动滚到底的能力，把顺序翻过来能让最新内容始终出现在视野里。空行保留，
+/// 因为引擎输出本身可能含空行，丢掉会让日志对不上号。
+pub(crate) fn log_lines(text: &str, reversed: bool) -> Vec<&str> {
+    let mut lines: Vec<&str> = text.lines().collect();
+    if reversed {
+        lines.reverse();
+    }
+    lines
+}
+
 /// 工作区连接状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ContainerWorkspaceStatus {
@@ -390,11 +465,17 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) logs_tail: usize,
     /// 是否让引擎附带服务端时间戳。
     pub(crate) logs_timestamps: bool,
+    /// 是否把最新一行排在最前：跟随日志时不必手动滚到底。
+    pub(crate) logs_reversed: bool,
     pub(crate) logs_request: Option<ContainerRequestId>,
     pub(crate) stats: Option<ContainerStats>,
     pub(crate) stats_request: Option<ContainerRequestId>,
     pub(crate) terminal: Option<ContainerTerminalState>,
     pub(crate) files: ContainerFilesState,
+    /// 多选：勾选的容器 ID，用于批量启停与删除。
+    pub(crate) checked: HashSet<String>,
+    /// 批量删除的二次确认是否已按下（第一次点只是武装）。
+    pub(crate) batch_armed: bool,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
     /// 统计是否自动刷新（引擎侧轮询）。
@@ -459,10 +540,13 @@ impl ContainerWorkspaceState {
             logs_follow: false,
             logs_tail: LOG_TAIL_DEFAULT,
             logs_timestamps: false,
+            logs_reversed: false,
             logs_request: None,
             stats: None,
             stats_request: None,
             terminal: None,
+            checked: HashSet::default(),
+            batch_armed: false,
             pending_select: None,
             stats_enabled: true,
             files: ContainerFilesState {
@@ -491,6 +575,25 @@ impl ContainerWorkspaceState {
             }
             self.logs.drain(..cut);
         }
+    }
+
+    /// 切换某个容器的勾选状态，返回切换后的数量。
+    pub(crate) fn toggle_checked(&mut self, id: &str) -> usize {
+        toggle_membership(&mut self.checked, id);
+        // 勾选集合变了就说明「是否删除全部选中」的确认状态不能再沿用。
+        self.batch_armed = false;
+        self.checked.len()
+    }
+
+    /// 已勾选容器的名字，顺序跟随列表；引擎按名字下发启停与删除。
+    pub(crate) fn checked_names(&self) -> Vec<String> {
+        let mut names = Vec::with_capacity(self.checked.len());
+        for item in &self.containers {
+            if self.checked.contains(&item.id) {
+                names.push(item.name.clone());
+            }
+        }
+        names
     }
 
     pub(crate) fn selected_container(&self) -> Option<&ContainerSummary> {
@@ -541,6 +644,8 @@ impl ContainerWorkspaceState {
         self.network_details = None;
         self.detail_tab = ContainerDetailTab::Overview;
         self.confirm = None;
+        self.checked.clear();
+        self.batch_armed = false;
         if !ContainerSortKey::for_section(section).contains(&self.sort_key) {
             self.sort_key = ContainerSortKey::default_for(section);
             self.sort_desc = false;
@@ -910,6 +1015,38 @@ mod tests {
         let mut sorted = items.to_vec();
         sorted.sort_by(|left, right| compare_fields(left, right, key, desc));
         sorted.into_iter().map(|item| item.name).collect()
+    }
+
+    #[test]
+    fn checkbox_membership_and_batch_arm_toggle() {
+        let mut set = std::collections::HashSet::new();
+        super::toggle_membership(&mut set, "a");
+        assert_eq!(set.len(), 1, "首次点击加入");
+        super::toggle_membership(&mut set, "a");
+        assert!(set.is_empty(), "再次点击移除");
+        super::toggle_membership(&mut set, "b");
+        super::toggle_membership(&mut set, "c");
+        assert_eq!(set.len(), 2);
+
+        assert_eq!(
+            super::arm_or_fire(false, 3),
+            (true, false),
+            "第一次只是武装"
+        );
+        assert_eq!(super::arm_or_fire(true, 3), (false, true), "第二次才下发");
+        assert_eq!(
+            super::arm_or_fire(true, 0),
+            (false, false),
+            "没有选中项就不下发"
+        );
+    }
+
+    #[test]
+    fn log_lines_reverse_keeps_every_line() {
+        let text = "a\nb\n\nc";
+        assert_eq!(super::log_lines(text, false), vec!["a", "b", "", "c"]);
+        assert_eq!(super::log_lines(text, true), vec!["c", "", "b", "a"]);
+        assert!(super::log_lines("", false).is_empty());
     }
 
     #[test]

@@ -1124,7 +1124,8 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
     .await;
     if let Some(details) = details {
         report.check(
-            details.state == ContainerState::Running && details.env.contains(&"TRANSOM_SMOKE=1".to_string()),
+            details.state == ContainerState::Running
+                && details.env.contains(&"TRANSOM_SMOKE=1".to_string()),
             "新容器状态与环境",
             format!(
                 "状态 {}，环境变量 {:?}，端口映射 {} 个，挂载 {} 个",

@@ -192,7 +192,18 @@ impl AppShell {
             px(560.0),
             p,
         );
-        Self::overlay(dialog, p)
+        let backdrop = div()
+            .id("container-form-backdrop")
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.containers.form = None;
+                cx.notify();
+            }))
+            .child(div().occlude().child(dialog));
+        Self::overlay(backdrop, p)
     }
 
     fn save_container_form(&mut self, cx: &mut Context<Self>) {
@@ -365,7 +376,7 @@ impl AppShell {
                     })),
             );
 
-        let dialog = Self::dialog_frame(
+        let run_dialog = Self::dialog_frame(
             "container-run-modal",
             rust_i18n::t!("container.run.title").to_string(),
             None,
@@ -374,7 +385,24 @@ impl AppShell {
             px(560.0),
             p,
         );
-        Self::overlay(dialog, p)
+        // 遮罩点击即关闭：对话框本体用 occlude 挡住命中测试，点在里面不会误关。
+        let tab_id_for_backdrop = tab_id;
+        let backdrop = div()
+            .id("container-run-backdrop")
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                let Some(form) = this.containers.run_form.as_ref() else {
+                    return;
+                };
+                if form.tab_id == tab_id_for_backdrop {
+                    this.dismiss_container_run(cx);
+                }
+            }))
+            .child(div().occlude().child(run_dialog));
+        Self::overlay(backdrop, p)
     }
 
     /// 提交运行：解析并校验 spec 后交给控制器，错误就地展示。

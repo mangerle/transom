@@ -4506,6 +4506,16 @@ container:
     none:
       en: None
       zh-CN: 无
+  batch:
+    selected:
+      en: '%{count} selected'
+      zh-CN: '已选 %{count} 项'
+    confirm:
+      en: 'Confirm delete %{count}'
+      zh-CN: '确认删除 %{count} 项'
+    clear:
+      en: Clear
+      zh-CN: 清空
   run:
     title:
       en: Run a container
@@ -4895,6 +4905,9 @@ container:
     copy:
       en: Copy all
       zh-CN: 复制全部
+    reverse:
+      en: Newest first
+      zh-CN: 最新在前
     follow:
       en: Follow
       zh-CN: 跟随

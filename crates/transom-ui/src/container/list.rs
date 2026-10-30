@@ -11,18 +11,21 @@
 
 use crate::app::AppShell;
 use crate::container::types::{
-    ContainerSection, ContainerSortKey, ContainerStateFilter, ContainerWorkspaceState, RowAction,
-    RowTarget, SortFields, compare_fields, matches_query, row_key,
+    ContainerBatchAction, ContainerSection, ContainerSortKey, ContainerStateFilter,
+    ContainerWorkspaceState, RowAction, RowTarget, SortFields, compare_fields, matches_query,
+    row_key,
 };
 use crate::format::format_size;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use std::collections::HashSet;
 use transom_core::{
     ComposeProject, ContainerImageSummary, ContainerNetworkSummary, ContainerSummary,
     ContainerVolumeSummary, TabId, short_id,
@@ -51,6 +54,8 @@ struct ListRow {
     badge: Option<String>,
     /// 运行态：容器与编排项目有，静态资源没有。
     running: Option<bool>,
+    /// 多选勾选状态：只有容器分类需要。
+    checked: Option<bool>,
     target: RowTarget,
     fields: SortFields,
 }
@@ -74,8 +79,10 @@ impl AppShell {
         let sort_desc = workspace.sort_desc;
         let busy = workspace.busy;
         let selected = workspace.selected.clone();
+        let checked = workspace.checked.clone();
+        let batch_armed = workspace.batch_armed;
         let query = workspace.query(cx).to_lowercase();
-        let mut rows = collect_rows(section, workspace, &query, state_filter);
+        let mut rows = collect_rows(section, workspace, &query, state_filter, &checked);
         let total = rows.len();
         rows.sort_by(|left, right| {
             compare_fields(
@@ -86,6 +93,15 @@ impl AppShell {
             )
         });
 
+        let checked_count = rows
+            .iter()
+            .filter(|row| row.checked.unwrap_or(false))
+            .count();
+        let batch_bar = if checked_count == 0 {
+            None
+        } else {
+            Some(render_batch_bar(tab_id, checked_count, batch_armed, p, cx))
+        };
         let toolbar = self.render_list_toolbar(
             &ToolbarParams {
                 tab_id,
@@ -99,7 +115,13 @@ impl AppShell {
         );
         let body = render_rows(tab_id, &rows, &selected, p, cx);
         let footer = render_footer(&rows, total, &query, state_filter, p);
-        let mut column = v_flex().h_full().gap_1p5().p_2().child(toolbar).child(body);
+        let mut column = v_flex()
+            .h_full()
+            .gap_1p5()
+            .p_2()
+            .child(toolbar)
+            .children(batch_bar)
+            .child(body);
         if matches!(
             section,
             ContainerSection::Images | ContainerSection::Volumes | ContainerSection::Networks
@@ -255,6 +277,7 @@ fn collect_rows(
     workspace: &ContainerWorkspaceState,
     query: &str,
     filter: ContainerStateFilter,
+    checked: &HashSet<String>,
 ) -> Vec<ListRow> {
     match section {
         ContainerSection::Containers => workspace
@@ -272,7 +295,7 @@ fn collect_rows(
                     ],
                 )
             })
-            .map(container_row_spec)
+            .map(|item| container_row_spec(item, checked.contains(&item.id)))
             .collect(),
         ContainerSection::Images => workspace
             .images
@@ -318,7 +341,7 @@ fn collect_rows(
     }
 }
 
-fn container_row_spec(item: &ContainerSummary) -> ListRow {
+fn container_row_spec(item: &ContainerSummary, checked: bool) -> ListRow {
     ListRow {
         key: format!("container-row-{}", item.id),
         icon: IconName::Container,
@@ -326,6 +349,7 @@ fn container_row_spec(item: &ContainerSummary) -> ListRow {
         subtitle: format!("{} · {}", item.image, item.status),
         badge: Some(item.state.key().to_string()),
         running: Some(item.state.is_running()),
+        checked: Some(checked),
         target: RowTarget::Container {
             id: item.id.clone(),
             name: item.name.clone(),
@@ -347,6 +371,7 @@ fn image_row_spec(item: &ContainerImageSummary) -> ListRow {
         subtitle: format!("{} · {}", format_size(item.size), short_id(&item.id)),
         badge: None,
         running: None,
+        checked: None,
         target: RowTarget::Image(item.id.clone()),
         fields: SortFields {
             name: item.display_name(),
@@ -365,6 +390,7 @@ fn volume_row_spec(item: &ContainerVolumeSummary) -> ListRow {
         subtitle: format!("{} · {}", item.driver, item.mountpoint),
         badge: None,
         running: None,
+        checked: None,
         target: RowTarget::Volume(item.name.clone()),
         fields: SortFields {
             name: item.name.clone(),
@@ -391,6 +417,7 @@ fn network_row_spec(item: &ContainerNetworkSummary) -> ListRow {
         ),
         badge: None,
         running: None,
+        checked: None,
         target: RowTarget::Network(item.id.clone()),
         fields: SortFields {
             name: item.name.clone(),
@@ -413,6 +440,7 @@ fn compose_row_spec(item: &ComposeProject) -> ListRow {
         ),
         badge: None,
         running: Some(item.total > 0 && item.running == item.total),
+        checked: None,
         target: RowTarget::Compose(item.name.clone()),
         fields: SortFields {
             name: item.name.clone(),
@@ -558,6 +586,21 @@ fn list_row(
                         .child(subtitle),
                 ),
         );
+    if let Some(is_checked) = row.checked {
+        let check_id = row_target_key_id(&row.target);
+        let app = app.clone();
+        element = element.child(
+            Checkbox::new(ElementId::Name(format!("{}-check", row.key).into()))
+                .small()
+                .checked(is_checked)
+                .on_click(move |&_, _, cx| {
+                    let check_id = check_id.clone();
+                    app.clone().update(cx, |this, cx| {
+                        this.toggle_container_check(tab_id, check_id, cx);
+                    });
+                }),
+        );
+    }
     if let Some(badge) = row.badge.clone() {
         element = element.child(
             div()
@@ -655,4 +698,69 @@ fn render_footer(
             rust_i18n::t!("container.list.matching", shown = rows.len(), total = total).to_string(),
         )
         .into_any_element()
+}
+
+/// 勾选行需要的主键：容器用 ID，与 `selected` 的取法一致。
+fn row_target_key_id(target: &RowTarget) -> String {
+    row_key(target).to_string()
+}
+
+/// 批量条：勾选后出现，删除按钮需要连点两次。
+fn render_batch_bar(
+    tab_id: TabId,
+    count: usize,
+    armed: bool,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let mut bar = h_flex()
+        .gap_1()
+        .items_center()
+        .px_2()
+        .py_1()
+        .rounded(p.radius.md)
+        .bg(p.muted.opacity(0.35))
+        .child(
+            div()
+                .text_xs()
+                .child(rust_i18n::t!("container.batch.selected", count = count).to_string()),
+        );
+    for action in [
+        ContainerBatchAction::Start,
+        ContainerBatchAction::Stop,
+        ContainerBatchAction::Remove,
+    ] {
+        let label = if action.is_dangerous() && armed {
+            rust_i18n::t!("container.batch.confirm", count = count).to_string()
+        } else {
+            rust_i18n::t!(action.label_key()).to_string()
+        };
+        bar = bar.child(
+            Button::new(ElementId::Name(
+                format!("container-batch-{}", action.label_key()).into(),
+            ))
+            .xsmall()
+            .ghost()
+            .icon(action.icon())
+            .label(label)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.run_container_batch(tab_id, action, cx);
+            })),
+        );
+    }
+    bar = bar.child(div().flex_1()).child(
+        Button::new("container-batch-clear")
+            .xsmall()
+            .ghost()
+            .icon(IconName::Close)
+            .label(rust_i18n::t!("container.batch.clear").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                    workspace.checked.clear();
+                    workspace.batch_armed = false;
+                }
+                cx.notify();
+            })),
+    );
+    bar.into_any_element()
 }

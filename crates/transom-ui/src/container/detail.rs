@@ -2,7 +2,7 @@
 
 use crate::app::AppShell;
 use crate::container::types::{
-    ContainerConfirm, ContainerDetailTab, ContainerSection, LOG_TAIL_CHOICES,
+    ContainerConfirm, ContainerDetailTab, ContainerSection, LOG_TAIL_CHOICES, log_lines,
 };
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -42,6 +42,7 @@ impl AppShell {
         let logs_follow = workspace.logs_follow;
         let logs_tail = workspace.logs_tail;
         let logs_timestamps = workspace.logs_timestamps;
+        let logs_reversed = workspace.logs_reversed;
         let stats = workspace.stats.clone();
         let workspace_stats_enabled = workspace.stats_enabled;
         let terminal = workspace
@@ -121,6 +122,7 @@ impl AppShell {
                     follow: logs_follow,
                     tail: logs_tail,
                     timestamps: logs_timestamps,
+                    reversed: logs_reversed,
                 },
                 p,
                 cx,
@@ -971,6 +973,7 @@ struct ContainerLogsView<'a> {
     follow: bool,
     tail: usize,
     timestamps: bool,
+    reversed: bool,
 }
 
 fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
@@ -980,6 +983,7 @@ fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShe
         follow,
         tail,
         timestamps,
+        reversed,
     } = view;
     let mut tails = h_flex().gap_0p5().items_center();
     for choice in LOG_TAIL_CHOICES {
@@ -1015,6 +1019,20 @@ fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShe
                 .selected(timestamps)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_container_logs_timestamps(tab_id);
+                    cx.notify();
+                })),
+        )
+        .child(
+            Button::new("container-logs-reverse")
+                .ghost()
+                .xsmall()
+                .icon(IconName::ArrowDown)
+                .label(rust_i18n::t!("container.logs.reverse").to_string())
+                .selected(reversed)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                        workspace.logs_reversed = !workspace.logs_reversed;
+                    }
                     cx.notify();
                 })),
         )
@@ -1055,6 +1073,12 @@ fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShe
     let body = if logs.is_empty() {
         centered_hint(rust_i18n::t!("container.logs.empty").to_string(), p)
     } else {
+        // 逐行渲染而不是整块文本：反转顺序时才能保持每行独立可选。
+        let rows = v_flex().gap_0().children(
+            log_lines(logs, reversed)
+                .into_iter()
+                .map(|line| div().child(line.to_string())),
+        );
         div()
             .id("container-logs-scroll")
             .flex_1()
@@ -1064,7 +1088,7 @@ fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShe
             .font_family(p.mono_font_family.clone())
             .text_size(p.mono_font_size)
             .line_height(relative(1.35))
-            .child(logs.to_string())
+            .child(rows)
             .into_any_element()
     };
     v_flex()
