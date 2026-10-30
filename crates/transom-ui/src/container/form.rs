@@ -5,7 +5,9 @@
 
 use crate::app::AppShell;
 use crate::container::types::{ContainerFormState, ContainerRunForm, EndpointChoice};
+use crate::keymap;
 use crate::palette::Palette;
+use gpui_kit::KeyDownEvent;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -201,6 +203,10 @@ impl AppShell {
             .on_click(cx.listener(|this, _, _, cx| {
                 this.containers.form = None;
                 cx.notify();
+            }))
+            .key_context(keymap::OVERLAY_CONTEXT)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                this.on_container_overlay_key(event, None, cx);
             }))
             .child(div().occlude().child(dialog));
         Self::overlay(backdrop, p)
@@ -400,6 +406,10 @@ impl AppShell {
                 if form.tab_id == tab_id_for_backdrop {
                     this.dismiss_container_run(cx);
                 }
+            }))
+            .key_context(keymap::OVERLAY_CONTEXT)
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                this.on_container_overlay_key(event, Some(tab_id_for_backdrop), cx);
             }))
             .child(div().occlude().child(run_dialog));
         Self::overlay(backdrop, p)

@@ -964,6 +964,46 @@ impl AppShell {
         );
     }
 
+    /// Esc 关闭容器侧的浮层：先关表单，再退全屏。
+    ///
+    /// 为什么挂在浮层自己的按键回调上而不是全局键位：终端里 Esc 是 vim 等程序的
+    /// 正常输入，全局绑一个「关浮层」的键会在没有浮层时也吃掉这一次按键。浮层
+    /// 存在时它的元素在焦点路径上，按键自然只到这里；全屏视图里正处于终端页签时
+    /// 直接放行，Esc 仍然只交给容器内的程序。
+    pub(crate) fn on_container_overlay_key(
+        &mut self,
+        event: &KeyDownEvent,
+        fullscreen_tab: Option<TabId>,
+        cx: &mut Context<Self>,
+    ) {
+        if !event.keystroke.key.eq_ignore_ascii_case("escape") {
+            return;
+        }
+        if self.containers.run_form.is_some() {
+            self.dismiss_container_run(cx);
+            return;
+        }
+        if self.containers.form.is_some() {
+            self.containers.form = None;
+            cx.notify();
+            return;
+        }
+        let Some(tab) = fullscreen_tab.filter(|tab| self.containers.fullscreen == Some(*tab))
+        else {
+            return;
+        };
+        // 终端页签里 Esc 是 vim 等程序的正常输入，这时不能把整个工作区收掉；
+        // 其余页签（列表/日志/统计/文件）Esc 的语义就是「关掉眼前的全屏」。
+        let in_terminal = self
+            .container_workspace(tab)
+            .is_some_and(|workspace| workspace.detail_tab == ContainerDetailTab::Terminal);
+        if in_terminal {
+            return;
+        }
+        self.containers.fullscreen = None;
+        cx.notify();
+    }
+
     /// 切换容器勾选状态（多选）。
     pub(crate) fn toggle_container_check(
         &mut self,

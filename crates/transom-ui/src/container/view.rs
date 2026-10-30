@@ -649,13 +649,18 @@ impl AppShell {
                     cx.notify();
                 })),
         );
-        Self::overlay(
-            v_flex()
-                .size_full()
-                .bg(p.background)
-                .child(close)
-                .child(div().flex_1().min_h_0().child(content)),
-            p,
-        )
+        let dismiss = v_flex()
+            .id("container-fullscreen-shell")
+            .size_full()
+            .bg(p.background)
+            .key_context(crate::keymap::OVERLAY_CONTEXT)
+            .on_key_down(
+                cx.listener(move |this, event: &gpui_kit::KeyDownEvent, _, cx| {
+                    this.on_container_overlay_key(event, Some(tab_id), cx);
+                }),
+            )
+            .child(close)
+            .child(div().flex_1().min_h_0().child(content));
+        Self::overlay(dismiss, p)
     }
 }
