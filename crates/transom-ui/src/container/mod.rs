@@ -2,15 +2,18 @@
 
 mod detail;
 mod form;
+mod list;
 mod types;
 mod view;
 
 pub(crate) use types::{
-    ContainerConfirm, ContainerDetailTab, ContainerFilesState, ContainerSection,
-    ContainerTerminalState, ContainerUiState, ContainerWorkspaceState, ContainerWorkspaceStatus,
+    ContainerConfirm, ContainerDetailTab, ContainerDiscovery, ContainerFilesState,
+    ContainerSection, ContainerTerminalState, ContainerUiState, ContainerWorkspaceState,
+    ContainerWorkspaceStatus, RowAction, RowTarget,
 };
 
 use crate::app::{AppShell, TabContent, TabStatus, TerminalTab};
+use crate::container::types::row_key;
 use crate::palette::localized_error;
 use gpui_kit::*;
 use std::sync::Arc;
@@ -49,6 +52,16 @@ impl AppShell {
                 if let Some(tab) = self.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Failed(error);
                 }
+            }
+            ContainerAppEvent::EnginesDiscovered {
+                engines, failures, ..
+            } => {
+                self.containers.discovering = false;
+                self.containers.discovery = Some(ContainerDiscovery {
+                    candidates: engines,
+                    failures,
+                });
+                cx.notify();
             }
             ContainerAppEvent::TestFinished {
                 request_id,
@@ -409,6 +422,23 @@ impl AppShell {
         }
     }
 
+    /// 汇总每个引擎连接当前的工作区状态，供侧栏行首的状态点使用。
+    pub(crate) fn container_profile_states(
+        &self,
+    ) -> std::collections::HashMap<transom_core::EngineProfileId, ContainerWorkspaceStatus> {
+        let mut states = std::collections::HashMap::default();
+        for tab in self.workspace.tabs.iter() {
+            let Connection::ContainerEngine(profile) = &tab.session.connection else {
+                continue;
+            };
+            let TabContent::Containers(workspace) = &tab.content else {
+                continue;
+            };
+            states.insert(profile.id, workspace.status.clone());
+        }
+        states
+    }
+
     pub(crate) fn container_workspace(&self, tab_id: TabId) -> Option<&ContainerWorkspaceState> {
         match &self.workspace.tab(tab_id)?.content {
             TabContent::Containers(state) => Some(state),
@@ -499,15 +529,7 @@ impl AppShell {
     ) {
         self.stop_container_streams(tab_id);
         if let Some(workspace) = self.container_workspace_mut(tab_id) {
-            workspace.section = section;
-            workspace.selected = None;
-            workspace.details = None;
-            workspace.image_details = None;
-            workspace.volume_details = None;
-            workspace.network_details = None;
-            workspace.detail_tab = ContainerDetailTab::Overview;
-            workspace.confirm = None;
-            workspace.normalize_detail_tab();
+            workspace.apply_section(section);
             workspace
                 .create_input
                 .update(cx, |input, cx| input.set_value("", window, cx));
@@ -600,6 +622,144 @@ impl AppShell {
             workspace.selected = Some(name);
             workspace.detail_tab = ContainerDetailTab::Overview;
         }
+    }
+
+    /// 让某一行成为选中项；已经选中时不重复拉详情，否则会把正在看的日志与
+    /// 统计清掉。
+    pub(crate) fn select_row(&mut self, tab_id: TabId, target: &RowTarget, cx: &mut Context<Self>) {
+        let already_selected = self
+            .container_workspace(tab_id)
+            .and_then(|workspace| workspace.selected.clone())
+            .is_some_and(|selected| selected == row_key(target));
+        if already_selected {
+            return;
+        }
+        match target {
+            RowTarget::Container { id, .. } => self.select_container_item(tab_id, id.clone()),
+            RowTarget::Image(id) => self.select_image_item(tab_id, id.clone()),
+            RowTarget::Volume(name) => self.select_volume_item(tab_id, name.clone()),
+            RowTarget::Network(id) => self.select_network_item(tab_id, id.clone()),
+            RowTarget::Compose(name) => self.select_compose_item(tab_id, name.clone()),
+        }
+        cx.notify();
+    }
+
+    /// 列表行动作分发：行内快捷按钮与右键菜单共用这一套语义，避免出现两处行为。
+    ///
+    /// 复制类动作不改选中项：用户常常要复制一个不是当前选中项的 ID，改选中会
+    /// 顺手清掉右侧正在看的内容。
+    pub(crate) fn run_row_action(
+        &mut self,
+        tab_id: TabId,
+        target: RowTarget,
+        action: RowAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(action, RowAction::CopyId | RowAction::CopyName) {
+            self.copy_row_text(tab_id, &target, action, cx);
+            return;
+        }
+        self.select_row(tab_id, &target, cx);
+        let container = match &target {
+            RowTarget::Container { name, .. } => Some(name.clone()),
+            _ => None,
+        };
+        match action {
+            RowAction::Overview => {
+                self.set_container_detail_tab(tab_id, ContainerDetailTab::Overview, window, cx);
+            }
+            RowAction::Logs => {
+                self.set_container_detail_tab(tab_id, ContainerDetailTab::Logs, window, cx);
+            }
+            RowAction::Terminal => {
+                self.set_container_detail_tab(tab_id, ContainerDetailTab::Terminal, window, cx);
+            }
+            RowAction::Stats => {
+                self.set_container_detail_tab(tab_id, ContainerDetailTab::Stats, window, cx);
+            }
+            RowAction::Files => {
+                self.set_container_detail_tab(tab_id, ContainerDetailTab::Files, window, cx);
+            }
+            RowAction::Start | RowAction::Stop | RowAction::Restart => {
+                let Some(name) = container else { return };
+                let action = match action {
+                    RowAction::Start => ContainerLifecycleAction::Start,
+                    RowAction::Stop => ContainerLifecycleAction::Stop,
+                    _ => ContainerLifecycleAction::Restart,
+                };
+                self.container_lifecycle(tab_id, name, action, cx);
+            }
+            RowAction::Remove => {
+                let confirm = match target {
+                    RowTarget::Container { name, .. } => Some(ContainerConfirm::Container(name)),
+                    RowTarget::Image(id) => Some(ContainerConfirm::Image(id)),
+                    RowTarget::Volume(name) => Some(ContainerConfirm::Volume(name)),
+                    RowTarget::Network(id) => Some(ContainerConfirm::Network(id)),
+                    RowTarget::Compose(_) => None,
+                };
+                if let (Some(confirm), Some(workspace)) =
+                    (confirm, self.container_workspace_mut(tab_id))
+                {
+                    workspace.confirm = Some(confirm);
+                    cx.notify();
+                }
+            }
+            RowAction::CopyId | RowAction::CopyName => {}
+        }
+    }
+
+    /// 复制行的标识到剪贴板，并在头部给出可检索的回执。
+    fn copy_row_text(
+        &mut self,
+        tab_id: TabId,
+        target: &RowTarget,
+        action: RowAction,
+        cx: &mut Context<Self>,
+    ) {
+        let text = match (target, action) {
+            (RowTarget::Container { id, name }, action) => {
+                if action == RowAction::CopyId {
+                    id.clone()
+                } else {
+                    name.clone()
+                }
+            }
+            (RowTarget::Volume(name), _) | (RowTarget::Compose(name), _) => name.clone(),
+            (RowTarget::Network(id), RowAction::CopyId) => id.clone(),
+            (RowTarget::Network(id), RowAction::CopyName) => self
+                .container_workspace(tab_id)
+                .and_then(|workspace| {
+                    workspace
+                        .networks
+                        .iter()
+                        .find(|network| &network.id == id)
+                        .map(|network| network.name.clone())
+                })
+                .unwrap_or_else(|| id.clone()),
+            (RowTarget::Image(id), action) => {
+                let workspace = self.container_workspace(tab_id);
+                match action {
+                    RowAction::CopyId => id.clone(),
+                    _ => workspace
+                        .and_then(|workspace| {
+                            workspace
+                                .images
+                                .iter()
+                                .find(|image| &image.id == id)
+                                .map(|image| image.display_name())
+                        })
+                        .unwrap_or_else(|| transom_core::short_id(id)),
+                }
+            }
+            _ => return,
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.notice =
+                Some(rust_i18n::t!("container.row.copied", value = text).to_string());
+        }
+        cx.notify();
     }
 
     /// 停止当前选中项的日志、统计与终端会话。
@@ -849,6 +1009,48 @@ impl AppShell {
     }
 
     /// 保存引擎连接配置（新建或更新）。
+    /// 发起一次本机引擎发现：用户不必手填 socket/管道路径。
+    pub(crate) fn discover_engines(&mut self, cx: &mut Context<Self>) {
+        if self.containers.discovering {
+            return;
+        }
+        self.containers.discovering = true;
+        self.containers.discovery = None;
+        self.send_command(ContainerCommand::Discover {
+            request_id: ContainerRequestId::new(),
+        });
+        cx.notify();
+    }
+
+    /// 收起发现结果面板。
+    pub(crate) fn dismiss_container_discovery(&mut self, cx: &mut Context<Self>) {
+        self.containers.discovery = None;
+        cx.notify();
+    }
+
+    /// 添加一个发现的引擎：同种类同端点已保存时不再重复入库，直接打开工作区。
+    pub(crate) fn add_discovered_engine(
+        &mut self,
+        profile: ContainerEngineProfile,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let duplicated = self.catalog.engines.iter().any(|saved| {
+            saved.engine.kind == profile.engine.kind
+                && saved.engine.endpoint.describe() == profile.engine.endpoint.describe()
+        });
+        if !duplicated {
+            self.catalog.engines.push(profile.clone());
+            self.persist_catalog();
+        }
+        if let Some(discovery) = self.containers.discovery.as_mut() {
+            discovery.candidates.retain(|candidate| {
+                candidate.engine.endpoint.describe() != profile.engine.endpoint.describe()
+            });
+        }
+        self.open_engine_workspace(profile, window, cx);
+    }
+
     pub(crate) fn save_container_profile(
         &mut self,
         profile: ContainerEngineProfile,

@@ -140,6 +140,8 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         profile: ContainerEngineProfile,
     },
+    /// 发现本机引擎：让用户不必手填 socket/管道路径就能添加连接。
+    Discover { request_id: ContainerRequestId },
     ListContainers {
         tab_id: TabId,
         request_id: ContainerRequestId,

@@ -4524,6 +4524,42 @@ container:
     running:
       en: Running
       zh-CN: 运行中
+    all:
+      en: All
+      zh-CN: 全部
+    stopped:
+      en: Stopped
+      zh-CN: 已停止
+  sort:
+    name:
+      en: Name
+      zh-CN: 名称
+    state:
+      en: State
+      zh-CN: 状态
+    created:
+      en: Created
+      zh-CN: 创建时间
+    size:
+      en: Size
+      zh-CN: 大小
+  list:
+    none:
+      en: No matching items
+      zh-CN: 没有匹配的条目
+    matching:
+      en: 'Matching %{shown} of %{total}'
+      zh-CN: '匹配 %{shown} / %{total} 条'
+  row:
+    copy_id:
+      en: Copy ID
+      zh-CN: 复制 ID
+    copy_name:
+      en: Copy name
+      zh-CN: 复制名称
+    copied:
+      en: 'Copied: %{value}'
+      zh-CN: '已复制：%{value}'
   section:
     compose:
       en: Compose
@@ -4574,11 +4610,24 @@ container:
       zh-CN: 引擎已断开
   sidebar:
     empty:
-      en: No engine connections yet. Create one to start managing containers.
-      zh-CN: 还没有引擎连接。新建一个即可开始管理容器。
+      en: No engine connections yet. Discover local engines or create one manually.
+      zh-CN: 还没有引擎连接。可以自动发现本机引擎，或手动新建一个。
     new:
       en: New engine connection
       zh-CN: 新建引擎连接
+    discover:
+      en: Discover engines
+      zh-CN: 发现引擎
+  discovery:
+    title:
+      en: Engines found on this machine
+      zh-CN: 本机发现的引擎
+    add:
+      en: Add
+      zh-CN: 添加
+    none:
+      en: No usable engine found
+      zh-CN: 未发现可用引擎
   form:
     new_title:
       en: New engine connection

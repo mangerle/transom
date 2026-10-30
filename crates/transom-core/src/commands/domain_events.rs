@@ -11,9 +11,10 @@
 use crate::error::AppError;
 use crate::ids::{ConnectionId, ContainerRequestId, SessionId, TabId, TransferId};
 use crate::model::container::{
-    ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerFileEntry,
-    ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails, ContainerNetworkSummary,
-    ContainerStats, ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary,
+    ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerEngineProfile,
+    ContainerFileEntry, ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails,
+    ContainerNetworkSummary, ContainerStats, ContainerSummary, ContainerVolumeDetails,
+    ContainerVolumeSummary,
 };
 use crate::model::forward::ForwardStatus;
 use crate::model::host::HostOutcome;
@@ -260,6 +261,12 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         info: Option<Box<ContainerEngineInfo>>,
         error: Option<AppError>,
+    },
+    /// 引擎发现结果：已探测可用的引擎配置与不可用候选的中文摘要。
+    EnginesDiscovered {
+        request_id: ContainerRequestId,
+        engines: Vec<ContainerEngineProfile>,
+        failures: Vec<String>,
     },
     Disconnected {
         tab_id: TabId,

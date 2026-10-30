@@ -1,13 +1,13 @@
 //! 容器侧栏与管理工作区三栏视图。
 
 use crate::app::AppShell;
-use crate::container::types::{ContainerSection, ContainerWorkspaceStatus};
-use crate::divider::{DividerEdge, DividerStyled};
+use crate::container::types::{ContainerDiscovery, ContainerSection, ContainerWorkspaceStatus};
+use crate::divider::{DividerEdge, DividerStyled, h_resizable};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::Input;
+use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -15,6 +15,10 @@ use transom_core::TabId;
 
 impl AppShell {
     /// 左侧槽位中的引擎连接列表。
+    ///
+    /// 设计原理（Why）：行首要能看到「这个连接现在通不通」，否则用户只能点开
+    /// 标签才知道引擎没起来；连接摘要挪到名称下方两行式排版，尾部只留编辑与
+    /// 删除两个动作，避免描述文字被挤到行尾截断。
     pub(crate) fn render_container_sidebar(
         &mut self,
         _window: &mut Window,
@@ -22,11 +26,27 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let profiles = self.catalog.engines.clone();
+        let states = self.container_profile_states();
+        let discovery = self.containers.discovery.clone();
+        let discovering = self.containers.discovering;
+
         let mut rows = v_flex().gap_0p5().p_2();
+        if let Some(discovery) = discovery {
+            rows = rows.child(self.render_discovery_panel(discovery, p, cx));
+        }
         for profile in &profiles {
             let id = profile.id;
             let name = profile.display_name();
             let description = profile.engine.describe();
+            let dot = states
+                .get(&id)
+                .map(|status| match status {
+                    ContainerWorkspaceStatus::Connected => p.success,
+                    ContainerWorkspaceStatus::Connecting => p.warning,
+                    ContainerWorkspaceStatus::Failed(_)
+                    | ContainerWorkspaceStatus::Disconnected => p.danger,
+                })
+                .unwrap_or(p.border);
             rows = rows.child(
                 h_flex()
                     .id(ElementId::Name(format!("container-profile-{id}").into()))
@@ -36,28 +56,45 @@ impl AppShell {
                     .rounded(p.radius.md)
                     .items_center()
                     .hover(|style| style.bg(p.muted.opacity(0.5)))
-                    .child(Icon::new(IconName::Container).small().text_color(p.primary))
+                    .child(div().size_2().flex_none().rounded_full().bg(dot))
                     .child(
-                        Button::new(ElementId::Name(
-                            format!("container-profile-open-{id}").into(),
-                        ))
-                        .ghost()
-                        .label(name)
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                if let Some(profile) = this
-                                    .catalog
-                                    .engines
-                                    .iter()
-                                    .find(|profile| profile.id == id)
-                                    .cloned()
-                                {
-                                    this.open_engine_workspace(profile, window, cx);
-                                }
-                            },
-                        )),
+                        Icon::new(IconName::Container)
+                            .xsmall()
+                            .text_color(p.primary),
                     )
-                    .child(div().flex_1())
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0p5()
+                            .child(
+                                Button::new(ElementId::Name(
+                                    format!("container-profile-open-{id}").into(),
+                                ))
+                                .ghost()
+                                .label(name)
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| {
+                                        if let Some(profile) = this
+                                            .catalog
+                                            .engines
+                                            .iter()
+                                            .find(|profile| profile.id == id)
+                                            .cloned()
+                                        {
+                                            this.open_engine_workspace(profile, window, cx);
+                                        }
+                                    },
+                                )),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .truncate()
+                                    .child(description),
+                            ),
+                    )
                     .child(
                         Button::new(ElementId::Name(
                             format!("container-profile-edit-{id}").into(),
@@ -89,12 +126,6 @@ impl AppShell {
                                 this.delete_container_profile(id, window, cx);
                             },
                         )),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(description),
                     ),
             );
         }
@@ -107,14 +138,27 @@ impl AppShell {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("container.sidebar.empty").to_string())
                     .child(
-                        Button::new("container-profile-new-empty")
-                            .primary()
-                            .small()
-                            .icon(IconName::Plus)
-                            .label(rust_i18n::t!("container.sidebar.new").to_string())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_container_form(None, window, cx);
-                            })),
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                Button::new("container-profile-new-empty")
+                                    .primary()
+                                    .small()
+                                    .icon(IconName::Plus)
+                                    .label(rust_i18n::t!("container.sidebar.new").to_string())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_container_form(None, window, cx);
+                                    })),
+                            )
+                            .child(
+                                Button::new("container-discover-empty")
+                                    .small()
+                                    .icon(IconName::Radar)
+                                    .label(rust_i18n::t!("container.sidebar.discover").to_string())
+                                    .on_click(cx.listener(|this, _, _window, cx| {
+                                        this.discover_engines(cx);
+                                    })),
+                            ),
                     ),
             );
         }
@@ -143,13 +187,34 @@ impl AppShell {
                             ),
                     )
                     .child(
-                        Button::new("container-profile-new")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Plus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_container_form(None, window, cx);
-                            })),
+                        h_flex()
+                            .gap_0p5()
+                            .child(
+                                Button::new("container-discover")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(if discovering {
+                                        IconName::Loader
+                                    } else {
+                                        IconName::Radar
+                                    })
+                                    .tooltip(
+                                        rust_i18n::t!("container.sidebar.discover").to_string(),
+                                    )
+                                    .on_click(cx.listener(|this, _, _window, cx| {
+                                        this.discover_engines(cx);
+                                    })),
+                            )
+                            .child(
+                                Button::new("container-profile-new")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::Plus)
+                                    .tooltip(rust_i18n::t!("container.sidebar.new").to_string())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_container_form(None, window, cx);
+                                    })),
+                            ),
                     ),
             )
             .child(
@@ -161,6 +226,104 @@ impl AppShell {
                     .child(rows),
             )
             .into_any_element()
+    }
+
+    /// 发现结果面板：列出可用引擎并给「添加并打开」，同时把不可用原因摊开。
+    fn render_discovery_panel(
+        &mut self,
+        discovery: ContainerDiscovery,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let ContainerDiscovery {
+            candidates,
+            failures,
+        } = discovery;
+        let mut body = v_flex()
+            .gap_1()
+            .p_2()
+            .rounded(p.radius.md)
+            .bg(p.muted.opacity(0.35));
+        body = body.child(
+            h_flex()
+                .gap_1()
+                .items_center()
+                .justify_between()
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .items_center()
+                        .child(Icon::new(IconName::Radar).xsmall().text_color(p.primary))
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .child(rust_i18n::t!("container.discovery.title").to_string()),
+                        ),
+                )
+                .child(
+                    Button::new("container-discovery-dismiss")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Close)
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.dismiss_container_discovery(cx);
+                        })),
+                ),
+        );
+        if candidates.is_empty() {
+            body = body.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("container.discovery.none").to_string()),
+            );
+        }
+        for candidate in candidates {
+            let name = candidate.display_name();
+            let endpoint = candidate.engine.describe();
+            body = body.child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .child(div().text_xs().truncate().child(name))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .truncate()
+                                    .child(endpoint),
+                            ),
+                    )
+                    .child(
+                        Button::new(ElementId::Name(
+                            format!("container-discovery-add-{}", candidate.id).into(),
+                        ))
+                        .primary()
+                        .xsmall()
+                        .icon(IconName::Plus)
+                        .label(rust_i18n::t!("container.discovery.add").to_string())
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                this.add_discovered_engine(candidate.clone(), window, cx);
+                            },
+                        )),
+                    ),
+            );
+        }
+        for failure in failures {
+            body = body.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(failure),
+            );
+        }
+        body.into_any_element()
     }
 
     /// 管理工作区标签的完整三栏视图。
@@ -179,8 +342,30 @@ impl AppShell {
         }
         let header = self.render_container_header(tab_id, window, cx, p);
         let menu = self.render_container_menu(tab_id, window, cx, p);
-        let list = self.render_container_list(tab_id, window, cx, p);
+        let list = self.render_container_list(tab_id, cx, p);
         let detail = self.render_container_detail(tab_id, window, cx, p);
+        // 三栏宽度可拖拽：列表 320px 起步在长容器名/镜像名下会截断，详情区在
+        // 小窗下又不够铺开；与主窗口其他分区一样交给用户拖。
+        let (menu_split, list_split) = self
+            .container_workspace(tab_id)
+            .map(|workspace| (workspace.menu_split.clone(), workspace.list_split.clone()))
+            .unwrap_or_else(|| {
+                (
+                    cx.new(|_| ResizableState::default()),
+                    cx.new(|_| ResizableState::default()),
+                )
+            });
+
+        let list_and_detail = h_resizable("container-split-list")
+            .with_state(&list_split)
+            .child(
+                resizable_panel()
+                    .size(px(340.0))
+                    .size_range(px(240.0)..px(620.0))
+                    .fixed()
+                    .child(list),
+            )
+            .child(resizable_panel().child(detail));
 
         v_flex()
             .size_full()
@@ -188,33 +373,32 @@ impl AppShell {
             .bg(p.background)
             .child(header)
             .child(
-                h_flex()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_hidden()
+                h_resizable("container-split-menu")
+                    .with_state(&menu_split)
                     .child(
-                        div()
-                            .id("container-menu-scroll")
-                            .w(px(190.0))
-                            .h_full()
-                            .flex_none()
-                            .overflow_y_scroll()
-                            .border_color(p.divider(p.border))
-                            .divider_edge(DividerEdge::Right, p.divider_width)
-                            .child(menu),
+                        resizable_panel()
+                            .size(px(200.0))
+                            .size_range(px(150.0)..px(320.0))
+                            .fixed()
+                            .child(
+                                div()
+                                    .id("container-menu-scroll")
+                                    .size_full()
+                                    .min_h_0()
+                                    .overflow_y_scroll()
+                                    .border_color(p.divider(p.border))
+                                    .divider_edge(DividerEdge::Right, p.divider_width)
+                                    .child(menu),
+                            ),
                     )
                     .child(
                         div()
-                            .w(px(320.0))
+                            .flex_1()
+                            .min_w_0()
                             .h_full()
-                            .flex_none()
-                            .min_h_0()
-                            .overflow_hidden()
-                            .border_color(p.divider(p.border))
-                            .divider_edge(DividerEdge::Right, p.divider_width)
-                            .child(list),
-                    )
-                    .child(div().flex_1().h_full().min_w_0().child(detail)),
+                            .child(list_and_detail)
+                            .into_any_element(),
+                    ),
             )
             .into_any_element()
     }
@@ -442,231 +626,6 @@ impl AppShell {
             .into_any_element()
     }
 
-    fn render_container_list(
-        &mut self,
-        tab_id: TabId,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(workspace) = self.container_workspace(tab_id) else {
-            return div().into_any_element();
-        };
-        let section = workspace.section;
-        let search = workspace.search.clone();
-        let create_input = workspace.create_input.clone();
-        let running_only = workspace.running_only;
-        let query = workspace.query(cx).to_lowercase();
-        let busy = workspace.busy;
-        let selected = workspace.selected.clone();
-        let containers: Vec<_> = workspace
-            .containers
-            .iter()
-            .filter(|item| !running_only || item.state.is_running())
-            .filter(|item| {
-                query.is_empty()
-                    || item.name.to_lowercase().contains(&query)
-                    || item.image.to_lowercase().contains(&query)
-            })
-            .cloned()
-            .collect();
-        let images = workspace.images.clone();
-        let volumes = workspace.volumes.clone();
-        let networks = workspace.networks.clone();
-        let compose = workspace.compose.clone();
-
-        let mut toolbar = h_flex()
-            .gap_1()
-            .items_center()
-            .child(Input::new(&search).flex_1());
-        if section == ContainerSection::Containers {
-            toolbar = toolbar.child(
-                Button::new("container-filter-running")
-                    .xsmall()
-                    .selected(running_only)
-                    .label(rust_i18n::t!("container.filter.running").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(workspace) = this.container_workspace_mut(tab_id) {
-                            workspace.running_only = !workspace.running_only;
-                        }
-                        cx.notify();
-                    })),
-            );
-        }
-
-        let mut rows = v_flex().gap_0p5();
-        match section {
-            ContainerSection::Containers => {
-                for item in &containers {
-                    let id = item.id.clone();
-                    let is_selected = selected.as_deref() == Some(id.as_str());
-                    rows = rows.child(container_row(
-                        cx,
-                        ContainerRow {
-                            id: ElementId::Name(format!("container-row-{id}").into()),
-                            selected: is_selected,
-                            icon: IconName::Container,
-                            title: item.name.clone(),
-                            subtitle: format!("{} · {}", item.image, item.status),
-                            badge: item.state.key(),
-                            palette: p,
-                        },
-                        move |this, _cx| this.select_container_item(tab_id, id.clone()),
-                    ));
-                }
-            }
-            ContainerSection::Images => {
-                for item in &images {
-                    let id = item.id.clone();
-                    let is_selected = selected.as_deref() == Some(id.as_str());
-                    rows = rows.child(container_row(
-                        cx,
-                        ContainerRow {
-                            id: ElementId::Name(format!("image-row-{id}").into()),
-                            selected: is_selected,
-                            icon: IconName::Layers,
-                            title: item.display_name(),
-                            subtitle: format!(
-                                "{} · {}",
-                                crate::format::format_size(item.size),
-                                short(&item.id)
-                            ),
-                            badge: "image",
-                            palette: p,
-                        },
-                        move |this, _cx| this.select_image_item(tab_id, id.clone()),
-                    ));
-                }
-            }
-            ContainerSection::Volumes => {
-                for item in &volumes {
-                    let name = item.name.clone();
-                    let is_selected = selected.as_deref() == Some(name.as_str());
-                    rows = rows.child(container_row(
-                        cx,
-                        ContainerRow {
-                            id: ElementId::Name(format!("volume-row-{name}").into()),
-                            selected: is_selected,
-                            icon: IconName::Database,
-                            title: name.clone(),
-                            subtitle: format!("{} · {}", item.driver, item.mountpoint),
-                            badge: "volume",
-                            palette: p,
-                        },
-                        move |this, _cx| this.select_volume_item(tab_id, name.clone()),
-                    ));
-                }
-            }
-            ContainerSection::Networks => {
-                for item in &networks {
-                    let id = item.id.clone();
-                    let is_selected = selected.as_deref() == Some(id.as_str());
-                    rows = rows.child(container_row(
-                        cx,
-                        ContainerRow {
-                            id: ElementId::Name(format!("network-row-{id}").into()),
-                            selected: is_selected,
-                            icon: IconName::Network,
-                            title: item.name.clone(),
-                            subtitle: format!(
-                                "{} · {}{}",
-                                item.driver,
-                                item.scope,
-                                item.subnet
-                                    .as_ref()
-                                    .map(|subnet| format!(" · {subnet}"))
-                                    .unwrap_or_default()
-                            ),
-                            badge: "network",
-                            palette: p,
-                        },
-                        move |this, _cx| this.select_network_item(tab_id, id.clone()),
-                    ));
-                }
-            }
-            ContainerSection::Compose => {
-                for project in &compose {
-                    let name = project.name.clone();
-                    let is_selected = selected.as_deref() == Some(name.as_str());
-                    rows = rows.child(container_row(
-                        cx,
-                        ContainerRow {
-                            id: ElementId::Name(format!("compose-row-{name}").into()),
-                            selected: is_selected,
-                            icon: IconName::Boxes,
-                            title: name.clone(),
-                            subtitle: format!(
-                                "{} · {}",
-                                project.state_label(),
-                                project.working_dir.clone().unwrap_or_default()
-                            ),
-                            badge: "compose",
-                            palette: p,
-                        },
-                        move |this, _cx| this.select_compose_item(tab_id, name.clone()),
-                    ));
-                }
-            }
-        }
-
-        let mut body = v_flex().h_full().child(
-            v_flex()
-                .gap_1p5()
-                .p_2()
-                .flex_none()
-                .child(toolbar)
-                .when(
-                    matches!(
-                        section,
-                        ContainerSection::Images
-                            | ContainerSection::Volumes
-                            | ContainerSection::Networks
-                    ),
-                    |this| {
-                        this.child(
-                            h_flex()
-                                .gap_1()
-                                .items_center()
-                                .child(Input::new(&create_input).flex_1())
-                                .child(
-                                    Button::new("container-create-submit")
-                                        .primary()
-                                        .xsmall()
-                                        .icon(IconName::Plus)
-                                        .label(if section == ContainerSection::Images {
-                                            rust_i18n::t!("container.pull").to_string()
-                                        } else {
-                                            rust_i18n::t!("container.create").to_string()
-                                        })
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.submit_container_create(tab_id, window, cx);
-                                        })),
-                                ),
-                        )
-                    },
-                )
-                .child(
-                    div()
-                        .id("container-list-scroll")
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .child(rows),
-                ),
-        );
-        if busy {
-            body = body.child(
-                div()
-                    .px_2()
-                    .pb_1()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("container.loading").to_string()),
-            );
-        }
-        body.into_any_element()
-    }
-
     /// 全屏模态：复用同一份工作区状态，标签内显示占位避免重复渲染终端。
     pub(crate) fn render_container_fullscreen(
         &mut self,
@@ -699,68 +658,4 @@ impl AppShell {
             p,
         )
     }
-}
-
-fn short(id: &str) -> String {
-    transom_core::short_id(id)
-}
-
-/// 列表行的渲染参数：字段较多，收敛为结构体避免长参数列表。
-struct ContainerRow<'a> {
-    id: ElementId,
-    selected: bool,
-    icon: IconName,
-    title: String,
-    subtitle: String,
-    badge: &'static str,
-    palette: &'a Palette,
-}
-
-fn container_row(
-    cx: &mut Context<AppShell>,
-    row: ContainerRow<'_>,
-    on_select: impl Fn(&mut AppShell, &mut Context<AppShell>) + 'static,
-) -> AnyElement {
-    let p = row.palette;
-    let mut element = h_flex()
-        .id(row.id)
-        .gap_2()
-        .px_2()
-        .py_1p5()
-        .rounded(p.radius.md)
-        .items_center()
-        .cursor_pointer()
-        .hover(|style| style.bg(p.muted.opacity(0.5)))
-        .child(Icon::new(row.icon).small().text_color(p.muted_foreground))
-        .child(
-            v_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_0p5()
-                .child(div().text_sm().truncate().child(row.title))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .truncate()
-                        .child(row.subtitle),
-                ),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(row.badge.to_string()),
-        );
-    if row.selected {
-        element = element
-            .bg(p.sidebar_accent)
-            .text_color(p.sidebar_accent_foreground);
-    }
-    element
-        .on_click(cx.listener(move |this, _, _, cx| {
-            on_select(this, cx);
-            cx.notify();
-        }))
-        .into_any_element()
 }

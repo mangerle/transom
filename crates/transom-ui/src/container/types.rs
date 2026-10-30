@@ -6,6 +6,7 @@
 
 use gpui_kit::Entity;
 use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::HashMap;
 use transom_core::{
@@ -100,6 +101,208 @@ impl ContainerDetailTab {
     }
 }
 
+/// 容器状态筛选档位。
+///
+/// 设计原理（Why）：原先只有「仅运行中」一个开关，想看已退出的一次性容器就
+/// 只能取消筛选再肉眼找；Portainer/Docker Desktop 都是三档，且默认全部。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContainerStateFilter {
+    All,
+    Running,
+    Stopped,
+}
+
+impl ContainerStateFilter {
+    pub(crate) const ALL: [Self; 3] = [Self::All, Self::Running, Self::Stopped];
+
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            Self::All => "container.filter.all",
+            Self::Running => "container.filter.running",
+            Self::Stopped => "container.filter.stopped",
+        }
+    }
+
+    /// 运行态是否落在该档位内。
+    pub(crate) fn accepts(self, running: bool) -> bool {
+        match self {
+            Self::All => true,
+            Self::Running => running,
+            Self::Stopped => !running,
+        }
+    }
+}
+
+/// 列表排序键。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContainerSortKey {
+    Name,
+    State,
+    Created,
+    Size,
+}
+
+impl ContainerSortKey {
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            Self::Name => "container.sort.name",
+            Self::State => "container.sort.state",
+            Self::Created => "container.sort.created",
+            Self::Size => "container.sort.size",
+        }
+    }
+
+    /// 该分类可用的排序键：镜像没有状态、卷没有大小字段，不给无效选项。
+    pub(crate) fn for_section(section: ContainerSection) -> &'static [Self] {
+        use ContainerSortKey::{Created, Name, Size, State};
+        match section {
+            ContainerSection::Containers => &[Name, State, Created],
+            ContainerSection::Compose => &[Name, State],
+            ContainerSection::Images => &[Name, Created, Size],
+            ContainerSection::Volumes => &[Name, Created],
+            ContainerSection::Networks => &[Name],
+        }
+    }
+
+    /// 该分类的默认排序键。
+    pub(crate) fn default_for(section: ContainerSection) -> Self {
+        Self::for_section(section)[0]
+    }
+}
+
+/// 排序所需的全部字段：把五种条目统一到同一个比较器上。
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct SortFields {
+    pub(crate) name: String,
+    pub(crate) state: String,
+    pub(crate) created: i64,
+    pub(crate) size: u64,
+}
+
+/// 按排序键比较两条条目；降序时取反，名称永远作为最后的稳定 tie-break。
+pub(crate) fn compare_fields(
+    left: &SortFields,
+    right: &SortFields,
+    key: ContainerSortKey,
+    desc: bool,
+) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let primary = match key {
+        ContainerSortKey::Name => Ordering::Equal,
+        ContainerSortKey::State => left
+            .state
+            .to_ascii_lowercase()
+            .cmp(&right.state.to_ascii_lowercase()),
+        ContainerSortKey::Created => left.created.cmp(&right.created),
+        ContainerSortKey::Size => left.size.cmp(&right.size),
+    };
+    let ordered = match primary {
+        Ordering::Equal => left.name.to_lowercase().cmp(&right.name.to_lowercase()),
+        other => other,
+    };
+    if desc { ordered.reverse() } else { ordered }
+}
+
+/// 关键词是否命中任一字段（大小写不敏感）；空关键词恒为真。
+pub(crate) fn matches_query(query: &str, fields: &[impl AsRef<str>]) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    fields
+        .iter()
+        .any(|field| field.as_ref().to_lowercase().contains(query))
+}
+
+/// 列表行的操作目标：五种条目各自用能唯一定位自己的标识。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RowTarget {
+    Container { id: String, name: String },
+    Image(String),
+    Volume(String),
+    Network(String),
+    Compose(String),
+}
+
+/// 列表行动作：行内按钮与右键菜单共用一套语义，避免两处行为漂移。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RowAction {
+    Overview,
+    Logs,
+    Terminal,
+    Stats,
+    Files,
+    Start,
+    Stop,
+    Restart,
+    Remove,
+    CopyId,
+    CopyName,
+}
+
+impl RowAction {
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            Self::Overview => "container.detail.overview",
+            Self::Logs => "container.detail.logs",
+            Self::Terminal => "container.detail.terminal",
+            Self::Stats => "container.detail.stats",
+            Self::Files => "container.detail.files",
+            Self::Start => "container.action.start",
+            Self::Stop => "container.action.stop",
+            Self::Restart => "container.action.restart",
+            Self::Remove => "common.delete",
+            Self::CopyId => "container.row.copy_id",
+            Self::CopyName => "container.row.copy_name",
+        }
+    }
+
+    pub(crate) fn icon(self) -> gpui_kit::assets::IconName {
+        use gpui_kit::assets::IconName;
+        match self {
+            Self::Overview => IconName::Info,
+            Self::Logs => IconName::ScrollText,
+            Self::Terminal => IconName::Terminal,
+            Self::Stats => IconName::Gauge,
+            Self::Files => IconName::FolderOpen,
+            Self::Start => IconName::Play,
+            Self::Stop => IconName::Square,
+            Self::Restart => IconName::RotateCw,
+            Self::Remove => IconName::Trash,
+            Self::CopyId => IconName::Copy,
+            Self::CopyName => IconName::Copy,
+        }
+    }
+
+    /// 破坏性动作在菜单里要用危险色，与确认条保持一致。
+    pub(crate) fn is_danger(self) -> bool {
+        matches!(self, Self::Remove)
+    }
+
+    /// 该动作适用于哪类条目：右键菜单按目标类型生成，避免出现无意义项。
+    pub(crate) fn applies_to(self, target: &RowTarget) -> bool {
+        match self {
+            Self::Logs | Self::Terminal | Self::Stats | Self::Files | Self::Restart => {
+                matches!(target, RowTarget::Container { .. })
+            }
+            Self::Start | Self::Stop => matches!(target, RowTarget::Container { .. }),
+            // 卷与编排项目没有独立 ID，名称就是唯一标识，不给重复的复制项。
+            Self::CopyId => matches!(
+                target,
+                RowTarget::Container { .. } | RowTarget::Image(_) | RowTarget::Network(_)
+            ),
+            Self::Overview | Self::Remove | Self::CopyName => true,
+        }
+    }
+}
+
+/// 行主键：与工作区 `selected` 字段的取法保持一致。
+pub(crate) fn row_key(target: &RowTarget) -> &str {
+    match target {
+        RowTarget::Container { id, .. } | RowTarget::Image(id) | RowTarget::Network(id) => id,
+        RowTarget::Volume(name) | RowTarget::Compose(name) => name,
+    }
+}
+
 /// 工作区连接状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ContainerWorkspaceStatus {
@@ -148,7 +351,14 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) search: Entity<InputState>,
     /// 拉取镜像/新建卷/新建网络的单行输入。
     pub(crate) create_input: Entity<InputState>,
-    pub(crate) running_only: bool,
+    /// 状态筛选档位（仅容器分类）。
+    pub(crate) state_filter: ContainerStateFilter,
+    /// 当前排序键与方向。
+    pub(crate) sort_key: ContainerSortKey,
+    pub(crate) sort_desc: bool,
+    /// 三栏拖拽状态：菜单/列表宽度由用户拖动决定，随工作区存活。
+    pub(crate) menu_split: Entity<ResizableState>,
+    pub(crate) list_split: Entity<ResizableState>,
     pub(crate) containers: Vec<ContainerSummary>,
     pub(crate) images: Vec<ContainerImageSummary>,
     pub(crate) volumes: Vec<ContainerVolumeSummary>,
@@ -208,7 +418,11 @@ impl ContainerWorkspaceState {
             section: ContainerSection::Containers,
             search,
             create_input,
-            running_only: false,
+            state_filter: ContainerStateFilter::All,
+            sort_key: ContainerSortKey::default_for(ContainerSection::Containers),
+            sort_desc: false,
+            menu_split: cx.new(|_| ResizableState::default()),
+            list_split: cx.new(|_| ResizableState::default()),
             containers: Vec::new(),
             images: Vec::new(),
             volumes: Vec::new(),
@@ -286,6 +500,31 @@ impl ContainerWorkspaceState {
             self.detail_tab = ContainerDetailTab::Overview;
         }
     }
+
+    /// 切换分类：排序键要落到该分类可用的档位上，否则会出现「按大小排数据卷」
+    /// 这类无效组合；同时收回不可用的详情页签并清掉旧选中项。
+    pub(crate) fn apply_section(&mut self, section: ContainerSection) {
+        self.section = section;
+        self.selected = None;
+        self.details = None;
+        self.image_details = None;
+        self.volume_details = None;
+        self.network_details = None;
+        self.detail_tab = ContainerDetailTab::Overview;
+        self.confirm = None;
+        if !ContainerSortKey::for_section(section).contains(&self.sort_key) {
+            self.sort_key = ContainerSortKey::default_for(section);
+            self.sort_desc = false;
+        }
+        self.normalize_detail_tab();
+    }
+}
+
+/// 引擎发现结果：可添加的引擎与不可用候选的中文摘要。
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ContainerDiscovery {
+    pub(crate) candidates: Vec<ContainerEngineProfile>,
+    pub(crate) failures: Vec<String>,
 }
 
 /// 引擎连接侧栏与表单的顶层状态。
@@ -296,6 +535,10 @@ pub(crate) struct ContainerUiState {
     pub(crate) fullscreen: Option<TabId>,
     /// 请求 ID → 所属工作区标签；事件按它路由。
     pub(crate) requests: HashMap<ContainerRequestId, TabId>,
+    /// 最近一次「发现本机引擎」的结果面板。
+    pub(crate) discovery: Option<ContainerDiscovery>,
+    /// 正在进行的发现请求，避免连点重复探测。
+    pub(crate) discovering: bool,
 }
 
 impl ContainerUiState {
@@ -493,5 +736,102 @@ impl ContainerFormState {
             profile.id = id;
         }
         Ok(profile)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ContainerSection, ContainerSortKey, ContainerStateFilter, SortFields, compare_fields,
+        matches_query,
+    };
+
+    fn fields(name: &str, state: &str, created: i64, size: u64) -> SortFields {
+        SortFields {
+            name: name.to_string(),
+            state: state.to_string(),
+            created,
+            size,
+        }
+    }
+
+    fn order(items: &[SortFields], key: ContainerSortKey, desc: bool) -> Vec<String> {
+        let mut sorted = items.to_vec();
+        sorted.sort_by(|left, right| compare_fields(left, right, key, desc));
+        sorted.into_iter().map(|item| item.name).collect()
+    }
+
+    #[test]
+    fn state_filter_covers_both_states() {
+        assert!(ContainerStateFilter::All.accepts(true));
+        assert!(ContainerStateFilter::All.accepts(false));
+        assert!(ContainerStateFilter::Running.accepts(true));
+        assert!(!ContainerStateFilter::Running.accepts(false));
+        assert!(ContainerStateFilter::Stopped.accepts(false));
+        assert!(!ContainerStateFilter::Stopped.accepts(true));
+    }
+
+    #[test]
+    fn sorting_is_stable_across_equal_keys() {
+        let items = [
+            fields("web", "running", 30, 10),
+            fields("api", "running", 10, 30),
+            fields("db", "exited", 20, 20),
+        ];
+        assert_eq!(
+            order(&items, ContainerSortKey::Name, false),
+            ["api", "db", "web"]
+        );
+        assert_eq!(
+            order(&items, ContainerSortKey::Name, true),
+            ["web", "db", "api"]
+        );
+        assert_eq!(
+            order(&items, ContainerSortKey::State, false),
+            ["db", "api", "web"],
+            "exited 排在 running 之前，同状态按名称收口"
+        );
+        assert_eq!(
+            order(&items, ContainerSortKey::Created, false),
+            ["api", "db", "web"]
+        );
+        assert_eq!(
+            order(&items, ContainerSortKey::Size, true),
+            ["api", "db", "web"]
+        );
+    }
+
+    #[test]
+    fn each_section_only_offers_valid_sort_keys() {
+        assert!(
+            !ContainerSortKey::for_section(ContainerSection::Volumes)
+                .contains(&ContainerSortKey::Size)
+        );
+        assert!(
+            !ContainerSortKey::for_section(ContainerSection::Images)
+                .contains(&ContainerSortKey::State)
+        );
+        assert!(
+            ContainerSortKey::for_section(ContainerSection::Networks) == [ContainerSortKey::Name]
+        );
+        for section in ContainerSection::ALL {
+            let keys = ContainerSortKey::for_section(section);
+            assert!(!keys.is_empty(), "{section:?} 必须有可用排序键");
+            assert!(keys.contains(&ContainerSortKey::default_for(section)));
+        }
+    }
+
+    #[test]
+    fn query_matches_any_field_case_insensitively() {
+        assert!(matches_query(
+            "nginx",
+            &["Web".to_string(), "nginx:latest".to_string()]
+        ));
+        assert!(!matches_query(
+            "redis",
+            &["Web".to_string(), "nginx:latest".to_string()]
+        ));
+        assert!(matches_query("", &["anything".to_string()]));
+        assert!(!matches_query("x", &[] as &[String]));
     }
 }

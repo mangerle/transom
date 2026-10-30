@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use transom_container::Engine;
+use transom_container::{Engine, discover_all};
 use transom_core::{
     AppError, ContainerAppEvent, ContainerCommand, ContainerEngineProfile, ContainerRequestId,
     ErrorCode, TabId,
@@ -126,6 +126,35 @@ pub(super) fn handle_container_command(
         }
         ContainerCommand::Cancel { tab_id, request_id } => {
             cancel_task(state, ctx, tab_id, request_id)
+        }
+        ContainerCommand::Discover { request_id } => {
+            let event_tx = ctx.event_tx.clone();
+            state.container_ops.spawn(async move {
+                let (engines, failures) = discover_all().await;
+                let profiles: Vec<ContainerEngineProfile> = engines
+                    .iter()
+                    .map(|engine| {
+                        ContainerEngineProfile::new(
+                            engine.info.engine.kind.to_string(),
+                            engine.info.engine.clone(),
+                        )
+                    })
+                    .collect();
+                log::info!(
+                    "容器引擎发现完成，可用 {} 个，不可用 {} 项",
+                    profiles.len(),
+                    failures.len()
+                );
+                send_event(
+                    &event_tx,
+                    ContainerAppEvent::EnginesDiscovered {
+                        request_id,
+                        engines: profiles,
+                        failures,
+                    },
+                )
+                .await;
+            });
         }
         ContainerCommand::ListContainers { tab_id, request_id } => one_shot(
             state,
