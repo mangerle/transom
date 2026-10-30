@@ -115,7 +115,15 @@ impl TerminalView {
         };
         // 载荷把命令与清行命令合成一条：命令是写进标准输入的，执行后它的回显会留在
         // 屏上，一整段几百字符的脚本留在那里极其扎眼。预装路径不走这里（见协议层说明）。
-        let payload = injection_payload(command);
+        // 终端宽度与当前提示符列数用于把折行后的回显一次擦干净。
+        let (columns, prompt_columns) = {
+            let engine = self.state.engine.lock();
+            (
+                usize::from(engine.size().cols),
+                engine.cursor_point().column.0,
+            )
+        };
+        let payload = injection_payload(command, columns, prompt_columns);
         // 走 write_input 但不置 user_typed：那是"用户亲自按键"的标记，
         // 自己写进去的脚本不能反过来把自己的时机判死。
         // 写失败说明通道已断（写入线程会随之上报 Exit），这里不额外造状态，
