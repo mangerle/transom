@@ -9,7 +9,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use crate::sftp::extract_candidate_path;
+use crate::sftp::normalize_remote_cwd;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -90,7 +90,7 @@ impl AppShell {
                 .sftp()
                 .map(|p| p.remote.path.clone())
                 .filter(|p| !p.is_empty() && p != ".")
-                .or_else(|| extract_candidate_path(&t.title))
+                .or_else(|| t.cwd.as_deref().and_then(normalize_remote_cwd))
                 .unwrap_or_else(|| ".".to_string());
             active_candidates.push((conn_id, display_name, initial_path));
         }

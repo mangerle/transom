@@ -192,6 +192,9 @@ impl AppShell {
         );
         if let Some(tab) = self.workspace.tab_mut(tab_id) {
             tab.connection_id = Some(connection_id);
+            // 新通道上的 Shell 还没上报 OSC 7，旧目录不再代表当前 cwd；
+            // 等新连接上的提示符钩子回报后再恢复 SFTP 跟随。
+            tab.cwd = None;
             if let Some(pane) = tab.session_pane_mut() {
                 pane.sftp = None;
                 pane.forward_statuses.clear();

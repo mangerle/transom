@@ -10,8 +10,12 @@ pub type HistoryProvider = std::sync::Arc<dyn Fn(&str) -> Vec<String> + Send + S
 /// Events surfaced to the application view.
 #[derive(Debug, Clone)]
 pub enum TerminalEvent {
+    /// 终端程序通过 OSC 0/2 设置的窗口标题；空串表示显式清空。
     Title(String),
+    /// 标题栈弹出或终端要求恢复默认标题：运行期标题应回落。
     ResetTitle,
+    /// 终端程序通过 OSC 7 上报的当前工作目录（已解码为裸路径）。
+    Cwd(String),
     Bell,
     Exit,
     ClipboardStored,

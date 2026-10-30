@@ -114,7 +114,7 @@ pub(super) fn build_tiled_group_badge(
             continue;
         };
         let (dot_color, _) = crate::workspace::pane_status_indicator(&tab.status, p);
-        let mut title = tab.display_name();
+        let mut title = tab.tab_label();
         if group.serial > 0 {
             title = format!("{title} #{}", group.serial);
         }
@@ -252,20 +252,29 @@ pub(super) fn calculate_dot_color(tab: &crate::app::TerminalTab, p: &Palette) ->
 }
 
 /// 构建悬浮提示内容。
+///
+/// 第一行是标签可见主名（运行期标题或会话名），第二行在两者不同时补会话身份：
+/// 远端程序可以把标签改成 `nvim app.rs`，但用户仍需随时确认这是哪台会话。
 pub(super) fn build_tab_tooltip(
     tooltip_title: String,
-    runtime_title: String,
-    show_runtime: bool,
+    session_name: String,
+    show_session: bool,
     tooltip_muted: Hsla,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     move |_window, cx| {
         let tooltip_title = tooltip_title.clone();
-        let runtime_title = runtime_title.clone();
+        let session_name = session_name.clone();
         Tooltip::element(move |_, _| {
-            let mut tip = v_flex()
-                .gap_0p5()
-                .child(div().text_sm().child(tooltip_title.clone()));
-            if show_runtime {
+            let mut tip = v_flex().gap_0p5().child(
+                div()
+                    .text_sm()
+                    .max_w(px(360.0))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .truncate()
+                    .child(tooltip_title.clone()),
+            );
+            if show_session {
                 tip = tip.child(
                     div()
                         .text_xs()
@@ -274,7 +283,7 @@ pub(super) fn build_tab_tooltip(
                         .whitespace_nowrap()
                         .truncate()
                         .text_color(tooltip_muted)
-                        .child(runtime_title.clone()),
+                        .child(session_name.clone()),
                 );
             }
             tip

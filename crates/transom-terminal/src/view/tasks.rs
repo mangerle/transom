@@ -3,7 +3,7 @@
 use super::{READ_BUFFER_BYTES, READ_CHANNEL_CAPACITY, TerminalView};
 use crate::audit::AuditSink;
 use crate::event::TerminalEvent;
-use crate::osc::OscEvent;
+use crate::osc::{OscEvent, TitleAction};
 use crate::record::RecorderHandle;
 use alacritty_terminal::event::{Event, WindowSize};
 use alacritty_terminal::vte::ansi::Rgb as AnsiRgb;
@@ -142,8 +142,17 @@ impl TerminalView {
         self.process_osc_events(cx);
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
-                Event::Title(title) => cx.emit(TerminalEvent::Title(title)),
-                Event::ResetTitle => cx.emit(TerminalEvent::ResetTitle),
+                // 提示符自己的 OSC 标题不覆盖标签；只有命令运行期间的程序标题才发布。
+                Event::Title(title) => {
+                    if self.title_gate.on_title(&title) == TitleAction::Publish {
+                        cx.emit(TerminalEvent::Title(title));
+                    }
+                }
+                Event::ResetTitle => {
+                    if self.title_gate.on_reset() == TitleAction::Clear {
+                        cx.emit(TerminalEvent::ResetTitle);
+                    }
+                }
                 Event::Bell => cx.emit(TerminalEvent::Bell),
                 Event::ClipboardStore(_, text) => {
                     cx.write_to_clipboard(ClipboardItem::new_string(text));
@@ -189,7 +198,12 @@ impl TerminalView {
         }
         let now = Instant::now();
         for event in events {
+            // 命令边界决定标题归属：进入命令时允许运行期标题，离开时清除。
+            if self.title_gate.on_boundary(&event) == TitleAction::Clear {
+                cx.emit(TerminalEvent::ResetTitle);
+            }
             match event {
+                OscEvent::Cwd { path } => cx.emit(TerminalEvent::Cwd(path)),
                 OscEvent::Notify { title, body } => {
                     cx.emit(TerminalEvent::DesktopNotification { title, body });
                 }

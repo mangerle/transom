@@ -1,18 +1,17 @@
-//! SFTP 远端目录导航、同步标题与控制方法。
+//! SFTP 远端目录导航、OSC 7 目录跟随与控制方法。
 //!
 //! 设计原理（Why）：
-//! - 实现初衷：提供 SFTP 远端目录的路径跳转、向上级、回车、终端标题联动与过滤切换；
+//! - 实现初衷：提供 SFTP 远端目录的路径跳转、向上级、回车、终端 cwd 联动与过滤切换；
 //! - 核心优势：集中封装向底层通信通道投递 SftpOperation 的接口，保障状态同步一致性。
 
 mod init;
 mod local_nav;
 
-use super::{
-    SFTP_DIR_CACHE_TTL, extract_candidate_path, extract_local_candidate_path, parent_remote,
-};
+use super::{SFTP_DIR_CACHE_TTL, normalize_local_cwd, normalize_remote_cwd, parent_remote};
 use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::*;
+use std::path::Path;
 use transom_core::{SftpCommand, SftpOperation, TabId, TransferId};
 
 impl AppShell {
@@ -268,35 +267,54 @@ impl AppShell {
         }
     }
 
-    pub(crate) fn sftp_sync_with_terminal_title(
+    /// 终端 OSC 7 上报新目录后，按面板形态更新本地栏或远端栏。
+    ///
+    /// 只认 OSC 7 的裸路径，不再从窗口标题猜目录：标题的语义是"终端里在跑什么"，
+    /// 可能被任意 TUI 改写；路径必须来自明确的 cwd 通道。
+    pub(crate) fn sftp_sync_with_terminal_cwd(
         &mut self,
         tab_id: TabId,
-        title: &str,
+        cwd: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
-            return;
-        };
-        let Some(panel) = tab.sftp_mut() else {
+        let Some(panel) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
             return;
         };
         if panel.local.only {
-            if let Some(candidate) = extract_local_candidate_path(title)
+            // 目录没变就不做 is_dir：本地面板开着时每条提示符都会上报一次 cwd，
+            // 网络挂载上的重复探测会拖慢 UI 线程。
+            if panel.local.path.as_path() == Path::new(cwd) {
+                return;
+            }
+            if let Some(candidate) = normalize_local_cwd(cwd)
                 && candidate != panel.local.path
             {
                 self.sftp_local_sync_navigate(tab_id, candidate, window, cx);
             }
             return;
         }
-        if let Some(candidate) = extract_candidate_path(title)
-            && candidate != panel.remote.path
+        let Some(candidate) = normalize_remote_cwd(cwd) else {
+            return;
+        };
+        if candidate == panel.remote.path {
+            return;
+        }
+        let open = panel.open;
+        if let Some(panel) = self
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|tab| tab.sftp_mut())
         {
             panel.remote.path = candidate.clone();
             panel.clear_remote_selection();
-            self.request_sftp_list(tab_id, candidate, cx);
-            cx.notify();
         }
+        // 面板隐藏时只记路径，不为了看不见的列表消耗一次 SFTP 请求；
+        // 展开时 toggle_sftp 会按当前路径补拉。
+        if open {
+            self.request_sftp_list(tab_id, candidate, cx);
+        }
+        cx.notify();
     }
 
     pub(crate) fn sftp_start_resize_queue(

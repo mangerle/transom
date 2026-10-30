@@ -96,7 +96,7 @@ impl AppShell {
         let (title, dot_color, tab_icon) = match self.workspace.tab(pane_id) {
             Some(tab) => {
                 let (dot_color, _) = super::pane_status_indicator(&tab.status, p);
-                let mut title = tab.display_name();
+                let mut title = tab.tab_label();
                 if serial > 0 {
                     title = format!("{title} #{serial}");
                 }
@@ -168,7 +168,7 @@ impl AppShell {
             else {
                 continue;
             };
-            let mut title = tab.display_name();
+            let mut title = tab.tab_label();
             if group.serial > 0 {
                 title = format!("{title} #{}", group.serial);
             }

@@ -300,8 +300,10 @@ impl TerminalEngine {
                     );
                 }
             }
-            // 命令记录、桌面通知与集成握手都不改变网格上的块边界：握手只喂状态机。
+            // 命令记录、cwd 上报、桌面通知与集成握手都不改变网格上的块边界：
+            // 握手只喂状态机，cwd 只改应用层目录状态。
             OscEvent::CommandRecorded { .. }
+            | OscEvent::Cwd { .. }
             | OscEvent::Notify { .. }
             | OscEvent::ShellReport { .. }
             | OscEvent::IntegrationReady { .. } => {}

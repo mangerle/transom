@@ -43,6 +43,8 @@ fn emit(bytes: &[u8], offset: usize, events: &mut Vec<(usize, OscEvent)>) {
     };
     let parse = match code {
         "133" => parse_command_marker(params),
+        // 7 是 xterm 系当前工作目录的事实标准：`file://<host>/<路径>`。
+        "7" => parse_cwd(params),
         // 777 是"自定义通知"约定段：先试本客户端的集成握手，再退回桌面通知。
         "777" => parse_integration_handshake(params).or_else(|| parse_notify(params)),
         _ => None,
@@ -94,6 +96,63 @@ fn parse_command_marker(params: &str) -> Option<OscEvent> {
                 .map(str::to_string)
                 .filter(|text| !text.is_empty()),
         }),
+        _ => None,
+    }
+}
+
+/// OSC 7：`file://<host>/<路径>`，host 可为空，路径允许百分号编码。
+///
+/// 设计原理（Why）：
+/// - 只接受本地文件 URI，host 段仅作来源标记，不参与路径判断：SSH 会话里
+///   主机名可能与本地不同，拿它做校验只会误伤；
+/// - 非法百分号编码不整条丢弃，而是按字面保留：很多提示符脚本直接拼 `$PWD`，
+///   目录名里的 `%` 未必编码；拒绝会让整条 cwd 上报失效；
+/// - 解码后含控制字符的路径一律拒绝：换行与 ESC 会污染路径输入框与界面文本，
+///   这是不可信输入，不能只依赖上游 Shell。
+///
+/// 代价与局限：不做 URI 规范级校验（端口、用户信息、相对路径等），只提取
+/// 第一个 `/` 之后的路径段；`file://` 前缀大小写不敏感。
+fn parse_cwd(params: &str) -> Option<OscEvent> {
+    let scheme = params.get(..7)?;
+    if !scheme.eq_ignore_ascii_case("file://") {
+        return None;
+    }
+    let rest = params.get(7..)?;
+    let path_start = rest.find('/')?;
+    let raw_path = &rest[path_start..];
+    let path = percent_decode(raw_path);
+    if path.is_empty() || path.chars().any(char::is_control) {
+        return None;
+    }
+    Some(OscEvent::Cwd { path })
+}
+
+/// 解码 URI 路径里的 `%XX`；非法转义或解码后不是合法 UTF-8 时按原样保留。
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && let (Some(high), Some(low)) =
+                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+        {
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).unwrap_or_else(|_| input.to_string())
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
     }
 }

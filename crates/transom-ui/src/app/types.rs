@@ -89,7 +89,14 @@ pub(crate) struct TerminalTab {
     pub(crate) session_id: SessionId,
     pub(crate) session: Session,
     pub(crate) connection_id: Option<ConnectionId>,
+    /// 运行期标题：会话标签由 OSC 0/2 覆盖，空串回落到 [`Self::display_name`]；
+    /// 录像播放器与监控看板用它承载固定标题。
     pub(crate) title: String,
+    /// 终端最近一次通过 OSC 7 上报的工作目录。
+    ///
+    /// 远端会话存远端路径，本地会话存本地路径；`None` 表示尚未上报。
+    /// SFTP 的初始目录与跟随导航只读这里，不再从窗口标题猜路径。
+    pub(crate) cwd: Option<String>,
     pub(crate) status: TabStatus,
     pub(crate) content: TabContent,
 }
@@ -171,6 +178,10 @@ impl TerminalTab {
         self.session_pane().and_then(|p| p.network_traffic.as_ref())
     }
 
+    /// 会话身份名：会话设置里的名字，缺失时回退到用户@主机/设备/shell。
+    ///
+    /// 始终不被 OSC 标题改写；tooltip、状态栏、通知等需要稳定身份的场景读它，
+    /// 标签栏的可见标题读 [`Self::tab_label`]。
     pub(crate) fn display_name(&self) -> String {
         if self.is_player() {
             return self.title.clone();
@@ -184,19 +195,40 @@ impl TerminalTab {
             Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
             Connection::Serial(serial) => serial.port.clone(),
             Connection::Local(local) => local.shell.clone().unwrap_or_else(|| "shell".to_string()),
+            Connection::Mosh(mosh) => format!("{}@{}", mosh.username, mosh.host),
             _ => self.title.clone(),
+        }
+    }
+
+    /// 标签栏主名：运行期标题优先，空标题回落到会话身份名。
+    ///
+    /// 通用终端的约定是 OSC 0/2 直接改标签名，这里采用同一口径；但远端程序
+    /// 清空标题或弹标题栈时不能把标签变成空白，所以必须回落到会话名。
+    /// 标题里的控制字符会被剔除：换行与 ESC 会把单行标签栏撑破或污染文本。
+    /// 同一会话的 `#N` 序号由标签栏另外拼接，不进入本字段。
+    pub(crate) fn tab_label(&self) -> String {
+        let runtime: String = self
+            .title
+            .chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect();
+        let runtime = runtime.trim();
+        if runtime.is_empty() {
+            self.display_name()
+        } else {
+            runtime.to_string()
         }
     }
 
     /// 构造处于连接等待中的实时通信终端标签。
     pub(crate) fn pending(id: TabId, session: Session) -> Self {
-        let title = session.name.clone();
         Self {
             id,
             session_id: session.id,
             session,
             connection_id: None,
-            title,
+            title: String::new(),
+            cwd: None,
             status: TabStatus::Connecting,
             content: TabContent::Session(Box::default()),
         }
@@ -215,6 +247,7 @@ impl TerminalTab {
             session,
             connection_id: None,
             title,
+            cwd: None,
             status: TabStatus::Connected,
             content: TabContent::Player(player),
         }
@@ -234,6 +267,7 @@ impl TerminalTab {
             session,
             connection_id,
             title,
+            cwd: None,
             status: TabStatus::Connected,
             content: TabContent::Monitor(target_tab_id),
         }
@@ -288,7 +322,12 @@ impl Default for PendingNotices {
 
 #[cfg(test)]
 mod tests {
-    use super::PendingNotices;
+    use super::{PendingNotices, TerminalTab};
+    use transom_core::{Connection, LocalConnection, Session, TabId};
+
+    fn local_session() -> Session {
+        Session::new("生产库", Connection::Local(LocalConnection::default()))
+    }
 
     #[test]
     fn pending_notices_keep_earliest_errors() {
@@ -301,5 +340,29 @@ mod tests {
         assert_eq!(drained[0], "错误 0", "队列满时应保留最早的根因");
         assert_eq!(drained[PendingNotices::LIMIT - 1], "错误 7");
         assert!(notices.drain().is_empty(), "取走后不得重复投递");
+    }
+
+    #[test]
+    fn tab_label_prefers_runtime_title_and_falls_back_to_session_name() {
+        let mut tab = TerminalTab::pending(TabId::new(), local_session());
+        assert_eq!(tab.tab_label(), "生产库");
+        assert_eq!(tab.display_name(), "生产库");
+
+        tab.title = "app.rs - nvim".to_string();
+        assert_eq!(tab.tab_label(), "app.rs - nvim");
+        assert_eq!(tab.display_name(), "生产库", "运行期标题不得覆盖会话身份");
+
+        tab.title = "   ".to_string();
+        assert_eq!(tab.tab_label(), "生产库", "空白标题必须回落会话名");
+
+        tab.title = "app.rs\n- nvim".to_string();
+        assert_eq!(
+            tab.tab_label(),
+            "app.rs - nvim",
+            "控制字符必须替换为空格，避免单行标签粘连"
+        );
+
+        tab.title.clear();
+        assert_eq!(tab.tab_label(), "生产库", "ResetTitle 清空后回落会话名");
     }
 }

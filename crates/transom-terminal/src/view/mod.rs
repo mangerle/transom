@@ -20,7 +20,7 @@ pub(crate) use types::{
 use crate::engine::TerminalEngine;
 use crate::event::{HistoryProvider, TerminalEvent};
 use crate::input::{focus_bytes, paste_bytes};
-use crate::osc::CommandTracker;
+use crate::osc::{CommandTracker, TitleGate};
 use crate::record::RecorderHandle;
 use crate::renderer::TerminalRenderer;
 use crate::shell_integration::ShellIntegration;
@@ -68,6 +68,8 @@ pub struct TerminalView {
     pub(crate) search_input: Option<Entity<InputState>>,
     /// 命令生命周期归并：把 OSC 133 的零散标记算成"一条命令跑了多久"。
     command_tracker: CommandTracker,
+    /// 运行期标题门控：区分提示符标题与命令/TUI 标题。
+    title_gate: TitleGate,
     /// Shell 集成流程控制器；进入终态（已生效或已放弃）后轮询任务自行退出。
     shell_integration: ShellIntegration,
     /// 用户是否已亲自按键过。一旦按键，本轮不再注入：写进去的字节会拼到用户
@@ -220,6 +222,7 @@ impl TerminalView {
             cursor_blink_on: true,
             scroll_pixel_remainder: 0.0,
             command_tracker: CommandTracker::default(),
+            title_gate: TitleGate::default(),
             shell_integration,
             user_typed: false,
             history_provider: None,

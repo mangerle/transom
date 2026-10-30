@@ -8,7 +8,7 @@ use super::columns::ColumnWidthMemory;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::{
     DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
-    SftpQueueState, SftpRemotePaneState, fuzzy_match_name,
+    SftpQueueState, SftpRemotePaneState, fuzzy_match_name, normalize_local_cwd,
 };
 use crate::app::AppShell;
 use crate::keymap;
@@ -20,7 +20,7 @@ use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
-use transom_core::TabId;
+use transom_core::{Connection, TabId};
 
 impl AppShell {
     pub(crate) fn open_local_file_panel(
@@ -34,11 +34,26 @@ impl AppShell {
         };
         let tab_id = tab.id;
         let quick_paths = LocalQuickPaths::resolve();
-        let local_path = quick_paths
-            .downloads
-            .clone()
+        // 终端上报过 OSC 7 就从当前 shell 目录打开；否则依次回落到会话配置的
+        // 工作目录、Home、下载目录。本地终端默认从 Home 启动，把下载目录排在
+        // 前面会让面板与终端看起来完全无关。
+        let session_dir = match &tab.session.connection {
+            Connection::Local(local) => local.working_dir.clone().filter(|path| path.is_dir()),
+            _ => None,
+        };
+        let local_path = tab
+            .cwd
+            .as_deref()
+            .and_then(normalize_local_cwd)
+            .or(session_dir)
             .or_else(|| quick_paths.home.clone())
+            .or_else(|| quick_paths.downloads.clone())
             .unwrap_or_else(|| PathBuf::from("."));
+        log::info!(
+            "打开本地文件面板，窗格: {tab_id}，初始目录: {}，终端 cwd: {:?}",
+            local_path.display(),
+            tab.cwd
+        );
         let local_entries = Vec::new();
         let local_error = None;
 

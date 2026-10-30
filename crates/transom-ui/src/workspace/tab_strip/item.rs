@@ -49,7 +49,7 @@ pub(super) fn render_tab_entry(
     let group_id = group.id;
     let active_pane = group.active_pane;
     let session_id = tab.session_id;
-    let title = tab.display_name();
+    let title = tab.tab_label();
     let pane_count = group.pane_count();
     let root_axis = group.root.root_axis();
     let serial = group.serial;
@@ -155,8 +155,8 @@ pub(super) fn render_tab_entry(
     } else {
         labeled
     };
-    let runtime_title = tab.title.trim().to_string();
-    let show_runtime = !runtime_title.is_empty() && runtime_title != tab.display_name();
+    let session_name = tab.display_name();
+    let show_session = !session_name.is_empty() && session_name != title;
 
     let tab_element = if composite {
         tab_element
@@ -180,8 +180,8 @@ pub(super) fn render_tab_entry(
     let mut element = tab_element
         .tooltip(build_tab_tooltip(
             tooltip_title,
-            runtime_title,
-            show_runtime,
+            session_name,
+            show_session,
             p.muted_foreground,
         ))
         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {

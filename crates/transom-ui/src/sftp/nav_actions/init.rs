@@ -10,7 +10,7 @@ use crate::palette::sftp_text_input;
 use crate::sftp::columns::ColumnWidthMemory;
 use crate::sftp::{
     DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
-    SftpQueueState, SftpRemotePaneState, extract_candidate_path,
+    SftpQueueState, SftpRemotePaneState, normalize_remote_cwd,
 };
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
@@ -129,8 +129,16 @@ impl AppShell {
             .clone()
             .or_else(|| quick_paths.home.clone())
             .unwrap_or_else(|| PathBuf::from("."));
-        let initial_remote_path = extract_candidate_path(&self.workspace.tabs[index].title)
+        // 初始远端目录优先用终端 OSC 7 上报的 cwd；还没上报时回落到远端 Home。
+        let initial_remote_path = self.workspace.tabs[index]
+            .cwd
+            .as_deref()
+            .and_then(normalize_remote_cwd)
             .unwrap_or_else(|| ".".to_string());
+        log::info!(
+            "打开远端文件面板，窗格: {tab_id}，初始目录: {initial_remote_path}，终端 cwd: {:?}",
+            self.workspace.tabs[index].cwd
+        );
         let path_input = sftp_text_input(
             window,
             cx,

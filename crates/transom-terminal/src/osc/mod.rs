@@ -5,4 +5,4 @@ mod types;
 mod tests;
 
 pub(crate) use scanner::OscScanner;
-pub(crate) use types::{CommandTracker, OscEvent};
+pub(crate) use types::{CommandTracker, OscEvent, TitleAction, TitleGate};

@@ -23,6 +23,11 @@ pub(crate) enum OscEvent {
     PreExec { command: Option<String> },
     /// 采集到的一条完整命令文本，用于命令历史与建议。
     CommandRecorded { command: String },
+    /// 程序上报的当前工作目录（OSC 7），已从 `file://` URI 解码为裸路径。
+    ///
+    /// 这是 cwd 的事实标准通道；窗口标题（OSC 0/2）只描述"终端里在跑什么"，
+    /// 不再拿来猜路径。
+    Cwd { path: String },
     /// 程序显式请求的桌面通知（OSC 777）。
     Notify { title: String, body: String },
     /// Shell 集成探针的回报（`OSC 777;transom;shell=<路径>`）。
@@ -39,6 +44,114 @@ pub(crate) enum OscEvent {
 pub(crate) struct TrackedCommand {
     pub(crate) exit_code: Option<i32>,
     pub(crate) duration_ms: u64,
+}
+
+/// 运行期标题门控的判定结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TitleAction {
+    /// 这是程序在命令运行期间设置的标题，可以更新标签。
+    Publish,
+    /// 运行期标题应清除，标签回落到会话名。
+    Clear,
+    /// 不属于运行期标题，忽略。
+    Ignore,
+}
+
+/// 运行期标题门控：只放行命令执行期间设置的 OSC 0/2 标题。
+///
+/// 设计原理（Why）：
+/// - 通用终端把 Shell 提示符和 TUI 写的标题一视同仁，标签会长期停在
+///   `用户@主机: 目录`；Transom 的标签承载会话身份，不能让提示符标题接管；
+/// - OSC 133 的命令边界提供了可靠证据：`B`/`C`（命令开始）之后、`D`/`A`
+///   （命令结束/新提示符）之前设置的标题属于运行中的程序；边界之外是提示符
+///   自己的标题，必须忽略；
+/// - 关闭 Shell 集成时没有边界证据，门控保持关闭：宁可少显示 TUI 标题，
+///   也不让 `用户@主机` 重新覆盖标签。
+///
+/// 代价与局限：嵌套 Shell 或 TUI 内部的提示符仍处于外层命令边界内，其标题
+/// 会被视为程序标题；命令在下一帧前就结束时，标题不会发布。
+#[derive(Debug, Default)]
+pub(crate) struct TitleGate {
+    command_running: bool,
+    published: bool,
+}
+
+impl TitleGate {
+    /// 处理一条 OSC 133 边界，返回是否需要清除已发布的运行期标题。
+    pub(crate) fn on_boundary(&mut self, event: &OscEvent) -> TitleAction {
+        match event {
+            OscEvent::CommandStart | OscEvent::PreExec { .. } => {
+                self.command_running = true;
+                TitleAction::Ignore
+            }
+            OscEvent::CommandFinish { .. } | OscEvent::PromptStart => {
+                self.command_running = false;
+                self.clear()
+            }
+            _ => TitleAction::Ignore,
+        }
+    }
+
+    /// 处理一条 OSC 0/2 标题；只有命令运行期间、且不像 Shell 提示符时才允许发布。
+    ///
+    /// 第二层过滤是给缺少 OSC 133 证据或边界顺序异常的会话兜底的：即使程序标题
+    /// 在外层命令运行期间到达，`用户@主机[: 目录]` 这种典型提示符标题也不能覆盖
+    /// 标签。它只认带 `@` 的最常见形态，正常的 TUI 标题（文件名、会话名、任务名）
+    /// 不受影响。
+    pub(crate) fn on_title(&mut self, title: &str) -> TitleAction {
+        if !self.command_running || looks_like_shell_prompt_title(title) {
+            return TitleAction::Ignore;
+        }
+        self.published = true;
+        TitleAction::Publish
+    }
+
+    /// 处理标题栈重置或恢复默认标题。
+    pub(crate) fn on_reset(&mut self) -> TitleAction {
+        self.clear()
+    }
+
+    fn clear(&mut self) -> TitleAction {
+        if self.published {
+            self.published = false;
+            TitleAction::Clear
+        } else {
+            TitleAction::Ignore
+        }
+    }
+}
+
+/// 是否是常见的 Shell 提示符标题形态：`用户@主机` 或 `用户@主机: 目录`。
+///
+/// 只匹配 `@` 前没有空白、且 `@` 后主机名以结尾或冒号收尾的形态，避免把
+/// `user@example.com - mutt` 这类真正包含 `@` 的 TUI 标题误杀。
+fn looks_like_shell_prompt_title(title: &str) -> bool {
+    let title = title.trim();
+    let Some((user, rest)) = title.split_once('@') else {
+        return false;
+    };
+    if user.is_empty() || user.chars().any(|c| c.is_whitespace() || c == ':') {
+        return false;
+    }
+    let host = rest
+        .split(|c: char| c.is_whitespace() || c == ':')
+        .next()
+        .unwrap_or_default();
+    if host.is_empty() {
+        return false;
+    }
+    let after_host = &rest[host.len()..];
+    if after_host.is_empty() || after_host.starts_with(':') {
+        return true;
+    }
+    // `[user@host ~]$`、`user@host /path` 这类提示符形态；`user@host - nvim`
+    // 的剩余部分以连字符开头，不当成提示符。
+    let tail = after_host.trim_start();
+    after_host.starts_with(' ')
+        && (tail.starts_with('~')
+            || tail.starts_with('/')
+            || tail.starts_with('[')
+            || tail.starts_with(']'))
 }
 
 /// 把零散的 OSC 133 标记归并成"一条命令跑了多久"。
@@ -70,6 +183,7 @@ impl CommandTracker {
                 })
             }
             OscEvent::PreExec { .. } | OscEvent::CommandRecorded { .. } => None,
+            OscEvent::Cwd { .. } => None,
             OscEvent::PromptStart => {
                 let started_at = self.started_at.take()?;
                 let elapsed = now.checked_duration_since(started_at)?.as_millis() as u64;

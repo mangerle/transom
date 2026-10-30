@@ -188,7 +188,9 @@ impl AppShell {
         tab.content = TabContent::Session(Box::default());
         tab.connection_id = None;
         tab.status = TabStatus::Connecting;
-        tab.title = session.name.clone();
+        // 新连接尚未收到 OSC 0/2 与 OSC 7：标签回落会话名，SFTP 重新等待上报。
+        tab.title.clear();
+        tab.cwd = None;
         self.workspace.active_tab = Some(tab_id);
         if let Some(group_index) = self.group_index_for_tab(tab_id) {
             self.workspace.groups[group_index].active_pane = tab_id;

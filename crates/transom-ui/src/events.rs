@@ -265,9 +265,20 @@ impl AppShell {
                 if let Some(tab) = self.workspace.tab_mut(tab_id) {
                     tab.title = title.clone();
                 }
-                self.sftp_sync_with_terminal_title(tab_id, title, window, cx);
             }
-            TerminalEvent::ResetTitle => {}
+            // 标题栈弹出或终端要求恢复默认标题：运行期标题清空，标签回落会话名。
+            TerminalEvent::ResetTitle => {
+                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                    tab.title.clear();
+                }
+            }
+            TerminalEvent::Cwd(path) => {
+                log::debug!("收到终端 OSC 7 cwd，窗格: {tab_id}，路径: {path}");
+                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                    tab.cwd = Some(path.clone());
+                }
+                self.sftp_sync_with_terminal_cwd(tab_id, path, window, cx);
+            }
             TerminalEvent::Bell => {
                 self.status = Some(rust_i18n::t!("status.bell").to_string());
             }

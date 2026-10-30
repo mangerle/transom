@@ -111,72 +111,60 @@ pub(crate) fn sftp_file_icon(is_dir: bool, p: &Palette) -> AnyElement {
     }
 }
 
-/// 从终端标题或状态文本中尝试解析当前工作目录
-pub(crate) fn extract_candidate_path(title: &str) -> Option<String> {
-    let trimmed = title.trim();
-    if trimmed.is_empty() {
+/// 把 OSC 7 上报的路径规范成 SFTP 远端面板可用的目录。
+///
+/// 设计原理（Why）：OSC 7 的标准载荷是以 `/` 开头的绝对 POSIX 路径；`~`、
+/// 相对路径、Windows 盘符都不是 SFTP 远端列目录能直接消化的形态，一律丢弃。
+/// 控制字符在终端解析层已经拒绝，这里再挡一次，避免其他调用方绕过解析器。
+/// 远端路径不做存在性检查：目录不存在时由列表请求返回错误，沿用现有错误通道。
+pub(crate) fn normalize_remote_cwd(path: &str) -> Option<String> {
+    if !path.starts_with('/') || path.chars().any(char::is_control) {
         return None;
     }
-    let candidate = if let Some((_, right)) = trimmed.split_once(':') {
-        right.trim()
-    } else {
-        trimmed
-    };
-    let candidate = if let Some((left, _)) = candidate.split_once('(') {
-        left.trim()
-    } else {
-        candidate
-    };
-    if candidate == "~" {
-        Some(".".to_string())
-    } else if let Some(rest) = candidate.strip_prefix("~/") {
-        Some(format!("./{rest}"))
-    } else if candidate.starts_with('/') || candidate.starts_with("./") {
-        Some(candidate.to_string())
-    } else {
-        None
-    }
+    Some(path.to_string())
 }
 
-/// 从终端标题或状态文本中尝试解析当前本地工作目录。
+/// 把 OSC 7 上报的路径规范成本地文件面板可用的目录。
 ///
-/// 只有当解析出的路径在本地文件系统中真实存在且是目录时才返回有效路径，
-/// 避免命令名（如 vim、top）或无效文本误触发本地文件面板跳转。
-pub(crate) fn extract_local_candidate_path(title: &str) -> Option<PathBuf> {
-    let trimmed = title.trim();
-    if trimmed.is_empty() {
+/// 只有真实存在且是目录时才返回，避免把命令名或无效文本当成路径；
+/// 只接受绝对路径，防止相对路径被误解析到进程当前目录。Windows 的 OSC 7
+/// 常写成 `/C:/Users/...`，去掉前导斜杠后再试一次。
+pub(crate) fn normalize_local_cwd(path: &str) -> Option<PathBuf> {
+    if path.is_empty() || path.chars().any(char::is_control) {
         return None;
     }
-    let candidate = if let Some((_, right)) = trimmed.split_once(':') {
-        right.trim()
-    } else {
-        trimmed
-    };
-    let candidate = if let Some((left, _)) = candidate.split_once('(') {
-        left.trim()
-    } else {
-        candidate
-    };
-    let home = local_home();
-    let target = if candidate == "~" {
-        home
-    } else if let Some(rest) = candidate.strip_prefix("~/") {
-        home.join(rest)
-    } else if candidate.starts_with('/')
-        || (candidate.len() >= 3
-            && candidate
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_alphabetic())
-            && candidate.chars().nth(1) == Some(':')
-            && (candidate.chars().nth(2) == Some('\\') || candidate.chars().nth(2) == Some('/')))
-    {
-        PathBuf::from(candidate)
-    } else {
+    let absolute = path.starts_with('/') || (cfg!(windows) && has_drive_prefix(path));
+    if !absolute {
         return None;
-    };
+    }
+    let direct = PathBuf::from(path);
+    if direct.is_dir() {
+        return Some(direct);
+    }
+    #[cfg(windows)]
+    if let Some(rest) = path.strip_prefix('/') {
+        let stripped = PathBuf::from(rest);
+        if stripped.is_dir() {
+            return Some(stripped);
+        }
+    }
+    None
+}
 
-    if target.is_dir() { Some(target) } else { None }
+/// 是否为 `C:/...` 或 `C:\...` 形式的 Windows 盘符路径。
+#[cfg(windows)]
+fn has_drive_prefix(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'/' || bytes[2] == b'\\')
+}
+
+/// 非 Windows 平台不存在盘符路径。
+#[cfg(not(windows))]
+fn has_drive_prefix(_path: &str) -> bool {
+    false
 }
 
 /// 大小写不敏感文件名模糊匹配（优先包含子串，次选按字符顺序子序列匹配）
@@ -214,42 +202,38 @@ pub(crate) fn send_desktop_notification(summary: &str, body: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_candidate_path, extract_local_candidate_path, local_home};
+    use super::{normalize_local_cwd, normalize_remote_cwd};
 
     #[test]
-    fn test_extract_local_candidate_path() {
-        let home = local_home();
-        if home.is_dir() {
-            assert_eq!(
-                extract_local_candidate_path("user@host: ~"),
-                Some(home.clone())
-            );
-            assert_eq!(extract_local_candidate_path("~"), Some(home.clone()));
-        }
+    fn normalize_remote_cwd_accepts_only_absolute_posix_paths() {
         assert_eq!(
-            extract_local_candidate_path("user@host: vim file.txt"),
-            None
+            normalize_remote_cwd("/var/log"),
+            Some("/var/log".to_string())
         );
-        assert_eq!(extract_local_candidate_path(""), None);
+        assert_eq!(normalize_remote_cwd("/"), Some("/".to_string()));
         assert_eq!(
-            extract_local_candidate_path("user@host: /non_existent_dir_987654321"),
-            None
+            normalize_remote_cwd("/home/a b"),
+            Some("/home/a b".to_string())
         );
     }
 
     #[test]
-    fn test_extract_candidate_path() {
-        assert_eq!(
-            extract_candidate_path("user@host: /var/log"),
-            Some("/var/log".to_string())
-        );
-        assert_eq!(
-            extract_candidate_path("user@host: ~"),
-            Some(".".to_string())
-        );
-        assert_eq!(
-            extract_candidate_path("user@host: ~/nginx"),
-            Some("./nginx".to_string())
-        );
+    fn normalize_remote_cwd_rejects_relative_and_control_input() {
+        assert_eq!(normalize_remote_cwd(""), None);
+        assert_eq!(normalize_remote_cwd("vim file.txt"), None);
+        assert_eq!(normalize_remote_cwd("~"), None);
+        assert_eq!(normalize_remote_cwd("~/nginx"), None);
+        assert_eq!(normalize_remote_cwd("C:\\Users"), None);
+        assert_eq!(normalize_remote_cwd("/var/\nlog"), None);
+    }
+
+    #[test]
+    fn normalize_local_cwd_requires_existing_directory() {
+        let temp = std::env::temp_dir();
+        assert_eq!(normalize_local_cwd(&temp.display().to_string()), Some(temp));
+        assert_eq!(normalize_local_cwd(""), None);
+        assert_eq!(normalize_local_cwd("vim file.txt"), None);
+        assert_eq!(normalize_local_cwd("."), None, "相对路径不能当 cwd");
+        assert_eq!(normalize_local_cwd("/non_existent_dir_987654321"), None);
     }
 }

@@ -1,7 +1,9 @@
 //! OSC 扫描与命令追踪单元测试。
 
 use super::scanner::OscScanner;
-use super::types::{CommandTracker, MAX_PAYLOAD_BYTES, OscEvent, TrackedCommand};
+use super::types::{
+    CommandTracker, MAX_PAYLOAD_BYTES, OscEvent, TitleAction, TitleGate, TrackedCommand,
+};
 use std::time::{Duration, Instant};
 
 fn collect(chunks: &[&[u8]]) -> Vec<OscEvent> {
@@ -60,6 +62,78 @@ fn survives_arbitrary_chunk_boundaries() {
 }
 
 #[test]
+fn parses_osc7_working_directory() {
+    assert_eq!(
+        collect(&[b"\x1b]7;file://host/home/user\x07"]),
+        vec![OscEvent::Cwd {
+            path: "/home/user".to_string()
+        }]
+    );
+    // host 为空是合法形式：`file:///var/log` 的路径从第一个 `/` 开始。
+    assert_eq!(
+        collect(&[b"\x1b]7;file:///var/log\x1b\\"]),
+        vec![OscEvent::Cwd {
+            path: "/var/log".to_string()
+        }]
+    );
+    assert_eq!(
+        collect(&["\x1b]7;file://h/项目/名 字\x07".as_bytes()]),
+        vec![OscEvent::Cwd {
+            path: "/项目/名 字".to_string()
+        }]
+    );
+    assert_eq!(
+        collect(&[b"\x1b]7;file:///root\x07"]),
+        vec![OscEvent::Cwd {
+            path: "/root".to_string()
+        }]
+    );
+    assert_eq!(
+        collect(&[b"\x1b]7;file:///\x07"]),
+        vec![OscEvent::Cwd {
+            path: "/".to_string()
+        }]
+    );
+}
+
+#[test]
+fn decodes_osc7_percent_encoding_and_tolerates_literal_percent() {
+    assert_eq!(
+        collect(&[b"\x1b]7;file://h/home/a%20b/%E4%B8%AD\x07"]),
+        vec![OscEvent::Cwd {
+            path: "/home/a b/中".to_string()
+        }]
+    );
+    // 提示符脚本直接拼 `$PWD` 时目录名里的 `%` 未必编码，不能整条丢弃。
+    assert_eq!(
+        collect(&[b"\x1b]7;file:///home/100%\x07"]),
+        vec![OscEvent::Cwd {
+            path: "/home/100%".to_string()
+        }]
+    );
+}
+
+#[test]
+fn rejects_invalid_osc7_payloads() {
+    assert_eq!(collect(&[b"\x1b]7;http://h/p\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]7;file://host\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]7;file://\x07"]), vec![]);
+    // 解码后含换行等控制字符的路径会污染路径输入框与界面文本，必须拒绝。
+    assert_eq!(collect(&[b"\x1b]7;file:///bad%0Apath\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]7;file:///bad%00path\x07"]), vec![]);
+}
+
+#[test]
+fn osc7_survives_chunk_boundary() {
+    assert_eq!(
+        collect(&[b"\x1b]7;file://host/home/", b"user\x07"]),
+        vec![OscEvent::Cwd {
+            path: "/home/user".to_string()
+        }]
+    );
+}
+
+#[test]
 fn ignores_other_escape_sequences_and_unknown_osc() {
     assert_eq!(collect(&[b"\x1b[31mred\x1b[0m"]), vec![]);
     assert_eq!(
@@ -113,6 +187,90 @@ fn caps_unterminated_payload_and_recovers() {
     flat.push(0x07);
     flat.extend_from_slice(b"\x1b]133;A\x07");
     assert_eq!(collect(&[&flat]), vec![OscEvent::PromptStart]);
+}
+
+#[test]
+fn title_gate_only_publishes_titles_set_by_running_commands() {
+    let mut gate = TitleGate::default();
+    // 初始提示符自己设置的标题不能接管标签。
+    assert_eq!(
+        gate.on_title("wangle@ubuntu: ~/project"),
+        TitleAction::Ignore
+    );
+    assert_eq!(
+        gate.on_boundary(&OscEvent::PromptStart),
+        TitleAction::Ignore
+    );
+    assert_eq!(
+        gate.on_title("wangle@ubuntu: ~/project"),
+        TitleAction::Ignore
+    );
+
+    // 命令开始后，TUI/程序设置的标题可以发布。
+    assert_eq!(
+        gate.on_boundary(&OscEvent::PreExec { command: None }),
+        TitleAction::Ignore
+    );
+    assert_eq!(gate.on_title("app.rs - nvim"), TitleAction::Publish);
+    assert_eq!(
+        gate.on_title("user@host: /path"),
+        TitleAction::Ignore,
+        "命令期间到达的提示符标题也不能覆盖标签"
+    );
+
+    // 命令结束或新提示符出现时清除，标签回落会话名。
+    assert_eq!(
+        gate.on_boundary(&OscEvent::CommandFinish {
+            exit_code: Some(0),
+            duration_ms: Some(10),
+        }),
+        TitleAction::Clear
+    );
+    assert_eq!(
+        gate.on_boundary(&OscEvent::PromptStart),
+        TitleAction::Ignore
+    );
+    assert_eq!(
+        gate.on_title("wangle@ubuntu: ~/project"),
+        TitleAction::Ignore
+    );
+}
+
+#[test]
+fn title_gate_handles_reset_and_command_start_marker() {
+    let mut gate = TitleGate::default();
+    assert_eq!(
+        gate.on_boundary(&OscEvent::CommandStart),
+        TitleAction::Ignore
+    );
+    assert_eq!(gate.on_title("tmux: work"), TitleAction::Publish);
+    assert_eq!(gate.on_reset(), TitleAction::Clear);
+    assert_eq!(gate.on_reset(), TitleAction::Ignore, "重复重置不应重复通知");
+    assert_eq!(
+        gate.on_title("tmux: work"),
+        TitleAction::Publish,
+        "同一命令运行期间仍可再次设置标题"
+    );
+    assert_eq!(gate.on_boundary(&OscEvent::PromptStart), TitleAction::Clear);
+}
+
+#[test]
+fn title_gate_rejects_common_prompt_title_shapes_even_while_command_runs() {
+    let mut gate = TitleGate::default();
+    assert_eq!(
+        gate.on_boundary(&OscEvent::CommandStart),
+        TitleAction::Ignore
+    );
+    for title in [
+        "wangle@ubuntu: ~/project",
+        "user@host",
+        "[user@localhost ~]$",
+        "user@host /srv/app",
+    ] {
+        assert_eq!(gate.on_title(title), TitleAction::Ignore, "{title}");
+    }
+    // 真正包含 @ 的 TUI 标题不能被误杀。
+    assert_eq!(gate.on_title("user@host - nvim"), TitleAction::Publish);
 }
 
 #[test]
