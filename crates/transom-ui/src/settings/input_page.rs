@@ -86,7 +86,7 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 剪贴板组：选中复制、多行粘贴确认与尾随空白清理。
+    /// 剪贴板组：选中复制、多行粘贴确认、尾随空白清理与拦截误按的 Ctrl+V。
     pub(crate) fn render_settings_clipboard(
         &mut self,
         p: &Palette,
@@ -128,6 +128,19 @@ impl AppShell {
                     .checked(self.settings.terminal_interaction.trim_trailing_whitespace)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.terminal_interaction.trim_trailing_whitespace = checked;
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.suppress_ctrl_v",
+                Some("settings.suppress_ctrl_v_desc"),
+                Switch::new("toggle-suppress-ctrl-v")
+                    .small()
+                    .checked(self.settings.terminal_interaction.suppress_ctrl_v)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.settings.terminal_interaction.suppress_ctrl_v = checked;
                         cx.notify();
                     }))
                     .into_any_element(),

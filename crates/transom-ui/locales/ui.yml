@@ -2656,6 +2656,9 @@ settings:
   trim_trailing_whitespace_desc:
     en: Trim trailing whitespace from each line when pasting.
     zh-CN: 粘贴时去除每行末尾的空白字符。
+  suppress_ctrl_v_desc:
+    en: Swallow Ctrl+V in the terminal instead of sending ^V to the shell. A stray ^V arms readline quoted-insert, which turns the next bracketed paste into literal ^[[200~ leftovers and corrupts that command line. Pasting is unaffected (Ctrl+Shift+V, Cmd+V, right click). Turn this off to hand the key back to readline and vim block select, or bind another key to \x16 in custom key bindings.
+    zh-CN: 默认开启：终端里的 Ctrl+V 被拦下，既不发给 Shell，也不当成粘贴。误按 Ctrl+V 会让 readline 布置一次性引用插入，紧接着的括号粘贴就留下 ^[[200~ 残字并污染那条命令行，拦下即从源头消除。粘贴不受影响，仍走 Ctrl+Shift+V、Cmd+V 或右键。需要 readline 引用插入与 vim 块选择时关闭本开关，或用自定义按键把别的组合（如 ctrl-q）绑成 \x16。
   show_tab_close_button_desc:
     en: Show the close button on each tab.
     zh-CN: 在每个标签页上显示关闭按钮。
@@ -3013,6 +3016,9 @@ settings:
   trim_trailing_whitespace:
     en: Trim Surrounding Spaces and Newlines
     zh-CN: 粘贴时去除周围空格和换行
+  suppress_ctrl_v:
+    en: Intercept Ctrl+V in Terminal
+    zh-CN: 拦下终端里的 Ctrl+V
   show_tab_close_button:
     en: Show Close Button on Tabs
     zh-CN: 在标签页上显示关闭按钮

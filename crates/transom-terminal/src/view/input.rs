@@ -83,6 +83,20 @@ impl TerminalView {
             self.paste_from_clipboard(cx);
             return;
         }
+        // 纯 Ctrl+V 默认被拦下，既不发给 Shell 也不改写成粘贴：`^V` 一旦落到
+        // readline 就布置了一次性引用插入，紧接着的括号粘贴会把标记的开头 ESC
+        // 变成 `^[[200~` 字面残字并污染那条命令行。拦下即从源头消除误伤。
+        // 需要 readline 引用插入或 vim 块选择时关掉本开关回到 Unix 惯例，或保留
+        // 开关、用自定义按键把别的组合（如 ctrl-q）绑成 \x16；自定义映射在前面已优先。
+        if self.interaction.suppress_ctrl_v
+            && modifiers.control
+            && !modifiers.shift
+            && !modifiers.platform
+            && key == "v"
+        {
+            cx.stop_propagation();
+            return;
+        }
 
         // Tab is consumed by the terminal context action to avoid focus traversal.
         // 建议浮层打开时先用来补全：这是用户此刻最想要 Tab 干的事。

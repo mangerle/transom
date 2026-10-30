@@ -60,6 +60,15 @@ impl TerminalView {
             return;
         }
         if control && key == "v" {
+            // 与常规输入域同一语义：拦下纯 Ctrl+V 时这里也不粘贴，避免同一个键
+            // 在两种模式下给出两种猜测行为；粘贴仍走 Ctrl+Shift+V 或 Cmd+V。
+            if self.interaction.suppress_ctrl_v
+                && modifiers.control
+                && !modifiers.platform
+                && !modifiers.shift
+            {
+                return;
+            }
             self.exit_copy_mode(cx);
             self.paste_from_clipboard(cx);
             return;

@@ -181,6 +181,19 @@ pub struct TerminalInteraction {
     pub middle_click_paste: bool,
     #[serde(default)]
     pub trim_trailing_whitespace: bool,
+    /// 是否拦下终端里的纯 Ctrl+V：既不发给 Shell，也不触发粘贴；默认开启。
+    ///
+    /// 设计原理（Why）：Unix 惯例里 Ctrl+V 属于 Shell——readline 的引用插入、vim 的
+    /// 块选择都挂在这个键上，终端把它原样透传。透传有条隐蔽的误伤路径：误按 Ctrl+V
+    /// 后 readline 布置了一次性的"下一字符原样插入"，紧接着的括号粘贴会把开头的 ESC
+    /// 变成字面文本，屏幕上留下 `^[[200~` 残字并污染那条命令行。用户只会看到"粘贴
+    /// 出错了"，实际与终端的模式判定无关。本应用默认把这个键拦在终端输入域内，
+    /// 从源头消除误伤；粘贴不受影响，仍走 Ctrl+Shift+V、`Cmd+V` 或右键。
+    /// 代价与局限：vim 块选择与 readline 引用插入不再吃 Ctrl+V，且本键不会改写成
+    /// 粘贴（避免"一个键两种猜测语义"）。需要原语义时关掉本开关，或把别的组合
+    /// （如 ctrl-q）用自定义按键绑成 `\x16`——自定义映射的优先级始终高于本开关。
+    #[serde(default = "default_true")]
+    pub suppress_ctrl_v: bool,
 }
 
 impl TerminalInteraction {
@@ -209,6 +222,7 @@ impl Default for TerminalInteraction {
             multiline_paste_confirm: false,
             middle_click_paste: false,
             trim_trailing_whitespace: false,
+            suppress_ctrl_v: true,
         }
     }
 }
