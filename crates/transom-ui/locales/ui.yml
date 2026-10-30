@@ -4888,6 +4888,12 @@ container:
       en: Connected containers
       zh-CN: 已连接容器
   action:
+    compose_up:
+      en: Redeploy from files
+      zh-CN: 按文件重新部署
+    compose_down:
+      en: Stop and remove project
+      zh-CN: 停止并删除项目
     rename:
       en: Rename
       zh-CN: 重命名
@@ -4910,6 +4916,9 @@ container:
       en: '%{action} in progress…'
       zh-CN: 正在%{action}…
   confirm:
+    compose_down:
+      en: 'Stop and remove the compose project %{name}? Its containers and networks will be deleted.'
+      zh-CN: '确认停止并删除编排项目 %{name}？它创建的容器与网络都会被删掉。'
     remove_container:
       en: 'Remove container %{name}?'
       zh-CN: 确认删除容器 %{name}？
@@ -4926,6 +4935,9 @@ container:
       en: 'Remove %{path}?'
       zh-CN: 确认删除 %{path}？
   compose:
+    running:
+      en: 'Running compose command: %{action}'
+      zh-CN: '正在执行编排命令：%{action}'
     no_containers:
       en: No containers belong to this project
       zh-CN: 该项目下没有容器

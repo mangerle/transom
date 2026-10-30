@@ -484,7 +484,12 @@ pub(crate) enum ContainerConfirm {
     Image(String),
     Volume(String),
     Network(String),
-    FilePath { path: String, recursive: bool },
+    /// 编排项目 `down`：会删掉该项目创建的容器与网络。
+    Compose(String),
+    FilePath {
+        path: String,
+        recursive: bool,
+    },
 }
 
 /// 一个引擎工作区的全部界面状态。

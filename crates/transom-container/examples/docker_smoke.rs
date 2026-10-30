@@ -32,7 +32,8 @@ use transom_container::{
     validate_container_path,
 };
 use transom_core::{
-    ContainerConnection, ContainerCreateSpec, ContainerDetails, ContainerEndpoint,
+    ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec, ContainerDetails,
+    ContainerEndpoint,
     ContainerEngineKind, ContainerFileEntry, ContainerFileKind, ContainerLifecycleAction,
     ContainerPortPublish, ContainerState, ContainerStats, ContainerSummary, TerminalIo,
     TerminalSize, short_id,
@@ -174,6 +175,7 @@ async fn main() -> ExitCode {
     volume_stage(&engine, &mut report).await;
     network_stage(&engine, &mut report).await;
     let _ = compose_stage(&engine, &options.project, &mut report).await;
+    compose_lifecycle_stage(&engine, &options.project, &mut report).await;
     path_guard_stage(&mut report);
     let _ = lifecycle_stage(&engine, &options.container, &mut report).await;
     run_stage(&engine, &options.image, &mut report).await;
@@ -1226,4 +1228,117 @@ async fn health_reaches_healthy(engine: &Engine, id: &str, report: &mut Report) 
         "健康检查闭环",
         format!("最终状态 {last}（创建时给的间隔 2 秒）"),
     );
+}
+
+/// 编排起停闭环：`down` 删掉项目容器、`up` 按同一份项目信息再拉起来。
+///
+/// 为什么要在 down 之前就把项目结构体拿到手：项目的 `working_dir` 与
+/// `config_files` 只存在于容器标签里，容器一旦被删就再也查不到，
+/// 而界面走的正是同一条路径（点击时缓存的项目对象）。
+async fn compose_lifecycle_stage(engine: &Engine, project: &str, report: &mut Report) {
+    let cancel = Arc::new(AtomicBool::default());
+    let captured = match step(
+        report,
+        "编排项目取样",
+        engine.compose_projects(),
+        |projects| format!("{} 个项目", projects.len()),
+    )
+    .await
+    {
+        Some(projects) => projects.into_iter().find(|item| item.name == project),
+        None => return,
+    };
+    let Some(target) = captured else {
+        report.fail("编排项目取样", format!("未发现项目 {project}，夹具未准备"));
+        return;
+    };
+
+    let bogus = ComposeProject {
+        name: target.name.clone(),
+        working_dir: Some("/definitely/not/exists".to_string()),
+        config_files: target.config_files.clone(),
+        ..target.clone()
+    };
+    let rejected = transom_container::compose::run(engine, &bogus, ComposeAction::Up, &cancel).await;
+    report.check(
+        matches!(&rejected, Err(ContainerError::Unsupported { .. })),
+        "工作目录不可用被拒",
+        format!("{:?}", rejected.err().map(|error| error.to_string())),
+    );
+
+    let down = step(
+        report,
+        "编排 down",
+        transom_container::compose::run(engine, &target, ComposeAction::Down, &cancel),
+        |output| format!("输出尾部 {}", abbreviate(output)),
+    )
+    .await;
+    if down.is_none() {
+        return;
+    }
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let after_down = step(
+        report,
+        "down 后项目消失",
+        engine.compose_projects(),
+        |projects| {
+            format!(
+                "剩余 {} 个项目：{}",
+                projects.len(),
+                projects
+                    .iter()
+                    .map(|item| item.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        },
+    )
+    .await;
+    if let Some(projects) = &after_down {
+        report.check(
+            !projects.iter().any(|item| item.name == project),
+            "down 结果一致",
+            format!("{project} 已不在项目列表"),
+        );
+    }
+
+    let up = step(
+        report,
+        "编排 up",
+        transom_container::compose::run(engine, &target, ComposeAction::Up, &cancel),
+        |output| format!("输出尾部 {}", abbreviate(output)),
+    )
+    .await;
+    if up.is_none() {
+        return;
+    }
+    let after_up = step(
+        report,
+        "up 后项目恢复",
+        engine.compose_projects(),
+        |projects| format!("共 {} 个项目", projects.len()),
+    )
+    .await;
+    let restored = after_up
+        .unwrap_or_default()
+        .into_iter()
+        .find(|item| item.name == project);
+    report.check(
+        restored.as_ref().is_some_and(|item| item.total >= 2 && item.running >= 1),
+        "up 结果一致",
+        format!("{:?}", restored.map(|item| item.state_label())),
+    );
+}
+
+/// 输出摘要：只保留尾部一段，避免把整段 compose 日志打进台账。
+fn abbreviate(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.len() <= 160 {
+        return trimmed.replace('\n', " / ");
+    }
+    let mut start = trimmed.len() - 160;
+    while !trimmed.is_char_boundary(start) {
+        start += 1;
+    }
+    format!("…{}", trimmed[start..].replace('\n', " / "))
 }

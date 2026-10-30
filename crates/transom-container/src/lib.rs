@@ -7,6 +7,7 @@
 mod api;
 mod bridge;
 mod cli;
+pub mod compose;
 mod discovery;
 mod engine;
 mod error;

@@ -40,13 +40,13 @@ pub use model::catalog::{
 };
 pub use model::color::Rgb;
 pub use model::container::{
-    ComposeProject, ContainerConnection, ContainerCreateSpec, ContainerDetails, ContainerEndpoint,
-    ContainerEngineInfo, ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef,
-    ContainerFileEntry, ContainerFileKind, ContainerImageDetails, ContainerImageSummary,
-    ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
-    ContainerNetworkSummary, ContainerPort, ContainerPortPublish, ContainerState, ContainerStats,
-    ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
-    is_valid_container_name, short_id,
+    ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec, ContainerDetails,
+    ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind, ContainerEngineProfile,
+    ContainerEngineRef, ContainerFileEntry, ContainerFileKind, ContainerImageDetails,
+    ContainerImageSummary, ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment,
+    ContainerNetworkDetails, ContainerNetworkSummary, ContainerPort, ContainerPortPublish,
+    ContainerState, ContainerStats, ContainerSummary, ContainerVolumeDetails,
+    ContainerVolumeSummary, compose_projects, is_valid_container_name, short_id,
 };
 pub use model::file_diff::{DEFAULT_CONTEXT_LINES, DiffHunk, FileDiff, MergeDirection};
 pub use model::forward::{

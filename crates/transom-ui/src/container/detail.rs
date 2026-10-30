@@ -411,6 +411,37 @@ impl AppShell {
                                     }
                                 })),
                         );
+                    let compose_name = project.name.clone();
+                    let up_name = compose_name.clone();
+                    actions = actions
+                        .child(
+                            Button::new("compose-up")
+                                .xsmall()
+                                .icon(IconName::RotateCw)
+                                .label(rust_i18n::t!("container.action.compose_up").to_string())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.run_compose(
+                                        tab_id,
+                                        up_name.clone(),
+                                        transom_core::ComposeAction::Up,
+                                        cx,
+                                    );
+                                })),
+                        )
+                        .child(
+                            Button::new("compose-down")
+                                .xsmall()
+                                .icon(IconName::Trash)
+                                .label(rust_i18n::t!("container.action.compose_down").to_string())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.run_compose(
+                                        tab_id,
+                                        compose_name.clone(),
+                                        transom_core::ComposeAction::Down,
+                                        cx,
+                                    );
+                                })),
+                        );
                 }
             }
             ContainerSection::Images => {
@@ -561,6 +592,10 @@ fn render_confirm_bar(
         ),
         ContainerConfirm::Network(name) => (
             rust_i18n::t!("container.confirm.remove_network", name = name).to_string(),
+            false,
+        ),
+        ContainerConfirm::Compose(name) => (
+            rust_i18n::t!("container.confirm.compose_down", name = name).to_string(),
             false,
         ),
         ContainerConfirm::FilePath { path, recursive } => (

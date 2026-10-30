@@ -286,6 +286,50 @@ pub struct ContainerNetworkDetails {
     pub connected: Vec<ContainerNetworkAttachment>,
 }
 
+/// 编排项目命令。
+///
+/// 设计原理（Why）：引擎没有 Compose 的 REST 接口，这两个动作只能由 CLI 完成；
+/// 界面把它做成枚举而不是字符串，避免把任意参数拼进子进程。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComposeAction {
+    /// 按 compose 文件重新起（幂等：已存在的容器由 CLI 自己判断）。
+    Up,
+    /// 停止并删除该项目创建的容器与网络。
+    Down,
+}
+
+impl ComposeAction {
+    /// 界面与日志用的人类可读名。
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Up => "启动",
+            Self::Down => "停止并删除",
+        }
+    }
+
+    /// 子命令名。
+    pub fn subcommand(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Down => "down",
+        }
+    }
+
+    /// 子命令及其参数。
+    pub fn args(self) -> &'static [&'static str] {
+        match self {
+            Self::Up => &["up", "-d"],
+            Self::Down => &["down"],
+        }
+    }
+
+    /// `down` 会删容器与网络，属于破坏性动作。
+    pub fn is_dangerous(self) -> bool {
+        matches!(self, Self::Down)
+    }
+}
+
 /// Compose 项目（按容器标签聚合）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ComposeProject {

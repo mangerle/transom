@@ -127,6 +127,52 @@ pub(super) fn handle_container_command(
         ContainerCommand::Cancel { tab_id, request_id } => {
             cancel_task(state, ctx, tab_id, request_id)
         }
+        ContainerCommand::RunCompose {
+            tab_id,
+            request_id,
+            project,
+            action,
+        } => {
+            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                return;
+            };
+            let event_tx = ctx.event_tx.clone();
+            spawn_long(
+                state,
+                ctx,
+                tab_id,
+                request_id,
+                Arc::clone(&cancel),
+                async move {
+                    let error =
+                        match transom_container::compose::run(&engine, &project, action, &cancel)
+                            .await
+                        {
+                            Ok(output) => {
+                                log::info!(
+                                    "编排命令完成，项目: {}，命令: {}，输出尾部: {output}",
+                                    project.name,
+                                    action.label()
+                                );
+                                None
+                            }
+                            Err(error) => {
+                                log::error!(
+                                    "编排命令失败，项目: {}，命令: {}，原因: {error}",
+                                    project.name,
+                                    action.label()
+                                );
+                                Some(AppError::from(error))
+                            }
+                        };
+                    send_event(
+                        &event_tx,
+                        ContainerAppEvent::ActionFinished { request_id, error },
+                    )
+                    .await;
+                },
+            );
+        }
         ContainerCommand::Discover { request_id } => {
             let event_tx = ctx.event_tx.clone();
             state.container_ops.spawn(async move {

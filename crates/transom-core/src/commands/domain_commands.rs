@@ -10,7 +10,8 @@
 
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
-    ContainerConnection, ContainerCreateSpec, ContainerEngineProfile, ContainerLifecycleAction,
+    ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec,
+    ContainerEngineProfile, ContainerLifecycleAction,
 };
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
@@ -139,6 +140,13 @@ pub enum ContainerCommand {
     TestConnection {
         request_id: ContainerRequestId,
         profile: ContainerEngineProfile,
+    },
+    /// 编排项目命令（up/down）；只能走宿主机 CLI。
+    RunCompose {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        project: Box<ComposeProject>,
+        action: ComposeAction,
     },
     /// 发现本机引擎：让用户不必手填 socket/管道路径就能添加连接。
     Discover { request_id: ContainerRequestId },
