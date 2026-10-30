@@ -4499,6 +4499,13 @@ sidebar:
     en: 'Host address copied: %{host}'
     zh-CN: '已复制主机地址: %{host}'
 container:
+  badge:
+    in_use:
+      en: In use
+      zh-CN: 在用
+    free:
+      en: Unused
+      zh-CN: 空闲
   title:
     en: Containers
     zh-CN: 容器
@@ -4581,6 +4588,18 @@ container:
     health_interval_placeholder:
       en: empty uses the engine default of 30s
       zh-CN: 留空用引擎默认 30 秒
+    memory:
+      en: Memory limit (MB)
+      zh-CN: 内存上限（MB）
+    memory_placeholder:
+      en: empty means unlimited
+      zh-CN: 留空表示不限制
+    cpus:
+      en: CPU limit (cores)
+      zh-CN: CPU 上限（核）
+    cpus_placeholder:
+      en: 0.5 means half a core
+      zh-CN: 0.5 表示半核
     restart:
       en: Restart policy
       zh-CN: 重启策略

@@ -114,13 +114,20 @@ impl AppShell {
                     workspace.compose = transom_core::compose_projects(&containers);
                     workspace.containers = containers;
                     workspace.busy = false;
-                    let valid = workspace
-                        .selected
-                        .as_deref()
-                        .is_some_and(|id| workspace.containers.iter().any(|item| item.id == id));
-                    if !valid {
-                        workspace.selected = None;
-                        workspace.details = None;
+                    // 只有容器/编排分类的选中项是容器 ID；在卷等其他分类下顺手
+                    // 拉一次容器列表时，不能把当前的选中项判成"无效"清掉。
+                    let id_is_container_scoped = matches!(
+                        workspace.section,
+                        ContainerSection::Containers | ContainerSection::Compose
+                    );
+                    if id_is_container_scoped {
+                        let valid = workspace.selected.as_deref().is_some_and(|id| {
+                            workspace.containers.iter().any(|item| item.id == id)
+                        });
+                        if !valid {
+                            workspace.selected = None;
+                            workspace.details = None;
+                        }
                     }
                     // 跨分类跳转等着列表到位再按名字定位，避免用户点了两次。
                     if let Some(name) = workspace.pending_select.take() {
@@ -528,6 +535,19 @@ impl AppShell {
             ContainerSection::Networks => ContainerCommand::ListNetworks { tab_id, request_id },
         };
         self.send_tracked(tab_id, request_id, command);
+        // 卷分类要同时拉容器列表：「在用 / 空闲」与「仅未使用卷」都靠容器的挂载
+        // 明细算，缺了这份数据会把在用卷说成空闲，用户据此删除就是事故。
+        if section == ContainerSection::Volumes {
+            let usage_request = ContainerRequestId::new();
+            self.send_tracked(
+                tab_id,
+                usage_request,
+                ContainerCommand::ListContainers {
+                    tab_id,
+                    request_id: usage_request,
+                },
+            );
+        }
     }
 
     /// 切换左侧分类：清空选中项并拉取该分类列表。

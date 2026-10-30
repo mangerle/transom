@@ -319,8 +319,11 @@ fn collect_rows(
     checked: &HashSet<String>,
 ) -> Vec<ListRow> {
     let quick = workspace.quick_filter;
+    let cli_backend = workspace.info.as_ref().is_some_and(|info| info.cli_backend);
+    // CLI 兜底的容器摘要没有挂载明细，算不出在用卷，此时既不显示徽章也不给筛选。
+    let usage_known = !cli_backend && !workspace.containers.is_empty();
     // 在用卷集合由已拉到的容器挂载计算：列表接口就带 Mounts，不需要逐个 inspect。
-    let used_volumes: HashSet<String> = if quick == ContainerQuickFilter::UnusedVolumes {
+    let used_volumes: HashSet<String> = if usage_known {
         workspace
             .containers
             .iter()
@@ -361,7 +364,7 @@ fn collect_rows(
             .iter()
             .filter(|item| matches_query(query, &[item.name.clone(), item.driver.clone()]))
             .filter(|item| volume_passes_filter(quick, used_volumes.contains(&item.name)))
-            .map(volume_row_spec)
+            .map(|item| volume_row_spec(item, usage_known, used_volumes.contains(&item.name)))
             .collect(),
         ContainerSection::Networks => workspace
             .networks
@@ -436,13 +439,20 @@ fn image_row_spec(item: &ContainerImageSummary) -> ListRow {
     }
 }
 
-fn volume_row_spec(item: &ContainerVolumeSummary) -> ListRow {
+fn volume_row_spec(item: &ContainerVolumeSummary, usage_known: bool, in_use: bool) -> ListRow {
     ListRow {
         key: format!("volume-row-{}", item.name),
         icon: IconName::Database,
         title: item.name.clone(),
         subtitle: format!("{} · {}", item.driver, item.mountpoint),
-        badge: None,
+        badge: usage_known.then(|| {
+            rust_i18n::t!(if in_use {
+                "container.badge.in_use"
+            } else {
+                "container.badge.free"
+            })
+            .to_string()
+        }),
         running: None,
         checked: None,
         target: RowTarget::Volume(item.name.clone()),

@@ -335,6 +335,16 @@ impl AppShell {
                     form.health_interval.clone(),
                     p,
                 ))
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.memory").to_string(),
+                    form.memory.clone(),
+                    p,
+                ))
+                .child(Self::form_field(
+                    rust_i18n::t!("container.run.cpus").to_string(),
+                    form.cpus.clone(),
+                    p,
+                ))
                 .child(
                     v_flex()
                         .gap_1()

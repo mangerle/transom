@@ -311,6 +311,10 @@ impl DockerApi {
                     "Name": spec.restart.clone().unwrap_or_else(|| "no".to_string()),
                     "MaximumRetryCount": 0,
                 },
+                // 资源限制留空即不下发：0 在 Docker 里同样是「不限制」，但少写字段
+                // 更不容易踩到版本差异。
+                "Memory": spec.memory_mb.unwrap_or(0) * 1024 * 1024,
+                "NanoCpus": spec.nano_cpus.unwrap_or(0),
             },
         });
         let path = if spec.name.is_empty() {

@@ -908,6 +908,8 @@ pub(crate) struct ContainerRunForm {
     pub(crate) env: Entity<InputState>,
     pub(crate) health: Entity<InputState>,
     pub(crate) health_interval: Entity<InputState>,
+    pub(crate) memory: Entity<InputState>,
+    pub(crate) cpus: Entity<InputState>,
     pub(crate) restart: Option<String>,
     /// 校验或引擎返回的错误提示，展示在表单底部。
     pub(crate) error: Option<String>,
@@ -935,6 +937,8 @@ impl ContainerRunForm {
                 window,
                 cx,
             ),
+            memory: run_input("container.run.memory_placeholder", None, window, cx),
+            cpus: run_input("container.run.cpus_placeholder", None, window, cx),
             restart: None,
             error: None,
         }
@@ -958,6 +962,8 @@ impl ContainerRunForm {
             // 间隔留空或写非数字都按引擎默认处理：这不是必须填对的字段，
             // 报错打断提交流程不值得，真正的非法值（0 秒）由 spec 校验拦下。
             health_interval_secs: read(&self.health_interval).parse::<u64>().ok(),
+            memory_mb: read(&self.memory).parse::<u64>().ok(),
+            nano_cpus: parse_cores(&read(&self.cpus)),
         };
         spec.validate().map_err(|error| error.to_string())?;
         Ok(spec)
@@ -971,6 +977,18 @@ pub(crate) fn split_list(text: &str) -> Vec<String> {
         .filter(|item| !item.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+/// 把「核数」输入换算成 Docker 的 `NanoCpus`（1e-9 核）。
+///
+/// 留空、非数字、非正数都按「不限制」处理：这一项不是必填，报错打断提交流程
+/// 不值得，真正的量级错误由 spec 校验拦下。
+pub(crate) fn parse_cores(text: &str) -> Option<u64> {
+    let cores: f64 = text.trim().parse().ok()?;
+    if !cores.is_finite() || cores <= 0.0 {
+        return None;
+    }
+    Some((cores * 1_000_000_000.0).round() as u64)
 }
 
 /// 命令按空白切分为 argv；本工具不支持带引号的命令，避免把 Shell 语义搬进界面。
@@ -1231,6 +1249,17 @@ mod tests {
             assert!(!keys.is_empty(), "{section:?} 必须有可用排序键");
             assert!(keys.contains(&ContainerSortKey::default_for(section)));
         }
+    }
+
+    #[test]
+    fn cpu_cores_convert_to_nanocpus() {
+        assert_eq!(super::parse_cores("0.5"), Some(500_000_000));
+        assert_eq!(super::parse_cores(" 2 "), Some(2_000_000_000));
+        assert_eq!(super::parse_cores(""), None);
+        assert_eq!(super::parse_cores("0"), None, "0 表示不限制");
+        assert_eq!(super::parse_cores("-1"), None);
+        assert_eq!(super::parse_cores("abc"), None);
+        assert_eq!(super::parse_cores("NaN"), None);
     }
 
     #[test]

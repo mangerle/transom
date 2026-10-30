@@ -33,10 +33,9 @@ use transom_container::{
 };
 use transom_core::{
     ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec, ContainerDetails,
-    ContainerEndpoint,
-    ContainerEngineKind, ContainerFileEntry, ContainerFileKind, ContainerLifecycleAction,
-    ContainerPortPublish, ContainerState, ContainerStats, ContainerSummary, TerminalIo,
-    TerminalSize, short_id,
+    ContainerEndpoint, ContainerEngineKind, ContainerFileEntry, ContainerFileKind,
+    ContainerLifecycleAction, ContainerPortPublish, ContainerState, ContainerStats,
+    ContainerSummary, TerminalIo, TerminalSize, short_id,
 };
 
 const DEFAULT_CONTAINER: &str = "transom-smoke";
@@ -1094,6 +1093,8 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
         // 健康检查走 CMD-SHELL：busybox 一定有 sh，能稳定跑出 healthy。
         health_cmd: Some("exit 0".to_string()),
         health_interval_secs: Some(2),
+        memory_mb: Some(64),
+        nano_cpus: Some(500_000_000),
     };
     let mut check = spec.clone();
     report.check(
@@ -1194,6 +1195,21 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
         "非法名称被拒",
         format!("{:?}", bad.err().map(|error| error.to_string())),
     );
+    let limits = step(
+        report,
+        "资源限制生效",
+        engine.container_stats(&id, &Arc::new(AtomicBool::default())),
+        |stats| format!("内存上限 {} 字节", stats.memory_limit),
+    )
+    .await;
+    if let Some(stats) = limits {
+        report.check(
+            stats.memory_limit >= 60 * 1024 * 1024 && stats.memory_limit <= 68 * 1024 * 1024,
+            "内存限制落在 64MB 上下",
+            format!("引擎回报 {}", stats.memory_limit),
+        );
+    }
+
     step(
         report,
         "删除新容器",
@@ -1259,7 +1275,8 @@ async fn compose_lifecycle_stage(engine: &Engine, project: &str, report: &mut Re
         config_files: target.config_files.clone(),
         ..target.clone()
     };
-    let rejected = transom_container::compose::run(engine, &bogus, ComposeAction::Up, &cancel).await;
+    let rejected =
+        transom_container::compose::run(engine, &bogus, ComposeAction::Up, &cancel).await;
     report.check(
         matches!(&rejected, Err(ContainerError::Unsupported { .. })),
         "工作目录不可用被拒",
@@ -1324,7 +1341,9 @@ async fn compose_lifecycle_stage(engine: &Engine, project: &str, report: &mut Re
         .into_iter()
         .find(|item| item.name == project);
     report.check(
-        restored.as_ref().is_some_and(|item| item.total >= 2 && item.running >= 1),
+        restored
+            .as_ref()
+            .is_some_and(|item| item.total >= 2 && item.running >= 1),
         "up 结果一致",
         format!("{:?}", restored.map(|item| item.state_label())),
     );

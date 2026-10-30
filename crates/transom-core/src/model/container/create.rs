@@ -57,6 +57,15 @@ pub struct ContainerCreateSpec {
     /// 健康检查间隔（秒）；留空走引擎默认 30 秒。
     #[serde(default)]
     pub health_interval_secs: Option<u64>,
+    /// 内存上限（MB）；留空不限制。
+    #[serde(default)]
+    pub memory_mb: Option<u64>,
+    /// CPU 上限，单位为 1e-9 核（Docker 的 `NanoCpus`）；留空不限制。
+    ///
+    /// 设计原理（Why）：界面填的是「0.5 核」这类小数，但小数进不了带 `Eq` 的
+    /// 契约类型，因此在界面侧一次性换算成整数纳核，本层只做整数校验。
+    #[serde(default)]
+    pub nano_cpus: Option<u64>,
 }
 
 impl ContainerCreateSpec {
@@ -122,6 +131,12 @@ impl ContainerCreateSpec {
         }
         if self.health_interval_secs == Some(0) {
             return Err("健康检查间隔必须大于 0 秒".to_string());
+        }
+        self.memory_mb = self.memory_mb.filter(|mb| *mb > 0);
+        self.nano_cpus = self.nano_cpus.filter(|nano| *nano > 0);
+        if self.nano_cpus.is_some_and(|nano| nano > 256_000_000_000) {
+            // 超过 256 核基本是把「核」当成「纳核」填错的量级，引擎会接受但没意义。
+            return Err("CPU 上限看起来填错了单位，请按核填写（最多 256 核）".to_string());
         }
         if let Some(restart) = self.restart.as_deref()
             && !Self::RESTART_POLICIES.contains(&restart)
@@ -194,6 +209,8 @@ mod tests {
             restart: Some("always".to_string()),
             health_cmd: Some("pg_isready".to_string()),
             health_interval_secs: Some(5),
+            memory_mb: Some(256),
+            nano_cpus: Some(500_000_000),
         }
     }
 
@@ -260,6 +277,20 @@ mod tests {
     }
 
     /// 健康检查留空要归一化成 `None`，否则会下发一个空命令的检查项，容器永远不健康。
+    #[test]
+    fn zero_limits_are_dropped_and_absurd_cpu_is_rejected() {
+        let mut item = spec();
+        item.memory_mb = Some(0);
+        item.nano_cpus = Some(0);
+        item.validate().expect("0 表示不限制，不该报错");
+        assert_eq!(item.memory_mb, None);
+        assert_eq!(item.nano_cpus, None);
+
+        let mut item = spec();
+        item.nano_cpus = Some(1_000_000_000_000);
+        assert!(item.validate().is_err(), "把核数当纳核填要被拦下");
+    }
+
     #[test]
     fn health_interval_requires_a_command() {
         let mut item = spec();
