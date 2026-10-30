@@ -58,7 +58,7 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 终端程序通过 OSC 777 显式请求的通知：程序自己决定了"值得看一眼"，
+    /// 终端程序通过 OSC 777 / OSC 9 显式请求的通知：程序自己决定了"值得看一眼"，
     /// 因此不加耗时阈值，只受总开关约束。
     pub(crate) fn on_desktop_notification(
         &mut self,
