@@ -281,6 +281,12 @@ enum ContainerCommand {
   但全屏视图正处于终端页签时 Esc 不放行给界面，仍然交给容器内的程序（vim 等把
   Esc 当正常输入）；按键回调挂在浮层自身的 Overlay 上下文里，不做全局绑定，
   避免没有浮层时也吃掉这一次按键；
+- 编排项目不再只读：详情头部提供「按文件重新部署」（compose up -d）与「停止并删除
+  项目」（compose down，走确认条）。引擎没有 Compose 的 REST 接口，只能起宿主机
+  CLI 子进程：工作目录与配置文件取容器标签且必须是已存在的绝对路径，参数以 argv
+  传递不经 Shell；`docker compose` 失败时回落独立版 `docker-compose`；子进程
+  `kill_on_drop` 加显式 `kill`，5 分钟超时与取消都收得回来，输出只回 8KB 内的
+  尾部摘要；
 - 图标全部使用 `gpui-kit` 的 `IconName`，容器默认图标复用
   `SessionIcon::Container`。
 
@@ -349,15 +355,15 @@ cargo run -p transom-container --example docker_smoke
 ```
 
 结论：Docker 29.1.3 / API 1.52（Ubuntu 26.04，systemd cgroup + overlayfs）
-77 步全部通过（含「列表接口必须带挂载明细」的断言，界面靠它算在用卷；以及
+85 步全部通过（含「列表接口必须带挂载明细」的断言，界面靠它算在用卷；以及
 创建时给 2 秒间隔、最终跑到 `healthy` 的健康检查闭环），
 覆盖发现与协商、容器列表/详情、创建并启动容器（含端口、挂载、
 环境变量、同名 409 冲突与重命名，非法名称单独用 `InvalidName` 报错而不是复用
 路径错误）、统计两次采样、日志全量与
 stderr 分流、日志时间戳、实时跟随与取消、exec 建立/尺寸/回显/结束通知、归档
 列目录与预览与上传下载与重命名删除、新建目录与递归建目录与递归删除、镜像列表
-/详情/重复拉取、卷与网络的创建详情删除、Compose 标签聚合、容器路径防线、
-启停状态闭环。
+/详情/重复拉取、卷与网络的创建详情删除、Compose 标签聚合与项目级 down/up 闭环（down 后
+项目从列表消失、up 后容器与网络按 compose 文件恢复）、容器路径防线、启停状态闭环。
 
 真机暴露的 7 个问题（均已修在 `transom-container`，各带回归测试）：
 
