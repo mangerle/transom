@@ -643,17 +643,16 @@ fn list_row(
         );
     if let Some(is_checked) = row.checked {
         let check_id = row_target_key_id(&row.target);
-        let app = app.clone();
         element = element.child(
             Checkbox::new(ElementId::Name(format!("{}-check", row.key).into()))
                 .small()
                 .checked(is_checked)
-                .on_click(move |&_, _, cx| {
-                    let check_id = check_id.clone();
-                    app.clone().update(cx, |this, cx| {
-                        this.toggle_container_check(tab_id, check_id, cx);
-                    });
-                }),
+                // 勾选只改勾选集合：不吞掉冒泡的话，行自身的点击会顺手把右侧详情
+                // 切到这个容器，正在看的日志与统计就被清了。
+                .on_click(cx.listener(move |this, &_, _, cx| {
+                    cx.stop_propagation();
+                    this.toggle_container_check(tab_id, check_id.clone(), cx);
+                })),
         );
     }
     if let Some(badge) = row.badge.clone() {
@@ -667,7 +666,6 @@ fn list_row(
     }
     for action in quick_actions(row) {
         let target = row.target.clone();
-        let entity = app.clone();
         element = element.child(
             Button::new(ElementId::Name(
                 format!("{}-action-{:?}", row.key, action).into(),
@@ -675,11 +673,11 @@ fn list_row(
             .ghost()
             .xsmall()
             .icon(action.icon())
-            .on_click(move |_, window, cx| {
-                entity.clone().update(cx, |this, cx| {
-                    this.run_row_action(tab_id, target.clone(), action, window, cx);
-                });
-            }),
+            // 同理：行内动作不该因为冒泡再触发一次「选中该行」。
+            .on_click(cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.run_row_action(tab_id, target.clone(), action, window, cx);
+            })),
         );
     }
     if selected {
