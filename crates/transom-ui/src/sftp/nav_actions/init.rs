@@ -9,14 +9,13 @@ use crate::keymap;
 use crate::palette::sftp_text_input;
 use crate::sftp::columns::ColumnWidthMemory;
 use crate::sftp::{
-    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
-    SftpQueueState, SftpRemotePaneState, normalize_remote_cwd,
+    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneInit, SftpLocalPaneState,
+    SftpPanelState, SftpQueueState, SftpRemotePaneRef, SftpRemotePaneState, normalize_remote_cwd,
 };
-use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::{Connection, ConnectionId, TabId};
 
@@ -33,7 +32,7 @@ impl AppShell {
                 .map(|p| {
                     p.side_remotes
                         .iter()
-                        .any(|s| s.connection_id == connection_id)
+                        .any(|s| s.connection_id == Some(connection_id))
                 })
                 .unwrap_or(false);
             if !is_side {
@@ -156,7 +155,7 @@ impl AppShell {
             window,
             move |this, _, event: &InputEvent, _window, cx| {
                 if matches!(event, InputEvent::PressEnter { .. }) {
-                    this.sftp_enter_path(tab_id, cx);
+                    this.sftp_enter_path_pane(tab_id, SftpRemotePaneRef::Main, cx);
                 }
             },
         );
@@ -188,38 +187,24 @@ impl AppShell {
         };
         pane.sftp = Some(SftpPanelState {
             open,
-            remote: SftpRemotePaneState {
-                path: initial_remote_path.clone(),
+            remote: SftpRemotePaneState::new_main(
+                initial_remote_path.clone(),
                 path_input,
                 name_input,
-                filter_input: remote_filter_input,
-                entries: Vec::new(),
-                selected: None,
-                selection: BTreeSet::new(),
-                anchor: None,
-                scroll_handle: VirtualListScrollHandle::new(),
-                collapsed: false,
-                loading: true,
-                dir_cache: std::collections::HashMap::new(),
-            },
-            local: SftpLocalPaneState {
+                remote_filter_input,
+                true,
+            ),
+            local: SftpLocalPaneState::new(SftpLocalPaneInit {
                 path: local_path,
                 path_input: local_path_input,
                 filter_input: local_filter_input,
-                entries: Vec::new(),
                 quick_paths,
                 only: false,
-                collapsed: false,
-                selected: None,
-                selection: BTreeSet::new(),
-                anchor: None,
                 error: None,
-                scroll_handle: VirtualListScrollHandle::new(),
-            },
+            }),
             queue: SftpQueueState {
                 tasks: Vec::new(),
                 active_transfers: HashSet::new(),
-                active_op: None,
                 progress: None,
                 resume_enabled: true,
                 expanded: true,
@@ -234,8 +219,6 @@ impl AppShell {
             side_remotes: Vec::new(),
             clipboard: None,
             mount_menu_open: false,
-            show_filter: false,
-            show_hidden: false,
             sync_navigation: false,
             active_pane: SftpActivePane::default(),
             focus_handle: cx.focus_handle(),

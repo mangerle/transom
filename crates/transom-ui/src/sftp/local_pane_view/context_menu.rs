@@ -149,7 +149,7 @@ pub(super) fn build_local_context_menu(
                             {
                                 panel.select_local(p_sym.clone());
                             }
-                            this.sftp_open_symlink_modal(tab_id, false, window, cx);
+                            this.sftp_open_local_symlink_modal(tab_id, window, cx);
                         });
                     }
                 }),
@@ -200,7 +200,7 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_open_mkdir_modal(tab_id, false, window, cx);
+                        this.sftp_open_local_mkdir_modal(tab_id, window, cx);
                     });
                 }
             }),
@@ -229,7 +229,7 @@ pub(super) fn build_local_context_menu(
                         {
                             panel.select_local(p_ren.clone());
                         }
-                        this.sftp_open_rename_modal(tab_id, false, window, cx);
+                        this.sftp_open_local_rename_modal(tab_id, window, cx);
                     });
                 }
             }),
@@ -343,7 +343,7 @@ pub(super) fn build_local_blank_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_open_mkdir_modal(tab_id, false, window, cx);
+                        this.sftp_open_local_mkdir_modal(tab_id, window, cx);
                     });
                 }
             }),

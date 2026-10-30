@@ -10,19 +10,33 @@ use self::context_menu::{RemoteContextMenuProps, build_remote_context_menu};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::SftpRemotePaneRef;
+use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteFile, TabId};
 
-/// 远程内容区的渲染输入：条目、加载态、标签归属与滚动句柄。
+/// 远程内容区的渲染输入：条目、加载态、目标列与滚动句柄。
 pub(crate) struct RemoteContentProps {
     pub(crate) remote_entries: Vec<RemoteFile>,
     pub(crate) loading: bool,
+    /// 列级错误：并列远端列的读取/操作错误只落在本列。
+    pub(crate) error: Option<String>,
     pub(crate) tab_id: TabId,
-    pub(crate) tab_conn_id: Option<ConnectionId>,
+    pub(crate) target: SftpRemotePaneRef,
+    pub(crate) connection_id: ConnectionId,
     pub(crate) remote_scroll_handle: VirtualListScrollHandle,
+}
+
+/// 构建远端虚拟列表所需的参数集合。
+struct RemoteListParams {
+    remote_entries: Vec<RemoteFile>,
+    tab_id: TabId,
+    target: SftpRemotePaneRef,
+    connection_id: ConnectionId,
+    remote_scroll_handle: VirtualListScrollHandle,
 }
 
 impl AppShell {
@@ -36,8 +50,10 @@ impl AppShell {
         let RemoteContentProps {
             remote_entries,
             loading,
+            error,
             tab_id,
-            tab_conn_id,
+            target,
+            connection_id,
             remote_scroll_handle,
         } = props;
 
@@ -65,17 +81,20 @@ impl AppShell {
                 .into_any_element()
         } else {
             self.build_remote_virtual_list(
-                remote_entries.clone(),
-                tab_id,
-                tab_conn_id,
-                remote_scroll_handle,
+                RemoteListParams {
+                    remote_entries: remote_entries.clone(),
+                    tab_id,
+                    target,
+                    connection_id,
+                    remote_scroll_handle,
+                },
                 p,
                 cx,
             )
         };
 
         // 加载态视觉过渡：已有条目上覆盖轻量半透明遮罩与微型动态 Spinner，消除假死顿挫感
-        if loading && !remote_entries.is_empty() {
+        let content = if loading && !remote_entries.is_empty() {
             div()
                 .relative()
                 .size_full()
@@ -101,19 +120,41 @@ impl AppShell {
                 .into_any_element()
         } else {
             content
+        };
+
+        // 列级错误：保留已有列表可继续操作，只在上方补一条提示条。
+        if let Some(error) = error {
+            v_flex()
+                .size_full()
+                .child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .text_xs()
+                        .text_color(p.danger)
+                        .child(error),
+                )
+                .child(div().flex_1().overflow_hidden().child(content))
+                .into_any_element()
+        } else {
+            content
         }
     }
 
     /// 构建远程文件虚拟滚动列表。
     fn build_remote_virtual_list(
         &self,
-        remote_entries: Vec<RemoteFile>,
-        tab_id: TabId,
-        tab_conn_id: Option<ConnectionId>,
-        remote_scroll_handle: VirtualListScrollHandle,
+        params: RemoteListParams,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let RemoteListParams {
+            remote_entries,
+            tab_id,
+            target,
+            connection_id,
+            remote_scroll_handle,
+        } = params;
         let remote_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); remote_entries.len()]);
         let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
             remote_entries
@@ -124,22 +165,23 @@ impl AppShell {
         let remote_entries_rc = std::rc::Rc::new(remote_entries);
         let p = p.clone();
         let app_entity = cx.entity().clone();
+        let has_main_remote = self
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+            .is_some();
 
         v_virtual_list(
             cx.entity().clone(),
-            format!("sftp-remote-virtual-list-{tab_id}"),
+            format!("sftp-remote-virtual-list-{tab_id}-{target:?}"),
             remote_sizes,
             move |this, range, _window, cx| {
                 let (remote_selection, remote_primary) = this
                     .workspace
                     .tab(tab_id)
                     .and_then(|tab| tab.sftp())
-                    .map(|panel| {
-                        (
-                            panel.remote.selection.clone(),
-                            panel.remote.selected.clone(),
-                        )
-                    })
+                    .and_then(|panel| panel.remote_pane(target))
+                    .map(|pane| (pane.selection.clone(), pane.selected.clone()))
                     .unwrap_or_default();
                 let app_entity = app_entity.clone();
                 range
@@ -155,7 +197,7 @@ impl AppShell {
                         let row = this.sftp_file_row(
                             SftpRowContext {
                                 tab_id,
-                                side: SftpSide::Remote,
+                                side: SftpSide::Remote(target),
                                 index: ix,
                                 path: SftpRowPath::Remote(entry.path.clone()),
                                 name: entry.name.clone(),
@@ -165,7 +207,7 @@ impl AppShell {
                                 permissions: entry.permissions,
                                 selected: is_selected,
                                 visible_paths: visible_paths.clone(),
-                                source_connection_id: tab_conn_id,
+                                source_connection_id: Some(connection_id),
                             },
                             &p,
                             cx,
@@ -177,9 +219,11 @@ impl AppShell {
                                 RemoteContextMenuProps {
                                     app: app_cm.clone(),
                                     tab_id,
+                                    target,
                                     entry_path: entry_path_cm.clone(),
                                     is_dir: entry_is_dir,
                                     is_parent_entry,
+                                    has_main_remote,
                                 },
                             )
                         });

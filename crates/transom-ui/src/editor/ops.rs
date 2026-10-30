@@ -18,12 +18,23 @@ use crate::keymap;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
 use transom_core::{
-    ErrorCode, RemoteTextMeta, SftpCommand, SftpOperation, SudoCapability, SudoUnavailable, TabId,
-    TransferId,
+    ConnectionId, ErrorCode, RemoteTextMeta, SftpCommand, SftpOperation, SudoCapability,
+    SudoUnavailable, TabId, TransferId,
 };
 
-use crate::palette::sftp_text_input;
-use crate::sftp::{SftpInputModalState, SftpInputTarget};
+use crate::sftp::{SftpInputModalParams, SftpInputTarget};
+
+/// 编辑回传通道：普通写回或经 sudo 提权写回。
+///
+/// 两条通道的准入闸门、载荷来源与投递失败兜底完全一致，差异只在命令变体
+/// 与成功后清理的状态位；用一个枚举把它们收进同一投递路径，避免两份生命周期
+/// 各自演化后出现口径漂移。
+enum EditorWriteMode {
+    /// 普通通道；`force` 为冲突横幅上显式触发的强制覆盖。
+    Normal { force: bool },
+    /// sudo 通道；`password` 为口令，`None` 表示探测确认可免密。
+    Sudo { password: Option<String> },
+}
 
 impl AppShell {
     /// 提权保存入口：先探测远端能力，再决定直接提交还是弹口令框。
@@ -57,13 +68,8 @@ impl AppShell {
             return;
         }
         let tab_id = item.tab_id;
-        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
-        else {
-            item.phase = EditorPhase::Failed;
-            item.error = Some(rust_i18n::t!("editor.error_tab_disconnected_probe").to_string());
-            cx.notify();
-            return;
-        };
+        // 提权探测同样要回到面板所属连接：并列远端的文件在主连接上不存在。
+        let connection_id = item.connection_id;
         let op_id = TransferId::new();
         item.pending_sudo_probe = Some(op_id);
         item.sudo_probe_attempted = true;
@@ -143,19 +149,21 @@ impl AppShell {
         item.confirm = None;
         item.pending_sudo_probe = None;
         item.error = None;
-        let input = sftp_text_input(window, cx, "", &rust_i18n::t!("editor.sudo_password_hint"));
-        input.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_modals.input = Some(SftpInputModalState {
-            tab_id,
-            title: rust_i18n::t!("editor.sudo_save").to_string(),
-            prompt: rust_i18n::t!("editor.sudo_save_prompt", file_name = file_name).to_string(),
-            input,
-            target: SftpInputTarget::SudoElevation {
-                editor: editor.clone(),
+        self.open_sftp_input_modal(
+            SftpInputModalParams {
+                tab_id,
+                connection_id: None,
+                title: rust_i18n::t!("editor.sudo_save").to_string(),
+                prompt: rust_i18n::t!("editor.sudo_save_prompt", file_name = file_name).to_string(),
+                placeholder: rust_i18n::t!("editor.sudo_password_hint").to_string(),
+                value: String::new(),
+                target: SftpInputTarget::SudoElevation {
+                    editor: editor.clone(),
+                },
             },
-            error: None,
-        });
-        cx.notify();
+            window,
+            cx,
+        );
     }
 
     /// 保存：把整份缓冲区连同版本指纹交给独立写回通道，面板保持打开等待结果。
@@ -205,6 +213,21 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.dispatch_editor_write(editor, EditorWriteMode::Normal { force }, window, cx);
+    }
+
+    /// 普通写回与提权写回的统一投递：守卫、载荷装配、发送与在途登记。
+    ///
+    /// 设计原理（Why）：两条通道都从同一面板快照取目标与内容，发送失败都回到
+    /// 失败态并取消"保存并关闭"意图；集中一处后，新增通道只需扩展载荷分支，
+    /// 不会漏掉任一状态清理。
+    fn dispatch_editor_write(
+        &mut self,
+        editor: &Entity<EditorState>,
+        mode: EditorWriteMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(item) = self
             .editors
             .panels
@@ -219,23 +242,36 @@ impl AppShell {
             return;
         }
         let tab_id = item.tab_id;
+        let connection_id = item.connection_id;
         let remote_path = item.remote_path.clone();
         // expected 始终携带已知指纹：它同时承载并发比对基准与 BOM/CRLF 形态还原
         // 标记（强制覆盖也必须还原形态，否则保存一次就改掉文件行尾）；跳过比对
         // 由 force 表达。新文件面板指纹为 None，net 层据此不做比对与还原。
         let expected = item.remote_meta;
+        let content = editor.read(cx).value().as_bytes().to_vec();
         let backup = self.settings.sftp.editor_write_backup;
-        let content = editor.read(cx).value();
-        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
-        else {
-            if let Some(item) = self.editor_panel_mut(editor) {
-                item.phase = EditorPhase::Failed;
-                item.close_after_write = false;
-                item.error = Some(rust_i18n::t!("editor.error_tab_disconnected_write").to_string());
-            }
-            self.focus_active_sftp_panel(window, cx);
-            cx.notify();
-            return;
+        let (sudo, force) = match &mode {
+            EditorWriteMode::Normal { force } => (false, *force),
+            EditorWriteMode::Sudo { .. } => (true, false),
+        };
+        let op = match mode {
+            EditorWriteMode::Normal { force } => SftpOperation::WriteText {
+                path: remote_path,
+                content,
+                expected,
+                force,
+                backup,
+            },
+            EditorWriteMode::Sudo { password } => SftpOperation::SudoWriteText {
+                path: remote_path,
+                content,
+                expected,
+                // 普通提权保存仍受版本指纹保护；强制覆盖只由冲突横幅显式触发，
+                // 提权通道不提供绕过入口。
+                force: false,
+                backup,
+                password,
+            },
         };
 
         let op_id = TransferId::new();
@@ -244,13 +280,7 @@ impl AppShell {
                 tab_id,
                 connection_id,
                 op_id,
-                op: SftpOperation::WriteText {
-                    path: remote_path,
-                    content: content.as_bytes().to_vec(),
-                    expected,
-                    force,
-                    backup,
-                },
+                op,
             }
             .into(),
         ) {
@@ -269,7 +299,9 @@ impl AppShell {
             item.phase = EditorPhase::Writing;
             item.error = None;
             item.confirm = None;
-            if force {
+            if sudo {
+                item.pending_sudo_probe = None;
+            } else if force {
                 item.conflict = false;
             }
         }
@@ -284,70 +316,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self
-            .editors
-            .panels
-            .iter()
-            .find(|item| item.editor == *editor)
-        else {
-            return;
-        };
-        if !item.loaded || matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing) {
-            return;
-        }
-        let tab_id = item.tab_id;
-        let remote_path = item.remote_path.clone();
-        let expected = item.remote_meta;
-        let content = editor.read(cx).value();
-        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
-        else {
-            if let Some(item) = self.editor_panel_mut(editor) {
-                item.phase = EditorPhase::Failed;
-                item.close_after_write = false;
-                item.error = Some(rust_i18n::t!("editor.error_tab_disconnected_sudo").to_string());
-            }
-            self.focus_active_sftp_panel(window, cx);
-            cx.notify();
-            return;
-        };
-
-        let op_id = TransferId::new();
-        if let Err(error) = self.services.command_tx.try_send(
-            SftpCommand::Sftp {
-                tab_id,
-                connection_id,
-                op_id,
-                op: SftpOperation::SudoWriteText {
-                    path: remote_path,
-                    content: content.as_bytes().to_vec(),
-                    expected,
-                    // 普通提权保存仍受版本指纹保护；强制覆盖只由冲突横幅显式触发，
-                    // 提权通道不提供绕过入口。
-                    force: false,
-                    backup: self.settings.sftp.editor_write_backup,
-                    password,
-                },
-            }
-            .into(),
-        ) {
-            if let Some(item) = self.editor_panel_mut(editor) {
-                item.phase = EditorPhase::Failed;
-                item.close_after_write = false;
-                item.error = Some(crate::app::command_send_error_text(error));
-            }
-            self.focus_active_sftp_panel(window, cx);
-            cx.notify();
-            return;
-        }
-
-        if let Some(item) = self.editor_panel_mut(editor) {
-            item.pending_op = Some(op_id);
-            item.phase = EditorPhase::Writing;
-            item.error = None;
-            item.confirm = None;
-            item.pending_sudo_probe = None;
-        }
-        cx.notify();
+        self.dispatch_editor_write(editor, EditorWriteMode::Sudo { password }, window, cx);
     }
 
     /// 回传成功：脏基准与版本指纹都换成远端确认后的新值，目录列表条目就地
@@ -534,12 +503,23 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 把编辑入口的拒绝原因写到该标签的远端栏错误位上。
-    pub(crate) fn editor_reject(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
-        if let Some(tab) = self.workspace.tab_mut(tab_id)
-            && let Some(panel) = tab.sftp_mut()
-        {
-            panel.set_error(message);
+    /// 把编辑入口的拒绝原因写到目标远端列的错误位上。
+    pub(crate) fn editor_reject(
+        &mut self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(tab) = self.workspace.tab_mut(tab_id) {
+            let main_connection = tab.connection_id;
+            if let Some(panel) = tab.sftp_mut()
+                && let Some(target) =
+                    panel.remote_pane_of_connection(connection_id, main_connection)
+                && let Some(pane) = panel.remote_pane_mut(target)
+            {
+                pane.error = Some(message);
+            }
         }
         cx.notify();
     }

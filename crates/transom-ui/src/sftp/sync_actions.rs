@@ -2,7 +2,7 @@
 
 use super::SftpSyncModalState;
 use crate::app::AppShell;
-use crate::sftp::TransferTask;
+use crate::sftp::{SftpRemotePaneRef, TransferTask};
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::*;
 use transom_core::{SftpCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId};
@@ -10,18 +10,30 @@ use transom_core::{SftpCommand, SftpOperation, SyncDirection, TabId, TransferFil
 impl AppShell {
     /// 以当前双栏路径为根目录发起异步扫描对比。
     pub(crate) fn sftp_open_sync_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        self.sftp_open_sync_modal_pane(tab_id, SftpRemotePaneRef::Main, cx);
+    }
+
+    /// 以目标远端列与本地当前目录为根发起目录对比。
+    ///
+    /// 并列远端列复用同一条对比与同步通道：扫描请求、弹窗状态与同步任务都
+    /// 携带目标连接，不会回落到标签页主远端。
+    pub(crate) fn sftp_open_sync_modal_pane(
+        &mut self,
+        tab_id: TabId,
+        target: SftpRemotePaneRef,
+        cx: &mut Context<Self>,
+    ) {
         let filter_text = self.settings.sftp.transfer_filter.clone();
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some((connection_id, local_root, remote_root)) =
+            self.workspace.tab(tab_id).and_then(|tab| {
+                let panel = tab.sftp()?;
+                let pane = panel.remote_pane(target)?;
+                let connection_id = panel.remote_connection(target, tab.connection_id)?;
+                Some((connection_id, panel.local.path.clone(), pane.path.clone()))
+            })
+        else {
             return;
         };
-        let Some(panel) = tab.sftp() else {
-            return;
-        };
-        let Some(connection_id) = tab.connection_id else {
-            return;
-        };
-        let local_root = panel.local.path.clone();
-        let remote_root = panel.remote.path.clone();
         let op_id = TransferId::new();
         self.send_command(SftpCommand::Sftp {
             tab_id,

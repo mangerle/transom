@@ -1,18 +1,18 @@
-//! SFTP 跨列剪贴板、拖拽载荷与参数模型定义。
+//! SFTP 跨列剪贴板、拖拽载荷与并列列状态构造。
 //!
 //! 设计原理（Why）：
 //! - 实现初衷：定义跨栏拖拽载荷 SftpDragItem、拖拽浮层视觉 SftpDragPreview 与剪贴板状态 SftpClipboardData；
-//! - 核心优势：纯数据契约，供视图渲染与动作调度解耦引用。
+//! - 核心优势：纯数据契约与共享列构造，供视图渲染与动作调度解耦引用。
 
 use crate::app::AppShell;
+use crate::sftp::SftpRemotePaneState;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::input::InputState;
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::BTreeSet;
-use transom_core::{ConnectionId, RemoteFile, TabId};
+use transom_core::{ConnectionId, TabId};
 
 /// 跨栏剪贴板数据来源。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,24 +122,12 @@ pub(crate) struct SftpRemoteCopyParams {
     pub(crate) is_dir: bool,
 }
 
-/// 并列借调的远端文件管理器状态。
-pub(crate) struct SftpSideRemoteState {
-    pub(crate) connection_id: ConnectionId,
-    pub(crate) title: String,
-    pub(crate) path: String,
-    pub(crate) path_input: Entity<InputState>,
-    pub(crate) filter_input: Entity<InputState>,
-    pub(crate) entries: Vec<RemoteFile>,
-    pub(crate) selected: Option<String>,
-    pub(crate) selection: BTreeSet<String>,
-    pub(crate) scroll_handle: VirtualListScrollHandle,
-    pub(crate) loading: bool,
-    pub(crate) error: Option<String>,
-    pub(crate) collapsed: bool,
-}
-
-impl SftpSideRemoteState {
-    pub(crate) fn new(
+impl SftpRemotePaneState {
+    /// 构造一个并列远端列。
+    ///
+    /// 与主远端共用同一份列状态：连接与标题在这里落成 `Some`，其余字段
+    /// 与主远端完全一致，渲染与文件操作不需要再区分类型。
+    pub(crate) fn new_side(
         connection_id: ConnectionId,
         title: String,
         path: String,
@@ -158,19 +146,27 @@ impl SftpSideRemoteState {
             "",
             rust_i18n::t!("sftp.sidebar.filter_placeholder").as_ref(),
         );
+        let name_input =
+            crate::palette::sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref());
         Self {
-            connection_id,
-            title,
+            connection_id: Some(connection_id),
+            title: Some(title),
+            error: None,
             path,
             path_input,
+            name_input,
             filter_input,
             entries: Vec::new(),
             selected: None,
             selection: BTreeSet::new(),
+            anchor: None,
             scroll_handle: VirtualListScrollHandle::new(),
-            loading: true,
-            error: None,
             collapsed: false,
+            loading: true,
+            show_hidden: false,
+            show_filter: false,
+            dir_cache: std::collections::HashMap::new(),
+            subscriptions: Vec::new(),
         }
     }
 }

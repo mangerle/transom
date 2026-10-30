@@ -175,7 +175,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::FolderPlus)
                         .tooltip(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_open_mkdir_modal(tab_id, false, window, cx);
+                            this.sftp_open_local_mkdir_modal(tab_id, window, cx);
                         })),
                 )
                 .child(
@@ -195,7 +195,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::Pencil)
                         .tooltip(rust_i18n::t!("sftp.rename").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_open_rename_modal(tab_id, false, window, cx);
+                            this.sftp_open_local_rename_modal(tab_id, window, cx);
                         })),
                 )
                 .child(
@@ -280,7 +280,7 @@ pub(super) fn render_local_toolbar(
                             rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_toggle_hidden(tab_id, cx);
+                            this.sftp_toggle_local_hidden(tab_id, cx);
                         })),
                 )
                 .child(
@@ -291,7 +291,7 @@ pub(super) fn render_local_toolbar(
                         .selected(show_filter)
                         .tooltip(rust_i18n::t!("sftp.nav.toggle_filter").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_toggle_filter(tab_id, window, cx);
+                            this.sftp_toggle_filter_local(tab_id, window, cx);
                         })),
                 ),
         )

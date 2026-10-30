@@ -1,20 +1,25 @@
 //! SFTP 文件属性查看：远端异步 stat 请求与本地同步属性读取。
 
 use crate::app::AppShell;
+use crate::sftp::SftpRemotePaneRef;
 use chrono::{Local, TimeZone};
 use gpui_kit::*;
 use std::path::Path;
 use transom_core::{RemoteMetadata, SftpOperation, TabId};
 
 impl AppShell {
-    /// 请求查看远端路径的详细属性（异步读取，结果经 `AppEvent::SftpMetadata` 回传）
-    pub(crate) fn sftp_request_remote_properties(
+    /// 请求目标远端列路径的属性：主远端与并列远端共用同一条 Stat 通道。
+    pub(crate) fn sftp_request_remote_properties_pane(
         &mut self,
         tab_id: TabId,
+        target: SftpRemotePaneRef,
         path: String,
         cx: &mut Context<Self>,
     ) {
-        self.send_sftp_op(tab_id, SftpOperation::Stat { path }, cx);
+        let Some(connection_id) = self.remote_pane_connection(tab_id, target) else {
+            return;
+        };
+        self.send_sftp_op_for_connection(tab_id, connection_id, SftpOperation::Stat { path }, cx);
     }
 
     /// 读取并直接展示本地路径属性。

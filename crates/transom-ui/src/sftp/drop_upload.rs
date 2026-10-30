@@ -14,6 +14,7 @@
 //!   松手无反馈比误传到本地目录更安全。
 
 use crate::app::{AppShell, TabStatus};
+use crate::sftp::SftpRemotePaneRef;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{Connection, Session, TabId};
@@ -79,6 +80,42 @@ impl AppShell {
             "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
             paths.len(),
             crate::connection::describe_target(&self.workspace.tabs[index].session)
+        );
+        self.show_drop_overlay(tab_id, cx);
+    }
+
+    /// 外部文件松手到指定远端列：上传目标为该列当前目录与连接。
+    ///
+    /// 与终端网格入口的区别只在落点：这里已经由用户明确指定了列，不做
+    /// "面板不存在就建一份隐藏状态"的推断，也不按请求标签的会话类型拒绝——
+    /// 并列列挂在别的标签上，连接合法性由它自己的会话保证。
+    pub(crate) fn handle_dropped_files_to_pane(
+        &mut self,
+        tab_id: TabId,
+        paths: &[PathBuf],
+        target: SftpRemotePaneRef,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() {
+            return;
+        }
+        let Some((connection_id, remote_dir)) = self.workspace.tab(tab_id).and_then(|tab| {
+            let panel = tab.sftp()?;
+            let pane = panel.remote_pane(target)?;
+            let connection_id = panel.remote_connection(target, tab.connection_id)?;
+            Some((connection_id, pane.path.clone()))
+        }) else {
+            return;
+        };
+        if let Err(message) = self.enqueue_uploads_to(tab_id, paths, &remote_dir, connection_id, cx)
+        {
+            self.set_error(message);
+            cx.notify();
+            return;
+        }
+        log::info!(
+            "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标目录: {remote_dir}",
+            paths.len()
         );
         self.show_drop_overlay(tab_id, cx);
     }

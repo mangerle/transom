@@ -15,7 +15,9 @@ use gpui_kit::component::input::{EditorState, Input, InputState, Textarea};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::path::PathBuf;
-use transom_core::{RemoteDeleteTarget, TabId, format_octal_permissions, format_rwx_permissions};
+use transom_core::{
+    ConnectionId, RemoteDeleteTarget, TabId, format_octal_permissions, format_rwx_permissions,
+};
 
 /// 编辑器"跳转到行"弹窗的状态。
 pub(crate) struct EditorGotoLineModalState {
@@ -33,6 +35,8 @@ pub(crate) enum SftpPendingDelete {
     },
     Remote {
         tab_id: TabId,
+        /// 目标连接；`None` 表示标签页主远端，`Some` 表示并列远端列。
+        connection_id: Option<ConnectionId>,
         targets: Vec<RemoteDeleteTarget>,
     },
 }

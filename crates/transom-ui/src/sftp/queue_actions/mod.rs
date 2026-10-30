@@ -6,6 +6,7 @@
 //!   1. 集中管理并发调度循环 `process_sftp_queue`；
 //!   2. 规范化整批操作日志与命令发送顺序。
 
+mod download;
 mod enqueue;
 mod task_control;
 
@@ -32,11 +33,33 @@ impl AppShell {
         }
     }
 
-    /// 把一组本地路径入队为上传任务并启动调度。
+    /// 把本地列选中的一组路径上传到标签页主远端当前目录。
     pub(crate) fn enqueue_uploads(
         &mut self,
         tab_id: TabId,
         paths: &[PathBuf],
+        cx: &mut Context<Self>,
+    ) -> Result<usize, String> {
+        let Some((target_connection_id, remote_dir)) = self.workspace.tab(tab_id).and_then(|tab| {
+            let connection_id = tab.connection_id?;
+            let remote_dir = tab.sftp()?.remote.path.clone();
+            Some((connection_id, remote_dir))
+        }) else {
+            return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
+        };
+        self.enqueue_uploads_to(tab_id, paths, &remote_dir, target_connection_id, cx)
+    }
+
+    /// 把一组本地路径入队为上传任务并启动调度。
+    ///
+    /// 目标连接与远端目录显式传入：并列远端列的上传入口复用它，不能回退到
+    /// 标签页主连接，否则文件会被传到另一台主机。
+    pub(crate) fn enqueue_uploads_to(
+        &mut self,
+        tab_id: TabId,
+        paths: &[PathBuf],
+        remote_dir: &str,
+        target_connection_id: ConnectionId,
         cx: &mut Context<Self>,
     ) -> Result<usize, String> {
         if paths.is_empty() {
@@ -45,18 +68,12 @@ impl AppShell {
         let verify = self.settings.sftp.verify_after_transfer;
         let verify_mode = self.settings.sftp.verify_mode;
         let algorithm = self.settings.sftp.checksum_algorithm;
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
-            return Err(rust_i18n::t!("sftp.upload_file").to_string());
-        };
-        let Some(target_connection_id) = tab.connection_id else {
-            return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
-        };
-        let Some(panel) = tab.sftp_mut() else {
+        let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
         let tasks = upload_tasks(
             paths,
-            &panel.remote.path,
+            remote_dir,
             panel.queue.resume_enabled,
             verify,
             verify_mode,
@@ -65,8 +82,7 @@ impl AppShell {
         )?;
         let count = tasks.len();
         log::info!(
-            "上传任务入队，窗格: {tab_id}，新增 {count} 项，目标目录: {}，队列现有 {} 项，校验: {verify}",
-            panel.remote.path,
+            "上传任务入队，窗格: {tab_id}，新增 {count} 项，目标目录: {remote_dir}，队列现有 {} 项，校验: {verify}",
             panel.queue.tasks.len() + count
         );
         panel.queue.tasks.extend(tasks);
@@ -82,91 +98,9 @@ impl AppShell {
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
         {
-            panel.set_error(message);
+            panel.set_queue_error(message);
             cx.notify();
         }
-    }
-
-    pub(crate) fn sftp_queue_download(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let verify = self.settings.sftp.verify_after_transfer;
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
-            return;
-        };
-        let source_connection_id = tab.connection_id;
-        let Some(panel) = tab.sftp_mut() else {
-            return;
-        };
-        let Some(source_connection_id) = source_connection_id else {
-            panel.set_error(rust_i18n::t!("sftp.queue_actions.no_remote_download").to_string());
-            cx.notify();
-            return;
-        };
-        let paths = panel.selected_remote_paths();
-        if paths.is_empty() {
-            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        }
-        let mode = if panel.queue.resume_enabled {
-            TransferMode::Resume
-        } else {
-            TransferMode::Overwrite
-        };
-        let mut tasks = Vec::with_capacity(paths.len());
-        let mut invalid_name: Option<String> = None;
-        for path in paths {
-            let Some(remote_entry) = panel.remote.entries.iter().find(|entry| entry.path == path)
-            else {
-                continue;
-            };
-            let local_path =
-                match transom_core::safe_local_join(&panel.local.path, &remote_entry.name) {
-                    Ok(path) => path,
-                    Err(error) => {
-                        invalid_name = Some(localized_error(&error));
-                        break;
-                    }
-                };
-            let mut task = if remote_entry.is_dir {
-                TransferTask::new_directory(
-                    TransferDirection::Download,
-                    local_path,
-                    remote_entry.path.clone(),
-                    None,
-                    mode,
-                )
-            } else {
-                TransferTask::new(
-                    TransferDirection::Download,
-                    local_path,
-                    remote_entry.path.clone(),
-                    Some(remote_entry.size),
-                    mode,
-                )
-            };
-            task.source_connection_id = Some(source_connection_id);
-            task.verify = verify;
-            task.verify_mode = self.settings.sftp.verify_mode;
-            task.checksum_algorithm = self.settings.sftp.checksum_algorithm;
-            tasks.push(task);
-        }
-        if let Some(message) = invalid_name {
-            panel.set_error(message);
-            cx.notify();
-            return;
-        }
-        if tasks.is_empty() {
-            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        }
-        let count = tasks.len();
-        panel.queue.tasks.extend(tasks);
-        panel.set_status(
-            rust_i18n::t!("sftp.queue_actions.downloads_queued", count = count).to_string(),
-        );
-        cx.notify();
-        self.process_sftp_queue(tab_id, cx);
     }
 
     /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
@@ -214,7 +148,7 @@ impl AppShell {
             cx.notify();
             return;
         }
-        panel.clear_error();
+        panel.clear_queue_error();
         panel.recompute_progress();
         for (op_id, connection_id, op) in commands {
             self.send_command(SftpCommand::Sftp {
@@ -279,7 +213,7 @@ impl AppShell {
                 }
             }
             if retried_count > 0 {
-                panel.clear_error();
+                panel.clear_queue_error();
                 panel.set_status(
                     rust_i18n::t!("sftp.queue_actions.retried", count = retried_count).to_string(),
                 );

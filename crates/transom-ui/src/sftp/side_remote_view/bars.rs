@@ -32,8 +32,11 @@ impl AppShell {
             .tab(tab_id)
             .and_then(|t| t.sftp())
             .map(|p| {
-                let mounted: Vec<ConnectionId> =
-                    p.side_remotes.iter().map(|s| s.connection_id).collect();
+                let mounted: Vec<ConnectionId> = p
+                    .side_remotes
+                    .iter()
+                    .filter_map(|s| s.connection_id)
+                    .collect();
                 (p.mount_menu_open, mounted)
             })
             .unwrap_or((false, Vec::new()));
@@ -219,8 +222,6 @@ impl AppShell {
             .py_2()
             .gap_2()
             .bg(p.sidebar)
-            .border_r_1()
-            .border_color(p.sidebar_border)
             .child(expand_btn)
             .child(
                 Icon::new(IconName::Laptop)
@@ -260,10 +261,6 @@ impl AppShell {
             .py_2()
             .gap_2()
             .bg(p.sidebar)
-            // 主远端列的折叠条恒在列的右侧，所以分隔线要画在朝内容的那一边（左边）；
-            // 画右边就等于画到面板外缘，视觉上等于没有线。
-            .border_l_1()
-            .border_color(p.sidebar_border)
             .child(expand_btn)
             .child(
                 Icon::new(IconName::Server)
@@ -314,9 +311,6 @@ impl AppShell {
             .py_2()
             .gap_2()
             .bg(p.sidebar)
-            // 同主远端条：并列远端折叠后也排在右侧，分隔线朝内容一侧。
-            .border_l_1()
-            .border_color(p.sidebar_border)
             .child(expand_btn)
             .child(close_btn)
             .child(

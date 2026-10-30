@@ -6,6 +6,8 @@ mod drop_upload;
 mod file_ops;
 mod file_row;
 mod file_row_content;
+mod filter;
+mod input_modal;
 mod local_async;
 mod local_listing;
 mod local_only;
@@ -21,8 +23,12 @@ mod properties;
 mod queue_actions;
 mod queue_view;
 mod quick_paths;
+mod remote_actions;
 mod remote_content;
+mod remote_nav;
 mod remote_pane;
+mod remote_pane_state;
+mod remote_pane_toolbar;
 mod row_interaction;
 mod search_modal;
 mod selection;
@@ -37,6 +43,7 @@ mod transfer_filter_modal;
 mod transfer_presentation;
 
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
+pub(crate) use self::input_modal::SftpInputModalParams;
 pub(crate) use self::local_async::spawn_blocking_local;
 pub(crate) use self::local_listing::LocalDirectoryLister;
 pub(crate) use self::modals::{
@@ -52,8 +59,9 @@ pub(crate) use self::search_modal::SftpSearchModalState;
 pub(crate) use self::side_remote::SftpActivePane;
 pub(crate) use self::state::{
     LocalFileEntry, RemoteDirCacheEntry, SFTP_DIR_CACHE_TTL, SftpChmodModalState,
-    SftpFilterModalState, SftpInputModalState, SftpInputTarget, SftpLocalPaneState, SftpPanelState,
-    SftpQueueState, SftpRemotePaneState, SftpSyncModalState,
+    SftpFilterModalState, SftpInputModalState, SftpInputTarget, SftpLocalPaneInit,
+    SftpLocalPaneState, SftpPanelState, SftpQueueState, SftpRemotePaneRef, SftpRemotePaneState,
+    SftpSyncModalState,
 };
 pub(crate) use self::task::{
     SftpTransferRequest, TransferKind, TransferMode, TransferStatus, TransferTask,

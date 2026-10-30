@@ -10,7 +10,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use crate::sftp::parent_remote;
+use crate::sftp::{SftpRemotePaneRef, parent_remote};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -20,11 +20,13 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Disableable, Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{RemoteSearchQuery, RemoteSearchResultItem, SftpOperation, TabId};
+use transom_core::{ConnectionId, RemoteSearchQuery, RemoteSearchResultItem, SftpOperation, TabId};
 
 /// SFTP 远程检索模态弹窗状态。
 pub(crate) struct SftpSearchModalState {
     pub(crate) tab_id: TabId,
+    /// 检索目标连接；`None` 表示标签页主远端，`Some` 表示并列远端列。
+    pub(crate) connection_id: Option<ConnectionId>,
     pub(crate) root_path: String,
     pub(crate) input: Entity<InputState>,
     pub(crate) is_content: bool,
@@ -35,20 +37,20 @@ pub(crate) struct SftpSearchModalState {
 }
 
 impl AppShell {
-    /// 打开 SFTP 远程检索模态对话框。
-    pub(crate) fn sftp_open_search_modal(
+    /// 打开目标远端列的检索模态对话框。
+    pub(crate) fn sftp_open_search_modal_for(
         &mut self,
         tab_id: TabId,
+        target: SftpRemotePaneRef,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some((root_path, side_connection)) = self
+            .remote_pane_scope(tab_id, target)
+            .map(|scope| (scope.pane.path.clone(), scope.side_connection))
+        else {
             return;
         };
-        let Some(panel) = tab.sftp() else {
-            return;
-        };
-        let root_path = panel.remote.path.clone();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("sftp.search.placeholder").to_string())
@@ -57,6 +59,7 @@ impl AppShell {
 
         self.sftp_modals.search = Some(SftpSearchModalState {
             tab_id,
+            connection_id: side_connection,
             root_path,
             input,
             is_content: false,
@@ -87,6 +90,7 @@ impl AppShell {
         modal.results.clear();
 
         let tab_id = modal.tab_id;
+        let target_connection = modal.connection_id;
         let query = RemoteSearchQuery {
             path: modal.root_path.clone(),
             pattern,
@@ -102,7 +106,17 @@ impl AppShell {
             query.pattern,
             query.is_content
         );
-        self.send_sftp_op(tab_id, SftpOperation::Search { query }, cx);
+        let Some(connection_id) = target_connection
+            .or_else(|| self.workspace.tab(tab_id).and_then(|tab| tab.connection_id))
+        else {
+            return;
+        };
+        self.send_sftp_op_for_connection(
+            tab_id,
+            connection_id,
+            SftpOperation::Search { query },
+            cx,
+        );
         cx.notify();
     }
 
@@ -124,6 +138,7 @@ impl AppShell {
         let is_searching = modal.is_searching;
         let results = modal.results.clone();
         let error = modal.error.clone();
+        let target_connection = modal.connection_id;
 
         let header =
             v_flex()
@@ -251,10 +266,15 @@ impl AppShell {
                         )
                     })
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        // 点击条目：关闭弹窗并导航到目标所在文件夹
+                        // 点击条目：关闭弹窗并导航到目标所在文件夹。
+                        // 并列远端的检索结果必须回到该列自己的连接，不能落到主远端。
                         this.sftp_modals.search = None;
                         let dir = parent_remote(&target_path);
-                        this.request_sftp_list(tab_id, dir, cx);
+                        if let Some(connection_id) = target_connection {
+                            this.request_sftp_list_for_connection(tab_id, connection_id, dir, cx);
+                        } else {
+                            this.request_sftp_list(tab_id, dir, cx);
+                        }
                         this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     }));

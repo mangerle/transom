@@ -5,7 +5,7 @@ use super::overlay::DropOverlayState;
 use super::preview::SftpPreviewState;
 use super::quick_paths::LocalQuickPaths;
 use super::selection;
-use super::side_remote::{SftpActivePane, SftpClipboardData, SftpSideRemoteState};
+use super::side_remote::{SftpActivePane, SftpClipboardData};
 use super::task::TransferTask;
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::{InputState, TextareaState};
@@ -25,6 +25,8 @@ pub(crate) struct LocalFileEntry {
 
 pub(crate) struct SftpChmodModalState {
     pub(crate) tab_id: TabId,
+    /// 目标连接；`None` 表示标签页主远端，`Some` 表示并列远端列。
+    pub(crate) connection_id: Option<ConnectionId>,
     pub(crate) remote_path: String,
     pub(crate) file_name: String,
     pub(crate) permissions: u32,
@@ -93,6 +95,9 @@ pub(crate) enum SftpInputTarget {
 
 pub(crate) struct SftpInputModalState {
     pub(crate) tab_id: TabId,
+    /// 远端目标连接；`None` 表示标签页主远端，`Some` 表示并列远端列。
+    /// 本地目标不使用该字段。
+    pub(crate) connection_id: Option<ConnectionId>,
     pub(crate) title: String,
     pub(crate) prompt: String,
     pub(crate) input: Entity<InputState>,
@@ -110,26 +115,7 @@ pub(crate) struct RemoteDirCacheEntry {
     pub(crate) cached_at: std::time::Instant,
 }
 
-/// SFTP 双栏中的活动栏位与主面板状态。
-/// 远端栏（主栏）的导航、条目与选择状态。
-pub(crate) struct SftpRemotePaneState {
-    pub(crate) path: String,
-    pub(crate) path_input: Entity<InputState>,
-    pub(crate) name_input: Entity<InputState>,
-    pub(crate) filter_input: Entity<InputState>,
-    pub(crate) entries: Vec<RemoteFile>,
-    pub(crate) selected: Option<String>,
-    /// 多选集合；`selected` 始终指向其中最近操作的主项。
-    pub(crate) selection: BTreeSet<String>,
-    /// Shift 连选的锚点路径。
-    pub(crate) anchor: Option<String>,
-    pub(crate) scroll_handle: VirtualListScrollHandle,
-    /// 是否折叠为竖条。
-    pub(crate) collapsed: bool,
-    pub(crate) loading: bool,
-    /// 远程目录短期内存缓存（SWR 机制），消除目录跳转顿挫感。
-    pub(crate) dir_cache: std::collections::HashMap<String, RemoteDirCacheEntry>,
-}
+pub(crate) use super::remote_pane_state::{SftpRemotePaneRef, SftpRemotePaneState};
 
 /// 本地栏的导航、条目与选择状态。
 pub(crate) struct SftpLocalPaneState {
@@ -141,6 +127,10 @@ pub(crate) struct SftpLocalPaneState {
     pub(crate) quick_paths: LocalQuickPaths,
     /// 本地终端专用：只渲染本地栏，不包含远端、队列与上传入口。
     pub(crate) only: bool,
+    /// 本列是否显示隐藏文件。
+    pub(crate) show_hidden: bool,
+    /// 本列是否展开过滤输入框。
+    pub(crate) show_filter: bool,
     /// 是否折叠为竖条。
     pub(crate) collapsed: bool,
     pub(crate) selected: Option<PathBuf>,
@@ -152,12 +142,42 @@ pub(crate) struct SftpLocalPaneState {
     pub(crate) scroll_handle: VirtualListScrollHandle,
 }
 
+/// 本地栏的构造参数：面板初始化与本地单栏共用同一套字段默认值。
+pub(crate) struct SftpLocalPaneInit {
+    pub(crate) path: PathBuf,
+    pub(crate) path_input: Entity<InputState>,
+    pub(crate) filter_input: Entity<InputState>,
+    pub(crate) quick_paths: LocalQuickPaths,
+    pub(crate) only: bool,
+    pub(crate) error: Option<String>,
+}
+
+impl SftpLocalPaneState {
+    pub(crate) fn new(init: SftpLocalPaneInit) -> Self {
+        Self {
+            path: init.path,
+            path_input: init.path_input,
+            filter_input: init.filter_input,
+            entries: Vec::new(),
+            quick_paths: init.quick_paths,
+            only: init.only,
+            show_hidden: false,
+            show_filter: false,
+            collapsed: false,
+            selected: None,
+            selection: BTreeSet::new(),
+            anchor: None,
+            error: init.error,
+            scroll_handle: VirtualListScrollHandle::new(),
+        }
+    }
+}
+
 /// 传输队列与运行态：任务集合、并发控制、进度与瞬时消息。
 pub(crate) struct SftpQueueState {
     pub(crate) tasks: Vec<TransferTask>,
     /// 当前正在由队列执行的任务集合，支持并行传输。
     pub(crate) active_transfers: HashSet<TransferId>,
-    pub(crate) active_op: Option<TransferId>,
     pub(crate) progress: Option<(u64, Option<u64>)>,
     pub(crate) resume_enabled: bool,
     pub(crate) expanded: bool,
@@ -172,11 +192,10 @@ pub(crate) struct SftpQueueState {
     pub(crate) drop_overlay: DropOverlayState,
 }
 
-/// SFTP 双栏面板状态：远端栏、本地栏与传输队列三块内聚子状态，
-/// 外加并排远端、剪贴板与面板级交互标记。
+/// SFTP 多列面板状态：主远端、本地栏、传输队列与并列远端列。
 ///
 /// 设计原理（Why）：此前 47 个字段平铺在同一个结构体里，路径、选择、队列
-/// 与展开状态互相穿插，任何模块都能直接改写任意字段；按"远端栏 / 本地栏 /
+/// 与展开状态互相穿插，任何模块都能直接改写任意字段；按"远端列 / 本地栏 /
 /// 传输队列"分组后，字段归属一眼可见，读写落在各自的子结构上。
 pub(crate) struct SftpPanelState {
     /// 面板列是否展开显示。
@@ -190,13 +209,15 @@ pub(crate) struct SftpPanelState {
     pub(crate) local: SftpLocalPaneState,
     pub(crate) queue: SftpQueueState,
     /// 并列挂载的其他远端文件会话列表。
-    pub(crate) side_remotes: Vec<SftpSideRemoteState>,
+    pub(crate) side_remotes: Vec<SftpRemotePaneState>,
     /// 跨列文件剪贴板（Ctrl+C / Ctrl+V）。
     pub(crate) clipboard: Option<SftpClipboardData>,
     /// 挂载新远端浮层菜单是否打开。
     pub(crate) mount_menu_open: bool,
-    pub(crate) show_filter: bool,
-    pub(crate) show_hidden: bool,
+    /// 主远端导航是否联动本地列。
+    ///
+    /// 只属于"主远端 ↔ 本地"这条关系；并列列不显示该开关，避免一列切换
+    /// 让所有列的按钮同时变亮。
     pub(crate) sync_navigation: bool,
     pub(crate) active_pane: SftpActivePane,
     pub(crate) focus_handle: FocusHandle,
@@ -242,13 +263,15 @@ impl SftpPanelState {
         self.queue.status = None;
     }
 
-    /// 设置面板级错误消息；由错误浮层展示，成功路径负责清除。
-    pub(crate) fn set_error(&mut self, message: impl Into<String>) {
+    /// 设置传输队列错误消息；由队列错误栏展示，成功路径负责清除。
+    ///
+    /// 远端列自身的操作错误落在对应列的 `error` 上，这里只承载队列/传输语义。
+    pub(crate) fn set_queue_error(&mut self, message: impl Into<String>) {
         self.queue.error = Some(message.into());
     }
 
-    /// 清除面板级错误消息。
-    pub(crate) fn clear_error(&mut self) {
+    /// 清除传输队列错误消息。
+    pub(crate) fn clear_queue_error(&mut self) {
         self.queue.error = None;
     }
 
@@ -264,74 +287,105 @@ impl SftpPanelState {
 }
 
 impl SftpPanelState {
-    /// 选中远程条目并标记远程栏为活动栏（行点击与右键菜单共用）。
-    ///
-    /// 设计原理（Why）：Delete 等快捷键按“活动栏”定位目标，若各处分散直接写
-    /// `selected` 字段，右键操作另一栏后会残留旧活动栏，导致快捷键删错栏位；
-    /// 统一经本方法赋值可从机制上杜绝该失配。
-    pub(crate) fn select_remote(&mut self, path: String) {
-        selection::select(
-            &mut self.remote.selected,
-            &mut self.remote.selection,
-            &mut self.remote.anchor,
-            path,
-        );
-        self.active_pane = SftpActivePane::Remote;
+    /// 按目标取远端列状态。
+    pub(crate) fn remote_pane(&self, target: SftpRemotePaneRef) -> Option<&SftpRemotePaneState> {
+        match target {
+            SftpRemotePaneRef::Main => Some(&self.remote),
+            SftpRemotePaneRef::Side(connection_id) => self
+                .side_remotes
+                .iter()
+                .find(|side| side.connection_id == Some(connection_id)),
+        }
     }
 
-    /// 设置远端主项但保留已有多选集合，供右键菜单定位单项操作。
-    pub(crate) fn set_remote_primary(&mut self, path: String) {
-        selection::set_primary(&mut self.remote.selected, &mut self.remote.selection, path);
-        self.active_pane = SftpActivePane::Remote;
+    /// 按目标取远端列状态的可变借用。
+    pub(crate) fn remote_pane_mut(
+        &mut self,
+        target: SftpRemotePaneRef,
+    ) -> Option<&mut SftpRemotePaneState> {
+        match target {
+            SftpRemotePaneRef::Main => Some(&mut self.remote),
+            SftpRemotePaneRef::Side(connection_id) => self
+                .side_remotes
+                .iter_mut()
+                .find(|side| side.connection_id == Some(connection_id)),
+        }
+    }
+
+    /// 按目标解析实际连接：主远端取标签页当前连接，并列列取列自身的连接。
+    pub(crate) fn remote_connection(
+        &self,
+        target: SftpRemotePaneRef,
+        main_connection: Option<ConnectionId>,
+    ) -> Option<ConnectionId> {
+        match target {
+            SftpRemotePaneRef::Main => main_connection,
+            SftpRemotePaneRef::Side(connection_id) => Some(connection_id),
+        }
+    }
+
+    /// 按连接反解远端列身份：主连接对应主列，其余连接对应已挂载的并列列。
+    ///
+    /// 动作与事件只携带连接，渲染与状态更新需要列身份；反解集中在这里，
+    /// 避免每个入口再写一套"先比主连接、再找并列列"的分支。
+    pub(crate) fn remote_pane_of_connection(
+        &self,
+        connection_id: ConnectionId,
+        main_connection: Option<ConnectionId>,
+    ) -> Option<SftpRemotePaneRef> {
+        if main_connection == Some(connection_id) {
+            Some(SftpRemotePaneRef::Main)
+        } else {
+            self.remote_pane(SftpRemotePaneRef::Side(connection_id))
+                .map(|_| SftpRemotePaneRef::Side(connection_id))
+        }
+    }
+
+    /// 选中远端条目并标记对应远端列为活动栏。
+    pub(crate) fn select_remote_pane(&mut self, target: SftpRemotePaneRef, path: String) {
+        if let Some(pane) = self.remote_pane_mut(target) {
+            pane.select(path);
+            self.active_pane = target.into();
+        }
     }
 
     /// Ctrl/Cmd 点击切换远端条目的选中状态。
-    pub(crate) fn toggle_remote_selection(&mut self, path: String) {
-        selection::toggle(
-            &mut self.remote.selected,
-            &mut self.remote.selection,
-            &mut self.remote.anchor,
-            path,
-        );
-        self.active_pane = SftpActivePane::Remote;
+    pub(crate) fn toggle_remote_selection_pane(&mut self, target: SftpRemotePaneRef, path: String) {
+        if let Some(pane) = self.remote_pane_mut(target) {
+            pane.toggle(path);
+            self.active_pane = target.into();
+        }
     }
 
     /// Shift 连选：用可见列表中的一段路径替换远端集合。
-    pub(crate) fn select_remote_range(
+    pub(crate) fn select_remote_range_pane(
         &mut self,
+        target: SftpRemotePaneRef,
         paths: impl IntoIterator<Item = String>,
         primary: String,
     ) {
-        selection::select_range(
-            &mut self.remote.selected,
-            &mut self.remote.selection,
-            paths,
-            primary,
-        );
-        self.active_pane = SftpActivePane::Remote;
+        if let Some(pane) = self.remote_pane_mut(target) {
+            pane.select_range(paths, primary);
+            self.active_pane = target.into();
+        }
     }
 
-    /// 返回当前需要批量操作的远端路径；无多选时退化为单选主项。
-    pub(crate) fn selected_remote_paths(&self) -> Vec<String> {
-        selection::paths(&self.remote.selected, &self.remote.selection)
+    /// 返回目标远端列当前需要批量操作的路径。
+    pub(crate) fn selected_remote_paths_pane(&self, target: SftpRemotePaneRef) -> Vec<String> {
+        self.remote_pane(target)
+            .map(SftpRemotePaneState::selected_paths)
+            .unwrap_or_default()
     }
 
+    pub(crate) fn clear_remote_selection_pane(&mut self, target: SftpRemotePaneRef) {
+        if let Some(pane) = self.remote_pane_mut(target) {
+            pane.clear_selection();
+        }
+    }
+
+    /// 清空主远端列的选中集（终端目录变化时使用）。
     pub(crate) fn clear_remote_selection(&mut self) {
-        selection::clear(
-            &mut self.remote.selected,
-            &mut self.remote.selection,
-            &mut self.remote.anchor,
-        );
-    }
-
-    /// 刷新远端列表后剔除已不存在的选中项，并修正主项与锚点。
-    pub(crate) fn sync_remote_selection(&mut self, valid: &BTreeSet<String>) {
-        selection::sync(
-            &mut self.remote.selected,
-            &mut self.remote.selection,
-            &mut self.remote.anchor,
-            valid,
-        );
+        self.clear_remote_selection_pane(SftpRemotePaneRef::Main);
     }
 
     /// 单选一个本地条目，同时清空多选集合并重置 Shift 锚点。

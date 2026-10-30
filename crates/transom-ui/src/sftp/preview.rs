@@ -45,10 +45,12 @@ pub(crate) enum PreviewKind {
     Text,
 }
 
-/// 预览目标的唯一标识：远端路径与本地路径可能同名，必须带上来源。
+/// 预览目标的唯一标识：远端路径与本地路径可能同名，必须带上来源；
+/// 同一路径也可能出现在主远端与并列远端，远端键必须再带连接。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PreviewKey {
     pub(crate) is_remote: bool,
+    pub(crate) connection_id: Option<ConnectionId>,
     pub(crate) path: String,
 }
 

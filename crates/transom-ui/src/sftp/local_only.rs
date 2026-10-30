@@ -7,18 +7,17 @@
 use super::columns::ColumnWidthMemory;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::{
-    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneState, SftpPanelState,
-    SftpQueueState, SftpRemotePaneState, fuzzy_match_name, normalize_local_cwd,
+    DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneInit, SftpLocalPaneState,
+    SftpPanelState, SftpQueueState, SftpRemotePaneState, normalize_local_cwd,
 };
 use crate::app::AppShell;
 use crate::keymap;
 use crate::palette::{Palette, sftp_text_input};
 use gpui_kit::base::v_flex;
-use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::{Connection, TabId};
 
@@ -54,9 +53,6 @@ impl AppShell {
             local_path.display(),
             tab.cwd
         );
-        let local_entries = Vec::new();
-        let local_error = None;
-
         let path_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.path").as_ref());
         let name_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref());
         let remote_filter_input = sftp_text_input(
@@ -92,38 +88,24 @@ impl AppShell {
         };
         pane.sftp = Some(SftpPanelState {
             open: true,
-            remote: SftpRemotePaneState {
-                path: String::new(),
+            remote: SftpRemotePaneState::new_main(
+                String::new(),
                 path_input,
                 name_input,
-                filter_input: remote_filter_input,
-                entries: Vec::new(),
-                selected: None,
-                selection: BTreeSet::new(),
-                anchor: None,
-                scroll_handle: VirtualListScrollHandle::new(),
-                collapsed: false,
-                loading: false,
-                dir_cache: std::collections::HashMap::new(),
-            },
-            local: SftpLocalPaneState {
+                remote_filter_input,
+                false,
+            ),
+            local: SftpLocalPaneState::new(SftpLocalPaneInit {
                 path: local_path,
                 path_input: local_path_input,
                 filter_input: local_filter_input,
-                entries: local_entries,
                 quick_paths,
                 only: true,
-                collapsed: false,
-                selected: None,
-                selection: BTreeSet::new(),
-                anchor: None,
-                error: local_error,
-                scroll_handle: VirtualListScrollHandle::new(),
-            },
+                error: None,
+            }),
             queue: SftpQueueState {
                 tasks: Vec::new(),
                 active_transfers: HashSet::new(),
-                active_op: None,
                 progress: None,
                 resume_enabled: true,
                 expanded: false,
@@ -138,8 +120,6 @@ impl AppShell {
             side_remotes: Vec::new(),
             clipboard: None,
             mount_menu_open: false,
-            show_filter: false,
-            show_hidden: false,
             sync_navigation: false,
             active_pane: SftpActivePane::Local,
             focus_handle: cx.focus_handle(),
@@ -167,8 +147,8 @@ impl AppShell {
         let local_filter_input = panel.local.filter_input.clone();
         let local_scroll_handle = panel.local.scroll_handle.clone();
         let quick_paths = panel.local.quick_paths.clone();
-        let show_filter = panel.show_filter;
-        let show_hidden = panel.show_hidden;
+        let show_filter = panel.local.show_filter;
+        let show_hidden = panel.local.show_hidden;
         let focus_handle = panel.focus_handle.clone();
         let local_error = panel.local.error.clone();
         let status = panel.queue.status.clone();
@@ -177,17 +157,12 @@ impl AppShell {
             .value()
             .trim()
             .to_ascii_lowercase();
-        let local_entries = panel
-            .local
-            .entries
-            .iter()
-            .filter(|entry| {
-                (show_hidden || !entry.name.starts_with('.'))
-                    && (local_filter_query.is_empty()
-                        || fuzzy_match_name(&entry.name, &local_filter_query))
-            })
-            .cloned()
-            .collect();
+        let local_entries = Self::filter_local_entries(
+            panel,
+            show_hidden,
+            &local_filter_query,
+            &self.settings.sftp.panel_hidden_patterns,
+        );
 
         let local_pane = self.render_sftp_local_pane(
             SftpLocalPaneProps {
@@ -242,8 +217,8 @@ impl AppShell {
             .id(ElementId::Name("local-file-panel-container".into()))
             .track_focus(&focus_handle)
             .key_context(keymap::SFTP_CONTEXT)
-            .on_action(cx.listener(Self::on_focus_sftp_filter))
-            .on_action(cx.listener(Self::on_toggle_sftp_hidden))
+            .on_action(cx.listener(Self::on_focus_sftp_filter_pane))
+            .on_action(cx.listener(Self::on_toggle_sftp_hidden_pane))
             .on_action(cx.listener(Self::on_delete_sftp_selection))
             .size_full()
             .overflow_hidden()

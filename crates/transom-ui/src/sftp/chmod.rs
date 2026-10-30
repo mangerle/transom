@@ -3,6 +3,7 @@
 use super::SftpChmodModalState;
 use crate::app::AppShell;
 use crate::palette::sftp_text_input;
+use crate::sftp::SftpRemotePaneRef;
 use gpui_kit::*;
 use transom_core::{SftpOperation, TabId, format_octal_permissions, parse_octal_permissions};
 
@@ -26,30 +27,57 @@ impl AppShell {
     ///
     /// 目标集合的取法与"下载""删除"完全一致：右键项已在多选集里就整批处理，
     /// 否则只处理它自己，避免同一面板里出现两套批量语义。
-    pub(crate) fn sftp_grant_remote_exec(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let mut plans: Vec<(String, u32)> = Vec::new();
-        let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+    /// 目标远端列一键授予执行位：主远端与并列远端共用同一套批量口径。
+    pub(crate) fn sftp_grant_remote_exec_pane(
+        &mut self,
+        tab_id: TabId,
+        target: SftpRemotePaneRef,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((connection_id, targets)) = self
+            .remote_pane_scope(tab_id, target)
+            .map(|scope| (scope.connection_id, scope.pane.selected_paths()))
+        else {
             return;
         };
-        let targets = panel.selected_remote_paths();
-        plans.reserve(targets.len());
-        for path in targets {
-            let entry = panel.remote.entries.iter().find(|e| e.path == path);
-            let mode = exec_granted_mode(
-                entry.and_then(|e| e.permissions),
-                entry.is_some_and(|e| e.is_dir),
-            );
-            plans.push((path, mode));
+        let mut plans: Vec<(String, u32)> = Vec::with_capacity(targets.len());
+        if let Some(panel) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp()) {
+            let Some(pane) = panel.remote_pane(target) else {
+                return;
+            };
+            for path in targets {
+                let entry = pane.entries.iter().find(|e| e.path == path);
+                let mode = exec_granted_mode(
+                    entry.and_then(|e| e.permissions),
+                    entry.is_some_and(|e| e.is_dir),
+                );
+                plans.push((path, mode));
+            }
         }
         if plans.is_empty() {
-            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
+            self.set_sftp_pane_error(
+                tab_id,
+                target,
+                rust_i18n::t!("sftp.select_file").to_string(),
+                cx,
+            );
             return;
         }
         let count = plans.len();
-        let dir = panel.remote.path.clone();
+        let dir = self
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.sftp())
+            .and_then(|panel| panel.remote_pane(target))
+            .map(|pane| pane.path.clone())
+            .unwrap_or_default();
         for (path, permissions) in plans {
-            self.send_sftp_op(tab_id, SftpOperation::Chmod { path, permissions }, cx);
+            self.send_sftp_op_for_connection(
+                tab_id,
+                connection_id,
+                SftpOperation::Chmod { path, permissions },
+                cx,
+            );
         }
         log::info!("远端赋予执行权限已下发，窗格: {tab_id}，条目数: {count}，目录: {dir}");
         // 状态只声明"已下发"：Chmod 是异步往返，此刻列表里的权限徽章尚未更新，
@@ -77,7 +105,7 @@ impl AppShell {
             .unwrap_or_default();
         if targets.is_empty() {
             if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-                panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
+                panel.set_local_error(rust_i18n::t!("sftp.select_file").to_string());
                 cx.notify();
             }
             return;
@@ -108,7 +136,7 @@ impl AppShell {
             return;
         };
         if let Some(first) = failures.first() {
-            panel.set_error(
+            panel.set_local_error(
                 rust_i18n::t!(
                     "sftp.chmod.grant_failed",
                     failed = failures.len(),
@@ -124,26 +152,32 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn sftp_open_chmod_modal(
+    /// 打开目标远端列的 Chmod 弹窗。
+    pub(crate) fn sftp_open_chmod_modal_for(
         &mut self,
         tab_id: TabId,
+        target: SftpRemotePaneRef,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
-            return;
-        };
-        let Some(panel) = tab.sftp_mut() else {
-            return;
-        };
-        let Some(selected) = panel.remote.selected.clone() else {
-            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
-            return;
-        };
-        let Some(entry) = panel.remote.entries.iter().find(|e| e.path == selected) else {
-            panel.set_error(rust_i18n::t!("sftp.select_file").to_string());
-            cx.notify();
+        let Some((entry, side_connection)) =
+            self.remote_pane_scope(tab_id, target).and_then(|scope| {
+                let selected = scope.pane.selected.clone()?;
+                let entry = scope
+                    .pane
+                    .entries
+                    .iter()
+                    .find(|entry| entry.path == selected)?
+                    .clone();
+                Some((entry, scope.side_connection))
+            })
+        else {
+            self.set_sftp_pane_error(
+                tab_id,
+                target,
+                rust_i18n::t!("sftp.select_file").to_string(),
+                cx,
+            );
             return;
         };
         let default_mode = if entry.is_dir { 0o755 } else { 0o644 };
@@ -158,8 +192,9 @@ impl AppShell {
         octal_input.update(cx, |state, cx| state.focus(window, cx));
         self.sftp_modals.chmod = Some(SftpChmodModalState {
             tab_id,
-            remote_path: entry.path.clone(),
-            file_name: entry.name.clone(),
+            connection_id: side_connection,
+            remote_path: entry.path,
+            file_name: entry.name,
             permissions,
             octal_input,
             error: None,
@@ -231,11 +266,17 @@ impl AppShell {
             }
         };
         let tab_id = modal.tab_id;
+        let Some(connection_id) = modal
+            .connection_id
+            .or_else(|| self.workspace.tab(tab_id).and_then(|tab| tab.connection_id))
+        else {
+            return;
+        };
         let op = SftpOperation::Chmod {
             path: modal.remote_path,
             permissions: target_perms,
         };
-        self.send_sftp_op(tab_id, op, cx);
+        self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
         self.focus_active_sftp_panel(window, cx);
     }
 }

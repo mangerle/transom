@@ -189,7 +189,9 @@ impl AppShell {
                             Ok(path) => path,
                             Err(_) => {
                                 if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
-                                    panel.set_error(rust_i18n::t!("sftp.invalid_name").to_string());
+                                    panel.set_local_error(
+                                        rust_i18n::t!("sftp.invalid_name").to_string(),
+                                    );
                                 }
                                 cx.notify();
                                 continue;

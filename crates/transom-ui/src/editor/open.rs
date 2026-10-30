@@ -39,7 +39,7 @@ enum EditGate {
     TooLarge { name: String, size: u64 },
     /// 允许打开。
     Allowed {
-        connection_id: Option<ConnectionId>,
+        connection_id: ConnectionId,
         name: String,
         /// 目录项快照的权限位；`None` 表示服务器未回传，视为可写。
         permissions: Option<u32>,
@@ -80,104 +80,48 @@ pub(crate) fn parent_dir(path: &str) -> Option<&str> {
     }
 }
 
+/// 建立编辑面板的输入参数：文件归属、路径与初始形态。
+///
+/// 参数对象化：编辑器装配同时需要标签、连接、路径、文件名与读取/新建形态，
+/// 平铺成参数列表既难读也容易把连接与路径配错。
+pub(super) struct SpawnEditorPanelParams {
+    pub(super) tab_id: TabId,
+    pub(super) connection_id: ConnectionId,
+    pub(super) remote_path: String,
+    pub(super) file_name: String,
+    pub(super) seed: PanelSeed,
+}
+
+/// 远端文本读取请求：列表打开、终端代码链接与失败重读共用同一条读取通道。
+///
+/// 参数对象化：四类信息里有三个是"目标"、一个是面板登记的任务标识，
+/// 平铺成参数列表容易把连接与路径配错。
+pub(crate) struct RemoteTextReadParams {
+    pub(crate) tab_id: TabId,
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) remote_path: String,
+    /// 面板读取态登记的任务标识；投递失败时按它回填错误。
+    pub(crate) op_id: TransferId,
+}
+
 impl AppShell {
-    /// 双击/点击远端文本文件：立刻开一个读取态面板，并发命令整份拉取内容。
-    pub(crate) fn sftp_edit_remote_file(
+    /// 投递 `ReadText`：读取上限取投递时的当前设置，失败按任务标识回填面板。
+    ///
+    /// 设计原理（Why）：三处读取入口只差路径与任务标识，装配与投递失败兜底
+    /// 完全一致；集中在一处，避免任何一处漏掉 `fail_editor_panel_by_op` 而让
+    /// 面板永远停在读取态。
+    pub(crate) fn request_remote_text_read(
         &mut self,
-        tab_id: TabId,
-        remote_path: String,
-        window: &mut Window,
+        params: RemoteTextReadParams,
         cx: &mut Context<Self>,
     ) {
-        let max_bytes = self.settings.sftp.edit_max_bytes;
-        let gate = self
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| {
-                let panel = tab.sftp()?;
-                let entry = panel
-                    .remote
-                    .entries
-                    .iter()
-                    .find(|item| item.path == remote_path)?;
-                if entry.is_dir {
-                    return Some(EditGate::IsDir);
-                }
-                if entry.size > max_bytes {
-                    return Some(EditGate::TooLarge {
-                        name: entry.name.clone(),
-                        size: entry.size,
-                    });
-                }
-                Some(EditGate::Allowed {
-                    connection_id: tab.connection_id,
-                    name: entry.name.clone(),
-                    permissions: entry.permissions,
-                })
-            })
-            .unwrap_or(EditGate::Missing);
-
-        let (connection_id, file_name, permissions) = match gate {
-            EditGate::Missing => {
-                self.editor_reject(tab_id, rust_i18n::t!("sftp.select_file").to_string(), cx);
-                return;
-            }
-            EditGate::IsDir => return,
-            EditGate::TooLarge { name, size } => {
-                self.editor_reject(
-                    tab_id,
-                    rust_i18n::t!(
-                        "editor.error_too_large",
-                        name = name,
-                        size = format_size(size),
-                        max = format_size(max_bytes)
-                    )
-                    .to_string(),
-                    cx,
-                );
-                return;
-            }
-            EditGate::Allowed {
-                connection_id,
-                name,
-                permissions,
-            } => (connection_id, name, permissions),
-        };
-        let Some(connection_id) = connection_id else {
-            self.editor_reject(
-                tab_id,
-                rust_i18n::t!("editor.error_no_connection").to_string(),
-                cx,
-            );
-            return;
-        };
-
-        // 同一文件已在编辑中就不再重复取文件：抬到最前并聚焦编辑器。
-        if let Some(index) = self
-            .editors
-            .panels
-            .iter()
-            .position(|item| item.same_file(tab_id, &remote_path))
-        {
-            let item = self.editors.panels.remove(index);
-            let editor = item.editor.clone();
-            self.editors.panels.push(item);
-            editor.update(cx, |state, cx| state.focus(window, cx));
-            cx.notify();
-            return;
-        }
-
-        // 这里的尺寸闸门只是第一道：目录列表的尺寸可能过期，net 层还会在读取循环内
-        // 按同一上限二次设限，两道一起才挡得住"列出之后文件变大"的情况。
-        let op_id = TransferId::new();
-        self.spawn_editor_panel(
+        let RemoteTextReadParams {
             tab_id,
-            remote_path.clone(),
-            file_name,
-            PanelSeed::Reading { op_id, permissions },
-            window,
-            cx,
-        );
+            connection_id,
+            remote_path,
+            op_id,
+        } = params;
+        let max_bytes = self.settings.sftp.edit_max_bytes;
         if !self.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
@@ -195,6 +139,124 @@ impl AppShell {
         }
     }
 
+    /// 在指定连接上打开远端文本文件：主远端与并列远端列共用同一条编辑通道。
+    ///
+    /// 目录列表里的元数据与读写都按 `connection_id` 定位；面板随后记住这条
+    /// 连接，保存与重新载入不会回落到标签页主连接上。
+    pub(crate) fn sftp_edit_remote_file_on(
+        &mut self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        remote_path: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let max_bytes = self.settings.sftp.edit_max_bytes;
+        let gate = self
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| {
+                let panel = tab.sftp()?;
+                let entries = if tab.connection_id == Some(connection_id) {
+                    &panel.remote.entries
+                } else {
+                    &panel
+                        .side_remotes
+                        .iter()
+                        .find(|side| side.connection_id == Some(connection_id))?
+                        .entries
+                };
+                let entry = entries.iter().find(|item| item.path == remote_path)?;
+                if entry.is_dir {
+                    return Some(EditGate::IsDir);
+                }
+                if entry.size > max_bytes {
+                    return Some(EditGate::TooLarge {
+                        name: entry.name.clone(),
+                        size: entry.size,
+                    });
+                }
+                Some(EditGate::Allowed {
+                    connection_id,
+                    name: entry.name.clone(),
+                    permissions: entry.permissions,
+                })
+            })
+            .unwrap_or(EditGate::Missing);
+
+        let (connection_id, file_name, permissions) = match gate {
+            EditGate::Missing => {
+                self.editor_reject(
+                    tab_id,
+                    connection_id,
+                    rust_i18n::t!("sftp.select_file").to_string(),
+                    cx,
+                );
+                return;
+            }
+            EditGate::IsDir => return,
+            EditGate::TooLarge { name, size } => {
+                self.editor_reject(
+                    tab_id,
+                    connection_id,
+                    rust_i18n::t!(
+                        "editor.error_too_large",
+                        name = name,
+                        size = format_size(size),
+                        max = format_size(max_bytes)
+                    )
+                    .to_string(),
+                    cx,
+                );
+                return;
+            }
+            EditGate::Allowed {
+                connection_id,
+                name,
+                permissions,
+            } => (connection_id, name, permissions),
+        };
+
+        // 同一文件已在编辑中就不再重复取文件：抬到最前并聚焦编辑器。
+        if let Some(index) = self
+            .editors
+            .panels
+            .iter()
+            .position(|item| item.same_file(tab_id, connection_id, &remote_path))
+        {
+            let item = self.editors.panels.remove(index);
+            let editor = item.editor.clone();
+            self.editors.panels.push(item);
+            editor.update(cx, |state, cx| state.focus(window, cx));
+            cx.notify();
+            return;
+        }
+
+        // 这里的尺寸闸门只是第一道：目录列表的尺寸可能过期，net 层还会在读取循环内
+        // 按同一上限二次设限，两道一起才挡得住"列出之后文件变大"的情况。
+        let op_id = TransferId::new();
+        self.spawn_editor_panel(
+            SpawnEditorPanelParams {
+                tab_id,
+                connection_id,
+                remote_path: remote_path.clone(),
+                file_name,
+                seed: PanelSeed::Reading { op_id, permissions },
+            },
+            window,
+            cx,
+        );
+        self.request_remote_text_read(
+            RemoteTextReadParams {
+                tab_id,
+                connection_id,
+                remote_path,
+                op_id,
+            },
+            cx,
+        );
+    }
+
     /// 新建远端文件并打开编辑面板：空缓冲区立即可编辑，首次保存才创建远端文件。
     ///
     /// 面板携带零尺寸指纹：若同名非空文件恰好已存在（目录列表过期时可能发生），
@@ -202,16 +264,20 @@ impl AppShell {
     pub(crate) fn spawn_new_editor_panel(
         &mut self,
         tab_id: TabId,
+        connection_id: ConnectionId,
         remote_path: String,
         file_name: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.spawn_editor_panel(
-            tab_id,
-            remote_path,
-            file_name,
-            PanelSeed::NewFile,
+            SpawnEditorPanelParams {
+                tab_id,
+                connection_id,
+                remote_path,
+                file_name,
+                seed: PanelSeed::NewFile,
+            },
             window,
             cx,
         );
@@ -223,13 +289,17 @@ impl AppShell {
     /// 新建面板可编辑、无在途任务，读取面板等待 `SftpTextRead` 装载内容。
     pub(super) fn spawn_editor_panel(
         &mut self,
-        tab_id: TabId,
-        remote_path: String,
-        file_name: String,
-        seed: PanelSeed,
+        params: SpawnEditorPanelParams,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let SpawnEditorPanelParams {
+            tab_id,
+            connection_id,
+            remote_path,
+            file_name,
+            seed,
+        } = params;
         let language = editor_language_token(&remote_path);
         // 软换行与行号跟随设置页选择：日志类内容常关行号开换行，
         // 配置文件则相反，属于高频个性化项。
@@ -321,6 +391,7 @@ impl AppShell {
         };
         self.editors.panels.push(EditorPanelState {
             tab_id,
+            connection_id,
             remote_path,
             file_name,
             language,
@@ -434,16 +505,9 @@ impl AppShell {
             return;
         }
         let tab_id = item.tab_id;
+        // 读写必须回到打开面板时的那条连接：并列远端的文件不属于标签页主连接。
+        let connection_id = item.connection_id;
         let remote_path = item.remote_path.clone();
-        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
-        else {
-            if let Some(item) = self.editor_panel_mut(editor) {
-                item.phase = EditorPhase::Failed;
-                item.error = Some(rust_i18n::t!("editor.error_no_connection_read").to_string());
-            }
-            cx.notify();
-            return;
-        };
         let op_id = TransferId::new();
         if let Some(item) = self.editor_panel_mut(editor) {
             item.phase = EditorPhase::Reading;
@@ -454,23 +518,15 @@ impl AppShell {
             item.showing_diff = false;
             item.diff = None;
         }
-        let max_bytes = self.settings.sftp.edit_max_bytes;
-        if !self.send_command(SftpCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id,
-            op: SftpOperation::ReadText {
-                path: remote_path,
-                max_bytes,
-            },
-        }) {
-            self.fail_editor_panel_by_op(
+        self.request_remote_text_read(
+            RemoteTextReadParams {
+                tab_id,
+                connection_id,
+                remote_path,
                 op_id,
-                rust_i18n::t!("editor.error_read_dispatch").to_string(),
-                cx,
-            );
-            return;
-        }
+            },
+            cx,
+        );
         cx.notify();
     }
 }

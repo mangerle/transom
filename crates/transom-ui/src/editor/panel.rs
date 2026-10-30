@@ -17,7 +17,7 @@
 use gpui_kit::component::diff::DiffState;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
-use transom_core::{RemoteTextMeta, TabId, TransferId};
+use transom_core::{ConnectionId, RemoteTextMeta, TabId, TransferId};
 
 /// 面板默认尺寸：足够容纳一个两百行的配置文件，又不至于盖住整个工作区。
 pub(crate) const PANEL_WIDTH: f32 = 880.0;
@@ -69,6 +69,11 @@ pub(crate) enum PanelConfirm {
 pub(crate) struct EditorPanelState {
     /// 面板所属标签页；关闭标签时用于连带回收面板。
     pub(crate) tab_id: TabId,
+    /// 文件所在远端连接。
+    ///
+    /// 主远端与并列远端都可能有同路径文件；读写必须回到打开时的那条连接，
+    /// 不能按标签页主连接反查，否则并列远端的文件会被写到主远端主机上。
+    pub(crate) connection_id: ConnectionId,
     pub(crate) remote_path: String,
     pub(crate) file_name: String,
     /// 传给编辑器的高亮 token（扩展名或语法名），未识别时为 `text`。
@@ -163,9 +168,17 @@ impl EditorPanelState {
         }
     }
 
-    /// 面板身份：同一标签内同一路径视为同一个编辑会话。
-    pub(crate) fn same_file(&self, tab_id: TabId, remote_path: &str) -> bool {
-        self.tab_id == tab_id && self.remote_path == remote_path
+    /// 面板身份：同一标签、同一连接内同一路径视为同一个编辑会话。
+    /// 并列远端的同路径文件属于另一台主机，必须各开一个面板。
+    pub(crate) fn same_file(
+        &self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        remote_path: &str,
+    ) -> bool {
+        self.tab_id == tab_id
+            && self.connection_id == connection_id
+            && self.remote_path == remote_path
     }
 }
 

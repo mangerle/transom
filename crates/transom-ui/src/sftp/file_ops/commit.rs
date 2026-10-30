@@ -2,7 +2,7 @@
 
 use super::validate::name_validation_error;
 use crate::app::AppShell;
-use crate::sftp::{SftpInputTarget, join_remote, parent_remote};
+use crate::sftp::{SftpInputTarget, SftpRemotePaneRef, join_remote, parent_remote};
 use gpui_kit::*;
 use std::path::Path;
 use transom_core::{SftpOperation, TabId};
@@ -34,27 +34,32 @@ impl AppShell {
             return;
         }
 
+        // 远端目标的连接与当前目录：并列远端弹窗携带目标连接，主远端沿用
+        // 标签页连接。所有远端操作与后续刷新都按这里解析出的连接路由。
+        let target = match modal.connection_id {
+            Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
+            None => SftpRemotePaneRef::Main,
+        };
+        let remote_scope = self.remote_pane_scope(tab_id, target).map(|scope| {
+            (
+                scope.connection_id,
+                scope.pane.path.clone(),
+                scope.pane.entries.clone(),
+            )
+        });
+
         // 新建文件在通用校验后直接分流：目录列表里已有同名条目时不创建，
         // 目录报错回填、文件直接打开编辑；全新路径才生成空编辑面板。
         // 整条分支在 match 之前完成，避免部分移动的模态再被改写。
         if matches!(modal.target, SftpInputTarget::RemoteEditorNewFile) {
-            let existing = self
-                .workspace
-                .tab(tab_id)
-                .and_then(|t| t.sftp())
-                .map(|panel| {
-                    let path = join_remote(&panel.remote.path, &name);
-                    let is_dir = panel
-                        .remote
-                        .entries
-                        .iter()
-                        .find(|entry| entry.path == path)
-                        .map(|entry| entry.is_dir);
-                    (path, is_dir)
-                });
-            let Some((path, existing_is_dir)) = existing else {
+            let Some((connection_id, base_path, entries)) = remote_scope else {
                 return;
             };
+            let path = join_remote(&base_path, &name);
+            let existing_is_dir = entries
+                .iter()
+                .find(|entry| entry.path == path)
+                .map(|entry| entry.is_dir);
             match existing_is_dir {
                 Some(true) => {
                     let mut modal = modal;
@@ -68,70 +73,75 @@ impl AppShell {
                     cx.notify();
                 }
                 // 列表里已有同名文件：交给既有打开流程（读取失败会在面板内报错）。
-                Some(false) => self.sftp_edit_remote_file(tab_id, path, window, cx),
+                Some(false) => {
+                    self.sftp_edit_remote_file_on(tab_id, connection_id, path, window, cx)
+                }
                 // 目录列表未命中：按新文件打开空编辑面板。
-                None => self.spawn_new_editor_panel(tab_id, path, name, window, cx),
+                None => self.spawn_new_editor_panel(tab_id, connection_id, path, name, window, cx),
             }
             return;
         }
 
         match modal.target {
             SftpInputTarget::RemoteMkdir => {
-                let Some(tab) = self.workspace.tab(tab_id) else {
-                    return;
-                };
-                let Some(panel) = tab.sftp() else {
+                let Some((connection_id, base_path, _)) = remote_scope else {
                     return;
                 };
                 let op = SftpOperation::Mkdir {
-                    path: join_remote(&panel.remote.path, &name),
+                    path: join_remote(&base_path, &name),
                 };
-                self.send_sftp_op(tab_id, op, cx);
+                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
             }
             // 新建文件已在 match 之前的前置分支完整处理：同名条目分流、
             // 目录报错回填、文件直接打开或生成空面板。
             SftpInputTarget::RemoteEditorNewFile => {}
             SftpInputTarget::RemoteRename { old_path } => {
+                let Some((connection_id, _, _)) = remote_scope else {
+                    return;
+                };
                 let op = SftpOperation::Rename {
                     from: old_path.clone(),
                     to: join_remote(&parent_remote(&old_path), &name),
                 };
-                self.send_sftp_op(tab_id, op, cx);
+                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
             }
             SftpInputTarget::RemoteSymlink { target } => {
-                let Some(tab) = self.workspace.tab(tab_id) else {
-                    return;
-                };
-                let Some(panel) = tab.sftp() else {
+                let Some((connection_id, base_path, _)) = remote_scope else {
                     return;
                 };
                 let op = SftpOperation::Symlink {
                     target,
-                    link_path: join_remote(&panel.remote.path, &name),
+                    link_path: join_remote(&base_path, &name),
                 };
-                self.send_sftp_op(tab_id, op, cx);
+                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
             }
             SftpInputTarget::RemoteArchive {
                 source_paths,
                 parent_dir,
             } => {
+                let Some((connection_id, _, _)) = remote_scope else {
+                    return;
+                };
                 let dest_archive_path = join_remote(&parent_dir, &name);
                 let op = SftpOperation::Archive {
                     source_paths,
                     dest_archive_path,
                 };
-                self.send_sftp_op(tab_id, op, cx);
+                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
             }
             SftpInputTarget::RemoteExtract {
                 archive_path,
                 parent_dir,
             } => {
+                let Some((connection_id, _, _)) = remote_scope else {
+                    return;
+                };
                 let dest_dir = join_remote(&parent_dir, &name);
                 let op = SftpOperation::Extract {
                     archive_path,
                     dest_dir,
                 };
-                self.send_sftp_op(tab_id, op, cx);
+                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
             }
             SftpInputTarget::SudoElevation { editor } => {
                 let password = if name.trim().is_empty() {

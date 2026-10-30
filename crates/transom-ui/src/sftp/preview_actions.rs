@@ -152,12 +152,7 @@ impl AppShell {
         kind: PreviewKind,
         cx: &mut Context<Self>,
     ) {
-        let connection_id = self
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.id == target.tab_id)
-            .and_then(|tab| tab.connection_id);
+        let connection_id = target.key.connection_id;
         let command_tx = self.services.command_tx.clone();
         let Some(panel) = self.sftp_panel_mut_by_tab(target.tab_id) else {
             return;

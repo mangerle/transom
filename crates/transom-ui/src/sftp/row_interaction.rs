@@ -18,6 +18,7 @@ use super::preview::{PreviewKey, SftpHoverTarget};
 use super::side_remote::{SftpDragItem, SftpDragPreview};
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::SftpRemotePaneRef;
 use gpui_kit::*;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -28,7 +29,7 @@ use transom_core::{ConnectionId, TabId};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SftpSide {
     Local,
-    Remote,
+    Remote(SftpRemotePaneRef),
 }
 
 /// 行的原始路径：本地保留 `PathBuf` 以免丢失非 UTF-8 文件名。
@@ -110,7 +111,13 @@ impl AppShell {
     ) -> Stateful<Div> {
         let id = match row.side {
             SftpSide::Local => format!("local-file-{}", row.name),
-            SftpSide::Remote => format!("remote-file-{}", row.path.display()),
+            SftpSide::Remote(target) => {
+                let pane_key = match target {
+                    SftpRemotePaneRef::Main => "main".to_string(),
+                    SftpRemotePaneRef::Side(connection_id) => format!("side-{connection_id}"),
+                };
+                format!("remote-file-{pane_key}-{}", row.path.display())
+            }
         };
         let base = file_row(FileRowProps {
             id,
@@ -125,7 +132,8 @@ impl AppShell {
         let hover_target = SftpHoverTarget {
             tab_id: row.tab_id,
             key: PreviewKey {
-                is_remote: row.side == SftpSide::Remote,
+                is_remote: matches!(row.side, SftpSide::Remote(_)),
+                connection_id: row.source_connection_id,
                 path: row.path.display().into_owned(),
             },
             name: row.name.clone(),
@@ -191,15 +199,27 @@ impl AppShell {
                         self.sftp_edit_local_file(row.tab_id, path.to_path_buf(), cx);
                     }
                 }
-                SftpSide::Remote => {
+                SftpSide::Remote(target) => {
                     if row.is_parent {
-                        self.sftp_go_up(row.tab_id, window, cx);
+                        self.sftp_go_up_pane(row.tab_id, target, window, cx);
                     } else if row.is_dir {
                         if let Some(path) = row.path.remote() {
-                            self.sftp_navigate(row.tab_id, path.to_string(), window, cx);
+                            self.sftp_navigate_pane(
+                                row.tab_id,
+                                target,
+                                path.to_string(),
+                                window,
+                                cx,
+                            );
                         }
                     } else if let Some(path) = row.path.remote() {
-                        self.sftp_edit_remote_file(row.tab_id, path.to_string(), window, cx);
+                        self.sftp_edit_remote_file_pane(
+                            row.tab_id,
+                            target,
+                            path.to_string(),
+                            window,
+                            cx,
+                        );
                     }
                 }
             }
@@ -215,21 +235,13 @@ impl AppShell {
         else {
             return;
         };
-        if event.modifiers.shift {
-            let anchor = match row.side {
-                SftpSide::Local => panel.local.anchor.clone().map(SftpRowPath::Local),
-                SftpSide::Remote => panel.remote.anchor.clone().map(SftpRowPath::Remote),
-            };
-            let anchor_index =
-                anchor.and_then(|anchor| row.visible_paths.iter().position(|path| path == &anchor));
-            if let Some(anchor_index) = anchor_index {
-                let (start, end) = if anchor_index <= row.index {
-                    (anchor_index, row.index)
-                } else {
-                    (row.index, anchor_index)
-                };
-                match row.side {
-                    SftpSide::Local => {
+        match row.side {
+            SftpSide::Local => {
+                if event.modifiers.shift {
+                    let anchor = panel.local.anchor.clone().map(SftpRowPath::Local);
+                    if let Some((start, end)) =
+                        selection_range(&anchor, row.index, &row.visible_paths)
+                    {
                         let paths: Vec<PathBuf> = row.visible_paths[start..=end]
                             .iter()
                             .filter_map(|path| path.local().map(Path::to_path_buf))
@@ -237,61 +249,48 @@ impl AppShell {
                         if let Some(primary) = row.path.local() {
                             panel.select_local_range(paths, primary.to_path_buf());
                         }
+                    } else if let Some(path) = row.path.local() {
+                        panel.select_local(path.to_path_buf());
                     }
-                    SftpSide::Remote => {
+                } else if event.modifiers.control || event.modifiers.platform {
+                    if let Some(path) = row.path.local() {
+                        panel.toggle_local_selection(path.to_path_buf());
+                    }
+                } else if let Some(path) = row.path.local() {
+                    panel.select_local(path.to_path_buf());
+                }
+            }
+            SftpSide::Remote(target) => {
+                if event.modifiers.shift {
+                    let anchor = panel
+                        .remote_pane(target)
+                        .and_then(|pane| pane.anchor.clone())
+                        .map(SftpRowPath::Remote);
+                    if let Some((start, end)) =
+                        selection_range(&anchor, row.index, &row.visible_paths)
+                    {
                         let paths: Vec<String> = row.visible_paths[start..=end]
                             .iter()
                             .filter_map(|path| path.remote().map(str::to_string))
                             .collect();
                         if let Some(primary) = row.path.remote() {
-                            panel.select_remote_range(paths, primary.to_string());
+                            panel.select_remote_range_pane(target, paths, primary.to_string());
                         }
+                    } else if let Some(path) = row.path.remote() {
+                        panel.select_remote_pane(target, path.to_string());
                     }
-                }
-            } else {
-                match row.side {
-                    SftpSide::Local => {
-                        if let Some(path) = row.path.local() {
-                            panel.select_local(path.to_path_buf());
-                        }
-                    }
-                    SftpSide::Remote => {
-                        if let Some(path) = row.path.remote() {
-                            panel.select_remote(path.to_string());
-                        }
-                    }
-                }
-            }
-        } else if event.modifiers.control || event.modifiers.platform {
-            match row.side {
-                SftpSide::Local => {
-                    if let Some(path) = row.path.local() {
-                        panel.toggle_local_selection(path.to_path_buf());
-                    }
-                }
-                SftpSide::Remote => {
+                } else if event.modifiers.control || event.modifiers.platform {
                     if let Some(path) = row.path.remote() {
-                        panel.toggle_remote_selection(path.to_string());
+                        panel.toggle_remote_selection_pane(target, path.to_string());
                     }
-                }
-            }
-        } else {
-            match row.side {
-                SftpSide::Local => {
-                    if let Some(path) = row.path.local() {
-                        panel.select_local(path.to_path_buf());
-                    }
-                }
-                SftpSide::Remote => {
-                    if let Some(path) = row.path.remote() {
-                        panel.select_remote(path.to_string());
-                    }
+                } else if let Some(path) = row.path.remote() {
+                    panel.select_remote_pane(target, path.to_string());
                 }
             }
         }
         let selected_count = match row.side {
             SftpSide::Local => panel.selected_local_paths().len(),
-            SftpSide::Remote => panel.selected_remote_paths().len(),
+            SftpSide::Remote(target) => panel.selected_remote_paths_pane(target).len(),
         };
         if selected_count > 1 {
             panel.queue.status = Some(
@@ -299,7 +298,7 @@ impl AppShell {
                     SftpSide::Local => {
                         rust_i18n::t!("sftp.row.selected_local", count = selected_count)
                     }
-                    SftpSide::Remote => {
+                    SftpSide::Remote(_) => {
                         rust_i18n::t!("sftp.row.selected_remote", count = selected_count)
                     }
                 }
@@ -307,10 +306,12 @@ impl AppShell {
             );
         }
         let name = row.name.clone();
-        panel
-            .remote
-            .name_input
-            .update(cx, |state, cx| state.set_value(name, window, cx));
+        if let SftpSide::Remote(target) = row.side
+            && let Some(pane) = panel.remote_pane(target)
+        {
+            pane.name_input
+                .update(cx, |state, cx| state.set_value(name, window, cx));
+        }
         cx.notify();
     }
 
@@ -337,14 +338,17 @@ impl AppShell {
                         }
                     }
                 }
-                SftpSide::Remote => {
+                SftpSide::Remote(target) => {
                     if let Some(path) = row.path.remote() {
                         let path = path.to_string();
-                        if panel.remote.selection.contains(&path) {
-                            panel.set_remote_primary(path);
-                        } else {
-                            panel.select_remote(path);
+                        if let Some(pane) = panel.remote_pane_mut(target) {
+                            if pane.selection.contains(&path) {
+                                pane.set_primary(path);
+                            } else {
+                                pane.select(path);
+                            }
                         }
+                        panel.active_pane = target.into();
                     }
                 }
             }
@@ -352,4 +356,19 @@ impl AppShell {
         }
         cx.notify();
     }
+}
+
+/// 计算 Shift 连选的可见区间；锚点不在当前列表时返回 `None`。
+fn selection_range(
+    anchor: &Option<SftpRowPath>,
+    row_index: usize,
+    visible_paths: &[SftpRowPath],
+) -> Option<(usize, usize)> {
+    let anchor = anchor.as_ref()?;
+    let anchor_index = visible_paths.iter().position(|path| path == anchor)?;
+    Some(if anchor_index <= row_index {
+        (anchor_index, row_index)
+    } else {
+        (row_index, anchor_index)
+    })
 }

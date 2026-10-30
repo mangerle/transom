@@ -4,10 +4,10 @@
 //! 读取通道与面板装配；单独成文件是为了让 `open.rs` 只保留列表行与新建文件的入口，
 //! 两条触达路径各自可读。
 
-use super::open::PanelSeed;
+use super::open::{PanelSeed, RemoteTextReadParams, SpawnEditorPanelParams};
 use crate::app::AppShell;
 use gpui_kit::*;
-use transom_core::{ConnectionId, SftpCommand, SftpOperation, TabId, TransferId};
+use transom_core::{ConnectionId, TabId, TransferId};
 
 /// 终端代码链接转换出的远端定位请求（行列均为 1 基）。
 pub(crate) struct RemoteCodeLocation {
@@ -48,15 +48,17 @@ impl AppShell {
                 || rust_i18n::t!("editor.remote_file_fallback").to_string(),
                 |name| name.to_string(),
             );
-        let max_bytes = self.settings.sftp.edit_max_bytes;
         let op_id = TransferId::new();
         self.spawn_editor_panel(
-            tab_id,
-            remote_path.clone(),
-            file_name,
-            PanelSeed::Reading {
-                op_id,
-                permissions: None,
+            SpawnEditorPanelParams {
+                tab_id,
+                connection_id,
+                remote_path: remote_path.clone(),
+                file_name,
+                seed: PanelSeed::Reading {
+                    op_id,
+                    permissions: None,
+                },
             },
             window,
             cx,
@@ -69,21 +71,15 @@ impl AppShell {
         {
             item.pending_goto = Some((line, column));
         }
-        if !self.send_command(SftpCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id,
-            op: SftpOperation::ReadText {
-                path: remote_path,
-                max_bytes,
-            },
-        }) {
-            self.fail_editor_panel_by_op(
+        self.request_remote_text_read(
+            RemoteTextReadParams {
+                tab_id,
+                connection_id,
+                remote_path,
                 op_id,
-                rust_i18n::t!("editor.error_read_dispatch").to_string(),
-                cx,
-            );
-        }
+            },
+            cx,
+        );
     }
 
     /// 目标文件已在编辑器里打开时直接跳行并聚焦，返回是否命中。
@@ -93,12 +89,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(index) = self
-            .editors
-            .panels
-            .iter()
-            .position(|item| item.same_file(target.tab_id, &target.remote_path))
-        else {
+        let Some(index) = self.editors.panels.iter().position(|item| {
+            item.same_file(target.tab_id, target.connection_id, &target.remote_path)
+        }) else {
             return false;
         };
         let item = self.editors.panels.remove(index);

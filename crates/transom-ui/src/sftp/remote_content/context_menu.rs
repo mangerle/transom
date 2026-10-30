@@ -1,11 +1,20 @@
-//! SFTP 远程文件项右键上下文菜单构建。
+//! 远端文件项与空白区的右键菜单：主远端与并列远端共用同一套菜单。
+//!
+//! 设计原理（Why）：
+//! - 实现初衷：并列远端列此前只有下载与复制几个菜单项，主远端的编辑、压缩、
+//!   解压、软链、属性、授权执行等能力无法在挂载列使用；两套菜单还各自维护
+//!   选中与动作口径；
+//! - 核心优势：菜单只认 `tab_id + target`，所有动作经统一动作入口按目标列
+//!   路由，新增一列能力时菜单不需要再写第二遍；
+//! - 代价与局限：主远端与并列列的动作实现仍在入口后面分支（过渡层），
+//!   但调用方看到的菜单项与文案已经完全一致。
 
 use crate::app::AppShell;
-use crate::sftp::parent_remote;
+use crate::sftp::SftpRemotePaneRef;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
-use transom_core::{SftpOperation, TabId};
+use transom_core::TabId;
 
 /// 判断指定路径是否属于受支持的常见压缩包格式。
 fn is_archive_name(path: &str) -> bool {
@@ -28,16 +37,19 @@ fn strip_archive_suffix(name: &str) -> String {
     }
 }
 
-/// 远端右键上下文菜单构建所需的参数上下文对象。
+/// 远端右键菜单构建所需的参数上下文对象。
 pub(crate) struct RemoteContextMenuProps {
     pub(crate) app: Entity<AppShell>,
     pub(crate) tab_id: TabId,
+    pub(crate) target: SftpRemotePaneRef,
     pub(crate) entry_path: String,
     pub(crate) is_dir: bool,
     pub(crate) is_parent_entry: bool,
+    /// 标签页是否有主远端连接；没有主远端时不显示“复制到主远端”。
+    pub(crate) has_main_remote: bool,
 }
 
-/// 构建远程文件/目录右键菜单。
+/// 构建远端文件/目录右键菜单。
 pub(crate) fn build_remote_context_menu(
     menu: PopupMenu,
     props: RemoteContextMenuProps,
@@ -45,9 +57,11 @@ pub(crate) fn build_remote_context_menu(
     let RemoteContextMenuProps {
         app,
         tab_id,
+        target,
         entry_path,
         is_dir,
         is_parent_entry,
+        has_main_remote,
     } = props;
 
     if is_parent_entry {
@@ -59,7 +73,7 @@ pub(crate) fn build_remote_context_menu(
                         let app = app.clone();
                         move |_, window, cx| {
                             app.update(cx, |this, cx| {
-                                this.sftp_go_up(tab_id, window, cx);
+                                this.sftp_go_up_pane(tab_id, target, window, cx);
                             });
                         }
                     }),
@@ -71,7 +85,7 @@ pub(crate) fn build_remote_context_menu(
                         let app = app.clone();
                         move |_, _, cx| {
                             app.update(cx, |this, cx| {
-                                this.sftp_refresh(tab_id, cx);
+                                this.sftp_refresh_pane(tab_id, target, cx);
                             });
                         }
                     }),
@@ -87,6 +101,7 @@ pub(crate) fn build_remote_context_menu(
     let p_chmod = entry_path.clone();
     let p_ren = entry_path.clone();
     let p_del = entry_path.clone();
+    let p_side_copy = entry_path.clone();
 
     let mut m = menu.item(
         PopupMenuItem::new(rust_i18n::t!("sftp.download").to_string())
@@ -95,16 +110,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            if panel.remote.selection.contains(&p_dl) {
-                                panel.set_remote_primary(p_dl.clone());
-                            } else {
-                                panel.select_remote(p_dl.clone());
-                            }
-                        }
-                        this.sftp_queue_download(tab_id, cx);
+                        this.select_remote_entry_for_menu(tab_id, target, p_dl.clone(), cx);
+                        this.sftp_queue_download_pane(tab_id, target, cx);
                     });
                 }
             }),
@@ -118,7 +125,14 @@ pub(crate) fn build_remote_context_menu(
                     let app = app.clone();
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
-                            this.sftp_edit_remote_file(tab_id, p_edit.clone(), window, cx);
+                            this.select_remote_entry_for_menu(tab_id, target, p_edit.clone(), cx);
+                            this.sftp_edit_remote_file_pane(
+                                tab_id,
+                                target,
+                                p_edit.clone(),
+                                window,
+                                cx,
+                            );
                         });
                     }
                 }),
@@ -136,12 +150,7 @@ pub(crate) fn build_remote_context_menu(
                         let app = app.clone();
                         move |_, _, cx| {
                             app.update(cx, |this, cx| {
-                                let dest_dir = parent_remote(&p_extract);
-                                let op = SftpOperation::Extract {
-                                    archive_path: p_extract.clone(),
-                                    dest_dir,
-                                };
-                                this.send_sftp_op(tab_id, op, cx);
+                                this.sftp_extract_here_pane(tab_id, target, p_extract.clone(), cx);
                             });
                         }
                     }),
@@ -158,8 +167,9 @@ pub(crate) fn build_remote_context_menu(
                                     .map(|(_, name)| name)
                                     .unwrap_or(&p_extract_new);
                                 let default_dir = strip_archive_suffix(file_name);
-                                this.sftp_open_extract_modal(
+                                this.sftp_open_extract_modal_pane(
                                     tab_id,
+                                    target,
                                     p_extract_new.clone(),
                                     default_dir,
                                     window,
@@ -182,25 +192,25 @@ pub(crate) fn build_remote_context_menu(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             let mut sources = Vec::new();
-                            if let Some(panel) = this.workspace.tab(tab_id).and_then(|t| t.sftp())
-                                && panel.remote.selection.contains(&p_archive_gz)
+                            if let Some(panel) =
+                                this.workspace.tab(tab_id).and_then(|tab| tab.sftp())
+                                && let Some(pane) = panel.remote_pane(target)
+                                && pane.selection.contains(&p_archive_gz)
                             {
-                                sources = panel.remote.selection.iter().cloned().collect();
+                                sources = pane.selection.iter().cloned().collect();
                             }
                             if sources.is_empty() {
                                 sources.push(p_archive_gz.clone());
                             }
-                            let default_name = if sources.len() == 1 {
-                                let item_name = sources[0]
-                                    .trim_end_matches('/')
-                                    .rsplit_once('/')
-                                    .map(|(_, n)| n)
-                                    .unwrap_or(&sources[0]);
-                                format!("{item_name}.tar.gz")
-                            } else {
-                                "archive.tar.gz".to_string()
-                            };
-                            this.sftp_open_archive_modal(tab_id, sources, default_name, window, cx);
+                            let default_name = archive_default_name(&sources, "tar.gz");
+                            this.sftp_open_archive_modal_pane(
+                                tab_id,
+                                target,
+                                sources,
+                                default_name,
+                                window,
+                                cx,
+                            );
                         });
                     }
                 }),
@@ -213,29 +223,51 @@ pub(crate) fn build_remote_context_menu(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             let mut sources = Vec::new();
-                            if let Some(panel) = this.workspace.tab(tab_id).and_then(|t| t.sftp())
-                                && panel.remote.selection.contains(&p_archive_zip)
+                            if let Some(panel) =
+                                this.workspace.tab(tab_id).and_then(|tab| tab.sftp())
+                                && let Some(pane) = panel.remote_pane(target)
+                                && pane.selection.contains(&p_archive_zip)
                             {
-                                sources = panel.remote.selection.iter().cloned().collect();
+                                sources = pane.selection.iter().cloned().collect();
                             }
                             if sources.is_empty() {
                                 sources.push(p_archive_zip.clone());
                             }
-                            let default_name = if sources.len() == 1 {
-                                let item_name = sources[0]
-                                    .trim_end_matches('/')
-                                    .rsplit_once('/')
-                                    .map(|(_, n)| n)
-                                    .unwrap_or(&sources[0]);
-                                format!("{item_name}.zip")
-                            } else {
-                                "archive.zip".to_string()
-                            };
-                            this.sftp_open_archive_modal(tab_id, sources, default_name, window, cx);
+                            let default_name = archive_default_name(&sources, "zip");
+                            this.sftp_open_archive_modal_pane(
+                                tab_id,
+                                target,
+                                sources,
+                                default_name,
+                                window,
+                                cx,
+                            );
                         });
                     }
                 }),
         );
+
+    if target != SftpRemotePaneRef::Main && has_main_remote {
+        let p_to_main = p_side_copy;
+        m = m.item(
+            PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_to_main_remote").to_string())
+                .icon(IconName::ArrowLeftRight)
+                .on_click({
+                    let app = app.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.sftp_copy_remote_entry_to_main(
+                                tab_id,
+                                target,
+                                p_to_main.clone(),
+                                is_dir,
+                                cx,
+                            );
+                        });
+                    }
+                }),
+        );
+    }
 
     m.item(
         PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_abs_path").to_string())
@@ -245,9 +277,7 @@ pub(crate) fn build_remote_context_menu(
                 move |_, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(p_cp.clone()));
                     app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
+                        if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
                             panel.set_status(
                                 rust_i18n::t!("sftp.menu.remote_path_copied", path = p_cp)
                                     .to_string(),
@@ -265,12 +295,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            panel.select_remote(p_sym.clone());
-                        }
-                        this.sftp_open_symlink_modal(tab_id, true, window, cx);
+                        this.select_remote_entry_for_menu(tab_id, target, p_sym.clone(), cx);
+                        this.sftp_open_symlink_modal_pane(tab_id, target, window, cx);
                     });
                 }
             }),
@@ -282,7 +308,12 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_request_remote_properties(tab_id, p_prop.clone(), cx);
+                        this.sftp_request_remote_properties_pane(
+                            tab_id,
+                            target,
+                            p_prop.clone(),
+                            cx,
+                        );
                     });
                 }
             }),
@@ -294,16 +325,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            if panel.remote.selection.contains(&p_exec) {
-                                panel.set_remote_primary(p_exec.clone());
-                            } else {
-                                panel.select_remote(p_exec.clone());
-                            }
-                        }
-                        this.sftp_grant_remote_exec(tab_id, cx);
+                        this.select_remote_entry_for_menu(tab_id, target, p_exec.clone(), cx);
+                        this.sftp_grant_remote_exec_pane(tab_id, target, cx);
                     });
                 }
             }),
@@ -315,12 +338,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            panel.select_remote(p_chmod.clone());
-                        }
-                        this.sftp_open_chmod_modal(tab_id, window, cx);
+                        this.select_remote_entry_for_menu(tab_id, target, p_chmod.clone(), cx);
+                        this.sftp_open_chmod_modal_for(tab_id, target, window, cx);
                     });
                 }
             }),
@@ -332,7 +351,7 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_open_mkdir_modal(tab_id, true, window, cx);
+                        this.sftp_open_mkdir_modal_for(tab_id, target, window, cx);
                     });
                 }
             }),
@@ -344,12 +363,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            panel.select_remote(p_ren.clone());
-                        }
-                        this.sftp_open_rename_modal(tab_id, true, window, cx);
+                        this.select_remote_entry_for_menu(tab_id, target, p_ren.clone(), cx);
+                        this.sftp_open_rename_modal_for(tab_id, target, window, cx);
                     });
                 }
             }),
@@ -361,13 +376,8 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                            && !panel.remote.selection.contains(&p_del)
-                        {
-                            panel.select_remote(p_del.clone());
-                        }
-                        this.sftp_delete_selection(tab_id, cx);
+                        this.select_remote_entry_for_menu(tab_id, target, p_del.clone(), cx);
+                        this.sftp_delete_selection_for(tab_id, target, cx);
                     });
                 }
             }),
@@ -379,7 +389,7 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_refresh(tab_id, cx);
+                        this.sftp_refresh_pane(tab_id, target, cx);
                     });
                 }
             }),
@@ -391,6 +401,7 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
+                        this.activate_remote_pane(tab_id, target, cx);
                         this.sftp_copy_selection(tab_id, cx);
                     });
                 }
@@ -403,6 +414,7 @@ pub(crate) fn build_remote_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
+                        this.activate_remote_pane(tab_id, target, cx);
                         this.sftp_paste_clipboard(tab_id, window, cx);
                     });
                 }
@@ -410,19 +422,26 @@ pub(crate) fn build_remote_context_menu(
     )
 }
 
-/// 远程列空白区域（未命中任何条目）的目录级右键菜单。
-///
-/// 设计原理（Why）：
-/// - 实现初衷：菜单此前只挂在 28px 高的行元素上，目录不满一屏时点下方空白毫无响应，
-///   而"返回上一级、刷新、新建、粘贴"本来就是目录级动作，与选中的条目无关；
-/// - 核心优势：gpui 的 `context_menu` 在自身 bounds 上命中，且子元素优先响应并停止冒泡，
-///   所以容器这一层只在空白处生效，条目上的行菜单不会被它抢走；
-/// - 代价与局限：这里刻意只收目录级动作。条目动作（下载、重命名、Chmod 等）仍归行菜单，
-///   避免同一功能在两个位置给出不同的可用集合。
+/// 按选中项生成归档默认名：单项沿用其文件名，多项使用通用名。
+fn archive_default_name(sources: &[String], extension: &str) -> String {
+    if sources.len() == 1 {
+        let item_name = sources[0]
+            .trim_end_matches('/')
+            .rsplit_once('/')
+            .map(|(_, name)| name)
+            .unwrap_or(&sources[0]);
+        format!("{item_name}.{extension}")
+    } else {
+        format!("archive.{extension}")
+    }
+}
+
+/// 远端列空白区域（未命中任何条目）的目录级右键菜单。
 pub(crate) fn build_remote_blank_context_menu(
     menu: PopupMenu,
     app: Entity<AppShell>,
     tab_id: TabId,
+    target: SftpRemotePaneRef,
 ) -> PopupMenu {
     menu.item(
         PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
@@ -431,7 +450,7 @@ pub(crate) fn build_remote_blank_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_go_up(tab_id, window, cx);
+                        this.sftp_go_up_pane(tab_id, target, window, cx);
                     });
                 }
             }),
@@ -443,7 +462,7 @@ pub(crate) fn build_remote_blank_context_menu(
                 let app = app.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_refresh(tab_id, cx);
+                        this.sftp_refresh_pane(tab_id, target, cx);
                     });
                 }
             }),
@@ -455,7 +474,7 @@ pub(crate) fn build_remote_blank_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_open_mkdir_modal(tab_id, true, window, cx);
+                        this.sftp_open_mkdir_modal_for(tab_id, target, window, cx);
                     });
                 }
             }),
@@ -465,6 +484,7 @@ pub(crate) fn build_remote_blank_context_menu(
             .icon(IconName::Clipboard)
             .on_click(move |_, window, cx| {
                 app.update(cx, |this, cx| {
+                    this.activate_remote_pane(tab_id, target, cx);
                     this.sftp_paste_clipboard(tab_id, window, cx);
                 });
             }),

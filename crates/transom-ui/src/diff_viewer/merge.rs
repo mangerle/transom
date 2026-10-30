@@ -18,6 +18,15 @@ struct MergePlan {
     merged: String,
 }
 
+/// 差异写回成功后同步编辑器的参数集合。
+struct DiffWriteSync<'a> {
+    tab_id: TabId,
+    connection_id: Option<ConnectionId>,
+    remote_path: &'a str,
+    text: &'a str,
+    meta: RemoteTextMeta,
+}
+
 impl AppShell {
     /// 请求合并当前变更块：先进入确认态，真正写回在用户确认后才发生。
     pub(crate) fn request_diff_merge(&mut self, direction: MergeDirection, cx: &mut Context<Self>) {
@@ -217,6 +226,7 @@ impl AppShell {
         viewer.remote_meta = Some(meta);
         viewer.remote_text = Some(text.clone());
         let tab_id = viewer.tab_id;
+        let connection_id = viewer.connection_id;
         let remote_path = viewer.remote_path.clone();
         if let Some(tab) = self.workspace.tab_mut(tab_id)
             && let Some(panel) = tab.sftp_mut()
@@ -229,7 +239,17 @@ impl AppShell {
             entry.size = meta.size;
             entry.modified = meta.mtime;
         }
-        self.sync_editor_after_diff_write(tab_id, &remote_path, &text, meta, window, cx);
+        self.sync_editor_after_diff_write(
+            DiffWriteSync {
+                tab_id,
+                connection_id,
+                remote_path: &remote_path,
+                text: &text,
+                meta,
+            },
+            window,
+            cx,
+        );
         self.recompute_diff(cx);
         cx.notify();
         true
@@ -237,18 +257,26 @@ impl AppShell {
 
     fn sync_editor_after_diff_write(
         &mut self,
-        tab_id: TabId,
-        remote_path: &str,
-        text: &str,
-        meta: RemoteTextMeta,
+        sync: DiffWriteSync<'_>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let DiffWriteSync {
+            tab_id,
+            connection_id,
+            remote_path,
+            text,
+            meta,
+        } = sync;
+        // 差异面板没有确定的远端连接时不存在对应的编辑会话，无需同步基线。
+        let Some(connection_id) = connection_id else {
+            return;
+        };
         let Some(index) = self
             .editors
             .panels
             .iter()
-            .position(|item| item.same_file(tab_id, remote_path))
+            .position(|item| item.same_file(tab_id, connection_id, remote_path))
         else {
             return;
         };

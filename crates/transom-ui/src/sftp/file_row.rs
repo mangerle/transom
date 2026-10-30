@@ -58,16 +58,6 @@ pub(crate) fn file_row(props: FileRowProps<'_>) -> Stateful<Div> {
     }))
 }
 
-/// 目录为空时的占位提示。
-pub(crate) fn empty_dir_hint(p: &Palette) -> AnyElement {
-    div()
-        .p_3()
-        .text_xs()
-        .text_color(p.muted_foreground)
-        .child(rust_i18n::t!("sftp.empty").to_string())
-        .into_any_element()
-}
-
 /// 在当前远端路径非根时，向列表头部注入 `..` 父目录项。
 ///
 /// `filter_query` 非空时只在它匹配 `..` 时注入；过滤状态下父目录与普通条目
