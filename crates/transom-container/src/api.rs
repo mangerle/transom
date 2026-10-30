@@ -511,6 +511,47 @@ impl DockerApi {
         http::ensure_success(status, operation, body, Some(container))
     }
 
+    /// 重命名容器。
+    ///
+    /// 设计原理（Why）：引擎只有 `POST /containers/{id}/rename?name=` 这一条
+    /// 通道，没有通用「改元数据」接口；改名后正在看的工作区选中项仍然按 ID 定位，
+    /// 因此界面不会因为改名丢会话。
+    ///
+    /// # Errors
+    /// 新名称非法、容器不存在或名称已被占用时返回对应错误。
+    pub async fn rename_container(
+        &self,
+        container: &str,
+        name: &str,
+    ) -> Result<(), ContainerError> {
+        if !transom_core::is_valid_container_name(name) {
+            return Err(ContainerError::InvalidName {
+                name: name.to_string(),
+                reason: "容器名只能包含字母、数字、点、下划线和短横线，且必须以字母或数字开头"
+                    .to_string(),
+            });
+        }
+        let path = format!(
+            "/containers/{}/rename?name={}",
+            http::percent_encode(container),
+            http::percent_encode(name)
+        );
+        let response = self
+            .send(
+                Method::POST,
+                &path,
+                None,
+                &format!("重命名容器 {container}"),
+            )
+            .await?;
+        if response.status.is_success() {
+            return Ok(());
+        }
+        let status = response.status;
+        let body = http::read_body_text(response.body, 8192).await;
+        http::ensure_success(status, "重命名容器", body, Some(container))
+    }
+
     /// 拉取镜像；进度通过回调上报，流中的错误会转成 `ContainerError`。
     pub async fn pull_image(
         &self,

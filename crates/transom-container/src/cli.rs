@@ -185,6 +185,30 @@ impl CliBackend {
         self.run_checked(&args).await.map(|_| ())
     }
 
+    /// CLI 兜底的重命名：`<程序> rename <容器> <新名>`。
+    ///
+    /// # Errors
+    /// 名称非法或子进程返回非零退出码时转成 [`ContainerError`]。
+    pub async fn rename_container(
+        &self,
+        container: &str,
+        name: &str,
+    ) -> Result<(), ContainerError> {
+        if !transom_core::is_valid_container_name(name) {
+            return Err(ContainerError::InvalidName {
+                name: name.to_string(),
+                reason: "容器名只能包含字母、数字、点、下划线和短横线，且必须以字母或数字开头"
+                    .to_string(),
+            });
+        }
+        let args = vec![
+            "rename".to_string(),
+            container.to_string(),
+            name.to_string(),
+        ];
+        self.run(&args).await.map(|_| ())
+    }
+
     pub async fn pull_image(&self, reference: &str) -> Result<(), ContainerError> {
         self.run_checked(&["pull".to_string(), reference.to_string()])
             .await

@@ -275,6 +275,21 @@ impl Engine {
     }
 
     /// HTTP 客户端入口：日志、exec 与文件模块需要它。
+    /// 重命名容器；CLI 兜底后端同样可用。
+    ///
+    /// # Errors
+    /// 名称非法或引擎拒绝时返回 [`ContainerError`]。
+    pub async fn rename_container(
+        &self,
+        container: &str,
+        name: &str,
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.rename_container(container, name).await,
+            EngineBackend::Cli(cli) => cli.rename_container(container, name).await,
+        }
+    }
+
     pub fn http(&self) -> Result<&DockerApi, ContainerError> {
         self.api()
     }

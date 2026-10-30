@@ -298,6 +298,13 @@ pub enum ContainerCommand {
         from: String,
         to: String,
     },
+    /// 重命名容器。
+    RenameContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        name: String,
+    },
     /// 创建并启动容器（把镜像跑起来）。
     CreateContainer {
         tab_id: TabId,

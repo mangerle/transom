@@ -116,7 +116,7 @@ impl ContainerCreateSpec {
 }
 
 /// 容器名规则与引擎一致：首字符是字母或数字，其后允许 `.`/`_`/`-`。
-fn is_valid_container_name(name: &str) -> bool {
+pub fn is_valid_container_name(name: &str) -> bool {
     let mut chars = name.chars();
     match chars.next() {
         Some(first) if first.is_ascii_alphanumeric() => {}

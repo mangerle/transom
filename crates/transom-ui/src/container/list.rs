@@ -475,6 +475,7 @@ fn row_actions(row: &ListRow) -> Vec<RowAction> {
             RowAction::Start
         });
         actions.push(RowAction::Restart);
+        actions.push(RowAction::Rename);
     }
     if matches!(row.target, RowTarget::Image(_)) {
         actions.push(RowAction::Run);

@@ -4506,6 +4506,13 @@ container:
     none:
       en: None
       zh-CN: 无
+  rename:
+    label:
+      en: New name
+      zh-CN: 新名称
+    invalid:
+      en: 'Name cannot be empty or unchanged: %{name}'
+      zh-CN: '名称不能为空，也不能与原名称相同: %{name}'
   batch:
     selected:
       en: '%{count} selected'
@@ -4857,6 +4864,9 @@ container:
       en: Connected containers
       zh-CN: 已连接容器
   action:
+    rename:
+      en: Rename
+      zh-CN: 重命名
     start:
       en: Start
       zh-CN: 启动

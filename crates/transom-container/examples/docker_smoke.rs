@@ -1136,6 +1136,41 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
             ),
         );
     }
+    let renamed = format!("{name}-renamed");
+    if step(
+        report,
+        "重命名容器",
+        engine.rename_container(&id, &renamed),
+        |_| format!("{name} -> {renamed}"),
+    )
+    .await
+    .is_none()
+    {
+        return;
+    }
+    let after_rename = step(
+        report,
+        "重命名后详情",
+        engine.inspect_container(&id),
+        |details| format!("名称 {}", details.name),
+    )
+    .await;
+    report.check(
+        after_rename
+            .as_ref()
+            .is_some_and(|details| details.name == renamed),
+        "重命名生效",
+        format!(
+            "期望 {renamed}，实际 {:?}",
+            after_rename.map(|details| details.name)
+        ),
+    );
+    let bad = engine.rename_container(&id, "_bad name").await;
+    report.check(
+        matches!(&bad, Err(ContainerError::InvalidName { .. })),
+        "非法名称被拒",
+        format!("{:?}", bad.err().map(|error| error.to_string())),
+    );
     step(
         report,
         "删除新容器",

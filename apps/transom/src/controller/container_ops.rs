@@ -611,6 +611,14 @@ pub(super) fn handle_container_command(
                 },
             );
         }
+        ContainerCommand::RenameContainer {
+            tab_id,
+            request_id,
+            container,
+            name,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            engine.rename_container(&container, &name).await
+        }),
         ContainerCommand::CreateContainer {
             tab_id,
             request_id,

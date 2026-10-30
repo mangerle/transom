@@ -239,6 +239,7 @@ pub(crate) enum RowAction {
     Stop,
     Restart,
     Run,
+    Rename,
     Remove,
     CopyId,
     CopyName,
@@ -256,6 +257,7 @@ impl RowAction {
             Self::Stop => "container.action.stop",
             Self::Restart => "container.action.restart",
             Self::Run => "container.run.title",
+            Self::Rename => "container.action.rename",
             Self::Remove => "common.delete",
             Self::CopyId => "container.row.copy_id",
             Self::CopyName => "container.row.copy_name",
@@ -274,6 +276,7 @@ impl RowAction {
             Self::Stop => IconName::Square,
             Self::Restart => IconName::RotateCw,
             Self::Run => IconName::Play,
+            Self::Rename => IconName::Pen,
             Self::Remove => IconName::Trash,
             Self::CopyId => IconName::Copy,
             Self::CopyName => IconName::Copy,
@@ -291,7 +294,9 @@ impl RowAction {
             Self::Logs | Self::Terminal | Self::Stats | Self::Files | Self::Restart => {
                 matches!(target, RowTarget::Container { .. })
             }
-            Self::Start | Self::Stop => matches!(target, RowTarget::Container { .. }),
+            Self::Start | Self::Stop | Self::Rename => {
+                matches!(target, RowTarget::Container { .. })
+            }
             // 卷与编排项目没有独立 ID，名称就是唯一标识，不给重复的复制项。
             Self::CopyId => matches!(
                 target,
@@ -476,6 +481,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) checked: HashSet<String>,
     /// 批量删除的二次确认是否已按下（第一次点只是武装）。
     pub(crate) batch_armed: bool,
+    /// 容器改名条：容器 ID 与输入框；`None` 表示不显示。
+    pub(crate) rename_container: Option<(String, Entity<InputState>)>,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
     /// 统计是否自动刷新（引擎侧轮询）。
@@ -545,6 +552,7 @@ impl ContainerWorkspaceState {
             stats: None,
             stats_request: None,
             terminal: None,
+            rename_container: None,
             checked: HashSet::default(),
             batch_armed: false,
             pending_select: None,
@@ -646,6 +654,7 @@ impl ContainerWorkspaceState {
         self.confirm = None;
         self.checked.clear();
         self.batch_armed = false;
+        self.rename_container = None;
         if !ContainerSortKey::for_section(section).contains(&self.sort_key) {
             self.sort_key = ContainerSortKey::default_for(section);
             self.sort_desc = false;

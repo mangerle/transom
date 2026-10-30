@@ -18,6 +18,54 @@ use transom_core::{
 };
 
 impl AppShell {
+    /// 容器改名条：与文件重命名同样的形态，避免为一次改名再弹一层模态。
+    pub(crate) fn render_container_rename_bar(
+        &mut self,
+        tab_id: TabId,
+        p: &Palette,
+        cx: &mut Context<AppShell>,
+    ) -> Option<AnyElement> {
+        let (_, input) = self.container_workspace(tab_id)?.rename_container.clone()?;
+        Some(
+            h_flex()
+                .gap_1()
+                .px_2()
+                .py_1()
+                .items_center()
+                .border_color(p.divider(p.border))
+                .divider_edge(DividerEdge::Bottom, p.divider_width)
+                .child(
+                    div()
+                        .text_xs()
+                        .flex_none()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.rename.label").to_string()),
+                )
+                .child(Input::new(&input).flex_1().min_w_0())
+                .child(
+                    Button::new("container-rename-submit")
+                        .primary()
+                        .xsmall()
+                        .icon(IconName::Check)
+                        .label(rust_i18n::t!("common.confirm").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.submit_container_rename(tab_id, cx);
+                        })),
+                )
+                .child(
+                    Button::new("container-rename-cancel")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Close)
+                        .label(rust_i18n::t!("common.cancel").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.cancel_container_rename(tab_id, cx);
+                        })),
+                )
+                .into_any_element(),
+        )
+    }
+
     /// 右侧详情区。
     pub(crate) fn render_container_detail(
         &mut self,
@@ -110,6 +158,7 @@ impl AppShell {
         );
         let tabs = self.render_detail_tabs(tab_id, section, detail_tab, p, cx);
         let confirm_bar = confirm.map(|confirm| render_confirm_bar(tab_id, confirm, p, cx));
+        let rename_bar = self.render_container_rename_bar(tab_id, p, cx);
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
@@ -174,6 +223,7 @@ impl AppShell {
             .size_full()
             .overflow_hidden()
             .child(header)
+            .children(rename_bar)
             .children(tabs)
             .children(confirm_bar)
             .child(div().flex_1().min_h_0().overflow_hidden().child(content))

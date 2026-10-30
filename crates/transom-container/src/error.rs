@@ -41,6 +41,9 @@ pub enum ContainerError {
     /// 容器文件读写失败。
     #[error("容器文件操作失败，路径: {path}，原因: {message}")]
     File { path: String, message: String },
+    /// 容器或镜像名称不符合引擎命名规则。
+    #[error("名称非法: {name}，原因: {reason}")]
+    InvalidName { name: String, reason: String },
     /// 本机没有发现可用引擎。
     #[error("本机未发现可用的容器引擎（Docker/Podman）：{detail}")]
     NoEngine { detail: String },
@@ -68,7 +71,9 @@ impl ContainerError {
                 ErrorCode::ContainerConflict
             }
             Self::Api { .. } | Self::Http { .. } | Self::Decode { .. } => ErrorCode::ContainerApi,
-            Self::Unsupported { .. } | Self::InvalidPath { .. } => ErrorCode::Configuration,
+            Self::Unsupported { .. } | Self::InvalidPath { .. } | Self::InvalidName { .. } => {
+                ErrorCode::Configuration
+            }
             Self::File { .. } => ErrorCode::Io,
             Self::Cancelled => ErrorCode::Cancelled,
         };
@@ -105,6 +110,15 @@ mod tests {
             body: "container is running".into(),
         };
         assert_eq!(error.to_app_error().code, ErrorCode::ContainerConflict);
+    }
+
+    #[test]
+    fn invalid_name_is_configuration_error() {
+        let error = ContainerError::InvalidName {
+            name: "_bad name".into(),
+            reason: "必须以字母或数字开头".into(),
+        };
+        assert_eq!(error.to_app_error().code, ErrorCode::Configuration);
     }
 
     #[test]
