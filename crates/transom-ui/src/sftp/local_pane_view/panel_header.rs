@@ -5,6 +5,7 @@
 //! - 核心优势：集中封装面板标题、关闭事件及额外的右侧按钮扩展点。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
@@ -47,8 +48,8 @@ impl AppShell {
             .px_3()
             .items_center()
             .justify_between()
-            .border_b_1()
-            .border_color(p.sidebar_border)
+            .border_color(p.divider(p.sidebar_border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .child(
                 div()
                     .flex_1()

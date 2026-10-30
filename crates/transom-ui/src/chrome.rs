@@ -2,9 +2,11 @@
 
 use crate::app::AppShell;
 use crate::brand;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::TitleBar;
 use gpui_kit::*;
 
@@ -24,9 +26,12 @@ impl AppShell {
     ) -> AnyElement {
         let app_entity = cx.entity().clone();
 
+        let title_bar_border = cx.theme().title_bar_border;
         TitleBar::new()
             .h(rems(size::TOP_BAR_HEIGHT))
             .bg(p.title_bar)
+            .border_color(p.divider(title_bar_border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .pl_2()
             .on_close_window(move |_, window, cx| {
                 app_entity.update(cx, |this, cx| {

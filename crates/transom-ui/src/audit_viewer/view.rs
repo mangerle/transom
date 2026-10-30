@@ -2,6 +2,7 @@
 
 use super::types::format_file_size;
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -258,8 +259,8 @@ impl AppShell {
             .min_h_0()
             .flex_none()
             .overflow_hidden()
-            .border_r_1()
-            .border_color(p.border)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Right, p.divider_width)
             .pr_2()
             .child(file_list);
 

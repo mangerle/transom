@@ -1,6 +1,7 @@
 //! 偏好设置中心弹窗的骨架与页签装配。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
@@ -80,8 +81,8 @@ impl AppShell {
                     .py_3()
                     .justify_between()
                     .items_center()
-                    .border_b_1()
-                    .border_color(p.border)
+                    .border_color(p.divider(p.border))
+                    .divider_edge(DividerEdge::Bottom, p.divider_width)
                     .bg(p.title_bar)
                     .child(
                         h_flex()
@@ -124,8 +125,8 @@ impl AppShell {
                     .py_3()
                     .justify_between()
                     .items_center()
-                    .border_t_1()
-                    .border_color(p.border)
+                    .border_color(p.divider(p.border))
+                    .divider_edge(DividerEdge::Top, p.divider_width)
                     .bg(p.status_bar)
                     .child(
                         h_flex().gap_2().items_center().child(
@@ -190,6 +191,12 @@ impl AppShell {
                     p,
                     "settings.window_appearance_group",
                     AppShell::render_settings_window_appearance,
+                ))
+                .group(setting_group(
+                    app,
+                    p,
+                    "settings.divider_group",
+                    AppShell::render_settings_divider,
                 ));
 
         let page_terminal = SettingPage::new(rust_i18n::t!("settings.tab_terminal").to_string())
@@ -420,7 +427,11 @@ impl AppShell {
                 AppShell::render_settings_about,
             ));
 
-        vec![
+        // 页头横线由组件内部写死 1px，这里用页面样式覆盖成当前档位。
+        let header_style = StyleRefinement::default()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width);
+        [
             page_appearance,
             page_terminal,
             page_files,
@@ -431,5 +442,8 @@ impl AppShell {
             page_monitor,
             page_about,
         ]
+        .into_iter()
+        .map(|page| page.header_style(&header_style))
+        .collect()
     }
 }

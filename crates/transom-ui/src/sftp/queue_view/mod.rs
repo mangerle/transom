@@ -14,6 +14,7 @@ use self::row::render_queue_task_row;
 pub(crate) use self::status_bar::SftpStatusBarProps;
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
 use crate::sftp::{TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
@@ -73,8 +74,8 @@ impl AppShell {
             .count();
 
         v_flex()
-            .border_t_1()
-            .border_color(p.sidebar_border)
+            .border_color(p.divider(p.sidebar_border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
             .when(queue_expanded, |this| {
                 this.child(
                     h_flex()

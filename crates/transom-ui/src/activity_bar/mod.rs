@@ -14,6 +14,7 @@ mod menu;
 mod metrics;
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use drag::{
     ActivityDrag, ActivityDragPreview, render_activity_blank_zone, render_activity_reorder_overlay,
@@ -48,34 +49,37 @@ impl AppShell {
 
         let app = cx.entity().clone();
         let menu_app = app.clone();
-        v_flex()
+        let mut bar = v_flex()
             .id("activity-bar")
             .w(rems(METRICS.width))
             .flex_none()
             .h_full()
             .items_center()
             .py(px(METRICS.padding_y))
-            .bg(p.sidebar)
-            .border_r_1()
-            .border_color(p.border)
-            .child(
-                v_flex()
-                    .gap(px(METRICS.gap))
-                    .items_center()
-                    .children(top_children),
-            )
-            .child(render_activity_blank_zone(&app, true, p))
-            .child(render_activity_blank_zone(&app, false, p))
-            .child(
-                v_flex()
-                    .gap(px(METRICS.gap))
-                    .items_center()
-                    .children(bottom_children),
-            )
-            .context_menu(move |menu, _window, _cx| {
-                Self::activity_bar_context_menu(menu, &menu_app)
-            })
-            .into_any_element()
+            .bg(p.sidebar);
+        // 侧栏展开时，活动栏右缘就是与侧栏的分界线；侧栏收起后主面板的
+        // 手柄线紧贴这条边，这里再画一条会并排成 2px，所以收起时不画。
+        if self.sidebar.visible {
+            bar = bar
+                .border_color(p.divider(p.border))
+                .divider_edge(DividerEdge::Right, p.divider_width);
+        }
+        bar.child(
+            v_flex()
+                .gap(px(METRICS.gap))
+                .items_center()
+                .children(top_children),
+        )
+        .child(render_activity_blank_zone(&app, true, p))
+        .child(render_activity_blank_zone(&app, false, p))
+        .child(
+            v_flex()
+                .gap(px(METRICS.gap))
+                .items_center()
+                .children(bottom_children),
+        )
+        .context_menu(move |menu, _window, _cx| Self::activity_bar_context_menu(menu, &menu_app))
+        .into_any_element()
     }
 
     fn render_activity_item(

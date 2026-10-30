@@ -23,6 +23,7 @@ mod chrome;
 mod cloud_sync;
 mod connection;
 mod diff_viewer;
+mod divider;
 mod editor;
 mod event_handlers;
 mod events;

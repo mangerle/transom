@@ -63,10 +63,11 @@ pub use model::session::{
 pub use model::session_appearance::{SessionColor, SessionIcon};
 pub use model::settings::{
     AppSettings, AppearanceSettings, AuditSettings, BellStyle, BlockViewSettings, BlockViewStyle,
-    GitSyncSettings, HistorySettings, LogLevel, LogSettings, MonitorSettings, PanelSide,
-    SavedLayout, SavedTabGroup, SavedTabTiling, SftpSettings, ShortcutSettings, SidebarStartup,
-    Snippet, SnippetSettings, SplitAxis, StartupTabs, SyncEndpoint, SyncSettings, UiDensity,
-    UiThemeMode, WindowBackgroundMode, WindowSettings,
+    DividerColor, DividerSettings, DividerWidth, GitSyncSettings, HistorySettings, LogLevel,
+    LogSettings, MonitorSettings, PanelSide, SavedLayout, SavedTabGroup, SavedTabTiling,
+    SftpSettings, ShortcutSettings, SidebarStartup, Snippet, SnippetSettings, SplitAxis,
+    StartupTabs, SyncEndpoint, SyncSettings, UiDensity, UiThemeMode, WindowBackgroundMode,
+    WindowSettings,
 };
 pub use model::terminal::TerminalHighlight;
 pub use model::terminal::{

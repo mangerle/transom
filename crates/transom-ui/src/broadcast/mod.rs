@@ -9,6 +9,7 @@
 //! 终端当前的括号粘贴语义，避免远端 shell 把脚本的每一行提前执行。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::workspace::pane_status_indicator;
 use gpui_kit::assets::IconName;
@@ -385,8 +386,8 @@ impl AppShell {
             v_flex()
                 .w_full()
                 .bg(p.tab_bar)
-                .border_t_1()
-                .border_color(p.border)
+                .border_color(p.divider(p.border))
+                .divider_edge(DividerEdge::Top, p.divider_width)
                 .child(
                     h_flex()
                         .px_2()
@@ -416,8 +417,8 @@ impl AppShell {
                 .gap_2()
                 .items_center()
                 .bg(p.tab_bar)
-                .border_t_1()
-                .border_color(p.border)
+                .border_color(p.divider(p.border))
+                .divider_edge(DividerEdge::Top, p.divider_width)
                 .child(targets_popover)
                 .child(
                     div().flex_1().min_w_0().child(

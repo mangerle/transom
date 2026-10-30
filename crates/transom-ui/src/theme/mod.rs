@@ -116,6 +116,9 @@ fn effective_mode(mode: UiThemeMode, cx: &App) -> ThemeMode {
 pub(crate) fn apply_appearance(appearance: &AppearanceSettings, cx: &mut App) {
     let resolved = ResolvedThemes::resolve(appearance, cx);
     let density = appearance.density;
+    // 分割线外观先落全局：语义色在渲染期按当前主题解析，这里只发布选择值，
+    // 因此必须赶在主题换装前写入，换装后的首帧才是新选择。
+    crate::divider::apply(cx, appearance.divider);
     // 窗口整体透明在主题层生效：主题是所有组件（含 gpui-kit 组件）取色的唯一
     // 来源，在这里折算表面色 alpha，自绘界面与第三方组件才会一起变透明。
     let surface_alpha = crate::window_appearance::window_appearance(cx)

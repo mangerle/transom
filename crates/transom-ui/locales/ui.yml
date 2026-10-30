@@ -2848,6 +2848,45 @@ settings:
   ui_font_group:
     en: Interface Font
     zh-CN: 界面字体
+  divider_group:
+    en: Divider
+    zh-CN: 分割线
+  divider_color:
+    en: Divider Color
+    zh-CN: 分割线颜色
+  divider_color_desc:
+    en: Applies to draggable splitters and the structural separators between panels.
+    zh-CN: 作用于可拖拽分割条与面板之间的结构性分隔线。
+  divider_color_theme:
+    en: Follow Theme
+    zh-CN: 跟随主题
+  divider_color_border:
+    en: Border
+    zh-CN: 边框色
+  divider_color_muted:
+    en: Muted Foreground
+    zh-CN: 弱前景
+  divider_color_foreground:
+    en: Foreground
+    zh-CN: 前景
+  divider_color_primary:
+    en: Accent
+    zh-CN: 强调色
+  divider_width:
+    en: Divider Width
+    zh-CN: 分割线粗细
+  divider_width_desc:
+    en: Hairline matches the current look; wider lines also thicken the draggable splitter.
+    zh-CN: 发丝线与现有观感一致；加宽同时作用于静态分隔线与可拖拽分割条。
+  divider_width_hairline:
+    en: 1 px
+    zh-CN: 1 像素
+  divider_width_medium:
+    en: 2 px
+    zh-CN: 2 像素
+  divider_width_thick:
+    en: 3 px
+    zh-CN: 3 像素
   terminal_font_group:
     en: Terminal Font
     zh-CN: 终端字体

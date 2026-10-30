@@ -5,6 +5,7 @@ mod item;
 mod menu;
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
@@ -18,9 +19,9 @@ impl AppShell {
             .h(rems(size::TAB_BAR_HEIGHT))
             .items_center()
             .bg(p.tab_bar)
-            .border_b_1()
-            .border_color(p.border)
+            .border_color(p.divider(p.border))
             .overflow_hidden();
+        tab_strip = tab_strip.divider_edge(DividerEdge::Bottom, p.divider_width);
         let app_entity = cx.entity().clone();
         // 并排菜单在每个标签上都显示：条目不足两个时置灰，避免用户以为功能
         // 不存在；右键标签时由 `tile_tab` 取标签栏左边那一条作搭档，左边是

@@ -5,6 +5,7 @@
 //! - 核心优势：使本地主视图更加清晰，避免数百行工具栏布局逻辑杂糅在主面板结构中。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -51,8 +52,8 @@ pub(super) fn render_local_toolbar(
     v_flex()
         .p_2()
         .gap_1()
-        .border_b_1()
-        .border_color(p.sidebar_border)
+        .border_color(p.divider(p.sidebar_border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .child(
             h_flex()
                 .gap_1()

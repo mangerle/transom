@@ -10,8 +10,9 @@
 
 use super::state::SftpPanelState;
 use crate::app::AppShell;
+use crate::divider::h_resizable;
 use crate::palette::Palette;
-use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
+use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
 use transom_core::TabId;
 

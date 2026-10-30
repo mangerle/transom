@@ -14,7 +14,10 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
-use transom_core::{PaletteMode, UiDensity, UiThemeMode, WindowBackgroundMode, preset_themes};
+use transom_core::{
+    DividerColor, DividerWidth, PaletteMode, UiDensity, UiThemeMode, WindowBackgroundMode,
+    preset_themes,
+};
 
 impl AppShell {
     /// 界面主题组：明暗模式、密度档位与全局主题卡片。
@@ -221,6 +224,75 @@ impl AppShell {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("settings.ui_font_note").to_string()),
             )
+            .into_any_element()
+    }
+
+    /// 分割线组：颜色语义与粗细；改一档经 [`AppShell::update_appearance`] 立即
+    /// 全局生效，保存/取消分别负责落盘与回滚。
+    pub(crate) fn render_settings_divider(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let divider = self.settings.appearance.divider;
+        // 预览色点与真实渲染走同一条解析：跟随主题时显示当前主题边框色。
+        let preview = p.divider(p.border);
+        let color_control = h_flex()
+            .gap_2()
+            .items_center()
+            .child(
+                div()
+                    .size(px(12.0))
+                    .rounded_full()
+                    .bg(preview)
+                    .border_1()
+                    .border_color(p.border),
+            )
+            .child(Self::setting_dropdown(
+                "dropdown-divider-color",
+                divider.color,
+                [
+                    DividerColor::Theme,
+                    DividerColor::Border,
+                    DividerColor::Muted,
+                    DividerColor::Foreground,
+                    DividerColor::Primary,
+                ]
+                .into_iter()
+                .map(|color| (color, rust_i18n::t!(color.label_key()).to_string()))
+                .collect(),
+                |this, color, cx| {
+                    this.update_appearance(|appearance| appearance.divider.color = color, cx);
+                },
+                cx,
+            ))
+            .into_any_element();
+        let width_control = Self::setting_dropdown(
+            "dropdown-divider-width",
+            divider.width,
+            DividerWidth::ALL
+                .into_iter()
+                .map(|width| (width, rust_i18n::t!(width.label_key()).to_string()))
+                .collect(),
+            |this, width, cx| {
+                this.update_appearance(|appearance| appearance.divider.width = width, cx);
+            },
+            cx,
+        );
+        v_flex()
+            .gap_2()
+            .child(Self::setting_row(
+                "settings.divider_color",
+                Some("settings.divider_color_desc"),
+                color_control,
+                p,
+            ))
+            .child(Self::setting_row(
+                "settings.divider_width",
+                Some("settings.divider_width_desc"),
+                width_control,
+                p,
+            ))
             .into_any_element()
     }
 

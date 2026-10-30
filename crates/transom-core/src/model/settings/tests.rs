@@ -313,11 +313,51 @@ fn appearance_round_trips() {
         ui_theme: "Transom Dark".into(),
         density: UiDensity::Roomy,
         ui_font_family: Some("Sarasa Mono SC".into()),
+        divider: DividerSettings {
+            color: DividerColor::Muted,
+            width: DividerWidth::Medium,
+        },
     };
     let json = serde_json::to_string(&settings).unwrap();
     let decoded: AppearanceSettings = serde_json::from_str(&json).unwrap();
     assert_eq!(decoded, settings);
     assert_eq!(decoded.ui_font_family.as_deref(), Some("Sarasa Mono SC"));
+    assert_eq!(decoded.divider.color, DividerColor::Muted);
+    assert_eq!(decoded.divider.width, DividerWidth::Medium);
+}
+
+/// 分割线是后加的字段：老设置里没有它时必须落进默认档，保持零观感变化。
+#[test]
+fn appearance_without_divider_uses_defaults() {
+    let decoded: AppearanceSettings =
+        serde_json::from_str(r#"{"mode":"light","density":"compact"}"#).unwrap();
+    assert_eq!(decoded.divider.color, DividerColor::Theme);
+    assert_eq!(decoded.divider.width, DividerWidth::Hairline);
+}
+
+/// 分割线的颜色与粗细同样来自外部文件：未知值进兜底变体，归一化后写盘合法。
+#[test]
+fn divider_unknown_values_fall_back_to_defaults() {
+    let decoded: AppearanceSettings =
+        serde_json::from_str(r#"{"divider":{"color":"neon","width":"huge"}}"#).unwrap();
+    assert_eq!(decoded.divider.color, DividerColor::Unknown);
+    assert_eq!(decoded.divider.width, DividerWidth::Unknown);
+    // 兜底变体在解析口径上与默认档一致，但写盘前必须洗成合法状态。
+    assert_eq!(decoded.divider.width.pixels(), 1.0);
+    let mut normalized = decoded;
+    normalized.normalize();
+    assert_eq!(normalized.divider.color, DividerColor::Theme);
+    assert_eq!(normalized.divider.width, DividerWidth::Hairline);
+}
+
+/// 粗细档位直接折算像素：静态线用边框实现，档位值必须与边框方法一一对应。
+#[test]
+fn divider_width_pixels_are_stable() {
+    let widths: Vec<f32> = DividerWidth::ALL
+        .iter()
+        .map(|width| width.pixels())
+        .collect();
+    assert_eq!(widths, vec![1.0, 2.0, 3.0]);
 }
 
 /// 密度档位是全局字号契约：mono 与 sans 的差距必须始终落在 2 至 3px，

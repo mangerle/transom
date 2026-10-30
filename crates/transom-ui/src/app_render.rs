@@ -1,6 +1,7 @@
 //! AppShell 顶层布局渲染。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled, h_resizable};
 use crate::keymap;
 use crate::palette::Palette;
 use crate::sftp::{EditorDragTracker, SftpPanelState};
@@ -8,7 +9,7 @@ use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::resizable::{h_resizable, resizable_panel};
+use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 
 impl Render for AppShell {
@@ -131,12 +132,15 @@ impl Render for AppShell {
 
         let mut main_row = h_flex().flex_1().overflow_hidden();
         if !self.immersive {
-            // 与顶栏、状态栏、活动栏的边框一起围合主内容区，补齐右侧轮廓；
-            // 停靠左侧时工具面板贴侧栏，主面板成为最右段，轮廓补在左缘。
-            if self.settings.window.sftp_panel_side.is_left() {
-                main_row = main_row.border_l_1().border_color(p.border);
-            } else {
-                main_row = main_row.border_r_1().border_color(p.border);
+            // 主内容区只在朝窗口边缘的一侧补轮廓，且只在右侧真的空到窗口边缘时
+            // 才补：面板之间由可拖拽手柄画唯一的分割线，这里再叠一条轮廓/面板
+            // 边框就会并排成 2px。停靠左侧时主面板右侧是监控抽屉或窗口边缘，
+            // 左边一律交给手柄，不再补左轮廓。
+            let has_right_panel = show_sftp || show_forwards || self.monitor.open;
+            if !self.settings.window.sftp_panel_side.is_left() && !has_right_panel {
+                main_row = main_row
+                    .border_color(p.divider(p.border))
+                    .divider_edge(DividerEdge::Right, p.divider_width);
             }
         }
         if let Some(activity_bar) = activity_bar {

@@ -1,12 +1,13 @@
 //! 标签内分屏渲染：按分割树铺满内容区，每一刀都是可拖拽的分隔线。
 
 use crate::app::AppShell;
+use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::pane_tree::LayoutNode;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
-use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel, v_resizable};
+use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
 use transom_core::{SplitAxis, SplitId, TabId};
 

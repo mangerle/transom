@@ -11,6 +11,7 @@ use super::{
     SftpPanelState, SftpQueueState, SftpRemotePaneState, normalize_local_cwd,
 };
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::{Palette, sftp_text_input};
 use gpui_kit::base::v_flex;
@@ -194,9 +195,9 @@ impl AppShell {
                     .text_xs()
                     .text_color(p.danger)
                     .bg(p.muted)
-                    .border_t_1()
-                    .border_color(p.sidebar_border)
+                    .border_color(p.divider(p.sidebar_border))
                     .child(error)
+                    .divider_edge(DividerEdge::Top, p.divider_width)
                     .into_any_element(),
             )
         } else {
@@ -206,9 +207,9 @@ impl AppShell {
                     .py_1()
                     .text_xs()
                     .bg(p.muted)
-                    .border_t_1()
-                    .border_color(p.sidebar_border)
+                    .border_color(p.divider(p.sidebar_border))
                     .child(status)
+                    .divider_edge(DividerEdge::Top, p.divider_width)
                     .into_any_element()
             })
         };

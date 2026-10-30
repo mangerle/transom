@@ -5,6 +5,7 @@
 //! 尚未并排的独立标签填进来。
 
 use crate::app::AppShell;
+use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::tiling::{TiledTabs, TilingId, TilingNode};
 use gpui_kit::assets::IconName;
@@ -12,7 +13,7 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
-use gpui_kit::component::resizable::{h_resizable, resizable_panel, v_resizable};
+use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SplitAxis};
 

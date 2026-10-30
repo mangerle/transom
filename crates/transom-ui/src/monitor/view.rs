@@ -1,6 +1,7 @@
 //! 监控抽屉容器视图与组装管道。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::monitor::types::{SampleIntervalMode, SparklineChartType};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -97,9 +98,7 @@ impl AppShell {
             .id("monitor-panel")
             .size_full()
             .overflow_hidden()
-            .bg(p.background)
-            .border_l_1()
-            .border_color(p.border);
+            .bg(p.background);
 
         // 顶栏工具条：标题、采样档位芯片、刷新、关闭
         let current_interval = self.monitor.interval_mode;
@@ -110,8 +109,8 @@ impl AppShell {
             .justify_between()
             .items_center()
             .px_3()
-            .border_b_1()
-            .border_color(p.border)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .child(
                 h_flex()
                     .gap_2()
@@ -303,8 +302,8 @@ impl AppShell {
             .justify_between()
             .items_center()
             .px_4()
-            .border_b_1()
-            .border_color(p.border)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .bg(p.background);
 
         // 顶栏左侧：图标与标题、主机概要

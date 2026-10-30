@@ -10,7 +10,7 @@ use gpui_kit::component::dialog::{
 };
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::*;
-use transom_core::{AppError, ErrorCode};
+use transom_core::{AppError, DividerWidth, ErrorCode};
 
 /// 全局 UI 调色板快照，用于各子视图渲染统一配色。
 ///
@@ -67,11 +67,16 @@ pub(crate) struct Palette {
     /// 圆角档位（由主题的 radius/radius_lg 派生），容器级圆角统一从这里取值，
     /// 主题即可控制全局圆角；装饰性圆点仍用 rounded_full。
     pub(crate) radius: RadiusTokens,
+    /// 分割线覆盖色；`None` 表示各区域沿用自身原有的边界色。
+    pub(crate) divider_color: Option<Hsla>,
+    /// 分割线粗细档位（静态线用边框实现，档位决定边框像素宽度）。
+    pub(crate) divider_width: DividerWidth,
 }
 
 impl Palette {
     pub(crate) fn from(cx: &App) -> Self {
         let theme = cx.theme();
+        let divider = crate::divider::settings(cx);
         // 主题里已经按窗口透明度折算过表面色的 alpha，这里直接取用：
         // 自绘界面与 gpui-kit 组件必须共用同一份透明度，否则会出现割裂。
         Self {
@@ -112,7 +117,15 @@ impl Palette {
             mono_font_family: theme.mono_font_family.clone(),
             mono_font_size: theme.mono_font_size,
             radius: theme.radius_tokens(),
+            divider_color: crate::divider::resolve_color(cx, divider.color),
+            divider_width: divider.width,
         }
+    }
+
+    /// 分割线颜色：设置了覆盖色时统一使用，否则回落到调用点的原有边界色
+    /// （普通面板用 `border`，侧栏与 SFTP 面板用各自的专用边界色）。
+    pub(crate) fn divider(&self, fallback: Hsla) -> Hsla {
+        self.divider_color.unwrap_or(fallback)
     }
 }
 

@@ -1,6 +1,7 @@
 //! 已知主机指纹管理与快捷启动面板模态框渲染模块。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -75,8 +76,8 @@ impl AppShell {
                     .gap_3()
                     .items_center()
                     .justify_between()
-                    .border_b_1()
-                    .border_color(p.border)
+                    .border_color(p.divider(p.border))
+                    .divider_edge(DividerEdge::Bottom, p.divider_width)
                     .hover(|style| style.bg(p.muted))
                     .child(
                         v_flex()

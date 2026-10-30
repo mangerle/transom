@@ -22,6 +22,7 @@ use super::panel::{
 };
 use super::status::render_panel_status;
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -139,8 +140,8 @@ fn render_panel_header(
         .gap_2()
         .px_2()
         .bg(p.popover)
-        .border_b_1()
-        .border_color(p.border)
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .on_mouse_down(MouseButton::Left, {
             cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                 this.begin_editor_panel_drag(&drag_editor, event.position, cx);

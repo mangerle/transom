@@ -2,6 +2,7 @@
 
 use super::ForwardKindChoice;
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -54,8 +55,6 @@ impl AppShell {
             .h_full()
             .bg(p.sidebar)
             .text_color(p.sidebar_foreground)
-            .border_l_1()
-            .border_color(p.sidebar_border)
             .child(header)
             .child(rules_list)
             .child(add_form)
@@ -69,8 +68,8 @@ impl AppShell {
             .py_2()
             .items_center()
             .justify_between()
-            .border_b_1()
-            .border_color(p.sidebar_border)
+            .border_color(p.divider(p.sidebar_border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .child(
                 div()
                     .text_sm()
@@ -314,8 +313,8 @@ impl AppShell {
         let mut add_form = v_flex()
             .p_2()
             .gap_2()
-            .border_t_1()
-            .border_color(p.sidebar_border)
+            .border_color(p.divider(p.sidebar_border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
             .child(
                 h_flex()
                     .gap_2()

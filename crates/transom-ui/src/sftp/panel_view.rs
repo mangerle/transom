@@ -10,6 +10,7 @@ use super::remote_pane::RemotePaneProps;
 use super::state::SftpRemotePaneState;
 use super::{LocalFileEntry, SftpRemotePaneRef};
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -337,9 +338,9 @@ impl AppShell {
                     // 队列收起时菜单与进度条之间没有列表行做分隔，补一条细线
                     div()
                         .w_full()
-                        .border_t_1()
-                        .border_color(p.sidebar_border)
+                        .border_color(p.divider(p.sidebar_border))
                         .child(status_element)
+                        .divider_edge(DividerEdge::Top, p.divider_width)
                         .into_any_element()
                 };
                 panel_element = panel_element.child(status_element);
@@ -400,8 +401,7 @@ impl AppShell {
                 .w_full()
                 .items_center()
                 .justify_center()
-                .border_b_1()
-                .border_color(p.sidebar_border)
+                .border_color(p.divider(p.sidebar_border))
                 .child(
                     Button::new("sftp-close-all-collapsed")
                         .ghost()
@@ -419,6 +419,7 @@ impl AppShell {
                             cx.notify();
                         })),
                 )
+                .divider_edge(DividerEdge::Bottom, p.divider_width)
                 .into_any_element()
         } else {
             let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);

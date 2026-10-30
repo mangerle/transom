@@ -17,6 +17,7 @@ pub(crate) struct SidebarButtonProps<F> {
 }
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -106,8 +107,8 @@ impl AppShell {
             .w_full()
             .p_3()
             .gap_2()
-            .border_b_1()
-            .border_color(p.sidebar_border)
+            .border_color(p.divider(p.sidebar_border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .child(
                 h_flex()
                     .w_full()

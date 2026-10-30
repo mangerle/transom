@@ -13,6 +13,7 @@ use super::SftpTransferRequest;
 use super::remote_content::{RemoteContentProps, build_remote_blank_context_menu};
 use super::side_remote::{SftpDragItem, SftpRemoteCopyParams};
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState};
 use gpui_kit::assets::IconName;
@@ -135,8 +136,8 @@ impl AppShell {
         });
 
         let header = v_flex()
-            .border_b_1()
-            .border_color(p.sidebar_border)
+            .border_color(p.divider(p.sidebar_border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .p_2()
             .gap_1()
             .child(

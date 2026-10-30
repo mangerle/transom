@@ -1,6 +1,7 @@
 //! 单个标签条目 UI 组件组装与子元素渲染。
 
 use crate::app::{AppShell, TabGroup};
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use crate::tiling::{MAX_TILING_SLOTS, StripEntry, TiledTabs};
@@ -129,8 +130,7 @@ pub(super) fn render_tab_entry(
         .max_w(rems(size::TAB_MAX_WIDTH))
         .min_w(rems(size::TAB_MIN_WIDTH))
         .overflow_hidden()
-        .border_r_1()
-        .border_color(p.border)
+        .border_color(p.divider(p.border))
         .cursor_pointer();
 
     if active {
@@ -144,6 +144,9 @@ pub(super) fn render_tab_entry(
                 .text_color(p.foreground)
         });
     }
+
+    // 标签之间的竖向分隔线跟随分割线设置；放在状态分支之后，避免各分支重写。
+    tab_element = tab_element.divider_edge(DividerEdge::Right, p.divider_width);
 
     let labeled = if is_extra {
         format!("{title} #{serial}")

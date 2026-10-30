@@ -12,6 +12,7 @@
 use super::diff::diff_entry_allowed;
 use super::panel::{EditorPanelState, EditorPhase};
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::format_size;
 use gpui_kit::assets::IconName;
@@ -62,8 +63,8 @@ pub(crate) fn render_panel_status(
         .gap_2()
         .px_2()
         .bg(p.popover)
-        .border_t_1()
-        .border_color(p.border)
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Top, p.divider_width)
         .text_xs()
         .text_color(p.muted_foreground)
         .child(div().flex_none().child(caret))

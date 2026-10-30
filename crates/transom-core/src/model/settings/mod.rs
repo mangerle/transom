@@ -14,7 +14,9 @@ mod window;
 #[cfg(test)]
 mod tests;
 
-pub use appearance::{AppearanceSettings, UiDensity, UiThemeMode};
+pub use appearance::{
+    AppearanceSettings, DividerColor, DividerSettings, DividerWidth, UiDensity, UiThemeMode,
+};
 pub use subsystems::{
     AuditSettings, BlockViewSettings, BlockViewStyle, HistorySettings, LogLevel, LogSettings,
     SftpSettings, ShortcutSettings, Snippet, SnippetSettings,

@@ -15,6 +15,7 @@ mod format;
 pub(crate) use format::{format_compact_size, format_rate};
 
 use crate::app::{AppShell, TabStatus, TerminalTab};
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
@@ -178,16 +179,30 @@ impl AppShell {
             .w_full()
             .h(rems(size::STATUS_BAR_HEIGHT))
             .bg(p.status_bar)
-            .border_t_1()
-            .border_color(p.border)
+            .border_color(p.divider(p.border))
             .text_xs()
             .text_color(p.muted_foreground)
             .items_center()
             .context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app));
+        bar = bar.divider_edge(DividerEdge::Top, p.divider_width);
 
         if divider_x > px(0.0) {
             // 左段宽到侧栏右缘，连接状态过长时在段内截断；右段的左边框续上
-            // 侧栏右边框，形成一条贯穿到窗口底边的标准 1px 分界线。
+            // 侧栏右边框，形成一条贯穿到窗口底边的分界线。
+            let mut right_segment = h_flex()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .items_center()
+                .gap_2()
+                .pr_3()
+                .border_color(p.divider(p.border))
+                .child(snippets_entry)
+                .child(broadcast_entry)
+                .child(recording_badge)
+                .child(front_zone)
+                .child(badges);
+            right_segment = right_segment.divider_edge(DividerEdge::Left, p.divider_width);
             bar = bar
                 .child(
                     h_flex()
@@ -199,22 +214,7 @@ impl AppShell {
                         .pr_2()
                         .child(h_flex().flex_1().min_w_0().child(connection_pill)),
                 )
-                .child(
-                    h_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .items_center()
-                        .gap_2()
-                        .pr_3()
-                        .border_l_1()
-                        .border_color(p.border)
-                        .child(snippets_entry)
-                        .child(broadcast_entry)
-                        .child(recording_badge)
-                        .child(front_zone)
-                        .child(badges),
-                );
+                .child(right_segment);
         } else {
             bar = bar.child(
                 h_flex()

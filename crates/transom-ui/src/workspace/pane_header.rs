@@ -5,13 +5,14 @@
 //! 改一处漏一处就出现两种"看起来像但不是"的标题条。这里只收敛视觉与关闭
 //! 按钮的通用交互；激活语义（切窗格 / 切标签组）与右键菜单由调用方注入。
 
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::{Icon, Sizable};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_core::DividerWidth;
 
 /// 标题条的渲染输入。
 pub(super) struct PaneHeaderProps<'a> {
@@ -40,6 +41,16 @@ where
     G: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 {
     let p = props.palette;
+    // 焦点格只靠背景色区分太弱（激活色与标签栏底色只差几个色阶），用强调
+    // 下划线把"焦点在哪一格"显式画出来：在分割线档位上加一档，同时换色。
+    let underline_width = if props.active {
+        match p.divider_width {
+            DividerWidth::Hairline | DividerWidth::Unknown => DividerWidth::Medium,
+            DividerWidth::Medium | DividerWidth::Thick => DividerWidth::Thick,
+        }
+    } else {
+        p.divider_width
+    };
     let mut header = h_flex()
         .id(ElementId::Name(props.id.into()))
         .h(rems(size::PANE_HEADER_HEIGHT))
@@ -47,11 +58,11 @@ where
         .px_2()
         .gap_2()
         .items_center()
-        .border_b_1()
-        // 焦点格只靠背景色区分太弱（激活色与标签栏底色只差几个色阶），
-        // 用同款强调下划线把"焦点在哪一格"显式画出来。
-        .when(props.active, |style| style.border_b_2())
-        .border_color(if props.active { p.primary } else { p.border })
+        .border_color(if props.active {
+            p.primary
+        } else {
+            p.divider(p.border)
+        })
         .bg(if props.active {
             p.tab_active
         } else {
@@ -112,4 +123,5 @@ where
                 .on_click(on_close)
                 .child(Icon::new(IconName::X).xsmall()),
         )
+        .divider_edge(DividerEdge::Bottom, underline_width)
 }

@@ -9,6 +9,7 @@
 //!   3. 采用 RIS 复位 + 增量事件流秒级快照重建技术，彻底解决终端状态机回退时的错乱与残影问题；
 //!   4. 复用 GPUI-kit 官方原生 Slider 组件，保持全应用 UI 风格统一。
 
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -367,8 +368,8 @@ impl Render for CastPlayerView {
             .gap_2()
             .items_center()
             .bg(p.tab_bar)
-            .border_t_1()
-            .border_color(p.border)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
             .child(
                 Button::new("player-play-toggle")
                     .ghost()
