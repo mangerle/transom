@@ -3,9 +3,7 @@
 use super::types::{ProxyChoice, SessionForm};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::Button;
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 
 /// 渲染出站代理配置分栏（跟随全局、直连或会话专属 SOCKS5/HTTP）。
@@ -26,33 +24,37 @@ pub(crate) fn render_proxy_section(
             .text_color(p.muted_foreground)
             .child(rust_i18n::t!("form.proxy").to_string()),
     );
-    proxy_section = proxy_section.child(
-        h_flex().gap_2().children(
-            [
-                (
-                    "proxy-follow-global",
-                    "form.proxy_follow_global",
-                    ProxyChoice::FollowGlobal,
-                ),
-                ("proxy-direct", "form.proxy_direct", ProxyChoice::Direct),
-                ("proxy-socks5", "form.proxy_socks5", ProxyChoice::Socks5),
-                ("proxy-http", "form.proxy_http", ProxyChoice::Http),
-            ]
-            .into_iter()
-            .map(|(id, key, choice)| {
-                Button::new(id)
-                    .small()
-                    .label(rust_i18n::t!(key).to_string())
-                    .selected(proxy_choice == choice)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
-                            form.proxy_choice = choice;
-                        }
-                        cx.notify();
-                    }))
-            }),
-        ),
-    );
+    // 与设置页同一条下拉：四档选项长短不一，分段按钮在窄表单里会换行，
+    // 下拉的触发宽度稳定，选中后下方的凭据字段按档位展开/收起。
+    proxy_section = proxy_section.child(AppShell::setting_dropdown(
+        "dropdown-session-proxy",
+        proxy_choice,
+        vec![
+            (
+                ProxyChoice::FollowGlobal,
+                rust_i18n::t!("form.proxy_follow_global").to_string(),
+            ),
+            (
+                ProxyChoice::Direct,
+                rust_i18n::t!("form.proxy_direct").to_string(),
+            ),
+            (
+                ProxyChoice::Socks5,
+                rust_i18n::t!("form.proxy_socks5").to_string(),
+            ),
+            (
+                ProxyChoice::Http,
+                rust_i18n::t!("form.proxy_http").to_string(),
+            ),
+        ],
+        |this, choice, cx| {
+            if let Some(form) = this.modals.form.as_mut() {
+                form.proxy_choice = choice;
+            }
+            cx.notify();
+        },
+        cx,
+    ));
     if proxy_choice == ProxyChoice::FollowGlobal {
         proxy_section = proxy_section.child(
             div()
