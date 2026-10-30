@@ -4,8 +4,7 @@ use super::reorder::{
     RowActionButtonProps, SidebarDragPreview, reorder_overlay, row_action_button,
 };
 use super::{
-    BAND_HEIGHT, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget, TINT_IDLE,
-    TINT_SELECTED, indent_padding,
+    BAND_HEIGHT, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget, indent_padding,
 };
 use crate::app::AppShell;
 use crate::connection::session_host;
@@ -217,15 +216,13 @@ impl AppShell {
                     )
                 }
             });
-        // 高亮与悬停只作用于内层内容条，缩进区保持透明，层级靠左偏移表达。
-        // 单击选中的行与多选勾选的行共用"选中"这一档深浅，避免再引入第五种底色。
+        // 行底取主题的列表令牌：常态是列表背景，选中与当前用列表激活色。
+        // 浅色与深色主题各自给值，不再对强调色叠低透明度。
         let is_selected_row = is_marked || (selection_mode && is_selected);
-        let tint = if is_active {
-            1.0
-        } else if is_selected_row {
-            TINT_SELECTED
+        let fill = if is_active || is_selected_row {
+            p.list_active
         } else {
-            TINT_IDLE
+            p.list_background
         };
         // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配
         // global_id 与悬浮状态，缺少 id 时鼠标移入不会触发重绘，高亮只能等
@@ -239,15 +236,15 @@ impl AppShell {
             .gap_2()
             .items_center()
             .rounded(p.radius.md)
-            .bg(p.sidebar_accent.opacity(tint))
+            .bg(fill)
             .text_color(if is_active {
                 p.sidebar_accent_foreground
             } else {
                 p.sidebar_foreground
             });
         if is_active {
-            // 活动会话与悬浮态同为实心强调色，靠左侧竖条区分"当前正在使用的会话"。
-            // 竖条绝对定位、不占布局宽度，切换活动会话时行内图标不会发生位移。
+            // 当前会话：列表激活底色 + 左侧竖条。竖条绝对定位、不占布局宽度，
+            // 切换活动会话时行内图标不会发生位移。
             inner = inner.child(
                 div()
                     .absolute()
@@ -258,10 +255,9 @@ impl AppShell {
                     .rounded_full()
                     .bg(p.list_active_border),
             );
-        } else {
-            // 悬浮铺满实心强调色：低透明度叠加在深色侧边栏上几乎看不出差别，
-            // 换成实色才有 SFTP 文件行那种"整条弹出"的清晰反馈。
-            inner = inner.hover(|style| style.bg(p.sidebar_accent));
+        } else if !is_selected_row {
+            // 悬停只给未选中的行，避免悬浮色把选中态的底色顶掉。
+            inner = inner.hover(|style| style.bg(p.list_hover));
         }
         if selection_mode {
             inner = inner.child(
@@ -301,11 +297,7 @@ impl AppShell {
                             .text_xs()
                             .line_height(px(14.0))
                             .truncate()
-                            .text_color(if is_active {
-                                p.sidebar_accent_foreground
-                            } else {
-                                p.muted_foreground
-                            })
+                            .text_color(p.muted_foreground)
                             .child(detail_text),
                     ),
             );

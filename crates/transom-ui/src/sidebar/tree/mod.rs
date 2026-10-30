@@ -24,17 +24,6 @@ const INDENT_STEP: f32 = 18.0;
 const ROW_ICON_SIZE: Pixels = px(18.0);
 /// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
 const ROW_CHEVRON_SIZE: Pixels = px(14.0);
-/// 行背景深浅梯度：常态最轻，选中居中，悬浮与活动会话改用实心强调色。
-///
-/// 深色主题下侧边栏底色与强调色本身就很接近（`#0a0a0a` 与 `#262626`），
-/// 再对强调色叠低透明度只会得到几乎不可辨的色差，因此悬浮态不再走透明度梯度，
-/// 而是直接铺满实色，与 SFTP 文件行的悬浮表现保持一致。
-const TINT_IDLE: f32 = 0.14;
-const TINT_SELECTED: f32 = 0.42;
-/// 文件夹行整体比会话行更重一档，用于区分层级容器。
-const TINT_FOLDER_IDLE: f32 = 0.22;
-/// 拖拽悬停在文件夹行中段时的“将放入此分组”提示底色。
-const TINT_FOLDER_INTO: f32 = 0.6;
 
 /// 按层级计算行左内边距，文件夹与会话共用，保证同层对齐。
 fn indent_padding(depth: usize) -> Pixels {

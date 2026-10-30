@@ -5,7 +5,7 @@ use super::reorder::{
 };
 use super::{
     BAND_HEIGHT, FolderRow, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SidebarDrag,
-    SidebarTarget, TINT_FOLDER_IDLE, TINT_FOLDER_INTO, indent_padding,
+    SidebarTarget, indent_padding,
 };
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -113,7 +113,10 @@ impl AppShell {
                 }
             });
         // `drag_over` 闭包要求 `'static`，先取成局部颜色再捕获。
-        let into_bg = p.sidebar_accent.opacity(TINT_FOLDER_INTO);
+        let into_bg = p.drop_target;
+        // 文件夹头悬停单独一档：在组标题底色上压 60% 结构线，比列表激活色更深，
+        // 浅色变暗、深色变亮，避免悬浮后又和侧栏底混成一片。
+        let hover_bg = p.list_head.blend(p.sidebar_border.opacity(0.6));
         // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配
         // global_id 与悬浮状态，缺少 id 时鼠标移入不会触发重绘，高亮只能等
         // 别的事件顺带重绘才补上，看上去就是"悬停不跟手"。
@@ -126,11 +129,11 @@ impl AppShell {
             .gap_1()
             .items_center()
             .rounded(p.radius.md)
-            .bg(p.sidebar_accent.opacity(TINT_FOLDER_IDLE))
+            .bg(p.list_head)
             .border_b_1()
-            .border_color(p.sidebar_border.opacity(0.55))
+            .border_color(p.sidebar_border)
             .text_color(p.sidebar_foreground)
-            .hover(|style| style.bg(p.sidebar_accent))
+            .hover(move |style| style.bg(hover_bg))
             .drag_over::<SidebarDrag>(move |style, _, _, _| style.bg(into_bg))
             .child(Icon::new(chevron).with_size(ROW_CHEVRON_SIZE))
             .child(

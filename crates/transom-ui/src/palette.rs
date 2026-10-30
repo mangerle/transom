@@ -44,6 +44,16 @@ pub(crate) struct Palette {
     pub(crate) secondary_hover: Hsla,
     /// 列表偶数行斑马纹背景色。
     pub(crate) list_even: Hsla,
+    /// 列表行常态表面色（会话树行底）。
+    pub(crate) list_background: Hsla,
+    /// 列表表头表面色（会话树文件夹行底）。
+    pub(crate) list_head: Hsla,
+    /// 列表悬浮表面色。
+    pub(crate) list_hover: Hsla,
+    /// 列表激活表面色（选中与当前会话共用）。
+    pub(crate) list_active: Hsla,
+    /// 拖放目标提示底色。
+    pub(crate) drop_target: Hsla,
     /// 主题强调色（设置页主题卡预览色点等场景）。
     pub(crate) primary: Hsla,
     /// 警示语义色（设置页明暗反差提示等场景）。
@@ -104,6 +114,11 @@ impl Palette {
             secondary_foreground: theme.secondary_foreground,
             secondary_hover: theme.secondary_hover,
             list_even: theme.list_even,
+            list_background: theme.colors.list,
+            list_head: theme.colors.list_head,
+            list_hover: theme.colors.list_hover,
+            list_active: theme.colors.list_active,
+            drop_target: theme.drop_target,
             primary: theme.primary,
             warning: theme.warning,
             danger: theme.danger,
