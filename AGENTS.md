@@ -156,7 +156,11 @@
 - **外部文件必须有上限**：解析 `.cast`、审计日志、预览与差异等外部文件必须先检查体积与事件数上限；`MAX_CAST_BYTES` / `MAX_CAST_EVENTS` 等常量不得绕过。
 - **错误不得静默降级**：禁止 `let _ = save(...)` 这类吞错写法；设置保存走 `persist_settings_reported`，目录保存走 `persist_catalog`，后台写盘错误由渲染帧统一转成应用内通知。确实可恢复的降级必须记录日志并说明原因。
 - **平台边界**：桌面注册、启动器与图标安装只经 `transom-desktop`；macOS/Windows 的占位实现必须返回明确错误，不允许静默成功。存储层不再承担桌面集成。
-- **文件拆分准则**：单文件超过 500 行按“状态 / 视图 / 动作 / 测试”拆分，不按行数机械切割；子模块共用导入收敛到 `common.rs` 之类的私有模块，禁止复制一长串 import。拆分后外部路径通过父模块重导出保持稳定。
+- **纯状态方法归属**：不依赖 `Window`、`Entity`、`Context`、`cx` 的状态查询与变更一律写在 `impl AppState`；`AppShell` 只保留需要 GPUI 上下文的渲染、事件路由与生命周期入口。新增方法前先判断是否真的需要 `Context<Self>`。
+- **外壳结构守卫**：`AppShell` 只允许持有 `state: AppState` 一个字段，`app_shell_keeps_single_state_field` 测试是回归闸门；新增状态放 `AppState` 或对应 feature 结构体，禁止重新平铺字段。
+- **菜单与按钮构造器**：右键菜单项统一用 `widgets::menu_item` / `widgets::MenuItem`（后者支持 `.disabled(...)`），弹窗取消与确认按钮分别用 `widgets::dialog_cancel_button` / `dialog_confirm_button`。`menu_items_use_widget_constructor` 守卫禁止 `PopupMenuItem::new(...)` 紧接 `.icon(...)` 的手写链；真实 `Action` 绑定与 `.checked(...)` 下拉选中项属例外，保留组件库原写法。
+- **文件拆分准则**：单文件超过 500 行按“状态 / 视图 / 动作 / 测试”拆分，不按行数机械切割；子模块共用导入收敛到 `common.rs` 之类的私有模块，禁止复制一长串 import。拆分后外部路径通过父模块重导出保持稳定。声明式键位表（如 `keymap/mod.rs`）属于规范例外，不为行数强行拆分。
+- **拆分落地清单**：菜单/按钮/空状态/列表行/表头/状态徽标/工具栏/表单行/弹窗骨架已全部收敛到 `widgets`；新增页面直接复用，不再在页面内重写这些结构。
 - **提交与验证**：一次提交只解决一个问题，提交信息使用 Conventional Commits 中文描述；每次提交前执行 `cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo check --all-targets`，涉及行为变更时执行 `cargo test`。重构提交必须说明取舍与门禁结果。
 
 ---
@@ -190,3 +194,5 @@
 16. **[UI 线程 IO]** 是否消除了渲染/点击/事件路径上的同步磁盘、`.cast` 解析与审计扫描？异步写盘是否使用覆盖式有界单槽并处理失败？
 17. **[设计令牌]** 新增或迁移的组件是否使用 `theme::tokens` 的字号/间距/控件/弹窗档位？是否通过 `widgets_use_design_tokens` 守卫？
 18. **[平台边界]** 桌面集成是否只经 `transom-desktop`？macOS/Windows 占位实现是否返回明确错误而非静默成功？
+19. **[状态归属]** 新方法是否确实需要 `Context<Self>`/`Window`？纯状态查询是否写进了 `impl AppState`？`AppShell` 字段是否仍然只有一个 `state`？
+20. **[构造器复用]** 菜单项、弹窗按钮、空状态、列表行、表头是否复用了 `widgets` 构造器？是否新增了手写 `PopupMenuItem::new(...).icon(...)` 链？
