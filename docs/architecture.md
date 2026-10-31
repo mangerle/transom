@@ -16,8 +16,11 @@ apps/transom (组合根 + 控制平面)
   ├─ transom-ui (GPUI 界面与全部应用状态)
   │    ├─ transom-terminal (VTE 网格 / 渲染 / 高亮引擎 / 检索 / OSC / Kitty)
   │    │    └─ alacritty_terminal
-  │    ├─ transom-store (JSON 存储 / 钥匙串 / 备份文件读写 / 桌面集成)
+  │    ├─ transom-store (JSON 存储 / 钥匙串 / 备份文件读写)
   │    │    ├─ transom-crypto
+  │    │    └─ transom-core
+  │    ├─ transom-desktop (默认终端 / 桌面条目 / 启动器集成)
+  │    │    ├─ transom-platform
   │    │    └─ transom-core
   │    ├─ transom-platform (用户目录 / 私有文件权限 / 发行版识别)
   │    └─ transom-core
@@ -43,7 +46,15 @@ apps/transom (组合根 + 控制平面)
 需要本地目录或私有权限的 crate ──> transom-platform（宿主平台约定）
 ```
 
-规则：**依赖只向内**。`transom-net` 不依赖 `transom-store`；`transom-sync` 依赖 `transom-store` 与 `transom-crypto`；加解密信封由独立的 `transom-crypto` 提供；UI 不直接做网络协议；与操作系统打交道的路径与权限只经 `transom-platform`。
+规则：**依赖只向内**。`transom-net` 不依赖 `transom-store`；`transom-sync` 依赖 `transom-store` 与 `transom-crypto`；加解密信封由独立的 `transom-crypto` 提供；UI 不直接做网络协议；与操作系统打交道的路径与权限经 `transom-platform`，桌面注册经 `transom-desktop`。
+
+## UI 内部结构
+
+`transom-ui` 的功能模块通过 `#[path]` 挂在 `app` 模块之下，`AppShell` 的字段只对 `app` 及其后代可见，crate 其它模块无法绕过外壳直接改状态。应用状态集中在 `app::state::AppState`，`AppShell` 只保留一个 `state` 字段，通过 `Deref`/`DerefMut` 复用状态操作。
+
+可复用的表现层组件在 `transom-ui/src/widgets/`：图标按钮、弹窗动作按钮与动作条、设置/表单行、空状态、菜单项。组件只接收数据与回调，不依赖 `AppShell`、不直接访问 store；字号、间距、控件尺寸与弹窗宽度统一取 `theme::tokens`。
+
+新增功能时：状态放 `AppState` 或对应 feature 结构体，纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。
 
 ## 数据流
 
@@ -121,8 +132,18 @@ crates/transom-crypto/src/
   envelope.rs  TSYN 二进制端到端加密信封
   backup.rs    JSON/YAML 内嵌加解密信封
 
+crates/transom-desktop/src/
+  linux/       freedesktop 默认终端注册、桌面条目与图标安装
+  unsupported.rs  macOS/Windows 同名入口的占位实现
+
 crates/transom-terminal/src/
   highlight/ 关键词高亮扫描与编译规则引擎
+
+crates/transom-ui/src/
+  app/        AppShell、AppState、持久化、事件分发与各功能模块
+  widgets/    跨页面复用的表现层组件
+  theme/      主题、设计令牌与外观解析
+  palette.rs  主题调色板快照与本地化辅助
 
 crates/transom-zmodem/src/
   frames / scanner / receiver / sender / fsm / attach：字节级协议与会话驱动
@@ -148,6 +169,7 @@ apps/transom/src/controller/
 | 加密信封独立为专用 crate（transom-crypto） | net/sync 不再反向依赖 store，同时 core 不再背负加解密重依赖 | 多维护一个轻量 crate |
 | 平台约定独立为 transom-platform | 路径与权限被存储/终端/同步/界面共同使用，留在 core 会把它变成 IO 实现层 | 多维护一个轻量 crate |
 | ZMODEM 独立为 transom-zmodem | 协议只依赖终端 IO 契约，抽离后 net 不再背负 4 千行编解码与真机测试 | 多维护一个轻量 crate |
+| 桌面集成独立为 transom-desktop | 存储层只做持久化；启动器/注册表逻辑有独立平台边界，macOS/Windows 可分别扩展 | 多维护一个轻量 crate；非 Linux 暂为占位实现 |
 | 连接参数随命令携带（ZMODEM/SHA1 策略） | 控制循环零同步 IO，磁盘慢不拖控制平面 | 命令载荷变宽，UI 有责任携带最新快照 |
 | known_hosts 异步落盘 | 握手路径不带写盘 IO | record 成功 ≠ 已落盘；极端崩溃丢最后若干条 |
 | 原子写必带 fsync | rename 只保证"旧或新"，不保证已持久 | 每次保存多一次 fsync（毫秒级） |
@@ -157,7 +179,7 @@ apps/transom/src/controller/
 
 ## 改动指引
 
-- **新增一条 AppCommand**：`core/commands.rs` 加变体 → `controller/commands.rs`
+- **新增一条 AppCommand**：`crates/transom-core/src/commands/mod.rs` 加变体 → `controller/commands.rs`
   加处理分支（UI 侧构造点按其语义选择 try_send/send_command）；
 - **新增连接类型**：`ReadyConnection` 加变体 → `internal.rs` 加差异化收尾
   → `pty.rs` 的派发点构造新变体；

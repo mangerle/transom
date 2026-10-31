@@ -143,11 +143,15 @@ Generated key pairs default to `~/.ssh`.
 
 ```
 apps/transom            binary: wires stores and the async connection controller together
-crates/transom-core     storage traits, session/settings models, forward and highlight rules
+crates/transom-core     storage traits, session/settings models, command/event contracts, rules
 crates/transom-platform user directories, private file permissions, OS release detection
+crates/transom-crypto   TSYN binary and JSON/YAML encryption envelopes
+crates/transom-desktop  default-terminal registration, desktop entries, launcher integration
 crates/transom-net      russh client, SFTP, port forwarding, serial ports, PTY plumbing
-crates/transom-store    JSON stores, keyring, Argon2id/XChaCha20 backup vault, atomic writes
+crates/transom-sync     WebDAV/S3/Git cloud-sync orchestration
+crates/transom-store    JSON stores, keyring, encrypted backups, atomic writes
 crates/transom-terminal alacritty_terminal grid, renderer, search, OSC parsing
+crates/transom-zmodem   ZMODEM protocol state machine and terminal attachment
 crates/transom-ui       GPUI app, sidebar, tabs, splits, SFTP panes, settings, i18n
 ```
 

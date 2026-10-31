@@ -143,11 +143,15 @@ Release 构建剥离符号表并启用 thin LTO。日志经 `log` 门面落到 `
 
 ```
 apps/transom            可执行入口：装配存储层与异步连接控制器
-crates/transom-core     存储契约、会话/设置模型、转发与高亮规则
+crates/transom-core     存储契约、会话/设置模型、命令事件契约与转发/高亮规则
 crates/transom-platform 用户目录、私有文件权限与发行版识别
+crates/transom-crypto   TSYN 二进制与 JSON/YAML 加密信封
+crates/transom-desktop  默认终端注册、桌面条目与启动器集成
 crates/transom-net      russh 客户端、SFTP、端口转发、串口与 PTY 链路
-crates/transom-store    JSON 存储、钥匙串、Argon2id/XChaCha20 加密备份、原子写
+crates/transom-sync     WebDAV/S3/Git 云同步编排
+crates/transom-store    JSON 存储、钥匙串、加密备份与原子写
 crates/transom-terminal alacritty_terminal 网格、渲染器、检索与 OSC 解析
+crates/transom-zmodem   ZMODEM 协议状态机与终端挂载层
 crates/transom-ui       GPUI 应用、侧边栏、标签、分屏、SFTP 面板、设置与 i18n
 ```
 
