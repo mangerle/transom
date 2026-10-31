@@ -67,6 +67,26 @@ impl<'a> StatusData<'a> {
 }
 
 impl AppShell {
+    /// 工作区里是否存在带终端窗格的标签。
+    ///
+    /// 底栏的会话作用域入口用它判定"有没有可操作对象"。刻意不看活动标签：
+    /// 广播目标跨标签，录制也常在非活动标签上进行。
+    pub(crate) fn has_any_terminal(&self) -> bool {
+        self.workspace
+            .tabs
+            .iter()
+            .any(|tab| tab.terminal().is_some())
+    }
+
+    /// 是否有标签正在录制：录制中必须保住停止入口。
+    pub(crate) fn is_any_tab_recording(&self, cx: &App) -> bool {
+        self.workspace
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.terminal())
+            .any(|term| term.read(cx).is_recording())
+    }
+
     /// 渲染底栏。`divider_x` 为分界线横坐标，`0` 表示侧栏已隐藏、整条不分段。
     pub(crate) fn render_status_bar(
         &mut self,
@@ -157,9 +177,19 @@ impl AppShell {
                     .child(status_text),
             );
 
-        let snippets_entry = self.render_snippets_popover(p, cx);
-        let broadcast_entry = self.render_broadcast_trigger(cx);
-        let recording_badge = self.render_recording_badge(p, cx);
+        // 三个会话作用域入口（快捷命令、广播、录制）只在存在终端标签时出现：
+        // 没有终端时它们点了要么静默返回、要么打开一个没有目标的输入条、要么
+        // 到执行步才报错，留着只会误导。判定取"任意标签有终端"而不是"活动标签
+        // 有终端"：广播的目标本来就跨标签多选，且图标不该随切换标签跳动。
+        // 三条兜底：已打开的卡片与输入条、以及正在录制的标签，都不允许因为
+        // 图标消失而失去关闭/停止的入口。
+        let session_scoped = self.has_any_terminal();
+        let snippets_entry = (session_scoped || self.modals.snippet_panel.open)
+            .then(|| self.render_snippets_popover(p, cx));
+        let broadcast_entry =
+            (session_scoped || self.broadcast.open).then(|| self.render_broadcast_trigger(cx));
+        let recording_badge = (session_scoped || self.is_any_tab_recording(cx))
+            .then(|| self.render_recording_badge(p, cx));
         let front_zone = drag::status_front_drop_zone(&app, p);
         let menu_app = app.clone();
         // ZMODEM 传输徽章优先于常规状态项：传输进行中用户最关心进度与取消。
@@ -197,9 +227,9 @@ impl AppShell {
                 .gap_2()
                 .pr_3()
                 .border_color(p.divider(p.border))
-                .child(snippets_entry)
-                .child(broadcast_entry)
-                .child(recording_badge)
+                .children(snippets_entry)
+                .children(broadcast_entry)
+                .children(recording_badge)
                 .child(front_zone)
                 .child(badges);
             right_segment = right_segment.divider_edge(DividerEdge::Left, p.divider_width);
@@ -225,9 +255,9 @@ impl AppShell {
                     .pr_3()
                     .gap_2()
                     .child(connection_pill)
-                    .child(snippets_entry)
-                    .child(broadcast_entry)
-                    .child(recording_badge)
+                    .children(snippets_entry)
+                    .children(broadcast_entry)
+                    .children(recording_badge)
                     .child(front_zone)
                     .child(badges),
             );
