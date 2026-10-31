@@ -24,8 +24,10 @@ use crate::sftp::SftpModals;
 use crate::sidebar::SidebarState;
 use crate::snippets::SnippetPanelState;
 use crate::workspace::WorkspaceState;
+use gpui_kit::component::WindowExt;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::slider::{SliderEvent, SliderValue};
 use gpui_kit::*;
@@ -105,7 +107,13 @@ pub struct AppShell {
     pub(crate) open_modals: crate::dialog_host::OpenModals,
     /// 弹窗内的一次性提示：脏表单被拦下不关时，说明为什么按键没有反应。
     pub(crate) dialog_hint: Option<String>,
+    /// 右上角提示的自增序号：用作通知的 key，定时关闭时只关自己那一条。
+    pub(crate) toast_seq: u64,
 }
+
+/// 提示通知的类型标记：只用于给 `Notification::id1` 与 `remove_notification1`
+/// 配对，让定时器精确关闭自己那一条，不参与任何业务逻辑。
+struct ToastMarker;
 
 impl AppShell {
     /// 向控制器提交命令的统一入口：非阻塞 try_send，队列满时快速失败。
@@ -126,6 +134,41 @@ impl AppShell {
     /// 既保留每条错误，也让渲染只负责取队列、不再承担"暂存"职责。
     pub(crate) fn set_error(&mut self, message: impl Into<String>) {
         self.pending_notices.push(message);
+    }
+
+    /// 右上角操作结果提示，3 秒后自动收起。
+    ///
+    /// 设计原理（Why）：上游通知组件的自动隐藏时长写死 5 秒，不接受这个与
+    /// 需求不符的时长，改成 `autohide(false)` + 显式定时器关闭，保证看到的
+    /// 与实际发生的一致。定时器只有关闭自己这一步，句柄显式 `detach`，
+    /// 不给每条提示再养一个字段。
+    pub(crate) fn show_toast(
+        &mut self,
+        message: impl Into<String>,
+        success: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.toast_seq = self.toast_seq.wrapping_add(1);
+        let key = format!("transom-toast-{}", self.toast_seq);
+        let notification = if success {
+            Notification::success(message.into())
+        } else {
+            Notification::error(message.into())
+        };
+        window.push_notification(
+            notification.id1::<ToastMarker>(key.clone()).autohide(false),
+            cx,
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(3))
+                .await;
+            let _ = this.update_in(cx, |_, window, cx| {
+                window.remove_notification1::<ToastMarker>(key, cx);
+            });
+        })
+        .detach();
     }
 
     /// 设置工具面板（SFTP/转发）停靠方向。
@@ -333,6 +376,7 @@ impl AppShell {
             },
             status: None,
             pending_notices,
+            toast_seq: 0,
             immersive: false,
             sftp_panel_width_target: None,
             shortcut_recording: ShortcutRecordingState {

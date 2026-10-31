@@ -11,7 +11,7 @@
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
     ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec,
-    ContainerEngineProfile, ContainerLifecycleAction,
+    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec,
 };
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
@@ -227,8 +227,7 @@ pub enum ContainerCommand {
     CreateNetwork {
         tab_id: TabId,
         request_id: ContainerRequestId,
-        name: String,
-        driver: Option<String>,
+        spec: ContainerNetworkSpec,
     },
     RemoveNetwork {
         tab_id: TabId,
@@ -256,6 +255,14 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         container: String,
         enabled: bool,
+        /// 轮询间隔（毫秒）：界面提供 1s/3s/10s 三档，0 按 3s 处理。
+        interval_ms: u64,
+    },
+    /// 容器内进程列表：进程数与 CPU/内存占用，用于统计页的进程表。
+    ListProcesses {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
     },
     /// 取消进行中的日志跟随、上传或下载。
     Cancel {
@@ -325,5 +332,15 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         container: String,
         path: String,
+    },
+    /// 清理未被任何容器使用的数据卷。
+    PruneVolumes {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    /// 清理悬空镜像。
+    PruneImages {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
     },
 }

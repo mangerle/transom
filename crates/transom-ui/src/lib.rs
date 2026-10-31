@@ -38,7 +38,7 @@ mod identity;
 mod keymap;
 mod keys;
 mod modals;
-mod monitor;
+pub(crate) mod monitor;
 mod notify;
 mod palette;
 mod pane_tree;

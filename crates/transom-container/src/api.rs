@@ -8,8 +8,8 @@ use crate::error::ContainerError;
 use crate::http::{self, RawResponse};
 use crate::models::{
     ContainerInspect, ContainerListItem, ExecCreateResponse, ExecInspectResponse, ImageInspect,
-    ImageListItem, ImagePullEvent, NetworkItem, StatsResponse, VersionResponse, VolumeItem,
-    VolumeListResponse,
+    ImageListItem, ImagePruneResponse, ImagePullEvent, NetworkItem, StatsResponse, TopResponse,
+    VersionResponse, VolumeItem, VolumeListResponse, VolumePruneResponse,
 };
 use crate::transport::EngineTransport;
 use bytes::Bytes;
@@ -22,8 +22,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use transom_core::ContainerEngineKind;
 use transom_core::{
     ContainerDetails, ContainerImageDetails, ContainerImageSummary, ContainerLifecycleAction,
-    ContainerNetworkDetails, ContainerNetworkSummary, ContainerStats, ContainerSummary,
-    ContainerVolumeDetails, ContainerVolumeSummary,
+    ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
+    ContainerStats, ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary,
 };
 
 /// 小体积 JSON 响应的上限：超过视为异常响应，避免误读巨型对象。
@@ -210,7 +210,12 @@ impl DockerApi {
         &self,
         container: &str,
     ) -> Result<ContainerDetails, ContainerError> {
-        let suffix = format!("/containers/{}/json", http::percent_encode(container));
+        // size=1 让引擎顺带算可写层/镜像层占用；单容器 inspect 可以接受这点开销，
+        // 统计页的磁盘卡片需要它。
+        let suffix = format!(
+            "/containers/{}/json?size=1",
+            http::percent_encode(container)
+        );
         let operation = "检视容器";
         let response = self.send(Method::GET, &suffix, None, operation).await?;
         let status = response.status;
@@ -233,13 +238,44 @@ impl DockerApi {
         &self,
         image: &str,
     ) -> Result<ContainerImageDetails, ContainerError> {
-        let inspect: ImageInspect = self
-            .get_json(
+        let (inspect, raw) = self
+            .inspect_json::<ImageInspect>(
                 &format!("/images/{}/json", http::percent_encode(image)),
                 "检视镜像",
             )
             .await?;
-        Ok(inspect.into_details())
+        Ok(inspect.into_details(raw))
+    }
+
+    /// 取一份 JSON 对象，同时把原文留一份格式化副本。
+    ///
+    /// 设计原理（Why）：详情面板要能在「结构化」与「原始 JSON」之间切换，而
+    /// 结构化字段必然丢上游信息；与其为每个对象再解析一遍，不如在唯一一次读取
+    /// 时把原文留下。解析失败时原文也照样能看，所以格式化不依赖反序列化成功。
+    ///
+    /// # Errors
+    /// 引擎返回非 2xx、响应体超限或无法解析为目标类型时返回 [`ContainerError`]。
+    async fn inspect_json<T>(
+        &self,
+        suffix: &str,
+        operation: &str,
+    ) -> Result<(T, String), ContainerError>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let response = self.send(Method::GET, suffix, None, operation).await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, operation, body, suffix));
+        }
+        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let raw = format_inspect_json(&bytes);
+        let parsed = serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
+            operation: operation.to_string(),
+            message: error.to_string(),
+        })?;
+        Ok((parsed, raw))
     }
 
     /// 数据卷列表。
@@ -257,8 +293,8 @@ impl DockerApi {
         &self,
         name: &str,
     ) -> Result<ContainerVolumeDetails, ContainerError> {
-        let volume: VolumeItem = self
-            .get_json(
+        let (volume, raw) = self
+            .inspect_json::<VolumeItem>(
                 &format!("/volumes/{}", http::percent_encode(name)),
                 "检视数据卷",
             )
@@ -279,6 +315,7 @@ impl DockerApi {
         Ok(ContainerVolumeDetails {
             summary: volume.into_summary(),
             used_by,
+            inspect: raw,
         })
     }
 
@@ -375,6 +412,81 @@ impl DockerApi {
         http::ensure_success(status, "创建数据卷", body, Some(name))
     }
 
+    /// 清理悬空镜像（没有 tag 也不再被任何镜像引用的那批）。
+    ///
+    /// 设计原理（Why）：与卷不同，镜像的 prune 默认语义就是 `dangling=true`，
+    /// 这里显式带上过滤，避免依赖引擎默认值；过滤条件同样只能走查询参数。
+    /// 删除对象既可能是取消标签（`Untagged`）也可能是真删层（`Deleted`），
+    /// 两种都收进同一份报告，界面按条数回报。
+    ///
+    /// # Errors
+    /// 引擎不可达、返回非 2xx 或响应无法解析时返回 [`ContainerError`]。
+    pub async fn prune_images(&self) -> Result<ContainerPruneReport, ContainerError> {
+        const OPERATION: &str = "清理悬空镜像";
+        let suffix = format!(
+            "/images/prune?filters={}",
+            http::percent_encode(r#"{"dangling":["true"]}"#)
+        );
+        let response = self.send(Method::POST, &suffix, None, OPERATION).await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, OPERATION, body, "images"));
+        }
+        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let report: ImagePruneResponse =
+            serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
+                operation: OPERATION.to_string(),
+                message: error.to_string(),
+            })?;
+        let deleted = report
+            .images_deleted
+            .into_iter()
+            .flat_map(|entry| [entry.untagged, entry.deleted])
+            .flatten()
+            .collect();
+        Ok(ContainerPruneReport {
+            deleted,
+            reclaimed: report.space_reclaimed,
+        })
+    }
+
+    /// 清理未被任何容器使用的数据卷。
+    ///
+    /// 设计原理（Why）：Docker 的 prune 默认只回收**匿名**卷，具名卷必须显式带
+    /// `all=true` 过滤才会被清理（真机实测：不带过滤时返回空列表，界面上却明明
+    /// 列出了未使用卷）；界面「仅未使用卷」那一档对应的正是这个语义，所以过滤
+    /// 固定写死。正在被挂载的卷由引擎自己排除，不需要我们传候选名单。
+    ///
+    /// 过滤条件必须走查询参数：放进 JSON 请求体会被引擎静默忽略（实测两种写法
+    /// 结果不同），因此这里显式拼 URL。
+    ///
+    /// # Errors
+    /// 引擎不可达、返回非 2xx 或响应无法解析时返回 [`ContainerError`]。
+    pub async fn prune_volumes(&self) -> Result<ContainerPruneReport, ContainerError> {
+        const OPERATION: &str = "清理未使用数据卷";
+        let suffix = format!(
+            "/volumes/prune?filters={}",
+            http::percent_encode(r#"{"all":["true"]}"#)
+        );
+        let response = self.send(Method::POST, &suffix, None, OPERATION).await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, OPERATION, body, "volumes"));
+        }
+        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let report: VolumePruneResponse =
+            serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
+                operation: OPERATION.to_string(),
+                message: error.to_string(),
+            })?;
+        Ok(ContainerPruneReport {
+            deleted: report.volumes_deleted,
+            reclaimed: report.space_reclaimed,
+        })
+    }
+
     pub async fn remove_volume(&self, name: &str, force: bool) -> Result<(), ContainerError> {
         let path = format!(
             "/volumes/{}?force={}",
@@ -401,25 +513,38 @@ impl DockerApi {
         &self,
         network: &str,
     ) -> Result<ContainerNetworkDetails, ContainerError> {
-        let item: NetworkItem = self
-            .get_json(
+        let (item, raw) = self
+            .inspect_json::<NetworkItem>(
                 &format!("/networks/{}", http::percent_encode(network)),
                 "检视网络",
             )
             .await?;
-        Ok(item.into_details())
+        Ok(item.into_details(raw))
     }
 
     pub async fn create_network(
         &self,
-        name: &str,
-        driver: Option<&str>,
+        spec: &transom_core::ContainerNetworkSpec,
     ) -> Result<(), ContainerError> {
-        let payload = serde_json::json!({
+        let name = spec.name.as_str();
+        // 留空的字段一律不下发，由引擎按自己的默认值决定；只有填了子网才带 IPAM。
+        let mut payload = serde_json::json!({
             "Name": name,
-            "Driver": driver.unwrap_or("bridge"),
             "CheckDuplicate": true,
         });
+        if let Some(driver) = spec.driver.as_deref() {
+            payload["Driver"] = serde_json::Value::String(driver.to_string());
+        }
+        if spec.internal {
+            payload["Internal"] = serde_json::Value::Bool(true);
+        }
+        if let Some(subnet) = spec.subnet.as_deref() {
+            let mut config = serde_json::json!({ "Subnet": subnet });
+            if let Some(gateway) = spec.gateway.as_deref() {
+                config["Gateway"] = serde_json::Value::String(gateway.to_string());
+            }
+            payload["IPAM"] = serde_json::json!({ "Config": [config] });
+        }
         let body = serde_json::to_vec(&payload).map_err(|error| ContainerError::Decode {
             operation: "构造网络请求".to_string(),
             message: error.to_string(),
@@ -444,6 +569,23 @@ impl DockerApi {
         let status = response.status;
         let body = http::read_body_text(response.body, 8192).await;
         http::ensure_success(status, "删除网络", body, Some(network))
+    }
+
+    /// 容器内进程列表（`ps aux` 口径）。
+    pub async fn list_processes(
+        &self,
+        container: &str,
+    ) -> Result<Vec<ContainerProcess>, ContainerError> {
+        let response: TopResponse = self
+            .get_json(
+                &format!(
+                    "/containers/{}/top?ps_args=aux",
+                    http::percent_encode(container)
+                ),
+                "列出容器进程",
+            )
+            .await?;
+        Ok(response.into_processes())
     }
 
     /// 采样一次容器统计；CPU 百分比需要两次样本，见 [`Self::container_stats`]。

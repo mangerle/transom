@@ -10,6 +10,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{
@@ -48,8 +49,8 @@ impl AppShell {
                         .xsmall()
                         .icon(IconName::Check)
                         .label(rust_i18n::t!("common.confirm").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.submit_container_rename(tab_id, cx);
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.submit_container_rename(tab_id, window, cx);
                         })),
                 )
                 .child(
@@ -81,6 +82,7 @@ impl AppShell {
         let selected = workspace.selected.clone();
         let confirm = workspace.confirm.clone();
         let detail_tab = workspace.detail_tab;
+        let overview_raw = workspace.overview_raw;
         let containers = workspace.containers.clone();
         let details = workspace.details.clone();
         let image_details = workspace.image_details.clone();
@@ -92,11 +94,27 @@ impl AppShell {
         let logs_timestamps = workspace.logs_timestamps;
         let logs_reversed = workspace.logs_reversed;
         let stats = workspace.stats.clone();
-        let workspace_stats_enabled = workspace.stats_enabled;
+        let stats_history: Vec<ContainerStats> = workspace.stats_history.iter().cloned().collect();
+        let stats_chart = workspace.stats_chart;
+        let stats_interval = workspace.stats_interval;
+        let stats_processes = workspace.stats_processes.clone();
+        let stats_processes_loading = workspace.stats_processes_loading;
+        let stats_processes_error = workspace.stats_processes_error.clone();
+        let stats_error = workspace.stats_error.clone();
         let terminal = workspace
             .terminal
             .as_ref()
             .map(|terminal| terminal.view.clone());
+        let terminal_user = workspace
+            .terminal
+            .as_ref()
+            .map(|terminal| terminal.user.clone())
+            .or_else(|| {
+                workspace
+                    .terminal_request
+                    .as_ref()
+                    .map(|(_, user)| user.clone())
+            });
         let files = (
             workspace.files.path.clone(),
             workspace.files.entries.clone(),
@@ -141,11 +159,15 @@ impl AppShell {
                 .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string()),
         };
 
+        let tabs = self.render_detail_tab_buttons(tab_id, section, detail_tab, p, cx);
         let header = self.render_detail_header(
             tab_id,
             ContainerHeaderView {
                 section,
                 title,
+                tabs,
+                overview_raw,
+                detail_tab,
                 container: &selected_container,
                 details: &details,
                 image: &selected_image,
@@ -157,13 +179,12 @@ impl AppShell {
             p,
             cx,
         );
-        let tabs = self.render_detail_tabs(tab_id, section, detail_tab, p, cx);
         let confirm_bar = confirm.map(|confirm| render_confirm_bar(tab_id, confirm, p, cx));
         let rename_bar = self.render_container_rename_bar(tab_id, p, cx);
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
-                render_container_overview(details.as_ref(), status_text.as_deref(), p)
+                render_container_overview(details.as_ref(), status_text.as_deref(), overview_raw, p)
             }
             (ContainerSection::Containers, ContainerDetailTab::Logs) => render_logs(
                 ContainerLogsView {
@@ -178,10 +199,26 @@ impl AppShell {
                 cx,
             ),
             (ContainerSection::Containers, ContainerDetailTab::Terminal) => {
-                render_terminal(tab_id, terminal, p, cx)
+                render_terminal(tab_id, terminal, terminal_user, p, cx)
             }
             (ContainerSection::Containers, ContainerDetailTab::Stats) => {
-                render_stats(tab_id, stats.as_ref(), workspace_stats_enabled, p, cx)
+                super::stats::render_container_stats(
+                    super::stats::ContainerStatsView {
+                        tab_id,
+                        stats: stats.as_ref(),
+                        history: &stats_history,
+                        chart: stats_chart,
+                        interval: stats_interval,
+                        error: stats_error.as_deref(),
+                        details: details.as_ref(),
+                        processes: &stats_processes,
+                        processes_loading: stats_processes_loading,
+                        processes_error: stats_processes_error.as_deref(),
+                        has_selection: selected.is_some(),
+                    },
+                    p,
+                    cx,
+                )
             }
             (ContainerSection::Containers, ContainerDetailTab::Files) => render_files(
                 tab_id,
@@ -225,7 +262,6 @@ impl AppShell {
             .overflow_hidden()
             .child(header)
             .children(rename_bar)
-            .children(tabs)
             .children(confirm_bar)
             .child(div().flex_1().min_h_0().overflow_hidden().child(content))
             .into_any_element()
@@ -241,6 +277,9 @@ impl AppShell {
         let ContainerHeaderView {
             section,
             title,
+            tabs,
+            overview_raw,
+            detail_tab,
             container,
             details,
             image,
@@ -274,6 +313,33 @@ impl AppShell {
         match section {
             ContainerSection::Containers => {
                 if let Some(container) = container {
+                    // 原始 inspect 只是一个视图切换，用一个小图标按钮就够；它只属于
+                    // 基础信息页，切到日志/终端等页签时不该占位置。
+                    if detail_tab == ContainerDetailTab::Overview {
+                        let raw = overview_raw;
+                        actions = actions.child(
+                            Button::new("container-raw-inspect")
+                                .xsmall()
+                                .ghost()
+                                .icon(IconName::Braces)
+                                .selected(raw)
+                                .tooltip(
+                                    rust_i18n::t!(if raw {
+                                        "container.detail.overview"
+                                    } else {
+                                        "container.field.inspect"
+                                    })
+                                    .to_string(),
+                                )
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                                        workspace.overview_raw = !raw;
+                                        workspace.detail_tab = ContainerDetailTab::Overview;
+                                    }
+                                    cx.notify();
+                                })),
+                        );
+                    }
                     let name = container.name.clone();
                     let running = container.state.is_running();
                     if running {
@@ -331,40 +397,25 @@ impl AppShell {
                                 })),
                         );
                     }
-                    actions = actions
-                        .child(
-                            Button::new("container-open-terminal")
-                                .xsmall()
-                                .icon(IconName::Terminal)
-                                .label(rust_i18n::t!("container.detail.terminal").to_string())
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.set_container_detail_tab(
-                                        tab_id,
-                                        ContainerDetailTab::Terminal,
-                                        window,
-                                        cx,
-                                    );
-                                })),
-                        )
-                        .child(
-                            Button::new("container-remove")
-                                .danger()
-                                .xsmall()
-                                .icon(IconName::Trash)
-                                .label(rust_i18n::t!("common.delete").to_string())
-                                .on_click(cx.listener({
-                                    let name = name.clone();
-                                    move |this, _, _, cx| {
-                                        if let Some(workspace) =
-                                            this.container_workspace_mut(tab_id)
-                                        {
-                                            workspace.confirm =
-                                                Some(ContainerConfirm::Container(name.clone()));
-                                        }
-                                        cx.notify();
+                    // 头部不再放「终端」按钮：页签已经并到同一行，再放一个是同一
+                    // 件事的两个入口。
+                    actions = actions.child(
+                        Button::new("container-remove")
+                            .danger()
+                            .xsmall()
+                            .icon(IconName::Trash)
+                            .label(rust_i18n::t!("common.delete").to_string())
+                            .on_click(cx.listener({
+                                let name = name.clone();
+                                move |this, _, _, cx| {
+                                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                                        workspace.confirm =
+                                            Some(ContainerConfirm::Container(name.clone()));
                                     }
-                                })),
-                        );
+                                    cx.notify();
+                                }
+                            })),
+                    );
                 }
             }
             ContainerSection::Compose => {
@@ -476,35 +527,52 @@ impl AppShell {
             }
         }
 
+        // 有页签时页签占左、动作占右；没有页签的分类才显示标题，因为那里没有
+        // 第二处能说明「当前选中的是谁」。
+        let left: AnyElement = match tabs {
+            Some(tabs) => tabs,
+            None => h_flex()
+                .gap_2()
+                .items_center()
+                .min_w_0()
+                .child(Icon::new(section.icon()).small().text_color(p.primary))
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::BOLD)
+                        .truncate()
+                        .child(title),
+                )
+                .into_any_element(),
+        };
         h_flex()
             .px_3()
-            .py_2()
+            .py_1p5()
             .gap_3()
             .items_center()
             .justify_between()
             .flex_none()
+            .min_w_0()
+            .overflow_hidden()
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Bottom, p.divider_width)
+            .child(left)
             .child(
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .min_w_0()
-                    .child(Icon::new(section.icon()).small().text_color(p.primary))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::BOLD)
-                            .truncate()
-                            .child(title),
-                    )
-                    .children(health_chip),
+                    .flex_shrink_0()
+                    .children(health_chip)
+                    .child(actions),
             )
-            .child(actions)
             .into_any_element()
     }
 
-    fn render_detail_tabs(
+    /// 详情页签按钮组：不含外边距与分隔线，由详情头部把它放在同一行的左端。
+    ///
+    /// 只有一个页签的分类（镜像/卷/网络/编排）没有可切换的东西，返回 `None`，
+    /// 头部因此保留标题。
+    fn render_detail_tab_buttons(
         &mut self,
         tab_id: TabId,
         section: ContainerSection,
@@ -516,25 +584,118 @@ impl AppShell {
         if tabs.len() <= 1 {
             return None;
         }
+        let app = cx.entity().clone();
+        // 当前终端会话（含正在建立）的执行用户；`None` 表示还没有会话。
+        let current_user = self.container_workspace(tab_id).and_then(|workspace| {
+            workspace
+                .terminal
+                .as_ref()
+                .map(|terminal| terminal.user.clone())
+                .or_else(|| {
+                    workspace
+                        .terminal_request
+                        .as_ref()
+                        .map(|(_, user)| user.clone())
+                })
+        });
+        let user_tooltip = match &current_user {
+            Some(Some(user)) => {
+                rust_i18n::t!("container.terminal.current_user", user = user.as_str()).to_string()
+            }
+            Some(None) => rust_i18n::t!("container.terminal.current_default_user").to_string(),
+            None => rust_i18n::t!("container.terminal.as_user").to_string(),
+        };
         Some(
             h_flex()
-                .px_3()
-                .py_1()
                 .gap_1()
+                .items_center()
                 .flex_none()
-                .border_color(p.divider(p.border))
-                .divider_edge(DividerEdge::Bottom, p.divider_width)
+                .min_w_0()
                 .children(tabs.iter().copied().map(|tab| {
-                    Button::new(ElementId::Name(
-                        format!("container-detail-tab-{}", tab.label_key()).into(),
-                    ))
-                    .xsmall()
-                    .icon(detail_icon(tab))
-                    .label(rust_i18n::t!(tab.label_key()).to_string())
-                    .selected(tab == current)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.set_container_detail_tab(tab_id, tab, window, cx);
-                    }))
+                    if tab != ContainerDetailTab::Terminal {
+                        return Button::new(ElementId::Name(
+                            format!("container-detail-tab-{}", tab.label_key()).into(),
+                        ))
+                        .xsmall()
+                        .icon(detail_icon(tab))
+                        .label(rust_i18n::t!(tab.label_key()).to_string())
+                        .selected(tab == current)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.set_container_detail_tab(tab_id, tab, window, cx);
+                        }))
+                        .into_any_element();
+                    }
+                    // 终端页签带一个下拉：root 与镜像默认用户的会话是两回事，
+                    // 点主按钮仍走默认用户，避免改变原有肌肉记忆。主按钮与
+                    // 三角共用一个外框，视觉上是一枚分体按钮而不是两枚。
+                    let root_app = app.clone();
+                    let default_app = app.clone();
+                    let menu_user = current_user.clone();
+                    h_flex()
+                        .items_center()
+                        .flex_none()
+                        .rounded(p.radius.md)
+                        .border_1()
+                        .border_color(p.border)
+                        .overflow_hidden()
+                        .child(
+                            Button::new("container-detail-tab-terminal")
+                                .xsmall()
+                                .ghost()
+                                .icon(IconName::Terminal)
+                                .label(rust_i18n::t!("container.detail.terminal").to_string())
+                                .selected(tab == current)
+                                .tooltip(user_tooltip.clone())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.set_container_detail_tab(tab_id, tab, window, cx);
+                                })),
+                        )
+                        .child(div().w(px(1.0)).h(px(14.0)).bg(p.border))
+                        .child(
+                            Button::new("container-detail-tab-terminal-menu")
+                                .xsmall()
+                                .ghost()
+                                .icon(IconName::ChevronDown)
+                                .tooltip(user_tooltip.clone())
+                                .dropdown_menu(move |menu, _, _| {
+                                    let root_app = root_app.clone();
+                                    let default_app = default_app.clone();
+                                    menu.item(
+                                        PopupMenuItem::new(
+                                            rust_i18n::t!("container.terminal.as_root").to_string(),
+                                        )
+                                        .icon(IconName::Terminal)
+                                        .checked(
+                                            matches!(&menu_user, Some(Some(user)) if user == "root"),
+                                        )
+                                        .on_click(move |_, _, cx| {
+                                            let app = root_app.clone();
+                                            app.update(cx, |this, cx| {
+                                                this.open_container_terminal_as(
+                                                    tab_id,
+                                                    Some("root".to_string()),
+                                                    cx,
+                                                );
+                                            });
+                                        }),
+                                    )
+                                    .item(
+                                        PopupMenuItem::new(
+                                            rust_i18n::t!("container.terminal.as_default")
+                                                .to_string(),
+                                        )
+                                        .icon(IconName::Terminal)
+                                        .checked(matches!(&menu_user, Some(None)))
+                                        .on_click(move |_, _, cx| {
+                                            let app = default_app.clone();
+                                            app.update(cx, |this, cx| {
+                                                this.open_container_terminal_as(tab_id, None, cx);
+                                            });
+                                        }),
+                                    )
+                                }),
+                        )
+                        .into_any_element()
                 }))
                 .into_any_element(),
         )
@@ -648,15 +809,49 @@ fn render_confirm_bar(
         .into_any_element()
 }
 
+/// 基础信息页签：结构化字段与原始 inspect 二选一。
+///
+/// 设计原理（Why）：原始 inspect 里就是上面这些字段的超集，两段同时铺开时
+/// 用户要滚很久才能确认「下面没有别的信息」。切换按钮让同一屏只保留一种视图，
+/// 想看原始 JSON 时不必离开页签。
 fn render_container_overview(
     details: Option<&ContainerDetails>,
     notice: Option<&str>,
+    raw: bool,
     p: &Palette,
 ) -> AnyElement {
     let Some(details) = details else {
         return centered_hint(rust_i18n::t!("container.detail.loading").to_string(), p);
     };
     let mut rows = v_flex().gap_1p5();
+    if raw {
+        let body: AnyElement = if details.inspect.is_empty() {
+            div()
+                .text_sm()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.detail.no_inspect").to_string())
+                .into_any_element()
+        } else {
+            div()
+                .p_2()
+                .rounded(p.radius.md)
+                .bg(p.muted.opacity(0.3))
+                .font_family(p.mono_font_family.clone())
+                .text_size(p.mono_font_size)
+                .child(details.inspect.clone())
+                .into_any_element()
+        };
+        rows = rows.child(body);
+        if let Some(notice) = notice {
+            rows = rows.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(notice.to_string()),
+            );
+        }
+        return scroll_body(rows, p).into_any_element();
+    }
     rows = rows
         .child(kv(
             p,
@@ -744,30 +939,6 @@ fn render_container_overview(
             rust_i18n::t!("container.field.env"),
             details.env.join("\n"),
         ));
-    }
-    if !details.inspect.is_empty() {
-        rows = rows.child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.field.inspect").to_string()),
-                )
-                .child(
-                    div()
-                        .id("container-inspect-scroll")
-                        .max_h(px(260.0))
-                        .overflow_y_scroll()
-                        .p_2()
-                        .rounded(p.radius.md)
-                        .bg(p.muted.opacity(0.3))
-                        .font_family(p.mono_font_family.clone())
-                        .text_size(p.mono_font_size)
-                        .child(details.inspect.clone()),
-                ),
-        );
     }
     if let Some(notice) = notice {
         rows = rows.child(
@@ -899,7 +1070,7 @@ fn render_image_detail(
     p: &Palette,
 ) -> AnyElement {
     if let Some(details) = details {
-        let rows = v_flex()
+        let mut rows = v_flex()
             .gap_1p5()
             .child(kv(
                 p,
@@ -935,6 +1106,62 @@ fn render_image_detail(
                 rust_i18n::t!("container.field.layers"),
                 details.layers.to_string(),
             ));
+        if !details.repo_digests.is_empty() {
+            rows = rows.child(kv(
+                p,
+                rust_i18n::t!("container.field.repo_digests"),
+                details.repo_digests.join("\n"),
+            ));
+        }
+        if !details.parent.is_empty() {
+            rows = rows.child(kv(
+                p,
+                rust_i18n::t!("container.field.parent"),
+                details.parent.clone(),
+            ));
+        }
+        if details.virtual_size > 0 {
+            rows = rows.child(kv(
+                p,
+                rust_i18n::t!("container.field.virtual_size"),
+                crate::format::format_size(details.virtual_size),
+            ));
+        }
+        if !details.layer_digests.is_empty() {
+            let mut layers = v_flex().gap_1().child(
+                div().text_xs().text_color(p.muted_foreground).child(
+                    rust_i18n::t!(
+                        "container.detail.layer_list",
+                        count = details.layer_digests.len()
+                    )
+                    .to_string(),
+                ),
+            );
+            for (index, layer) in details.layer_digests.iter().enumerate() {
+                layers = layers.child(
+                    h_flex()
+                        .gap_2()
+                        .items_start()
+                        .child(
+                            div()
+                                .w(px(22.0))
+                                .flex_none()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(format!("{}", index + 1)),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_xs()
+                                .font_family(p.mono_font_family.clone())
+                                .child(layer.clone()),
+                        ),
+                );
+            }
+            rows = rows.child(layers);
+        }
         return scroll_body(rows, p).into_any_element();
     }
     match summary {
@@ -972,31 +1199,39 @@ fn render_volume_detail(
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let (name, driver, mountpoint, created, labels, used_by) = if let Some(details) = details {
-        (
-            details.summary.name.clone(),
-            details.summary.driver.clone(),
-            details.summary.mountpoint.clone(),
-            details.summary.created.clone().unwrap_or_default(),
-            details.summary.labels.clone(),
-            details.used_by.clone(),
-        )
-    } else if let Some(summary) = summary {
-        (
-            summary.name.clone(),
-            summary.driver.clone(),
-            summary.mountpoint.clone(),
-            summary.created.clone().unwrap_or_default(),
-            summary.labels.clone(),
-            Vec::new(),
-        )
-    } else {
-        return centered_hint(
-            rust_i18n::t!("container.detail.no_selection").to_string(),
-            p,
-        );
-    };
+    let (name, driver, mountpoint, created, labels, options, used_by) =
+        if let Some(details) = details {
+            (
+                details.summary.name.clone(),
+                details.summary.driver.clone(),
+                details.summary.mountpoint.clone(),
+                details.summary.created.clone().unwrap_or_default(),
+                details.summary.labels.clone(),
+                details.summary.options.clone(),
+                details.used_by.clone(),
+            )
+        } else if let Some(summary) = summary {
+            (
+                summary.name.clone(),
+                summary.driver.clone(),
+                summary.mountpoint.clone(),
+                summary.created.clone().unwrap_or_default(),
+                summary.labels.clone(),
+                summary.options.clone(),
+                Vec::new(),
+            )
+        } else {
+            return centered_hint(
+                rust_i18n::t!("container.detail.no_selection").to_string(),
+                p,
+            );
+        };
     let labels = labels
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let options = options
         .iter()
         .map(|(key, value)| format!("{key}={value}"))
         .collect::<Vec<_>>()
@@ -1005,6 +1240,7 @@ fn render_volume_detail(
         .gap_1p5()
         .child(kv(p, rust_i18n::t!("container.field.name"), name))
         .child(kv(p, rust_i18n::t!("container.field.driver"), driver))
+        .child(kv(p, rust_i18n::t!("container.field.options"), options))
         .child(kv(
             p,
             rust_i18n::t!("container.field.mountpoint"),
@@ -1062,21 +1298,54 @@ fn render_network_detail(
         .iter()
         .map(|item| (item.name.clone(), item.ipv4.clone().unwrap_or_default()))
         .collect();
-    let rows = v_flex()
+    let mut rows = v_flex()
         .gap_1p5()
         .child(kv(p, rust_i18n::t!("container.field.id"), id))
         .child(kv(p, rust_i18n::t!("container.field.name"), name))
         .child(kv(p, rust_i18n::t!("container.field.driver"), driver))
         .child(kv(p, rust_i18n::t!("container.field.scope"), scope))
         .child(kv(p, rust_i18n::t!("container.field.subnet"), subnet))
-        .child(kv(p, rust_i18n::t!("container.field.gateway"), gateway))
-        .child(linked_containers(
-            tab_id,
-            rust_i18n::t!("container.field.connected").to_string(),
-            connected_items,
-            p,
-            cx,
-        ));
+        .child(kv(p, rust_i18n::t!("container.field.gateway"), gateway));
+    if let Some(details) = details {
+        let flag = |value: bool| {
+            rust_i18n::t!(if value {
+                "container.bool.yes"
+            } else {
+                "container.bool.no"
+            })
+            .to_string()
+        };
+        let labels = details
+            .labels
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        rows = rows
+            .child(kv(
+                p,
+                rust_i18n::t!("container.field.internal"),
+                flag(details.internal),
+            ))
+            .child(kv(
+                p,
+                rust_i18n::t!("container.field.attachable"),
+                flag(details.attachable),
+            ))
+            .child(kv(
+                p,
+                rust_i18n::t!("container.field.enable_ipv6"),
+                flag(details.enable_ipv6),
+            ))
+            .child(kv(p, rust_i18n::t!("container.field.labels"), labels));
+    }
+    rows = rows.child(linked_containers(
+        tab_id,
+        rust_i18n::t!("container.field.connected").to_string(),
+        connected_items,
+        p,
+        cx,
+    ));
     scroll_body(rows, p).into_any_element()
 }
 
@@ -1123,6 +1392,9 @@ fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShe
         .gap_2()
         .p_2()
         .items_center()
+        // 工具条与日志正文之间要有分隔线：两者背景同色，不留线时正文像浮在半空。
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .child(tails)
         .child(
             Button::new("container-logs-timestamps")
@@ -1216,12 +1488,23 @@ fn render_logs(view: ContainerLogsView<'_>, p: &Palette, cx: &mut Context<AppShe
 fn render_terminal(
     tab_id: TabId,
     terminal: Option<Entity<transom_terminal::TerminalView>>,
+    current_user: Option<Option<String>>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if let Some(terminal) = terminal {
         return div().size_full().child(terminal).into_any_element();
     }
+    let app = cx.entity().clone();
+    let root_app = app.clone();
+    let default_app = app.clone();
+    let user_tooltip = match &current_user {
+        Some(Some(user)) => {
+            rust_i18n::t!("container.terminal.current_user", user = user.as_str()).to_string()
+        }
+        Some(None) => rust_i18n::t!("container.terminal.current_default_user").to_string(),
+        None => rust_i18n::t!("container.terminal.as_user").to_string(),
+    };
     v_flex()
         .size_full()
         .items_center()
@@ -1234,121 +1517,61 @@ fn render_terminal(
                 .child(rust_i18n::t!("container.terminal.hint").to_string()),
         )
         .child(
-            Button::new("container-terminal-open")
-                .primary()
-                .small()
-                .icon(IconName::Terminal)
-                .label(rust_i18n::t!("container.terminal.open").to_string())
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.set_container_detail_tab(tab_id, ContainerDetailTab::Terminal, window, cx);
-                })),
-        )
-        .into_any_element()
-}
-
-fn render_stats(
-    tab_id: TabId,
-    stats: Option<&ContainerStats>,
-    enabled: bool,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
-    let toolbar = h_flex().gap_1().p_2().items_center().child(
-        Button::new("container-stats-auto")
-            .ghost()
-            .xsmall()
-            .icon(IconName::RefreshCw)
-            .label(rust_i18n::t!("container.stats.auto").to_string())
-            .selected(enabled)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_container_stats(tab_id, cx);
-            })),
-    );
-    let Some(stats) = stats else {
-        return v_flex()
-            .size_full()
-            .child(toolbar)
-            .child(centered_hint(
-                rust_i18n::t!("container.stats.waiting").to_string(),
-                p,
-            ))
-            .into_any_element();
-    };
-    let rows = v_flex()
-        .gap_3()
-        .child(stat_bar(
-            rust_i18n::t!("container.stats.cpu").to_string(),
-            format!("{:.2}%", stats.cpu_percent),
-            (stats.cpu_percent / 100.0).clamp(0.0, 1.0),
-            p,
-        ))
-        .child(stat_bar(
-            rust_i18n::t!("container.stats.memory").to_string(),
-            format!(
-                "{} / {}（{:.1}%）",
-                crate::format::format_size(stats.memory_used),
-                crate::format::format_size(stats.memory_limit),
-                stats.memory_percent
-            ),
-            (stats.memory_percent / 100.0).clamp(0.0, 1.0),
-            p,
-        ))
-        .child(stat_line(
-            p,
-            rust_i18n::t!("container.stats.network").to_string(),
-            format!(
-                "{} ↓ / {} ↑",
-                crate::format::format_size(stats.network_rx),
-                crate::format::format_size(stats.network_tx)
-            ),
-        ))
-        .child(stat_line(
-            p,
-            rust_i18n::t!("container.stats.block").to_string(),
-            format!(
-                "{} R / {} W",
-                crate::format::format_size(stats.block_read),
-                crate::format::format_size(stats.block_write)
-            ),
-        ))
-        .child(stat_line(
-            p,
-            rust_i18n::t!("container.stats.pids").to_string(),
-            stats.pids.to_string(),
-        ));
-    v_flex()
-        .size_full()
-        .child(toolbar)
-        .child(scroll_body(rows, p))
-        .into_any_element()
-}
-
-fn stat_bar(label: String, value: String, ratio: f32, p: &Palette) -> AnyElement {
-    v_flex()
-        .gap_1()
-        .child(
             h_flex()
-                .justify_between()
-                .child(div().text_sm().child(label))
-                .child(div().text_sm().text_color(p.muted_foreground).child(value)),
+                .gap_0()
+                .items_center()
+                .child(
+                    Button::new("container-terminal-open")
+                        .primary()
+                        .small()
+                        .icon(IconName::Terminal)
+                        .label(rust_i18n::t!("container.terminal.open").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_container_terminal_as(tab_id, None, cx);
+                        })),
+                )
+                .child(
+                    Button::new("container-terminal-open-menu")
+                        .small()
+                        .icon(IconName::ChevronDown)
+                        .tooltip(user_tooltip)
+                        .dropdown_menu(move |menu, _, _| {
+                            let root_app = root_app.clone();
+                            let default_app = default_app.clone();
+                            let menu_user = current_user.clone();
+                            menu.item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!("container.terminal.as_root").to_string(),
+                                )
+                                .icon(IconName::Terminal)
+                                .checked(matches!(&menu_user, Some(Some(user)) if user == "root"))
+                                .on_click(move |_, _, cx| {
+                                    let app = root_app.clone();
+                                    app.update(cx, |this, cx| {
+                                        this.open_container_terminal_as(
+                                            tab_id,
+                                            Some("root".to_string()),
+                                            cx,
+                                        );
+                                    });
+                                }),
+                            )
+                            .item(
+                                PopupMenuItem::new(
+                                    rust_i18n::t!("container.terminal.as_default").to_string(),
+                                )
+                                .icon(IconName::Terminal)
+                                .checked(matches!(&menu_user, Some(None)))
+                                .on_click(move |_, _, cx| {
+                                    let app = default_app.clone();
+                                    app.update(cx, |this, cx| {
+                                        this.open_container_terminal_as(tab_id, None, cx);
+                                    });
+                                }),
+                            )
+                        }),
+                ),
         )
-        .child(
-            div().h(px(6.0)).w_full().rounded_full().bg(p.muted).child(
-                div()
-                    .h_full()
-                    .w(relative(ratio))
-                    .rounded_full()
-                    .bg(p.primary),
-            ),
-        )
-        .into_any_element()
-}
-
-fn stat_line(p: &Palette, label: String, value: String) -> AnyElement {
-    h_flex()
-        .justify_between()
-        .child(div().text_sm().child(label))
-        .child(div().text_sm().text_color(p.muted_foreground).child(value))
         .into_any_element()
 }
 
@@ -1429,6 +1652,13 @@ fn render_rename_bar(
 struct ContainerHeaderView<'a> {
     section: ContainerSection,
     title: String,
+    /// 详情页签按钮组：容器分类有页签，直接占掉标题的位置（标题与中栏高亮行
+    /// 重复）；其它分类只有基础信息，页签为 `None`，仍显示标题。
+    tabs: Option<AnyElement>,
+    /// 基础信息当前是否显示原始 inspect：头部的小按钮用它显示选中态。
+    overview_raw: bool,
+    /// 当前详情页签：原始 inspect 按钮只在基础信息页出现。
+    detail_tab: ContainerDetailTab,
     container: &'a Option<ContainerSummary>,
     /// 容器详情：健康状态只有 inspect 才有，标题行要显示它。
     details: &'a Option<ContainerDetails>,
@@ -1593,6 +1823,7 @@ fn render_files(
             .then_with(|| left.name.cmp(&right.name))
     });
 
+    let app = cx.entity().clone();
     let mut list = v_flex().gap_0p5();
     if loading {
         list = list.child(
@@ -1602,6 +1833,43 @@ fn render_files(
                 .child(rust_i18n::t!("container.loading").to_string()),
         );
     }
+    // 目录列表顶部的 `..`：根目录也占同一行（置灰不可点），否则进出根目录时
+    // 整张列表会上下跳一行，看起来就是闪烁。
+    let at_root = current_path == "/";
+    let mut parent_row = h_flex()
+        .id("container-file-parent-row")
+        .gap_2()
+        .px_2()
+        .py_1()
+        .rounded(p.radius.md)
+        .items_center()
+        .child(
+            Icon::new(IconName::CornerLeftUp)
+                .small()
+                .text_color(p.muted_foreground),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_sm()
+                .text_color(if at_root {
+                    p.muted_foreground
+                } else {
+                    p.foreground
+                })
+                .child(".."),
+        );
+    if !at_root {
+        let parent = parent.clone();
+        parent_row = parent_row
+            .hover(|style| style.bg(p.muted.opacity(0.5)))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.load_container_dir(tab_id, parent.clone());
+                cx.notify();
+            }));
+    }
+    list = list.child(parent_row);
     for entry in ordered {
         let entry_path = entry.path.clone();
         let entry_name = entry.name.clone();
@@ -1698,13 +1966,13 @@ fn render_files(
                 let entry_path = entry_path.clone();
                 let entry_name = entry_name.clone();
                 move |this, _, window, cx| {
-                    let input =
-                        cx.new(|cx| InputState::new(window, cx).default_value(entry_name.clone()));
-                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
-                        workspace.files.rename_from = Some(entry_path.clone());
-                        workspace.files.rename_input = Some(input);
-                    }
-                    cx.notify();
+                    this.begin_container_file_rename(
+                        tab_id,
+                        entry_path.clone(),
+                        entry_name.clone(),
+                        window,
+                        cx,
+                    );
                 }
             })),
         );
@@ -1715,16 +1983,107 @@ fn render_files(
             .ghost()
             .xsmall()
             .icon(IconName::Trash)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(workspace) = this.container_workspace_mut(tab_id) {
-                    workspace.confirm = Some(ContainerConfirm::FilePath {
-                        path: entry_path.clone(),
-                        recursive: is_dir,
-                    });
+            .on_click(cx.listener({
+                let entry_path = entry_path.clone();
+                move |this, _, _, cx| {
+                    this.request_remove_container_path(tab_id, entry_path.clone(), is_dir, cx);
                 }
-                cx.notify();
             })),
         );
+        // 文件行右键菜单：与 SFTP 面板同样把「打开/预览、下载、改名、删除」收进来，
+        // 窄窗下不必再去找行尾那一排小图标。
+        let menu_app = app.clone();
+        let menu_path = entry_path.clone();
+        let menu_name = entry_name.clone();
+        let row = row
+            .context_menu(move |menu, _, _| {
+                let mut menu = menu;
+                if is_dir {
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(rust_i18n::t!("container.files.open").to_string())
+                            .icon(IconName::FolderOpen)
+                            .on_click(move |_, _, cx| {
+                                let app = app.clone();
+                                let path = path.clone();
+                                app.update(cx, |this, cx| {
+                                    this.load_container_dir(tab_id, path.clone());
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                } else {
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(rust_i18n::t!("container.files.preview").to_string())
+                            .icon(IconName::File)
+                            .on_click(move |_, _, cx| {
+                                let app = app.clone();
+                                let path = path.clone();
+                                app.update(cx, |this, cx| {
+                                    this.preview_container_file(tab_id, path.clone());
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(rust_i18n::t!("container.files.download").to_string())
+                            .icon(IconName::Download)
+                            .on_click(move |_, _, cx| {
+                                let app = app.clone();
+                                let path = path.clone();
+                                app.update(cx, |this, cx| {
+                                    this.download_container_file(tab_id, path.clone());
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                }
+                let app = menu_app.clone();
+                let path = menu_path.clone();
+                let name = menu_name.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(rust_i18n::t!("container.files.rename").to_string())
+                        .icon(IconName::Pen)
+                        .on_click(move |_, window, cx| {
+                            let app = app.clone();
+                            let path = path.clone();
+                            let name = name.clone();
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_rename(
+                                    tab_id,
+                                    path.clone(),
+                                    name.clone(),
+                                    window,
+                                    cx,
+                                );
+                            });
+                        }),
+                );
+                let app = menu_app.clone();
+                let path = menu_path.clone();
+                menu.item(PopupMenuItem::separator()).item(
+                    PopupMenuItem::new(rust_i18n::t!("common.delete").to_string())
+                        .icon(IconName::Trash)
+                        .on_click(move |_, _, cx| {
+                            let app = app.clone();
+                            let path = path.clone();
+                            app.update(cx, |this, cx| {
+                                this.request_remove_container_path(
+                                    tab_id,
+                                    path.clone(),
+                                    is_dir,
+                                    cx,
+                                );
+                            });
+                        }),
+                )
+            })
+            .into_any_element();
         list = list.child(row);
     }
     if entries.is_empty() && !loading {
@@ -1736,21 +2095,31 @@ fn render_files(
         );
     }
 
-    let mut body = v_flex().size_full().overflow_hidden().child(
-        v_flex()
-            .gap_1()
+    // 头部固定、列表撑满剩余高度：原先把滚动区写死 280px，下面留一大块空白，
+    // 滚到底时最后一行还贴着硬边界被截断。
+    let header = v_flex()
+        .gap_1()
+        .px_2()
+        .pt_2()
+        .pb_1p5()
+        .flex_none()
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .child(crumbs)
+        .children(mkdir_bar)
+        .children(rename_bar);
+    let mut body = v_flex().size_full().overflow_hidden().child(header).child(
+        div()
+            // 滚动 id 跟随目录：换目录时换一份滚动状态，既回到顶部，也避免
+            // 新列表较短时沿用旧偏移导致滚动区间越界。
+            .id(ElementId::Name(
+                format!("container-files-scroll-{current_path}").into(),
+            ))
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
             .p_2()
-            .flex_none()
-            .child(crumbs)
-            .children(mkdir_bar)
-            .children(rename_bar)
-            .child(
-                div()
-                    .id("container-files-scroll")
-                    .max_h(px(280.0))
-                    .overflow_y_scroll()
-                    .child(list),
-            ),
+            .child(list),
     );
     if let Some((path, content, truncated)) = preview {
         let mut header = h_flex().gap_2().items_center().justify_between().child(

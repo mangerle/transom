@@ -4,7 +4,10 @@
 //! 表单只负责编辑端点与名称；“测试连接”走控制器探测，不在 UI 线程建连接。
 
 use crate::app::AppShell;
-use crate::container::types::{ContainerFormState, ContainerRunForm, EndpointChoice};
+use crate::container::list::create_button_label;
+use crate::container::types::{
+    ContainerFormState, ContainerRunForm, ContainerSection, EndpointChoice,
+};
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::KeyDownEvent;
@@ -12,6 +15,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::*;
 use transom_core::{ContainerCommand, ContainerEngineKind, ContainerRequestId};
 
@@ -402,11 +406,18 @@ impl AppShell {
                     })),
             );
 
+        // 共用弹窗容器把高度上限写死在 640px（全应用 20 多处弹窗共用，改它影响面太
+        // 大），所以长表单在自己的框内滚动：页头与页脚留在外面，字段区超出就滚。
+        let body = div()
+            .id("container-run-body")
+            .max_h(px(440.0))
+            .overflow_y_scroll()
+            .child(content);
         let run_dialog = Self::dialog_frame(
             "container-run-modal",
             rust_i18n::t!("container.run.title").to_string(),
             None,
-            content,
+            body,
             Some(footer),
             px(560.0),
             p,
@@ -432,6 +443,127 @@ impl AppShell {
                 this.on_container_overlay_key(event, Some(tab_id_for_backdrop), cx);
             }))
             .child(div().occlude().child(run_dialog));
+        Self::overlay(backdrop, p)
+    }
+
+    /// 拉取镜像 / 新建数据卷 / 新建网络的弹窗。
+    ///
+    /// 设计原理（Why）：这三件事的输入都是「一个名字 + 可选驱动」，共用一个弹窗
+    /// 即可；主输入沿用工作区的 `create_input`，因此提交与校验路径和旧的底部输入行
+    /// 完全相同，只是入口从中栏底部移到了工具条。
+    pub(crate) fn render_container_create_dialog(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(dialog) = self.containers.create_dialog.clone() else {
+            return div().into_any_element();
+        };
+        let tab_id = dialog.tab_id;
+        let title = create_button_label(dialog.section)
+            .unwrap_or_else(|| rust_i18n::t!("container.create").to_string());
+        let name_label = if dialog.section == ContainerSection::Images {
+            rust_i18n::t!("container.run.image").to_string()
+        } else {
+            rust_i18n::t!("container.field.name").to_string()
+        };
+        let Some(workspace) = self.container_workspace(tab_id) else {
+            return div().into_any_element();
+        };
+        let create_input = workspace.create_input.clone();
+        let mut content = v_flex()
+            .gap_3()
+            .child(Self::form_field(name_label, create_input, p));
+        if let Some(driver) = dialog.driver.clone() {
+            content = content.child(Self::form_field(
+                rust_i18n::t!("container.field.driver").to_string(),
+                driver,
+                p,
+            ));
+        }
+        if let Some(subnet) = dialog.subnet.clone() {
+            content = content.child(Self::form_field(
+                rust_i18n::t!("container.field.subnet").to_string(),
+                subnet,
+                p,
+            ));
+        }
+        if let Some(gateway) = dialog.gateway.clone() {
+            content = content.child(Self::form_field(
+                rust_i18n::t!("container.field.gateway").to_string(),
+                gateway,
+                p,
+            ));
+        }
+        if dialog.section == ContainerSection::Networks {
+            content = content.child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        Checkbox::new("container-create-internal")
+                            .small()
+                            .checked(dialog.internal)
+                            .on_click(cx.listener(|this, &checked, _, cx| {
+                                if let Some(dialog) = this.containers.create_dialog.as_mut() {
+                                    dialog.internal = checked;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("container.create_dialog.internal").to_string()),
+                    ),
+            );
+        }
+
+        let footer = h_flex()
+            .gap_2()
+            .justify_end()
+            .child(
+                Button::new("container-create-cancel")
+                    .ghost()
+                    .label(rust_i18n::t!("common.cancel").to_string())
+                    .on_click(cx.listener(|this, _, _, cx| this.dismiss_container_create(cx))),
+            )
+            .child(
+                Button::new("container-create-submit")
+                    .primary()
+                    .icon(if dialog.section == ContainerSection::Images {
+                        IconName::Plus
+                    } else {
+                        IconName::Check
+                    })
+                    .label(title.clone())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.submit_container_create(tab_id, window, cx);
+                    })),
+            );
+
+        let frame = Self::dialog_frame(
+            "container-create-modal",
+            title,
+            None,
+            content,
+            Some(footer),
+            px(460.0),
+            p,
+        );
+        let backdrop = div()
+            .id("container-create-backdrop")
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_click(cx.listener(|this, _, _, cx| this.dismiss_container_create(cx)))
+            .key_context(keymap::OVERLAY_CONTEXT)
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                this.on_container_overlay_key(event, None, cx);
+            }))
+            .child(div().occlude().child(frame));
         Self::overlay(backdrop, p)
     }
 

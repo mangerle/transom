@@ -14,7 +14,8 @@ use serde::de::DeserializeOwned;
 use std::time::Duration;
 use tokio::process::Command;
 use transom_core::{
-    ContainerEngineKind, ContainerImageSummary, ContainerState, ContainerSummary, short_id,
+    ContainerEngineKind, ContainerImageSummary, ContainerProcess, ContainerState, ContainerSummary,
+    short_id,
 };
 
 /// CLI 单次命令超时；拉取镜像与日志跟随不走这里。
@@ -255,6 +256,7 @@ impl CliBackend {
             .inspect_value::<crate::models::ContainerInspect>(&[
                 "container".to_string(),
                 "inspect".to_string(),
+                "--size".to_string(),
                 container.to_string(),
             ])
             .await?;
@@ -265,14 +267,102 @@ impl CliBackend {
         &self,
         image: &str,
     ) -> Result<transom_core::ContainerImageDetails, ContainerError> {
-        let (inspect, _raw) = self
+        let (inspect, raw) = self
             .inspect_value::<crate::models::ImageInspect>(&[
                 "image".to_string(),
                 "inspect".to_string(),
                 image.to_string(),
             ])
             .await?;
-        Ok(inspect.into_details())
+        Ok(inspect.into_details(raw))
+    }
+
+    /// 容器内进程列表。
+    ///
+    /// `docker top` 只有表格输出，是 CLI 兜底里唯一没有 `--format json` 的
+    /// 端点；这里按表头定位列，容器内 `ps` 不支持 `aux` 时明确报「不支持」，
+    /// 而不是猜列位。
+    pub async fn list_processes(
+        &self,
+        container: &str,
+    ) -> Result<Vec<ContainerProcess>, ContainerError> {
+        let stdout = self
+            .run_checked(&["top".to_string(), container.to_string(), "aux".to_string()])
+            .await?;
+        let mut lines = stdout.lines().filter(|line| !line.trim().is_empty());
+        let header = lines.next().ok_or_else(|| ContainerError::Unsupported {
+            operation: "列出容器进程（容器内 ps 没有输出）".to_string(),
+        })?;
+        let columns: Vec<&str> = header.split_whitespace().collect();
+        let column = |name: &str| {
+            columns
+                .iter()
+                .position(|title| title.eq_ignore_ascii_case(name))
+        };
+        let pid = column("PID");
+        let user = column("USER");
+        let cpu = column("%CPU");
+        let mem = column("%MEM");
+        let command = column("COMMAND")
+            .or_else(|| column("CMD"))
+            .or_else(|| column("ARGS"));
+        let (Some(command_index), Some(_)) = (command, pid) else {
+            return Err(ContainerError::Unsupported {
+                operation: "列出容器进程（容器内 ps 不支持 aux 列）".to_string(),
+            });
+        };
+        Ok(lines
+            .filter_map(|line| {
+                let cells: Vec<&str> = line.split_whitespace().collect();
+                let cell = |index: Option<usize>| {
+                    index
+                        .and_then(|index| cells.get(index))
+                        .map(|value| value.to_string())
+                        .unwrap_or_default()
+                };
+                Some(ContainerProcess {
+                    pid: cell(pid),
+                    user: cell(user),
+                    cpu_percent: cell(cpu).parse().unwrap_or(0.0),
+                    mem_percent: cell(mem).parse().unwrap_or(0.0),
+                    command: cells.get(command_index..)?.join(" "),
+                })
+            })
+            .collect())
+    }
+
+    /// 清理悬空镜像：先列出 dangling 镜像 ID，再逐个删除。
+    ///
+    /// 设计原理（Why）：不跑 `docker image prune -f`——它输出人类可读列表，
+    /// 与本模块「只解析机器可读输出」的约定冲突。`image ls -q -f
+    /// dangling=true` 给出的是纯 ID，删除复用既有的 `rmi` 路径。
+    ///
+    /// # Errors
+    /// 列出失败或某个镜像删除失败时返回 [`ContainerError`]；已删除的不回滚。
+    pub async fn prune_images(&self) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        let stdout = self
+            .run_checked(&[
+                "image".to_string(),
+                "ls".to_string(),
+                "-q".to_string(),
+                "-f".to_string(),
+                "dangling=true".to_string(),
+            ])
+            .await?;
+        let mut deleted = Vec::new();
+        for id in stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+        {
+            self.run_checked(&["rmi".to_string(), "--force".to_string(), id.to_string()])
+                .await?;
+            deleted.push(transom_core::short_id(id));
+        }
+        Ok(transom_core::ContainerPruneReport {
+            deleted,
+            reclaimed: 0,
+        })
     }
 
     pub async fn list_volumes(
@@ -302,7 +392,7 @@ impl CliBackend {
         &self,
         name: &str,
     ) -> Result<transom_core::ContainerVolumeDetails, ContainerError> {
-        let (item, _raw) = self
+        let (item, raw) = self
             .inspect_value::<crate::models::VolumeItem>(&[
                 "volume".to_string(),
                 "inspect".to_string(),
@@ -313,6 +403,7 @@ impl CliBackend {
             summary: item.into_summary(),
             // CLI 列表不携带挂载信息，占用容器留给 HTTP 后端展示。
             used_by: Vec::new(),
+            inspect: raw,
         })
     }
 
@@ -337,6 +428,42 @@ impl CliBackend {
         }
         args.push(name.to_string());
         self.run_checked(&args).await.map(|_| ())
+    }
+
+    /// 清理未被任何容器使用的数据卷。
+    ///
+    /// 设计原理（Why）：不跑 `docker volume prune`——它的输出是人类可读列表，
+    /// 而本模块的约定是只解析机器可读输出。这里改用 `volume ls -q
+    /// -f dangling=true` 拿到未使用卷名（真机实测：具名卷也算 dangling，正在
+    /// 被挂载的卷不会出现），再逐个 `volume rm`，回收量因此拿不到，报 0。
+    ///
+    /// # Errors
+    /// 列出或某个卷删除失败时返回 [`ContainerError`]；已删除成功的部分不回滚。
+    pub async fn prune_volumes(
+        &self,
+    ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        let stdout = self
+            .run_checked(&[
+                "volume".to_string(),
+                "ls".to_string(),
+                "-q".to_string(),
+                "-f".to_string(),
+                "dangling=true".to_string(),
+            ])
+            .await?;
+        let mut deleted = Vec::new();
+        for name in stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+        {
+            self.remove_volume(name, false).await?;
+            deleted.push(name.to_string());
+        }
+        Ok(transom_core::ContainerPruneReport {
+            deleted,
+            reclaimed: 0,
+        })
     }
 
     pub async fn list_networks(
@@ -366,27 +493,35 @@ impl CliBackend {
         &self,
         network: &str,
     ) -> Result<transom_core::ContainerNetworkDetails, ContainerError> {
-        let (item, _raw) = self
+        let (item, raw) = self
             .inspect_value::<crate::models::NetworkItem>(&[
                 "network".to_string(),
                 "inspect".to_string(),
                 network.to_string(),
             ])
             .await?;
-        Ok(item.into_details())
+        Ok(item.into_details(raw))
     }
 
     pub async fn create_network(
         &self,
-        name: &str,
-        driver: Option<&str>,
+        spec: &transom_core::ContainerNetworkSpec,
     ) -> Result<(), ContainerError> {
         let mut args = vec!["network".to_string(), "create".to_string()];
-        if let Some(driver) = driver {
-            args.push("--driver".to_string());
-            args.push(driver.to_string());
+        for (flag, value) in [
+            ("--driver", spec.driver.as_deref()),
+            ("--subnet", spec.subnet.as_deref()),
+            ("--gateway", spec.gateway.as_deref()),
+        ] {
+            if let Some(value) = value {
+                args.push(flag.to_string());
+                args.push(value.to_string());
+            }
         }
-        args.push(name.to_string());
+        if spec.internal {
+            args.push("--internal".to_string());
+        }
+        args.push(spec.name.clone());
         self.run_checked(&args).await.map(|_| ())
     }
 
@@ -610,6 +745,7 @@ impl CliStats {
         let (memory_used, memory_limit) = parse_size_pair(&self.memory);
         let (network_rx, network_tx) = parse_size_pair(&self.network);
         let (block_read, block_write) = parse_size_pair(&self.block);
+        // CLI 的 `stats --format json` 只给汇总值，没有每核/分设备明细。
         transom_core::ContainerStats {
             cpu_percent: parse_percent(&self.cpu_percent),
             memory_used,
@@ -620,6 +756,7 @@ impl CliStats {
             block_read,
             block_write,
             pids: self.pids.trim().parse().unwrap_or(0),
+            ..transom_core::ContainerStats::default()
         }
     }
 }

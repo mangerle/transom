@@ -13,8 +13,8 @@ use crate::ids::{ConnectionId, ContainerRequestId, SessionId, TabId, TransferId}
 use crate::model::container::{
     ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerEngineProfile,
     ContainerFileEntry, ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails,
-    ContainerNetworkSummary, ContainerStats, ContainerSummary, ContainerVolumeDetails,
-    ContainerVolumeSummary,
+    ContainerNetworkSummary, ContainerProcess, ContainerPruneReport, ContainerStats,
+    ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary,
 };
 use crate::model::forward::ForwardStatus;
 use crate::model::host::HostOutcome;
@@ -295,6 +295,16 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         details: Box<ContainerVolumeDetails>,
     },
+    /// 清理未使用数据卷的结果：删了哪些、回收多少，界面要如实回报。
+    VolumesPruned {
+        request_id: ContainerRequestId,
+        report: ContainerPruneReport,
+    },
+    /// 清理悬空镜像的结果。
+    ImagesPruned {
+        request_id: ContainerRequestId,
+        report: ContainerPruneReport,
+    },
     NetworksListed {
         request_id: ContainerRequestId,
         networks: Vec<ContainerNetworkSummary>,
@@ -327,6 +337,10 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         container: String,
         stats: ContainerStats,
+    },
+    ProcessesListed {
+        request_id: ContainerRequestId,
+        processes: Vec<ContainerProcess>,
     },
     DirListed {
         request_id: ContainerRequestId,

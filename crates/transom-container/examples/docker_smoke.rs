@@ -34,8 +34,8 @@ use transom_container::{
 use transom_core::{
     ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec, ContainerDetails,
     ContainerEndpoint, ContainerEngineKind, ContainerFileEntry, ContainerFileKind,
-    ContainerLifecycleAction, ContainerPortPublish, ContainerState, ContainerStats,
-    ContainerSummary, TerminalIo, TerminalSize, short_id,
+    ContainerLifecycleAction, ContainerNetworkSpec, ContainerPortPublish, ContainerState,
+    ContainerStats, ContainerSummary, TerminalIo, TerminalSize, short_id,
 };
 
 const DEFAULT_CONTAINER: &str = "transom-smoke";
@@ -891,12 +891,59 @@ async fn volume_stage(engine: &Engine, report: &mut Report) {
         Ok(()) => report.pass("删除数据卷", name.to_string()),
         Err(error) => report.fail("删除数据卷", error.to_string()),
     }
+    prune_stage(engine, report).await;
+}
+
+/// 清理未使用卷：刚创建的游离卷应当被回收，被运行中容器挂载的夹具卷必须保住。
+///
+/// 这条断言是真实语义的回归护栏：Docker 的 prune 默认只清匿名卷，必须带
+/// `all=true` 过滤才会回收具名卷（实测不带过滤返回空列表）；而过滤条件放进
+/// 请求体会被静默忽略，只能走查询参数。
+async fn prune_stage(engine: &Engine, report: &mut Report) {
+    const THROWAWAY: &str = "transom-smoke-prune";
+    const IN_USE: &str = "transom-smoke-vol";
+    if timed("创建待清理卷", engine.create_volume(THROWAWAY, None))
+        .await
+        .is_err()
+    {
+        report.fail("创建待清理卷", "引擎拒绝了创建请求");
+        return;
+    }
+    match timed("清理未使用卷", engine.prune_volumes()).await {
+        Ok(outcome) => {
+            let cleaned = outcome.deleted.iter().any(|item| item == THROWAWAY);
+            let kept = !outcome.deleted.iter().any(|item| item == IN_USE);
+            if cleaned && kept {
+                report.pass(
+                    "清理未使用卷",
+                    format!(
+                        "回收 {} 个，{} 字节",
+                        outcome.deleted.len(),
+                        outcome.reclaimed
+                    ),
+                );
+            } else {
+                report.fail(
+                    "清理未使用卷",
+                    format!(
+                        "待清理卷命中={cleaned}，在用夹具卷保住={kept}，实际删除 {:?}",
+                        outcome.deleted
+                    ),
+                );
+            }
+        }
+        Err(error) => report.fail("清理未使用卷", error.to_string()),
+    }
 }
 
 /// 网络：创建、详情、删除。
 async fn network_stage(engine: &Engine, report: &mut Report) {
     let name = "transom-smoke-net2";
-    if timed("创建网络", engine.create_network(name, None))
+    let spec = ContainerNetworkSpec {
+        name: name.to_string(),
+        ..ContainerNetworkSpec::default()
+    };
+    if timed("创建网络", engine.create_network(&spec))
         .await
         .is_err()
     {

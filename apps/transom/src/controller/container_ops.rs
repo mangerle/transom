@@ -370,6 +370,22 @@ pub(super) fn handle_container_command(
         } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
             engine.remove_volume(&name, force).await
         }),
+        ContainerCommand::PruneVolumes { tab_id, request_id } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            |engine| async move { engine.prune_volumes().await },
+            |request_id, report| ContainerAppEvent::VolumesPruned { request_id, report },
+        ),
+        ContainerCommand::PruneImages { tab_id, request_id } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            |engine| async move { engine.prune_images().await },
+            |request_id, report| ContainerAppEvent::ImagesPruned { request_id, report },
+        ),
         ContainerCommand::ListNetworks { tab_id, request_id } => one_shot(
             state,
             ctx,
@@ -399,10 +415,9 @@ pub(super) fn handle_container_command(
         ContainerCommand::CreateNetwork {
             tab_id,
             request_id,
-            name,
-            driver,
+            spec,
         } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
-            engine.create_network(&name, driver.as_deref()).await
+            engine.create_network(&spec).await
         }),
         ContainerCommand::RemoveNetwork {
             tab_id,
@@ -462,14 +477,17 @@ pub(super) fn handle_container_command(
             request_id,
             container,
             enabled,
+            interval_ms,
         } => {
             if !enabled {
                 cancel_task(state, ctx, tab_id, request_id);
                 return;
             }
             let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                log::warn!("容器统计未能启动，容器: {container}，标签: {tab_id}");
                 return;
             };
+            log::info!("容器统计轮询已启动，容器: {container}，间隔: {interval_ms}ms");
             let event_tx = ctx.event_tx.clone();
             spawn_long(
                 state,
@@ -478,15 +496,60 @@ pub(super) fn handle_container_command(
                 request_id,
                 Arc::clone(&cancel),
                 async move {
-                    let mut ticker = tokio::time::interval(Duration::from_secs(3));
+                    // 采样档位由界面下发；下限 500ms，避免异常配置把引擎打满。
+                    let interval = Duration::from_millis(interval_ms.max(500));
+                    let mut ticker = tokio::time::interval(interval);
                     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    let mut tick: u64 = 0;
                     loop {
                         ticker.tick().await;
                         if cancel.load(Ordering::Relaxed) {
                             break;
                         }
-                        match engine.container_stats(&container, &cancel).await {
-                            Ok(stats) => {
+                        if tick == 0 {
+                            log::info!("容器统计首帧采样开始，容器: {container}");
+                        }
+                        // 采样是外部 I/O：引擎挂起时必须超时退出，否则页签永远停在
+                        // 「正在采样统计…」而没有任何反馈。
+                        let sampled = tokio::time::timeout(
+                            Duration::from_secs(8),
+                            engine.container_stats(&container, &cancel),
+                        )
+                        .await
+                        .unwrap_or_else(|_| {
+                            Err(transom_container::ContainerError::Http {
+                                operation: "采样容器统计".to_string(),
+                                message: "请求超时".to_string(),
+                            })
+                        });
+                        match sampled {
+                            Ok(mut stats) => {
+                                // 宿主负载不在 Docker stats 里。只对「本机引擎」读宿主
+                                // /proc/loadavg：容器归档接口不允许 /proc，远端引擎
+                                // 读到的还是本机负载，会误导，因此直接留空。
+                                if tick.is_multiple_of(5)
+                                    && is_local_engine(&engine)
+                                    && let Ok(Ok(text)) = tokio::time::timeout(
+                                        Duration::from_secs(1),
+                                        tokio::fs::read_to_string("/proc/loadavg"),
+                                    )
+                                    .await
+                                {
+                                    stats.host_load = parse_loadavg(text.as_bytes());
+                                }
+                                if tick == 0 {
+                                    log::info!(
+                                        "容器统计首帧已采样，容器: {container}，CPU: {:.1}%",
+                                        stats.cpu_percent
+                                    );
+                                }
+                                tick = tick.saturating_add(1);
+                                log::debug!(
+                                    "容器统计采样，容器: {}，第 {} 次，宿主负载: {:?}",
+                                    container,
+                                    tick,
+                                    stats.host_load
+                                );
                                 let _ = event_tx.try_send(
                                     ContainerAppEvent::StatsUpdated {
                                         request_id,
@@ -506,6 +569,21 @@ pub(super) fn handle_container_command(
                 },
             );
         }
+        ContainerCommand::ListProcesses {
+            tab_id,
+            request_id,
+            container,
+        } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine| async move { engine.list_processes(&container).await },
+            |request_id, processes| ContainerAppEvent::ProcessesListed {
+                request_id,
+                processes,
+            },
+        ),
         ContainerCommand::ListDir {
             tab_id,
             request_id,
@@ -896,6 +974,24 @@ fn spawn_long(
         Some(workspace) => workspace.insert_task(request_id, cancel, handle),
         None => handle.abort(),
     }
+}
+
+/// 引擎是否跑在本机：只有本机引擎的宿主负载与本机一致。
+fn is_local_engine(engine: &transom_container::Engine) -> bool {
+    matches!(
+        engine.info.engine.endpoint,
+        transom_core::ContainerEndpoint::Unix { .. } | transom_core::ContainerEndpoint::Cli { .. }
+    )
+}
+
+/// 解析 `/proc/loadavg` 的前三个字段；格式不符时返回 `None`。
+fn parse_loadavg(bytes: &[u8]) -> Option<(f32, f32, f32)> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let mut fields = text.split_whitespace();
+    let one = fields.next()?.parse().ok()?;
+    let five = fields.next()?.parse().ok()?;
+    let fifteen = fields.next()?.parse().ok()?;
+    Some((one, five, fifteen))
 }
 
 fn engine_for(

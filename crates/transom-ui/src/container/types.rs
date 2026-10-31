@@ -4,22 +4,26 @@
 //! 与 exec 终端都放在同一个结构里；事件按 `request_id` 找到所属标签后直接
 //! 更新对应字段，界面不需要维护额外的订阅表。
 
+use crate::monitor::{SampleIntervalMode, SparklineChartType};
 use gpui_kit::Entity;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use transom_core::{
     ComposeProject, ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
     ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
     ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails, ContainerNetworkSummary,
-    ContainerPortPublish, ContainerRequestId, ContainerStats, ContainerSummary,
+    ContainerPortPublish, ContainerProcess, ContainerRequestId, ContainerStats, ContainerSummary,
     ContainerVolumeDetails, ContainerVolumeSummary, EngineProfileId, TabId,
 };
 use transom_terminal::TerminalView;
 
 /// 日志缓冲上限：超出后丢弃最旧部分，避免长时间跟随把内存吃满。
 pub(crate) const LOG_BUFFER_LIMIT: usize = 512 * 1024;
+
+/// 统计历史窗口：与主机监控走势图槽位一致，约两分钟（3 秒采样）。
+pub(crate) const STATS_HISTORY_LIMIT: usize = 40;
 /// 默认只取尾部 500 行：一次性拉全量日志会把大容器的输出灌进界面缓冲。
 pub(crate) const LOG_TAIL_DEFAULT: usize = 500;
 /// 日志尾部行数档位：与 Portainer/lazydocker 的取数习惯一致。
@@ -456,6 +460,9 @@ pub(crate) enum ContainerWorkspaceStatus {
 /// 容器内 exec 终端。
 pub(crate) struct ContainerTerminalState {
     pub(crate) view: Entity<TerminalView>,
+    /// 建立时选择的执行用户：`None` 是镜像默认用户。切换用户要重建会话，
+    /// 因此必须记住当前会话用的是谁。
+    pub(crate) user: Option<String>,
     pub(crate) _subscription: Subscription,
 }
 
@@ -465,6 +472,8 @@ pub(crate) struct ContainerFilesState {
     pub(crate) path: String,
     pub(crate) entries: Vec<ContainerFileEntry>,
     pub(crate) loading: bool,
+    /// 在途的目录列表请求：目录切换可能连点，旧请求的结果必须丢弃。
+    pub(crate) request: Option<ContainerRequestId>,
     /// 当前预览：路径、内容、是否截断。
     pub(crate) preview: Option<(String, String, bool)>,
     /// 正在重命名的源路径；`None` 表示不显示重命名条。
@@ -519,6 +528,8 @@ pub(crate) struct ContainerWorkspaceState {
     /// 当前选中项标识：容器 ID、镜像 ID、卷名、网络 ID 或项目名。
     pub(crate) selected: Option<String>,
     pub(crate) detail_tab: ContainerDetailTab,
+    /// 基础信息页签是否切到原始 inspect：两者数据重叠，同一时刻只给一种视图。
+    pub(crate) overview_raw: bool,
     pub(crate) details: Option<ContainerDetails>,
     pub(crate) image_details: Option<ContainerImageDetails>,
     pub(crate) volume_details: Option<ContainerVolumeDetails>,
@@ -533,8 +544,23 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) logs_reversed: bool,
     pub(crate) logs_request: Option<ContainerRequestId>,
     pub(crate) stats: Option<ContainerStats>,
+    /// 历史采样：统计页的走势图参考主机监控，只留最后一帧就只能画一个点。
+    pub(crate) stats_history: VecDeque<ContainerStats>,
+    /// 走势图形态（折线/柱状），与主机监控同一套组件。
+    pub(crate) stats_chart: SparklineChartType,
+    /// 采样档位：与主机监控相同的 1s/3s/10s。
+    pub(crate) stats_interval: SampleIntervalMode,
+    /// 容器进程列表（`ps aux` 口径）。
+    pub(crate) stats_processes: Vec<ContainerProcess>,
+    pub(crate) stats_processes_request: Option<ContainerRequestId>,
+    pub(crate) stats_processes_loading: bool,
+    pub(crate) stats_processes_error: Option<String>,
     pub(crate) stats_request: Option<ContainerRequestId>,
+    /// 采样失败原因：没有它，页签会永远停在「正在采样统计…」不给任何出口。
+    pub(crate) stats_error: Option<String>,
     pub(crate) terminal: Option<ContainerTerminalState>,
+    /// 正在建立的终端会话与所选用户：建立前连点页签会重复创建 exec，必须占位拦住。
+    pub(crate) terminal_request: Option<(ContainerRequestId, Option<String>)>,
     pub(crate) files: ContainerFilesState,
     /// 多选：勾选的容器 ID，用于批量启停与删除。
     pub(crate) checked: HashSet<String>,
@@ -544,10 +570,10 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) rename_container: Option<(String, Entity<InputState>)>,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
-    /// 统计是否自动刷新（引擎侧轮询）。
-    pub(crate) stats_enabled: bool,
     /// 待确认的删除动作。
     pub(crate) confirm: Option<ContainerConfirm>,
+    /// 已按下一次「清理」、等待第二次确认的目标。
+    pub(crate) prune_armed: Option<ContainerPruneTarget>,
     /// 最近一条操作结果/错误提示。
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
@@ -599,6 +625,7 @@ impl ContainerWorkspaceState {
             compose: Vec::new(),
             selected: None,
             detail_tab: ContainerDetailTab::Overview,
+            overview_raw: false,
             details: None,
             image_details: None,
             volume_details: None,
@@ -610,19 +637,28 @@ impl ContainerWorkspaceState {
             logs_reversed: false,
             logs_request: None,
             stats: None,
+            stats_history: VecDeque::with_capacity(STATS_HISTORY_LIMIT),
+            stats_chart: SparklineChartType::default(),
+            stats_interval: SampleIntervalMode::Normal,
+            stats_processes: Vec::new(),
+            stats_processes_request: None,
+            stats_processes_loading: false,
+            stats_processes_error: None,
             stats_request: None,
+            stats_error: None,
             terminal: None,
+            terminal_request: None,
             rename_container: None,
             checked: HashSet::default(),
             batch_armed: false,
             pending_select: None,
-            stats_enabled: true,
             files: ContainerFilesState {
                 new_dir_open: false,
                 new_dir_input: None,
                 ..ContainerFilesState::default()
             },
             confirm: None,
+            prune_armed: None,
             notice: None,
             busy: false,
             _search_subscription: search_subscription,
@@ -717,7 +753,15 @@ impl ContainerWorkspaceState {
         self.volume_details = None;
         self.network_details = None;
         self.detail_tab = ContainerDetailTab::Overview;
+        self.overview_raw = false;
+        self.stats = None;
+        self.stats_history.clear();
+        self.stats_error = None;
+        self.stats_processes.clear();
+        self.stats_processes_error = None;
+        self.stats_processes_loading = false;
         self.confirm = None;
+        self.prune_armed = None;
         self.checked.clear();
         self.batch_armed = false;
         self.rename_container = None;
@@ -726,6 +770,63 @@ impl ContainerWorkspaceState {
             self.sort_desc = false;
         }
         self.normalize_detail_tab();
+    }
+}
+
+/// 拉取/新建弹窗的状态。
+///
+/// 设计原理（Why）：原先把输入框常驻在中栏底部，三个分类各占一行高度却几乎
+/// 用不到（真实窗口实测：用户要求去掉底部新增行）。改成按需弹窗后，主输入仍
+/// 复用工作区的 `create_input`（校验与提交路径不变），弹窗只多带一个驱动输入。
+#[derive(Clone)]
+pub(crate) struct ContainerCreateDialog {
+    pub(crate) tab_id: TabId,
+    pub(crate) section: ContainerSection,
+    /// 驱动输入：数据卷与网络有，镜像拉取没有。
+    pub(crate) driver: Option<Entity<InputState>>,
+    /// 子网与网关：只有网络需要；留空由引擎分配。
+    pub(crate) subnet: Option<Entity<InputState>>,
+    pub(crate) gateway: Option<Entity<InputState>>,
+    /// 仅宿主机内部可见（`--internal`）。
+    pub(crate) internal: bool,
+}
+
+/// 一键清理的目标：卷与镜像各自独立待确认。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContainerPruneTarget {
+    Volumes,
+    Images,
+}
+
+impl ContainerPruneTarget {
+    /// 工具条按钮文案：清理对象不同，不能共用一句「清理」。
+    pub(crate) fn button_label_key(self) -> &'static str {
+        match self {
+            Self::Volumes => "container.prune.volumes",
+            Self::Images => "container.prune.images",
+        }
+    }
+
+    pub(crate) fn hint_key(self) -> &'static str {
+        match self {
+            Self::Volumes => "container.prune.hint",
+            Self::Images => "container.prune.images_hint",
+        }
+    }
+
+    /// 清理结果的「有删除」与「无删除」文案，避免镜像结果显示成数据卷。
+    pub(crate) fn done_key(self) -> &'static str {
+        match self {
+            Self::Volumes => "container.prune.done",
+            Self::Images => "container.prune.images_done",
+        }
+    }
+
+    pub(crate) fn none_key(self) -> &'static str {
+        match self {
+            Self::Volumes => "container.prune.none",
+            Self::Images => "container.prune.images_none",
+        }
     }
 }
 
@@ -744,8 +845,10 @@ pub(crate) struct ContainerUiState {
     pub(crate) fullscreen: Option<TabId>,
     /// 运行容器表单。
     pub(crate) run_form: Option<ContainerRunForm>,
-    /// 请求 ID → 所属工作区标签；事件按它路由。
-    pub(crate) requests: HashMap<ContainerRequestId, TabId>,
+    /// 拉取镜像 / 新建卷 / 新建网络的弹窗：字段随分类不同。
+    pub(crate) create_dialog: Option<ContainerCreateDialog>,
+    /// 请求 ID → 所属工作区标签与动作描述；事件按它路由。
+    pub(crate) requests: HashMap<ContainerRequestId, ContainerRequest>,
     /// 最近一次「发现本机引擎」的结果面板。
     pub(crate) discovery: Option<ContainerDiscovery>,
     /// 正在进行的发现请求，避免连点重复探测。
@@ -759,17 +862,47 @@ pub(crate) struct ContainerUiState {
 }
 
 impl ContainerUiState {
-    pub(crate) fn track(&mut self, request_id: ContainerRequestId, tab_id: TabId) {
-        self.requests.insert(request_id, tab_id);
+    pub(crate) fn track(
+        &mut self,
+        request_id: ContainerRequestId,
+        tab_id: TabId,
+        label: Option<String>,
+    ) {
+        self.requests.insert(
+            request_id,
+            ContainerRequest {
+                tab_id,
+                label: label.filter(|label| !label.is_empty()),
+            },
+        );
     }
 
     pub(crate) fn take_tab(&mut self, request_id: ContainerRequestId) -> Option<TabId> {
-        self.requests.remove(&request_id)
+        self.requests
+            .remove(&request_id)
+            .map(|request| request.tab_id)
     }
 
     pub(crate) fn tab_of(&self, request_id: ContainerRequestId) -> Option<TabId> {
-        self.requests.get(&request_id).copied()
+        self.requests.get(&request_id).map(|request| request.tab_id)
     }
+
+    /// 取回发送时登记的动作描述（不消费记录）：结果事件用它拼提示文案。
+    pub(crate) fn label_of(&self, request_id: ContainerRequestId) -> Option<String> {
+        self.requests
+            .get(&request_id)
+            .and_then(|request| request.label.clone())
+    }
+}
+
+/// 一条在途请求的路由信息。
+///
+/// 设计原理（Why）：结果事件只带 `request_id`，要给出「启动 web-1 成功」这样的
+/// 可读提示，就得在发送时把动作描述一起登记；只读请求（列表、inspect、日志）
+/// 的 `label` 为空，成功时不弹提示，避免每次刷新都糊一条 toast。
+pub(crate) struct ContainerRequest {
+    pub(crate) tab_id: TabId,
+    pub(crate) label: Option<String>,
 }
 
 /// 端点输入档位。

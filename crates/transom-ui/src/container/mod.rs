@@ -3,6 +3,8 @@
 mod detail;
 mod form;
 mod list;
+mod stats;
+mod toast;
 mod types;
 mod view;
 
@@ -13,14 +15,18 @@ pub(crate) use types::{
 };
 
 use crate::app::{AppShell, TabContent, TabStatus, TerminalTab};
-use crate::container::types::{arm_or_fire, row_key};
+use crate::container::toast::{command_toast_label, toast_failed, toast_succeeded};
+use crate::container::types::{
+    ContainerCreateDialog, ContainerPruneTarget, STATS_HISTORY_LIMIT, arm_or_fire, row_key,
+};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::{
     Connection, ContainerAppEvent, ContainerCommand, ContainerConnection, ContainerEngineProfile,
-    ContainerLifecycleAction, ContainerRequestId, Session, TabId, TerminalSize,
+    ContainerLifecycleAction, ContainerNetworkSpec, ContainerRequestId, Session, TabId,
+    TerminalSize,
 };
 use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
 
@@ -48,8 +54,10 @@ impl AppShell {
                 let message = localized_error(&error);
                 if let Some(workspace) = self.container_workspace_mut(tab_id) {
                     workspace.status = ContainerWorkspaceStatus::Failed(message.clone());
-                    workspace.notice = Some(message);
                 }
+                // 连接失败既要让工作区停在失败态（重试按钮在那里），也要在右上角
+                // 立刻说一声：标签可能不在前台，只靠面板状态用户看不到出了事。
+                self.show_toast(message, false, window, cx);
                 if let Some(tab) = self.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Failed(error);
                 }
@@ -281,8 +289,14 @@ impl AppShell {
                 let (terminal, subscription) =
                     self.create_container_terminal(*io, tab_id, window, cx);
                 if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    let user = workspace
+                        .terminal_request
+                        .take()
+                        .map(|(_, user)| user)
+                        .unwrap_or(None);
                     workspace.terminal = Some(ContainerTerminalState {
                         view: terminal,
+                        user,
                         _subscription: subscription,
                     });
                     workspace.detail_tab = ContainerDetailTab::Terminal;
@@ -318,10 +332,30 @@ impl AppShell {
                 let Some(tab_id) = self.containers.tab_of(request_id) else {
                     return;
                 };
+                log::debug!("收到容器统计更新，请求: {request_id}");
                 if let Some(workspace) = self.container_workspace_mut(tab_id)
                     && workspace.stats_request == Some(request_id)
                 {
+                    workspace.stats_history.push_back(stats.clone());
+                    while workspace.stats_history.len() > STATS_HISTORY_LIMIT {
+                        workspace.stats_history.pop_front();
+                    }
                     workspace.stats = Some(stats);
+                    workspace.stats_error = None;
+                }
+            }
+            ContainerAppEvent::ProcessesListed {
+                request_id,
+                processes,
+            } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.stats_processes_request = None;
+                    workspace.stats_processes_loading = false;
+                    workspace.stats_processes = processes;
+                    workspace.stats_processes_error = None;
                 }
             }
             ContainerAppEvent::DirListed {
@@ -332,7 +366,11 @@ impl AppShell {
                 let Some(tab_id) = self.containers.take_tab(request_id) else {
                     return;
                 };
-                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                if let Some(workspace) = self.container_workspace_mut(tab_id)
+                    && workspace.files.request == Some(request_id)
+                {
+                    log::info!("容器目录已加载，路径: {path}，条目: {}", entries.len());
+                    workspace.files.request = None;
                     workspace.files.path = path;
                     workspace.files.entries = entries;
                     workspace.files.loading = false;
@@ -371,40 +409,82 @@ impl AppShell {
                     });
                 }
             }
+            ContainerAppEvent::VolumesPruned { request_id, report } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                let target = ContainerPruneTarget::Volumes;
+                let message = if report.deleted.is_empty() {
+                    rust_i18n::t!(target.none_key()).to_string()
+                } else {
+                    rust_i18n::t!(target.done_key(), count = report.deleted.len()).to_string()
+                };
+                self.show_toast(message, true, window, cx);
+                self.refresh_container_section(tab_id);
+            }
+            ContainerAppEvent::ImagesPruned { request_id, report } => {
+                let Some(tab_id) = self.containers.take_tab(request_id) else {
+                    return;
+                };
+                let target = ContainerPruneTarget::Images;
+                let message = if report.deleted.is_empty() {
+                    rust_i18n::t!(target.none_key()).to_string()
+                } else {
+                    rust_i18n::t!(target.done_key(), count = report.deleted.len()).to_string()
+                };
+                self.show_toast(message, true, window, cx);
+                self.refresh_container_section(tab_id);
+            }
             ContainerAppEvent::ActionFinished { request_id, error } => {
+                let label = self.containers.label_of(request_id);
                 let Some(tab_id) = self.containers.take_tab(request_id) else {
                     return;
                 };
                 let mut refresh = false;
+                let toast = match &error {
+                    Some(error) => Some((
+                        toast_failed(label.as_deref(), &localized_error(error)),
+                        false,
+                    )),
+                    None => {
+                        refresh = true;
+                        label.map(|label| (toast_succeeded(&label), true))
+                    }
+                };
                 if let Some(workspace) = self.container_workspace_mut(tab_id) {
                     workspace.busy = false;
                     workspace.confirm = None;
                     workspace.rename_container = None;
-                    match error {
-                        Some(error) => workspace.notice = Some(localized_error(&error)),
-                        None => {
-                            workspace.notice = None;
-                            refresh = true;
-                        }
-                    }
+                    workspace.notice = None;
+                }
+                if let Some((message, success)) = toast {
+                    self.show_toast(message, success, window, cx);
                 }
                 if refresh {
                     self.refresh_container_section(tab_id);
                 }
             }
             ContainerAppEvent::TransferFinished { request_id, error } => {
+                let label = self.containers.label_of(request_id);
                 let Some(tab_id) = self.containers.take_tab(request_id) else {
                     return;
                 };
+                let toast = match &error {
+                    Some(error) => Some((
+                        toast_failed(label.as_deref(), &localized_error(error)),
+                        false,
+                    )),
+                    None => label.map(|label| (toast_succeeded(&label), true)),
+                };
                 let mut refresh_files = None;
                 if let Some(workspace) = self.container_workspace_mut(tab_id) {
-                    match error {
-                        Some(error) => workspace.notice = Some(localized_error(&error)),
-                        None => {
-                            workspace.notice = None;
-                            refresh_files = Some(workspace.files.path.clone());
-                        }
+                    workspace.notice = None;
+                    if error.is_none() {
+                        refresh_files = Some(workspace.files.path.clone());
                     }
+                }
+                if let Some((message, success)) = toast {
+                    self.show_toast(message, success, window, cx);
                 }
                 if let Some(path) = refresh_files
                     && !path.is_empty()
@@ -413,21 +493,41 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::Failed { request_id, error } => {
+                let label = self.containers.label_of(request_id);
                 let Some(tab_id) = self.containers.take_tab(request_id) else {
                     return;
                 };
+                let message = toast_failed(label.as_deref(), &localized_error(&error));
                 if let Some(workspace) = self.container_workspace_mut(tab_id) {
                     workspace.busy = false;
                     workspace.files.loading = false;
+                    workspace.notice = None;
                     if workspace.logs_request == Some(request_id) {
                         workspace.logs_request = None;
                         workspace.logs_follow = false;
                     }
                     if workspace.stats_request == Some(request_id) {
                         workspace.stats_request = None;
+                        workspace.stats_error = Some(message.clone());
                     }
-                    workspace.notice = Some(localized_error(&error));
+                    if workspace.stats_processes_request == Some(request_id) {
+                        workspace.stats_processes_request = None;
+                        workspace.stats_processes_loading = false;
+                        workspace.stats_processes_error = Some(message.clone());
+                    }
+                    if workspace.files.request == Some(request_id) {
+                        workspace.files.request = None;
+                        workspace.files.loading = false;
+                    }
+                    if workspace
+                        .terminal_request
+                        .as_ref()
+                        .is_some_and(|(pending, _)| *pending == request_id)
+                    {
+                        workspace.terminal_request = None;
+                    }
                 }
+                self.show_toast(message, false, window, cx);
             }
         }
         cx.notify();
@@ -470,7 +570,9 @@ impl AppShell {
         request_id: ContainerRequestId,
         command: ContainerCommand,
     ) {
-        self.containers.track(request_id, tab_id);
+        // 发送时就登记动作描述：结果事件只带 request_id，提示要靠它说清「做了什么」。
+        let label = command_toast_label(&command);
+        self.containers.track(request_id, tab_id, label);
         if !self.send_command(command) {
             self.containers.requests.remove(&request_id);
         }
@@ -578,6 +680,11 @@ impl AppShell {
             workspace.details = None;
             workspace.logs.clear();
             workspace.stats = None;
+            workspace.stats_history.clear();
+            workspace.stats_error = None;
+            workspace.stats_processes.clear();
+            workspace.stats_processes_error = None;
+            workspace.stats_processes_loading = false;
             workspace.files = ContainerFilesState::default();
             workspace.detail_tab = ContainerDetailTab::Overview;
             workspace.confirm = None;
@@ -672,6 +779,10 @@ impl AppShell {
             RowTarget::Network(id) => self.select_network_item(tab_id, id.clone()),
             RowTarget::Compose(name) => self.select_compose_item(tab_id, name.clone()),
         }
+        // 换条目回到结构化视图：上一个容器的原始 JSON 留在这一条上没有意义。
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.overview_raw = false;
+        }
         cx.notify();
     }
 
@@ -688,7 +799,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if matches!(action, RowAction::CopyId | RowAction::CopyName) {
-            self.copy_row_text(tab_id, &target, action, cx);
+            self.copy_row_text(tab_id, &target, action, window, cx);
             return;
         }
         self.select_row(tab_id, &target, cx);
@@ -762,12 +873,13 @@ impl AppShell {
         }
     }
 
-    /// 复制行的标识到剪贴板，并在头部给出可检索的回执。
+    /// 复制行的标识到剪贴板，并给出右上角回执。
     fn copy_row_text(
         &mut self,
         tab_id: TabId,
         target: &RowTarget,
         action: RowAction,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let text = match (target, action) {
@@ -808,11 +920,12 @@ impl AppShell {
             _ => return,
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-        if let Some(workspace) = self.container_workspace_mut(tab_id) {
-            workspace.notice =
-                Some(rust_i18n::t!("container.row.copied", value = text).to_string());
-        }
-        cx.notify();
+        self.show_toast(
+            rust_i18n::t!("container.row.copied", value = text).to_string(),
+            true,
+            window,
+            cx,
+        );
     }
 
     /// 停止当前选中项的日志、统计与终端会话。
@@ -822,8 +935,19 @@ impl AppShell {
         };
         let logs = workspace.logs_request.take();
         let stats = workspace.stats_request.take();
+        let processes = workspace.stats_processes_request.take();
+        let files = workspace.files.request.take();
+        workspace.files.loading = false;
+        workspace.stats_processes_loading = false;
+        let terminal = workspace
+            .terminal_request
+            .take()
+            .map(|(request_id, _)| request_id);
         workspace.terminal = None;
-        for request_id in [logs, stats].into_iter().flatten() {
+        for request_id in [logs, stats, processes, files, terminal]
+            .into_iter()
+            .flatten()
+        {
             self.containers.requests.remove(&request_id);
             self.send_command(ContainerCommand::Cancel { tab_id, request_id });
         }
@@ -843,7 +967,7 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
         tab: ContainerDetailTab,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(workspace) = self.container_workspace_mut(tab_id) else {
@@ -853,6 +977,10 @@ impl AppShell {
         workspace.detail_tab = tab;
         let logs = workspace.logs_request;
         let stats = workspace.stats_request;
+        let terminal = workspace
+            .terminal_request
+            .as_ref()
+            .map(|(request_id, _)| *request_id);
 
         if previous == ContainerDetailTab::Logs
             && tab != ContainerDetailTab::Logs
@@ -873,12 +1001,36 @@ impl AppShell {
                 workspace.stats_request = None;
             }
         }
+        if previous == ContainerDetailTab::Stats && tab != ContainerDetailTab::Stats {
+            let processes = self
+                .container_workspace_mut(tab_id)
+                .and_then(|workspace| workspace.stats_processes_request.take());
+            if let Some(request_id) = processes {
+                self.cancel_container_request(tab_id, request_id);
+                if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                    workspace.stats_processes_loading = false;
+                }
+            }
+        }
+        // 还没建立完的终端：用户已经切走就撤销，避免后台建好后又把页签抢回去。
+        if previous == ContainerDetailTab::Terminal
+            && tab != ContainerDetailTab::Terminal
+            && let Some(request_id) = terminal
+        {
+            self.cancel_container_request(tab_id, request_id);
+            if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                workspace.terminal_request = None;
+            }
+        }
 
         match tab {
             ContainerDetailTab::Logs => self.ensure_container_logs(tab_id),
-            ContainerDetailTab::Stats => self.ensure_container_stats(tab_id),
+            ContainerDetailTab::Stats => {
+                self.ensure_container_stats(tab_id, cx);
+                self.ensure_container_processes(tab_id);
+            }
             ContainerDetailTab::Files => self.ensure_container_files(tab_id),
-            ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, window, cx),
+            ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, cx),
             ContainerDetailTab::Overview => {}
         }
         cx.notify();
@@ -966,19 +1118,31 @@ impl AppShell {
         self.restart_container_logs(tab_id);
     }
 
-    pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId) {
+    pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(workspace) = self.container_workspace_mut(tab_id) else {
             return;
         };
         if workspace.stats_request.is_some() {
             return;
         }
-        let Some(container) = workspace.selected_container_name() else {
+        let Some(container) = workspace.selected_container() else {
             return;
         };
+        // 停掉的容器采不到统计（引擎直接 409）；先把话说清楚，别让页面空等。
+        if !container.state.is_running() {
+            workspace.stats = None;
+            workspace.stats_error = Some(rust_i18n::t!("container.stats.not_running").to_string());
+            return;
+        }
+        let container = container.name.clone();
+        let interval_ms = workspace.stats_interval.interval().as_millis() as u64;
         let request_id = ContainerRequestId::new();
         workspace.stats_request = Some(request_id);
         workspace.stats = None;
+        workspace.stats_error = None;
+        log::debug!(
+            "请求容器统计，标签: {tab_id}，容器: {container}，间隔: {interval_ms}ms，请求: {request_id}"
+        );
         self.send_tracked(
             tab_id,
             request_id,
@@ -987,6 +1151,83 @@ impl AppShell {
                 request_id,
                 container,
                 enabled: true,
+                interval_ms,
+            },
+        );
+        // 兜底看门狗：请求若因链路异常一直没有回音，12 秒后给出可重试的错误，
+        // 避免界面永远停在「正在采样统计…」。
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(12))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let pending = this
+                    .container_workspace(tab_id)
+                    .is_some_and(|workspace| workspace.stats_request == Some(request_id));
+                if !pending {
+                    return;
+                }
+                if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                    workspace.stats_request = None;
+                    workspace.stats_error =
+                        Some(rust_i18n::t!("container.stats.timeout").to_string());
+                }
+                this.cancel_container_request(tab_id, request_id);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// 切换采样档位：历史与速率口径都依赖间隔，换档时清空历史重新累积。
+    pub(crate) fn set_container_stats_interval(
+        &mut self,
+        tab_id: TabId,
+        interval: crate::monitor::SampleIntervalMode,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        if workspace.stats_interval == interval {
+            return;
+        }
+        workspace.stats_interval = interval;
+        workspace.stats_history.clear();
+        let stats_request = workspace.stats_request.take();
+        // 统计页始终采样；换档位时按新间隔重启轮询，不在统计页则只记档位。
+        let should_poll = workspace.detail_tab == ContainerDetailTab::Stats;
+        if let Some(request_id) = stats_request {
+            self.cancel_container_request(tab_id, request_id);
+        }
+        if should_poll {
+            self.ensure_container_stats(tab_id, cx);
+        }
+        cx.notify();
+    }
+
+    /// 拉取容器进程列表（一次性请求，可手动刷新）。
+    pub(crate) fn ensure_container_processes(&mut self, tab_id: TabId) {
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        if workspace.stats_processes_request.is_some() {
+            return;
+        }
+        let Some(container) = workspace.selected_container().map(|item| item.name.clone()) else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.stats_processes_request = Some(request_id);
+        workspace.stats_processes_loading = true;
+        workspace.stats_processes_error = None;
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::ListProcesses {
+                tab_id,
+                request_id,
+                container,
             },
         );
     }
@@ -1004,6 +1245,10 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if !event.keystroke.key.eq_ignore_ascii_case("escape") {
+            return;
+        }
+        if self.containers.create_dialog.is_some() {
+            self.dismiss_container_create(cx);
             return;
         }
         if self.containers.run_form.is_some() {
@@ -1056,7 +1301,12 @@ impl AppShell {
     }
 
     /// 提交改名：名称留空或与原名相同都不下发，避免无意义的请求与 409。
-    pub(crate) fn submit_container_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    pub(crate) fn submit_container_rename(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some((id, input)) = self
             .container_workspace(tab_id)
             .and_then(|workspace| workspace.rename_container.clone())
@@ -1069,11 +1319,12 @@ impl AppShell {
             .and_then(|workspace| workspace.containers.iter().find(|item| item.id == id))
             .is_some_and(|item| item.name == name);
         if name.is_empty() || same {
-            if let Some(workspace) = self.container_workspace_mut(tab_id) {
-                workspace.notice =
-                    Some(rust_i18n::t!("container.rename.invalid", name = name).to_string());
-            }
-            cx.notify();
+            self.show_toast(
+                rust_i18n::t!("container.rename.invalid", name = name).to_string(),
+                false,
+                window,
+                cx,
+            );
             return;
         }
         let request_id = ContainerRequestId::new();
@@ -1154,7 +1405,7 @@ impl AppShell {
         self.delete_container_profile(id, window, cx);
     }
 
-    /// 清掉头部提示（成功回执与错误都走这一条）。
+    /// 清掉中栏顶部的状态提示（成功回执与错误都走这一条）。
     pub(crate) fn dismiss_container_notice(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(workspace) = self.container_workspace_mut(tab_id) {
             workspace.notice = None;
@@ -1237,32 +1488,13 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 开关统计自动刷新：关掉时通知引擎停止轮询，界面保留最后一帧。
-    pub(crate) fn toggle_container_stats(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(workspace) = self.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let Some(container) = workspace.selected_container_name() else {
-            return;
-        };
-        let enabled = !workspace.stats_enabled;
-        workspace.stats_enabled = enabled;
-        if enabled {
-            if workspace.stats_request.is_none() {
-                self.ensure_container_stats(tab_id);
-            }
-        } else if let Some(request_id) = workspace.stats_request.take() {
-            let cancel = request_id;
-            self.send_tracked(
-                tab_id,
-                cancel,
-                ContainerCommand::Stats {
-                    tab_id,
-                    request_id: cancel,
-                    container: container.clone(),
-                    enabled: false,
-                },
-            );
+    /// 切换统计走势图形态：与主机监控共用同一套折线/柱状组件。
+    pub(crate) fn toggle_container_stats_chart(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.stats_chart = match workspace.stats_chart {
+                crate::monitor::SparklineChartType::Line => crate::monitor::SparklineChartType::Bar,
+                crate::monitor::SparklineChartType::Bar => crate::monitor::SparklineChartType::Line,
+            };
         }
         cx.notify();
     }
@@ -1286,6 +1518,10 @@ impl AppShell {
         workspace.files.loading = true;
         workspace.files.preview = None;
         let request_id = ContainerRequestId::new();
+        if let Some(previous) = workspace.files.request.replace(request_id) {
+            self.cancel_container_request(tab_id, previous);
+        }
+        log::info!("打开容器目录，容器: {container}，路径: {path}，请求: {request_id}");
         self.send_tracked(
             tab_id,
             request_id,
@@ -1298,33 +1534,80 @@ impl AppShell {
         );
     }
 
+    /// 切到终端页签并按指定用户建立会话。
+    ///
+    /// 同一容器只保留一个终端：换了用户（root ↔ 镜像默认）就结束旧会话重建，
+    /// 选的是同一个用户则只切页签，避免无谓地杀掉一次已经在用的 shell。
+    pub(crate) fn open_container_terminal_as(
+        &mut self,
+        tab_id: TabId,
+        user: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.container_workspace(tab_id) else {
+            return;
+        };
+        let same_user = workspace
+            .terminal
+            .as_ref()
+            .is_some_and(|terminal| terminal.user == user);
+        if same_user {
+            if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                workspace.detail_tab = ContainerDetailTab::Terminal;
+            }
+            cx.notify();
+            return;
+        }
+        let pending = workspace
+            .terminal_request
+            .as_ref()
+            .map(|(request_id, _)| *request_id);
+        if let Some(request_id) = pending {
+            self.cancel_container_request(tab_id, request_id);
+        }
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            // 丢弃旧终端即可结束旧 exec（TerminalIo 的 RAII 清理），再建新会话。
+            workspace.terminal = None;
+            workspace.terminal_request = None;
+            workspace.detail_tab = ContainerDetailTab::Terminal;
+        }
+        self.ensure_container_terminal(tab_id, user, cx);
+        cx.notify();
+    }
+
+    /// 建立终端会话；`user` 为 `None` 表示镜像默认用户，`Some("root")` 表示提权进入。
+    ///
+    /// 建立 exec 是异步的：真机上连点页签会在结果回来前重复下发，一次会话变出一串
+    /// shell。`terminal_request` 在发出时占位，结果（成功或失败）回来才清空。
     pub(crate) fn ensure_container_terminal(
         &mut self,
         tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        user: Option<String>,
+        _cx: &mut Context<Self>,
     ) {
         let Some(workspace) = self.container_workspace_mut(tab_id) else {
             return;
         };
-        if workspace.terminal.is_some() {
+        if workspace.terminal.is_some() || workspace.terminal_request.is_some() {
             return;
         }
         let Some(container) = workspace.selected_container_name() else {
             return;
         };
         let request_id = ContainerRequestId::new();
+        workspace.terminal_request = Some((request_id, user.clone()));
+        let mut options = ContainerConnection::new(container);
+        options.user = user;
         self.send_tracked(
             tab_id,
             request_id,
             ContainerCommand::ExecTerminal {
                 tab_id,
                 request_id,
-                options: ContainerConnection::new(container),
+                options,
                 size: TerminalSize::new(100, 30),
             },
         );
-        let _ = (window, cx);
     }
 
     fn create_container_terminal(
@@ -1589,12 +1872,30 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // 附加输入都挂在弹窗状态上，取走它们必须在借用工作区之前。
+        let dialog = self.containers.create_dialog.as_ref();
+        let read_input = |input: &Option<Entity<InputState>>| {
+            input
+                .as_ref()
+                .map(|input| input.read(cx).value().trim().to_string())
+                .filter(|value| !value.is_empty())
+        };
+        let driver = read_input(&dialog.and_then(|dialog| dialog.driver.clone()));
+        let subnet = read_input(&dialog.and_then(|dialog| dialog.subnet.clone()));
+        let gateway = read_input(&dialog.and_then(|dialog| dialog.gateway.clone()));
+        let internal = dialog.is_some_and(|dialog| dialog.internal);
         let Some(workspace) = self.container_workspace_mut(tab_id) else {
             return;
         };
         let section = workspace.section;
         let value = workspace.create_input.read(cx).value().trim().to_string();
         if value.is_empty() {
+            self.show_toast(
+                rust_i18n::t!("container.create_dialog.name_required").to_string(),
+                false,
+                window,
+                cx,
+            );
             return;
         }
         let request_id = ContainerRequestId::new();
@@ -1608,20 +1909,117 @@ impl AppShell {
                 tab_id,
                 request_id,
                 name: value,
-                driver: None,
+                driver,
             },
-            ContainerSection::Networks => ContainerCommand::CreateNetwork {
-                tab_id,
-                request_id,
-                name: value,
-                driver: None,
-            },
+            ContainerSection::Networks => {
+                // 子网/网关/仅内部访问由领域层校验，界面只负责把错误说清楚。
+                let mut spec = ContainerNetworkSpec {
+                    name: value,
+                    driver,
+                    subnet,
+                    gateway,
+                    internal,
+                };
+                if let Err(error) = spec.validate() {
+                    self.show_toast(error, false, window, cx);
+                    return;
+                }
+                ContainerCommand::CreateNetwork {
+                    tab_id,
+                    request_id,
+                    spec,
+                }
+            }
             _ => return,
         };
         workspace.busy = true;
         workspace
             .create_input
             .update(cx, |input, cx| input.set_value("", window, cx));
+        self.containers.create_dialog = None;
+        self.send_tracked(tab_id, request_id, command);
+        cx.notify();
+    }
+
+    /// 打开拉取/新建弹窗：镜像只有一个引用输入，卷与网络多一个驱动输入，
+    /// 网络再加子网、网关与「仅内部访问」。
+    pub(crate) fn open_container_create_dialog(
+        &mut self,
+        tab_id: TabId,
+        section: ContainerSection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let driver = matches!(
+            section,
+            ContainerSection::Volumes | ContainerSection::Networks
+        )
+        .then(|| {
+            cx.new(|cx| {
+                InputState::new(window, cx).placeholder(
+                    rust_i18n::t!("container.create_dialog.driver_placeholder").to_string(),
+                )
+            })
+        });
+        let network = section == ContainerSection::Networks;
+        let subnet = network.then(|| {
+            cx.new(|cx| {
+                InputState::new(window, cx).placeholder(
+                    rust_i18n::t!("container.create_dialog.subnet_placeholder").to_string(),
+                )
+            })
+        });
+        let gateway = network.then(|| {
+            cx.new(|cx| {
+                InputState::new(window, cx).placeholder(
+                    rust_i18n::t!("container.create_dialog.gateway_placeholder").to_string(),
+                )
+            })
+        });
+        self.containers.create_dialog = Some(ContainerCreateDialog {
+            tab_id,
+            section,
+            driver,
+            subnet,
+            gateway,
+            internal: false,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn dismiss_container_create(&mut self, cx: &mut Context<Self>) {
+        self.containers.create_dialog = None;
+        cx.notify();
+    }
+
+    /// 清理未使用卷或悬空镜像：删除不可恢复，因此第一下只待确认，第二下才下发。
+    ///
+    /// 两个目标的确认状态共用 `prune_armed` 一个槽位：同一时刻只会有一个待确认
+    /// 动作，分开存反而可能出现两条按钮同时武装。
+    pub(crate) fn prune_container_target(
+        &mut self,
+        tab_id: TabId,
+        target: ContainerPruneTarget,
+        armed: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if !armed {
+            if let Some(workspace) = self.container_workspace_mut(tab_id) {
+                workspace.prune_armed = Some(target);
+            }
+            cx.notify();
+            return;
+        }
+        let Some(workspace) = self.container_workspace_mut(tab_id) else {
+            return;
+        };
+        workspace.prune_armed = None;
+        workspace.busy = true;
+        let request_id = ContainerRequestId::new();
+        let command = match target {
+            ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },
+            ContainerPruneTarget::Images => ContainerCommand::PruneImages { tab_id, request_id },
+        };
         self.send_tracked(tab_id, request_id, command);
         cx.notify();
     }
@@ -1675,6 +2073,37 @@ impl AppShell {
                 local_path,
             },
         );
+    }
+
+    /// 打开文件重命名条：按钮与右键菜单共用同一份输入状态。
+    pub(crate) fn begin_container_file_rename(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let input = cx.new(|cx| InputState::new(window, cx).default_value(name));
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.files.rename_from = Some(path);
+            workspace.files.rename_input = Some(input);
+        }
+        cx.notify();
+    }
+
+    /// 请求删除容器内路径；目录按递归删除走二次确认。
+    pub(crate) fn request_remove_container_path(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        recursive: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(workspace) = self.container_workspace_mut(tab_id) {
+            workspace.confirm = Some(ContainerConfirm::FilePath { path, recursive });
+        }
+        cx.notify();
     }
 
     /// 上传本地文件到当前目录。
@@ -1759,11 +2188,12 @@ impl AppShell {
         };
         let name = input.read(cx).value().trim().to_string();
         if name.is_empty() || name.contains('/') || name.contains("..") {
-            if let Some(workspace) = self.container_workspace_mut(tab_id) {
-                workspace.notice =
-                    Some(rust_i18n::t!("container.files.new_dir_invalid").to_string());
-            }
-            cx.notify();
+            self.show_toast(
+                rust_i18n::t!("container.files.new_dir_invalid").to_string(),
+                false,
+                window,
+                cx,
+            );
             return;
         }
         let parent = if workspace.files.path.is_empty() {

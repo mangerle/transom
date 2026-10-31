@@ -12,8 +12,8 @@ use std::time::Duration;
 use transom_core::{
     ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
     ContainerEngineRef, ContainerImageDetails, ContainerImageSummary, ContainerLifecycleAction,
-    ContainerNetworkDetails, ContainerNetworkSummary, ContainerStats, ContainerSummary,
-    ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
+    ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerStats,
+    ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
 };
 
 /// 探测单个候选的超时：发现是交互触发的，不能让一个坏端点拖住整页。
@@ -169,6 +169,24 @@ impl Engine {
         }
     }
 
+    /// 清理悬空镜像；与卷一样，REST 走 prune 端点，CLI 走「列出 + 逐个删」。
+    pub async fn prune_images(&self) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.prune_images().await,
+            EngineBackend::Cli(cli) => cli.prune_images().await,
+        }
+    }
+
+    /// 清理未使用数据卷；REST 走 prune 端点，CLI 走「列出 dangling + 逐个删」。
+    pub async fn prune_volumes(
+        &self,
+    ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.prune_volumes().await,
+            EngineBackend::Cli(cli) => cli.prune_volumes().await,
+        }
+    }
+
     pub async fn list_networks(&self) -> Result<Vec<ContainerNetworkSummary>, ContainerError> {
         match &self.backend {
             EngineBackend::Http(api) => api.list_networks().await,
@@ -188,12 +206,11 @@ impl Engine {
 
     pub async fn create_network(
         &self,
-        name: &str,
-        driver: Option<&str>,
+        spec: &transom_core::ContainerNetworkSpec,
     ) -> Result<(), ContainerError> {
         match &self.backend {
-            EngineBackend::Http(api) => api.create_network(name, driver).await,
-            EngineBackend::Cli(cli) => cli.create_network(name, driver).await,
+            EngineBackend::Http(api) => api.create_network(spec).await,
+            EngineBackend::Cli(cli) => cli.create_network(spec).await,
         }
     }
 
@@ -212,6 +229,16 @@ impl Engine {
         match &self.backend {
             EngineBackend::Http(api) => api.container_stats(container, cancel).await,
             EngineBackend::Cli(cli) => cli.container_stats(container).await,
+        }
+    }
+
+    pub async fn list_processes(
+        &self,
+        container: &str,
+    ) -> Result<Vec<ContainerProcess>, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.list_processes(container).await,
+            EngineBackend::Cli(cli) => cli.list_processes(container).await,
         }
     }
 

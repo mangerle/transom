@@ -6,14 +6,14 @@
 //! 与状态筛选。本模块把五种条目统一成 [`ListRow`] 描述，渲染与动作分发因此只有
 //! 一处实现，新增分类只要补一个构造函数。
 //!
-//! 代价与局限（Trade-offs）：行内只放三个快捷按钮，其余动作收进右键菜单，窄列表
-//! 下仍要展开菜单；筛选与排序都在前端完成，不额外发请求。
+//! 代价与局限（Trade-offs）：行内只放启停与删除两个按钮，其余动作收进右键菜单，
+//! 窄列表下仍要展开菜单；筛选与排序都在前端完成，不额外发请求。
 
 use crate::app::AppShell;
 use crate::container::types::{
-    ContainerBatchAction, ContainerQuickFilter, ContainerSection, ContainerSortKey,
-    ContainerStateFilter, ContainerWorkspaceState, RowAction, RowTarget, SortFields,
-    compare_fields, image_passes_filter, matches_query, row_key, volume_passes_filter,
+    ContainerBatchAction, ContainerPruneTarget, ContainerQuickFilter, ContainerSection,
+    ContainerSortKey, ContainerStateFilter, ContainerWorkspaceState, RowAction, RowTarget,
+    SortFields, compare_fields, image_passes_filter, matches_query, row_key, volume_passes_filter,
 };
 use crate::format::format_size;
 use crate::palette::Palette;
@@ -22,7 +22,7 @@ use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenu, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use std::collections::HashSet;
@@ -43,15 +43,19 @@ struct ToolbarParams<'a> {
     quick: ContainerQuickFilter,
     sort_key: ContainerSortKey,
     sort_desc: bool,
+    /// CLI 兜底后端拿不到挂载明细，「仅未使用卷」档位不可用。
+    cli_backend: bool,
+    /// 已按下一次清理、等待第二次确认的目标；`None` 表示没有待确认动作。
+    prune_armed: Option<ContainerPruneTarget>,
 }
 
 /// 一行的展示数据与动作目标。
 struct ListRow {
     /// 与条目主键拼成稳定 ElementId 的前缀。
     key: String,
-    icon: IconName,
     title: String,
-    subtitle: String,
+    /// 副标题：容器只有名称，静态资源才带大小/驱动等次要信息。
+    subtitle: Option<String>,
     badge: Option<String>,
     /// 运行态：容器与编排项目有，静态资源没有。
     running: Option<bool>,
@@ -74,18 +78,18 @@ impl AppShell {
         };
         let section = workspace.section;
         let search = workspace.search.clone();
-        let create_input = workspace.create_input.clone();
         let state_filter = workspace.state_filter;
         let sort_key = workspace.sort_key;
         let sort_desc = workspace.sort_desc;
         let busy = workspace.busy;
+        let notice = workspace.notice.clone();
         let selected = workspace.selected.clone();
         let checked = workspace.checked.clone();
         let batch_armed = workspace.batch_armed;
         let quick = workspace.quick_filter;
+        let cli_backend = workspace.info.as_ref().is_some_and(|info| info.cli_backend);
         let query = workspace.query(cx).to_lowercase();
         let mut rows = collect_rows(section, workspace, &query, state_filter, &checked);
-        let total = rows.len();
         rows.sort_by(|left, right| {
             compare_fields(
                 &left.fields,
@@ -99,11 +103,20 @@ impl AppShell {
             .iter()
             .filter(|row| row.checked.unwrap_or(false))
             .count();
-        let batch_bar = if checked_count == 0 {
-            None
-        } else {
-            Some(render_batch_bar(tab_id, checked_count, batch_armed, p, cx))
-        };
+        // 信息条常驻：优先显示批量选择，其次显示操作状态；两者都没有时只占位。
+        // 容器分类始终占位（勾选/取消不跳行）；其它分类仅在有状态时才出现，
+        // 不白占一行高度。
+        let batch_bar = (section == ContainerSection::Containers || notice.is_some()).then(|| {
+            render_status_bar(
+                tab_id,
+                section,
+                checked_count,
+                batch_armed,
+                notice.as_deref(),
+                p,
+                cx,
+            )
+        });
         let toolbar = self.render_list_toolbar(
             &ToolbarParams {
                 tab_id,
@@ -113,25 +126,22 @@ impl AppShell {
                 quick,
                 sort_key,
                 sort_desc,
+                cli_backend,
+                prune_armed: workspace.prune_armed,
             },
             cx,
         );
         let body = render_rows(tab_id, &rows, &selected, p, cx);
-        let footer = render_footer(&rows, total, &query, state_filter, quick, p);
         let mut column = v_flex()
             .h_full()
+            .w_full()
+            .min_w_0()
+            .overflow_hidden()
             .gap_1p5()
             .p_2()
             .child(toolbar)
             .children(batch_bar)
             .child(body);
-        if matches!(
-            section,
-            ContainerSection::Images | ContainerSection::Volumes | ContainerSection::Networks
-        ) {
-            column = column.child(self.render_create_row(tab_id, section, &create_input, cx));
-        }
-        column = column.child(footer);
         if busy {
             column = column.child(
                 h_flex()
@@ -146,159 +156,257 @@ impl AppShell {
         column.into_any_element()
     }
 
-    /// 工具条：搜索框、状态三档筛选与排序键（点击同键切换升降序）。
+    /// 工具条：一行摆下搜索框与状态、快速筛选、排序三个下拉。
+    ///
+    /// 设计原理（Why）：原先把三档状态与三个排序键平铺成芯片，在可拖到 260px 的
+    /// 中栏里横向撑爆，行内容被推到右侧详情面板上（真实窗口实测）。收成下拉后
+    /// 控制项与搜索框同处一行，中栏不再需要第二行工具条；代价是换档位多一次点击。
+    /// 「运行容器」不再占工具条：起容器从镜像行的「运行」进入，同一件事不留两个入口。
     fn render_list_toolbar(
+        &mut self,
+        params: &ToolbarParams<'_>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mut controls = h_flex()
+            .gap_1()
+            .items_center()
+            .flex_wrap()
+            .child(Input::new(params.search).flex_1().min_w_0())
+            .child(self.render_state_filter_menu(params, cx))
+            .child(self.render_quick_filter_menu(params, cx))
+            .child(self.render_sort_menu(params, cx));
+        // 新增入口收在工具条上：底部常驻一行输入框在三个分类里都占高度却几乎不用。
+        // 卷与网络只留加号图标：中栏本来就窄，文字按钮会把搜索框压到不可用。
+        if let Some(label) = create_button_label(params.section) {
+            let tab_id = params.tab_id;
+            let section = params.section;
+            let button = Button::new("container-create-open")
+                .xsmall()
+                .ghost()
+                .icon(IconName::Plus);
+            let button = if matches!(
+                section,
+                ContainerSection::Volumes | ContainerSection::Networks
+            ) {
+                button.tooltip(label)
+            } else {
+                button.label(label)
+            };
+            controls = controls.child(button.on_click(cx.listener(move |this, _, window, cx| {
+                this.open_container_create_dialog(tab_id, section, window, cx);
+            })));
+        }
+        // 卷与镜像都有「清理」视角：卷清未使用，镜像清悬空且无标签的那批。
+        let prune_target = match params.section {
+            ContainerSection::Volumes => Some(ContainerPruneTarget::Volumes),
+            ContainerSection::Images => Some(ContainerPruneTarget::Images),
+            _ => None,
+        };
+        if let Some(target) = prune_target {
+            let tab_id = params.tab_id;
+            let armed = params.prune_armed == Some(target);
+            controls = controls.child(
+                Button::new(ElementId::Name(
+                    format!("container-prune-{:?}", target).into(),
+                ))
+                .xsmall()
+                .ghost()
+                .icon(if armed {
+                    IconName::CircleAlert
+                } else {
+                    IconName::Trash
+                })
+                .selected(armed)
+                .tooltip(if armed {
+                    rust_i18n::t!("container.prune.confirm").to_string()
+                } else {
+                    format!(
+                        "{}：{}",
+                        rust_i18n::t!(target.button_label_key()),
+                        rust_i18n::t!(target.hint_key())
+                    )
+                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.prune_container_target(tab_id, target, armed, cx);
+                })),
+            );
+        }
+        controls.into_any_element()
+    }
+
+    /// 状态下拉：只有容器分类有运行态可筛，其它分类渲染空元素占位。
+    fn render_state_filter_menu(
+        &mut self,
+        params: &ToolbarParams<'_>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if params.section != ContainerSection::Containers {
+            return div().into_any_element();
+        }
+        let tab_id = params.tab_id;
+        let current = params.state_filter;
+        let app = cx.entity().clone();
+        dropdown_trigger(
+            "container-filter-state",
+            rust_i18n::t!(current.label_key()).to_string(),
+            IconName::ChevronDown,
+            None,
+            move |menu, _, _| {
+                let mut menu = menu;
+                for filter in ContainerStateFilter::ALL {
+                    let app = app.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(rust_i18n::t!(filter.label_key()).to_string())
+                            .checked(filter == current)
+                            .on_click(move |_, _, cx| {
+                                app.update(cx, |this, cx| {
+                                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                                        workspace.state_filter = filter;
+                                    }
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                }
+                menu
+            },
+        )
+    }
+
+    /// 快速筛选下拉：镜像「仅悬空」、数据卷「仅未使用」。
+    fn render_quick_filter_menu(
+        &mut self,
+        params: &ToolbarParams<'_>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let options = ContainerQuickFilter::for_section(params.section);
+        if options.len() <= 1 {
+            return div().into_any_element();
+        }
+        let tab_id = params.tab_id;
+        let current = params.quick;
+        // CLI 兜底后端拿不到挂载明细，「仅未使用卷」会把在用卷也说成空闲，
+        // 因此该档位在 CLI 后端下禁用而不是悄悄收掉，否则用户会以为功能不存在。
+        let unused_unavailable = params.cli_backend
+            && current == ContainerQuickFilter::UnusedVolumes
+            && options.contains(&ContainerQuickFilter::UnusedVolumes);
+        let app = cx.entity().clone();
+        dropdown_trigger(
+            "container-filter-quick",
+            rust_i18n::t!(current.label_key()).to_string(),
+            IconName::ChevronDown,
+            unused_unavailable
+                .then(|| rust_i18n::t!("container.filter.unused_unavailable").to_string()),
+            move |menu, _, _| {
+                let mut menu = menu;
+                for quick in options.iter().copied() {
+                    let app = app.clone();
+                    let disabled =
+                        quick == ContainerQuickFilter::UnusedVolumes && unused_unavailable;
+                    menu = menu.item(
+                        PopupMenuItem::new(rust_i18n::t!(quick.label_key()).to_string())
+                            .checked(quick == current)
+                            .disabled(disabled)
+                            .on_click(move |_, _, cx| {
+                                app.update(cx, |this, cx| {
+                                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                                        workspace.quick_filter = quick;
+                                    }
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                }
+                menu
+            },
+        )
+    }
+
+    /// 排序下拉：排序键与升降序收在同一个菜单里，触发按钮直接显示当前方向。
+    fn render_sort_menu(
         &mut self,
         params: &ToolbarParams<'_>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let tab_id = params.tab_id;
         let section = params.section;
-        let sort_desc = params.sort_desc;
-        let mut toolbar = h_flex()
-            .gap_1()
-            .items_center()
-            .child(Input::new(params.search).flex_1().min_w_0());
-        if section == ContainerSection::Containers {
-            toolbar = toolbar.child(
-                Button::new("container-run-open")
-                    .xsmall()
-                    .ghost()
-                    .icon(IconName::Play)
-                    .label(rust_i18n::t!("container.run.title").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.open_container_run_form(tab_id, None, window, cx);
-                    })),
-            );
-        }
-        if section == ContainerSection::Containers {
-            for filter in ContainerStateFilter::ALL {
-                toolbar = toolbar.child(
-                    Button::new(ElementId::Name(
-                        format!("container-filter-{}", filter.label_key()).into(),
-                    ))
-                    .xsmall()
-                    .ghost()
-                    .selected(filter == params.state_filter)
-                    .label(rust_i18n::t!(filter.label_key()).to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(workspace) = this.container_workspace_mut(tab_id) {
-                            workspace.state_filter = filter;
-                        }
-                        cx.notify();
-                    })),
-                );
-            }
-        }
-        if ContainerQuickFilter::for_section(params.section).len() > 1 {
-            // CLI 兜底后端拿不到挂载明细，「仅未使用卷」会把在用卷也说成空闲，
-            // 因此只有 REST 后端才给这个档位。
-            let cli_backend = self
-                .container_workspace(params.tab_id)
-                .and_then(|workspace| workspace.info.as_ref())
-                .is_some_and(|info| info.cli_backend);
-            for quick in ContainerQuickFilter::for_section(params.section) {
-                let selected_quick = *quick;
-                let quick_tab_id = params.tab_id;
-                // 状态要可见：不适用的档位置灰并说明原因，而不是悄悄收掉，
-                // 否则用户会以为这个功能不存在。
-                let unavailable =
-                    selected_quick == ContainerQuickFilter::UnusedVolumes && cli_backend;
-                let mut button = Button::new(ElementId::Name(
-                    format!("container-quick-{}", quick.label_key()).into(),
-                ))
-                .xsmall()
-                .ghost()
-                .selected(params.quick == selected_quick)
-                .label(rust_i18n::t!(selected_quick.label_key()).to_string());
-                button = if unavailable {
-                    // 上游按钮没有禁用态样式：不绑事件 + 悬停说明原因，档位仍然留在
-                    // 工具条上，用户既知道功能存在，也知道为什么点不动。
-                    button.tooltip(rust_i18n::t!("container.filter.unused_unavailable").to_string())
-                } else {
-                    button.on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(workspace) = this.container_workspace_mut(quick_tab_id) {
-                            workspace.quick_filter = selected_quick;
-                        }
-                        cx.notify();
-                    }))
-                };
-                toolbar = toolbar.child(button);
-            }
-        }
-        let keys = ContainerSortKey::for_section(section);
-        let mut sorts = h_flex().gap_0p5().items_center();
-        for key in keys {
-            sorts = sorts.child(
-                Button::new(ElementId::Name(
-                    format!("container-sort-{}", key.label_key()).into(),
-                ))
-                .xsmall()
-                .ghost()
-                .selected(*key == active_sort(section, params.sort_key))
-                .label(rust_i18n::t!(key.label_key()).to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    let Some(workspace) = this.container_workspace_mut(tab_id) else {
-                        return;
-                    };
-                    let current = active_sort(workspace.section, workspace.sort_key);
-                    if current == *key {
-                        workspace.sort_desc = !workspace.sort_desc;
-                    } else {
-                        workspace.sort_key = *key;
-                        workspace.sort_desc = false;
-                    }
-                    cx.notify();
-                })),
-            );
-        }
-        toolbar = toolbar.child(sorts).child(
-            Button::new("container-sort-direction")
-                .xsmall()
-                .ghost()
-                .icon(if sort_desc {
-                    IconName::ArrowDown
-                } else {
-                    IconName::ArrowUp
-                })
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(workspace) = this.container_workspace_mut(tab_id) {
-                        workspace.sort_desc = !workspace.sort_desc;
-                    }
-                    cx.notify();
-                })),
-        );
-        toolbar.into_any_element()
+        let current = active_sort(section, params.sort_key);
+        let desc = params.sort_desc;
+        let app = cx.entity().clone();
+        dropdown_trigger(
+            "container-sort-menu",
+            rust_i18n::t!(current.label_key()).to_string(),
+            if desc {
+                IconName::ArrowDown
+            } else {
+                IconName::ArrowUp
+            },
+            None,
+            move |menu, _, _| {
+                let mut menu = menu;
+                for key in ContainerSortKey::for_section(section) {
+                    let app = app.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(rust_i18n::t!(key.label_key()).to_string())
+                            .checked(*key == current)
+                            .on_click(move |_, _, cx| {
+                                app.update(cx, |this, cx| {
+                                    let Some(workspace) = this.container_workspace_mut(tab_id)
+                                    else {
+                                        return;
+                                    };
+                                    // 同键再点一次只翻方向，换键则回到升序。
+                                    if active_sort(workspace.section, workspace.sort_key) == *key {
+                                        workspace.sort_desc = !workspace.sort_desc;
+                                    } else {
+                                        workspace.sort_key = *key;
+                                        workspace.sort_desc = false;
+                                    }
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                }
+                menu = menu.item(PopupMenuItem::separator());
+                for ascending in [true, false] {
+                    let app = app.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(
+                            rust_i18n::t!(if ascending {
+                                "container.sort.ascending"
+                            } else {
+                                "container.sort.descending"
+                            })
+                            .to_string(),
+                        )
+                        .checked(ascending != desc)
+                        .on_click(move |_, _, cx| {
+                            app.update(cx, |this, cx| {
+                                if let Some(workspace) = this.container_workspace_mut(tab_id) {
+                                    workspace.sort_desc = !ascending;
+                                }
+                                cx.notify();
+                            });
+                        }),
+                    );
+                }
+                menu
+            },
+        )
     }
+}
 
-    /// 拉取/新建行：镜像填引用，卷与网络填名称。
-    fn render_create_row(
-        &mut self,
-        tab_id: TabId,
-        section: ContainerSection,
-        create_input: &Entity<InputState>,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        h_flex()
-            .gap_1()
-            .items_center()
-            .child(Input::new(create_input).flex_1().min_w_0())
-            .child(
-                Button::new("container-create-submit")
-                    .primary()
-                    .xsmall()
-                    .icon(IconName::Plus)
-                    .label(if section == ContainerSection::Images {
-                        rust_i18n::t!("container.pull").to_string()
-                    } else {
-                        rust_i18n::t!("container.create").to_string()
-                    })
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.submit_container_create(tab_id, window, cx);
-                    })),
-            )
-            .into_any_element()
-    }
+/// 工具条「新增」按钮的文案；容器与编排分类没有这一档。
+pub(crate) fn create_button_label(section: ContainerSection) -> Option<String> {
+    let key = match section {
+        // 镜像拉取入口暂时收掉：先把列表、运行与详情打磨好，避免工具条继续变宽。
+        ContainerSection::Images | ContainerSection::Containers | ContainerSection::Compose => {
+            return None;
+        }
+        ContainerSection::Volumes => "container.create_dialog.volume",
+        ContainerSection::Networks => "container.create_dialog.network",
+    };
+    Some(rust_i18n::t!(key).to_string())
 }
 
 /// 当前生效的排序键：分类切换后旧键可能不在新分类的可用档位里。
@@ -308,6 +416,28 @@ fn active_sort(section: ContainerSection, sort_key: ContainerSortKey) -> Contain
     } else {
         ContainerSortKey::default_for(section)
     }
+}
+
+/// 下拉触发按钮：统一的「当前值 + 箭头」外观，菜单内容由 builder 填充。
+///
+/// 设计原理（Why）：中栏宽度可拖到 240px，控制项必须尽量窄；三个下拉共用同一个
+/// 触发样式，避免出现三种不同的收起形态。`tooltip` 只用于说明不可用的档位。
+fn dropdown_trigger(
+    id: &'static str,
+    label: String,
+    icon: IconName,
+    tooltip: Option<String>,
+    builder: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
+) -> AnyElement {
+    let button = Button::new(ElementId::Name(id.into()))
+        .xsmall()
+        .ghost()
+        .label(label);
+    let button = match tooltip {
+        Some(tooltip) => button.tooltip(tooltip),
+        None => button,
+    };
+    button.icon(icon).dropdown_menu(builder).into_any_element()
 }
 
 /// 按分类收集行数据，并套用状态筛选与关键词搜索。
@@ -401,10 +531,11 @@ fn collect_rows(
 fn container_row_spec(item: &ContainerSummary, checked: bool) -> ListRow {
     ListRow {
         key: format!("container-row-{}", item.id),
-        icon: IconName::Container,
         title: item.name.clone(),
-        subtitle: format!("{} · {}", item.image, item.status),
-        badge: Some(item.state.key().to_string()),
+        // 单行只剩名称：镜像引用（走加速仓库时三四十字符）与状态串在这一列宽度
+        // 下必然截断成不可读片段，完整信息在右侧详情基础信息里看。
+        subtitle: None,
+        badge: None,
         running: Some(item.state.is_running()),
         checked: Some(checked),
         target: RowTarget::Container {
@@ -423,9 +554,13 @@ fn container_row_spec(item: &ContainerSummary, checked: bool) -> ListRow {
 fn image_row_spec(item: &ContainerImageSummary) -> ListRow {
     ListRow {
         key: format!("image-row-{}", item.id),
-        icon: IconName::Layers,
-        title: item.display_name(),
-        subtitle: format!("{} · {}", format_size(item.size), short_id(&item.id)),
+        // 短名做主标题：完整引用（含加速仓库主机）留在详情与起容器参数里。
+        title: item.short_display_name(),
+        subtitle: Some(format!(
+            "{} · {}",
+            format_size(item.size),
+            short_id(&item.id)
+        )),
         badge: None,
         running: None,
         checked: None,
@@ -442,18 +577,12 @@ fn image_row_spec(item: &ContainerImageSummary) -> ListRow {
 fn volume_row_spec(item: &ContainerVolumeSummary, usage_known: bool, in_use: bool) -> ListRow {
     ListRow {
         key: format!("volume-row-{}", item.name),
-        icon: IconName::Database,
         title: item.name.clone(),
-        subtitle: format!("{} · {}", item.driver, item.mountpoint),
-        badge: usage_known.then(|| {
-            rust_i18n::t!(if in_use {
-                "container.badge.in_use"
-            } else {
-                "container.badge.free"
-            })
-            .to_string()
-        }),
-        running: None,
+        subtitle: Some(format!("{} · {}", item.driver, item.mountpoint)),
+        // 在用/空闲改用名称前的状态点，与容器行同一套语言；文字徽章去掉，
+        // 避免同一件事在一行里说两遍。用量数据拿不到时不画点（不假装有把握）。
+        badge: None,
+        running: usage_known.then_some(in_use),
         checked: None,
         target: RowTarget::Volume(item.name.clone()),
         fields: SortFields {
@@ -468,9 +597,8 @@ fn volume_row_spec(item: &ContainerVolumeSummary, usage_known: bool, in_use: boo
 fn network_row_spec(item: &ContainerNetworkSummary) -> ListRow {
     ListRow {
         key: format!("network-row-{}", item.id),
-        icon: IconName::Network,
         title: item.name.clone(),
-        subtitle: format!(
+        subtitle: Some(format!(
             "{} · {}{}",
             item.driver,
             item.scope,
@@ -478,7 +606,7 @@ fn network_row_spec(item: &ContainerNetworkSummary) -> ListRow {
                 .as_ref()
                 .map(|subnet| format!(" · {subnet}"))
                 .unwrap_or_default()
-        ),
+        )),
         badge: None,
         running: None,
         checked: None,
@@ -495,13 +623,12 @@ fn network_row_spec(item: &ContainerNetworkSummary) -> ListRow {
 fn compose_row_spec(item: &ComposeProject) -> ListRow {
     ListRow {
         key: format!("compose-row-{}", item.name),
-        icon: IconName::Boxes,
         title: item.name.clone(),
-        subtitle: format!(
+        subtitle: Some(format!(
             "{} · {}",
             item.state_label(),
             item.working_dir.clone().unwrap_or_default()
-        ),
+        )),
         badge: None,
         running: Some(item.total > 0 && item.running == item.total),
         checked: None,
@@ -553,7 +680,12 @@ fn row_actions(row: &ListRow) -> Vec<RowAction> {
         .collect()
 }
 
-/// 行内快捷按钮：容器给「启停 + 日志 + 终端」，静态资源给「复制 + 删除」。
+/// 行内快捷按钮：容器给「启停 + 重启 + 删除」，镜像给「运行 + 删除」，卷与网络给「删除」。
+///
+/// 设计原理（Why）：这一列是用户扫一眼就要动手的地方，最高频的启停/删除不该只
+/// 藏在详情头部或右键菜单里（真实窗口实测：只有名称的行要点完再找按钮，来回移动
+/// 鼠标成本高）。其余动作（日志、终端、统计、复制）仍然只在头部与菜单，避免同一
+/// 件事摆三个入口。
 fn quick_actions(row: &ListRow) -> Vec<RowAction> {
     let actions: Vec<RowAction> = match row.target {
         RowTarget::Container { .. } => vec![
@@ -562,12 +694,12 @@ fn quick_actions(row: &ListRow) -> Vec<RowAction> {
             } else {
                 RowAction::Start
             },
-            RowAction::Logs,
-            RowAction::Terminal,
+            RowAction::Restart,
+            RowAction::Remove,
         ],
-        RowTarget::Image(_) => vec![RowAction::Run, RowAction::CopyId, RowAction::Remove],
-        RowTarget::Volume(_) | RowTarget::Network(_) => vec![RowAction::CopyId, RowAction::Remove],
-        RowTarget::Compose(_) => vec![RowAction::Overview],
+        RowTarget::Image(_) => vec![RowAction::Run, RowAction::Remove],
+        RowTarget::Volume(_) | RowTarget::Network(_) => vec![RowAction::Remove],
+        RowTarget::Compose(_) => Vec::new(),
     };
     actions
         .into_iter()
@@ -599,7 +731,7 @@ fn render_rows(
             .into_any_element();
     }
     let app = cx.entity().clone();
-    let mut list = v_flex().gap_0p5();
+    let mut list = v_flex().gap_0p5().w_full();
     for row in rows {
         let is_selected = selected.as_deref() == Some(row_key(&row.target));
         list = list.child(list_row(&app, tab_id, row, is_selected, p, cx));
@@ -624,47 +756,39 @@ fn list_row(
 ) -> AnyElement {
     let group = format!("container-list-row-{}", row.key);
     let title = row.title.clone();
-    let subtitle = row.subtitle.clone();
     let mut element = h_flex()
         .id(ElementId::Name(row.key.clone().into()))
         .group(group.as_str())
+        .w_full()
         .gap_2()
         .px_2()
         .py_1p5()
         .rounded(p.radius.md)
         .items_center()
         .cursor_pointer()
-        .hover(|style| style.bg(p.muted.opacity(0.5)))
-        .child(status_dot(row, p))
-        .child(Icon::new(row.icon).xsmall().text_color(p.muted_foreground))
-        .child(
-            v_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_0p5()
-                .child(div().text_sm().truncate().child(title))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .truncate()
-                        .child(subtitle),
-                ),
-        );
-    if let Some(is_checked) = row.checked {
-        let check_id = row_target_key_id(&row.target);
-        element = element.child(
-            Checkbox::new(ElementId::Name(format!("{}-check", row.key).into()))
-                .small()
-                .checked(is_checked)
-                // 勾选只改勾选集合：不吞掉冒泡的话，行自身的点击会顺手把右侧详情
-                // 切到这个容器，正在看的日志与统计就被清了。
-                .on_click(cx.listener(move |this, &_, _, cx| {
-                    cx.stop_propagation();
-                    this.toggle_container_check(tab_id, check_id.clone(), cx);
-                })),
-        );
+        .hover(|style| style.bg(p.muted.opacity(0.5)));
+    // 行首不再放类型图标：中栏已经按分类分页，每一行的类型是确定的，图标只是噪声。
+    // 状态点也只给有运行态的条目，静态资源那枚灰点是纯装饰。
+    if row.running.is_some() {
+        element = element.child(status_dot(row, p));
     }
+    let names = v_flex()
+        .flex_1()
+        .min_w_0()
+        .gap_0p5()
+        .child(div().text_sm().truncate().child(title));
+    element = element.child(match &row.subtitle {
+        Some(subtitle) => names
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .truncate()
+                    .child(subtitle.clone()),
+            )
+            .into_any_element(),
+        None => names.into_any_element(),
+    });
     if let Some(badge) = row.badge.clone() {
         element = element.child(
             div()
@@ -688,6 +812,21 @@ fn list_row(
                 cx.stop_propagation();
                 this.run_row_action(tab_id, target.clone(), action, window, cx);
             })),
+        );
+    }
+    // 勾选放在动作之后：列表扫描时先看到「这个容器能做什么」，多选是次要操作。
+    if let Some(is_checked) = row.checked {
+        let check_id = row_target_key_id(&row.target);
+        element = element.child(
+            Checkbox::new(ElementId::Name(format!("{}-check", row.key).into()))
+                .small()
+                .checked(is_checked)
+                // 勾选只改勾选集合：不吞掉冒泡的话，行自身的点击会顺手把右侧详情
+                // 切到这个容器，正在看的日志与统计就被清了。
+                .on_click(cx.listener(move |this, &_, _, cx| {
+                    cx.stop_propagation();
+                    this.toggle_container_check(tab_id, check_id.clone(), cx);
+                })),
         );
     }
     if selected {
@@ -742,55 +881,67 @@ fn status_dot(row: &ListRow, p: &Palette) -> AnyElement {
         .into_any_element()
 }
 
-/// 页脚：筛选生效时报告「显示 / 总数」，让用户知道少掉的是筛掉的而不是丢了。
-fn render_footer(
-    rows: &[ListRow],
-    total: usize,
-    query: &str,
-    filter: ContainerStateFilter,
-    quick: ContainerQuickFilter,
-    p: &Palette,
-) -> AnyElement {
-    let filtered = !query.is_empty()
-        || filter != ContainerStateFilter::All
-        || quick != ContainerQuickFilter::All;
-    if !filtered || rows.len() == total {
-        return div().into_any_element();
-    }
-    div()
-        .text_xs()
-        .text_color(p.muted_foreground)
-        .child(
-            rust_i18n::t!("container.list.matching", shown = rows.len(), total = total).to_string(),
-        )
-        .into_any_element()
-}
-
 /// 勾选行需要的主键：容器用 ID，与 `selected` 的取法一致。
 fn row_target_key_id(target: &RowTarget) -> String {
     row_key(target).to_string()
 }
 
-/// 批量条：勾选后出现，删除按钮需要连点两次。
-fn render_batch_bar(
+/// 批量条：高度固定常驻，没有勾选时只占位不绘制内容。
+///
+/// 设计原理（Why）：条件渲染会让中栏在勾选/取消时上下跳一截，肉眼就是闪烁；
+/// 固定高度后只有条内的文字与按钮切换，列表位置不变。
+fn render_status_bar(
     tab_id: TabId,
+    section: ContainerSection,
     count: usize,
     armed: bool,
+    notice: Option<&str>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let mut bar = h_flex()
         .gap_1()
         .items_center()
+        .h(px(28.0))
         .px_2()
-        .py_1()
-        .rounded(p.radius.md)
-        .bg(p.muted.opacity(0.35))
-        .child(
-            div()
-                .text_xs()
-                .child(rust_i18n::t!("container.batch.selected", count = count).to_string()),
-        );
+        .rounded(p.radius.md);
+    if section != ContainerSection::Containers || count == 0 {
+        // 没有批量选择时，这同一行用来放操作状态，不再额外加一条提示带。
+        let Some(notice) = notice else {
+            return bar.into_any_element();
+        };
+        return bar
+            .bg(p.muted.opacity(0.35))
+            .child(
+                Icon::new(IconName::Info)
+                    .xsmall()
+                    .text_color(p.muted_foreground),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_xs()
+                    .truncate()
+                    .child(notice.to_string()),
+            )
+            .child(
+                Button::new("container-notice-dismiss")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close)
+                    .tooltip(rust_i18n::t!("container.notice.dismiss").to_string())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.dismiss_container_notice(tab_id, cx);
+                    })),
+            )
+            .into_any_element();
+    }
+    bar = bar.bg(p.muted.opacity(0.35)).child(
+        div()
+            .text_xs()
+            .child(rust_i18n::t!("container.batch.selected", count = count).to_string()),
+    );
     for action in [
         ContainerBatchAction::Start,
         ContainerBatchAction::Stop,

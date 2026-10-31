@@ -186,9 +186,67 @@ fn validate_bind(bind: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 创建网络的参数。
+///
+/// 设计原理（Why）：REST 请求体、CLI argv 与界面表单三处都要同一组字段，参数
+/// 超过五个按规范收敛成参数对象。留空的字段一律不下发，让引擎按自己的版本默认
+/// 决定（我们写死 `bridge` 之类反而可能与 Podman 的默认值打架）。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContainerNetworkSpec {
+    pub name: String,
+    /// 驱动；留空由引擎决定。
+    #[serde(default)]
+    pub driver: Option<String>,
+    /// CIDR，如 `172.28.0.0/16`；留空表示让引擎分配。
+    #[serde(default)]
+    pub subnet: Option<String>,
+    /// 网关地址（不带掩码）；只有填了子网才有意义。
+    #[serde(default)]
+    pub gateway: Option<String>,
+    /// 仅宿主机内部可见：不做出站 NAT。
+    #[serde(default)]
+    pub internal: bool,
+}
+
+impl ContainerNetworkSpec {
+    /// 就地归一化并校验；错误消息带 `字段:` 前缀，界面按前缀翻成中文。
+    ///
+    /// # Errors
+    /// 名称为空、子网不是 CIDR 形式，或网关带了掩码时返回对应字段错误。
+    pub fn validate(&mut self) -> Result<(), String> {
+        self.name = self.name.trim().to_string();
+        if self.name.is_empty() {
+            return Err("name: 网络名称不能为空".to_string());
+        }
+        self.driver = trim_to_none(self.driver.take());
+        self.subnet = trim_to_none(self.subnet.take());
+        self.gateway = trim_to_none(self.gateway.take());
+        if let Some(subnet) = self.subnet.as_deref()
+            && !subnet.contains('/')
+        {
+            return Err("subnet: 子网需要 CIDR 形式，如 172.28.0.0/16".to_string());
+        }
+        if self
+            .gateway
+            .as_deref()
+            .is_some_and(|gateway| gateway.contains('/'))
+        {
+            return Err("gateway: 网关不要带掩码".to_string());
+        }
+        Ok(())
+    }
+}
+
+/// 空白字符串一律按「未填写」处理，避免把空格下发给引擎。
+fn trim_to_none(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ContainerCreateSpec, ContainerPortPublish};
+    use super::{ContainerCreateSpec, ContainerNetworkSpec, ContainerPortPublish};
 
     fn spec() -> ContainerCreateSpec {
         ContainerCreateSpec {
@@ -321,5 +379,39 @@ mod tests {
         let minimal: ContainerCreateSpec =
             serde_json::from_str("{}").expect("空对象必须能解析成默认参数");
         assert!(minimal.image.is_empty());
+    }
+
+    #[test]
+    fn network_spec_normalizes_blanks_and_validates_shapes() {
+        let mut spec = ContainerNetworkSpec {
+            name: "  edge  ".to_string(),
+            driver: Some("   ".to_string()),
+            subnet: Some("172.28.0.0/16".to_string()),
+            gateway: Some("172.28.0.1".to_string()),
+            internal: true,
+        };
+        spec.validate().expect("合法参数必须通过");
+        assert_eq!(spec.name, "edge", "名称要削掉首尾空白");
+        assert_eq!(spec.driver, None, "空白驱动按未填写处理");
+
+        let mut no_cidr = ContainerNetworkSpec {
+            name: "edge".to_string(),
+            subnet: Some("172.28.0.0".to_string()),
+            ..Default::default()
+        };
+        let error = no_cidr.validate().expect_err("缺掩码的子网必须被拒");
+        assert!(error.starts_with("subnet:"), "实际: {error}");
+
+        let mut masked_gateway = ContainerNetworkSpec {
+            name: "edge".to_string(),
+            gateway: Some("172.28.0.1/16".to_string()),
+            ..Default::default()
+        };
+        let error = masked_gateway.validate().expect_err("带掩码的网关必须被拒");
+        assert!(error.starts_with("gateway:"), "实际: {error}");
+
+        let mut blank = ContainerNetworkSpec::default();
+        let error = blank.validate().expect_err("空名称必须被拒");
+        assert!(error.starts_with("name:"), "实际: {error}");
     }
 }

@@ -117,6 +117,9 @@ impl AppShell {
         if self.containers.run_form.is_some() {
             overlays.push(self.render_container_run_form(window, cx, &p));
         }
+        if self.containers.create_dialog.is_some() {
+            overlays.push(self.render_container_create_dialog(window, cx, &p));
+        }
         overlays
     }
 }

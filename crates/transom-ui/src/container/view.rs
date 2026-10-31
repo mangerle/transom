@@ -355,8 +355,8 @@ impl AppShell {
         let menu = self.render_container_menu(tab_id, window, cx, p);
         let list = self.render_container_list(tab_id, cx, p);
         let detail = self.render_container_detail(tab_id, window, cx, p);
-        // 三栏宽度可拖拽：列表 320px 起步在长容器名/镜像名下会截断，详情区在
-        // 小窗下又不够铺开；与主窗口其他分区一样交给用户拖。
+        // 三栏宽度可拖拽：长容器名与镜像引用在固定宽度下必然截断，详情区在小窗下
+        // 又铺不开，与主窗口其他分区一样交给用户拖。默认值只是首次打开的起点。
         let (menu_split, list_split) = self
             .container_workspace(tab_id)
             .map(|workspace| (workspace.menu_split.clone(), workspace.list_split.clone()))
@@ -371,12 +371,14 @@ impl AppShell {
             .with_state(&list_split)
             .child(
                 resizable_panel()
-                    .size(px(340.0))
-                    .size_range(px(240.0)..px(620.0))
+                    .size(px(380.0))
+                    .size_range(px(260.0)..px(680.0))
                     .fixed()
-                    .child(list),
+                    // 面板本身不裁剪内容：工具条与行一旦超出宽度就整体压到右栏上
+                    // （真实窗口实测），这里补一层裁剪容器把中栏锁在自己的宽度内。
+                    .child(div().size_full().min_w_0().overflow_hidden().child(list)),
             )
-            .child(resizable_panel().child(detail));
+            .child(resizable_panel().min_w_0().child(detail));
 
         v_flex()
             .size_full()
@@ -395,7 +397,9 @@ impl AppShell {
                                 div()
                                     .id("container-menu-scroll")
                                     .size_full()
+                                    .min_w_0()
                                     .min_h_0()
+                                    .overflow_hidden()
                                     .overflow_y_scroll()
                                     .border_color(p.divider(p.border))
                                     .divider_edge(DividerEdge::Right, p.divider_width)
@@ -503,7 +507,6 @@ impl AppShell {
             )
         });
         let busy = workspace.busy;
-        let notice = workspace.notice.clone();
         let fullscreen = self.containers.fullscreen == Some(tab_id);
 
         h_flex()
@@ -536,25 +539,6 @@ impl AppShell {
                                 .text_color(p.muted_foreground)
                                 .truncate()
                                 .child(info),
-                        )
-                    })
-                    .when_some(notice, |this, notice| {
-                        this.child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .truncate()
-                                .child(notice.clone()),
-                        )
-                        .child(
-                            Button::new("container-notice-dismiss")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Close)
-                                .tooltip(rust_i18n::t!("container.notice.dismiss").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.dismiss_container_notice(tab_id, cx);
-                                })),
                         )
                     }),
             )

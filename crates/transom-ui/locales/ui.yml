@@ -4499,6 +4499,13 @@ sidebar:
     en: 'Host address copied: %{host}'
     zh-CN: '已复制主机地址: %{host}'
 container:
+  toast:
+    succeeded:
+      en: '%{action} succeeded'
+      zh-CN: '%{action} 成功'
+    failed:
+      en: '%{action} failed: %{error}'
+      zh-CN: '%{action} 失败：%{error}'
   notice:
     dismiss:
       en: Dismiss
@@ -4616,6 +4623,56 @@ container:
   search:
     en: Search containers, images, volumes or networks
     zh-CN: 搜索容器、镜像、数据卷或网络
+  create_dialog:
+    volume:
+      en: New volume
+      zh-CN: 新建数据卷
+    network:
+      en: New network
+      zh-CN: 新建网络
+    driver_placeholder:
+      en: Leave empty for the engine default
+      zh-CN: 留空使用引擎默认
+    subnet_placeholder:
+      en: 'CIDR such as 172.28.0.0/16; leave empty for the engine default'
+      zh-CN: 如 172.28.0.0/16；留空由引擎分配
+    gateway_placeholder:
+      en: 'Gateway without mask; leave empty for the engine default'
+      zh-CN: 网关不带掩码；留空由引擎分配
+    internal:
+      en: Host-internal only (no outbound NAT)
+      zh-CN: 仅宿主机内部访问（不做出站 NAT）
+    name_required:
+      en: Name is required
+      zh-CN: 名称不能为空
+  prune:
+    volumes:
+      en: Prune unused volumes
+      zh-CN: 清理未使用卷
+    images:
+      en: Prune dangling images
+      zh-CN: 清理悬空镜像
+    confirm:
+      en: Click again to confirm
+      zh-CN: 再点一次确认清理
+    hint:
+      en: Removes every volume not referenced by a container; cannot be undone
+      zh-CN: 删除所有未被容器引用的数据卷，不可恢复
+    images_hint:
+      en: Removes untagged images not referenced by any other image; cannot be undone
+      zh-CN: 删除没有标签且不被其他镜像引用的镜像，不可恢复
+    done:
+      en: 'Pruned %{count} unused volumes'
+      zh-CN: '已清理 %{count} 个未使用数据卷'
+    images_done:
+      en: 'Pruned %{count} dangling images'
+      zh-CN: '已清理 %{count} 个悬空镜像'
+    none:
+      en: No unused volumes to prune
+      zh-CN: 没有需要清理的未使用卷
+    images_none:
+      en: No dangling images to prune
+      zh-CN: 没有需要清理的悬空镜像
   create_placeholder:
     en: Name or image reference
     zh-CN: 名称或镜像引用
@@ -4663,6 +4720,12 @@ container:
     size:
       en: Size
       zh-CN: 大小
+    ascending:
+      en: Ascending
+      zh-CN: 升序
+    descending:
+      en: Descending
+      zh-CN: 降序
   list:
     none:
       en: No matching items
@@ -4700,6 +4763,12 @@ container:
     overview:
       en: Overview
       zh-CN: 基础信息
+    no_inspect:
+      en: No raw inspect data for this item
+      zh-CN: 该条目没有原始 inspect 数据
+    layer_list:
+      en: 'Image layers (%{count})'
+      zh-CN: '镜像层（%{count} 层）'
     logs:
       en: Logs
       zh-CN: 日志
@@ -4718,6 +4787,13 @@ container:
     loading:
       en: Loading details…
       zh-CN: 正在加载详情…
+  bool:
+    yes:
+      en: 'Yes'
+      zh-CN: '是'
+    no:
+      en: 'No'
+      zh-CN: '否'
   state:
     connecting:
       en: Connecting to engine…
@@ -4916,6 +4992,27 @@ container:
     connected:
       en: Connected containers
       zh-CN: 已连接容器
+    options:
+      en: Driver options
+      zh-CN: 驱动选项
+    internal:
+      en: Host-internal only
+      zh-CN: 仅内部访问
+    attachable:
+      en: Attachable
+      zh-CN: 允许动态接入
+    enable_ipv6:
+      en: IPv6 enabled
+      zh-CN: 启用 IPv6
+    repo_digests:
+      en: Repo digests
+      zh-CN: 仓库摘要
+    parent:
+      en: Parent image
+      zh-CN: 父镜像
+    virtual_size:
+      en: Virtual size
+      zh-CN: 虚拟大小
   action:
     compose_up:
       en: Redeploy from files
@@ -4999,13 +5096,28 @@ container:
     open:
       en: Open terminal
       zh-CN: 打开终端
+    as_user:
+      en: Choose the user to open the shell as
+      zh-CN: 选择进入终端所用的用户
+    current_user:
+      en: 'Current user: %{user}'
+      zh-CN: '当前用户：%{user}'
+    current_default_user:
+      en: 'Current user: the image default user'
+      zh-CN: '当前用户：镜像默认用户'
+    as_root:
+      en: Open as root
+      zh-CN: 以 root 进入
+    as_default:
+      en: Open as the image default user
+      zh-CN: 以镜像默认用户进入
     closed:
       en: Terminal session ended
       zh-CN: 终端会话已结束
   stats:
-    auto:
-      en: Auto refresh
-      zh-CN: 自动刷新
+    not_running:
+      en: The container is not running, so stats cannot be sampled
+      zh-CN: 容器未运行，无法采样统计
     waiting:
       en: Collecting stats…
       zh-CN: 正在采样统计…
@@ -5024,6 +5136,105 @@ container:
     pids:
       en: Processes
       zh-CN: 进程数
+    disk:
+      en: Disk
+      zh-CN: 磁盘
+    ports:
+      en: Ports
+      zh-CN: 端口映射
+    processes:
+      en: Processes
+      zh-CN: 进程
+    core_usage:
+      en: 'Per-core usage (%{count})'
+      zh-CN: '每核占用（%{count} 核）'
+    core_count:
+      en: '%{count} cores'
+      zh-CN: '%{count} 核'
+    host_load:
+      en: Host load average
+      zh-CN: 宿主负载
+    select_first:
+      en: Select a container first
+      zh-CN: 先选择一个容器
+    timeout:
+      en: Sampling timed out. Please retry
+      zh-CN: 采样超时，请重试
+    rss:
+      en: Resident memory
+      zh-CN: 常驻内存
+    cache:
+      en: Page cache
+      zh-CN: 页缓存
+    interfaces:
+      en: Interfaces
+      zh-CN: 网卡
+    writable_layer:
+      en: Writable layer
+      zh-CN: 可写层
+    image_size:
+      en: Image layers
+      zh-CN: 镜像大小
+    mounts:
+      en: Mounts
+      zh-CN: 挂载
+    published:
+      en: Published
+      zh-CN: 已发布
+    exposed:
+      en: Exposed by the image
+      zh-CN: 镜像暴露
+    no_ports:
+      en: No port mappings
+      zh-CN: 没有端口映射
+    unpublished_port:
+      en: '%{port} (not published)'
+      zh-CN: '%{port}（未发布）'
+    loading:
+      en: Loading…
+      zh-CN: 加载中…
+    process_loading:
+      en: Loading processes…
+      zh-CN: 正在加载进程…
+    process_empty:
+      en: No process data
+      zh-CN: 没有进程数据
+    process_refresh:
+      en: Refresh processes
+      zh-CN: 刷新进程
+    process_limit:
+      en: 'Showing the first %{count} processes'
+      zh-CN: '仅显示前 %{count} 个进程'
+    process_user:
+      en: User
+      zh-CN: 用户
+    process_mem:
+      en: Memory
+      zh-CN: 内存
+    process_command:
+      en: Command
+      zh-CN: 命令
+    trend:
+      en: 'Trend (%{window})'
+      zh-CN: '走势（%{window}）'
+    window_40s:
+      en: 40 seconds
+      zh-CN: 40 秒
+    window_2m:
+      en: 2 minutes
+      zh-CN: 2 分钟
+    window_7m:
+      en: about 7 minutes
+      zh-CN: 约 7 分钟
+    ports_summary:
+      en: '%{published} published · %{exposed} exposed'
+      zh-CN: '%{published} 已发布 · %{exposed} 暴露'
+    oom_title:
+      en: Out of memory
+      zh-CN: 内存不足（OOM）
+    oom_detail:
+      en: The container was killed by the kernel OOM killer. Check its memory limit.
+      zh-CN: 容器上次退出被内核 OOM 终止，请检查内存上限。
   files:
     new_dir:
       en: New folder
@@ -5037,6 +5248,15 @@ container:
     upload:
       en: Upload
       zh-CN: 上传
+    download:
+      en: Download
+      zh-CN: 下载
+    open:
+      en: Open folder
+      zh-CN: 打开目录
+    preview:
+      en: Preview
+      zh-CN: 预览
     empty:
       en: This directory is empty
       zh-CN: 目录为空

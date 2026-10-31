@@ -7,9 +7,10 @@ use serde::Deserialize;
 use serde::de::Deserializer;
 use std::collections::HashMap;
 use transom_core::{
-    ContainerDetails, ContainerImageDetails, ContainerImageSummary, ContainerMount,
-    ContainerNetworkAttachment, ContainerNetworkDetails, ContainerNetworkSummary, ContainerPort,
-    ContainerState, ContainerStats, ContainerSummary, ContainerVolumeSummary, short_id,
+    ContainerBlockDeviceIo, ContainerDetails, ContainerImageDetails, ContainerImageSummary,
+    ContainerInterfaceIo, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
+    ContainerNetworkSummary, ContainerPort, ContainerProcess, ContainerState, ContainerStats,
+    ContainerSummary, ContainerVolumeSummary, short_id,
 };
 
 /// 把线格式里的 `null` 收敛成空集合。
@@ -275,6 +276,11 @@ pub struct ContainerInspect {
     pub mounts: Vec<MountItem>,
     #[serde(rename = "NetworkSettings", default)]
     pub network_settings: Option<NetworkSettings>,
+    /// 可写层 / 镜像层占用；只有 `?size=1` 时引擎才计算。
+    #[serde(rename = "SizeRw", default)]
+    pub size_rw: Option<u64>,
+    #[serde(rename = "SizeRootFs", default)]
+    pub size_root_fs: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -296,12 +302,17 @@ pub struct ContainerConfig {
     pub working_dir: Option<String>,
     #[serde(rename = "Labels", default, deserialize_with = "null_as_empty")]
     pub labels: HashMap<String, String>,
+    /// 镜像声明的暴露端口：键形如 `80/tcp`，值恒为 null。
+    #[serde(rename = "ExposedPorts", default, deserialize_with = "null_as_empty")]
+    pub exposed_ports: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct InspectState {
     #[serde(rename = "Status", default)]
     pub status: Option<String>,
+    #[serde(rename = "OOMKilled", default)]
+    pub oom_killed: bool,
     #[serde(rename = "ExitCode", default)]
     pub exit_code: Option<i64>,
     #[serde(rename = "StartedAt", default)]
@@ -406,6 +417,14 @@ impl ContainerInspect {
             ports,
             mounts: self.mounts.into_iter().map(MountItem::into_mount).collect(),
             compose_project: config.labels.get("com.docker.compose.project").cloned(),
+            oom_killed: state.oom_killed,
+            size_rw: self.size_rw.unwrap_or(0),
+            size_root_fs: self.size_root_fs.unwrap_or(0),
+            exposed_ports: {
+                let mut ports: Vec<String> = config.exposed_ports.keys().cloned().collect();
+                ports.sort();
+                ports
+            },
             inspect: raw,
         }
     }
@@ -417,6 +436,35 @@ pub fn parse_rfc3339_secs(value: Option<&str>) -> Option<i64> {
     chrono::DateTime::parse_from_rfc3339(value)
         .ok()
         .map(|datetime| datetime.timestamp())
+}
+
+/// `POST /images/prune` 响应。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ImagePruneResponse {
+    /// 没有可删条目时引擎返回 `null`，不能交给 `default` 硬接。
+    #[serde(rename = "ImagesDeleted", default, deserialize_with = "null_as_empty")]
+    pub images_deleted: Vec<ImagePruneEntry>,
+    #[serde(rename = "SpaceReclaimed", default)]
+    pub space_reclaimed: u64,
+}
+
+/// 单条镜像清理记录：引擎按动作回报，取消标签与删除镜像是两种条目。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ImagePruneEntry {
+    #[serde(rename = "Untagged", default)]
+    pub untagged: Option<String>,
+    #[serde(rename = "Deleted", default)]
+    pub deleted: Option<String>,
+}
+
+/// `POST /volumes/prune` 响应。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct VolumePruneResponse {
+    /// 同镜像清理：没有可删条目时是 `null`。
+    #[serde(rename = "VolumesDeleted", default, deserialize_with = "null_as_empty")]
+    pub volumes_deleted: Vec<String>,
+    #[serde(rename = "SpaceReclaimed", default)]
+    pub space_reclaimed: u64,
 }
 
 /// `GET /volumes` 响应。
@@ -438,20 +486,28 @@ pub struct VolumeItem {
     pub created_at: Option<String>,
     #[serde(rename = "Labels", default, deserialize_with = "null_as_empty")]
     pub labels: HashMap<String, String>,
+    #[serde(rename = "Options", default, deserialize_with = "null_as_empty")]
+    pub options: HashMap<String, String>,
 }
 
 impl VolumeItem {
     pub fn into_summary(self) -> ContainerVolumeSummary {
-        let mut labels: Vec<(String, String)> = self.labels.into_iter().collect();
-        labels.sort_by(|left, right| left.0.cmp(&right.0));
         ContainerVolumeSummary {
             name: self.name,
             driver: self.driver,
             mountpoint: self.mountpoint,
             created: self.created_at,
-            labels,
+            labels: sorted_pairs(self.labels),
+            options: sorted_pairs(self.options),
         }
     }
+}
+
+/// 把引擎的 map 字段摊平成按 key 排序的列表：界面渲染与差分都要求稳定顺序。
+fn sorted_pairs(map: HashMap<String, String>) -> Vec<(String, String)> {
+    let mut pairs: Vec<(String, String)> = map.into_iter().collect();
+    pairs.sort_by(|left, right| left.0.cmp(&right.0));
+    pairs
 }
 
 /// `GET /networks` 列表项。
@@ -469,11 +525,22 @@ pub struct NetworkItem {
     pub ipam: Option<Ipam>,
     #[serde(rename = "Containers", default)]
     pub containers: Option<HashMap<String, NetworkContainerItem>>,
+    #[serde(rename = "Internal", default)]
+    pub internal: bool,
+    #[serde(rename = "Attachable", default)]
+    pub attachable: bool,
+    #[serde(rename = "EnableIPv6", default)]
+    pub enable_ipv6: bool,
+    /// 引擎在无标签时返回 `null`，`HashMap` 的 `default` 接不住显式 null。
+    #[serde(rename = "Labels", default, deserialize_with = "null_as_empty")]
+    pub labels: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Ipam {
-    #[serde(rename = "Config", default)]
+    /// 内置网络（bridge/host/none）会返回 `"Config": null`；`Vec` 的 `default`
+    /// 只覆盖字段缺失，接不住显式 null，曾经导致网络列表整体解析失败。
+    #[serde(rename = "Config", default, deserialize_with = "null_as_empty")]
     pub config: Vec<IpamConfig>,
 }
 
@@ -508,7 +575,8 @@ impl NetworkItem {
         }
     }
 
-    pub fn into_details(self) -> ContainerNetworkDetails {
+    /// 收敛为界面详情；`raw` 是引擎原始 JSON，供「原始 JSON」视图直接展示。
+    pub fn into_details(self, raw: String) -> ContainerNetworkDetails {
         let summary = self.summary();
         let gateway = self
             .ipam
@@ -533,6 +601,11 @@ impl NetworkItem {
             summary,
             gateway,
             connected,
+            internal: self.internal,
+            attachable: self.attachable,
+            enable_ipv6: self.enable_ipv6,
+            labels: sorted_pairs(self.labels),
+            inspect: raw,
         }
     }
 }
@@ -554,6 +627,12 @@ pub struct ImageInspect {
     pub architecture: Option<String>,
     #[serde(rename = "RootFS", default)]
     pub root_fs: Option<RootFs>,
+    #[serde(rename = "RepoDigests", default)]
+    pub repo_digests: Option<Vec<String>>,
+    #[serde(rename = "ParentId", default)]
+    pub parent_id: Option<String>,
+    #[serde(rename = "VirtualSize", default)]
+    pub virtual_size: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -563,15 +642,22 @@ pub struct RootFs {
 }
 
 impl ImageInspect {
-    pub fn into_details(self) -> ContainerImageDetails {
+    /// 收敛为界面详情；`raw` 是引擎原始 JSON，供「原始 JSON」视图直接展示。
+    pub fn into_details(self, raw: String) -> ContainerImageDetails {
+        let layer_digests = self.root_fs.map(|root| root.layers).unwrap_or_default();
         ContainerImageDetails {
             id: self.id,
             tags: self.repo_tags.unwrap_or_default(),
+            repo_digests: self.repo_digests.unwrap_or_default(),
+            parent: self.parent_id.unwrap_or_default(),
+            virtual_size: self.virtual_size.unwrap_or(0),
+            inspect: raw,
             size: self.size,
             created: parse_rfc3339_secs(self.created.as_deref()).unwrap_or(0),
             os: self.os,
             architecture: self.architecture,
-            layers: self.root_fs.map(|root| root.layers.len()).unwrap_or(0),
+            layers: layer_digests.len(),
+            layer_digests,
         }
     }
 }
@@ -617,6 +703,9 @@ pub struct MemoryStats {
     pub usage: u64,
     #[serde(rename = "limit", default)]
     pub limit: u64,
+    /// 细分项（`rss`/`cache`/`inactive_file` 等）：统计页用它展示内存构成。
+    #[serde(rename = "stats", default, deserialize_with = "null_as_empty")]
+    pub stats: HashMap<String, u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -639,12 +728,64 @@ pub struct BlkioEntry {
     pub op: String,
     #[serde(rename = "value", default)]
     pub value: u64,
+    #[serde(rename = "major", default)]
+    pub major: Option<u16>,
+    #[serde(rename = "minor", default)]
+    pub minor: Option<u16>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct PidsStats {
     #[serde(rename = "current", default)]
     pub current: u64,
+}
+
+/// `GET /containers/{id}/top` 响应（`ps_args=aux`）。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct TopResponse {
+    #[serde(rename = "Titles", default, deserialize_with = "null_as_empty")]
+    pub titles: Vec<String>,
+    #[serde(rename = "Processes", default, deserialize_with = "null_as_empty")]
+    pub processes: Vec<Vec<String>>,
+}
+
+impl TopResponse {
+    /// 按标题定位列：不同镜像的 `ps` 列顺序可能不同，不能按下标硬取。
+    pub fn into_processes(self) -> Vec<ContainerProcess> {
+        let column = |name: &str| {
+            self.titles
+                .iter()
+                .position(|title| title.eq_ignore_ascii_case(name))
+        };
+        let pid = column("PID");
+        let user = column("USER");
+        let cpu = column("%CPU");
+        let mem = column("%MEM");
+        let command = column("COMMAND")
+            .or_else(|| column("COMMAND_AND_ARGS"))
+            .or_else(|| column("ARGS"))
+            .or_else(|| column("CMD"));
+        self.processes
+            .into_iter()
+            .map(|row| {
+                let cell = |index: Option<usize>| {
+                    index
+                        .and_then(|index| row.get(index))
+                        .cloned()
+                        .unwrap_or_default()
+                };
+                ContainerProcess {
+                    pid: cell(pid),
+                    user: cell(user),
+                    cpu_percent: cell(cpu).parse().unwrap_or(0.0),
+                    mem_percent: cell(mem).parse().unwrap_or(0.0),
+                    command: command
+                        .and_then(|index| row.get(index..).map(|tail| tail.join(" ")))
+                        .unwrap_or_default(),
+                }
+            })
+            .collect()
+    }
 }
 
 impl StatsResponse {
@@ -685,6 +826,25 @@ impl StatsResponse {
         } else {
             0.0
         };
+        // 每核占用：用各核累计 jiffies 的差值除以单核系统时间增量。
+        let mut cpu_cores = Vec::new();
+        if system_delta > 0
+            && let (Some(current), Some(previous)) = (
+                self.cpu_stats.cpu_usage.percpu_usage.as_ref(),
+                previous_cpu.cpu_usage.percpu_usage.as_ref(),
+            )
+            && current.len() == previous.len()
+        {
+            let per_core_system = system_delta as f64 / online_cpus as f64;
+            cpu_cores = current
+                .iter()
+                .zip(previous)
+                .map(|(now, before)| {
+                    let delta = now.saturating_sub(*before) as f64;
+                    (delta / per_core_system * 100.0).clamp(0.0, 100.0) as f32
+                })
+                .collect();
+        }
         let memory_used = self.memory_stats.usage;
         let memory_limit = self.memory_stats.limit;
         let memory_percent = if memory_limit > 0 {
@@ -692,13 +852,42 @@ impl StatsResponse {
         } else {
             0.0
         };
-        let (mut network_rx, mut network_tx) = (0u64, 0u64);
-        if let Some(networks) = &self.networks {
-            for interface in networks.values() {
-                network_rx = network_rx.saturating_add(interface.rx_bytes);
-                network_tx = network_tx.saturating_add(interface.tx_bytes);
-            }
-        }
+        // cgroup v1 用 rss/cache，v2 用 anon/inactive_file，两套键都认。
+        let memory_rss = self
+            .memory_stats
+            .stats
+            .get("rss")
+            .or_else(|| self.memory_stats.stats.get("anon"))
+            .copied()
+            .unwrap_or(0);
+        let memory_cache = self
+            .memory_stats
+            .stats
+            .get("cache")
+            .or_else(|| self.memory_stats.stats.get("inactive_file"))
+            .copied()
+            .unwrap_or(0);
+        let mut networks: Vec<ContainerInterfaceIo> = self
+            .networks
+            .as_ref()
+            .map(|map| {
+                map.iter()
+                    .map(|(name, interface)| ContainerInterfaceIo {
+                        name: name.clone(),
+                        rx_bytes: interface.rx_bytes,
+                        tx_bytes: interface.tx_bytes,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        networks.sort_by(|left, right| left.name.cmp(&right.name));
+        let network_rx = networks
+            .iter()
+            .fold(0u64, |total, item| total.saturating_add(item.rx_bytes));
+        let network_tx = networks
+            .iter()
+            .fold(0u64, |total, item| total.saturating_add(item.tx_bytes));
+        let mut per_device: HashMap<(u16, u16), (u64, u64)> = HashMap::new();
         let (mut block_read, mut block_write) = (0u64, 0u64);
         if let Some(entries) = self
             .blkio_stats
@@ -707,21 +896,49 @@ impl StatsResponse {
         {
             for entry in entries {
                 match entry.op.as_str() {
-                    "read" | "Read" => block_read = block_read.saturating_add(entry.value),
-                    "write" | "Write" => block_write = block_write.saturating_add(entry.value),
+                    "read" | "Read" => {
+                        block_read = block_read.saturating_add(entry.value);
+                        let slot = per_device
+                            .entry((entry.major.unwrap_or(0), entry.minor.unwrap_or(0)))
+                            .or_default();
+                        slot.0 = slot.0.saturating_add(entry.value);
+                    }
+                    "write" | "Write" => {
+                        block_write = block_write.saturating_add(entry.value);
+                        let slot = per_device
+                            .entry((entry.major.unwrap_or(0), entry.minor.unwrap_or(0)))
+                            .or_default();
+                        slot.1 = slot.1.saturating_add(entry.value);
+                    }
                     _ => {}
                 }
             }
         }
+        let mut block_devices: Vec<ContainerBlockDeviceIo> = per_device
+            .into_iter()
+            .map(|((major, minor), (read, write))| ContainerBlockDeviceIo {
+                device: format!("{major}:{minor}"),
+                read_bytes: read,
+                write_bytes: write,
+            })
+            .collect();
+        block_devices.sort_by(|left, right| left.device.cmp(&right.device));
         ContainerStats {
             cpu_percent,
+            cpu_count: online_cpus as u32,
+            cpu_cores,
+            host_load: None,
             memory_used,
             memory_limit,
             memory_percent,
+            memory_rss,
+            memory_cache,
             network_rx,
             network_tx,
+            networks,
             block_read,
             block_write,
+            block_devices,
             pids: self
                 .pids_stats
                 .as_ref()
@@ -775,8 +992,9 @@ pub struct ProgressDetail {
 #[cfg(test)]
 mod tests {
     use super::{
-        ContainerInspect, ContainerListItem, ImageListItem, NetworkSettings, VersionResponse,
-        VolumeItem,
+        ContainerInspect, ContainerListItem, ImageListItem, ImagePruneResponse, NetworkItem,
+        NetworkSettings, StatsResponse, TopResponse, VersionResponse, VolumeItem,
+        VolumePruneResponse,
     };
     use transom_core::ContainerState;
 
@@ -807,6 +1025,114 @@ mod tests {
         let image = images.into_iter().next().expect("至少一个").into_summary();
         assert!(image.tags.is_empty());
         assert_eq!(image.display_name(), "f00");
+    }
+
+    /// 真机回归：内置网络的 `IPAM.Config` 与无标签网络的 `Labels` 会是显式 null，
+    /// 不能让整个网络列表解析失败。
+    #[test]
+    fn network_list_tolerates_null_ipam_and_labels() {
+        let json = r#"{
+            "Id": "n1",
+            "Name": "bridge",
+            "Driver": "bridge",
+            "Scope": "local",
+            "IPAM": { "Driver": "default", "Options": null, "Config": null },
+            "Labels": null,
+            "Containers": null
+        }"#;
+        let item: NetworkItem =
+            serde_json::from_str(json).expect("网络列表必须能反序列化 null 字段");
+        let summary = item.summary();
+        assert_eq!(summary.name, "bridge");
+        assert!(summary.subnet.is_none(), "Config 为 null 时应按无子网处理");
+    }
+
+    /// 统计快照要能给出每核、分网卡与分设备明细：这几项是统计页卡片的数据来源。
+    #[test]
+    fn stats_report_cores_interfaces_and_devices() {
+        let current: StatsResponse = serde_json::from_str(
+            r#"{
+                "cpu_stats": {
+                    "cpu_usage": {"total_usage": 160000, "percpu_usage": [80000, 80000]},
+                    "system_cpu_usage": 2000000,
+                    "online_cpus": 2
+                },
+                "precpu_stats": {
+                    "cpu_usage": {"total_usage": 100000, "percpu_usage": [50000, 50000]},
+                    "system_cpu_usage": 1000000,
+                    "online_cpus": 2
+                },
+                "memory_stats": {
+                    "usage": 100,
+                    "limit": 200,
+                    "stats": {"rss": 60, "inactive_file": 20}
+                },
+                "networks": {"eth0": {"rx_bytes": 1000, "tx_bytes": 200}},
+                "blkio_stats": {
+                    "io_service_bytes_recursive": [
+                        {"major": 8, "minor": 0, "op": "read", "value": 10},
+                        {"major": 8, "minor": 0, "op": "write", "value": 20}
+                    ]
+                },
+                "pids_stats": {"current": 3}
+            }"#,
+        )
+        .expect("统计响应必须能反序列化");
+        let previous: StatsResponse = serde_json::from_str(
+            r#"{
+                "cpu_stats": {
+                    "cpu_usage": {"total_usage": 100000, "percpu_usage": [50000, 50000]},
+                    "system_cpu_usage": 1000000,
+                    "online_cpus": 2
+                }
+            }"#,
+        )
+        .expect("上一帧统计必须能反序列化");
+        let stats = current.to_stats(Some(&previous));
+        assert!((stats.cpu_percent - 12.0).abs() < 0.01, "总占用");
+        assert_eq!(stats.cpu_cores.len(), 2);
+        assert!((stats.cpu_cores[0] - 6.0).abs() < 0.01, "每核占用");
+        assert_eq!(stats.memory_rss, 60);
+        assert_eq!(stats.memory_cache, 20);
+        assert_eq!(stats.networks[0].name, "eth0");
+        assert_eq!(stats.networks[0].rx_bytes, 1000);
+        assert_eq!(stats.block_devices[0].device, "8:0");
+        assert_eq!(stats.block_devices[0].read_bytes, 10);
+        assert_eq!(stats.block_devices[0].write_bytes, 20);
+    }
+
+    /// `docker top` 的列顺序不固定，按标题定位。
+    #[test]
+    fn top_response_maps_columns_by_title() {
+        let top: TopResponse = serde_json::from_str(
+            r#"{
+                "Titles": ["PID", "USER", "%CPU", "%MEM", "COMMAND"],
+                "Processes": [
+                    ["1", "root", "0.0", "0.1", "sleep 3600"],
+                    ["7", "nobody", "1.5", "0.2", "sh -c echo hi"]
+                ]
+            }"#,
+        )
+        .expect("top 响应必须能反序列化");
+        let processes = top.into_processes();
+        assert_eq!(processes.len(), 2);
+        assert_eq!(processes[0].pid, "1");
+        assert_eq!(processes[0].user, "root");
+        assert!((processes[1].cpu_percent - 1.5).abs() < f32::EPSILON);
+        assert_eq!(processes[1].command, "sh -c echo hi");
+    }
+
+    /// 清理接口在「没有可删条目」时返回 null 数组，不能因此报解析失败。
+    #[test]
+    fn prune_responses_tolerate_null_arrays() {
+        let images: ImagePruneResponse =
+            serde_json::from_str(r#"{"ImagesDeleted":null,"SpaceReclaimed":0}"#)
+                .expect("镜像清理响应必须能反序列化");
+        assert!(images.images_deleted.is_empty());
+        let volumes: VolumePruneResponse =
+            serde_json::from_str(r#"{"VolumesDeleted":null,"SpaceReclaimed":0}"#)
+                .expect("卷清理响应必须能反序列化");
+        assert!(volumes.volumes_deleted.is_empty());
     }
 
     #[test]
