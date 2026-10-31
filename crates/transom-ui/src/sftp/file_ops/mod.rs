@@ -5,7 +5,6 @@ mod remote_inputs;
 mod validate;
 
 use crate::app::AppShell;
-use crate::keymap;
 use crate::sftp::{SftpConfirmModalState, SftpPendingDelete, SftpRemotePaneRef};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpOperation, TabId};
@@ -120,23 +119,6 @@ impl AppShell {
     /// 确定删除目标；与右键菜单删除共用同一操作路径，活动栏由统一选中方法维护，
     /// 不会出现删错栏位的失配。删除不可恢复，确认步骤由
     /// `sftp_delete_selection` 与 `sftp_local_delete_selection` 统一弹出。
-    pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.delete_selected(cx));
-        }
-    }
-
-    pub(crate) fn on_delete_sftp_selection(
-        &mut self,
-        _: &keymap::DeleteSftpSelection,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(tab_id) = self.state.workspace.active_tab {
-            self.sftp_delete_selected(tab_id, cx);
-        }
-    }
-
     pub(crate) fn sftp_open_local_mkdir_modal(
         &mut self,
         tab_id: TabId,

@@ -345,20 +345,6 @@ impl AppShell {
         }
     }
 
-    pub(crate) fn on_toggle_sftp_hidden_pane(
-        &mut self,
-        _: &keymap::ToggleSftpHidden,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(tab_id) = self.state.workspace.active_tab else {
-            return;
-        };
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.on_toggle_hidden_action(cx));
-        }
-    }
-
     pub(crate) fn sftp_toggle_filter_local(
         &mut self,
         tab_id: TabId,
@@ -369,20 +355,4 @@ impl AppShell {
             view.update(cx, |view, cx| view.toggle_filter_local(window, cx));
         }
     }
-
-    pub(crate) fn on_focus_sftp_filter_pane(
-        &mut self,
-        _: &keymap::FocusSftpFilter,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(tab_id) = self.state.workspace.active_tab else {
-            return;
-        };
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.on_focus_filter_action(window, cx));
-        }
-    }
 }
-
-use crate::keymap;

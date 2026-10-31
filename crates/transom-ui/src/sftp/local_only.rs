@@ -12,7 +12,6 @@ use super::{
 };
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
-use crate::keymap;
 use crate::palette::{Palette, sftp_text_input};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputEvent;
@@ -155,7 +154,6 @@ impl AppShell {
         let quick_paths = panel.local.quick_paths.clone();
         let show_filter = panel.local.show_filter;
         let show_hidden = panel.local.show_hidden;
-        let focus_handle = panel.focus_handle.clone();
         let local_error = panel.local.error.clone();
         let status = panel.queue.status.clone();
         let local_filter_query = local_filter_input
@@ -222,13 +220,9 @@ impl AppShell {
             })
         };
 
+        // 外层容器的焦点、键位与监听由实体统一挂载；这里只构建内容，
+        // 避免同一面板出现两套 on_action 导致动作重复执行。
         let mut panel = v_flex()
-            .id(ElementId::Name("local-file-panel-container".into()))
-            .track_focus(&focus_handle)
-            .key_context(keymap::SFTP_CONTEXT)
-            .on_action(cx.listener(Self::on_focus_sftp_filter_pane))
-            .on_action(cx.listener(Self::on_toggle_sftp_hidden_pane))
-            .on_action(cx.listener(Self::on_delete_sftp_selection))
             .size_full()
             .overflow_hidden()
             .bg(p.sidebar)

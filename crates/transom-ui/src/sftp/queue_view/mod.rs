@@ -241,8 +241,8 @@ impl AppShell {
                                         rust_i18n::t!("sftp.queue.filter_rules_tooltip")
                                             .to_string(),
                                     )
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.sftp_open_filter_modal(window, cx);
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.sftp_open_filter_modal(tab_id, window, cx);
                                     })),
                             )
                             .child(
