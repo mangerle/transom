@@ -1068,6 +1068,25 @@ pub(crate) struct ContainerRunForm {
 }
 
 impl ContainerRunForm {
+    /// 脏判定用的文本快照：取消时与打开基线逐项比对。
+    pub(crate) fn text_values(&self, cx: &App) -> Vec<String> {
+        [
+            &self.name,
+            &self.image,
+            &self.command,
+            &self.ports,
+            &self.binds,
+            &self.env,
+            &self.health,
+            &self.health_interval,
+            &self.memory,
+            &self.cpus,
+        ]
+        .into_iter()
+        .map(|input| input.read(cx).value().to_string())
+        .collect()
+    }
+
     pub(crate) fn new(
         tab_id: TabId,
         image_hint: Option<String>,
@@ -1192,6 +1211,14 @@ pub(crate) struct ContainerFormState {
 }
 
 impl ContainerFormState {
+    /// 脏判定用的文本快照：名称与端点值。
+    pub(crate) fn text_values(&self, cx: &App) -> Vec<String> {
+        vec![
+            self.name.read(cx).value().to_string(),
+            self.endpoint_value.read(cx).value().to_string(),
+        ]
+    }
+
     pub(crate) fn new(
         window: &mut Window,
         cx: &mut Context<crate::app::AppShell>,

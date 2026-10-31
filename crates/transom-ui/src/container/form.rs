@@ -8,9 +8,7 @@ use crate::container::list::create_button_label;
 use crate::container::types::{
     ContainerFormState, ContainerRunForm, ContainerSection, EndpointChoice,
 };
-use crate::keymap;
 use crate::palette::Palette;
-use gpui_kit::KeyDownEvent;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -39,11 +37,12 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 渲染容器表单模态。
-    pub(crate) fn render_container_form(
-        &mut self,
+    /// 容器连接表单的弹窗体；外观与关闭件由 Dialog 容器负责。
+    pub(crate) fn render_container_form_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(form) = self.containers.form.as_ref() else {
@@ -79,24 +78,30 @@ impl AppShell {
                                     .small()
                                     .label("Docker")
                                     .selected(form.kind == ContainerEngineKind::Docker)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(form) = this.containers.form.as_mut() {
-                                            form.kind = ContainerEngineKind::Docker;
-                                        }
-                                        cx.notify();
-                                    })),
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        |this, _: &ClickEvent, _, cx| {
+                                            if let Some(form) = this.containers.form.as_mut() {
+                                                form.kind = ContainerEngineKind::Docker;
+                                            }
+                                            cx.notify();
+                                        },
+                                    )),
                             )
                             .child(
                                 Button::new("container-kind-podman")
                                     .small()
                                     .label("Podman")
                                     .selected(form.kind == ContainerEngineKind::Podman)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(form) = this.containers.form.as_mut() {
-                                            form.kind = ContainerEngineKind::Podman;
-                                        }
-                                        cx.notify();
-                                    })),
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        |this, _: &ClickEvent, _, cx| {
+                                            if let Some(form) = this.containers.form.as_mut() {
+                                                form.kind = ContainerEngineKind::Podman;
+                                            }
+                                            cx.notify();
+                                        },
+                                    )),
                             ),
                     ),
             )
@@ -118,8 +123,9 @@ impl AppShell {
                             .xsmall()
                             .label(rust_i18n::t!(choice.label_key()).to_string())
                             .selected(selected)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
                                     if let Some(form) = this.containers.form.as_mut() {
                                         form.endpoint_choice = choice;
                                         form.test_status = None;
@@ -157,15 +163,18 @@ impl AppShell {
                     .small()
                     .icon(IconName::Trash)
                     .label(rust_i18n::t!("common.delete").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        if let Some(id) =
-                            this.containers.form.as_ref().and_then(|form| form.editing)
-                        {
-                            this.containers.form = None;
-                            this.containers.form_folder = None;
-                            this.delete_container_profile(id, window, cx);
-                        }
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            if let Some(id) =
+                                this.containers.form.as_ref().and_then(|form| form.editing)
+                            {
+                                this.containers.form = None;
+                                this.containers.form_folder = None;
+                                this.delete_container_profile(id, window, cx);
+                            }
+                        },
+                    )),
             );
         }
         footer = footer
@@ -175,55 +184,39 @@ impl AppShell {
                     .small()
                     .icon(IconName::Gauge)
                     .label(rust_i18n::t!("container.form.test").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.test_container_form(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.test_container_form(cx),
+                    )),
             )
             .child(
                 Button::new("container-form-cancel")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.containers.form = None;
-                        this.containers.form_folder = None;
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.containers.form = None;
+                            this.containers.form_folder = None;
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("container-form-save")
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.save_container_form(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.save_container_form(cx),
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
-            "container-form-modal",
-            title,
-            None,
-            content,
-            Some(footer),
-            px(560.0),
-            p,
-        );
-        let backdrop = div()
-            .id("container-form-backdrop")
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.containers.form = None;
-                this.containers.form_folder = None;
-                cx.notify();
-            }))
-            .key_context(keymap::OVERLAY_CONTEXT)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                this.on_container_overlay_key(event, None, cx);
-            }))
-            .child(div().occlude().child(dialog));
-        Self::overlay(backdrop, p)
+        Self::dialog_body("container-form-body", title, None, content, Some(footer))
     }
 
-    fn save_container_form(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn save_container_form(&mut self, cx: &mut Context<Self>) {
         let Some(form) = self.containers.form.as_ref() else {
             return;
         };
@@ -290,11 +283,12 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 渲染运行容器模态。
-    pub(crate) fn render_container_run_form(
-        &mut self,
+    /// 运行容器表单的弹窗体。
+    pub(crate) fn render_container_run_form_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(form) = self.containers.run_form.as_ref() else {
@@ -374,19 +368,24 @@ impl AppShell {
                                 .ghost()
                                 .selected(restart.as_deref() == Some(*policy))
                                 .label((*policy).to_string())
-                                .on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        let Some(form) = this.containers.run_form.as_mut() else {
-                                            return;
-                                        };
-                                        form.restart = if form.restart.as_deref() == Some(*policy) {
-                                            None
-                                        } else {
-                                            Some((*policy).to_string())
-                                        };
-                                        cx.notify();
-                                    },
-                                ))
+                                .on_click(
+                                    crate::dialog_host::on_event(
+                                        app,
+                                        move |this, _: &ClickEvent, _, cx| {
+                                            let Some(form) = this.containers.run_form.as_mut()
+                                            else {
+                                                return;
+                                            };
+                                            form.restart =
+                                                if form.restart.as_deref() == Some(*policy) {
+                                                    None
+                                                } else {
+                                                    Some((*policy).to_string())
+                                                };
+                                            cx.notify();
+                                        },
+                                    ),
+                                )
                             },
                         ))),
                 );
@@ -401,67 +400,45 @@ impl AppShell {
                 Button::new("container-run-cancel")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.dismiss_container_run(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.dismiss_container_run(cx),
+                    )),
             )
             .child(
                 Button::new("container-run-submit")
                     .primary()
                     .icon(IconName::Play)
                     .label(rust_i18n::t!("container.run.submit").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.submit_container_run(tab_id, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, _, cx| {
+                            this.submit_container_run(tab_id, cx);
+                        },
+                    )),
             );
 
-        // 共用弹窗容器把高度上限写死在 640px（全应用 20 多处弹窗共用，改它影响面太
-        // 大），所以长表单在自己的框内滚动：页头与页脚留在外面，字段区超出就滚。
+        // 字段多，让内容区自己滚动；页头页脚由 Dialog 容器固定。
         let body = div()
             .id("container-run-body")
             .max_h(px(440.0))
             .overflow_y_scroll()
             .child(content);
-        let run_dialog = Self::dialog_frame(
-            "container-run-modal",
+        Self::dialog_body(
+            "container-run-form-body",
             rust_i18n::t!("container.run.title").to_string(),
             None,
             body,
             Some(footer),
-            px(560.0),
-            p,
-        );
-        // 遮罩点击即关闭：对话框本体用 occlude 挡住命中测试，点在里面不会误关。
-        let tab_id_for_backdrop = tab_id;
-        let backdrop = div()
-            .id("container-run-backdrop")
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                let Some(form) = this.containers.run_form.as_ref() else {
-                    return;
-                };
-                if form.tab_id == tab_id_for_backdrop {
-                    this.dismiss_container_run(cx);
-                }
-            }))
-            .key_context(keymap::OVERLAY_CONTEXT)
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
-                this.on_container_overlay_key(event, Some(tab_id_for_backdrop), cx);
-            }))
-            .child(div().occlude().child(run_dialog));
-        Self::overlay(backdrop, p)
+        )
     }
 
-    /// 拉取镜像 / 新建数据卷 / 新建网络的弹窗。
-    ///
-    /// 设计原理（Why）：这三件事的输入都是「一个名字 + 可选驱动」，共用一个弹窗
-    /// 即可；主输入沿用工作区的 `create_input`，因此提交与校验路径和旧的底部输入行
-    /// 完全相同，只是入口从中栏底部移到了工具条。
-    pub(crate) fn render_container_create_dialog(
-        &mut self,
+    /// 新建卷/网络/拉取镜像的弹窗体。
+    pub(crate) fn render_container_create_dialog_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(dialog) = self.containers.create_dialog.clone() else {
@@ -512,12 +489,15 @@ impl AppShell {
                         Checkbox::new("container-create-internal")
                             .small()
                             .checked(dialog.internal)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                if let Some(dialog) = this.containers.create_dialog.as_mut() {
-                                    dialog.internal = checked;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, &checked, _, cx| {
+                                    if let Some(dialog) = this.containers.create_dialog.as_mut() {
+                                        dialog.internal = checked;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     )
                     .child(
                         div()
@@ -534,7 +514,10 @@ impl AppShell {
                 Button::new("container-create-cancel")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.dismiss_container_create(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.dismiss_container_create(cx),
+                    )),
             )
             .child(
                 Button::new("container-create-submit")
@@ -545,33 +528,14 @@ impl AppShell {
                         IconName::Check
                     })
                     .label(title.clone())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.submit_container_create(tab_id, window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, window, cx| {
+                            this.submit_container_create(tab_id, window, cx);
+                        },
+                    )),
             );
-
-        let frame = Self::dialog_frame(
-            "container-create-modal",
-            title,
-            None,
-            content,
-            Some(footer),
-            px(460.0),
-            p,
-        );
-        let backdrop = div()
-            .id("container-create-backdrop")
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .on_click(cx.listener(|this, _, _, cx| this.dismiss_container_create(cx)))
-            .key_context(keymap::OVERLAY_CONTEXT)
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
-                this.on_container_overlay_key(event, None, cx);
-            }))
-            .child(div().occlude().child(frame));
-        Self::overlay(backdrop, p)
+        Self::dialog_body("container-create-body", title, None, content, Some(footer))
     }
 
     /// 提交运行：解析并校验 spec 后交给控制器，错误就地展示。

@@ -972,11 +972,11 @@ impl AppShell {
         }
     }
 
-    /// 引擎分组的新建/重命名弹窗。
-    pub(crate) fn render_engine_folder_form(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    /// 引擎分组的新建/重命名弹窗体。
+    pub(crate) fn render_engine_folder_form_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(form) = self.containers.engine_folder_form.as_ref() else {
@@ -1009,43 +1009,30 @@ impl AppShell {
                 Button::new("container-engine-folder-cancel")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.dismiss_engine_folder_form(cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.dismiss_engine_folder_form(cx),
+                    )),
             )
             .child(
                 Button::new("container-engine-folder-save")
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.submit_engine_folder_form(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.submit_engine_folder_form(window, cx);
+                        },
+                    )),
             );
-        let frame = Self::dialog_frame(
-            "container-engine-folder-modal",
+        Self::dialog_body(
+            "container-engine-folder-body",
             title,
             description,
             content,
             Some(footer),
-            px(420.0),
-            p,
-        );
-        let backdrop = div()
-            .id("container-engine-folder-backdrop")
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.dismiss_engine_folder_form(cx);
-            }))
-            .key_context(crate::keymap::OVERLAY_CONTEXT)
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
-                this.on_container_overlay_key(event, None, cx);
-            }))
-            .child(div().occlude().child(frame));
-        Self::overlay(backdrop, p)
+        )
     }
 }
 

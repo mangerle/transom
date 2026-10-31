@@ -1249,25 +1249,6 @@ impl AppShell {
         if !event.keystroke.key.eq_ignore_ascii_case("escape") {
             return;
         }
-        if self.containers.engine_folder_form.is_some() {
-            self.containers.engine_folder_form = None;
-            cx.notify();
-            return;
-        }
-        if self.containers.create_dialog.is_some() {
-            self.dismiss_container_create(cx);
-            return;
-        }
-        if self.containers.run_form.is_some() {
-            self.dismiss_container_run(cx);
-            return;
-        }
-        if self.containers.form.is_some() {
-            self.containers.form = None;
-            self.containers.form_folder = None;
-            cx.notify();
-            return;
-        }
         let Some(tab) = fullscreen_tab.filter(|tab| self.containers.fullscreen == Some(*tab))
         else {
             return;

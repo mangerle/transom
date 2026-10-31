@@ -111,18 +111,6 @@ impl AppShell {
         if let Some(tab_id) = self.containers.fullscreen {
             overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
         }
-        if self.containers.form.is_some() {
-            overlays.push(self.render_container_form(window, cx, &p));
-        }
-        if self.containers.engine_folder_form.is_some() {
-            overlays.push(self.render_engine_folder_form(window, cx, &p));
-        }
-        if self.containers.run_form.is_some() {
-            overlays.push(self.render_container_run_form(window, cx, &p));
-        }
-        if self.containers.create_dialog.is_some() {
-            overlays.push(self.render_container_create_dialog(window, cx, &p));
-        }
         overlays
     }
 }

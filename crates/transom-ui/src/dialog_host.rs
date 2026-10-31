@@ -61,6 +61,14 @@ pub(crate) enum ModalKind {
     SftpSync,
     /// 编辑器跳转到行。
     EditorGotoLine,
+    /// 容器引擎连接表单。
+    ContainerForm,
+    /// 引擎分组新建/重命名表单。
+    ContainerFolderForm,
+    /// 运行容器表单。
+    ContainerRunForm,
+    /// 拉取镜像 / 新建卷与网络的弹窗。
+    ContainerCreate,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -113,6 +121,10 @@ impl ModalKind {
         ModalKind::SftpSync,
         ModalKind::EditorGotoLine,
         ModalKind::DiffViewer,
+        ModalKind::ContainerForm,
+        ModalKind::ContainerFolderForm,
+        ModalKind::ContainerRunForm,
+        ModalKind::ContainerCreate,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -132,6 +144,10 @@ impl ModalKind {
             ModalKind::SftpSearch => shell.sftp_modals.search.is_some(),
             ModalKind::SftpSync => shell.sftp_modals.sync.is_some(),
             ModalKind::EditorGotoLine => shell.sftp_modals.goto_line.is_some(),
+            ModalKind::ContainerForm => shell.containers.form.is_some(),
+            ModalKind::ContainerFolderForm => shell.containers.engine_folder_form.is_some(),
+            ModalKind::ContainerRunForm => shell.containers.run_form.is_some(),
+            ModalKind::ContainerCreate => shell.containers.create_dialog.is_some(),
             ModalKind::SessionForm => shell.modals.form.is_some(),
             ModalKind::FolderForm => shell.modals.folder_form.is_some(),
             ModalKind::BatchEdit => shell.modals.batch_edit.is_some(),
@@ -167,6 +183,10 @@ impl ModalKind {
             // 同步弹窗与密钥向导用全局弹窗宽度上限档位，随密度缩放。
             ModalKind::SftpSync | ModalKind::KeyWizard => None,
             ModalKind::EditorGotoLine => Some(420.0),
+            ModalKind::ContainerForm => Some(560.0),
+            ModalKind::ContainerFolderForm => Some(420.0),
+            ModalKind::ContainerRunForm => Some(560.0),
+            ModalKind::ContainerCreate => Some(460.0),
             ModalKind::SessionForm => Some(620.0),
             ModalKind::FolderForm => Some(480.0),
             ModalKind::BatchEdit => Some(560.0),
@@ -200,6 +220,10 @@ impl ModalKind {
             ModalKind::SftpSearch => "sftp-search",
             ModalKind::SftpSync => "sftp-sync",
             ModalKind::EditorGotoLine => "editor-goto-line",
+            ModalKind::ContainerForm => "container-form",
+            ModalKind::ContainerFolderForm => "container-folder-form",
+            ModalKind::ContainerRunForm => "container-run",
+            ModalKind::ContainerCreate => "container-create",
             ModalKind::SessionForm => "session-form",
             ModalKind::FolderForm => "folder-form",
             ModalKind::BatchEdit => "batch-edit",
@@ -229,6 +253,42 @@ impl ModalKind {
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
         match self {
+            ModalKind::ContainerForm => shell
+                .containers
+                .form
+                .as_ref()
+                .map(|form| form.text_values(cx))
+                .unwrap_or_default(),
+            ModalKind::ContainerFolderForm => shell
+                .containers
+                .engine_folder_form
+                .as_ref()
+                .map(|form| vec![form.input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            ModalKind::ContainerRunForm => shell
+                .containers
+                .run_form
+                .as_ref()
+                .map(|form| form.text_values(cx))
+                .unwrap_or_default(),
+            ModalKind::ContainerCreate => shell
+                .containers
+                .create_dialog
+                .as_ref()
+                .map(|dialog| {
+                    let mut values = Vec::new();
+                    if let Some(workspace) = shell.container_workspace(dialog.tab_id) {
+                        values.push(workspace.create_input.read(cx).value().to_string());
+                    }
+                    for input in [&dialog.driver, &dialog.subnet, &dialog.gateway]
+                        .into_iter()
+                        .flatten()
+                    {
+                        values.push(input.read(cx).value().to_string());
+                    }
+                    values
+                })
+                .unwrap_or_default(),
             ModalKind::SessionForm => shell
                 .modals
                 .form
@@ -310,6 +370,23 @@ impl ModalKind {
             ModalKind::SftpSync => shell.close_sftp_modal(|hub| hub.sync = None, window, cx),
             ModalKind::EditorGotoLine => {
                 shell.cancel_editor_goto_line(window, cx);
+                true
+            }
+            ModalKind::ContainerForm => {
+                shell.containers.form = None;
+                shell.containers.form_folder = None;
+                true
+            }
+            ModalKind::ContainerFolderForm => {
+                shell.containers.engine_folder_form = None;
+                true
+            }
+            ModalKind::ContainerRunForm => {
+                shell.dismiss_container_run(cx);
+                true
+            }
+            ModalKind::ContainerCreate => {
+                shell.dismiss_container_create(cx);
                 true
             }
             ModalKind::SessionForm => {
@@ -403,6 +480,23 @@ impl ModalKind {
             ModalKind::SftpFilter => shell.save_sftp_filter_modal(window, cx),
             ModalKind::SftpSync => shell.start_sftp_sync(window, cx),
             ModalKind::EditorGotoLine => shell.commit_editor_goto_line(window, cx),
+            ModalKind::ContainerForm => shell.save_container_form(cx),
+            ModalKind::ContainerFolderForm => shell.submit_engine_folder_form(window, cx),
+            ModalKind::ContainerRunForm => {
+                if let Some(tab_id) = shell.containers.run_form.as_ref().map(|form| form.tab_id) {
+                    shell.submit_container_run(tab_id, cx);
+                }
+            }
+            ModalKind::ContainerCreate => {
+                if let Some(tab_id) = shell
+                    .containers
+                    .create_dialog
+                    .as_ref()
+                    .map(|dialog| dialog.tab_id)
+                {
+                    shell.submit_container_create(tab_id, window, cx);
+                }
+            }
             ModalKind::SessionForm => shell.save_session_form(cx),
             ModalKind::FolderForm => shell.save_folder_form(cx),
             ModalKind::BatchEdit => shell.save_batch_edit(cx),
@@ -455,6 +549,30 @@ impl ModalKind {
                     .as_ref()
                     .map(|modal| modal.input.clone()),
             ),
+            ModalKind::ContainerForm => {
+                input(shell.containers.form.as_ref().map(|form| form.name.clone()))
+            }
+            ModalKind::ContainerFolderForm => input(
+                shell
+                    .containers
+                    .engine_folder_form
+                    .as_ref()
+                    .map(|form| form.input.clone()),
+            ),
+            ModalKind::ContainerRunForm => input(
+                shell
+                    .containers
+                    .run_form
+                    .as_ref()
+                    .map(|form| form.image.clone()),
+            ),
+            ModalKind::ContainerCreate => {
+                input(shell.containers.create_dialog.as_ref().and_then(|dialog| {
+                    shell
+                        .container_workspace(dialog.tab_id)
+                        .map(|workspace| workspace.create_input.clone())
+                }))
+            }
             ModalKind::SessionForm => {
                 input(shell.modals.form.as_ref().map(|form| form.name.clone()))
             }
@@ -528,6 +646,12 @@ impl ModalKind {
             ModalKind::SftpSearch => shell.render_sftp_search_body(app, cx, p),
             ModalKind::SftpSync => shell.render_sftp_sync_body(app, cx, p),
             ModalKind::EditorGotoLine => shell.render_editor_goto_line_body(app, cx, p),
+            ModalKind::ContainerForm => shell.render_container_form_body(app, window, cx, p),
+            ModalKind::ContainerFolderForm => shell.render_engine_folder_form_body(app, cx, p),
+            ModalKind::ContainerRunForm => shell.render_container_run_form_body(app, window, cx, p),
+            ModalKind::ContainerCreate => {
+                shell.render_container_create_dialog_body(app, window, cx, p)
+            }
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
