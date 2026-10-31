@@ -8425,6 +8425,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "transom-desktop"
+version = "1.5.1"
+dependencies = [
+ "log",
+ "tempfile",
+ "transom-core",
+ "transom-platform",
+]
+
+[[package]]
 name = "transom-net"
 version = "1.5.1"
 dependencies = [
@@ -8544,6 +8554,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "transom-core",
+ "transom-desktop",
  "transom-platform",
  "transom-store",
  "transom-terminal",

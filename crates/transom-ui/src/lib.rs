@@ -169,10 +169,10 @@ fn reassert_default_terminal(settings: &AppSettings) {
         );
         return;
     }
-    if transom_store::desktop::default_terminal_registered(&exe) {
+    if transom_desktop::default_terminal_registered(&exe) {
         return;
     }
-    match transom_store::desktop::apply_default_terminal(true) {
+    match transom_desktop::apply_default_terminal(true) {
         Ok(()) => log::info!("默认终端注册已重言，可执行文件: {}", exe.display()),
         Err(error) => log::warn!("默认终端注册重言失败，桌面入口暂不可用，原因: {error}"),
     }

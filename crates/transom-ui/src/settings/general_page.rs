@@ -302,7 +302,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         let previous = this.settings.window.default_terminal;
                         this.settings.window.default_terminal = checked;
-                        match transom_store::desktop::apply_default_terminal(checked) {
+                        match transom_desktop::apply_default_terminal(checked) {
                             Ok(()) => {
                                 if let Err(error) = this.persist_settings() {
                                     log::error!("默认终端注册已生效但偏好落盘失败，原因: {error}");
