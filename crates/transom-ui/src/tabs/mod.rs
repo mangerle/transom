@@ -7,13 +7,40 @@ mod session_ops;
 #[cfg(test)]
 mod tests;
 
-use crate::app::{AppShell, TabContent, TabGroup, TabStatus, TerminalTab};
+use crate::app::{AppShell, AppState, TabContent, TabGroup, TabStatus, TerminalTab};
 use crate::pane_tree::LayoutNode;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SavedTabGroup, Session, SessionId, TabId};
 
-impl AppShell {
-    /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
+impl AppState {
+    /// 标签所属分组的索引；标签不属于任何分组时返回 `None`。
+    ///
+    /// 纯状态查询，不依赖 GPUI 上下文；外壳通过 `Deref` 直接复用。
+    pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
+        self.workspace.group_index_of(tab_id)
+    }
+}
+
+impl AppState {
+    pub(crate) fn refresh_tab_sessions(&mut self) {
+        for index in 0..self.workspace.tabs.len() {
+            let session_id = self.workspace.tabs[index].session_id;
+            // 先结束对 catalog 的只读借用，再写回标签，避免通过 Deref
+            // 访问两个字段时被当成对 `*self` 的整体借用。
+            let resolved = self
+                .catalog
+                .sessions
+                .iter()
+                .find(|session| session.id == session_id)
+                .map(|session| self.catalog.resolved_session(session));
+            if let Some(session) = resolved {
+                self.workspace.tabs[index].session = session;
+            }
+        }
+    }
+}
+
+impl AppState {
     pub(crate) fn create_group(&mut self, tab_id: TabId, session_id: SessionId) -> GroupId {
         let serial = self
             .workspace
@@ -65,6 +92,40 @@ impl AppShell {
         id
     }
 
+    pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
+        let index = self.workspace.tab_index(tab_id)?;
+        let session_id = self.workspace.tabs[index].session_id;
+        Some(
+            self.catalog
+                .sessions
+                .iter()
+                .find(|session| session.id == session_id)
+                .cloned()
+                .unwrap_or_else(|| self.workspace.tabs[index].session.clone()),
+        )
+    }
+
+    pub(crate) fn fallback_active_pane(
+        &self,
+        replacement: Option<TabId>,
+        previous_tiled_focus: Option<GroupId>,
+    ) -> Option<TabId> {
+        replacement
+            .or_else(|| {
+                self.active_tiling()
+                    .and_then(|tiled| tiled.focused_group())
+                    .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
+            })
+            .or_else(|| {
+                previous_tiled_focus
+                    .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
+            })
+            .or_else(|| self.workspace.groups.first().map(|group| group.active_pane))
+    }
+}
+
+impl AppShell {
+    /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
     /// 根据窗口设置恢复一个标签组及其分割树布局，返回实际创建的标签组。
     pub(crate) fn restore_tab_group(
         &mut self,
@@ -118,64 +179,11 @@ impl AppShell {
     }
 
     /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
-    pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
-        let index = self.workspace.tab_index(tab_id)?;
-        let session_id = self.workspace.tabs[index].session_id;
-        Some(
-            self.catalog
-                .sessions
-                .iter()
-                .find(|session| session.id == session_id)
-                .cloned()
-                .unwrap_or_else(|| self.workspace.tabs[index].session.clone()),
-        )
-    }
-
-    /// 将已打开标签的会话快照同步为目录中的最新配置。
-    pub(crate) fn refresh_tab_sessions(&mut self) {
-        for index in 0..self.workspace.tabs.len() {
-            let session_id = self.workspace.tabs[index].session_id;
-            // 先结束对 catalog 的只读借用，再写回标签，避免通过 Deref
-            // 访问两个字段时被当成对 `*self` 的整体借用。
-            let resolved = self
-                .catalog
-                .sessions
-                .iter()
-                .find(|session| session.id == session_id)
-                .map(|session| self.catalog.resolved_session(session));
-            if let Some(session) = resolved {
-                self.workspace.tabs[index].session = session;
-            }
-        }
-    }
-
-    pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
-        self.workspace.group_index_of(tab_id)
-    }
-
     /// 计算当前标签被移除或替换后应激活的窗格。
     ///
     /// 优先级：显式替换目标 → 并排网格当前焦点组 → 移除前的分组焦点 →
     /// 第一个分组。关闭标签、删除会话与复制标签共用同一顺序，避免几处
     /// 各写一条 `or_else` 链后逐渐漂移。
-    pub(crate) fn fallback_active_pane(
-        &self,
-        replacement: Option<TabId>,
-        previous_tiled_focus: Option<GroupId>,
-    ) -> Option<TabId> {
-        replacement
-            .or_else(|| {
-                self.active_tiling()
-                    .and_then(|tiled| tiled.focused_group())
-                    .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
-            })
-            .or_else(|| {
-                previous_tiled_focus
-                    .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
-            })
-            .or_else(|| self.workspace.groups.first().map(|group| group.active_pane))
-    }
-
     pub(crate) fn reconnect_tab(
         &mut self,
         tab_id: TabId,

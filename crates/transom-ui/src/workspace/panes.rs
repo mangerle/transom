@@ -1,6 +1,6 @@
 //! 标签内分屏渲染：按分割树铺满内容区，每一刀都是可拖拽的分隔线。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::pane_tree::LayoutNode;
@@ -20,6 +20,13 @@ struct PaneFrame<'a> {
     active: TabId,
     zoomed: Option<TabId>,
     order: &'a [TabId],
+}
+
+impl AppState {
+    /// 丢弃分割树上已消失节点的拖拽状态。
+    pub(crate) fn prune_pane_split_states(&mut self) {
+        self.workspace.reconcile_split_states();
+    }
 }
 
 impl AppShell {
@@ -126,10 +133,6 @@ impl AppShell {
     /// 丢弃已从分割树上消失的拖拽状态，避免长期积累无用实体。
     ///
     /// 只在布局被改动后调用（渲染期不能调用：那会儿新节点的状态刚刚登记）。
-    pub(crate) fn prune_pane_split_states(&mut self) {
-        self.workspace.reconcile_split_states();
-    }
-
     /// 渲染单个窗格：细条头部（状态灯、序号、标题、关闭）加终端本体。
     fn render_split_pane(
         &mut self,

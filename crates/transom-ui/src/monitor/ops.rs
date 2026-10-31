@@ -1,11 +1,31 @@
 //! 监控看板的采样生命周期、轮询调度与进程信号发送。
 
 use super::types::SampleIntervalMode;
-use crate::app::{AppShell, TabContent, TerminalTab};
+use crate::app::{AppShell, AppState, TabContent, TerminalTab};
 use gpui_kit::{Context, Window};
 use transom_core::{
     AppError, ConnectionId, HostCommand, ProcessInfo, ProcessSort, SystemStats, TabId,
 };
+
+impl AppState {
+    fn active_monitor_target(&self) -> Option<(TabId, ConnectionId)> {
+        let tab_id = self.workspace.active_tab?;
+        let tab = self.workspace.tab(tab_id)?;
+        if !matches!(
+            tab.session.connection,
+            transom_core::Connection::Ssh(_) | transom_core::Connection::Local(_)
+        ) {
+            return None;
+        }
+        Some((tab_id, tab.connection_id?))
+    }
+
+    pub(crate) fn monitor_record_stats(&mut self, tab_id: TabId, stats: &SystemStats) {
+        if self.monitor.open {
+            self.monitor.record_stats(tab_id, stats);
+        }
+    }
+}
 
 impl AppShell {
     /// 活动栏入口：打开/关闭监控抽屉，打开时立即拉取一轮进程快照。
@@ -170,18 +190,6 @@ impl AppShell {
     }
 
     /// 当前活动标签的进程采样目标；只有 SSH 与本地终端支持。
-    fn active_monitor_target(&self) -> Option<(TabId, ConnectionId)> {
-        let tab_id = self.workspace.active_tab?;
-        let tab = self.workspace.tab(tab_id)?;
-        if !matches!(
-            tab.session.connection,
-            transom_core::Connection::Ssh(_) | transom_core::Connection::Local(_)
-        ) {
-            return None;
-        }
-        Some((tab_id, tab.connection_id?))
-    }
-
     /// 安全终止进程（对核心系统进程施加保护拦截）。
     pub(crate) fn send_kill_process_safe(&mut self, pid: u32, force: bool, cx: &mut Context<Self>) {
         if pid <= 1 {
@@ -276,12 +284,6 @@ impl AppShell {
     }
 
     /// 记录完整指标时序快照。
-    pub(crate) fn monitor_record_stats(&mut self, tab_id: TabId, stats: &SystemStats) {
-        if self.monitor.open {
-            self.monitor.record_stats(tab_id, stats);
-        }
-    }
-
     pub(crate) fn monitor_sampled(
         &mut self,
         tab_id: TabId,

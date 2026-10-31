@@ -2,7 +2,7 @@
 
 use super::PendingCredential;
 use super::secrets::enable_auth_save;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -11,6 +11,61 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{Connection, ConnectionId, ErrorCode, PromptKind, SecretKey, SessionId};
 use zeroize::Zeroizing;
+
+impl AppState {
+    pub(crate) fn discard_pending_credential(&mut self, connection_id: ConnectionId) {
+        let matched = self
+            .modals
+            .pending_credential
+            .as_ref()
+            .is_some_and(|pending| pending.connection_id == connection_id);
+        if matched {
+            self.modals.pending_credential = None;
+        }
+    }
+
+    /// 会话口令归属：引用凭据模板时归模板。
+    fn secret_owner_for(&self, session_id: SessionId) -> transom_core::SecretOwner {
+        self.catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map_or(transom_core::SecretOwner::Session(session_id), |session| {
+                session.secret_owner()
+            })
+    }
+
+    /// 打开"凭据保存到钥匙串"标记，使目录记录与钥匙串实际状态一致。
+    fn mark_credential_saved(&mut self, owner: transom_core::SecretOwner) {
+        let flipped = match owner {
+            transom_core::SecretOwner::Session(session_id) => self
+                .catalog
+                .sessions
+                .iter_mut()
+                .find(|session| session.id == session_id)
+                .and_then(|session| match &mut session.connection {
+                    Connection::Ssh(ssh) => Some(ssh),
+                    _ => None,
+                })
+                .is_some_and(|ssh| enable_auth_save(&mut ssh.auth)),
+            transom_core::SecretOwner::Identity(identity_id) => self
+                .catalog
+                .identities
+                .iter_mut()
+                .find(|identity| identity.id == identity_id)
+                .is_some_and(|identity| enable_auth_save(&mut identity.auth)),
+        };
+        if !flipped {
+            return;
+        }
+        self.refresh_tab_sessions();
+        self.persist_catalog();
+    }
+
+    pub(crate) fn cancel_auth_prompt(&mut self) {
+        self.modals.auth_prompt = None;
+    }
+}
 
 impl AppShell {
     pub(crate) fn submit_auth_prompt(&mut self, cx: &mut Context<Self>) {
@@ -82,59 +137,6 @@ impl AppShell {
     }
 
     /// 连接失败时丢弃待保存凭据。
-    pub(crate) fn discard_pending_credential(&mut self, connection_id: ConnectionId) {
-        let matched = self
-            .modals
-            .pending_credential
-            .as_ref()
-            .is_some_and(|pending| pending.connection_id == connection_id);
-        if matched {
-            self.modals.pending_credential = None;
-        }
-    }
-
-    /// 会话口令归属：引用凭据模板时归模板。
-    fn secret_owner_for(&self, session_id: SessionId) -> transom_core::SecretOwner {
-        self.catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .map_or(transom_core::SecretOwner::Session(session_id), |session| {
-                session.secret_owner()
-            })
-    }
-
-    /// 打开"凭据保存到钥匙串"标记，使目录记录与钥匙串实际状态一致。
-    fn mark_credential_saved(&mut self, owner: transom_core::SecretOwner) {
-        let flipped = match owner {
-            transom_core::SecretOwner::Session(session_id) => self
-                .catalog
-                .sessions
-                .iter_mut()
-                .find(|session| session.id == session_id)
-                .and_then(|session| match &mut session.connection {
-                    Connection::Ssh(ssh) => Some(ssh),
-                    _ => None,
-                })
-                .is_some_and(|ssh| enable_auth_save(&mut ssh.auth)),
-            transom_core::SecretOwner::Identity(identity_id) => self
-                .catalog
-                .identities
-                .iter_mut()
-                .find(|identity| identity.id == identity_id)
-                .is_some_and(|identity| enable_auth_save(&mut identity.auth)),
-        };
-        if !flipped {
-            return;
-        }
-        self.refresh_tab_sessions();
-        self.persist_catalog();
-    }
-
-    pub(crate) fn cancel_auth_prompt(&mut self) {
-        self.modals.auth_prompt = None;
-    }
-
     /// 用户信任首连主机指纹。
     pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
         if let Some(state) = self.modals.host_key_confirm.take() {

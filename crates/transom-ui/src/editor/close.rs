@@ -13,7 +13,7 @@
 //!   会让续行继续等待——宁可多等一次确认，也不冒丢改动的险。
 
 use super::panel::PanelConfirm;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use transom_core::{GroupId, SessionId, TabId};
 
@@ -32,6 +32,25 @@ pub(crate) enum PendingEditorClose {
     Session(SessionId),
     /// 关闭整个并排组（含组内每个标签组及其窗格）。
     Tiling(Vec<GroupId>),
+}
+
+impl AppState {
+    /// 丢弃标签已不存在的编辑面板与对比面板。
+    ///
+    /// 两者都挂在 `TabId`（窗格）上，关闭标签、关闭窗格、关闭整组都会让面板失去宿主；
+    /// 集中在一处按存活标签集合裁剪，比在每条关闭路径里分别点名更可靠，订阅句柄随
+    /// 面板一起析构退订，不会留下向已死实体投递的事件。
+    pub(crate) fn prune_tab_overlays(&mut self) {
+        let alive: Vec<TabId> = self.workspace.tabs.iter().map(|tab| tab.id).collect();
+        self.editors.prune_dead_tabs(&alive);
+        if self
+            .diff_viewer
+            .as_ref()
+            .is_some_and(|viewer| !alive.contains(&viewer.tab_id))
+        {
+            self.diff_viewer = None;
+        }
+    }
 }
 
 impl AppShell {
@@ -132,23 +151,6 @@ impl AppShell {
                 })
                 .flat_map(|group| group.pane_ids())
                 .collect(),
-        }
-    }
-
-    /// 丢弃标签已不存在的编辑面板与对比面板。
-    ///
-    /// 两者都挂在 `TabId`（窗格）上，关闭标签、关闭窗格、关闭整组都会让面板失去宿主；
-    /// 集中在一处按存活标签集合裁剪，比在每条关闭路径里分别点名更可靠，订阅句柄随
-    /// 面板一起析构退订，不会留下向已死实体投递的事件。
-    pub(crate) fn prune_tab_overlays(&mut self) {
-        let alive: Vec<TabId> = self.workspace.tabs.iter().map(|tab| tab.id).collect();
-        self.editors.prune_dead_tabs(&alive);
-        if self
-            .diff_viewer
-            .as_ref()
-            .is_some_and(|viewer| !alive.contains(&viewer.tab_id))
-        {
-            self.diff_viewer = None;
         }
     }
 }

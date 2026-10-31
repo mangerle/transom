@@ -6,7 +6,7 @@ mod secrets;
 
 pub(crate) use secrets::{describe_target, session_host};
 
-use crate::app::{AppShell, TabStatus, TerminalTab};
+use crate::app::{AppShell, AppState, TabStatus, TerminalTab};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -52,8 +52,7 @@ pub(crate) struct HostKeyConfirmState {
     pub(crate) responder: tokio::sync::mpsc::Sender<bool>,
 }
 
-impl AppShell {
-    /// 记录最近打开的会话 ID，并异步落盘保存。
+impl AppState {
     pub(crate) fn record_recent_session(&mut self, session_id: SessionId) {
         self.settings
             .window
@@ -65,7 +64,10 @@ impl AppShell {
             log::warn!("保存最近打开会话失败，原因: {error}");
         }
     }
+}
 
+impl AppShell {
+    /// 记录最近打开的会话 ID，并异步落盘保存。
     /// 从最近打开会话记录中移除指定会话，并异步落盘保存。
     pub(crate) fn remove_recent_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
         let before_len = self.settings.window.recent_sessions.len();

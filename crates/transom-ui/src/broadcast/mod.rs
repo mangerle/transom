@@ -8,7 +8,7 @@
 //! 单行模式回车发送；多行模式同样回车发送，`Shift+Enter` 换行。多行文本走
 //! 终端当前的括号粘贴语义，避免远端 shell 把脚本的每一行提前执行。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::workspace::pane_status_indicator;
@@ -39,6 +39,70 @@ pub(crate) struct BroadcastBarState {
     pub(crate) textarea: Entity<TextareaState>,
     pub(crate) targets: HashSet<TabId>,
     pub(crate) targets_scope: Vec<GroupId>,
+}
+
+impl AppState {
+    /// 当前"视觉标签"里的标签组，顺序固定为并排对的前后格或单标签本身。
+    ///
+    /// 用它作为目标作用域：并排时是两个标签组（同一个合并条目），配对挂起或
+    /// 未并排时只有当前标签。顺序不跟随焦点，避免在并排的两格间点来点去时
+    /// 误判成切换了标签。
+    fn current_visual_groups(&self) -> Vec<GroupId> {
+        let Some(active_index) = self.active_group_index() else {
+            return Vec::new();
+        };
+        let active_group = self.workspace.groups[active_index].id;
+        if let Some(tiled) = self.active_tiling() {
+            return tiled.occupied_groups();
+        }
+        vec![active_group]
+    }
+
+    /// 标签切换、并排关系变化后，把广播目标重置到新的视觉标签。
+    ///
+    /// 同一视觉标签内换焦点（点窗格、切并排格）不会改变作用域，因此不会
+    /// 覆盖用户手动增删的目标。
+    pub(crate) fn sync_broadcast_targets(&mut self) {
+        if !self.broadcast.open {
+            return;
+        }
+        let scope = self.current_visual_groups();
+        let same = scope.len() == self.broadcast.targets_scope.len()
+            && scope
+                .iter()
+                .all(|group| self.broadcast.targets_scope.contains(group));
+        if same {
+            return;
+        }
+        self.broadcast.targets = self.default_broadcast_targets_for(&scope);
+        self.broadcast.targets_scope = scope;
+    }
+
+    /// 按给定的视觉标签作用域收集默认目标：只取已有终端的窗格。
+    fn default_broadcast_targets_for(&self, groups: &[GroupId]) -> HashSet<TabId> {
+        let mut targets = HashSet::with_capacity(self.workspace.tabs.len());
+        for group_id in groups {
+            let Some(group) = self
+                .workspace
+                .groups
+                .iter()
+                .find(|group| group.id == *group_id)
+            else {
+                continue;
+            };
+            for pane_id in group.pane_ids() {
+                if self
+                    .workspace
+                    .tabs
+                    .iter()
+                    .any(|tab| tab.id == pane_id && tab.terminal().is_some())
+                {
+                    targets.insert(pane_id);
+                }
+            }
+        }
+        targets
+    }
 }
 
 impl AppShell {
@@ -200,68 +264,6 @@ impl AppShell {
             self.broadcast.targets.remove(&tab_id);
         }
         cx.notify();
-    }
-
-    /// 当前"视觉标签"里的标签组，顺序固定为并排对的前后格或单标签本身。
-    ///
-    /// 用它作为目标作用域：并排时是两个标签组（同一个合并条目），配对挂起或
-    /// 未并排时只有当前标签。顺序不跟随焦点，避免在并排的两格间点来点去时
-    /// 误判成切换了标签。
-    fn current_visual_groups(&self) -> Vec<GroupId> {
-        let Some(active_index) = self.active_group_index() else {
-            return Vec::new();
-        };
-        let active_group = self.workspace.groups[active_index].id;
-        if let Some(tiled) = self.active_tiling() {
-            return tiled.occupied_groups();
-        }
-        vec![active_group]
-    }
-
-    /// 标签切换、并排关系变化后，把广播目标重置到新的视觉标签。
-    ///
-    /// 同一视觉标签内换焦点（点窗格、切并排格）不会改变作用域，因此不会
-    /// 覆盖用户手动增删的目标。
-    pub(crate) fn sync_broadcast_targets(&mut self) {
-        if !self.broadcast.open {
-            return;
-        }
-        let scope = self.current_visual_groups();
-        let same = scope.len() == self.broadcast.targets_scope.len()
-            && scope
-                .iter()
-                .all(|group| self.broadcast.targets_scope.contains(group));
-        if same {
-            return;
-        }
-        self.broadcast.targets = self.default_broadcast_targets_for(&scope);
-        self.broadcast.targets_scope = scope;
-    }
-
-    /// 按给定的视觉标签作用域收集默认目标：只取已有终端的窗格。
-    fn default_broadcast_targets_for(&self, groups: &[GroupId]) -> HashSet<TabId> {
-        let mut targets = HashSet::with_capacity(self.workspace.tabs.len());
-        for group_id in groups {
-            let Some(group) = self
-                .workspace
-                .groups
-                .iter()
-                .find(|group| group.id == *group_id)
-            else {
-                continue;
-            };
-            for pane_id in group.pane_ids() {
-                if self
-                    .workspace
-                    .tabs
-                    .iter()
-                    .any(|tab| tab.id == pane_id && tab.terminal().is_some())
-                {
-                    targets.insert(pane_id);
-                }
-            }
-        }
-        targets
     }
 
     /// 目标选择列表：只列当前视觉标签内的窗格，不跨标签。

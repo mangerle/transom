@@ -1,6 +1,6 @@
 //! 标签关闭、窗格摘除与应用语言切换操作。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use crate::pane_tree::RemoveOutcome;
 use crate::sftp::PendingEditorClose;
@@ -9,8 +9,16 @@ use gpui_kit::component::set_locale;
 use gpui_kit::*;
 use transom_core::{GroupId, TabId, TerminalCommand};
 
-impl AppShell {
-    /// 该窗格此刻是否正被渲染：属于可见标签组、在分割树里，且没被"单窗格最大化"挡在后面。
+impl AppState {
+    /// 当前活动标签所属分组的索引；没有活动标签时为 `None`。
+    pub(crate) fn active_group_index(&self) -> Option<usize> {
+        self.workspace
+            .active_tab
+            .and_then(|tab_id| self.group_index_for_tab(tab_id))
+    }
+}
+
+impl AppState {
     pub(crate) fn is_rendered_pane(&self, tab_id: TabId) -> bool {
         let Some(group_index) = self.group_index_for_tab(tab_id) else {
             return false;
@@ -27,12 +35,6 @@ impl AppShell {
             Some(zoomed) => zoomed == tab_id,
             None => group.root.contains(tab_id),
         }
-    }
-
-    pub(crate) fn active_group_index(&self) -> Option<usize> {
-        self.workspace
-            .active_tab
-            .and_then(|tab_id| self.group_index_for_tab(tab_id))
     }
 
     /// 从所属标签组的分割树里摘除一个窗格，返回应接管的焦点窗格。
@@ -67,6 +69,28 @@ impl AppShell {
         replacement
     }
 
+    pub(crate) fn remove_tab(&mut self, tab_id: TabId) {
+        let was_active = self.workspace.active_tab == Some(tab_id);
+        let group_id = self
+            .group_index_for_tab(tab_id)
+            .map(|index| self.workspace.groups[index].id);
+        let tiled_focus = group_id
+            .and_then(|group| self.tiling_of_group(group))
+            .and_then(|tiled| tiled.focused_group());
+        self.workspace.tabs.retain(|tab| tab.id != tab_id);
+        self.prune_tab_overlays();
+        let replacement = self.detach_pane_from_group(tab_id);
+        self.prune_tilings();
+        if was_active {
+            self.workspace.active_tab = self.fallback_active_pane(replacement, tiled_focus);
+        }
+        self.prune_tab_selection();
+        self.sync_broadcast_targets();
+    }
+}
+
+impl AppShell {
+    /// 该窗格此刻是否正被渲染：属于可见标签组、在分割树里，且没被"单窗格最大化"挡在后面。
     pub(crate) fn close_other_tabs(
         &mut self,
         tab_id: TabId,
@@ -196,25 +220,6 @@ impl AppShell {
     }
 
     /// 连接尚未建立时的静默移除，不向控制器发送关闭命令。
-    pub(crate) fn remove_tab(&mut self, tab_id: TabId) {
-        let was_active = self.workspace.active_tab == Some(tab_id);
-        let group_id = self
-            .group_index_for_tab(tab_id)
-            .map(|index| self.workspace.groups[index].id);
-        let tiled_focus = group_id
-            .and_then(|group| self.tiling_of_group(group))
-            .and_then(|tiled| tiled.focused_group());
-        self.workspace.tabs.retain(|tab| tab.id != tab_id);
-        self.prune_tab_overlays();
-        let replacement = self.detach_pane_from_group(tab_id);
-        self.prune_tilings();
-        if was_active {
-            self.workspace.active_tab = self.fallback_active_pane(replacement, tiled_focus);
-        }
-        self.prune_tab_selection();
-        self.sync_broadcast_targets();
-    }
-
     /// 在标签栏条目之间轮转：并排网格算一条，组内成员不单独占位。
     pub(crate) fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let entries = self.strip_entries();

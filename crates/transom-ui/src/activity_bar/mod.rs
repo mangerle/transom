@@ -13,7 +13,7 @@ mod drag;
 mod menu;
 mod metrics;
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use drag::{
@@ -28,6 +28,77 @@ use metrics::METRICS;
 use transom_core::{ActivityItemId, Connection, TabPosition};
 
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
+
+impl AppState {
+    fn activity_item_tooltip(&self, id: ActivityItemId, label: &str) -> String {
+        if id == ActivityItemId::Language {
+            if crate::i18n::resolve_language(&self.settings.language) == "zh-CN" {
+                rust_i18n::t!("activity.switch_to_english").to_string()
+            } else {
+                rust_i18n::t!("activity.switch_to_chinese").to_string()
+            }
+        } else if id == ActivityItemId::Sftp
+            && self
+                .workspace
+                .active_tab
+                .and_then(|tab_id| self.workspace.tab(tab_id))
+                .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
+        {
+            rust_i18n::t!("sftp.local_files_title").to_string()
+        } else {
+            label.to_string()
+        }
+    }
+
+    /// 条目在当前上下文是否可展示。
+    ///
+    /// 纵向标签条目只在"标签位置 = 左侧"时有意义；顶部模式下直接不渲染，
+    /// 避免保留一个点击无反应的图标。设置页仍保留该条目，方便用户调整顺序。
+    fn activity_item_available(&self, id: ActivityItemId) -> bool {
+        id != ActivityItemId::Tabs || self.settings.window.tab_position == TabPosition::Left
+    }
+
+    fn activity_item_selected(&self, id: ActivityItemId) -> bool {
+        match id {
+            ActivityItemId::Sessions => self.sidebar.visible && !self.vertical_tabs_open,
+            ActivityItemId::Tabs => self.sidebar.visible && self.vertical_tabs_open,
+            ActivityItemId::Forwards => self
+                .workspace
+                .active_tab
+                .and_then(|tab_id| self.workspace.tab(tab_id))
+                .is_some_and(|tab| tab.forwards_panel().is_some()),
+            ActivityItemId::Sftp => self
+                .workspace
+                .active_tab
+                .and_then(|tab_id| self.workspace.tab(tab_id))
+                .is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open)),
+            ActivityItemId::Monitor => self.monitor.open,
+            ActivityItemId::Keys => self.modals.settings.key_wizard.is_some(),
+            _ => false,
+        }
+    }
+
+    fn activity_item_disabled(&self, id: ActivityItemId) -> bool {
+        if !matches!(id, ActivityItemId::Forwards | ActivityItemId::Sftp) {
+            return false;
+        }
+        let Some(tab) = self
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.workspace.tab(tab_id))
+        else {
+            return true;
+        };
+        match id {
+            ActivityItemId::Forwards => !matches!(tab.session.connection, Connection::Ssh(_)),
+            ActivityItemId::Sftp => !matches!(
+                tab.session.connection,
+                Connection::Ssh(_) | Connection::Local(_)
+            ),
+            _ => false,
+        }
+    }
+}
 
 impl AppShell {
     pub(crate) fn render_activity_bar(
@@ -154,75 +225,6 @@ impl AppShell {
             })
             .context_menu(move |menu, _window, _cx| Self::activity_context_menu(menu, id, &app))
             .into_any_element()
-    }
-
-    fn activity_item_tooltip(&self, id: ActivityItemId, label: &str) -> String {
-        if id == ActivityItemId::Language {
-            if crate::i18n::resolve_language(&self.settings.language) == "zh-CN" {
-                rust_i18n::t!("activity.switch_to_english").to_string()
-            } else {
-                rust_i18n::t!("activity.switch_to_chinese").to_string()
-            }
-        } else if id == ActivityItemId::Sftp
-            && self
-                .workspace
-                .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
-                .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
-        {
-            rust_i18n::t!("sftp.local_files_title").to_string()
-        } else {
-            label.to_string()
-        }
-    }
-
-    /// 条目在当前上下文是否可展示。
-    ///
-    /// 纵向标签条目只在"标签位置 = 左侧"时有意义；顶部模式下直接不渲染，
-    /// 避免保留一个点击无反应的图标。设置页仍保留该条目，方便用户调整顺序。
-    fn activity_item_available(&self, id: ActivityItemId) -> bool {
-        id != ActivityItemId::Tabs || self.settings.window.tab_position == TabPosition::Left
-    }
-
-    fn activity_item_selected(&self, id: ActivityItemId) -> bool {
-        match id {
-            ActivityItemId::Sessions => self.sidebar.visible && !self.vertical_tabs_open,
-            ActivityItemId::Tabs => self.sidebar.visible && self.vertical_tabs_open,
-            ActivityItemId::Forwards => self
-                .workspace
-                .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
-                .is_some_and(|tab| tab.forwards_panel().is_some()),
-            ActivityItemId::Sftp => self
-                .workspace
-                .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
-                .is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open)),
-            ActivityItemId::Monitor => self.monitor.open,
-            ActivityItemId::Keys => self.modals.settings.key_wizard.is_some(),
-            _ => false,
-        }
-    }
-
-    fn activity_item_disabled(&self, id: ActivityItemId) -> bool {
-        if !matches!(id, ActivityItemId::Forwards | ActivityItemId::Sftp) {
-            return false;
-        }
-        let Some(tab) = self
-            .workspace
-            .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id))
-        else {
-            return true;
-        };
-        match id {
-            ActivityItemId::Forwards => !matches!(tab.session.connection, Connection::Ssh(_)),
-            ActivityItemId::Sftp => !matches!(
-                tab.session.connection,
-                Connection::Ssh(_) | Connection::Local(_)
-            ),
-            _ => false,
-        }
     }
 
     fn activate_activity_item(

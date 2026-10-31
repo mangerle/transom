@@ -11,7 +11,7 @@
 //! - 代价与局限：状态点是纯瞬时反馈，不落盘也不留历史，到期即消失；"可达"只
 //!   说明 TCP 握手成功，不代表能登录。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::*;
 use std::collections::HashSet;
@@ -53,6 +53,38 @@ impl ProbeBadge {
             Self::Pending => rust_i18n::t!("probe.pending").into(),
             Self::Reachable { tooltip } | Self::Unreachable { tooltip } => tooltip.clone(),
         }
+    }
+}
+
+impl AppState {
+    fn session_label(&self, session_id: SessionId) -> String {
+        self.catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.name.clone())
+            .unwrap_or_else(|| rust_i18n::t!("probe.session_fallback", id = session_id).to_string())
+    }
+
+    /// 该会话是否有在途拨测。
+    fn is_probe_pending(&self, session_id: SessionId) -> bool {
+        matches!(
+            self.probe_badges.get(&session_id),
+            Some(ProbeBadge::Pending)
+        )
+    }
+
+    /// 会话的 `host:port` 描述；会话已删除时退回空串，tooltip 只剩结果本身。
+    fn session_target(&self, session_id: SessionId) -> String {
+        self.catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .and_then(HostAction::probe_for)
+            .map(|action| match action {
+                HostAction::Probe { host, port, .. } => format!("{host}:{port}"),
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -160,36 +192,6 @@ impl AppShell {
     }
 
     /// 会话名（日志定位用）；查不到时退回 id，保证每条日志都能追到一行记录。
-    fn session_label(&self, session_id: SessionId) -> String {
-        self.catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .map(|session| session.name.clone())
-            .unwrap_or_else(|| rust_i18n::t!("probe.session_fallback", id = session_id).to_string())
-    }
-
-    /// 该会话是否有在途拨测。
-    fn is_probe_pending(&self, session_id: SessionId) -> bool {
-        matches!(
-            self.probe_badges.get(&session_id),
-            Some(ProbeBadge::Pending)
-        )
-    }
-
-    /// 会话的 `host:port` 描述；会话已删除时退回空串，tooltip 只剩结果本身。
-    fn session_target(&self, session_id: SessionId) -> String {
-        self.catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .and_then(HostAction::probe_for)
-            .map(|action| match action {
-                HostAction::Probe { host, port, .. } => format!("{host}:{port}"),
-            })
-            .unwrap_or_default()
-    }
-
     /// 写入状态点，并按需挂到期任务；`ttl` 为 `None` 表示在途态，不自动消失。
     fn set_probe_badge(
         &mut self,
