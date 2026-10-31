@@ -13,7 +13,7 @@ pub(crate) mod activity_bar;
 pub(crate) mod audit_viewer;
 #[path = "../backup/mod.rs"]
 pub(crate) mod backup;
-#[path = "../batch.rs"]
+#[path = "../batch/mod.rs"]
 pub(crate) mod batch;
 #[path = "../broadcast/mod.rs"]
 pub(crate) mod broadcast;
@@ -21,7 +21,7 @@ pub(crate) mod broadcast;
 pub(crate) mod chrome;
 #[path = "../clipboard_prompt.rs"]
 pub(crate) mod clipboard_prompt;
-#[path = "../cloud_sync.rs"]
+#[path = "../cloud_sync/mod.rs"]
 pub(crate) mod cloud_sync;
 #[path = "../command_palette/mod.rs"]
 pub(crate) mod command_palette;
