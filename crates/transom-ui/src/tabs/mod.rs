@@ -133,14 +133,18 @@ impl AppShell {
 
     /// 将已打开标签的会话快照同步为目录中的最新配置。
     pub(crate) fn refresh_tab_sessions(&mut self) {
-        for tab in &mut self.workspace.tabs {
-            if let Some(session) = self
+        for index in 0..self.workspace.tabs.len() {
+            let session_id = self.workspace.tabs[index].session_id;
+            // 先结束对 catalog 的只读借用，再写回标签，避免通过 Deref
+            // 访问两个字段时被当成对 `*self` 的整体借用。
+            let resolved = self
                 .catalog
                 .sessions
                 .iter()
-                .find(|session| session.id == tab.session_id)
-            {
-                tab.session = self.catalog.resolved_session(session);
+                .find(|session| session.id == session_id)
+                .map(|session| self.catalog.resolved_session(session));
+            if let Some(session) = resolved {
+                self.workspace.tabs[index].session = session;
             }
         }
     }

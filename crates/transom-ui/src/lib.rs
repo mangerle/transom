@@ -9,65 +9,31 @@ pub(crate) const APP_LICENSE: &str = env!("CARGO_PKG_LICENSE");
 pub(crate) const APP_REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 pub(crate) const APP_AUTHORS: &str = "wangle";
 
-mod activity_bar;
 mod app;
-mod app_render;
 mod audit;
-mod audit_viewer;
-mod backup;
-mod batch;
 mod brand;
-mod broadcast;
 mod cast_player;
-mod chrome;
-mod clipboard_prompt;
-mod cloud_sync;
-mod command_palette;
-mod connection;
-mod dialog_host;
-mod diff_viewer;
 mod divider;
-mod editor;
-mod event_handlers;
-mod events;
 mod format;
-mod forward;
 mod i18n;
-mod identity;
 mod keymap;
-mod keys;
-mod modals;
-mod monitor;
-mod notify;
 mod palette;
 mod pane_tree;
-mod probe;
-mod record;
-mod session_appearance;
-mod session_form;
-mod session_serial;
-mod settings;
-mod sftp;
-mod sftp_handlers;
-mod shortcuts;
-mod sidebar;
-mod snippets;
-mod split;
-mod startup;
-mod status_bar;
-mod tabs;
-mod terminal_copy_mode;
-mod terminal_search;
 mod theme;
-mod tiling;
-mod trigger_panel;
 mod window_appearance;
-mod window_state;
-mod workspace;
-mod zmodem;
 
-pub use app::AppShell;
-pub use workspace::WorkspaceState;
+// 功能模块统一挂在 `app` 之下：AppShell 的字段对其后代模块可见，
+// 对 crate 其它模块保持私有。这里重导出旧路径，避免大面积改写 `crate::sftp`
+// 之类的引用；模块的真实父级仍是 `app`，因此不会绕过状态封装。
+pub(crate) use app::{
+    activity_bar, audit_viewer, backup, clipboard_prompt, cloud_sync, connection, dialog_host,
+    diff_viewer, editor, forward, identity, keys, monitor, notify, record, session_appearance,
+    session_form, settings, sftp, sidebar, snippets, status_bar, tiling, trigger_panel, workspace,
+    zmodem,
+};
+
+pub(crate) use app::AppShell;
+pub use app::workspace::WorkspaceState;
 
 use gpui_kit::component as gpui_component;
 use gpui_kit::*;

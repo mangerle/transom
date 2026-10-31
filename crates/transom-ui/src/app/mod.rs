@@ -1,29 +1,126 @@
 //! GPUI 顶层应用外壳状态与生命周期主入口。
 
+// 功能模块的真实父模块是 `app`，文件仍留在原目录。
+//
+// 设计原理（Why）：AppShell 的字段只应对应用外壳及其功能模块可见。
+// 若把功能模块继续挂在 crate 根，它们与 AppShell 是兄弟模块，只能通过
+// `pub(crate)` 字段访问状态，封装形同虚设。用 `#[path]` 把模块挂到 `app`
+// 之下后，字段可以收成模块私有，同时不必搬动文件；crate 根再重导出旧路径，
+// 现有 `crate::sftp` / `crate::settings` 引用无需批量改写。
+#[path = "../activity_bar/mod.rs"]
+pub(crate) mod activity_bar;
+#[path = "../audit_viewer/mod.rs"]
+pub(crate) mod audit_viewer;
+#[path = "../backup/mod.rs"]
+pub(crate) mod backup;
+#[path = "../batch.rs"]
+pub(crate) mod batch;
+#[path = "../broadcast/mod.rs"]
+pub(crate) mod broadcast;
+#[path = "../chrome.rs"]
+pub(crate) mod chrome;
+#[path = "../clipboard_prompt.rs"]
+pub(crate) mod clipboard_prompt;
+#[path = "../cloud_sync.rs"]
+pub(crate) mod cloud_sync;
+#[path = "../command_palette/mod.rs"]
+pub(crate) mod command_palette;
+#[path = "../connection/mod.rs"]
+pub(crate) mod connection;
+#[path = "../dialog_host.rs"]
+pub(crate) mod dialog_host;
+#[path = "../diff_viewer/mod.rs"]
+pub(crate) mod diff_viewer;
+#[path = "../editor/mod.rs"]
+pub(crate) mod editor;
+#[path = "../event_handlers.rs"]
+pub(crate) mod event_handlers;
+#[path = "../events.rs"]
+pub(crate) mod events;
+#[path = "../forward/mod.rs"]
+pub(crate) mod forward;
+#[path = "../identity/mod.rs"]
+pub(crate) mod identity;
+#[path = "../keys/mod.rs"]
+pub(crate) mod keys;
+#[path = "../modals.rs"]
+pub(crate) mod modals;
+#[path = "../monitor/mod.rs"]
+pub(crate) mod monitor;
+#[path = "../notify.rs"]
+pub(crate) mod notify;
+#[path = "../probe.rs"]
+pub(crate) mod probe;
+#[path = "../record/mod.rs"]
+pub(crate) mod record;
+#[path = "../app_render.rs"]
+mod render;
+#[path = "../session_appearance.rs"]
+pub(crate) mod session_appearance;
+#[path = "../session_form/mod.rs"]
+pub(crate) mod session_form;
+#[path = "../session_serial.rs"]
+pub(crate) mod session_serial;
+#[path = "../settings/mod.rs"]
+pub(crate) mod settings;
+#[path = "../sftp/mod.rs"]
+pub(crate) mod sftp;
+#[path = "../sftp_handlers.rs"]
+pub(crate) mod sftp_handlers;
+#[path = "../shortcuts.rs"]
+pub(crate) mod shortcuts;
+#[path = "../sidebar/mod.rs"]
+pub(crate) mod sidebar;
+#[path = "../snippets/mod.rs"]
+pub(crate) mod snippets;
+#[path = "../split.rs"]
+pub(crate) mod split;
+#[path = "../startup.rs"]
+pub(crate) mod startup;
+#[path = "../status_bar/mod.rs"]
+pub(crate) mod status_bar;
+#[path = "../tabs/mod.rs"]
+pub(crate) mod tabs;
+#[path = "../terminal_copy_mode.rs"]
+pub(crate) mod terminal_copy_mode;
+#[path = "../terminal_search.rs"]
+pub(crate) mod terminal_search;
+#[path = "../tiling/mod.rs"]
+pub(crate) mod tiling;
+#[path = "../trigger_panel/mod.rs"]
+pub(crate) mod trigger_panel;
+#[path = "../window_state.rs"]
+pub(crate) mod window_state;
+#[path = "../workspace/mod.rs"]
+pub(crate) mod workspace;
+#[path = "../zmodem.rs"]
+pub(crate) mod zmodem;
+
 mod modal_hub;
 mod overlays;
 mod secret_prefill;
+mod state;
 mod task_hub;
 mod types;
 
 pub(crate) use modal_hub::ModalHub;
 pub(crate) use secret_prefill::prefill_secret_fields;
+pub(crate) use state::AppState;
 pub(crate) use task_hub::TaskHub;
 
+use self::broadcast::BroadcastBarState;
+use self::cloud_sync::GitSyncScheduler;
+use self::editor::EditorManager;
+use self::keys::KnownHostsModalState;
+use self::settings::SettingsModalState;
+use self::sftp::SftpModals;
+use self::sidebar::SidebarState;
+use self::snippets::SnippetPanelState;
+use self::workspace::WorkspaceState;
 use crate::UiServices;
-use crate::broadcast::BroadcastBarState;
-use crate::cloud_sync::GitSyncScheduler;
-use crate::editor::EditorManager;
 use crate::keymap;
 use crate::keymap::ShortcutRecordingState;
-use crate::keys::KnownHostsModalState;
 use crate::palette::localized_error;
-use crate::probe::ProbeBadge;
-use crate::settings::SettingsModalState;
-use crate::sftp::SftpModals;
-use crate::sidebar::SidebarState;
-use crate::snippets::SnippetPanelState;
-use crate::workspace::WorkspaceState;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
@@ -32,8 +129,7 @@ use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppSettings, PanelSide, SessionCatalog, SessionId, StartupTabs, TabPosition,
-    UiThemeMode,
+    AppCommand, AppSettings, PanelSide, SessionCatalog, StartupTabs, TabPosition, UiThemeMode,
 };
 
 pub(crate) use types::*;
@@ -48,91 +144,37 @@ pub(crate) fn command_send_error_text(error: flume::TrySendError<AppCommand>) ->
     }
 }
 
-pub struct AppShell {
-    pub(crate) services: UiServices,
-    pub(crate) settings: AppSettings,
-    /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
-    pub(crate) catalog: SessionCatalog,
-    /// 会话目录版本：每次持久化（= 目录被修改）递增，侧栏行缓存以此为失效键。
-    pub(crate) catalog_revision: u64,
-    /// 统一托管的侧栏核心状态与选择集。
-    pub(crate) sidebar: SidebarState,
-    /// 统一托管的工作区多标签与分屏网格核心状态。
-    pub(crate) workspace: WorkspaceState,
-    /// 工作区分组（侧栏、主区、SFTP、转发）的列宽状态。
-    pub(crate) workspace_panels: Entity<ResizableState>,
-    /// 停靠左/右各自独立的列宽状态。
-    pub(crate) workspace_panels_left: Entity<ResizableState>,
-    /// 纵向标签面板的搜索框状态。
-    pub(crate) vertical_tabs_search: Entity<InputState>,
-    /// 左侧槽位当前是否显示纵向标签面板；为假时槽位显示会话树或收起。
-    pub(crate) vertical_tabs_open: bool,
-    /// 统一托管的应用顶层交互模态与表单集合。
-    pub(crate) modals: ModalHub,
-    /// 统一纳管的应用外壳后台任务与事件订阅。
-    pub(crate) tasks: TaskHub,
-    /// 定时 Git 同步的分钟节拍。
-    pub(crate) git_sync_schedule: GitSyncScheduler,
-    /// 命令历史内存快照：终端视图的查询回调共享它，避免每次按键都读盘。
-    pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
-    /// 共享给每个终端视图的历史查询回调。
-    pub(crate) history_provider: transom_terminal::HistoryProvider,
-    /// 会话列表行尾的拨测状态点，按会话 id 索引。
-    pub(crate) probe_badges: HashMap<SessionId, ProbeBadge>,
-    /// 主机监控看板与进程管理器状态。
-    pub(crate) monitor: crate::monitor::MonitorState,
-    /// 统一托管的远端文本编辑器管理器。
-    pub(crate) editors: EditorManager,
-    /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
-    pub(crate) sftp_modals: SftpModals,
-    /// 远程与本地文件分栏对比面板；同一时刻至多一个。
-    pub(crate) diff_viewer: Option<crate::diff_viewer::DiffViewerState>,
-    /// 底部广播输入条：目标集合、单行/多行输入与展开状态。
-    pub(crate) broadcast: BroadcastBarState,
-    /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
-    pub(crate) status: Option<String>,
-    /// 应用级错误通知的待发队列：写入与渲染解耦，逐帧统一投递。
-    pub(crate) pending_notices: PendingNotices,
-    /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
-    pub(crate) immersive: bool,
-    /// SFTP 面板上次同步到的目标宽度；目标变了才调整面板宽度。
-    pub(crate) sftp_panel_width_target: Option<f32>,
-    /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
-    pub(crate) shortcut_recording: ShortcutRecordingState,
-    /// 组件库弹窗栈的影子记录：与容器实际栈同序，逐帧对账的依据。
-    pub(crate) open_modals: crate::dialog_host::OpenModals,
-    /// 弹窗内的一次性提示：脏表单被拦下不关时，说明为什么按键没有反应。
-    pub(crate) dialog_hint: Option<String>,
+pub(crate) struct AppShell {
+    /// 全部应用状态集中存放；外壳只负责渲染、事件路由与生命周期。
+    state: AppState,
+}
+
+impl std::ops::Deref for AppShell {
+    type Target = AppState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.state
+    }
+}
+
+impl std::ops::DerefMut for AppShell {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.state
+    }
 }
 
 impl AppShell {
-    /// 向控制器提交命令的统一入口：非阻塞 try_send，队列满时快速失败。
-    pub(crate) fn send_command(&mut self, command: impl Into<AppCommand>) -> bool {
-        match self.services.command_tx.try_send(command.into()) {
-            Ok(()) => true,
-            Err(error) => {
-                self.set_error(command_send_error_text(error));
-                false
-            }
-        }
-    }
-
-    /// 记录一条应用级错误，由下一次渲染统一转成通知。
-    ///
-    /// 设计原理（Why）：错误写入点多数不持有窗口句柄，无法在写入时推送通知；
-    /// 单槽暂存又会让同一帧内的多次失败互相覆盖。入队后由渲染统一投递，
-    /// 既保留每条错误，也让渲染只负责取队列、不再承担"暂存"职责。
-    pub(crate) fn set_error(&mut self, message: impl Into<String>) {
-        self.pending_notices.push(message);
-    }
-
     /// 设置工具面板（SFTP/转发）停靠方向。
     pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<Self>) {
         if self.settings.window.sftp_panel_side == side {
             return;
         }
         self.settings.window.sftp_panel_side = side;
-        std::mem::swap(&mut self.workspace_panels, &mut self.workspace_panels_left);
+        let state = &mut self.state;
+        std::mem::swap(
+            &mut state.workspace_panels,
+            &mut state.workspace_panels_left,
+        );
         self.persist_layout_settings(cx);
     }
 
@@ -273,7 +315,7 @@ impl AppShell {
         let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;
         let monitor = crate::monitor::MonitorState::new(window, &settings.monitor, cx);
 
-        let mut this = Self {
+        let state = AppState {
             services,
             settings,
             catalog,
@@ -340,6 +382,7 @@ impl AppShell {
             open_modals: crate::dialog_host::OpenModals::default(),
             dialog_hint: None,
         };
+        let mut this = Self { state };
 
         cx.subscribe_in(
             &this.broadcast.input,
@@ -447,18 +490,6 @@ impl AppShell {
             .map_or(0, |git| git.interval_minutes);
         if self.git_sync_schedule.tick(interval) {
             self.start_git_sync_scheduled(cx);
-        }
-    }
-
-    /// 持久化会话与文件夹目录。
-    pub(crate) fn persist_catalog(&mut self) -> bool {
-        self.catalog_revision = self.catalog_revision.wrapping_add(1);
-        match self.services.session_store.save(&self.catalog) {
-            Ok(()) => true,
-            Err(error) => {
-                self.set_error(localized_error(&error));
-                false
-            }
         }
     }
 }

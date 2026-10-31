@@ -8,8 +8,8 @@
 //!   2. 统一提供重置与活动弹窗判定能力；
 //!   3. 大幅精简 `AppShell` 结构体，提高领域内聚度。
 
+use super::batch::BatchEditForm;
 use crate::backup::BackupPromptState;
-use crate::batch::BatchEditForm;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
 use crate::keys::KnownHostsModalState;
 use crate::session_form::SessionForm;

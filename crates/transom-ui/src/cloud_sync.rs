@@ -306,10 +306,8 @@ impl AppShell {
 
     fn send_git_sync(&mut self, settings: SyncSettings, cx: &mut Context<Self>) {
         self.status = Some(rust_i18n::t!("sync.git_running").to_string());
-        if !self.send_command(SyncCommand::GitSync {
-            settings,
-            catalog: self.catalog.clone(),
-        }) {
+        let catalog = self.catalog.clone();
+        if !self.send_command(SyncCommand::GitSync { settings, catalog }) {
             self.set_error(rust_i18n::t!("sync.git_no_config").to_string());
         }
         cx.notify();
