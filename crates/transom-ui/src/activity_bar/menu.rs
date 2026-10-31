@@ -16,9 +16,12 @@ impl AppShell {
         let mut menu = menu;
         if id.is_pinned() {
             menu = menu.item(
-                PopupMenuItem::new(rust_i18n::t!("activity.pinned").to_string())
-                    .icon(IconName::Lock)
-                    .disabled(true),
+                crate::widgets::MenuItem::new(
+                    rust_i18n::t!("activity.pinned").to_string(),
+                    IconName::Lock,
+                )
+                .disabled(true)
+                .render(|_, _, _| {}),
             );
         } else {
             let app_hide = app.clone();

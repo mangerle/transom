@@ -669,3 +669,38 @@ fn widgets_use_design_tokens() {
         offenders.join("\n")
     );
 }
+
+/// 菜单项必须走 widgets 构造器：`PopupMenuItem::new(...)` 紧随 `.icon(...)`
+/// 是迁移前的写法，散落回页面会让图标顺序与禁用语义各自漂移。
+///
+/// 例外只保留两处真实差异：带真实 `Action` 的条目（动作自带键位展示）与下拉
+/// 里的 `.checked(...)` 选中项，它们不属于同一语义。
+#[test]
+fn menu_items_use_widget_constructor() {
+    let mut offenders = Vec::new();
+    for (path, content) in ui_source_files() {
+        // 只守卫 transom-ui：transom-terminal 不能反向依赖 UI 组件层。
+        if path.contains("/widgets/") || !path.contains("/transom-ui/src/") {
+            continue;
+        }
+        let lines: Vec<&str> = content.lines().collect();
+        for (index, line) in lines.iter().enumerate() {
+            if !line.contains("PopupMenuItem::new(") && !line.contains("PopupMenuItem::new()") {
+                continue;
+            }
+            let window = lines
+                .iter()
+                .skip(index)
+                .take(3)
+                .any(|next| next.trim_start().starts_with(".icon("));
+            if window {
+                offenders.push(format!("{}:{}: {}", path, index + 1, line.trim()));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "菜单项请使用 crate::widgets::menu_item / MenuItem：\n{}",
+        offenders.join("\n")
+    );
+}

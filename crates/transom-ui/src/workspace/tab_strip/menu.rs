@@ -212,30 +212,34 @@ pub(crate) fn build_tab_context_menu(
     menu = menu
         .item(PopupMenuItem::separator())
         .item(
-            PopupMenuItem::new(rust_i18n::t!("menu.tile_right").to_string())
-                .icon(IconName::Columns2)
-                .disabled(!tile_enabled)
-                .on_click({
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            this.tile_tab(group_id, SplitAxis::Horizontal, window, cx);
-                        });
-                    }
-                }),
+            crate::widgets::MenuItem::new(
+                rust_i18n::t!("menu.tile_right").to_string(),
+                IconName::Columns2,
+            )
+            .disabled(!tile_enabled)
+            .render({
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.tile_tab(group_id, SplitAxis::Horizontal, window, cx);
+                    });
+                }
+            }),
         )
         .item(
-            PopupMenuItem::new(rust_i18n::t!("menu.tile_down").to_string())
-                .icon(IconName::Rows2)
-                .disabled(!tile_enabled)
-                .on_click({
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            this.tile_tab(group_id, SplitAxis::Vertical, window, cx);
-                        });
-                    }
-                }),
+            crate::widgets::MenuItem::new(
+                rust_i18n::t!("menu.tile_down").to_string(),
+                IconName::Rows2,
+            )
+            .disabled(!tile_enabled)
+            .render({
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.tile_tab(group_id, SplitAxis::Vertical, window, cx);
+                    });
+                }
+            }),
         );
     if show_add_to_tiling && let Some(set_id) = this_set_id {
         let groups = menu_selection.clone();
@@ -283,25 +287,28 @@ pub(crate) fn build_tab_context_menu(
         // 选中跨了多张并排网格：没有唯一落点，置灰而不是隐藏，
         // 让用户知道功能存在但当前选择不明确。
         menu = menu.item(
-            PopupMenuItem::new(
+            crate::widgets::MenuItem::new(
                 rust_i18n::t!("menu.tile_selected", count = selected_singles_count).to_string(),
+                IconName::LayoutGrid,
             )
-            .icon(IconName::LayoutGrid)
-            .disabled(true),
+            .disabled(true)
+            .render(|_, _, _| {}),
         );
     }
     menu = menu.item(
-        PopupMenuItem::new(rust_i18n::t!("menu.untile").to_string())
-            .icon(IconName::Minimize2)
-            .disabled(this_set_id.is_none())
-            .on_click({
-                let app = app.clone();
-                move |_, _window, cx| {
-                    if let Some(id) = this_set_id {
-                        app.update(cx, |this, cx| this.untile_tiling(id, cx));
-                    }
+        crate::widgets::MenuItem::new(
+            rust_i18n::t!("menu.untile").to_string(),
+            IconName::Minimize2,
+        )
+        .disabled(this_set_id.is_none())
+        .render({
+            let app = app.clone();
+            move |_, _window, cx| {
+                if let Some(id) = this_set_id {
+                    app.update(cx, |this, cx| this.untile_tiling(id, cx));
                 }
-            }),
+            }
+        }),
     );
     menu.item(PopupMenuItem::separator())
         .item(crate::widgets::menu_item(
@@ -317,19 +324,21 @@ pub(crate) fn build_tab_context_menu(
             },
         ))
         .item(
-            PopupMenuItem::new(rust_i18n::t!("menu.close_tiling_group").to_string())
-                .icon(IconName::Trash)
-                .disabled(this_set_id.is_none())
-                .on_click({
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        if let Some(id) = this_set_id {
-                            app.update(cx, |this, cx| {
-                                this.close_tiling_group(id, window, cx);
-                            });
-                        }
+            crate::widgets::MenuItem::new(
+                rust_i18n::t!("menu.close_tiling_group").to_string(),
+                IconName::Trash,
+            )
+            .disabled(this_set_id.is_none())
+            .render({
+                let app = app.clone();
+                move |_, window, cx| {
+                    if let Some(id) = this_set_id {
+                        app.update(cx, |this, cx| {
+                            this.close_tiling_group(id, window, cx);
+                        });
                     }
-                }),
+                }
+            }),
         )
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.close_other_tabs").to_string(),

@@ -33,6 +33,6 @@ pub(crate) use form::{
     form_field, secret_field, setting_field_row, setting_frame, setting_row, setting_text_row,
 };
 pub(crate) use list_row::{list_row, table_header};
-pub(crate) use menu::menu_item;
+pub(crate) use menu::{MenuItem, menu_item};
 pub(crate) use status::{status_badge, status_dot};
 pub(crate) use toolbar::toolbar;
