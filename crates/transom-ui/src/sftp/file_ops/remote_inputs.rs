@@ -5,12 +5,11 @@
 //! 主文件只保留增删改查与删除确认。
 
 use crate::app::AppShell;
-use crate::sftp::{SftpInputModalParams, SftpInputTarget, SftpRemotePaneRef};
+use crate::sftp::SftpRemotePaneRef;
 use gpui_kit::*;
 use transom_core::TabId;
 
 impl AppShell {
-    /// 打开目标远端列的归档压缩弹窗：并列列把连接写进弹窗，提交按连接路由。
     pub(crate) fn sftp_open_archive_modal_pane(
         &mut self,
         tab_id: TabId,
@@ -20,32 +19,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((side_connection, parent_dir)) = self
-            .remote_pane_scope(tab_id, target, cx)
-            .map(|scope| (scope.side_connection, scope.pane.path.clone()))
-        else {
-            return;
-        };
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: side_connection,
-                title: rust_i18n::t!("sftp.file_ops.archive_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.archive_prompt", count = source_paths.len())
-                    .to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.archive_placeholder").to_string(),
-                value: default_name,
-                target: SftpInputTarget::RemoteArchive {
-                    source_paths,
-                    parent_dir,
-                },
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.open_archive_modal(target, source_paths, default_name, window, cx)
+            });
+        }
     }
 
-    /// 打开目标远端列的解压到新文件夹弹窗。
     pub(crate) fn sftp_open_extract_modal_pane(
         &mut self,
         tab_id: TabId,
@@ -55,31 +35,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((side_connection, parent_dir)) = self
-            .remote_pane_scope(tab_id, target, cx)
-            .map(|scope| (scope.side_connection, scope.pane.path.clone()))
-        else {
-            return;
-        };
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: side_connection,
-                title: rust_i18n::t!("sftp.file_ops.extract_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.extract_prompt").to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.extract_placeholder").to_string(),
-                value: default_dir_name,
-                target: SftpInputTarget::RemoteExtract {
-                    archive_path,
-                    parent_dir,
-                },
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.open_extract_modal(target, archive_path, default_dir_name, window, cx)
+            });
+        }
     }
 
-    /// 目标远端列的「创建软链接」输入弹窗。
     pub(crate) fn sftp_open_symlink_modal_pane(
         &mut self,
         tab_id: TabId,
@@ -87,37 +49,8 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((side_connection, entry)) =
-            self.remote_pane_scope(tab_id, target, cx)
-                .and_then(|scope| {
-                    let selected = scope.pane.selected.clone()?;
-                    let entry = scope
-                        .pane
-                        .entries
-                        .iter()
-                        .find(|entry| entry.path == selected)?
-                        .clone();
-                    Some((scope.side_connection, entry))
-                })
-        else {
-            return;
-        };
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: side_connection,
-                title: rust_i18n::t!("sftp.file_ops.symlink_remote_title").to_string(),
-                prompt: rust_i18n::t!(
-                    "sftp.file_ops.symlink_remote_prompt",
-                    path = entry.path.as_str()
-                )
-                .to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.symlink_name_placeholder").to_string(),
-                value: format!("{}.link", entry.name),
-                target: SftpInputTarget::RemoteSymlink { target: entry.path },
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_symlink_modal(target, window, cx));
+        }
     }
 }

@@ -6,10 +6,7 @@ mod validate;
 
 use crate::app::AppShell;
 use crate::keymap;
-use crate::sftp::{
-    SftpConfirmModalState, SftpInputModalParams, SftpInputTarget, SftpPendingDelete,
-    SftpRemotePaneRef,
-};
+use crate::sftp::{SftpConfirmModalState, SftpPendingDelete, SftpRemotePaneRef};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpOperation, TabId};
 
@@ -146,22 +143,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: None,
-                title: rust_i18n::t!("sftp.file_ops.mkdir_local_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.mkdir_local_prompt").to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.folder_name_placeholder").to_string(),
-                value: String::new(),
-                target: SftpInputTarget::LocalMkdir,
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_local_mkdir_modal(window, cx));
+        }
     }
 
-    /// 打开目标远端列的新建目录弹窗。
     pub(crate) fn sftp_open_mkdir_modal_for(
         &mut self,
         tab_id: TabId,
@@ -169,29 +155,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(side_connection) = self
-            .remote_pane_scope(tab_id, target, cx)
-            .map(|scope| scope.side_connection)
-        else {
-            return;
-        };
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: side_connection,
-                title: rust_i18n::t!("sftp.file_ops.mkdir_remote_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.mkdir_remote_prompt").to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.folder_name_placeholder").to_string(),
-                value: String::new(),
-                target: SftpInputTarget::RemoteMkdir,
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_mkdir_modal_for(target, window, cx));
+        }
     }
 
-    /// 打开"新建远端文件并编辑"输入模态：提交后由编辑器打开空面板，
-    /// 首次保存才在远端创建文件。
     pub(crate) fn sftp_open_editor_new_file_modal_for(
         &mut self,
         tab_id: TabId,
@@ -199,47 +167,22 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(side_connection) = self
-            .remote_pane_scope(tab_id, target, cx)
-            .map(|scope| scope.side_connection)
-        else {
-            return;
-        };
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: side_connection,
-                title: rust_i18n::t!("sftp.file_ops.new_remote_file_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.new_remote_file_prompt").to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.new_file_placeholder").to_string(),
-                value: String::new(),
-                target: SftpInputTarget::RemoteEditorNewFile,
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.open_editor_new_file_modal_for(target, window, cx)
+            });
+        }
     }
 
-    /// 打开"新建本地文件"输入模态：提交后在本地当前目录下创建该空文件。
     pub(crate) fn sftp_open_local_new_file_modal(
         &mut self,
         tab_id: TabId,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: None,
-                title: rust_i18n::t!("sftp.file_ops.new_local_file_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.new_local_file_prompt").to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.new_file_placeholder").to_string(),
-                value: String::new(),
-                target: SftpInputTarget::LocalNewFile,
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_local_new_file_modal(window, cx));
+        }
     }
 
     pub(crate) fn sftp_open_local_rename_modal(
@@ -248,32 +191,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(selected) = self
-            .sftp_state(tab_id, cx)
-            .and_then(|panel| panel.local.selected.clone())
-        else {
-            return;
-        };
-        let initial = selected
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: None,
-                title: rust_i18n::t!("sftp.file_ops.rename_local_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.rename_prompt").to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.rename_placeholder").to_string(),
-                value: initial,
-                target: SftpInputTarget::LocalRename { old_path: selected },
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_local_rename_modal(window, cx));
+        }
     }
 
-    /// 打开目标远端列的重命名弹窗，初始值取当前主项的文件名。
     pub(crate) fn sftp_open_rename_modal_for(
         &mut self,
         tab_id: TabId,
@@ -281,80 +203,21 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((selected, side_connection)) = self
-            .remote_pane_scope(tab_id, target, cx)
-            .and_then(|scope| Some((scope.pane.selected.clone()?, scope.side_connection)))
-        else {
-            self.set_sftp_pane_error(
-                tab_id,
-                target,
-                rust_i18n::t!("sftp.select_file").to_string(),
-                cx,
-            );
-            return;
-        };
-        let initial = selected
-            .trim_end_matches('/')
-            .rsplit_once('/')
-            .map(|(_, name)| name.to_string())
-            .unwrap_or_else(|| selected.clone());
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: side_connection,
-                title: rust_i18n::t!("sftp.file_ops.rename_remote_title").to_string(),
-                prompt: rust_i18n::t!("sftp.file_ops.rename_prompt").to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.rename_placeholder").to_string(),
-                value: initial,
-                target: SftpInputTarget::RemoteRename { old_path: selected },
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.open_rename_modal_for(target, window, cx)
+            });
+        }
     }
 
-    /// 打开本地「创建软链接」输入弹窗：基于当前选中项目。
-    ///
-    /// 设计原理（Why）：
-    /// - 实现初衷：创建软链接需要用户为新链接命名，且必须明确被指向的目标路径，
-    ///   因此复用通用输入弹窗承载「名称输入 + 目标信息提示」；
-    /// - 核心优势：默认名称在所选项目名后追加 `.link` 后缀，避免与既有项目重名
-    ///   导致服务端直接拒绝，用户也可按需改写；
-    /// - 代价与局限：链接固定创建于当前目录，暂不支持跨目录指定链接存放位置。
     pub(crate) fn sftp_open_local_symlink_modal(
         &mut self,
         tab_id: TabId,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(selected) = self
-            .sftp_state(tab_id, cx)
-            .and_then(|panel| panel.local.selected.clone())
-        else {
-            return;
-        };
-        let initial_name = selected
-            .file_name()
-            .map(|name| format!("{}.link", name.to_string_lossy()))
-            .unwrap_or_else(|| "link".to_string());
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id,
-                connection_id: None,
-                title: rust_i18n::t!("sftp.file_ops.symlink_local_title").to_string(),
-                prompt: rust_i18n::t!(
-                    "sftp.file_ops.symlink_local_prompt",
-                    path = selected.display().to_string()
-                )
-                .to_string(),
-                placeholder: rust_i18n::t!("sftp.file_ops.symlink_name_placeholder").to_string(),
-                value: initial_name,
-                target: SftpInputTarget::LocalSymlink {
-                    target_path: selected,
-                },
-            },
-            window,
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_local_symlink_modal(window, cx));
+        }
     }
 }

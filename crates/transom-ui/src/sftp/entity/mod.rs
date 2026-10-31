@@ -23,6 +23,7 @@
 
 mod clipboard;
 mod delete;
+mod file_ops;
 mod queue;
 mod status;
 
