@@ -41,6 +41,11 @@ pub(crate) struct SftpLocalPaneProps {
     pub(crate) quick_paths: LocalQuickPaths,
     /// 本地终端模式没有远端，上传入口必须隐藏。
     pub(crate) remote_available: bool,
+    /// 选中集快照：虚拟列表回调在实体租借期间执行，不能再读实体。
+    pub(crate) local_selection: std::collections::BTreeSet<std::path::PathBuf>,
+    pub(crate) local_primary: Option<std::path::PathBuf>,
+    /// "与本地对比"入口是否可用：由调用方按实体状态提前算好。
+    pub(crate) diff_ready: bool,
 }
 
 impl AppShell {
@@ -59,6 +64,9 @@ impl AppShell {
         let local_scroll_handle = props.local_scroll_handle;
         let quick_paths = props.quick_paths;
         let remote_available = props.remote_available;
+        let local_selection = std::rc::Rc::new(props.local_selection);
+        let local_primary = std::rc::Rc::new(props.local_primary);
+        let diff_ready = props.diff_ready;
 
         let local_content = if local_entries.is_empty() {
             div()
@@ -83,13 +91,6 @@ impl AppShell {
                 format!("sftp-local-virtual-list-{tab_id}"),
                 local_sizes,
                 move |this, range, _window, cx| {
-                    let (local_selection, local_primary) = this
-                        .state
-                        .workspace
-                        .tab(tab_id)
-                        .and_then(|tab| tab.sftp())
-                        .map(|panel| (panel.local.selection.clone(), panel.local.selected.clone()))
-                        .unwrap_or_default();
                     let app_entity = app_entity.clone();
                     range
                         .filter_map(|ix| {
@@ -98,7 +99,7 @@ impl AppShell {
                             let is_dir = entry.is_dir;
                             let is_parent_entry = entry_name == "..";
                             let is_selected = local_selection.contains(&entry.path)
-                                || local_primary.as_ref() == Some(&entry.path);
+                                || local_primary.as_deref() == Some(entry.path.as_path());
                             let entry_path_cm = entry.path.clone();
                             let app_cm = app_entity.clone();
                             let row = this.sftp_file_row(
@@ -143,7 +144,6 @@ impl AppShell {
 
         // 对比入口只在"选中单个本地文件且远端有同名文件"时可用；
         // 目录、多选与远端缺失都置灰，避免点击后才发现没有对手方。
-        let diff_ready = remote_available && self.state.diff_entry_ready(tab_id);
         let toolbar = render_local_toolbar(
             LocalToolbarProps {
                 tab_id,
@@ -179,8 +179,7 @@ impl AppShell {
                         return;
                     };
                     let Some(local_dir) = this
-                        .state
-                        .sftp_panel_mut_tab(tab_id)
+                        .sftp_view_mut(tab_id, cx)
                         .map(|panel| panel.local.path.clone())
                     else {
                         return;
@@ -190,7 +189,7 @@ impl AppShell {
                         let target_local = match transom_core::safe_local_join(&local_dir, fname) {
                             Ok(path) => path,
                             Err(_) => {
-                                if let Some(panel) = this.state.sftp_panel_mut_tab(tab_id) {
+                                if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
                                     panel.set_local_error(
                                         rust_i18n::t!("sftp.invalid_name").to_string(),
                                     );

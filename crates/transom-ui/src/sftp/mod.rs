@@ -3,6 +3,7 @@
 mod chmod;
 mod columns;
 mod drop_upload;
+mod entity;
 mod file_ops;
 mod file_row;
 mod file_row_content;
@@ -42,6 +43,7 @@ mod task;
 mod transfer_filter_modal;
 mod transfer_presentation;
 
+pub(crate) use self::entity::SftpPanelView;
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
 pub(crate) use self::input_modal::SftpInputModalParams;
 pub(crate) use self::local_async::spawn_blocking_local;

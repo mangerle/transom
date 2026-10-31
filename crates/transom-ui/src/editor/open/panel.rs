@@ -21,7 +21,7 @@ impl AppShell {
             .workspace
             .tab(tab_id)
             .and_then(|tab| {
-                let panel = tab.sftp()?;
+                let panel = self.sftp_state(tab_id, cx)?;
                 let entries = if tab.connection_id == Some(connection_id) {
                     &panel.remote.entries
                 } else {

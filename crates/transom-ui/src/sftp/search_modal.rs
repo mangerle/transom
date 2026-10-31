@@ -46,8 +46,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((root_path, side_connection)) = self
-            .state
-            .remote_pane_scope(tab_id, target)
+            .remote_pane_scope(tab_id, target, cx)
             .map(|scope| (scope.pane.path.clone(), scope.side_connection))
         else {
             return;

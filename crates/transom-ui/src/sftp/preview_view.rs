@@ -21,15 +21,10 @@ impl AppShell {
         &self,
         window: &Window,
         p: &Palette,
+        cx: &App,
     ) -> Option<AnyElement> {
         let tab_id = self.state.workspace.active_tab?;
-        let preview = self
-            .state
-            .workspace
-            .tab(tab_id)?
-            .sftp()?
-            .hover_preview
-            .as_ref()?;
+        let preview = self.sftp_state(tab_id, cx)?.hover_preview.as_ref()?;
         if matches!(preview.content, PreviewContent::Pending) {
             return None;
         }

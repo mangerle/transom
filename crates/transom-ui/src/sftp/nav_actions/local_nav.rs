@@ -19,18 +19,16 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
+        let Some(input) = self.sftp_view_mut(tab_id, cx).map(|mut panel| {
+            panel.local.path = target.clone();
+            // 先清空旧目录内容给出即时反馈，实际条目由后台刷新回填
+            panel.local.entries = Vec::new();
+            panel.clear_local_selection();
+            panel.clear_local_error();
+            panel.local.path_input.clone()
+        }) else {
             return;
         };
-        let Some(panel) = tab.sftp_mut() else {
-            return;
-        };
-        panel.local.path = target.clone();
-        // 先清空旧目录内容给出即时反馈，实际条目由后台刷新回填
-        panel.local.entries = Vec::new();
-        panel.clear_local_selection();
-        panel.clear_local_error();
-        let input = panel.local.path_input.clone();
         input.update(cx, |state, cx| {
             state.set_value(target.display().to_string(), window, cx);
         });
@@ -47,16 +45,14 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
+        let Some(input) = self.sftp_view_mut(tab_id, cx).map(|mut panel| {
+            panel.local.path = target.clone();
+            panel.clear_local_selection();
+            panel.clear_local_error();
+            panel.local.path_input.clone()
+        }) else {
             return;
         };
-        let Some(panel) = tab.sftp_mut() else {
-            return;
-        };
-        panel.local.path = target.clone();
-        panel.clear_local_selection();
-        panel.clear_local_error();
-        let input = panel.local.path_input.clone();
         input.update(cx, |state, cx| {
             state.set_value(target.display().to_string(), window, cx);
         });
@@ -71,23 +67,18 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let sync_remote_target = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
-            .and_then(|panel| {
-                if !panel.sync_navigation {
-                    return None;
-                }
-                let child_name = target.file_name()?.to_str()?;
-                panel
-                    .remote
-                    .entries
-                    .iter()
-                    .find(|e| e.is_dir && e.name == child_name)
-                    .map(|e| e.path.clone())
-            });
+        let sync_remote_target = self.sftp_state(tab_id, cx).and_then(|panel| {
+            if !panel.sync_navigation {
+                return None;
+            }
+            let child_name = target.file_name()?.to_str()?;
+            panel
+                .remote
+                .entries
+                .iter()
+                .find(|e| e.is_dir && e.name == child_name)
+                .map(|e| e.path.clone())
+        });
         self.sftp_local_navigate_only(tab_id, target, window, cx);
         if let Some(remote_path) = sync_remote_target {
             self.request_sftp_list(tab_id, remote_path, cx);
@@ -101,10 +92,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let (parent, sync_remote_parent) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
+            .sftp_state(tab_id, cx)
             .map(|panel| {
                 let local_parent = panel.local.path.parent().map(|p| p.to_path_buf());
                 let remote_parent = if panel.sync_navigation {
@@ -135,10 +123,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let target = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
+            .sftp_state(tab_id, cx)
             .map(|panel| PathBuf::from(panel.local.path_input.read(cx).value().trim()));
         if let Some(target) = target
             && target.is_dir()
@@ -149,22 +134,14 @@ impl AppShell {
 
     pub(crate) fn sftp_open_local_file_manager(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(local_path) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
+            .sftp_state(tab_id, cx)
             .map(|panel| panel.local.path.clone())
         else {
             return;
         };
         crate::audit::reveal_in_file_manager(local_path.clone());
 
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.set_status(
                 rust_i18n::t!(
                     "sftp.nav.revealed_local_path",
@@ -172,8 +149,8 @@ impl AppShell {
                 )
                 .to_string(),
             );
-            cx.notify();
         }
+        cx.notify();
     }
 
     /// 调用系统默认程序/关联编辑器打开指定的本地文件。
@@ -184,24 +161,14 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if !target.is_file() {
-            if let Some(panel) = self
-                .state
-                .workspace
-                .tab_mut(tab_id)
-                .and_then(|t| t.sftp_mut())
-            {
+            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
                 panel.set_local_error(rust_i18n::t!("sftp.row.select_local_to_edit").to_string());
-                cx.notify();
             }
+            cx.notify();
             return;
         }
         crate::audit::reveal_in_file_manager(target.clone());
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|t| t.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.set_status(
                 rust_i18n::t!(
                     "sftp.nav.opened_with_default",
@@ -209,7 +176,7 @@ impl AppShell {
                 )
                 .to_string(),
             );
-            cx.notify();
         }
+        cx.notify();
     }
 }

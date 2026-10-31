@@ -307,8 +307,7 @@ impl AppShell {
     ) {
         // 目录列表条目就地补丁：size/mtime 都来自写后 stat，与远端一致，
         // 无需为刷新列表再发一次目录请求。
-        if let Some(tab) = self.state.workspace.tab_mut(action.tab_id)
-            && let Some(panel) = tab.sftp_mut()
+        if let Some(mut panel) = self.sftp_view_mut(action.tab_id, cx)
             && let Some(entry) = panel
                 .remote
                 .entries
@@ -323,10 +322,7 @@ impl AppShell {
         if action.was_new_file
             && let Some(parent) = parent_dir(&action.remote_path)
             && self
-                .state
-                .workspace
-                .tab(action.tab_id)
-                .and_then(|tab| tab.sftp())
+                .sftp_state(action.tab_id, cx)
                 .is_some_and(|panel| panel.remote.path == parent)
         {
             self.request_sftp_list(action.tab_id, parent.to_string(), cx);
@@ -406,15 +402,17 @@ impl AppShell {
         message: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
-            let main_connection = tab.connection_id;
-            if let Some(panel) = tab.sftp_mut()
-                && let Some(target) =
-                    panel.remote_pane_of_connection(connection_id, main_connection)
-                && let Some(pane) = panel.remote_pane_mut(target)
-            {
-                pane.error = Some(message);
-            }
+        if let Some(main_connection) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+            && let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
+            && let Some(target) =
+                panel.remote_pane_of_connection(connection_id, Some(main_connection))
+            && let Some(pane) = panel.remote_pane_mut(target)
+        {
+            pane.error = Some(message);
         }
         cx.notify();
     }

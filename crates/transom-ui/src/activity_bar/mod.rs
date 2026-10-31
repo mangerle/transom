@@ -58,7 +58,7 @@ impl AppState {
         id != ActivityItemId::Tabs || self.settings.window.tab_position == TabPosition::Left
     }
 
-    fn activity_item_selected(&self, id: ActivityItemId, monitor_open: bool) -> bool {
+    fn activity_item_selected(&self, id: ActivityItemId, monitor_open: bool, cx: &App) -> bool {
         match id {
             ActivityItemId::Sessions => self.sidebar.visible && !self.vertical_tabs_open,
             ActivityItemId::Tabs => self.sidebar.visible && self.vertical_tabs_open,
@@ -70,8 +70,8 @@ impl AppState {
             ActivityItemId::Sftp => self
                 .workspace
                 .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
-                .is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open)),
+                .and_then(|tab_id| self.workspace.tab(tab_id)?.sftp_view())
+                .is_some_and(|view| view.read(cx).open),
             ActivityItemId::Monitor => monitor_open,
             ActivityItemId::Keys => self.modals.settings.key_wizard.is_some(),
             _ => false,
@@ -175,9 +175,9 @@ impl AppShell {
         let label = activity_item_label(id);
         let icon = activity_item_icon(id);
         let tooltip = self.state.activity_item_tooltip(id, &label);
-        let selected = self
-            .state
-            .activity_item_selected(id, self.state.monitor.read(cx).is_open());
+        let selected =
+            self.state
+                .activity_item_selected(id, self.state.monitor.read(cx).is_open(), cx);
         let disabled = self.state.activity_item_disabled(id);
         let app = cx.entity().clone();
 

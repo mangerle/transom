@@ -11,11 +11,10 @@
 //!   窗格级的，分屏时每个窗格各显示自己的浮层；速率由 100ms 节流的进度事件做一阶
 //!   平滑得出，暂停瞬间归零是事实而非误差，不做额外的"保持上次速率"美化。
 
-use super::SftpPanelState;
 use super::format_size;
 use super::transfer_presentation::{display_name, is_busy, progress_percent, status_label};
 use super::{TransferStatus, TransferTask};
-use crate::app::{AppShell, TerminalTab};
+use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::status_bar::format_rate;
 use gpui_kit::assets::IconName;
@@ -85,20 +84,9 @@ impl DropOverlayState {
 }
 
 impl AppShell {
-    /// 按窗格 id 取其 SFTP 状态。
-    ///
-    /// 不复用 `sftp_panel_mut(tab_id, connection_id)`：浮层只关心队列，而队列状态
-    /// 随连接建立而创建、断开即释放（见 `connection.rs` 与 `tabs.rs` 的清理点），
-    /// 因此这里不需要再拿连接号复核一遍。
-    fn panel_of(tabs: &mut [TerminalTab], tab_id: TabId) -> Option<&mut SftpPanelState> {
-        tabs.iter_mut()
-            .find(|tab| tab.id == tab_id)
-            .and_then(|tab| tab.sftp_mut())
-    }
-
     /// 拖入即显示：展开明细并撤掉待收起定时器。
     pub(crate) fn show_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id) else {
+        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
             return;
         };
         // 面板已经展开时不弹浮层：它的队列区就在旁边，两处同时刷进度是纯重复。
@@ -108,33 +96,46 @@ impl AppShell {
         panel.queue.drop_overlay.visible = true;
         panel.queue.drop_overlay.expanded = true;
         panel.queue.drop_overlay.settle_task = None;
+        drop(panel);
         cx.notify();
     }
 
     /// 队列状态变化后同步浮层：面板展开即退出，繁忙则常驻，排空则起停留定时器。
     pub(crate) fn sync_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id) else {
+        let Some((open, busy, visible, has_settle_task)) =
+            self.sftp_state(tab_id, cx).map(|panel| {
+                (
+                    panel.open,
+                    panel.queue.tasks.iter().any(is_busy),
+                    panel.queue.drop_overlay.visible,
+                    panel.queue.drop_overlay.settle_task.is_some(),
+                )
+            })
+        else {
             return;
         };
         // 面板展开时由面板的队列区呈现进度，浮层不再重复。
-        if panel.open {
-            panel.queue.drop_overlay.visible = false;
-            panel.queue.drop_overlay.settle_task = None;
+        if open {
+            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+                panel.queue.drop_overlay.visible = false;
+                panel.queue.drop_overlay.settle_task = None;
+            }
             return;
         }
-        if panel.queue.tasks.iter().any(is_busy) {
-            panel.queue.drop_overlay.visible = true;
-            panel.queue.drop_overlay.settle_task = None;
+        if busy {
+            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+                panel.queue.drop_overlay.visible = true;
+                panel.queue.drop_overlay.settle_task = None;
+            }
             return;
         }
-        if !panel.queue.drop_overlay.visible || panel.queue.drop_overlay.settle_task.is_some() {
+        if !visible || has_settle_task {
             return;
         }
-        panel.queue.drop_overlay.reset_rate();
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(OVERLAY_LINGER).await;
             let _ = this.update(cx, |this, cx| {
-                let Some(panel) = Self::panel_of(&mut this.state.workspace.tabs, tab_id) else {
+                let Some(mut panel) = this.sftp_view_mut(tab_id, cx) else {
                     return;
                 };
                 // 停留期间若又忙起来，`sync_drop_overlay` 已把本句柄换成 None；
@@ -142,17 +143,19 @@ impl AppShell {
                 panel.queue.drop_overlay.visible = false;
                 panel.queue.drop_overlay.expanded = true;
                 panel.queue.drop_overlay.settle_task = None;
-                cx.notify();
             });
         });
-        panel.queue.drop_overlay.settle_task = Some(task);
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+            panel.queue.drop_overlay.reset_rate();
+            panel.queue.drop_overlay.settle_task = Some(task);
+        }
     }
 
     /// 进度事件驱动的刷新：更新速率，并且只在窗格正被渲染时触发重绘。
     ///
     /// 进度事件是高频信号，后台标签的浮层不值得整帧重绘外壳。
     pub(crate) fn note_drop_overlay_progress(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id)
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
             && !panel.open
             && panel.queue.drop_overlay.visible
         {
@@ -166,7 +169,7 @@ impl AppShell {
 
     /// 用户点关闭：撤下浮层与定时器，下次拖入会重新出现。
     fn dismiss_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id) {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.queue.drop_overlay.visible = false;
             panel.queue.drop_overlay.settle_task = None;
             panel.queue.drop_overlay.reset_rate();
@@ -181,18 +184,14 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let panel = self.state.workspace.tab(tab_id)?.sftp()?;
+        let panel = self.sftp_state(tab_id, cx)?;
         if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
             return None;
         }
         let expanded = panel.queue.drop_overlay.expanded;
-        let total = panel.queue.tasks.len();
-        let busy = panel
-            .queue
-            .tasks
-            .iter()
-            .filter(|task| is_busy(task))
-            .count();
+        let tasks = panel.queue.tasks.clone();
+        let total = tasks.len();
+        let busy = tasks.iter().filter(|task| is_busy(task)).count();
         let speed = panel.queue.drop_overlay.rate_bytes_per_sec;
         let (done_bytes, total_bytes) = panel.queue.progress.unwrap_or((0, None));
         // 目标目录挂在 tooltip 上：浮层面积有限，但"传到哪儿"必须能查到。
@@ -242,11 +241,9 @@ impl AppShell {
                     })
                     .tooltip(rust_i18n::t!("sftp.overlay_expand"))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        let Some(panel) = Self::panel_of(&mut this.state.workspace.tabs, tab_id)
-                        else {
-                            return;
-                        };
-                        panel.queue.drop_overlay.expanded = !panel.queue.drop_overlay.expanded;
+                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                            panel.queue.drop_overlay.expanded = !panel.queue.drop_overlay.expanded;
+                        }
                         cx.notify();
                     })),
             )
@@ -291,13 +288,7 @@ impl AppShell {
             .max_h(OVERLAY_MAX_HEIGHT)
             .overflow_y_scrollbar()
             .when(expanded, |this| {
-                this.children(
-                    panel
-                        .queue
-                        .tasks
-                        .iter()
-                        .map(|task| overlay_row(tab_id, task, p, cx)),
-                )
+                this.children(tasks.iter().map(|task| overlay_row(tab_id, task, p, cx)))
             });
 
         // 绝对定位挂在窗格的终端容器上（见 workspace/panes.rs 的 .relative()），

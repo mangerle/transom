@@ -20,7 +20,7 @@ pub(crate) use self::types::{
     active_pane_after_removing,
 };
 
-use crate::app::{AppShell, AppState};
+use crate::app::AppShell;
 use crate::sftp::columns::SftpColumnId;
 use crate::sftp::{
     SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, SftpTransferRequest, TransferMode,
@@ -55,17 +55,6 @@ fn side_column_width_hint(panel: &SftpPanelState, cx: &App) -> f32 {
     }
 }
 
-impl AppState {
-    pub(crate) fn sftp_panel_mut_tab(
-        &mut self,
-        tab_id: TabId,
-    ) -> Option<&mut super::SftpPanelState> {
-        self.workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-    }
-}
-
 impl AppShell {
     /// 挂载并列远端会话到当前 SFTP 面板。
     pub(crate) fn sftp_mount_side_remote(
@@ -77,21 +66,25 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
-            return;
-        };
-        let Some(panel) = tab.sftp_mut() else {
+        let Some((already_mounted, side_count)) = self.sftp_state(tab_id, cx).map(|panel| {
+            (
+                panel
+                    .side_remotes
+                    .iter()
+                    .any(|s| s.connection_id == Some(connection_id)),
+                panel.side_remotes.len(),
+            )
+        }) else {
             return;
         };
         // 避免重复挂载相同连接
-        if panel
-            .side_remotes
-            .iter()
-            .any(|s| s.connection_id == Some(connection_id))
-        {
-            panel.set_status(
-                rust_i18n::t!("sftp.sidebar.already_mounted", title = title.as_str()).to_string(),
-            );
+        if already_mounted {
+            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+                panel.set_status(
+                    rust_i18n::t!("sftp.sidebar.already_mounted", title = title.as_str())
+                        .to_string(),
+                );
+            }
             cx.notify();
             return;
         }
@@ -113,20 +106,29 @@ impl AppShell {
         // 占满，新列没有可增长的空间，工具栏只剩一两个按钮甚至整列空白。挂载时
         // 按实测列宽重新分配现有展开列，给新列留出可读宽度；面板本身也放不下时
         // 再向工作区申请加宽。
-        let width_hint = side_column_width_hint(panel, cx);
-        let mount_plan = super::columns::plan_side_mount(panel, width_hint, cx);
-        if let Some(plan) = &mount_plan {
-            for (id, width) in &plan.widths {
-                panel.column_widths.remember(*id, *width);
+        let Some((width_hint, mount_plan)) = self.sftp_state(tab_id, cx).map(|panel| {
+            let width_hint = side_column_width_hint(panel, cx);
+            let mount_plan = super::columns::plan_side_mount(panel, width_hint, cx);
+            (width_hint, mount_plan)
+        }) else {
+            return;
+        };
+        let extra_width = mount_plan
+            .as_ref()
+            .map(|plan| plan.extra_width)
+            .unwrap_or(0.0);
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+            if let Some(plan) = &mount_plan {
+                for (id, width) in &plan.widths {
+                    panel.column_widths.remember(*id, *width);
+                }
             }
+            panel
+                .column_widths
+                .remember(SftpColumnId::Side(side_count), width_hint);
+            panel.side_remotes.push(side_state);
+            panel.mount_menu_open = false;
         }
-        let extra_width = mount_plan.map(|plan| plan.extra_width).unwrap_or(0.0);
-        let side_index = panel.side_remotes.len();
-        panel
-            .column_widths
-            .remember(SftpColumnId::Side(side_index), width_hint);
-        panel.side_remotes.push(side_state);
-        panel.mount_menu_open = false;
         self.reset_sftp_column_state(tab_id, cx);
         if extra_width > 0.5 {
             self.grow_sftp_panel_width(extra_width, window, cx);
@@ -145,7 +147,7 @@ impl AppShell {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let removed = if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
+        let removed = if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
             && index < panel.side_remotes.len()
         {
             let removed = panel.side_remotes[index].connection_id;
@@ -172,7 +174,7 @@ impl AppShell {
     ) {
         // 折叠前先记下当前列宽：折叠后这一列不再参与展开宽度测量。
         self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
             && let Some(side) = panel.side_remotes.get_mut(index)
         {
             side.collapsed = !side.collapsed;
@@ -185,7 +187,7 @@ impl AppShell {
     pub(crate) fn sftp_toggle_local_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         // 折叠前先记下当前列宽：折叠条不参与展开宽度测量。
         self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.local.collapsed = !panel.local.collapsed;
         }
         self.reset_sftp_column_state(tab_id, cx);
@@ -196,7 +198,7 @@ impl AppShell {
     pub(crate) fn sftp_toggle_remote_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         // 折叠前先记下当前列宽：折叠条不参与展开宽度测量。
         self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.remote.collapsed = !panel.remote.collapsed;
         }
         self.reset_sftp_column_state(tab_id, cx);
@@ -210,7 +212,7 @@ impl AppShell {
         params: SftpRemoteCopyParams,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) else {
+        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
             return;
         };
         let src_path = params.source_path.clone();
@@ -232,6 +234,7 @@ impl AppShell {
             )
             .to_string(),
         );
+        drop(panel);
         self.process_sftp_queue(tab_id, cx);
         cx.notify();
     }
@@ -248,7 +251,7 @@ impl AppShell {
         let verify = self.state.settings.sftp.verify_after_transfer;
         let verify_mode = self.state.settings.sftp.verify_mode;
         let checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
-        let Some(panel) = self.state.sftp_panel_mut_tab(request.tab_id) else {
+        let Some(mut panel) = self.sftp_view_mut(request.tab_id, cx) else {
             return;
         };
         let mode = if panel.queue.resume_enabled {
@@ -299,6 +302,7 @@ impl AppShell {
             )
             .to_string(),
         });
+        drop(panel);
         self.process_sftp_queue(request.tab_id, cx);
         cx.notify();
     }
@@ -316,7 +320,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let target = self.state.workspace.tab(tab_id).and_then(|tab| {
-            tab.sftp()
+            self.sftp_state(tab_id, cx)
                 .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
         });
         let Some(target) = target else {

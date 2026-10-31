@@ -17,12 +17,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let mut needs_cancel = false;
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
                 && task.status == TransferStatus::Transferring
             {
@@ -34,8 +29,8 @@ impl AppShell {
             if panel.queue.active_transfers.is_empty() {
                 panel.set_status(rust_i18n::t!("sftp.queue_actions.paused_one").to_string());
             }
-            cx.notify();
         }
+        cx.notify();
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if needs_cancel {
             self.state
@@ -50,34 +45,28 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
+            && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
+            && (task.status == TransferStatus::Paused
+                || matches!(task.status, TransferStatus::Failed(_)))
         {
-            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
-                && (task.status == TransferStatus::Paused
-                    || matches!(task.status, TransferStatus::Failed(_)))
-            {
-                let is_verify_failure = match &task.status {
-                    TransferStatus::Failed(reason) => {
-                        reason.contains("校验") || reason.contains("verify")
-                    }
-                    _ => false,
-                };
-                task.status = TransferStatus::Pending;
-                // 校验失败说明两端数据不一致或损坏，断点续传可能在脏数据后追加导致二次损坏；
-                // 采用 Overwrite 强制截断从头传输以实现完全自愈。
-                if is_verify_failure {
-                    task.mode = TransferMode::Overwrite;
-                    task.transferred = 0;
-                } else {
-                    task.mode = TransferMode::Resume;
+            let is_verify_failure = match &task.status {
+                TransferStatus::Failed(reason) => {
+                    reason.contains("校验") || reason.contains("verify")
                 }
+                _ => false,
+            };
+            task.status = TransferStatus::Pending;
+            // 校验失败说明两端数据不一致或损坏，断点续传可能在脏数据后追加导致二次损坏；
+            // 采用 Overwrite 强制截断从头传输以实现完全自愈。
+            if is_verify_failure {
+                task.mode = TransferMode::Overwrite;
+                task.transferred = 0;
+            } else {
+                task.mode = TransferMode::Resume;
             }
-            cx.notify();
         }
+        cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }
 
@@ -89,12 +78,7 @@ impl AppShell {
     ) {
         log::debug!("取消传输任务，窗格: {tab_id}，任务: {op_id}");
         let mut should_cancel = false;
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 if task.status == TransferStatus::Transferring {
                     should_cancel = true;
@@ -106,8 +90,8 @@ impl AppShell {
             if panel.queue.active_transfers.is_empty() {
                 panel.set_status(rust_i18n::t!("sftp.queue_actions.cancelled_one").to_string());
             }
-            cx.notify();
         }
+        cx.notify();
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if should_cancel {
             self.state
@@ -122,17 +106,12 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.queue.active_transfers.remove(&op_id);
             panel.queue.tasks.retain(|task| task.id != op_id);
             panel.recompute_progress();
-            cx.notify();
         }
+        cx.notify();
     }
 
     pub(crate) fn sftp_prioritize_task(
@@ -142,12 +121,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let mut needs_cancel = false;
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             if panel.queue.active_transfers.contains(&op_id)
                 && let Some(active_task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
                 && active_task.status == TransferStatus::Transferring
@@ -168,8 +142,8 @@ impl AppShell {
                 panel.set_status(rust_i18n::t!("sftp.queue_actions.prioritized").to_string());
             }
             panel.recompute_progress();
-            cx.notify();
         }
+        cx.notify();
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if needs_cancel {
             self.state

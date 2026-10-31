@@ -23,11 +23,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.state.workspace.tab(tab_id) else {
+        let Some(connection_id) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .map(|tab| tab.connection_id)
+        else {
             return;
         };
-        let connection_id = tab.connection_id;
-        let remote_dir = tab.sftp().map(|panel| panel.remote.path.clone());
+        let remote_dir = self
+            .sftp_state(tab_id, cx)
+            .map(|panel| panel.remote.path.clone());
         let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
             self.state.status =
                 Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());

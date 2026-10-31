@@ -29,10 +29,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(dir) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
+            .sftp_state(tab_id, cx)
             .map(|panel| panel.local.path.clone())
         else {
             return;
@@ -44,12 +41,7 @@ impl AppShell {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                let Some(panel) = this
-                    .state
-                    .workspace
-                    .tab_mut(tab_id)
-                    .and_then(|tab| tab.sftp_mut())
-                else {
+                let Some(mut panel) = this.sftp_view_mut(tab_id, cx) else {
                     return;
                 };
                 if panel.local.path != dir {
@@ -75,6 +67,7 @@ impl AppShell {
                         );
                     }
                 }
+                drop(panel);
                 cx.notify();
             });
         })
@@ -84,20 +77,17 @@ impl AppShell {
     /// 批量删除本地选中项：先弹确认，确认后再执行。
     pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        else {
+        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
             return;
         };
         let paths = panel.selected_local_paths();
         if paths.is_empty() {
             panel.set_local_error(rust_i18n::t!("sftp.local_async.select_first").to_string());
+            drop(panel);
             cx.notify();
             return;
         }
+        drop(panel);
         let count = paths.len();
         self.state.sftp_modals.confirm = Some(SftpConfirmModalState {
             action: SftpPendingDelete::Local { tab_id, paths },
@@ -118,19 +108,15 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        else {
+        let Some(dir) = self.sftp_view_mut(tab_id, cx).map(|mut panel| {
+            panel.clear_local_error();
+            panel.set_status(
+                rust_i18n::t!("sftp.local_async.deleting", count = paths.len()).to_string(),
+            );
+            panel.local.path.clone()
+        }) else {
             return;
         };
-        panel.clear_local_error();
-        panel.set_status(
-            rust_i18n::t!("sftp.local_async.deleting", count = paths.len()).to_string(),
-        );
-        let dir = panel.local.path.clone();
         cx.notify();
         cx.spawn(async move |this, cx| {
             let Some(outcome) = spawn_blocking_local(move || delete_local_paths(&paths)).await
@@ -141,12 +127,7 @@ impl AppShell {
             let scan_dir = dir.clone();
             let entries = spawn_blocking_local(move || list_local_dir(&scan_dir)).await;
             let _ = this.update(cx, |this, cx| {
-                let Some(panel) = this
-                    .state
-                    .workspace
-                    .tab_mut(tab_id)
-                    .and_then(|tab| tab.sftp_mut())
-                else {
+                let Some(mut panel) = this.sftp_view_mut(tab_id, cx) else {
                     return;
                 };
                 if outcome.failures.is_empty() {
@@ -186,6 +167,7 @@ impl AppShell {
                     panel.local.entries = entries;
                     panel.sync_local_selection(&valid_paths);
                 }
+                drop(panel);
                 cx.notify();
             });
         })

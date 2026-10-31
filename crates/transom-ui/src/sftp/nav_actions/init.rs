@@ -4,56 +4,33 @@
 //! - 实现初衷：为 SSH 与本地会话创建并初始化 SFTP 双栏文件浏览器状态（输入框绑定、回车监听、列表分发）；
 //! - 核心优势：集中管理长生命周期 Input 实体与订阅，避免面板构造逻辑散落在各种触发动作中。
 
-use crate::app::{AppShell, AppState, TabStatus};
+use crate::app::{AppShell, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
 use crate::sftp::columns::ColumnWidthMemory;
 use crate::sftp::{
     DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneInit, SftpLocalPaneState,
-    SftpPanelState, SftpQueueState, SftpRemotePaneRef, SftpRemotePaneState, normalize_remote_cwd,
+    SftpPanelState, SftpPanelView, SftpQueueState, SftpRemotePaneRef, SftpRemotePaneState,
+    normalize_remote_cwd,
 };
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use transom_core::{Connection, ConnectionId, TabId};
-
-impl AppState {
-    pub(crate) fn sftp_panel_mut(
-        &mut self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-    ) -> Option<&mut SftpPanelState> {
-        let tab = self.workspace.tab_mut(tab_id)?;
-        if tab.connection_id != Some(connection_id) {
-            let is_side = tab
-                .sftp()
-                .map(|p| {
-                    p.side_remotes
-                        .iter()
-                        .any(|s| s.connection_id == Some(connection_id))
-                })
-                .unwrap_or(false);
-            if !is_side {
-                return None;
-            }
-        }
-        tab.sftp_mut()
-    }
-}
+use transom_core::{Connection, TabId};
 
 impl AppShell {
     /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
     pub(crate) fn focus_active_sftp_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(panel) = self
+        let focus_handle = self
             .state
             .workspace
             .active_tab
-            .and_then(|tab_id| self.state.workspace.tab(tab_id))
-            .and_then(|tab| tab.sftp())
-        {
-            window.focus(&panel.focus_handle, cx);
+            .and_then(|tab_id| self.sftp_state(tab_id, cx))
+            .map(|panel| panel.focus_handle.clone());
+        if let Some(focus_handle) = focus_handle {
+            window.focus(&focus_handle, cx);
         }
     }
 
@@ -66,24 +43,19 @@ impl AppShell {
         };
         // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，
         // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
-        match self.state.workspace.tabs[index]
-            .sftp()
-            .map(|panel| panel.open)
-        {
+        match self.sftp_state(tab_id, cx).map(|panel| panel.open) {
             Some(true) => {
-                if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
-                    pane.sftp = None;
-                }
+                self.close_sftp_panel(tab_id);
                 cx.notify();
                 return;
             }
             Some(false) => {
-                let path = self.state.workspace.tabs[index]
-                    .sftp()
+                let path = self
+                    .sftp_state(tab_id, cx)
                     .map(|panel| panel.remote.path.clone())
                     .unwrap_or_else(|| ".".to_string());
-                if let Some(panel) = self.state.workspace.tabs[index].sftp_mut() {
-                    panel.open = true;
+                if let Some(mut view) = self.sftp_view_mut(tab_id, cx) {
+                    view.state.open = true;
                 }
                 // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。
                 self.sync_drop_overlay(tab_id, cx);
@@ -196,7 +168,7 @@ impl AppShell {
         let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
             return;
         };
-        pane.sftp = Some(SftpPanelState {
+        let state = SftpPanelState {
             open,
             remote: SftpRemotePaneState::new_main(
                 initial_remote_path.clone(),
@@ -240,7 +212,14 @@ impl AppShell {
             column_widths: ColumnWidthMemory::default(),
             restored_width: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
+        };
+        let app = cx.entity().downgrade();
+        let view = cx.new(|_| {
+            let mut view = SftpPanelView::new(state);
+            view.attach(app);
+            view
         });
+        pane.sftp_view = Some(view);
         if open {
             // 本地栏初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
             self.spawn_local_dir_refresh(tab_id, None, cx);

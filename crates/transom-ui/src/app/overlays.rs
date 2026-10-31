@@ -103,7 +103,7 @@ impl AppShell {
     ) -> Vec<AnyElement> {
         let p = Palette::from(cx);
         let mut overlays = Vec::new();
-        if let Some(preview) = self.render_sftp_hover_preview(window, &p) {
+        if let Some(preview) = self.render_sftp_hover_preview(window, &p, cx) {
             overlays.push(preview);
         }
         if self.state.modals.show_quick_open {

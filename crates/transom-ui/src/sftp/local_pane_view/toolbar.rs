@@ -205,22 +205,16 @@ pub(super) fn render_local_toolbar(
                         .tooltip(rust_i18n::t!("common.edit").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             let selected = this
-                                .state
-                                .workspace
-                                .tab(tab_id)
-                                .and_then(|t| t.sftp())
+                                .sftp_state(tab_id, cx)
                                 .and_then(|p| p.local.selected.clone());
                             if let Some(target) = selected {
                                 this.sftp_edit_local_file(tab_id, target, cx);
-                            } else if let Some(panel) = this
-                                .state
-                                .workspace
-                                .tab_mut(tab_id)
-                                .and_then(|t| t.sftp_mut())
-                            {
-                                panel.set_local_error(
-                                    rust_i18n::t!("sftp.row.select_local_to_edit").to_string(),
-                                );
+                            } else {
+                                if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                                    panel.set_local_error(
+                                        rust_i18n::t!("sftp.row.select_local_to_edit").to_string(),
+                                    );
+                                }
                                 cx.notify();
                             }
                         })),
@@ -232,17 +226,12 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::Info)
                         .tooltip(rust_i18n::t!("sftp.menu.properties").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            let path = this
-                                .state
-                                .workspace
-                                .tab(tab_id)
-                                .and_then(|t| t.sftp())
-                                .and_then(|p| {
-                                    p.local
-                                        .selected
-                                        .clone()
-                                        .or_else(|| Some(p.local.path.clone()))
-                                });
+                            let path = this.sftp_state(tab_id, cx).and_then(|p| {
+                                p.local
+                                    .selected
+                                    .clone()
+                                    .or_else(|| Some(p.local.path.clone()))
+                            });
                             if let Some(target) = path {
                                 this.sftp_show_local_properties(tab_id, target, cx);
                             }

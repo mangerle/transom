@@ -20,18 +20,23 @@ impl AppShell {
         let verify = self.state.settings.sftp.verify_after_transfer;
         let verify_mode = self.state.settings.sftp.verify_mode;
         let checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
-        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
+        let Some(main_conn) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+        else {
             return;
         };
-        let main_conn = tab.connection_id;
-        let Some(panel) = tab.sftp_mut() else {
+        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
             return;
         };
-        let Some(source_connection_id) = panel.remote_connection(target, main_conn) else {
+        let Some(source_connection_id) = panel.remote_connection(target, Some(main_conn)) else {
             if let Some(pane) = panel.remote_pane_mut(target) {
                 pane.error =
                     Some(rust_i18n::t!("sftp.queue_actions.no_remote_download").to_string());
             }
+            drop(panel);
             cx.notify();
             return;
         };
@@ -45,6 +50,7 @@ impl AppShell {
             if let Some(pane) = panel.remote_pane_mut(target) {
                 pane.error = Some(rust_i18n::t!("sftp.select_file").to_string());
             }
+            drop(panel);
             cx.notify();
             return;
         }
@@ -96,6 +102,7 @@ impl AppShell {
             if let Some(pane) = panel.remote_pane_mut(target) {
                 pane.error = Some(message);
             }
+            drop(panel);
             cx.notify();
             return;
         }
@@ -103,6 +110,7 @@ impl AppShell {
             if let Some(pane) = panel.remote_pane_mut(target) {
                 pane.error = Some(rust_i18n::t!("sftp.select_file").to_string());
             }
+            drop(panel);
             cx.notify();
             return;
         }
@@ -111,6 +119,7 @@ impl AppShell {
         panel.set_status(
             rust_i18n::t!("sftp.queue_actions.downloads_queued", count = count).to_string(),
         );
+        drop(panel);
         cx.notify();
         self.process_sftp_queue(tab_id, cx);
     }

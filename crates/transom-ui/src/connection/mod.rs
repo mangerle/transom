@@ -201,7 +201,7 @@ impl AppShell {
             // 等新连接上的提示符钩子回报后再恢复 SFTP 跟随。
             tab.cwd = None;
             if let Some(pane) = tab.session_pane_mut() {
-                pane.sftp = None;
+                pane.sftp_view = None;
                 pane.forward_statuses.clear();
                 pane.network_traffic = None;
                 pane._startup_task = None;

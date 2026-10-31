@@ -33,7 +33,7 @@ impl AppShell {
                     && let Some(tab) = this.state.workspace.tab_mut(tab_id)
                     && let Some(pane) = tab.session_pane_mut()
                 {
-                    pane.sftp = None;
+                    pane.sftp_view = None;
                 }
                 cx.notify();
             }));

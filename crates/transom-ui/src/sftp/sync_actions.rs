@@ -26,7 +26,7 @@ impl AppShell {
         let filter_text = self.state.settings.sftp.transfer_filter.clone();
         let Some((connection_id, local_root, remote_root)) =
             self.state.workspace.tab(tab_id).and_then(|tab| {
-                let panel = tab.sftp()?;
+                let panel = self.sftp_state(tab_id, cx)?;
                 let pane = panel.remote_pane(target)?;
                 let connection_id = panel.remote_connection(target, tab.connection_id)?;
                 Some((connection_id, panel.local.path.clone(), pane.path.clone()))
@@ -146,12 +146,7 @@ impl AppShell {
         task.verify_mode = self.state.settings.sftp.verify_mode;
         task.checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
         task.target_connection_id = Some(modal.connection_id);
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.queue.tasks.push(task);
             panel.set_status(
                 rust_i18n::t!(

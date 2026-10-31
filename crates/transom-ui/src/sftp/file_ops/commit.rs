@@ -42,7 +42,7 @@ impl AppShell {
             Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
             None => SftpRemotePaneRef::Main,
         };
-        let remote_scope = self.state.remote_pane_scope(tab_id, target).map(|scope| {
+        let remote_scope = self.remote_pane_scope(tab_id, target, cx).map(|scope| {
             (
                 scope.connection_id,
                 scope.pane.path.clone(),
@@ -154,37 +154,28 @@ impl AppShell {
                 self.submit_sudo_editor_write(&editor, password, window, cx);
             }
             SftpInputTarget::LocalMkdir => {
-                let Some(panel) = self
-                    .state
-                    .workspace
-                    .tab_mut(tab_id)
-                    .and_then(|t| t.sftp_mut())
+                let Some(local_path) = self
+                    .sftp_state(tab_id, cx)
+                    .map(|panel| panel.local.path.clone())
                 else {
                     return;
                 };
-                let op = LocalFsOp::Mkdir(panel.local.path.join(&name));
+                let op = LocalFsOp::Mkdir(local_path.join(&name));
                 self.spawn_local_fs(tab_id, op, cx);
             }
             SftpInputTarget::LocalNewFile => {
-                let Some(panel) = self
-                    .state
-                    .workspace
-                    .tab_mut(tab_id)
-                    .and_then(|t| t.sftp_mut())
+                let Some(local_path) = self
+                    .sftp_state(tab_id, cx)
+                    .map(|panel| panel.local.path.clone())
                 else {
                     return;
                 };
-                let op = LocalFsOp::NewFile(panel.local.path.join(&name));
+                let op = LocalFsOp::NewFile(local_path.join(&name));
                 self.spawn_local_fs(tab_id, op, cx);
             }
             SftpInputTarget::LocalRename { old_path } => {
                 let Some(parent) = old_path.parent() else {
-                    if let Some(panel) = self
-                        .state
-                        .workspace
-                        .tab_mut(tab_id)
-                        .and_then(|t| t.sftp_mut())
-                    {
+                    if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
                         panel.set_local_error(
                             rust_i18n::t!(
                                 "sftp.file_ops.local_rename_failed",
@@ -192,23 +183,21 @@ impl AppShell {
                             )
                             .to_string(),
                         );
-                        cx.notify();
                     }
+                    cx.notify();
                     return;
                 };
                 let op = LocalFsOp::Rename(old_path.clone(), parent.join(&name));
                 self.spawn_local_fs(tab_id, op, cx);
             }
             SftpInputTarget::LocalSymlink { target_path } => {
-                let Some(panel) = self
-                    .state
-                    .workspace
-                    .tab_mut(tab_id)
-                    .and_then(|t| t.sftp_mut())
+                let Some(local_path) = self
+                    .sftp_state(tab_id, cx)
+                    .map(|panel| panel.local.path.clone())
                 else {
                     return;
                 };
-                let op = LocalFsOp::Symlink(target_path, panel.local.path.join(&name));
+                let op = LocalFsOp::Symlink(target_path, local_path.join(&name));
                 self.spawn_local_fs(tab_id, op, cx);
             }
         }
@@ -368,12 +357,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let (select, reveal) = {
-            let Some(panel) = self
-                .state
-                .workspace
-                .tab_mut(tab_id)
-                .and_then(|t| t.sftp_mut())
-            else {
+            let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
                 return;
             };
             if let Some(error) = outcome.error {

@@ -1,6 +1,5 @@
 //! SFTP 面板瞬时状态消息的过期管理。
 
-use super::SftpPanelState;
 use crate::app::AppShell;
 use gpui_kit::*;
 use std::time::Duration;
@@ -23,30 +22,26 @@ impl AppShell {
     /// - 代价与局限：只有经过本方法的提示会自动过期；错误消息走 `error`
     ///   字段，保持到下一次操作，避免用户还没看到就被清掉。
     pub(crate) fn set_sftp_transient_status(
-        panel: &mut SftpPanelState,
+        &mut self,
         tab_id: TabId,
         message: String,
         cx: &mut Context<Self>,
     ) {
+        let Some(view) = self.sftp_view(tab_id) else {
+            return;
+        };
         let expiry_message = message.clone();
-        let task = cx.spawn(async move |this, cx| {
+        let task = cx.spawn(async move |_, cx| {
             cx.background_executor().timer(STATUS_MESSAGE_TTL).await;
-            let _ = this.update(cx, |this, cx| {
-                let Some(panel) = this
-                    .state
-                    .workspace
-                    .tab_mut(tab_id)
-                    .and_then(|tab| tab.sftp_mut())
-                else {
-                    return;
-                };
-                if panel.queue.status.as_deref() == Some(expiry_message.as_str()) {
-                    panel.clear_status();
-                    cx.notify();
+            view.update(cx, |view, _| {
+                if view.queue.status.as_deref() == Some(expiry_message.as_str()) {
+                    view.clear_status();
                 }
             });
         });
-        panel.set_status(message);
-        panel.queue.status_task = Some(task);
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+            panel.set_status(message);
+            panel.queue.status_task = Some(task);
+        }
     }
 }

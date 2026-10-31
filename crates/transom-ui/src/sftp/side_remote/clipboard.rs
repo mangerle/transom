@@ -18,11 +18,15 @@ use transom_core::{TabId, TransferDirection};
 impl AppShell {
     /// 触发剪贴板复制（Ctrl+C 或右键复制）。
     pub(crate) fn sftp_copy_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
+        let Some(main_conn_id) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+        else {
             return;
         };
-        let main_conn_id = tab.connection_id;
-        let Some(panel) = tab.sftp_mut() else {
+        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
             return;
         };
         let active_pane = panel.active_pane;
@@ -64,6 +68,7 @@ impl AppShell {
                 panel.set_status(
                     rust_i18n::t!("sftp.sidebar.copied_local", count = count).to_string(),
                 );
+                drop(panel);
                 cx.notify();
             }
             return;
@@ -74,7 +79,7 @@ impl AppShell {
             SftpActivePane::SideRemote(connection_id) => SftpRemotePaneRef::Side(connection_id),
             SftpActivePane::Local => return,
         };
-        let Some(connection_id) = panel.remote_connection(target, main_conn_id) else {
+        let Some(connection_id) = panel.remote_connection(target, Some(main_conn_id)) else {
             return;
         };
         let Some(pane) = panel.remote_pane(target) else {
@@ -112,6 +117,7 @@ impl AppShell {
             rust_i18n::t!("sftp.sidebar.copied_side_remote", count = count)
         };
         panel.set_status(status.to_string());
+        drop(panel);
         cx.notify();
     }
 
@@ -122,24 +128,28 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.state.workspace.tab(tab_id) else {
+        let Some((clip, active_pane, local_dir, tab_conn_id)) =
+            self.sftp_state(tab_id, cx).and_then(|panel| {
+                let clip = panel.clipboard.clone()?;
+                Some((
+                    clip,
+                    panel.active_pane,
+                    panel.local.path.clone(),
+                    self.state
+                        .workspace
+                        .tab(tab_id)
+                        .and_then(|tab| tab.connection_id),
+                ))
+            })
+        else {
             return;
         };
-        let Some(panel) = tab.sftp() else {
-            return;
-        };
-        let Some(clip) = panel.clipboard.clone() else {
-            return;
-        };
-        let active_pane = panel.active_pane;
-        let tab_conn_id = tab.connection_id;
 
         if active_pane == SftpActivePane::Local {
             let SftpClipboardSource::Remote(source_conn) = clip.source else {
                 return;
             };
             // 从远端下载至本地当前目录
-            let local_dir = panel.local.path.clone();
             for entry in clip.entries {
                 let file_name = entry
                     .path
@@ -150,7 +160,7 @@ impl AppShell {
                 let target_path = match transom_core::safe_local_join(&local_dir, &file_name) {
                     Ok(path) => path,
                     Err(_) => {
-                        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
+                        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
                             panel.set_local_error(rust_i18n::t!("sftp.invalid_name").to_string());
                         }
                         continue;
@@ -177,10 +187,11 @@ impl AppShell {
             SftpActivePane::SideRemote(connection_id) => SftpRemotePaneRef::Side(connection_id),
             SftpActivePane::Local => return,
         };
-        let Some(target_conn) = panel.remote_connection(target, tab_conn_id) else {
-            return;
-        };
-        let Some(target_dir) = panel.remote_pane(target).map(|pane| pane.path.clone()) else {
+        let Some((target_conn, target_dir)) = self.sftp_state(tab_id, cx).and_then(|panel| {
+            let target_conn = panel.remote_connection(target, tab_conn_id)?;
+            let target_dir = panel.remote_pane(target)?.path.clone();
+            Some((target_conn, target_dir))
+        }) else {
             return;
         };
 

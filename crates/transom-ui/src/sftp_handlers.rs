@@ -31,42 +31,45 @@ impl AppShell {
             return true;
         };
         let mut update_input = None;
-        if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
-            let main_connection = tab.connection_id;
-            if let Some(panel) = tab.sftp_mut() {
-                if let Some(target) =
-                    panel.remote_pane_of_connection(connection_id, main_connection)
-                {
-                    if let Some(pane) = panel.remote_pane_mut(target) {
-                        log::debug!(
-                            "远端目录回填，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}，条目数: {}",
-                            entries.len()
-                        );
-                        pane.path = path.clone();
-                        pane.dir_cache.insert(
-                            path.clone(),
-                            RemoteDirCacheEntry {
-                                entries: entries.clone(),
-                                cached_at: std::time::Instant::now(),
-                            },
-                        );
-                        pane.entries = entries;
-                        pane.loading = false;
-                        pane.error = None;
-                        let valid_paths: std::collections::BTreeSet<String> = pane
-                            .entries
-                            .iter()
-                            .map(|entry| entry.path.clone())
-                            .collect();
-                        pane.sync_selection(&valid_paths);
-                        update_input = Some((pane.path_input.clone(), path));
-                    }
-                } else {
-                    // 列已关闭或事件标签不匹配：回填没有落点，留一条调试线索。
+        if let Some(main_connection) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+            && let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx)
+        {
+            if let Some(target) =
+                panel.remote_pane_of_connection(connection_id, Some(main_connection))
+            {
+                if let Some(pane) = panel.remote_pane_mut(target) {
                     log::debug!(
-                        "远端目录回填找不到目标列，窗格: {tab_id}，连接: {connection_id}，路径: {path}"
+                        "远端目录回填，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}，条目数: {}",
+                        entries.len()
                     );
+                    pane.path = path.clone();
+                    pane.dir_cache.insert(
+                        path.clone(),
+                        RemoteDirCacheEntry {
+                            entries: entries.clone(),
+                            cached_at: std::time::Instant::now(),
+                        },
+                    );
+                    pane.entries = entries;
+                    pane.loading = false;
+                    pane.error = None;
+                    let valid_paths: std::collections::BTreeSet<String> = pane
+                        .entries
+                        .iter()
+                        .map(|entry| entry.path.clone())
+                        .collect();
+                    pane.sync_selection(&valid_paths);
+                    update_input = Some((pane.path_input.clone(), path));
                 }
+            } else {
+                // 列已关闭或事件标签不匹配：回填没有落点，留一条调试线索。
+                log::debug!(
+                    "远端目录回填找不到目标列，窗格: {tab_id}，连接: {connection_id}，路径: {path}"
+                );
             }
         }
         if let Some((input, path)) = update_input {
@@ -92,7 +95,7 @@ impl AppShell {
             return true;
         };
         let mut applied = false;
-        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id)
+        if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx)
             && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
         {
             task.transferred = transferred;
@@ -131,19 +134,14 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id)
+        if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx)
             && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
         {
             task.status = TransferStatus::Verifying;
             task.speed_bps = None;
             task.eta_secs = None;
-            Self::set_sftp_transient_status(
-                panel,
-                tab_id,
-                rust_i18n::t!("sftp.verifying").to_string(),
-                cx,
-            );
         }
+        self.set_sftp_transient_status(tab_id, rust_i18n::t!("sftp.verifying").to_string(), cx);
         true
     }
 
@@ -164,12 +162,13 @@ impl AppShell {
         let mut refresh_side = None;
         let mut refresh_local = false;
         let mut notify_info: Option<(TransferDirection, String, u64)> = None;
+        let mut status_message: Option<String> = None;
         let main_conn = self
             .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.connection_id);
-        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id) {
+        if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx) {
             let mut completed_transfer = false;
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 completed_transfer = true;
@@ -243,7 +242,7 @@ impl AppShell {
                     if verified {
                         message.push_str(&format!(" | {}", rust_i18n::t!("sftp.sha256_verified")));
                     }
-                    Self::set_sftp_transient_status(panel, tab_id, message, cx);
+                    status_message = Some(message);
                     panel.clear_queue_error();
                     refresh = Some(panel.remote.path.clone());
                 }
@@ -257,13 +256,11 @@ impl AppShell {
                 if let Some(path) = pane_path {
                     refresh_side = Some((connection_id, path));
                 }
-                Self::set_sftp_transient_status(
-                    panel,
-                    tab_id,
-                    rust_i18n::t!("sftp.operation_done").to_string(),
-                    cx,
-                );
+                status_message = Some(rust_i18n::t!("sftp.operation_done").to_string());
             }
+        }
+        if let Some(message) = status_message {
+            self.set_sftp_transient_status(tab_id, message, cx);
         }
         // 任务落定，浮层据此决定继续常驻还是进入 5 秒停留窗口。
         self.sync_drop_overlay(tab_id, cx);
@@ -305,7 +302,10 @@ impl AppShell {
         else {
             return true;
         };
-        if self.state.sftp_panel_mut(tab_id, connection_id).is_none() {
+        if self
+            .sftp_view_mut_for_connection(tab_id, connection_id, cx)
+            .is_none()
+        {
             // 标签页已关闭（或连接已切换）：忽略迟到的属性响应，不再弹出属性窗
             return false;
         }
@@ -422,7 +422,7 @@ impl AppShell {
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.connection_id);
-        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id) {
+        if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx) {
             let err_msg = localized_error(&error);
             let mut failed_transfer = false;
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {

@@ -129,15 +129,12 @@ impl AppShell {
                                             .small()
                                             .checked(resume_enabled)
                                             .on_click(cx.listener(move |this, &checked, _, cx| {
-                                                if let Some(panel) = this
-                                                    .state
-                                                    .workspace
-                                                    .tab_mut(tab_id)
-                                                    .and_then(|tab| tab.sftp_mut())
+                                                if let Some(mut panel) =
+                                                    this.sftp_view_mut(tab_id, cx)
                                                 {
                                                     panel.queue.resume_enabled = checked;
-                                                    cx.notify();
                                                 }
+                                                cx.notify();
                                             })),
                                     ),
                             )
@@ -272,15 +269,10 @@ impl AppShell {
                                         rust_i18n::t!("sftp.queue.expand").to_string()
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        if let Some(panel) = this
-                                            .state
-                                            .workspace
-                                            .tab_mut(tab_id)
-                                            .and_then(|tab| tab.sftp_mut())
-                                        {
+                                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
                                             panel.queue.expanded = !panel.queue.expanded;
-                                            cx.notify();
                                         }
+                                        cx.notify();
                                     })),
                             ),
                     ),

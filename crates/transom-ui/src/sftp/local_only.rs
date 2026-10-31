@@ -8,7 +8,7 @@ use super::columns::ColumnWidthMemory;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::{
     DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneInit, SftpLocalPaneState,
-    SftpPanelState, SftpQueueState, SftpRemotePaneState, normalize_local_cwd,
+    SftpPanelState, SftpPanelView, SftpQueueState, SftpRemotePaneState, normalize_local_cwd,
 };
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
@@ -87,7 +87,7 @@ impl AppShell {
         let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
             return;
         };
-        pane.sftp = Some(SftpPanelState {
+        let state = SftpPanelState {
             open: true,
             remote: SftpRemotePaneState::new_main(
                 String::new(),
@@ -129,21 +129,26 @@ impl AppShell {
             column_widths: ColumnWidthMemory::default(),
             restored_width: None,
             _subscriptions: vec![local_enter_sub],
+        };
+        let app = cx.entity().downgrade();
+        let view = cx.new(|_| {
+            let mut view = SftpPanelView::new(state);
+            view.attach(app);
+            view
         });
+        pane.sftp_view = Some(view);
         // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
         self.spawn_local_dir_refresh(tab_id, None, cx);
         cx.notify();
     }
 
-    pub(crate) fn render_local_only_panel(
+    pub(crate) fn render_local_only_panel_with_state(
         &mut self,
         tab_id: TabId,
+        panel: &mut SftpPanelState,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(panel) = self.state.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
-            return div().into_any_element();
-        };
         let local_path_input = panel.local.path_input.clone();
         let local_filter_input = panel.local.filter_input.clone();
         let local_scroll_handle = panel.local.scroll_handle.clone();
@@ -176,11 +181,14 @@ impl AppShell {
                 local_scroll_handle,
                 quick_paths,
                 remote_available: false,
+                local_selection: panel.local.selection.clone(),
+                local_primary: panel.local.selected.clone(),
+                diff_ready: false,
             },
             p,
             cx,
         );
-        let mount_btn = self.render_side_remote_mount_button(tab_id, p, cx);
+        let mount_btn = self.render_side_remote_mount_button(tab_id, panel, p, cx);
         let header = self.render_sftp_panel_header(
             rust_i18n::t!("sftp.local_files_title").to_string(),
             Some(mount_btn),

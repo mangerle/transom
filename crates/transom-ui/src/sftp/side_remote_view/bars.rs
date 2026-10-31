@@ -24,23 +24,16 @@ impl AppShell {
     pub(crate) fn render_side_remote_mount_button(
         &self,
         tab_id: TabId,
+        panel: &crate::sftp::SftpPanelState,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let (open, mounted_conn_ids) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|t| t.sftp())
-            .map(|p| {
-                let mounted: Vec<ConnectionId> = p
-                    .side_remotes
-                    .iter()
-                    .filter_map(|s| s.connection_id)
-                    .collect();
-                (p.mount_menu_open, mounted)
-            })
-            .unwrap_or((false, Vec::new()));
+        let open = panel.mount_menu_open;
+        let mounted_conn_ids: Vec<ConnectionId> = panel
+            .side_remotes
+            .iter()
+            .filter_map(|side| side.connection_id)
+            .collect();
 
         let app_open = cx.entity().clone();
         let trigger = Button::new(format!("sftp-mount-side-remote-btn-{tab_id}"))
@@ -54,10 +47,7 @@ impl AppShell {
         let current_tab = self.state.workspace.tab(tab_id);
         let current_conn_id = current_tab.and_then(|t| t.connection_id);
         let current_session_id = current_tab.map(|t| t.session.id);
-        let is_local_only = current_tab
-            .and_then(|t| t.sftp())
-            .map(|p| p.local.only)
-            .unwrap_or(false);
+        let is_local_only = panel.local.only;
 
         let mut seen_sessions = HashSet::new();
         // 如果当前标签页是远端会话（非纯本地模式），排除当前自身所属的会话
@@ -91,8 +81,8 @@ impl AppShell {
 
             let display_name = t.display_name();
             let initial_path = t
-                .sftp()
-                .map(|p| p.remote.path.clone())
+                .sftp_view()
+                .map(|view| view.read(cx).remote.path.clone())
                 .filter(|p| !p.is_empty() && p != ".")
                 .or_else(|| t.cwd.as_deref().and_then(normalize_remote_cwd))
                 .unwrap_or_else(|| ".".to_string());
@@ -110,12 +100,12 @@ impl AppShell {
         .on_open_change(move |is_open, _window, cx| {
             let is_open = *is_open;
             app_open.update(cx, |this, cx| {
-                if let Some(panel) = this.state.sftp_panel_mut_tab(tab_id)
+                if let Some(mut panel) = this.sftp_view_mut(tab_id, cx)
                     && panel.mount_menu_open != is_open
                 {
                     panel.mount_menu_open = is_open;
-                    cx.notify();
                 }
+                cx.notify();
             });
         })
         .trigger(trigger)

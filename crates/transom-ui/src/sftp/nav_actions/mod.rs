@@ -23,14 +23,14 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(connection_id) = self.state.remote_pane_connection(tab_id, target) else {
+        let Some(connection_id) = self.remote_pane_connection(tab_id, target, cx) else {
             log::warn!("远端目录请求找不到目标列，窗格: {tab_id}，目标: {target:?}，路径: {path}");
             return;
         };
         log::debug!(
             "请求远端目录列表，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}"
         );
-        self.begin_sftp_pane_load(tab_id, target);
+        self.begin_sftp_pane_load(tab_id, target, cx);
         self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
@@ -60,17 +60,26 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self.state.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
+        let Some((only, local_path, remote_path, open)) =
+            self.sftp_state(tab_id, cx).map(|panel| {
+                (
+                    panel.local.only,
+                    panel.local.path.clone(),
+                    panel.remote.path.clone(),
+                    panel.open,
+                )
+            })
+        else {
             return;
         };
-        if panel.local.only {
+        if only {
             // 目录没变就不做 is_dir：本地面板开着时每条提示符都会上报一次 cwd，
             // 网络挂载上的重复探测会拖慢 UI 线程。
-            if panel.local.path.as_path() == Path::new(cwd) {
+            if local_path.as_path() == Path::new(cwd) {
                 return;
             }
             if let Some(candidate) = normalize_local_cwd(cwd)
-                && candidate != panel.local.path
+                && candidate != local_path
             {
                 self.sftp_local_sync_navigate(tab_id, candidate, window, cx);
             }
@@ -79,16 +88,10 @@ impl AppShell {
         let Some(candidate) = normalize_remote_cwd(cwd) else {
             return;
         };
-        if candidate == panel.remote.path {
+        if candidate == remote_path {
             return;
         }
-        let open = panel.open;
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.remote.path = candidate.clone();
             panel.clear_remote_selection();
         }
@@ -106,16 +109,11 @@ impl AppShell {
         start_y: f32,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|t| t.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.queue.drag_start_y = Some(start_y);
             panel.queue.drag_start_height = panel.queue.height;
-            cx.notify();
         }
+        cx.notify();
     }
 
     pub(crate) fn sftp_update_resize_queue(
@@ -124,30 +122,22 @@ impl AppShell {
         current_y: f32,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|t| t.sftp_mut())
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
             && let Some(start_y) = panel.queue.drag_start_y
         {
             let delta = start_y - current_y;
             let new_height = (panel.queue.drag_start_height + delta).clamp(80.0, 480.0);
             panel.queue.height = new_height;
-            cx.notify();
         }
+        cx.notify();
     }
 
     pub(crate) fn sftp_stop_resize_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|t| t.sftp_mut())
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
             && panel.queue.drag_start_y.is_some()
         {
             panel.queue.drag_start_y = None;
-            cx.notify();
         }
+        cx.notify();
     }
 }

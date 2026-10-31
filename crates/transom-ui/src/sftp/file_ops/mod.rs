@@ -22,7 +22,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((targets, side_connection)) =
-            self.state.remote_pane_scope(tab_id, target).map(|scope| {
+            self.remote_pane_scope(tab_id, target, cx).map(|scope| {
                 let targets = scope
                     .pane
                     .selected_paths()
@@ -90,17 +90,12 @@ impl AppShell {
             SftpOperation::DeleteMany { targets },
             cx,
         );
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.set_status(
                 rust_i18n::t!("sftp.file_ops.deleting_remote", count = count).to_string(),
             );
-            cx.notify();
         }
+        cx.notify();
     }
 
     /// 执行确认弹窗中挂起的删除动作。
@@ -129,13 +124,7 @@ impl AppShell {
     /// 不会出现删错栏位的失配。删除不可恢复，确认步骤由
     /// `sftp_delete_selection` 与 `sftp_local_delete_selection` 统一弹出。
     pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(active_pane) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
-            .map(|panel| panel.active_pane)
-        else {
+        let Some(active_pane) = self.sftp_state(tab_id, cx).map(|panel| panel.active_pane) else {
             return;
         };
         match active_pane {
@@ -190,8 +179,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(side_connection) = self
-            .state
-            .remote_pane_scope(tab_id, target)
+            .remote_pane_scope(tab_id, target, cx)
             .map(|scope| scope.side_connection)
         else {
             return;
@@ -221,8 +209,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(side_connection) = self
-            .state
-            .remote_pane_scope(tab_id, target)
+            .remote_pane_scope(tab_id, target, cx)
             .map(|scope| scope.side_connection)
         else {
             return;
@@ -271,10 +258,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(selected) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
+            .sftp_state(tab_id, cx)
             .and_then(|panel| panel.local.selected.clone())
         else {
             return;
@@ -307,8 +291,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((selected, side_connection)) = self
-            .state
-            .remote_pane_scope(tab_id, target)
+            .remote_pane_scope(tab_id, target, cx)
             .and_then(|scope| Some((scope.pane.selected.clone()?, scope.side_connection)))
         else {
             self.set_sftp_pane_error(
@@ -354,10 +337,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(selected) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
+            .sftp_state(tab_id, cx)
             .and_then(|panel| panel.local.selected.clone())
         else {
             return;

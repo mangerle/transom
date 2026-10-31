@@ -42,6 +42,9 @@ pub(super) struct RemotePaneProps<'a> {
     /// 是否渲染“最近编辑器”浮层：它是标签级入口，同一帧只能出现一次。
     pub(super) show_editor_list: bool,
     pub(super) remote_entries: Vec<RemoteFile>,
+    /// 渲染所需的选中集快照：虚拟列表回调在实体租借期间执行，不能再读实体。
+    pub(super) remote_selection: std::collections::BTreeSet<String>,
+    pub(super) remote_primary: Option<String>,
 }
 
 /// 列元素 ID 前缀：主远端与并列列互不冲突。
@@ -72,6 +75,8 @@ impl AppShell {
             sync_navigation,
             show_editor_list,
             remote_entries,
+            remote_selection,
+            remote_primary,
         } = props;
         let key = pane_key(target);
         let path_input = pane.path_input.clone();
@@ -199,6 +204,8 @@ impl AppShell {
                 target,
                 connection_id,
                 remote_scroll_handle: scroll_handle,
+                remote_selection: remote_selection.clone(),
+                remote_primary: remote_primary.clone(),
             },
             p,
             cx,

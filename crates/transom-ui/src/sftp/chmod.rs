@@ -35,14 +35,13 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((connection_id, targets)) = self
-            .state
-            .remote_pane_scope(tab_id, target)
+            .remote_pane_scope(tab_id, target, cx)
             .map(|scope| (scope.connection_id, scope.pane.selected_paths()))
         else {
             return;
         };
         let mut plans: Vec<(String, u32)> = Vec::with_capacity(targets.len());
-        if let Some(panel) = self.state.workspace.tab(tab_id).and_then(|tab| tab.sftp()) {
+        if let Some(panel) = self.sftp_state(tab_id, cx) {
             let Some(pane) = panel.remote_pane(target) else {
                 return;
             };
@@ -66,10 +65,7 @@ impl AppShell {
         }
         let count = plans.len();
         let dir = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.sftp())
+            .sftp_state(tab_id, cx)
             .and_then(|panel| panel.remote_pane(target))
             .map(|pane| pane.path.clone())
             .unwrap_or_default();
@@ -84,15 +80,10 @@ impl AppShell {
         log::info!("远端赋予执行权限已下发，窗格: {tab_id}，条目数: {count}，目录: {dir}");
         // 状态只声明"已下发"：Chmod 是异步往返，此刻列表里的权限徽章尚未更新，
         // 说"已生效"就是在骗用户；刷新目录后即可看到新值。
-        if let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|t| t.sftp_mut())
-        {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.set_status(rust_i18n::t!("sftp.chmod.granted_remote", count = count).to_string());
-            cx.notify();
         }
+        cx.notify();
     }
 
     /// 本地右键一键授予执行位（仅 Unix）。
@@ -105,22 +96,14 @@ impl AppShell {
         use std::path::PathBuf;
 
         let targets: Vec<PathBuf> = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|t| t.sftp_mut())
+            .sftp_state(tab_id, cx)
             .map(|panel| panel.selected_local_paths())
             .unwrap_or_default();
         if targets.is_empty() {
-            if let Some(panel) = self
-                .state
-                .workspace
-                .tab_mut(tab_id)
-                .and_then(|t| t.sftp_mut())
-            {
+            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
                 panel.set_local_error(rust_i18n::t!("sftp.select_file").to_string());
-                cx.notify();
             }
+            cx.notify();
             return;
         }
 
@@ -145,12 +128,7 @@ impl AppShell {
             }
         }
 
-        let Some(panel) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|t| t.sftp_mut())
-        else {
+        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
             return;
         };
         if let Some(first) = failures.first() {
@@ -167,6 +145,7 @@ impl AppShell {
             panel
                 .set_status(rust_i18n::t!("sftp.chmod.granted_local", count = granted).to_string());
         }
+        drop(panel);
         cx.notify();
     }
 
@@ -179,8 +158,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((entry, side_connection)) =
-            self.state
-                .remote_pane_scope(tab_id, target)
+            self.remote_pane_scope(tab_id, target, cx)
                 .and_then(|scope| {
                     let selected = scope.pane.selected.clone()?;
                     let entry = scope

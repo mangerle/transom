@@ -28,6 +28,9 @@ pub(crate) struct RemoteContentProps {
     pub(crate) target: SftpRemotePaneRef,
     pub(crate) connection_id: ConnectionId,
     pub(crate) remote_scroll_handle: VirtualListScrollHandle,
+    /// 渲染所需的选中集快照：虚拟列表回调在实体租借期间执行，不能再读实体。
+    pub(crate) remote_selection: std::collections::BTreeSet<String>,
+    pub(crate) remote_primary: Option<String>,
 }
 
 /// 构建远端虚拟列表所需的参数集合。
@@ -37,6 +40,8 @@ struct RemoteListParams {
     target: SftpRemotePaneRef,
     connection_id: ConnectionId,
     remote_scroll_handle: VirtualListScrollHandle,
+    remote_selection: std::collections::BTreeSet<String>,
+    remote_primary: Option<String>,
 }
 
 impl AppShell {
@@ -55,6 +60,8 @@ impl AppShell {
             target,
             connection_id,
             remote_scroll_handle,
+            remote_selection,
+            remote_primary,
         } = props;
 
         let content = if remote_entries.is_empty() && !loading {
@@ -87,6 +94,8 @@ impl AppShell {
                     target,
                     connection_id,
                     remote_scroll_handle,
+                    remote_selection,
+                    remote_primary,
                 },
                 p,
                 cx,
@@ -154,6 +163,8 @@ impl AppShell {
             target,
             connection_id,
             remote_scroll_handle,
+            remote_selection,
+            remote_primary,
         } = params;
         let remote_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); remote_entries.len()]);
         let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
@@ -163,6 +174,8 @@ impl AppShell {
                 .collect(),
         );
         let remote_entries_rc = std::rc::Rc::new(remote_entries);
+        let remote_selection = std::rc::Rc::new(remote_selection);
+        let remote_primary = std::rc::Rc::new(remote_primary);
         let p = p.clone();
         let app_entity = cx.entity().clone();
         let has_main_remote = self
@@ -177,14 +190,6 @@ impl AppShell {
             format!("sftp-remote-virtual-list-{tab_id}-{target:?}"),
             remote_sizes,
             move |this, range, _window, cx| {
-                let (remote_selection, remote_primary) = this
-                    .state
-                    .workspace
-                    .tab(tab_id)
-                    .and_then(|tab| tab.sftp())
-                    .and_then(|panel| panel.remote_pane(target))
-                    .map(|pane| (pane.selection.clone(), pane.selected.clone()))
-                    .unwrap_or_default();
                 let app_entity = app_entity.clone();
                 range
                     .filter_map(|ix| {
@@ -193,7 +198,7 @@ impl AppShell {
                         let entry_is_dir = entry.is_dir;
                         let is_parent_entry = entry_name == "..";
                         let is_selected = remote_selection.contains(&entry.path)
-                            || remote_primary.as_ref() == Some(&entry.path);
+                            || remote_primary.as_deref() == Some(entry.path.as_str());
                         let entry_path_cm = entry.path.clone();
                         let app_cm = app_entity.clone();
                         let row = this.sftp_file_row(

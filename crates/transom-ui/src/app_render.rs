@@ -88,7 +88,7 @@ impl Render for AppShell {
                         .size(px(plan.sftp_width.min(plan.sftp_max_width)))
                         .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
-                        .child(self.render_sftp_panel(window, cx, &p)),
+                        .child(self.render_sftp_panel_element()),
                 );
             }
             if show_forwards {
@@ -109,7 +109,7 @@ impl Render for AppShell {
                         .size(px(plan.sftp_width.min(plan.sftp_max_width)))
                         .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
-                        .child(self.render_sftp_panel(window, cx, &p)),
+                        .child(self.render_sftp_panel_element()),
                 );
             }
             if show_forwards {
@@ -286,8 +286,12 @@ impl AppShell {
             .workspace
             .active_tab
             .and_then(|tab_id| self.state.workspace.tab(tab_id));
-        let show_sftp = active_panel.is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open));
-        let sftp_panel = active_panel.and_then(|tab| tab.sftp());
+        let sftp_panel = self
+            .state
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.sftp_state(tab_id, cx));
+        let show_sftp = sftp_panel.is_some_and(|panel| panel.open);
         let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);
         let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
         let collapsed_count = sftp_panel

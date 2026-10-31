@@ -142,19 +142,37 @@ impl DiffViewerState {
 }
 
 impl AppState {
-    pub(crate) fn diff_entry_ready(&self, tab_id: TabId) -> bool {
-        matches!(self.local_diff_check(tab_id), LocalDiffCheck::Ready(_))
+    /// 面板渲染期使用：实体正被租借，条件判断只能基于传入的状态。
+    pub(crate) fn diff_entry_ready_with_panel(
+        &self,
+        tab_id: TabId,
+        panel: &crate::sftp::SftpPanelState,
+        cx: &App,
+    ) -> bool {
+        matches!(
+            self.local_diff_check_with_panel(tab_id, panel, cx),
+            LocalDiffCheck::Ready(_)
+        )
     }
 
     /// 校验"本地文件 → 远端同名文件"的对比前提；入口置灰与真正打开共用同一套口径。
-    fn local_diff_check(&self, tab_id: TabId) -> LocalDiffCheck {
+    fn local_diff_check(&self, tab_id: TabId, cx: &App) -> LocalDiffCheck {
+        let Some(view) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp_view()) else {
+            return LocalDiffCheck::NotApplicable;
+        };
+        self.local_diff_check_with_panel(tab_id, &view.read(cx).state, cx)
+    }
+
+    fn local_diff_check_with_panel(
+        &self,
+        tab_id: TabId,
+        panel: &crate::sftp::SftpPanelState,
+        _cx: &App,
+    ) -> LocalDiffCheck {
         let Some(tab) = self.workspace.tab(tab_id) else {
             return LocalDiffCheck::NotApplicable;
         };
         let Some(connection_id) = tab.connection_id else {
-            return LocalDiffCheck::NotApplicable;
-        };
-        let Some(panel) = tab.sftp() else {
             return LocalDiffCheck::NotApplicable;
         };
         let Some(local_path) = panel
@@ -212,7 +230,7 @@ impl AppShell {
             connection_id,
             local_path,
             remote_path,
-        } = match self.state.local_diff_check(tab_id) {
+        } = match self.state.local_diff_check(tab_id, cx) {
             LocalDiffCheck::Ready(target) => target,
             LocalDiffCheck::NotApplicable => return,
             LocalDiffCheck::Rejected(reason) => {

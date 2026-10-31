@@ -2,7 +2,7 @@
 
 use crate::forward::ForwardPanelState;
 use crate::pane_tree::LayoutNode;
-use crate::sftp::SftpPanelState;
+use crate::sftp::SftpPanelView;
 use gpui_kit::*;
 use std::collections::{HashMap, VecDeque};
 use transom_core::{
@@ -72,7 +72,8 @@ pub(crate) enum TabContent {
 #[derive(Default)]
 pub(crate) struct SessionPaneState {
     pub(crate) terminal: Option<Entity<TerminalView>>,
-    pub(crate) sftp: Option<SftpPanelState>,
+    /// 该窗格 SFTP 面板的实体句柄；实体随窗格强持有，置 `None` 即销毁。
+    pub(crate) sftp_view: Option<Entity<SftpPanelView>>,
     pub(crate) forwards_panel: Option<ForwardPanelState>,
     pub(crate) forward_statuses: HashMap<ForwardId, ForwardStatus>,
     pub(crate) system_stats: Option<SystemStats>,
@@ -142,14 +143,9 @@ impl TerminalTab {
         self.session_pane().and_then(|p| p.terminal.clone())
     }
 
-    /// 快捷访问 SFTP 面板引用。
-    pub(crate) fn sftp(&self) -> Option<&SftpPanelState> {
-        self.session_pane().and_then(|p| p.sftp.as_ref())
-    }
-
-    /// 快捷访问 SFTP 面板可变引用。
-    pub(crate) fn sftp_mut(&mut self) -> Option<&mut SftpPanelState> {
-        self.session_pane_mut().and_then(|p| p.sftp.as_mut())
+    /// 快捷访问 SFTP 面板实体句柄。
+    pub(crate) fn sftp_view(&self) -> Option<Entity<SftpPanelView>> {
+        self.session_pane().and_then(|p| p.sftp_view.clone())
     }
 
     /// 快捷访问端口转发面板引用。
