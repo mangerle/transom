@@ -11,13 +11,10 @@ pub(super) mod enqueue;
 mod task_control;
 
 use crate::app::AppShell;
-use crate::palette::localized_error;
-use crate::sftp::{TransferKind, TransferMode, TransferStatus, TransferTask};
+use crate::sftp::{TransferKind, TransferMode, TransferTask};
 use gpui_kit::*;
 use std::path::PathBuf;
-use transom_core::{
-    ConnectionId, SftpCommand, SftpOperation, TabId, TransferDirection, TransferFilter, TransferId,
-};
+use transom_core::{ConnectionId, SftpOperation, TabId, TransferDirection, TransferFilter};
 
 impl AppShell {
     pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
@@ -64,150 +61,54 @@ impl AppShell {
     }
 
     pub(crate) fn sftp_queue_clear_done(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.queue.tasks.retain(|task| {
-                task.status != TransferStatus::Completed && task.status != TransferStatus::Cancelled
-            });
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.queue_clear_done(cx));
         }
-        cx.notify();
     }
 
     /// 循环切换并发传输数；增加时立即补位启动待处理任务。
-    pub(crate) fn sftp_cycle_concurrency(&mut self, cx: &mut Context<Self>) {
-        let current = self
-            .state
-            .settings
-            .sftp
-            .max_concurrent_transfers
-            .clamp(1, 4);
-        let next = if current >= 4 { 1 } else { current + 1 };
-        self.state.settings.sftp.max_concurrent_transfers = next;
-        if let Err(error) = self.state.persist_settings() {
-            self.state.set_error(localized_error(&error));
+    pub(crate) fn sftp_cycle_concurrency(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.cycle_concurrency(tab_id, cx));
         }
-        self.state.status =
-            Some(rust_i18n::t!("sftp.queue_actions.concurrency_set", count = next).to_string());
-        if let Some(tab_id) = self.state.workspace.active_tab {
-            self.process_sftp_queue(tab_id, cx);
-        }
-        cx.notify();
     }
 
     /// 一键重试传输队列中全部处于失败状态（`TransferStatus::Failed`）的任务。
     pub(crate) fn sftp_retry_all_failed(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let mut retried_count: usize = 0;
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            let resume_enabled = panel.queue.resume_enabled;
-            for task in &mut panel.queue.tasks {
-                if let TransferStatus::Failed(ref reason) = task.status {
-                    let is_verify_failure = reason.contains("校验") || reason.contains("verify");
-                    task.status = TransferStatus::Pending;
-                    if is_verify_failure {
-                        task.mode = TransferMode::Overwrite;
-                        task.transferred = 0;
-                    } else if resume_enabled || task.transferred > 0 {
-                        task.mode = TransferMode::Resume;
-                    }
-                    retried_count = retried_count.saturating_add(1);
-                }
-            }
-            if retried_count > 0 {
-                panel.clear_queue_error();
-                panel.set_status(
-                    rust_i18n::t!("sftp.queue_actions.retried", count = retried_count).to_string(),
-                );
-            }
-        }
-        cx.notify();
-        if retried_count > 0 {
-            self.process_sftp_queue(tab_id, cx);
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.retry_all_failed(tab_id, cx));
         }
     }
 
     /// 暂停全部活动与排队任务；队列收起时由状态栏调用。
     pub(crate) fn sftp_pause_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        log::debug!("暂停整列传输任务，窗格: {tab_id}");
-        let mut active_ids: Vec<TransferId> = Vec::new();
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            active_ids = panel.queue.active_transfers.iter().copied().collect();
-            let mut paused = 0u32;
-            for task in &mut panel.queue.tasks {
-                match task.status {
-                    TransferStatus::Transferring | TransferStatus::Pending => {
-                        task.status = TransferStatus::Paused;
-                        paused = paused.saturating_add(1);
-                    }
-                    _ => {}
-                }
-            }
-            panel.queue.active_transfers.clear();
-            panel.recompute_progress();
-            if paused > 0 {
-                panel.set_status(
-                    rust_i18n::t!("sftp.queue_actions.paused", count = paused).to_string(),
-                );
-            }
-        }
-        cx.notify();
-        for op_id in active_ids {
-            self.state
-                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.pause_all(tab_id, cx));
         }
     }
 
     /// 继续全部暂停任务。
     pub(crate) fn sftp_resume_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let mut resumed = 0u32;
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            for task in &mut panel.queue.tasks {
-                if task.status == TransferStatus::Paused {
-                    task.status = TransferStatus::Pending;
-                    task.mode = TransferMode::Resume;
-                    resumed = resumed.saturating_add(1);
-                }
-            }
-            if resumed > 0 {
-                panel.set_status(
-                    rust_i18n::t!("sftp.queue_actions.resumed", count = resumed).to_string(),
-                );
-            }
-        }
-        cx.notify();
-        if resumed > 0 {
-            self.process_sftp_queue(tab_id, cx);
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.resume_all(tab_id, cx));
         }
     }
 
     /// 取消全部活动、排队与暂停任务。
     pub(crate) fn sftp_cancel_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        log::debug!("取消整列传输任务，窗格: {tab_id}");
-        let mut active_ids: Vec<TransferId> = Vec::new();
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            active_ids = panel.queue.active_transfers.iter().copied().collect();
-            let mut cancelled = 0u32;
-            for task in &mut panel.queue.tasks {
-                if matches!(
-                    task.status,
-                    TransferStatus::Transferring | TransferStatus::Pending | TransferStatus::Paused
-                ) {
-                    task.status = TransferStatus::Cancelled;
-                    cancelled = cancelled.saturating_add(1);
-                }
-            }
-            panel.queue.active_transfers.clear();
-            panel.recompute_progress();
-            if cancelled > 0 {
-                panel.set_status(
-                    rust_i18n::t!("sftp.queue_actions.cancelled", count = cancelled).to_string(),
-                );
-            }
-        }
-        cx.notify();
-        for op_id in active_ids {
-            self.state
-                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.cancel_all(tab_id, cx));
         }
     }
+}
+
+/// 失败原因是否属于校验失败。
+///
+/// 校验失败说明两端数据不一致或损坏，断点续传可能在脏数据后追加导致二次
+/// 损坏，重试时必须强制从头覆盖传输。识别口径集中在这里，实体与队列动作
+/// 共用同一判断。
+pub(super) fn is_verify_failure(reason: &str) -> bool {
+    reason.contains("校验") || reason.contains("verify")
 }
 
 /// 任务执行所需的远端连接；方向决定用哪一端，缺失即视为入队缺陷。

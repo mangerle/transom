@@ -5,9 +5,8 @@
 //! - 核心优势：集中管理状态流转与命令发送（SftpCancel），明确细粒度职责。
 
 use crate::app::AppShell;
-use crate::sftp::{TransferMode, TransferStatus};
 use gpui_kit::*;
-use transom_core::{SftpCommand, TabId, TransferId};
+use transom_core::{TabId, TransferId};
 
 impl AppShell {
     pub(crate) fn sftp_pause_task(
@@ -16,27 +15,9 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        let mut needs_cancel = false;
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
-                && task.status == TransferStatus::Transferring
-            {
-                task.status = TransferStatus::Paused;
-                needs_cancel = true;
-            }
-            panel.queue.active_transfers.remove(&op_id);
-            panel.recompute_progress();
-            if panel.queue.active_transfers.is_empty() {
-                panel.set_status(rust_i18n::t!("sftp.queue_actions.paused_one").to_string());
-            }
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.pause_task(tab_id, op_id, cx));
         }
-        cx.notify();
-        // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
-        if needs_cancel {
-            self.state
-                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
-        }
-        self.process_sftp_queue(tab_id, cx);
     }
 
     pub(crate) fn sftp_resume_task(
@@ -45,29 +26,9 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
-            && (task.status == TransferStatus::Paused
-                || matches!(task.status, TransferStatus::Failed(_)))
-        {
-            let is_verify_failure = match &task.status {
-                TransferStatus::Failed(reason) => {
-                    reason.contains("校验") || reason.contains("verify")
-                }
-                _ => false,
-            };
-            task.status = TransferStatus::Pending;
-            // 校验失败说明两端数据不一致或损坏，断点续传可能在脏数据后追加导致二次损坏；
-            // 采用 Overwrite 强制截断从头传输以实现完全自愈。
-            if is_verify_failure {
-                task.mode = TransferMode::Overwrite;
-                task.transferred = 0;
-            } else {
-                task.mode = TransferMode::Resume;
-            }
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.resume_task(tab_id, op_id, cx));
         }
-        cx.notify();
-        self.process_sftp_queue(tab_id, cx);
     }
 
     pub(crate) fn sftp_cancel_task(
@@ -76,28 +37,9 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        log::debug!("取消传输任务，窗格: {tab_id}，任务: {op_id}");
-        let mut should_cancel = false;
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
-                if task.status == TransferStatus::Transferring {
-                    should_cancel = true;
-                }
-                task.status = TransferStatus::Cancelled;
-            }
-            panel.queue.active_transfers.remove(&op_id);
-            panel.recompute_progress();
-            if panel.queue.active_transfers.is_empty() {
-                panel.set_status(rust_i18n::t!("sftp.queue_actions.cancelled_one").to_string());
-            }
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.cancel_task(tab_id, op_id, cx));
         }
-        cx.notify();
-        // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
-        if should_cancel {
-            self.state
-                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
-        }
-        self.process_sftp_queue(tab_id, cx);
     }
 
     pub(crate) fn sftp_remove_task(
@@ -106,12 +48,9 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.queue.active_transfers.remove(&op_id);
-            panel.queue.tasks.retain(|task| task.id != op_id);
-            panel.recompute_progress();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.remove_task(op_id, cx));
         }
-        cx.notify();
     }
 
     pub(crate) fn sftp_prioritize_task(
@@ -120,35 +59,8 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        let mut needs_cancel = false;
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            if panel.queue.active_transfers.contains(&op_id)
-                && let Some(active_task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
-                && active_task.status == TransferStatus::Transferring
-            {
-                needs_cancel = true;
-                active_task.status = TransferStatus::Pending;
-                active_task.mode = TransferMode::Resume;
-                panel.queue.active_transfers.remove(&op_id);
-            }
-
-            if let Some(pos) = panel.queue.tasks.iter().position(|t| t.id == op_id) {
-                let mut task = panel.queue.tasks.remove(pos);
-                task.status = TransferStatus::Pending;
-                if task.transferred > 0 {
-                    task.mode = TransferMode::Resume;
-                }
-                panel.queue.tasks.insert(0, task);
-                panel.set_status(rust_i18n::t!("sftp.queue_actions.prioritized").to_string());
-            }
-            panel.recompute_progress();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.prioritize_task(tab_id, op_id, cx));
         }
-        cx.notify();
-        // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
-        if needs_cancel {
-            self.state
-                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
-        }
-        self.process_sftp_queue(tab_id, cx);
     }
 }

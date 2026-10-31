@@ -202,8 +202,8 @@ impl AppShell {
                                     .tooltip(
                                         rust_i18n::t!("sftp.queue.concurrency_tooltip").to_string(),
                                     )
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.sftp_cycle_concurrency(cx);
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.sftp_cycle_concurrency(tab_id, cx);
                                     })),
                             ),
                     )

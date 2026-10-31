@@ -22,6 +22,7 @@
 //! `attach` 在创建后立即调用，不存在未绑定窗口期。
 
 mod queue;
+mod status;
 
 use super::SftpPanelState;
 use crate::app::AppShell;
