@@ -1,6 +1,5 @@
 //! 监听端口（Listening Ports）看板。
 
-use crate::app::AppShell;
 use crate::monitor::components::CollapsibleCard;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -29,7 +28,9 @@ struct PortRow {
     process: String,
 }
 
-impl AppShell {
+use crate::monitor::MonitorView;
+
+impl MonitorView {
     /// 渲染监听端口监控卡片。
     ///
     /// `scope` 区分宿主位置（抽屉 / 全屏标签页）：虚拟列表的滚动状态挂在元素 id 上，
@@ -41,10 +42,10 @@ impl AppShell {
         p: &Palette,
         scope: &str,
     ) -> AnyElement {
-        let collapsed = self.monitor.collapse.ports;
+        let collapsed = self.state.collapse.ports;
         let total = stats.ports.len();
         // 采样每轮整体替换 stats，筛选词只存在输入框里，因此刷新不会打断正在输入的条件。
-        let query = self.monitor.ports_filter.read(cx).value().to_lowercase();
+        let query = self.state.ports_filter.read(cx).value().to_lowercase();
         let matched: Vec<&PortListeningInfo> = stats
             .ports
             .iter()
@@ -70,7 +71,7 @@ impl AppShell {
 
         // 输入框常驻在数据有无之前：没采到数据时也留着，免得用户以为是筛选功能坏了。
         if total > 0 {
-            content = content.child(Input::new(&self.monitor.ports_filter).small());
+            content = content.child(Input::new(&self.state.ports_filter).small());
         }
 
         if stats.ports.is_empty() {
@@ -148,7 +149,7 @@ impl AppShell {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.toggle_section_collapse("ports", cx);
+                this.with_shell(cx, |shell, cx| shell.toggle_section_collapse("ports", cx));
             }),
         )
     }
@@ -163,7 +164,7 @@ impl AppShell {
     ) -> AnyElement {
         let rows = Rc::new(rows);
         let palette = p.clone();
-        let scroll = self.monitor.ports_scroll.clone();
+        let scroll = self.state.ports_scroll.clone();
         let list_id = format!("ports-virtual-list-{scope}");
         let item_sizes: Rc<Vec<Size<Pixels>>> =
             Rc::new(vec![

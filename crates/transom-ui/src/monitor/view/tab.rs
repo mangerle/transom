@@ -2,23 +2,25 @@
 
 use super::*;
 
-impl AppShell {
-    /// 渲染全屏独立的主机系统监控看板标签页内容。
+impl MonitorView {
+    /// 渲染全屏监控看板。
+    ///
+    /// 数据由外壳传入而不是在这里反查：目标标签的标题与统计快照属于工作区，
+    /// 面板只负责画，避免为了取值而克隆整份会话。
     pub(crate) fn render_monitor_tab_content(
         &mut self,
-        tab_id: TabId,
-        target_tab_id: TabId,
+        params: MonitorTabParams,
         _window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let target_tab = self.workspace.tab(target_tab_id);
-        let target_title = target_tab
-            .map(|t| t.display_name())
-            .unwrap_or_else(|| rust_i18n::t!("monitor.view.host_fallback").to_string());
-        let stats = target_tab.and_then(|t| t.system_stats().cloned());
-
-        let current_interval = self.monitor.interval_mode;
+        let MonitorTabParams {
+            tab_id,
+            target_tab_id,
+            target_title,
+            stats,
+        } = params;
+        let current_interval = self.state.interval_mode;
 
         // 顶栏宽幅工具条
         let mut header = h_flex()
@@ -95,7 +97,9 @@ impl AppShell {
                             .label(SampleIntervalMode::Fast.label())
                             .selected(current_interval == SampleIntervalMode::Fast)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.set_monitor_interval_mode(SampleIntervalMode::Fast, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.set_monitor_interval_mode(SampleIntervalMode::Fast, cx)
+                                });
                             })),
                     )
                     .child(
@@ -104,7 +108,9 @@ impl AppShell {
                             .label(SampleIntervalMode::Normal.label())
                             .selected(current_interval == SampleIntervalMode::Normal)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.set_monitor_interval_mode(SampleIntervalMode::Normal, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.set_monitor_interval_mode(SampleIntervalMode::Normal, cx)
+                                });
                             })),
                     )
                     .child(
@@ -113,7 +119,9 @@ impl AppShell {
                             .label(SampleIntervalMode::Eco.label())
                             .selected(current_interval == SampleIntervalMode::Eco)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.set_monitor_interval_mode(SampleIntervalMode::Eco, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.set_monitor_interval_mode(SampleIntervalMode::Eco, cx)
+                                });
                             })),
                     ),
             )
@@ -124,7 +132,7 @@ impl AppShell {
                     .icon(IconName::RefreshCw)
                     .tooltip(rust_i18n::t!("monitor.view.refresh_tooltip").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.sample_processes(cx);
+                        this.with_shell(cx, |shell, cx| shell.sample_processes(cx));
                     })),
             )
             .child(
@@ -135,7 +143,9 @@ impl AppShell {
                     .label(rust_i18n::t!("monitor.view.dock_label").to_string())
                     .tooltip(rust_i18n::t!("monitor.view.dock_tooltip").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx);
+                        this.with_shell(cx, |shell, cx| {
+                            shell.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx)
+                        });
                     })),
             )
             .child(
@@ -145,7 +155,7 @@ impl AppShell {
                     .icon(IconName::Close)
                     .tooltip(rust_i18n::t!("monitor.view.close_tab_tooltip").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.close_pane(tab_id, window, cx);
+                        this.with_shell(cx, |shell, cx| shell.close_pane(tab_id, window, cx));
                     })),
             );
 
@@ -254,4 +264,15 @@ impl AppShell {
             )
             .into_any_element()
     }
+}
+
+/// 全屏监控看板的渲染入参。
+///
+/// 目标标签的标题与统计快照属于工作区，由外壳读好传入；收成结构体是因为
+/// 平铺参数已超过五个，调用点容易把两个 `TabId` 传反。
+pub(crate) struct MonitorTabParams {
+    pub(crate) tab_id: TabId,
+    pub(crate) target_tab_id: TabId,
+    pub(crate) target_title: String,
+    pub(crate) stats: Option<transom_core::SystemStats>,
 }

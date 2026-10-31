@@ -728,3 +728,32 @@ fn app_shell_keeps_single_state_field() {
         "AppShell 只允许持有 state 一个字段，新增状态请放进 AppState 或 feature 结构体"
     );
 }
+
+/// 监控面板的渲染与面板状态必须归属 `MonitorView` 实体：`monitor/` 下只允许
+/// `ops.rs` 保留 `impl AppShell`（采样调度、任务生命周期与跨域动作回交外壳）。
+/// 一旦渲染方法重新散落到外壳，说明实体化被回退了。
+#[test]
+fn monitor_rendering_belongs_to_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/monitor");
+    let mut offenders = Vec::new();
+    for (path, content) in walkdir_like(&root)
+        .into_iter()
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
+        .filter_map(|path| {
+            let content = std::fs::read_to_string(&path).ok()?;
+            Some((path.display().to_string(), content))
+        })
+    {
+        if path.ends_with("ops.rs") {
+            continue;
+        }
+        if content.contains("impl AppShell") {
+            offenders.push(path);
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "监控渲染必须以 impl MonitorView 实现，不得挂在 AppShell 上：\n{}",
+        offenders.join("\n")
+    );
+}

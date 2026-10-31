@@ -1,6 +1,5 @@
 //! 网络流量与上下行波形监控板块。
 
-use crate::app::AppShell;
 use crate::monitor::components::{CollapsibleCard, render_network_dual_sparkline};
 use crate::monitor::types::format_size;
 use crate::palette::Palette;
@@ -9,7 +8,9 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use transom_core::SystemStats;
 
-impl AppShell {
+use crate::monitor::MonitorView;
+
+impl MonitorView {
     /// 渲染网络流量监控卡片（包含双向波形与网卡明细）。
     pub(crate) fn render_network_section_card(
         &self,
@@ -17,7 +18,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let collapsed = self.monitor.collapse.network;
+        let collapsed = self.state.collapse.network;
 
         // 计算当前总上行与总下行
         let (total_rx, total_tx) = stats
@@ -49,8 +50,8 @@ impl AppShell {
         let mut content = v_flex().gap_2p5();
 
         // 双向流量波形走势（最近 40 个采样点，双线对比）
-        let rx_hist: Vec<u64> = self.monitor.rx_history.iter().copied().collect();
-        let tx_hist: Vec<u64> = self.monitor.tx_history.iter().copied().collect();
+        let rx_hist: Vec<u64> = self.state.rx_history.iter().copied().collect();
+        let tx_hist: Vec<u64> = self.state.tx_history.iter().copied().collect();
         if !rx_hist.is_empty() || !tx_hist.is_empty() {
             let rx_peak = rx_hist.iter().copied().max().unwrap_or(0);
             let tx_peak = tx_hist.iter().copied().max().unwrap_or(0);
@@ -147,7 +148,7 @@ impl AppShell {
                         p.primary,
                         p.sidebar_accent_foreground,
                         p.muted,
-                        self.monitor.chart_type,
+                        self.state.chart_type,
                     )),
             );
         }
@@ -206,7 +207,7 @@ impl AppShell {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.toggle_section_collapse("network", cx);
+                this.with_shell(cx, |shell, cx| shell.toggle_section_collapse("network", cx));
             }),
         )
     }

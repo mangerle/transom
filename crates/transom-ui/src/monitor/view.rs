@@ -1,7 +1,7 @@
 //! 监控抽屉容器视图与组装管道。
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
+use crate::monitor::MonitorView;
 use crate::monitor::types::{SampleIntervalMode, SparklineChartType};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -15,3 +15,5 @@ use transom_core::TabId;
 
 mod panel;
 mod tab;
+
+pub(crate) use tab::MonitorTabParams;

@@ -1,6 +1,5 @@
 //! Systemd 崩溃服务监控与快速自愈板块。
 
-use crate::app::AppShell;
 use crate::monitor::components::CollapsibleCard;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -11,7 +10,9 @@ use gpui_kit::component::list::ListItem;
 use gpui_kit::*;
 use transom_core::SystemStats;
 
-impl AppShell {
+use crate::monitor::MonitorView;
+
+impl MonitorView {
     /// 渲染 Systemd 崩溃服务监控卡片。
     pub(crate) fn render_services_section_card(
         &self,
@@ -19,7 +20,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let collapsed = self.monitor.collapse.services;
+        let collapsed = self.state.collapse.services;
         let count = stats.failed_services.len();
 
         let summary = if count == 0 {
@@ -87,7 +88,9 @@ impl AppShell {
                                             rust_i18n::t!("monitor.services.restart").to_string(),
                                         )
                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.restart_systemd_service(&unit, cx);
+                                            this.with_shell(cx, |shell, cx| {
+                                                shell.restart_systemd_service(&unit, cx)
+                                            });
                                         })),
                                 ),
                         ),
@@ -106,7 +109,9 @@ impl AppShell {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.toggle_section_collapse("services", cx);
+                this.with_shell(cx, |shell, cx| {
+                    shell.toggle_section_collapse("services", cx)
+                });
             }),
         )
     }

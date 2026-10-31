@@ -1,6 +1,5 @@
 //! 磁盘存储与挂载点文件系统监控板块。
 
-use crate::app::AppShell;
 use crate::monitor::components::CollapsibleCard;
 use crate::monitor::types::{format_size, usage_bar, usage_color};
 use crate::palette::Palette;
@@ -9,7 +8,9 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use transom_core::SystemStats;
 
-impl AppShell {
+use crate::monitor::MonitorView;
+
+impl MonitorView {
     /// 渲染磁盘与文件系统监控卡片。
     pub(crate) fn render_disk_section_card(
         &self,
@@ -17,7 +18,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let collapsed = self.monitor.collapse.disk;
+        let collapsed = self.state.collapse.disk;
 
         // 折叠态紧凑摘要（以根目录为核心代表）
         let root_fs = stats.filesystems.iter().find(|fs| fs.mount == "/");
@@ -103,7 +104,7 @@ impl AppShell {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.toggle_section_collapse("disk", cx);
+                this.with_shell(cx, |shell, cx| shell.toggle_section_collapse("disk", cx));
             }),
         )
     }

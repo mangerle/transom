@@ -157,7 +157,7 @@ impl AppShell {
         }
         self.schedule_startup_commands(tab_id, connection_id, window, cx);
         self.auto_start_forwards(tab_id, connection_id, session_id, cx);
-        if still_active && self.monitor.open {
+        if still_active && self.monitor.read(cx).is_open() {
             self.sample_processes(cx);
         }
         true
@@ -338,8 +338,12 @@ impl AppShell {
             return true;
         };
         // 看板打开时先把统计快照推入时序历史，再移动 stats。
-        if self.monitor.open && self.workspace.active_tab == Some(tab_id) {
-            self.monitor_record_stats(tab_id, &stats);
+        if self.monitor.read(cx).is_open() && self.workspace.active_tab == Some(tab_id) {
+            let open = true;
+            if open {
+                self.monitor
+                    .update(cx, |view, _| view.record_stats(tab_id, &stats));
+            }
         }
 
         let mut applied = false;
@@ -357,7 +361,7 @@ impl AppShell {
         // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
         if applied
             && self.workspace.active_tab == Some(tab_id)
-            && (!self.immersive || self.monitor.open)
+            && (!self.immersive || self.monitor.read(cx).is_open())
         {
             cx.notify();
         }

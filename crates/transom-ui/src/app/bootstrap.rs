@@ -138,7 +138,7 @@ impl AppShell {
         let sidebar_visible = settings.window.sidebar_visible_at_startup();
         // 左侧标签模式启动即以标签面板作为槽位主视图；顶部模式该标志无效。
         let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;
-        let monitor = crate::monitor::MonitorState::new(window, &settings.monitor, cx);
+        let monitor = cx.new(|cx| crate::monitor::MonitorView::new(window, &settings.monitor, cx));
 
         let persistence = Persistence::new(
             services.session_store.clone(),
@@ -213,6 +213,9 @@ impl AppShell {
             dialog_hint: None,
         };
         let mut this = Self { state };
+        // 面板需要回到外壳执行跨域动作；外壳此时才构造完成，因此两段式绑定。
+        let app_weak = cx.entity().downgrade();
+        this.monitor.update(cx, |view, _| view.attach(app_weak));
 
         cx.subscribe_in(
             &this.broadcast.input,

@@ -1,6 +1,5 @@
 //! 主机监控状态模型与辅助计算工具。
 
-use crate::app::AppShell;
 use gpui_kit::base::VirtualListScrollHandle;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -136,10 +135,14 @@ pub(crate) struct MonitorState {
 }
 
 impl MonitorState {
-    pub(crate) fn new(
+    /// 构造监控状态。
+    ///
+    /// 参数是泛型上下文：状态既可挂在面板实体里（`Context<MonitorView>`），
+    /// 也可在测试中独立构造；这里只用到 `cx.new` 建立两个筛选输入框。
+    pub(crate) fn new<C: 'static>(
         window: &mut Window,
         settings: &transom_core::MonitorSettings,
-        cx: &mut Context<AppShell>,
+        cx: &mut Context<C>,
     ) -> Self {
         Self {
             open: false,

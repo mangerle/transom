@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl AppShell {
+impl MonitorView {
     /// 渲染右侧监控抽屉。
     pub(crate) fn render_monitor_panel(
         &mut self,
@@ -10,11 +10,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let stats = self
-            .workspace
-            .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id))
-            .and_then(|tab| tab.system_stats().cloned());
+        let stats = self.active_stats(cx);
 
         let mut body = v_flex().gap_2p5().p_2p5();
 
@@ -82,7 +78,7 @@ impl AppShell {
         body = body.child(self.render_process_section_card(cx, p, "drawer"));
 
         // 抽屉容器布局：尺寸由外部 resizable_panel 统一约束，内部填满并自适应。
-        let drawer_width = self.monitor.drawer_width.clamp(360.0, 750.0);
+        let drawer_width = self.state.drawer_width.clamp(360.0, 750.0);
         let mut panel = v_flex()
             .id("monitor-panel")
             .size_full()
@@ -90,7 +86,7 @@ impl AppShell {
             .bg(p.background);
 
         // 顶栏工具条：标题、采样档位芯片、刷新、关闭
-        let current_interval = self.monitor.interval_mode;
+        let current_interval = self.state.interval_mode;
         let header = h_flex()
             .h(rems(size::TAB_BAR_HEIGHT))
             .w_full()
@@ -130,10 +126,12 @@ impl AppShell {
                                     .label(SampleIntervalMode::Fast.label())
                                     .selected(current_interval == SampleIntervalMode::Fast)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.set_monitor_interval_mode(
-                                            SampleIntervalMode::Fast,
-                                            cx,
-                                        );
+                                        this.with_shell(cx, |shell, cx| {
+                                            shell.set_monitor_interval_mode(
+                                                SampleIntervalMode::Fast,
+                                                cx,
+                                            )
+                                        });
                                     })),
                             )
                             .child(
@@ -142,10 +140,12 @@ impl AppShell {
                                     .label(SampleIntervalMode::Normal.label())
                                     .selected(current_interval == SampleIntervalMode::Normal)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.set_monitor_interval_mode(
-                                            SampleIntervalMode::Normal,
-                                            cx,
-                                        );
+                                        this.with_shell(cx, |shell, cx| {
+                                            shell.set_monitor_interval_mode(
+                                                SampleIntervalMode::Normal,
+                                                cx,
+                                            )
+                                        });
                                     })),
                             )
                             .child(
@@ -154,7 +154,12 @@ impl AppShell {
                                     .label(SampleIntervalMode::Eco.label())
                                     .selected(current_interval == SampleIntervalMode::Eco)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.set_monitor_interval_mode(SampleIntervalMode::Eco, cx);
+                                        this.with_shell(cx, |shell, cx| {
+                                            shell.set_monitor_interval_mode(
+                                                SampleIntervalMode::Eco,
+                                                cx,
+                                            )
+                                        });
                                     })),
                             ),
                     )
@@ -163,11 +168,11 @@ impl AppShell {
                         Button::new("monitor-toggle-chart-type")
                             .ghost()
                             .xsmall()
-                            .icon(match self.monitor.chart_type {
+                            .icon(match self.state.chart_type {
                                 SparklineChartType::Line => IconName::ChartLine,
                                 SparklineChartType::Bar => IconName::ChartBar,
                             })
-                            .tooltip(match self.monitor.chart_type {
+                            .tooltip(match self.state.chart_type {
                                 SparklineChartType::Line => {
                                     rust_i18n::t!("monitor.view.chart_line_tooltip").to_string()
                                 }
@@ -176,7 +181,7 @@ impl AppShell {
                                 }
                             })
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.monitor.chart_type = match this.monitor.chart_type {
+                                this.state.chart_type = match this.state.chart_type {
                                     SparklineChartType::Line => SparklineChartType::Bar,
                                     SparklineChartType::Bar => SparklineChartType::Line,
                                 };
@@ -190,7 +195,7 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::RefreshCw)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.sample_processes(cx);
+                                this.with_shell(cx, |shell, cx| shell.sample_processes(cx));
                             })),
                     )
                     // 宽度缩放切换芯片（快速切换 420px / 600px）
@@ -209,7 +214,9 @@ impl AppShell {
                                 rust_i18n::t!("monitor.view.width_wide_tooltip").to_string()
                             })
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.toggle_monitor_drawer_width(window, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.toggle_monitor_drawer_width(window, cx)
+                                });
                             })),
                     )
                     // 脱离为独立标签页按钮
@@ -220,7 +227,9 @@ impl AppShell {
                             .icon(IconName::ArrowUpRight)
                             .tooltip(rust_i18n::t!("monitor.view.detach_tooltip").to_string())
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.maximize_monitor_to_tab(window, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.maximize_monitor_to_tab(window, cx)
+                                });
                             })),
                     )
                     // 关闭抽屉按钮
@@ -231,8 +240,8 @@ impl AppShell {
                             .icon(IconName::Close)
                             .tooltip(rust_i18n::t!("monitor.view.close_tooltip").to_string())
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.monitor.open = false;
-                                this.monitor.processes.clear();
+                                this.state.open = false;
+                                this.state.processes.clear();
                                 cx.notify();
                             })),
                     ),
@@ -241,7 +250,7 @@ impl AppShell {
         panel = panel.child(header);
 
         // 错误提示条
-        if let Some(error) = &self.monitor.error {
+        if let Some(error) = &self.state.error {
             panel = panel.child(
                 div()
                     .px_3()

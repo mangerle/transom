@@ -66,7 +66,7 @@ pub(crate) struct AppState {
     /// 会话列表行尾的拨测状态点，按会话 id 索引。
     pub(in crate::app) probe_badges: HashMap<SessionId, ProbeBadge>,
     /// 主机监控看板与进程管理器状态。
-    pub(in crate::app) monitor: crate::monitor::MonitorState,
+    pub(in crate::app) monitor: Entity<crate::monitor::MonitorView>,
     /// 统一托管的远端文本编辑器管理器。
     pub(in crate::app) editors: EditorManager,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。

@@ -121,25 +121,30 @@ impl Render for AppShell {
             }
         }
 
-        if !self.immersive && self.monitor.open {
+        if !self.immersive && self.monitor.read(cx).is_open() {
             // 监控抽屉停靠在主面板右侧，支持拖拽调整宽度（360px 至屏幕宽度的 75%）。
             let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(520.0);
             if let Some(actual_w) = panels_state.read(cx).sizes().last().copied() {
                 let actual_f32 = actual_w.as_f32();
                 if actual_f32 >= 360.0
                     && actual_f32 <= max_drawer_width
-                    && (self.monitor.drawer_width - actual_f32).abs() > 1.0
+                    && (self.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
                 {
-                    self.monitor.drawer_width = actual_f32;
+                    self.monitor
+                        .update(cx, |view, _| view.set_drawer_width(actual_f32));
                     self.settings.monitor.drawer_width = actual_f32;
                 }
             }
-            let monitor_width = self.monitor.drawer_width.clamp(360.0, max_drawer_width);
+            let monitor_width = self
+                .monitor
+                .read(cx)
+                .drawer_width()
+                .clamp(360.0, max_drawer_width);
             resizable_group = resizable_group.child(
                 resizable_panel()
                     .size(px(monitor_width))
                     .size_range(px(360.0)..px(max_drawer_width))
-                    .child(self.render_monitor_panel(window, cx, &p)),
+                    .child(self.monitor.clone()),
             );
         }
 
@@ -149,7 +154,7 @@ impl Render for AppShell {
             // 才补：面板之间由可拖拽手柄画唯一的分割线，这里再叠一条轮廓/面板
             // 边框就会并排成 2px。停靠左侧时主面板右侧是监控抽屉或窗口边缘，
             // 左边一律交给手柄，不再补左轮廓。
-            let has_right_panel = show_sftp || show_forwards || self.monitor.open;
+            let has_right_panel = show_sftp || show_forwards || self.monitor.read(cx).is_open();
             if !self.settings.window.sftp_panel_side.is_left() && !has_right_panel {
                 main_row = main_row
                     .border_color(p.divider(p.border))

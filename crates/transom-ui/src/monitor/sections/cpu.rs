@@ -1,6 +1,5 @@
 //! CPU 监控板块（包含负载、细分状态、走势与核心图表）。
 
-use crate::app::AppShell;
 use crate::monitor::components::{CollapsibleCard, render_percent_sparkline};
 use crate::monitor::types::{usage_bar, usage_color};
 use crate::palette::Palette;
@@ -9,7 +8,9 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use transom_core::SystemStats;
 
-impl AppShell {
+use crate::monitor::MonitorView;
+
+impl MonitorView {
     /// 渲染 CPU 处理器监控卡片。
     pub(crate) fn render_cpu_section_card(
         &self,
@@ -17,7 +18,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let collapsed = self.monitor.collapse.cpu;
+        let collapsed = self.state.collapse.cpu;
         let color = usage_color(stats.cpu_percent, p);
 
         // 折叠态紧凑摘要
@@ -133,7 +134,7 @@ impl AppShell {
         );
 
         // 历史走势波形（最近 40 个采样点）
-        let history: Vec<f32> = self.monitor.cpu_history.iter().copied().collect();
+        let history: Vec<f32> = self.state.cpu_history.iter().copied().collect();
         if !history.is_empty() {
             content = content.child(
                 v_flex()
@@ -149,7 +150,7 @@ impl AppShell {
                         44.0,
                         color,
                         p.muted,
-                        self.monitor.chart_type,
+                        self.state.chart_type,
                     )),
             );
         }
@@ -200,7 +201,7 @@ impl AppShell {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.toggle_section_collapse("cpu", cx);
+                this.with_shell(cx, |shell, cx| shell.toggle_section_collapse("cpu", cx));
             }),
         )
     }

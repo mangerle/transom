@@ -1,6 +1,5 @@
 //! 内存与交换分区监控板块。
 
-use crate::app::AppShell;
 use crate::monitor::components::{CollapsibleCard, render_percent_sparkline};
 use crate::monitor::types::{format_size, usage_bar, usage_color};
 use crate::palette::Palette;
@@ -9,7 +8,9 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use transom_core::SystemStats;
 
-impl AppShell {
+use crate::monitor::MonitorView;
+
+impl MonitorView {
     /// 渲染内存与 Swap 监控卡片。
     pub(crate) fn render_memory_section_card(
         &self,
@@ -17,7 +18,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let collapsed = self.monitor.collapse.memory;
+        let collapsed = self.state.collapse.memory;
 
         let mem_fraction = if stats.mem_total_bytes == 0 {
             0.0
@@ -90,7 +91,7 @@ impl AppShell {
         }
 
         // 内存历史走势波形（最近 40 个采样点）
-        let history: Vec<f32> = self.monitor.mem_history.iter().copied().collect();
+        let history: Vec<f32> = self.state.mem_history.iter().copied().collect();
         if !history.is_empty() {
             let min_val = history.iter().copied().fold(f32::INFINITY, f32::min);
             let max_val = history.iter().copied().fold(f32::NEG_INFINITY, f32::max);
@@ -152,7 +153,7 @@ impl AppShell {
                         44.0,
                         mem_color,
                         p.muted,
-                        self.monitor.chart_type,
+                        self.state.chart_type,
                     )),
             );
         }
@@ -169,7 +170,7 @@ impl AppShell {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.toggle_section_collapse("memory", cx);
+                this.with_shell(cx, |shell, cx| shell.toggle_section_collapse("memory", cx));
             }),
         )
     }

@@ -244,9 +244,8 @@ impl AppShell {
             window.focus(&focus_handle, cx);
         }
         self.sync_broadcast_targets();
-        if self.monitor.open {
-            self.monitor.history_tab = None;
-            self.monitor.error = None;
+        if self.monitor.read(cx).is_open() {
+            self.monitor.update(cx, |view, _| view.reset_history());
             self.sample_processes(cx);
         }
         cx.notify();

@@ -1,6 +1,5 @@
 //! 进程管理板块（虚拟滚动列表、完整命令行详情条、终端追踪与防误杀保护）。
 
-use crate::app::AppShell;
 use crate::monitor::components::CollapsibleCard;
 use crate::monitor::types::{ProcessSort, format_size, usage_color};
 use crate::palette::Palette;
@@ -40,7 +39,9 @@ const COL_USER: f32 = 60.0;
 const COL_CPU: f32 = 44.0;
 const COL_MEM: f32 = 88.0;
 
-impl AppShell {
+use crate::monitor::MonitorView;
+
+impl MonitorView {
     /// 渲染进程管理监控卡片。
     ///
     /// `scope` 区分宿主位置（抽屉 / 全屏标签页）：虚拟列表的滚动状态挂在元素 id 上，
@@ -51,10 +52,10 @@ impl AppShell {
         p: &Palette,
         scope: &'static str,
     ) -> AnyElement {
-        let collapsed = self.monitor.collapse.processes;
-        let total = self.monitor.process_total;
-        let sort = self.monitor.sort;
-        let ascending = self.monitor.sort_ascending;
+        let collapsed = self.state.collapse.processes;
+        let total = self.state.process_total;
+        let sort = self.state.sort;
+        let ascending = self.state.sort_ascending;
 
         // 过滤与排序结果同时决定摘要计数与虚拟列表条数，二者必须同源。
         let order = self.filtered_order(cx);
@@ -72,7 +73,7 @@ impl AppShell {
 
         let mut content = v_flex()
             .gap_2()
-            .child(Input::new(&self.monitor.filter).small())
+            .child(Input::new(&self.state.filter).small())
             .child(
                 h_flex()
                     .gap_2()
@@ -138,7 +139,9 @@ impl AppShell {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.toggle_section_collapse("processes", cx);
+                this.with_shell(cx, |shell, cx| {
+                    shell.toggle_section_collapse("processes", cx)
+                });
             }),
         )
     }
@@ -147,8 +150,8 @@ impl AppShell {
     ///
     /// 表头计数与虚拟列表数据都走这里，保证条数与实际行数不会错位。
     fn filtered_order(&self, cx: &mut Context<Self>) -> Vec<usize> {
-        let filter = self.monitor.filter.read(cx).value().to_lowercase();
-        let processes = &self.monitor.processes;
+        let filter = self.state.filter.read(cx).value().to_lowercase();
+        let processes = &self.state.processes;
         let mut order: Vec<usize> = processes
             .iter()
             .enumerate()
@@ -164,8 +167,8 @@ impl AppShell {
             })
             .map(|(index, _)| index)
             .collect();
-        let ascending = self.monitor.sort_ascending;
-        match self.monitor.sort {
+        let ascending = self.state.sort_ascending;
+        match self.state.sort {
             ProcessSort::Cpu => order.sort_by(|a, b| {
                 let cmp = processes[*a]
                     .cpu_percent
@@ -247,9 +250,9 @@ impl AppShell {
                 .into_any_element();
         }
 
-        let rows = self.monitor.processes.clone();
+        let rows = self.state.processes.clone();
         let palette = p.clone();
-        let scroll = self.monitor.process_scroll.clone();
+        let scroll = self.state.process_scroll.clone();
         let list_id = format!("process-virtual-list-{scope}");
         // 申报高度必须与行内实际高度一致：虚拟列表按这里定位每一行，
         // 一旦偏小，行会互相压盖，表现就是"列表钉死、滚不动"。
@@ -307,7 +310,7 @@ impl AppShell {
             .as_deref()
             .unwrap_or(&process.cmdline)
             .to_string();
-        let selected = self.monitor.selected_process_pid == Some(pid);
+        let selected = self.state.selected_process_pid == Some(pid);
         let click_app = cx.entity();
         let menu_app = cx.entity();
 
@@ -319,8 +322,8 @@ impl AppShell {
             .h(px(PROCESS_ROW_HEIGHT))
             .on_click(move |_, _, cx| {
                 click_app.update(cx, |this, cx| {
-                    this.monitor.selected_process_pid =
-                        if this.monitor.selected_process_pid == Some(pid) {
+                    this.state.selected_process_pid =
+                        if this.state.selected_process_pid == Some(pid) {
                             None
                         } else {
                             Some(pid)
@@ -397,7 +400,9 @@ impl AppShell {
                         IconName::Terminal,
                         move |_, _, cx| {
                             term.update(cx, |this, cx| {
-                                this.trace_process_in_terminal(pid, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.trace_process_in_terminal(pid, cx)
+                                });
                             });
                         },
                     ))
@@ -406,7 +411,9 @@ impl AppShell {
                         IconName::CircleX,
                         move |_, _, cx| {
                             safe_kill.update(cx, |this, cx| {
-                                this.send_kill_process_safe(pid, false, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.send_kill_process_safe(pid, false, cx)
+                                });
                             });
                         },
                     ))
@@ -415,7 +422,9 @@ impl AppShell {
                         IconName::Ban,
                         move |_, _, cx| {
                             force_kill.update(cx, |this, cx| {
-                                this.send_kill_process_safe(pid, true, cx);
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.send_kill_process_safe(pid, true, cx)
+                                });
                             });
                         },
                     ))
@@ -435,9 +444,9 @@ impl AppShell {
 
     /// 底部详情条：展示选中进程的完整命令行。
     fn render_process_detail(&mut self, p: &Palette) -> Option<AnyElement> {
-        let pid = self.monitor.selected_process_pid?;
+        let pid = self.state.selected_process_pid?;
         let process = self
-            .monitor
+            .state
             .processes
             .iter()
             .find(|process| process.pid == pid)?;

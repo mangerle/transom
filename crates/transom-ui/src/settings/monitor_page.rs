@@ -25,7 +25,8 @@ impl AppShell {
                     .checked(self.settings.monitor.cpu_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.cpu_expanded = checked;
-                        this.monitor.collapse.cpu = !checked;
+                        this.monitor
+                            .update(cx, |view, _| view.state.collapse.cpu = !checked);
                         this.persist_settings_reported();
                         cx.notify();
                     }))
@@ -40,7 +41,8 @@ impl AppShell {
                     .checked(self.settings.monitor.memory_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.memory_expanded = checked;
-                        this.monitor.collapse.memory = !checked;
+                        this.monitor
+                            .update(cx, |view, _| view.state.collapse.memory = !checked);
                         this.persist_settings_reported();
                         cx.notify();
                     }))
@@ -55,7 +57,8 @@ impl AppShell {
                     .checked(self.settings.monitor.disk_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.disk_expanded = checked;
-                        this.monitor.collapse.disk = !checked;
+                        this.monitor
+                            .update(cx, |view, _| view.state.collapse.disk = !checked);
                         this.persist_settings_reported();
                         cx.notify();
                     }))
@@ -70,7 +73,8 @@ impl AppShell {
                     .checked(self.settings.monitor.network_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.network_expanded = checked;
-                        this.monitor.collapse.network = !checked;
+                        this.monitor
+                            .update(cx, |view, _| view.state.collapse.network = !checked);
                         this.persist_settings_reported();
                         cx.notify();
                     }))
@@ -85,7 +89,8 @@ impl AppShell {
                     .checked(self.settings.monitor.ports_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.ports_expanded = checked;
-                        this.monitor.collapse.ports = !checked;
+                        this.monitor
+                            .update(cx, |view, _| view.state.collapse.ports = !checked);
                         this.persist_settings_reported();
                         cx.notify();
                     }))
@@ -100,7 +105,8 @@ impl AppShell {
                     .checked(self.settings.monitor.services_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.services_expanded = checked;
-                        this.monitor.collapse.services = !checked;
+                        this.monitor
+                            .update(cx, |view, _| view.state.collapse.services = !checked);
                         this.persist_settings_reported();
                         cx.notify();
                     }))
@@ -115,7 +121,8 @@ impl AppShell {
                     .checked(self.settings.monitor.processes_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.processes_expanded = checked;
-                        this.monitor.collapse.processes = !checked;
+                        this.monitor
+                            .update(cx, |view, _| view.state.collapse.processes = !checked);
                         this.persist_settings_reported();
                         cx.notify();
                     }))
@@ -133,7 +140,7 @@ impl AppShell {
     ) -> AnyElement {
         let current_width = self.settings.monitor.drawer_width;
         let is_wide = current_width > 480.0;
-        let current_interval = self.monitor.interval_mode;
+        let current_interval = self.monitor.read(cx).interval_mode();
 
         v_flex()
             .gap_2()
@@ -155,7 +162,8 @@ impl AppShell {
                     ],
                     |this, width, cx| {
                         this.settings.monitor.drawer_width = width;
-                        this.monitor.drawer_width = width;
+                        this.monitor
+                            .update(cx, |view, _| view.set_drawer_width(width));
                         this.persist_settings_reported();
                         cx.notify();
                     },
