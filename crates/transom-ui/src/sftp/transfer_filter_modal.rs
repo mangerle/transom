@@ -38,7 +38,7 @@ impl AppShell {
             return;
         }
         self.settings.sftp.transfer_filter = text;
-        match self.services.settings_store.save(&self.settings) {
+        match self.persist_settings() {
             Ok(()) => {
                 self.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());
             }

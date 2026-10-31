@@ -26,7 +26,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.cpu_expanded = checked;
                         this.monitor.collapse.cpu = !checked;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -41,7 +41,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.memory_expanded = checked;
                         this.monitor.collapse.memory = !checked;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -56,7 +56,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.disk_expanded = checked;
                         this.monitor.collapse.disk = !checked;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -71,7 +71,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.network_expanded = checked;
                         this.monitor.collapse.network = !checked;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -86,7 +86,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.ports_expanded = checked;
                         this.monitor.collapse.ports = !checked;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -101,7 +101,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.services_expanded = checked;
                         this.monitor.collapse.services = !checked;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -116,7 +116,7 @@ impl AppShell {
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         this.settings.monitor.processes_expanded = checked;
                         this.monitor.collapse.processes = !checked;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -156,7 +156,7 @@ impl AppShell {
                     |this, width, cx| {
                         this.settings.monitor.drawer_width = width;
                         this.monitor.drawer_width = width;
-                        let _ = this.services.settings_store.save(&this.settings);
+                        let _ = this.persist_settings();
                         cx.notify();
                     },
                     cx,

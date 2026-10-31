@@ -232,26 +232,62 @@ impl RecorderHandle {
     }
 }
 
+/// 单个 `.cast` 文件允许读取的最大字节数。
+///
+/// 录制文件是外部输入：可能来自用户手选、也可能被其他程序写坏。设置上限
+/// 既防止一次性把超大文件读进内存，也让错误信息可解释；超出时由调用方
+/// 按“文件过大”提示，而不是卡死 UI。
+pub const MAX_CAST_BYTES: u64 = 64 * 1024 * 1024;
+
+/// 单个 `.cast` 文件允许解析的最大事件数。
+pub const MAX_CAST_EVENTS: usize = 200_000;
+
 /// 解析 `.cast` 文件并提取事件流。
 pub fn parse_cast_file(path: &Path) -> std::io::Result<(CastHeader, Vec<CastEvent>)> {
     let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    let mut lines = reader.lines();
-
-    let first_line = lines
-        .next()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "文件为空"))??;
-    let header: CastHeader = serde_json::from_str(&first_line)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
+    let metadata = file.metadata()?;
+    if metadata.len() > MAX_CAST_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("录制文件超过 {} 字节上限", MAX_CAST_BYTES),
+        ));
+    }
+    let mut reader = BufReader::new(file);
+    let mut line = String::new();
+    let mut total_bytes = 0u64;
+    let mut header = None;
     let mut events = Vec::new();
-    for line in lines {
-        let line = line?;
+
+    loop {
+        line.clear();
+        let read = reader.read_line(&mut line)?;
+        if read == 0 {
+            break;
+        }
+        total_bytes = total_bytes.saturating_add(read as u64);
+        if total_bytes > MAX_CAST_BYTES {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("录制文件读取超过 {} 字节上限", MAX_CAST_BYTES),
+            ));
+        }
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-
+        if header.is_none() {
+            header = Some(
+                serde_json::from_str::<CastHeader>(trimmed)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?,
+            );
+            continue;
+        }
+        if events.len() >= MAX_CAST_EVENTS {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("录制事件超过 {} 条上限", MAX_CAST_EVENTS),
+            ));
+        }
         // 解析 [time, type, data]
         if let Ok(parsed) = serde_json::from_str::<(f64, String, String)>(trimmed)
             && let Ok(event_type) = parsed.1.parse::<CastEventType>()
@@ -264,6 +300,8 @@ pub fn parse_cast_file(path: &Path) -> std::io::Result<(CastHeader, Vec<CastEven
         }
     }
 
+    let header =
+        header.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "文件为空"))?;
     Ok((header, events))
 }
 
@@ -303,7 +341,7 @@ pub fn extract_replay_inputs(events: &[CastEvent], max_delay_secs: f64) -> Vec<R
 
 #[cfg(test)]
 mod tests {
-    use super::{CastEventType, RecorderHandle, parse_cast_file};
+    use super::{CastEventType, MAX_CAST_BYTES, RecorderHandle, parse_cast_file};
 
     #[test]
     fn test_record_and_parse_cast() {
@@ -342,5 +380,19 @@ mod tests {
 
         let _ = std::fs::remove_file(cast_file);
         let _ = std::fs::remove_dir(temp_dir);
+    }
+    /// 超出体积上限的录制文件必须在读取内容前被拒绝，避免把未知大小的外部
+    /// 文件一次性拉进内存。
+    #[test]
+    fn oversized_cast_is_rejected_before_reading() {
+        let path = std::env::temp_dir().join(format!(
+            "transom-oversized-cast-{}.cast",
+            std::process::id()
+        ));
+        let file = std::fs::File::create(&path).expect("创建临时文件");
+        file.set_len(MAX_CAST_BYTES + 1).expect("构造超限文件");
+        let error = parse_cast_file(&path).expect_err("超限文件必须被拒绝");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
 }

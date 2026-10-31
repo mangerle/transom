@@ -206,7 +206,7 @@ impl AppShell {
     }
 
     fn persist_theme_choice(&mut self, cx: &mut Context<Self>) {
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
+        if let Err(error) = self.persist_settings() {
             log::error!("保存主题选择失败，界面仍是新主题但下次启动会回退，原因: {error}");
             self.set_error(localized_error(&error));
         }

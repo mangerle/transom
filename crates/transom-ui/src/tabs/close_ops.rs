@@ -252,7 +252,7 @@ impl AppShell {
         }
         self.settings.language = language;
         set_locale(&crate::i18n::resolve_language(&self.settings.language));
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
+        if let Err(error) = self.persist_settings() {
             self.set_error(localized_error(&error));
         }
         cx.notify();

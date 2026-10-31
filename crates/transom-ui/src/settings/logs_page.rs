@@ -13,6 +13,7 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::spawn_blocking_local;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
@@ -55,11 +56,20 @@ impl AppShell {
             this.status = Some(rust_i18n::t!("settings.log_revealed").to_string());
             cx.notify();
         });
-        let cleanup = cx.listener(move |this, _, _, cx| {
-            let removed = this.prune_rotated_logs();
-            this.status =
-                Some(rust_i18n::t!("settings.log_cleanup_done", count = removed).to_string());
-            cx.notify();
+        let cleanup = cx.listener(|_this, _, _, cx| {
+            cx.spawn(async move |this, cx| {
+                let Some(removed) = spawn_blocking_local(prune_rotated_logs).await else {
+                    log::error!("清理历史日志的线程创建失败");
+                    return;
+                };
+                let _ = this.update(cx, |this, cx| {
+                    this.status = Some(
+                        rust_i18n::t!("settings.log_cleanup_done", count = removed).to_string(),
+                    );
+                    cx.notify();
+                });
+            })
+            .detach();
         });
 
         v_flex()
@@ -111,32 +121,32 @@ impl AppShell {
             ))
             .into_any_element()
     }
+}
 
-    /// 删除目录里已轮转的日志备份，返回成功删除的份数。
-    ///
-    /// 单个文件删不掉（被别的程序占用、权限被改）只记一条警告并继续：清理是
-    /// 尽力而为的维护动作，不该因为一个文件失败就把按钮整体报错，让用户以为
-    /// 完全没生效。
-    fn prune_rotated_logs(&self) -> usize {
-        let log_path = paths::log_file_path();
-        let mut removed = 0usize;
-        for index in 1..=CLEANUP_SCAN_LIMIT {
-            let candidate = paths::rotated_backup_path(&log_path, index);
-            if !candidate.exists() {
-                continue;
-            }
-            match std::fs::remove_file(&candidate) {
-                Ok(()) => removed += 1,
-                Err(error) => log::warn!(
-                    "清理历史日志失败，已跳过该份，路径: {}，原因: {error}",
-                    candidate.display()
-                ),
-            }
+/// 删除目录里已轮转的日志备份，返回成功删除的份数。
+///
+/// 单个文件删不掉（被别的程序占用、权限被改）只记一条警告并继续：清理是
+/// 尽力而为的维护动作，不该因为一个文件失败就把按钮整体报错，让用户以为
+/// 完全没生效。
+fn prune_rotated_logs() -> usize {
+    let log_path = paths::log_file_path();
+    let mut removed = 0usize;
+    for index in 1..=CLEANUP_SCAN_LIMIT {
+        let candidate = paths::rotated_backup_path(&log_path, index);
+        if !candidate.exists() {
+            continue;
         }
-        log::info!(
-            "历史日志清理完成，删除份数: {removed}，目标目录: {}",
-            log_path.display()
-        );
-        removed
+        match std::fs::remove_file(&candidate) {
+            Ok(()) => removed += 1,
+            Err(error) => log::warn!(
+                "清理历史日志失败，已跳过该份，路径: {}，原因: {error}",
+                candidate.display()
+            ),
+        }
     }
+    log::info!(
+        "历史日志清理完成，删除份数: {removed}，目标目录: {}",
+        log_path.display()
+    );
+    removed
 }

@@ -2,9 +2,11 @@
 
 use super::validate::name_validation_error;
 use crate::app::AppShell;
-use crate::sftp::{SftpInputTarget, SftpRemotePaneRef, join_remote, parent_remote};
+use crate::sftp::{
+    SftpInputTarget, SftpRemotePaneRef, join_remote, parent_remote, spawn_blocking_local,
+};
 use gpui_kit::*;
-use std::path::Path;
+use std::path::PathBuf;
 use transom_core::{SftpOperation, TabId};
 
 impl AppShell {
@@ -152,129 +154,216 @@ impl AppShell {
                 self.submit_sudo_editor_write(&editor, password, window, cx);
             }
             SftpInputTarget::LocalMkdir => {
-                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-                    let new_dir = panel.local.path.join(&name);
-                    if let Err(err) = std::fs::create_dir_all(&new_dir) {
+                let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+                    return;
+                };
+                let op = LocalFsOp::Mkdir(panel.local.path.join(&name));
+                self.spawn_local_fs(tab_id, op, cx);
+            }
+            SftpInputTarget::LocalNewFile => {
+                let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+                    return;
+                };
+                let op = LocalFsOp::NewFile(panel.local.path.join(&name));
+                self.spawn_local_fs(tab_id, op, cx);
+            }
+            SftpInputTarget::LocalRename { old_path } => {
+                let Some(parent) = old_path.parent() else {
+                    if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
                         panel.set_local_error(
-                            rust_i18n::t!("sftp.file_ops.local_mkdir_failed", error = err)
-                                .to_string(),
-                        );
-                    } else {
-                        panel.set_status(
                             rust_i18n::t!(
-                                "sftp.file_ops.local_mkdir_created",
-                                name = name.as_str()
+                                "sftp.file_ops.local_rename_failed",
+                                error = rust_i18n::t!("sftp.file_ops.no_parent_dir")
                             )
                             .to_string(),
                         );
-                        self.spawn_local_dir_refresh(tab_id, None, cx);
+                        cx.notify();
                     }
-                    cx.notify();
-                }
-            }
-            SftpInputTarget::LocalNewFile => {
-                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-                    let new_file = panel.local.path.join(&name);
-                    if new_file.exists() {
-                        panel.set_local_error(
-                            rust_i18n::t!("sftp.file_ops.local_file_exists", name = name.as_str())
-                                .to_string(),
-                        );
-                    } else {
-                        match std::fs::OpenOptions::new()
-                            .write(true)
-                            .create_new(true)
-                            .open(&new_file)
-                        {
-                            Ok(_) => {
-                                panel.set_status(
-                                    rust_i18n::t!(
-                                        "sftp.file_ops.local_file_created",
-                                        name = name.as_str()
-                                    )
-                                    .to_string(),
-                                );
-                                self.spawn_local_dir_refresh(tab_id, Some(new_file.clone()), cx);
-                                crate::audit::reveal_in_file_manager(new_file);
-                            }
-                            Err(err) => {
-                                panel.set_local_error(
-                                    rust_i18n::t!(
-                                        "sftp.file_ops.local_file_create_failed",
-                                        error = err
-                                    )
-                                    .to_string(),
-                                );
-                            }
-                        }
-                    }
-                    cx.notify();
-                }
-            }
-            SftpInputTarget::LocalRename { old_path } => {
-                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
-                    if let Some(parent) = old_path.parent() {
-                        let new_path = parent.join(&name);
-                        if let Err(err) = std::fs::rename(&old_path, &new_path) {
-                            panel.set_local_error(
-                                rust_i18n::t!("sftp.file_ops.local_rename_failed", error = err)
-                                    .to_string(),
-                            );
-                        } else {
-                            panel.set_status(
-                                rust_i18n::t!("sftp.file_ops.local_renamed", name = name.as_str())
-                                    .to_string(),
-                            );
-                            self.spawn_local_dir_refresh(tab_id, Some(new_path), cx);
-                        }
-                    }
-                    cx.notify();
-                }
+                    return;
+                };
+                let op = LocalFsOp::Rename(old_path.clone(), parent.join(&name));
+                self.spawn_local_fs(tab_id, op, cx);
             }
             SftpInputTarget::LocalSymlink { target_path } => {
-                self.create_local_symlink(tab_id, &target_path, &name, cx);
+                let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+                    return;
+                };
+                let op = LocalFsOp::Symlink(target_path, panel.local.path.join(&name));
+                self.spawn_local_fs(tab_id, op, cx);
             }
         }
         self.focus_active_sftp_panel(window, cx);
         cx.notify();
     }
+}
 
-    /// 在当前本地目录创建指向指定目标的软链接（仅 Unix 平台支持）。
-    ///
-    /// 设计原理（Why）：
-    /// - 实现初衷：本地栏与远端栏保持右键菜单能力对称，避免用户在两栏间形成心智差异；
-    /// - 核心优势：直接复用标准库 `std::os::unix::fs::symlink`，无额外依赖，
-    ///   且创建后立即刷新并选中新链接，反馈闭环完整；
-    /// - 代价与局限：Windows 需要特权与文件/目录区分调用，当前不提供该平台支持，
-    ///   以显式报错提示代替静默失败。
-    fn create_local_symlink(
+/// 本地文件操作：在后台线程执行，成功后回到 UI 线程刷新。
+enum LocalFsOp {
+    Mkdir(PathBuf),
+    NewFile(PathBuf),
+    Rename(PathBuf, PathBuf),
+    Symlink(PathBuf, PathBuf),
+}
+
+/// 本地文件操作结果；字段都是已本地化文案或待选中路径。
+struct LocalFsOutcome {
+    status: Option<String>,
+    error: Option<String>,
+    select: Option<PathBuf>,
+    reveal: Option<PathBuf>,
+}
+
+fn run_local_fs(op: LocalFsOp) -> LocalFsOutcome {
+    match op {
+        LocalFsOp::Mkdir(path) => match std::fs::create_dir_all(&path) {
+            Ok(()) => LocalFsOutcome {
+                status: Some(
+                    rust_i18n::t!(
+                        "sftp.file_ops.local_mkdir_created",
+                        name = path.file_name().map_or_else(
+                            || path.display().to_string(),
+                            |name| name.to_string_lossy().into_owned()
+                        )
+                    )
+                    .to_string(),
+                ),
+                error: None,
+                select: None,
+                reveal: None,
+            },
+            Err(error) => LocalFsOutcome {
+                status: None,
+                error: Some(
+                    rust_i18n::t!("sftp.file_ops.local_mkdir_failed", error = error).to_string(),
+                ),
+                select: None,
+                reveal: None,
+            },
+        },
+        LocalFsOp::NewFile(path) => {
+            if path.exists() {
+                return LocalFsOutcome {
+                    status: None,
+                    error: Some(
+                        rust_i18n::t!("sftp.file_ops.local_file_exists", name = path.display())
+                            .to_string(),
+                    ),
+                    select: None,
+                    reveal: None,
+                };
+            }
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(_) => LocalFsOutcome {
+                    status: Some(
+                        rust_i18n::t!("sftp.file_ops.local_file_created", name = path.display())
+                            .to_string(),
+                    ),
+                    error: None,
+                    select: Some(path.clone()),
+                    reveal: Some(path),
+                },
+                Err(error) => LocalFsOutcome {
+                    status: None,
+                    error: Some(
+                        rust_i18n::t!("sftp.file_ops.local_file_create_failed", error = error)
+                            .to_string(),
+                    ),
+                    select: None,
+                    reveal: None,
+                },
+            }
+        }
+        LocalFsOp::Rename(from, to) => match std::fs::rename(&from, &to) {
+            Ok(()) => LocalFsOutcome {
+                status: Some(
+                    rust_i18n::t!("sftp.file_ops.local_renamed", name = to.display()).to_string(),
+                ),
+                error: None,
+                select: Some(to),
+                reveal: None,
+            },
+            Err(error) => LocalFsOutcome {
+                status: None,
+                error: Some(
+                    rust_i18n::t!("sftp.file_ops.local_rename_failed", error = error).to_string(),
+                ),
+                select: None,
+                reveal: None,
+            },
+        },
+        LocalFsOp::Symlink(target, link) => {
+            #[cfg(unix)]
+            let result =
+                std::os::unix::fs::symlink(&target, &link).map_err(|error| error.to_string());
+            #[cfg(not(unix))]
+            let result = Err(rust_i18n::t!("sftp.file_ops.local_symlink_unsupported").to_string());
+            match result {
+                Ok(()) => LocalFsOutcome {
+                    status: Some(
+                        rust_i18n::t!("sftp.file_ops.local_symlink_created", name = link.display())
+                            .to_string(),
+                    ),
+                    error: None,
+                    select: Some(link),
+                    reveal: None,
+                },
+                Err(error) => LocalFsOutcome {
+                    status: None,
+                    error: Some(
+                        rust_i18n::t!("sftp.file_ops.local_symlink_failed", error = error)
+                            .to_string(),
+                    ),
+                    select: None,
+                    reveal: None,
+                },
+            }
+        }
+    }
+}
+
+impl AppShell {
+    /// 在后台线程执行本地文件操作，完成后回 UI 刷新对应面板。
+    fn spawn_local_fs(&mut self, tab_id: TabId, op: LocalFsOp, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let Some(outcome) = spawn_blocking_local(move || run_local_fs(op)).await else {
+                log::error!("本地文件操作线程创建失败");
+                return;
+            };
+            let _ = this.update(cx, |this, cx| {
+                this.apply_local_fs_outcome(tab_id, outcome, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// 应用本地文件操作结果：错误与状态写回面板，成功时刷新并选中目标。
+    fn apply_local_fs_outcome(
         &mut self,
         tab_id: TabId,
-        target_path: &Path,
-        name: &str,
+        outcome: LocalFsOutcome,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
-            return;
+        let (select, reveal) = {
+            let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+                return;
+            };
+            if let Some(error) = outcome.error {
+                panel.set_local_error(error);
+            }
+            if let Some(status) = outcome.status {
+                panel.set_status(status);
+            }
+            (outcome.select, outcome.reveal)
         };
-        let link_path = panel.local.path.join(name);
-        #[cfg(unix)]
-        let result =
-            std::os::unix::fs::symlink(target_path, &link_path).map_err(|error| error.to_string());
-        #[cfg(not(unix))]
-        let result = Err(rust_i18n::t!("sftp.file_ops.local_symlink_unsupported").to_string());
-        match result {
-            Ok(()) => {
-                panel.set_status(
-                    rust_i18n::t!("sftp.file_ops.local_symlink_created", name = name).to_string(),
-                );
-                self.spawn_local_dir_refresh(tab_id, Some(link_path), cx);
-            }
-            Err(err) => {
-                panel.set_local_error(
-                    rust_i18n::t!("sftp.file_ops.local_symlink_failed", error = err).to_string(),
-                );
-            }
+        if let Some(path) = select {
+            self.spawn_local_dir_refresh(tab_id, Some(path), cx);
+        }
+        if let Some(path) = reveal {
+            crate::audit::reveal_in_file_manager(path);
         }
         cx.notify();
     }

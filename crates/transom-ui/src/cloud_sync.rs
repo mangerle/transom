@@ -392,7 +392,7 @@ impl AppShell {
         match result {
             Ok(report) => {
                 self.settings.sync.last_push_at = Some(report.at);
-                if let Err(error) = self.services.settings_store.save(&self.settings) {
+                if let Err(error) = self.persist_settings() {
                     self.set_error(localized_error(&error));
                 }
                 self.status = Some(
@@ -475,7 +475,7 @@ impl AppShell {
         let saved = self.persist_catalog();
         self.refresh_tab_sessions();
         self.settings.sync.last_pull_at = Some(chrono::Utc::now().timestamp());
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
+        if let Err(error) = self.persist_settings() {
             self.set_error(localized_error(&error));
         }
 

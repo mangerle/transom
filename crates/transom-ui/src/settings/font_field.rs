@@ -12,6 +12,7 @@ use super::font_select::{
 };
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::spawn_blocking_local;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
@@ -104,7 +105,40 @@ impl AppShell {
             return;
         };
 
-        match std::fs::read(&path) {
+        let read_path = path.clone();
+        let select = select.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let Some(result) = spawn_blocking_local(move || std::fs::read(&read_path)).await else {
+                log::error!("读取本地字体文件的线程创建失败");
+                let _ = this.update(cx, |this, cx| {
+                    this.status = Some(
+                        rust_i18n::t!(
+                            "settings.font_read_failed",
+                            error = rust_i18n::t!("settings.font_thread_failed")
+                        )
+                        .to_string(),
+                    );
+                    cx.notify();
+                });
+                return;
+            };
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.finish_import_local_font(select, path, result, window, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// 字体文件读取完成后的注册与选项刷新；必须在 UI 线程执行。
+    fn finish_import_local_font(
+        &mut self,
+        select: Entity<FontSelect>,
+        path: std::path::PathBuf,
+        result: std::io::Result<Vec<u8>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match result {
             Ok(bytes) => {
                 let before: HashSet<String> =
                     cx.text_system().all_font_names().into_iter().collect();

@@ -179,7 +179,7 @@ impl AppShell {
         let current = self.settings.sftp.max_concurrent_transfers.clamp(1, 4);
         let next = if current >= 4 { 1 } else { current + 1 };
         self.settings.sftp.max_concurrent_transfers = next;
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
+        if let Err(error) = self.persist_settings() {
             self.set_error(localized_error(&error));
         }
         self.status =

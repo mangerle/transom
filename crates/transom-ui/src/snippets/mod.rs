@@ -190,7 +190,7 @@ impl AppShell {
         } else {
             self.settings.snippets.items.push(candidate);
         }
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
+        if let Err(error) = self.persist_settings() {
             if let Some(form) = self.modals.snippet_panel.form.as_mut() {
                 form.error = Some(localized_error(&error));
             }

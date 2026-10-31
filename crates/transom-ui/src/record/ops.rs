@@ -3,6 +3,7 @@
 use super::types::{ReplayModalState, scan_recordings};
 use crate::app::{AppShell, TerminalTab};
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
+use crate::sftp::spawn_blocking_local;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -80,12 +81,25 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let dir = paths::recordings_dir();
-        let entries = scan_recordings(&dir);
         self.modals.replay = Some(ReplayModalState {
             target_tab_id: tab_id,
-            entries,
+            entries: Vec::new(),
             selected_index: 0,
         });
+        cx.spawn(async move |this, cx| {
+            let Some(entries) = spawn_blocking_local(move || scan_recordings(&dir)).await else {
+                log::error!("扫描录制目录的线程创建失败，回放列表为空");
+                return;
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(modal) = this.modals.replay.as_mut() {
+                    modal.entries = entries;
+                    modal.selected_index = 0;
+                }
+                cx.notify();
+            });
+        })
+        .detach();
         cx.notify();
     }
 
@@ -97,16 +111,41 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let (header, events) = match parse_cast_file(&path) {
-            Ok(res) => res,
-            Err(e) => {
-                log::error!("解析会话录制文件失败，路径: {:?}，原因: {e}", path);
-                self.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
-                cx.notify();
+        cx.spawn_in(window, async move |this, cx| {
+            let parse_path = path.clone();
+            let Some(parsed) = spawn_blocking_local(move || parse_cast_file(&parse_path)).await
+            else {
+                log::error!("解析会话录制文件的线程创建失败");
+                let _ = this.update(cx, |this, cx| {
+                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    cx.notify();
+                });
                 return;
-            }
-        };
+            };
+            let _ = this.update_in(cx, |this, window, cx| match parsed {
+                Ok((header, events)) => {
+                    this.finish_open_cast_player(path, title, header, events, window, cx);
+                }
+                Err(error) => {
+                    log::error!("解析会话录制文件失败，原因: {error}");
+                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
 
+    /// 录制文件解析完成后的建标签动作；必须在 UI 线程执行。
+    fn finish_open_cast_player(
+        &mut self,
+        path: PathBuf,
+        title: Option<String>,
+        header: transom_terminal::CastHeader,
+        events: Vec<transom_terminal::CastEvent>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -205,16 +244,38 @@ impl AppShell {
         path: &Path,
         cx: &mut Context<Self>,
     ) {
-        let (header, events) = match parse_cast_file(path) {
-            Ok(res) => res,
-            Err(e) => {
-                log::error!("解析回放脚本失败: {e}");
-                self.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
-                cx.notify();
+        let path = path.to_path_buf();
+        cx.spawn(async move |this, cx| {
+            let parse_path = path.clone();
+            let Some(parsed) = spawn_blocking_local(move || parse_cast_file(&parse_path)).await
+            else {
+                log::error!("解析回放脚本的线程创建失败");
+                let _ = this.update(cx, |this, cx| {
+                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    cx.notify();
+                });
                 return;
-            }
-        };
+            };
+            let _ = this.update(cx, |this, cx| match parsed {
+                Ok((header, events)) => this.execute_replay_events(tab_id, header, events, cx),
+                Err(error) => {
+                    log::error!("解析回放脚本失败: {error}");
+                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
 
+    /// 解析完成后的输入流调度；必须在 UI 线程执行。
+    fn execute_replay_events(
+        &mut self,
+        tab_id: TabId,
+        header: transom_terminal::CastHeader,
+        events: Vec<transom_terminal::CastEvent>,
+        cx: &mut Context<Self>,
+    ) {
         let steps = extract_replay_inputs(&events, 1.5);
         if steps.is_empty() {
             self.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());

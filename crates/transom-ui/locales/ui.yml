@@ -1260,6 +1260,9 @@ sftp:
     local_rename_failed:
       en: 'Failed to rename the local file: %{error}'
       zh-CN: '重命名本地文件失败: %{error}'
+    no_parent_dir:
+      en: The path has no parent directory
+      zh-CN: 路径没有父目录
     local_renamed:
       en: 'Renamed to: %{name}'
       zh-CN: '已重命名为: %{name}'
@@ -3186,6 +3189,9 @@ settings:
   font_read_failed:
     en: 'Failed to read font file: %{error}'
     zh-CN: '读取字体文件失败: %{error}'
+  font_thread_failed:
+    en: Failed to start the font reading thread
+    zh-CN: 读取字体文件的线程创建失败
   font_preset_default_mono:
     en: Default Mono (JetBrains Mono)
     zh-CN: 默认等宽 (JetBrains Mono)

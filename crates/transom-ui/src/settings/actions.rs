@@ -15,7 +15,7 @@ impl AppShell {
     /// 拖拽或显隐发生在设置弹窗之外，不能等待弹窗的保存按钮；这里只做保存与
     /// 错误上报，不重复解析字体等输入框状态，也不改变弹窗的取消语义。
     pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
+        if let Err(error) = self.persist_settings() {
             log::error!("保存布局设置失败，界面仍是新值但下次启动会回退，原因: {error}");
             self.set_error(localized_error(&error));
         }
@@ -255,7 +255,7 @@ impl AppShell {
         }
         // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
         self.modals.settings.window_appearance_snapshot = None;
-        if let Err(error) = self.services.settings_store.save(&self.settings) {
+        if let Err(error) = self.persist_settings() {
             log::error!("保存偏好设置失败，界面仍是新值但下次启动会回退，原因: {error}");
             self.set_error(localized_error(&error));
         } else {

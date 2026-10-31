@@ -304,9 +304,7 @@ impl AppShell {
                         this.settings.window.default_terminal = checked;
                         match transom_store::desktop::apply_default_terminal(checked) {
                             Ok(()) => {
-                                if let Err(error) =
-                                    this.services.settings_store.save(&this.settings)
-                                {
+                                if let Err(error) = this.persist_settings() {
                                     log::error!("默认终端注册已生效但偏好落盘失败，原因: {error}");
                                 }
                             }

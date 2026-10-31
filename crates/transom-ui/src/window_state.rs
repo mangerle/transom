@@ -71,6 +71,8 @@ impl AppShell {
             .collect();
         self.settings.window.previous_tab_groups =
             saved_groups.into_iter().map(|(_, group)| group).collect();
+        // 退出路径必须同步落盘：异步写盘线程虽然会在 Drop 时 join，但这里
+        // 是最后一次状态快照，直接写能保证进程退出前已经落定。
         if let Err(error) = self.services.settings_store.save(&self.settings) {
             // 这一处原先是静默丢弃的：保存失败等于下次启动窗口位置与标签组全丢，
             // 用户只会说"我上次开的那几个标签没了"，日志是唯一能回溯的现场。

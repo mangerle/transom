@@ -98,12 +98,14 @@ pub(crate) mod zmodem;
 
 mod modal_hub;
 mod overlays;
+mod persistence;
 mod secret_prefill;
 mod state;
 mod task_hub;
 mod types;
 
 pub(crate) use modal_hub::ModalHub;
+pub(crate) use persistence::Persistence;
 pub(crate) use secret_prefill::prefill_secret_fields;
 pub(crate) use state::AppState;
 pub(crate) use task_hub::TaskHub;
@@ -315,6 +317,10 @@ impl AppShell {
         let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;
         let monitor = crate::monitor::MonitorState::new(window, &settings.monitor, cx);
 
+        let persistence = Persistence::new(
+            services.session_store.clone(),
+            services.settings_store.clone(),
+        );
         let state = AppState {
             services,
             settings,
@@ -371,6 +377,7 @@ impl AppShell {
                 targets_scope: Vec::new(),
             },
             status: None,
+            persistence,
             pending_notices,
             immersive: false,
             sftp_panel_width_target: None,

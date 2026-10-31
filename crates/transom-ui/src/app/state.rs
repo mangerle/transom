@@ -14,6 +14,7 @@
 use super::broadcast::BroadcastBarState;
 use super::dialog_host::OpenModals;
 use super::modal_hub::ModalHub;
+use super::persistence::Persistence;
 use super::probe::ProbeBadge;
 use super::task_hub::TaskHub;
 use super::types::PendingNotices;
@@ -76,6 +77,8 @@ pub(crate) struct AppState {
     pub(in crate::app) broadcast: BroadcastBarState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
     pub(in crate::app) status: Option<String>,
+    /// 会话目录与设置的覆盖式异步写盘通道。
+    pub(in crate::app) persistence: Persistence,
     /// 应用级错误通知的待发队列：写入与渲染解耦，逐帧统一投递。
     pub(in crate::app) pending_notices: PendingNotices,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
@@ -117,6 +120,13 @@ impl AppState {
     /// 版本号只在保存成功后推进：失败时侧栏缓存不应失效，避免一次失败的
     /// 写盘让下一次渲染做无意义的全量行重建。
     pub(crate) fn persist_catalog(&mut self) -> bool {
+        // 内存态先推进版本：侧栏缓存需要在本次修改后立即失效，不能等磁盘。
+        let catalog = self.catalog.clone();
+        if self.persistence.enqueue_catalog(catalog) {
+            self.catalog_revision = self.catalog_revision.wrapping_add(1);
+            return true;
+        }
+        // 写盘线程不可用（启动失败或已停机）时退回同步写，避免静默丢数据。
         match self.services.session_store.save(&self.catalog) {
             Ok(()) => {
                 self.catalog_revision = self.catalog_revision.wrapping_add(1);
@@ -127,5 +137,16 @@ impl AppState {
                 false
             }
         }
+    }
+
+    /// 设置快照入队异步落盘。
+    ///
+    /// 高频开关（监控板块折叠、窗口外观等）走这条路径，UI 不做同步 `fsync`；
+    /// 写盘线程不可用时退回同步写并把错误交给调用方。
+    pub(crate) fn persist_settings(&self) -> Result<(), transom_core::AppError> {
+        if self.persistence.enqueue_settings(self.settings.clone()) {
+            return Ok(());
+        }
+        self.persist_settings()
     }
 }
