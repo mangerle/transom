@@ -227,14 +227,13 @@ impl AppShell {
                 h_flex()
                     .gap_2()
                     .justify_end()
-                    .child(
-                        Button::new("identity-cancel")
-                            .ghost()
-                            .label(rust_i18n::t!("common.cancel").to_string())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.cancel_identity_edit(cx);
-                            })),
-                    )
+                    .child(crate::widgets::dialog_cancel_button(
+                        "identity-cancel",
+                        rust_i18n::t!("common.cancel").to_string(),
+                        cx.listener(|this, _, _, cx| {
+                            this.cancel_identity_edit(cx);
+                        }),
+                    ))
                     .child(
                         Button::new("identity-save")
                             .primary()

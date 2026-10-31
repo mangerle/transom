@@ -149,33 +149,33 @@ fn status_item_context_menu(
 ) -> PopupMenu {
     let app_hide = app.clone();
     let app_restore = app.clone();
-    menu.item(
-        PopupMenuItem::new(rust_i18n::t!("status.hide_item").to_string())
-            .icon(IconName::EyeOff)
-            .on_click(move |_, _, cx| {
-                app_hide.update(cx, |this, cx| this.hide_status_item(id, cx));
-            }),
-    )
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("status.hide_item").to_string(),
+        IconName::EyeOff,
+        move |_, _, cx| {
+            app_hide.update(cx, |this, cx| this.hide_status_item(id, cx));
+        },
+    ))
     .item(PopupMenuItem::separator())
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("activity.restore_default").to_string())
-            .icon(IconName::RotateCcw)
-            .on_click(move |_, _, cx| {
-                app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
-            }),
-    )
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("activity.restore_default").to_string(),
+        IconName::RotateCcw,
+        move |_, _, cx| {
+            app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
+        },
+    ))
 }
 
 /// 空白区兜底菜单：状态栏没有可隐藏的具体条目，只保留整条栏共有的动作。
 pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu {
     let app_restore = app.clone();
-    menu.item(
-        PopupMenuItem::new(rust_i18n::t!("activity.restore_default").to_string())
-            .icon(IconName::RotateCcw)
-            .on_click(move |_, _, cx| {
-                app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
-            }),
-    )
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("activity.restore_default").to_string(),
+        IconName::RotateCcw,
+        move |_, _, cx| {
+            app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
+        },
+    ))
 }
 
 impl AppShell {

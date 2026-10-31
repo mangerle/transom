@@ -144,17 +144,13 @@ impl AppShell {
 
         let footer = h_flex()
             .gap_2()
-            .child(
-                Button::new("editor-goto-cancel")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.cancel_editor_goto_line(window, cx);
-                        },
-                    )),
-            )
+            .child(crate::widgets::dialog_cancel_button(
+                "editor-goto-cancel",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                    this.cancel_editor_goto_line(window, cx);
+                }),
+            ))
             .child(
                 Button::new("editor-goto-confirm")
                     .primary()

@@ -169,19 +169,15 @@ impl AppShell {
 
         let footer = h_flex()
             .gap_2()
-            .child(
-                Button::new("cancel-sftp-chmod")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.sftp_modals.chmod = None;
-                            this.focus_active_sftp_panel(window, cx);
-                            cx.notify();
-                        },
-                    )),
-            )
+            .child(crate::widgets::dialog_cancel_button(
+                "cancel-sftp-chmod",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                    this.sftp_modals.chmod = None;
+                    this.focus_active_sftp_panel(window, cx);
+                    cx.notify();
+                }),
+            ))
             .child(
                 Button::new("save-sftp-chmod")
                     .primary()

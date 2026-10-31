@@ -8,7 +8,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
@@ -70,36 +70,36 @@ impl AppShell {
                     rust_i18n::t!("recorder.start_btn").to_string()
                 };
 
-                let mut menu = menu.item(
-                    PopupMenuItem::new(toggle_label)
-                        .icon(if active_is_recording {
-                            IconName::Square
-                        } else {
-                            IconName::Disc
-                        })
-                        .on_click({
+                let mut menu = menu.item(crate::widgets::menu_item(
+                    toggle_label,
+                    if active_is_recording {
+                        IconName::Square
+                    } else {
+                        IconName::Disc
+                    },
+                    {
+                        let app = app.clone();
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.toggle_recording_for_active_tab(window, cx);
+                            });
+                        }
+                    },
+                ));
+
+                if let Some(tab_id) = active_tab_id {
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("recorder.replay_menu").to_string(),
+                        IconName::Play,
+                        {
                             let app = app.clone();
                             move |_, window, cx| {
                                 app.update(cx, |this, cx| {
-                                    this.toggle_recording_for_active_tab(window, cx);
+                                    this.open_replay_modal(tab_id, window, cx);
                                 });
                             }
-                        }),
-                );
-
-                if let Some(tab_id) = active_tab_id {
-                    menu = menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("recorder.replay_menu").to_string())
-                            .icon(IconName::Play)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_replay_modal(tab_id, window, cx);
-                                    });
-                                }
-                            }),
-                    );
+                        },
+                    ));
                 }
 
                 menu
@@ -315,18 +315,14 @@ impl AppShell {
         let footer = h_flex()
             .justify_between()
             .items_center()
-            .child(
-                Button::new("cancel-replay-modal")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            this.modals.replay = None;
-                            cx.notify();
-                        },
-                    )),
-            )
+            .child(crate::widgets::dialog_cancel_button(
+                "cancel-replay-modal",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.modals.replay = None;
+                    cx.notify();
+                }),
+            ))
             .child(
                 h_flex()
                     .gap_2()

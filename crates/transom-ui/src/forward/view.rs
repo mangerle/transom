@@ -396,15 +396,13 @@ impl AppShell {
 
         let footer = h_flex()
             .gap_2()
-            .child(
-                Button::new("cancel-forward-confirm")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.cancel_forward_confirm(cx),
-                    )),
-            )
+            .child(crate::widgets::dialog_cancel_button(
+                "cancel-forward-confirm",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.cancel_forward_confirm(cx)
+                }),
+            ))
             .child(
                 Button::new("accept-forward-confirm")
                     .danger()

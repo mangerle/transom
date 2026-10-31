@@ -236,18 +236,14 @@ impl AppShell {
             h_flex()
                 .gap_2()
                 .justify_end()
-                .child(
-                    Button::new("cancel-auth")
-                        .ghost()
-                        .label(rust_i18n::t!("common.cancel").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, _: &ClickEvent, _, cx| {
-                                this.cancel_auth_prompt();
-                                cx.notify();
-                            },
-                        )),
-                )
+                .child(crate::widgets::dialog_cancel_button(
+                    "cancel-auth",
+                    rust_i18n::t!("common.cancel").to_string(),
+                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                        this.cancel_auth_prompt();
+                        cx.notify();
+                    }),
+                ))
                 .child(
                     Button::new("submit-auth")
                         .primary()

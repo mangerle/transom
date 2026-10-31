@@ -295,13 +295,13 @@ fn build_new_session_menu(
     let mut menu = menu
         .scrollable(true)
         .max_h(px(460.0))
-        .item(
-            PopupMenuItem::new(rust_i18n::t!("app.new_local").to_string())
-                .icon(IconName::Terminal)
-                .on_click(move |_, window, cx| {
-                    local_app.update(cx, |this, cx| this.open_local_terminal(window, cx));
-                }),
-        )
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("app.new_local").to_string(),
+            IconName::Terminal,
+            move |_, window, cx| {
+                local_app.update(cx, |this, cx| this.open_local_terminal(window, cx));
+            },
+        ))
         .item(PopupMenuItem::separator());
     for entry in &data.root {
         menu = menu.item(session_menu_item(entry, app));
@@ -323,28 +323,27 @@ fn build_new_session_menu(
             menu.item(PopupMenuItem::submenu(folder.label.clone(), submenu).icon(IconName::Folder));
     }
     let tree_app = app.clone();
-    menu.item(PopupMenuItem::separator()).item(
-        PopupMenuItem::new(rust_i18n::t!("vertical_tabs.open_session_tree").to_string())
-            .icon(IconName::Server)
-            .on_click(move |_, _, cx| {
+    menu.item(PopupMenuItem::separator())
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("vertical_tabs.open_session_tree").to_string(),
+            IconName::Server,
+            move |_, _, cx| {
                 tree_app.update(cx, |this, cx| {
                     this.sidebar.visible = true;
                     this.vertical_tabs_open = false;
                     cx.notify();
                 });
-            }),
-    )
+            },
+        ))
 }
 
 /// 单个会话的菜单项：选中后直接发起连接。
 fn session_menu_item(entry: &NewSessionEntry, app: &Entity<AppShell>) -> PopupMenuItem {
     let app = app.clone();
     let session_id = entry.session_id;
-    PopupMenuItem::new(entry.label.clone())
-        .icon(entry.icon)
-        .on_click(move |_, window, cx| {
-            app.update(cx, |this, cx| this.connect_session(session_id, window, cx));
-        })
+    crate::widgets::menu_item(entry.label.clone(), entry.icon, move |_, window, cx| {
+        app.update(cx, |this, cx| this.connect_session(session_id, window, cx));
+    })
 }
 
 /// 大小写不敏感的包含匹配；查询词已由调用方转小写。

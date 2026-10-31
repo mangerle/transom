@@ -51,12 +51,10 @@ pub(super) fn render_jump_section(
                             let dropdown_app = app.clone();
                             move |menu, _window, _cx| {
                                 let app = dropdown_app.clone();
-                                let mut menu = menu.item(
-                                    PopupMenuItem::new(
-                                        rust_i18n::t!("form.proxy_jump_none").to_string(),
-                                    )
-                                    .icon(IconName::Ban)
-                                    .on_click({
+                                let mut menu = menu.item(crate::widgets::menu_item(
+                                    rust_i18n::t!("form.proxy_jump_none").to_string(),
+                                    IconName::Ban,
+                                    {
                                         let app = app.clone();
                                         move |_, _, cx| {
                                             app.update(cx, |this, cx| {
@@ -66,8 +64,8 @@ pub(super) fn render_jump_section(
                                                 cx.notify();
                                             });
                                         }
-                                    }),
-                                );
+                                    },
+                                ));
                                 if !options.is_empty() {
                                     menu = menu.item(PopupMenuItem::separator());
                                 }
@@ -78,18 +76,18 @@ pub(super) fn render_jump_section(
                                         option.name, option.host, option.port
                                     );
                                     let app = app.clone();
-                                    menu = menu.item(
-                                        PopupMenuItem::new(label).icon(IconName::Route).on_click(
-                                            move |_, _, cx| {
-                                                app.update(cx, |this, cx| {
-                                                    if let Some(form) = this.modals.form.as_mut() {
-                                                        form.jump_choice = Some(id);
-                                                    }
-                                                    cx.notify();
-                                                });
-                                            },
-                                        ),
-                                    );
+                                    menu = menu.item(crate::widgets::menu_item(
+                                        label,
+                                        IconName::Route,
+                                        move |_, _, cx| {
+                                            app.update(cx, |this, cx| {
+                                                if let Some(form) = this.modals.form.as_mut() {
+                                                    form.jump_choice = Some(id);
+                                                }
+                                                cx.notify();
+                                            });
+                                        },
+                                    ));
                                 }
                                 menu
                             }

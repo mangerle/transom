@@ -202,18 +202,14 @@ impl AppShell {
 
         let footer = h_flex()
             .gap_2()
-            .child(
-                Button::new("cancel-batch-edit")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            this.modals.batch_edit = None;
-                            cx.notify();
-                        },
-                    )),
-            )
+            .child(crate::widgets::dialog_cancel_button(
+                "cancel-batch-edit",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.modals.batch_edit = None;
+                    cx.notify();
+                }),
+            ))
             .child(
                 Button::new("apply-batch-edit")
                     .primary()

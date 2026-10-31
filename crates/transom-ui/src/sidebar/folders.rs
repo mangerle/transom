@@ -348,18 +348,14 @@ impl AppShell {
 
         let footer = h_flex()
             .gap_2()
-            .child(
-                Button::new("cancel-folder")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            this.modals.folder_form = None;
-                            cx.notify();
-                        },
-                    )),
-            )
+            .child(crate::widgets::dialog_cancel_button(
+                "cancel-folder",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.modals.folder_form = None;
+                    cx.notify();
+                }),
+            ))
             .child(
                 Button::new("save-folder")
                     .primary()

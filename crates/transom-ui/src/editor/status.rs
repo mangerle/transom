@@ -19,7 +19,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{EditorState, RopeExt};
-use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
@@ -176,37 +176,37 @@ fn render_panel_actions(
             if can_diff {
                 let app = app.clone();
                 let editor = menu_editor.clone();
-                menu = menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("editor.action_compare").to_string())
-                        .icon(IconName::FileDiff)
-                        .on_click(move |_, _, cx| {
-                            app.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
-                        }),
-                );
+                menu = menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("editor.action_compare").to_string(),
+                    IconName::FileDiff,
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
+                    },
+                ));
             }
             if can_local {
                 let app = app.clone();
                 let editor = menu_editor.clone();
-                menu = menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("editor.action_compare_local").to_string())
-                        .icon(IconName::FileDiff)
-                        .on_click(move |_, _, cx| {
-                            app.update(cx, |this, cx| {
-                                this.open_editor_local_diff(&editor, cx);
-                            });
-                        }),
-                );
+                menu = menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("editor.action_compare_local").to_string(),
+                    IconName::FileDiff,
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.open_editor_local_diff(&editor, cx);
+                        });
+                    },
+                ));
             }
             if can_revert {
                 let app = app.clone();
                 let editor = menu_editor.clone();
-                menu = menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("editor.action_revert").to_string())
-                        .icon(IconName::RotateCcw)
-                        .on_click(move |_, _, cx| {
-                            app.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
-                        }),
-                );
+                menu = menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("editor.action_revert").to_string(),
+                    IconName::RotateCcw,
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
+                    },
+                ));
             }
             menu
         });

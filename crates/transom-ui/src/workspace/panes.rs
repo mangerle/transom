@@ -188,59 +188,55 @@ impl AppShell {
         )
         .context_menu(move |menu, _window, _cx| {
             let app = app_entity.clone();
-            menu.item(
-                PopupMenuItem::new(rust_i18n::t!("menu.split_right").to_string())
-                    .icon(IconName::Columns2)
-                    .on_click({
-                        let app = app.clone();
-                        move |_, window, cx| {
-                            app.update(cx, |this, cx| {
-                                this.activate_tab(tab_id, window, cx);
-                                this.split_active_pane(SplitAxis::Horizontal, window, cx);
-                            });
-                        }
-                    }),
-            )
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("menu.split_down").to_string())
-                    .icon(IconName::Rows2)
-                    .on_click({
-                        let app = app.clone();
-                        move |_, window, cx| {
-                            app.update(cx, |this, cx| {
-                                this.activate_tab(tab_id, window, cx);
-                                this.split_active_pane(SplitAxis::Vertical, window, cx);
-                            });
-                        }
-                    }),
-            )
+            menu.item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.split_right").to_string(),
+                IconName::Columns2,
+                {
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.activate_tab(tab_id, window, cx);
+                            this.split_active_pane(SplitAxis::Horizontal, window, cx);
+                        });
+                    }
+                },
+            ))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.split_down").to_string(),
+                IconName::Rows2,
+                {
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.activate_tab(tab_id, window, cx);
+                            this.split_active_pane(SplitAxis::Vertical, window, cx);
+                        });
+                    }
+                },
+            ))
             .item(PopupMenuItem::separator())
-            .item(
-                PopupMenuItem::new(zoom_label.clone())
-                    .icon(zoom_icon)
-                    .on_click({
-                        let app = app.clone();
-                        move |_, window, cx| {
-                            app.update(cx, |this, cx| {
-                                this.activate_tab(tab_id, window, cx);
-                                this.toggle_zoom_pane(tab_id, cx);
-                            });
-                        }
-                    }),
-            )
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("menu.detach_pane").to_string())
-                    .icon(IconName::ArrowUpRight)
-                    .on_click({
-                        let app = app.clone();
-                        move |_, window, cx| {
-                            app.update(cx, |this, cx| {
-                                this.activate_tab(tab_id, window, cx);
-                                this.detach_pane_to_tab(tab_id, window, cx);
-                            });
-                        }
-                    }),
-            )
+            .item(crate::widgets::menu_item(zoom_label.clone(), zoom_icon, {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.activate_tab(tab_id, window, cx);
+                        this.toggle_zoom_pane(tab_id, cx);
+                    });
+                }
+            }))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.detach_pane").to_string(),
+                IconName::ArrowUpRight,
+                {
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.activate_tab(tab_id, window, cx);
+                            this.detach_pane_to_tab(tab_id, window, cx);
+                        });
+                    }
+                },
+            ))
         });
 
         let body = self.render_pane_body(tab_id, window, cx, p);

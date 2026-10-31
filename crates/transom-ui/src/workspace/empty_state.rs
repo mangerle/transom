@@ -244,25 +244,25 @@ impl AppShell {
             move |menu, _window, _cx| {
                 let app_connect = app.clone();
                 let app_remove = app.clone();
-                menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("menu.connect").to_string())
-                        .icon(IconName::Terminal)
-                        .on_click(move |_, window, cx| {
-                            app_connect.update(cx, |this, cx| {
-                                this.connect_session(session_id, window, cx);
-                            });
-                        }),
-                )
+                menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("menu.connect").to_string(),
+                    IconName::Terminal,
+                    move |_, window, cx| {
+                        app_connect.update(cx, |this, cx| {
+                            this.connect_session(session_id, window, cx);
+                        });
+                    },
+                ))
                 .item(PopupMenuItem::separator())
-                .item(
-                    PopupMenuItem::new(rust_i18n::t!("app.remove_from_recent").to_string())
-                        .icon(IconName::X)
-                        .on_click(move |_, _window, cx| {
-                            app_remove.update(cx, |this, cx| {
-                                this.remove_recent_session(session_id, cx);
-                            });
-                        }),
-                )
+                .item(crate::widgets::menu_item(
+                    rust_i18n::t!("app.remove_from_recent").to_string(),
+                    IconName::X,
+                    move |_, _window, cx| {
+                        app_remove.update(cx, |this, cx| {
+                            this.remove_recent_session(session_id, cx);
+                        });
+                    },
+                ))
             }
         });
 

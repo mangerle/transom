@@ -94,18 +94,20 @@ pub(super) fn render_pane_badge(
                     );
                 }
                 if zoomed {
-                    menu = menu.item(PopupMenuItem::separator()).item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.restore_panes").to_string())
-                            .icon(IconName::Minimize2)
-                            .on_click({
+                    menu = menu
+                        .item(PopupMenuItem::separator())
+                        .item(crate::widgets::menu_item(
+                            rust_i18n::t!("menu.restore_panes").to_string(),
+                            IconName::Minimize2,
+                            {
                                 let app = app_entity.clone();
                                 move |_, _window, cx| {
                                     app.update(cx, |this, cx| {
                                         this.toggle_zoom_pane(active_pane, cx)
                                     });
                                 }
-                            }),
-                    );
+                            },
+                        ));
                 }
                 menu
             }
@@ -133,24 +135,24 @@ pub(super) fn render_tab_close_button(
             .dropdown_menu(move |menu, _window, _cx| {
                 let close_current = menu_app.clone();
                 let close_all = menu_app.clone();
-                menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("menu.close_tab").to_string())
-                        .icon(IconName::X)
-                        .on_click(move |_, window, cx| {
-                            close_current.update(cx, |this, cx| {
-                                this.close_group(group_id, window, cx);
-                            });
-                        }),
-                )
-                .item(
-                    PopupMenuItem::new(rust_i18n::t!("menu.close_tiling_group").to_string())
-                        .icon(IconName::Trash)
-                        .on_click(move |_, window, cx| {
-                            close_all.update(cx, |this, cx| {
-                                this.close_tiling_group(tiling_id, window, cx);
-                            });
-                        }),
-                )
+                menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("menu.close_tab").to_string(),
+                    IconName::X,
+                    move |_, window, cx| {
+                        close_current.update(cx, |this, cx| {
+                            this.close_group(group_id, window, cx);
+                        });
+                    },
+                ))
+                .item(crate::widgets::menu_item(
+                    rust_i18n::t!("menu.close_tiling_group").to_string(),
+                    IconName::Trash,
+                    move |_, window, cx| {
+                        close_all.update(cx, |this, cx| {
+                            this.close_tiling_group(tiling_id, window, cx);
+                        });
+                    },
+                ))
             })
             .into_any_element()
     } else {

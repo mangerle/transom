@@ -61,55 +61,55 @@ impl AppShell {
                 let app_entity = app_entity.clone();
                 move |menu, _window, _cx| {
                     let app = app_entity.clone();
-                    menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.new_session_here").to_string())
-                            .icon(IconName::Plus)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_new_session_in_folder(folder_id, window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.new_folder").to_string())
-                            .icon(IconName::FolderPlus)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_new_folder(Some(folder_id), window, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.rename").to_string())
-                            .icon(IconName::FolderPen)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_rename_folder(folder_id, window, cx);
-                                    });
-                                }
-                            }),
-                    )
+                    menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("menu.new_session_here").to_string(),
+                        IconName::Plus,
+                        {
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.open_new_session_in_folder(folder_id, window, cx);
+                                });
+                            }
+                        },
+                    ))
+                    .item(crate::widgets::menu_item(
+                        rust_i18n::t!("menu.new_folder").to_string(),
+                        IconName::FolderPlus,
+                        {
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.open_new_folder(Some(folder_id), window, cx);
+                                });
+                            }
+                        },
+                    ))
+                    .item(crate::widgets::menu_item(
+                        rust_i18n::t!("menu.rename").to_string(),
+                        IconName::FolderPen,
+                        {
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.open_rename_folder(folder_id, window, cx);
+                                });
+                            }
+                        },
+                    ))
                     .item(PopupMenuItem::separator())
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.delete_folder").to_string())
-                            .icon(IconName::Trash)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.delete_folder(folder_id, cx);
-                                    });
-                                }
-                            }),
-                    )
+                    .item(crate::widgets::menu_item(
+                        rust_i18n::t!("menu.delete_folder").to_string(),
+                        IconName::Trash,
+                        {
+                            let app = app.clone();
+                            move |_, _, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.delete_folder(folder_id, cx);
+                                });
+                            }
+                        },
+                    ))
                 }
             });
         // `drag_over` 闭包要求 `'static`，先取成局部颜色再捕获。

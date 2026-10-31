@@ -7,7 +7,7 @@
 
 use crate::app::AppShell;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
+use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::TabId;
@@ -33,30 +33,30 @@ pub(super) fn build_local_context_menu(
 
     if is_parent_entry {
         return menu
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
-                    .icon(IconName::ArrowUp)
-                    .on_click({
-                        let app = app_entity.clone();
-                        move |_, window, cx| {
-                            app.update(cx, |this, cx| {
-                                this.sftp_local_go_up(tab_id, window, cx);
-                            });
-                        }
-                    }),
-            )
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
-                    .icon(IconName::RefreshCw)
-                    .on_click({
-                        let app = app_entity;
-                        move |_, _, cx| {
-                            app.update(cx, |this, cx| {
-                                this.sftp_local_refresh(tab_id, cx);
-                            });
-                        }
-                    }),
-            );
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("sftp.menu.go_up").to_string(),
+                IconName::ArrowUp,
+                {
+                    let app = app_entity.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.sftp_local_go_up(tab_id, window, cx);
+                        });
+                    }
+                },
+            ))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("sftp.refresh").to_string(),
+                IconName::RefreshCw,
+                {
+                    let app = app_entity;
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.sftp_local_refresh(tab_id, cx);
+                        });
+                    }
+                },
+            ));
     }
 
     let p_up = entry_path.clone();
@@ -72,234 +72,226 @@ pub(super) fn build_local_context_menu(
     let mut menu = menu;
 
     if is_file {
-        menu = menu.item(
-            PopupMenuItem::new(rust_i18n::t!("common.edit").to_string())
-                .icon(IconName::FilePen)
-                .on_click({
-                    let app = app_entity.clone();
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            this.sftp_edit_local_file(tab_id, p_edit.clone(), cx);
-                        });
-                    }
-                }),
-        );
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("common.edit").to_string(),
+            IconName::FilePen,
+            {
+                let app = app_entity.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_edit_local_file(tab_id, p_edit.clone(), cx);
+                    });
+                }
+            },
+        ));
     }
 
     if remote_available {
-        menu = menu.item(
-            PopupMenuItem::new(rust_i18n::t!("sftp.upload").to_string())
-                .icon(IconName::Upload)
-                .on_click({
-                    let app = app_entity.clone();
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            if let Some(panel) =
-                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                            {
-                                if panel.local.selection.contains(&p_up) {
-                                    panel.set_local_primary(p_up.clone());
-                                } else {
-                                    panel.select_local(p_up.clone());
-                                }
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.upload").to_string(),
+            IconName::Upload,
+            {
+                let app = app_entity.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                        {
+                            if panel.local.selection.contains(&p_up) {
+                                panel.set_local_primary(p_up.clone());
+                            } else {
+                                panel.select_local(p_up.clone());
                             }
-                            this.sftp_queue_upload(tab_id, cx);
-                        });
-                    }
-                }),
-        );
+                        }
+                        this.sftp_queue_upload(tab_id, cx);
+                    });
+                }
+            },
+        ));
     }
 
     menu = menu
-        .item(
-            PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_abs_path").to_string())
-                .icon(IconName::Copy)
-                .on_click({
-                    let app = app_entity.clone();
-                    move |_, _, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(
-                            p_cp.display().to_string(),
-                        ));
-                        app.update(cx, |this, cx| {
-                            if let Some(panel) =
-                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                            {
-                                panel.set_status(
-                                    rust_i18n::t!(
-                                        "sftp.menu.local_path_copied",
-                                        path = p_cp.display()
-                                    )
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.copy_abs_path").to_string(),
+            IconName::Copy,
+            {
+                let app = app_entity.clone();
+                move |_, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(p_cp.display().to_string()));
+                    app.update(cx, |this, cx| {
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                        {
+                            panel.set_status(
+                                rust_i18n::t!("sftp.menu.local_path_copied", path = p_cp.display())
                                     .to_string(),
-                                );
-                            }
-                            cx.notify();
-                        });
-                    }
-                }),
-        )
-        .item(
-            PopupMenuItem::new(rust_i18n::t!("sftp.menu.create_symlink").to_string())
-                .icon(IconName::Link2)
-                .on_click({
-                    let app = app_entity.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            if let Some(panel) =
-                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                            {
-                                panel.select_local(p_sym.clone());
-                            }
-                            this.sftp_open_local_symlink_modal(tab_id, window, cx);
-                        });
-                    }
-                }),
-        )
-        .item(
-            PopupMenuItem::new(rust_i18n::t!("sftp.menu.properties").to_string())
-                .icon(IconName::Info)
-                .on_click({
-                    let app = app_entity.clone();
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            this.sftp_show_local_properties(tab_id, p_prop.clone(), cx);
-                        });
-                    }
-                }),
-        );
+                            );
+                        }
+                        cx.notify();
+                    });
+                }
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.create_symlink").to_string(),
+            IconName::Link2,
+            {
+                let app = app_entity.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                        {
+                            panel.select_local(p_sym.clone());
+                        }
+                        this.sftp_open_local_symlink_modal(tab_id, window, cx);
+                    });
+                }
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.properties").to_string(),
+            IconName::Info,
+            {
+                let app = app_entity.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        this.sftp_show_local_properties(tab_id, p_prop.clone(), cx);
+                    });
+                }
+            },
+        ));
 
     // 执行位是 Unix 语义：Windows 下整个菜单项不出现，而不是点击后报"不支持"。
     #[cfg(unix)]
     {
-        menu = menu.item(
-            PopupMenuItem::new(rust_i18n::t!("sftp.menu.grant_exec").to_string())
-                .icon(IconName::Terminal)
-                .on_click({
-                    let app = app_entity.clone();
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            if let Some(panel) =
-                                this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                            {
-                                if panel.local.selection.contains(&p_exec) {
-                                    panel.set_local_primary(p_exec.clone());
-                                } else {
-                                    panel.select_local(p_exec.clone());
-                                }
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.grant_exec").to_string(),
+            IconName::Terminal,
+            {
+                let app = app_entity.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        if let Some(panel) =
+                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                        {
+                            if panel.local.selection.contains(&p_exec) {
+                                panel.set_local_primary(p_exec.clone());
+                            } else {
+                                panel.select_local(p_exec.clone());
                             }
-                            this.sftp_grant_local_exec(tab_id, cx);
-                        });
-                    }
-                }),
-        );
+                        }
+                        this.sftp_grant_local_exec(tab_id, cx);
+                    });
+                }
+            },
+        ));
     }
 
-    menu.item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
-            .icon(IconName::FolderPlus)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_open_local_mkdir_modal(tab_id, window, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_file").to_string())
-            .icon(IconName::FilePlus)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_open_local_new_file_modal(tab_id, window, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.rename").to_string())
-            .icon(IconName::Pencil)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                        {
-                            panel.select_local(p_ren.clone());
-                        }
-                        this.sftp_open_local_rename_modal(tab_id, window, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.delete").to_string())
-            .icon(IconName::Trash)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, _, cx| {
-                    app.update(cx, |this, cx| {
-                        if let Some(panel) =
-                            this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
-                            && !panel.local.selection.contains(&p_del)
-                        {
-                            panel.select_local(p_del.clone());
-                        }
-                        this.sftp_local_delete_selection(tab_id, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.open_file_manager").to_string())
-            .icon(IconName::FolderOpen)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, _, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_open_local_file_manager(tab_id, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
-            .icon(IconName::RefreshCw)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, _, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_local_refresh(tab_id, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.copy_entries").to_string())
-            .icon(IconName::Copy)
-            .on_click({
-                let app = app_entity.clone();
-                move |_, _, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_copy_selection(tab_id, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.paste_here").to_string())
-            .icon(IconName::Clipboard)
-            .on_click({
-                let app = app_entity;
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_paste_clipboard(tab_id, window, cx);
-                    });
-                }
-            }),
-    )
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
+        IconName::FolderPlus,
+        {
+            let app = app_entity.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_open_local_mkdir_modal(tab_id, window, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.new_local_file").to_string(),
+        IconName::FilePlus,
+        {
+            let app = app_entity.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_open_local_new_file_modal(tab_id, window, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.rename").to_string(),
+        IconName::Pencil,
+        {
+            let app = app_entity.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+                        panel.select_local(p_ren.clone());
+                    }
+                    this.sftp_open_local_rename_modal(tab_id, window, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.delete").to_string(),
+        IconName::Trash,
+        {
+            let app = app_entity.clone();
+            move |_, _, cx| {
+                app.update(cx, |this, cx| {
+                    if let Some(panel) = this.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+                        && !panel.local.selection.contains(&p_del)
+                    {
+                        panel.select_local(p_del.clone());
+                    }
+                    this.sftp_local_delete_selection(tab_id, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.open_file_manager").to_string(),
+        IconName::FolderOpen,
+        {
+            let app = app_entity.clone();
+            move |_, _, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_open_local_file_manager(tab_id, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.refresh").to_string(),
+        IconName::RefreshCw,
+        {
+            let app = app_entity.clone();
+            move |_, _, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_local_refresh(tab_id, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.copy_entries").to_string(),
+        IconName::Copy,
+        {
+            let app = app_entity.clone();
+            move |_, _, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_copy_selection(tab_id, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.paste_here").to_string(),
+        IconName::Clipboard,
+        {
+            let app = app_entity;
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_paste_clipboard(tab_id, window, cx);
+                });
+            }
+        },
+    ))
 }
 
 /// 本地列空白区域的目录级右键菜单。
@@ -312,61 +304,61 @@ pub(super) fn build_local_blank_context_menu(
     app: Entity<AppShell>,
     tab_id: TabId,
 ) -> PopupMenu {
-    menu.item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.go_up").to_string())
-            .icon(IconName::ArrowUp)
-            .on_click({
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_local_go_up(tab_id, window, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.refresh").to_string())
-            .icon(IconName::RefreshCw)
-            .on_click({
-                let app = app.clone();
-                move |_, _, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_local_refresh(tab_id, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
-            .icon(IconName::FolderPlus)
-            .on_click({
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_open_local_mkdir_modal(tab_id, window, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.new_local_file").to_string())
-            .icon(IconName::FilePlus)
-            .on_click({
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.sftp_open_local_new_file_modal(tab_id, window, cx);
-                    });
-                }
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("sftp.menu.paste_here").to_string())
-            .icon(IconName::Clipboard)
-            .on_click(move |_, window, cx| {
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.go_up").to_string(),
+        IconName::ArrowUp,
+        {
+            let app = app.clone();
+            move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_paste_clipboard(tab_id, window, cx);
+                    this.sftp_local_go_up(tab_id, window, cx);
                 });
-            }),
-    )
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.refresh").to_string(),
+        IconName::RefreshCw,
+        {
+            let app = app.clone();
+            move |_, _, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_local_refresh(tab_id, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
+        IconName::FolderPlus,
+        {
+            let app = app.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_open_local_mkdir_modal(tab_id, window, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.new_local_file").to_string(),
+        IconName::FilePlus,
+        {
+            let app = app.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.sftp_open_local_new_file_modal(tab_id, window, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.paste_here").to_string(),
+        IconName::Clipboard,
+        move |_, window, cx| {
+            app.update(cx, |this, cx| {
+                this.sftp_paste_clipboard(tab_id, window, cx);
+            });
+        },
+    ))
 }

@@ -107,18 +107,14 @@ impl AppShell {
             }
         }
         footer = footer
-            .child(
-                Button::new("cancel-session")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            this.modals.form = None;
-                            cx.notify();
-                        },
-                    )),
-            )
+            .child(crate::widgets::dialog_cancel_button(
+                "cancel-session",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.modals.form = None;
+                    cx.notify();
+                }),
+            ))
             .child(
                 Button::new("save-session")
                     .primary()

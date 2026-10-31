@@ -8,7 +8,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::list::ListItem;
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -392,44 +392,42 @@ impl AppShell {
                     let safe_kill = menu_app.clone();
                     let force_kill = menu_app.clone();
                     let cmd_for_clipboard = command.clone();
-                    menu.item(
-                        PopupMenuItem::new(
-                            rust_i18n::t!("monitor.process_section.trace").to_string(),
-                        )
-                        .icon(IconName::Terminal)
-                        .on_click(move |_, _, cx| {
+                    menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("monitor.process_section.trace").to_string(),
+                        IconName::Terminal,
+                        move |_, _, cx| {
                             term.update(cx, |this, cx| {
                                 this.trace_process_in_terminal(pid, cx);
                             });
-                        }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.kill_term").to_string())
-                            .icon(IconName::CircleX)
-                            .on_click(move |_, _, cx| {
-                                safe_kill.update(cx, |this, cx| {
-                                    this.send_kill_process_safe(pid, false, cx);
-                                });
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.kill_kill").to_string())
-                            .icon(IconName::Ban)
-                            .on_click(move |_, _, cx| {
-                                force_kill.update(cx, |this, cx| {
-                                    this.send_kill_process_safe(pid, true, cx);
-                                });
-                            }),
-                    )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("monitor.copy_command").to_string())
-                            .icon(IconName::Copy)
-                            .on_click(move |_, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(
-                                    cmd_for_clipboard.clone(),
-                                ));
-                            }),
-                    )
+                        },
+                    ))
+                    .item(crate::widgets::menu_item(
+                        rust_i18n::t!("monitor.kill_term").to_string(),
+                        IconName::CircleX,
+                        move |_, _, cx| {
+                            safe_kill.update(cx, |this, cx| {
+                                this.send_kill_process_safe(pid, false, cx);
+                            });
+                        },
+                    ))
+                    .item(crate::widgets::menu_item(
+                        rust_i18n::t!("monitor.kill_kill").to_string(),
+                        IconName::Ban,
+                        move |_, _, cx| {
+                            force_kill.update(cx, |this, cx| {
+                                this.send_kill_process_safe(pid, true, cx);
+                            });
+                        },
+                    ))
+                    .item(crate::widgets::menu_item(
+                        rust_i18n::t!("monitor.copy_command").to_string(),
+                        IconName::Copy,
+                        move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                cmd_for_clipboard.clone(),
+                            ));
+                        },
+                    ))
                 }
             })
             .into_any_element()

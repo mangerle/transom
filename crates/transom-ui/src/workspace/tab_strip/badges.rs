@@ -207,18 +207,18 @@ pub(super) fn build_tiled_group_badge(
                             }
                         },
                     )
-                    .item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.untile").to_string())
-                            .icon(IconName::Minimize2)
-                            .on_click({
-                                let app = app_entity.clone();
-                                move |_, _window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.untile_tiling(tiling_id, cx);
-                                    });
-                                }
-                            }),
-                    )
+                    .item(crate::widgets::menu_item(
+                        rust_i18n::t!("menu.untile").to_string(),
+                        IconName::Minimize2,
+                        {
+                            let app = app_entity.clone();
+                            move |_, _window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.untile_tiling(tiling_id, cx);
+                                });
+                            }
+                        },
+                    ))
             }
         })
         .into_any_element()

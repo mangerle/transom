@@ -5,7 +5,6 @@ use crate::keymap;
 use crate::keymap::ShortcutCapture;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::dialog::{
     DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 };
@@ -137,18 +136,14 @@ impl AppShell {
             content = content.child(div().text_sm().text_color(p.danger).child(error));
         }
 
-        let footer = DialogFooter::new().child(
-            Button::new("cancel-shortcut-capture")
-                .ghost()
-                .label(rust_i18n::t!("common.cancel").to_string())
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    |this, _: &ClickEvent, _, cx| {
-                        this.shortcut_recording.capture = None;
-                        cx.notify();
-                    },
-                )),
-        );
+        let footer = DialogFooter::new().child(crate::widgets::dialog_cancel_button(
+            "cancel-shortcut-capture",
+            rust_i18n::t!("common.cancel").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                this.shortcut_recording.capture = None;
+                cx.notify();
+            }),
+        ));
 
         let panel = v_flex()
             .id("shortcut-capture-panel")

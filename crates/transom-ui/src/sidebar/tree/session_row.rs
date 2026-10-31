@@ -125,95 +125,94 @@ impl AppShell {
                         },
                     ));
                     if folder_id.is_some() {
-                        menu = menu.item(
-                            PopupMenuItem::new(rust_i18n::t!("menu.move_to_root").to_string())
-                                .icon(IconName::FolderTree)
-                                .on_click({
-                                    let app = app.clone();
-                                    move |_, _, cx| {
-                                        app.update(cx, |this, cx| {
-                                            this.handle_sidebar_drop(
-                                                SidebarDrag::Session(session_id),
-                                                SidebarTarget::Root,
-                                                cx,
-                                            );
-                                        });
-                                    }
-                                }),
-                        );
+                        menu = menu.item(crate::widgets::menu_item(
+                            rust_i18n::t!("menu.move_to_root").to_string(),
+                            IconName::FolderTree,
+                            {
+                                let app = app.clone();
+                                move |_, _, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.handle_sidebar_drop(
+                                            SidebarDrag::Session(session_id),
+                                            SidebarTarget::Root,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        ));
                     }
                     menu = menu
-                        .item(
-                            PopupMenuItem::new(rust_i18n::t!("menu.duplicate").to_string())
-                                .icon(IconName::Plus)
-                                .on_click({
-                                    let app = app.clone();
-                                    move |_, _, cx| {
-                                        app.update(cx, |this, cx| {
-                                            this.duplicate_session(session_id, cx);
-                                        });
-                                    }
-                                }),
-                        )
-                        .item(
-                            PopupMenuItem::new(rust_i18n::t!("menu.edit").to_string())
-                                .icon(IconName::Settings)
-                                .on_click({
-                                    let app = app.clone();
-                                    move |_, window, cx| {
-                                        app.update(cx, |this, cx| {
-                                            this.open_edit_session(session_id, window, cx);
-                                        });
-                                    }
-                                }),
-                        )
-                        .item(
-                            PopupMenuItem::new(rust_i18n::t!("audit_viewer.menu_item").to_string())
-                                .icon(IconName::FileText)
-                                .on_click({
-                                    let app = app.clone();
-                                    move |_, window, cx| {
-                                        app.update(cx, |this, cx| {
-                                            this.open_audit_viewer_for_session(
-                                                session_id, window, cx,
-                                            );
-                                        });
-                                    }
-                                }),
-                        );
+                        .item(crate::widgets::menu_item(
+                            rust_i18n::t!("menu.duplicate").to_string(),
+                            IconName::Plus,
+                            {
+                                let app = app.clone();
+                                move |_, _, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.duplicate_session(session_id, cx);
+                                    });
+                                }
+                            },
+                        ))
+                        .item(crate::widgets::menu_item(
+                            rust_i18n::t!("menu.edit").to_string(),
+                            IconName::Settings,
+                            {
+                                let app = app.clone();
+                                move |_, window, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.open_edit_session(session_id, window, cx);
+                                    });
+                                }
+                            },
+                        ))
+                        .item(crate::widgets::menu_item(
+                            rust_i18n::t!("audit_viewer.menu_item").to_string(),
+                            IconName::FileText,
+                            {
+                                let app = app.clone();
+                                move |_, window, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.open_audit_viewer_for_session(session_id, window, cx);
+                                    });
+                                }
+                            },
+                        ));
 
                     // 与标签栏同一口径：取不到地址（本地终端、串口）就不放这一项。
                     if let Some(host) = menu_host.clone() {
                         let copy_app = app.clone();
-                        menu = menu.item(
-                            PopupMenuItem::new(rust_i18n::t!("menu.copy_host").to_string())
-                                .icon(IconName::Copy)
-                                .on_click(move |_, _, cx| {
-                                    let text = host.clone();
-                                    cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                                    copy_app.update(cx, |this, cx| {
-                                        this.status = Some(
-                                            rust_i18n::t!("sidebar.host_copied", host = text)
-                                                .to_string(),
-                                        );
-                                        cx.notify();
-                                    });
-                                }),
-                        );
+                        menu = menu.item(crate::widgets::menu_item(
+                            rust_i18n::t!("menu.copy_host").to_string(),
+                            IconName::Copy,
+                            move |_, _, cx| {
+                                let text = host.clone();
+                                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                                copy_app.update(cx, |this, cx| {
+                                    this.status = Some(
+                                        rust_i18n::t!("sidebar.host_copied", host = text)
+                                            .to_string(),
+                                    );
+                                    cx.notify();
+                                });
+                            },
+                        ));
                     }
 
-                    menu.item(PopupMenuItem::separator()).item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.delete").to_string())
-                            .icon(IconName::Trash)
-                            .on_click({
+                    menu.item(PopupMenuItem::separator())
+                        .item(crate::widgets::menu_item(
+                            rust_i18n::t!("menu.delete").to_string(),
+                            IconName::Trash,
+                            {
                                 let app = app.clone();
                                 move |_, _, cx| {
                                     app.update(cx, |this, cx| {
                                         this.delete_session_by_id(session_id, cx);
                                     });
                                 }
-                            }),
-                    )
+                            },
+                        ))
                 }
             });
         // 行底取主题的列表令牌：常态是列表背景，选中与当前用列表激活色。
