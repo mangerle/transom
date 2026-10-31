@@ -42,7 +42,11 @@ impl SftpPanelView {
         });
     }
 
-    fn confirm_remote_delete(&mut self, target: SftpRemotePaneRef, cx: &mut Context<Self>) {
+    pub(crate) fn confirm_remote_delete(
+        &mut self,
+        target: SftpRemotePaneRef,
+        cx: &mut Context<Self>,
+    ) {
         let Some(pane) = self.state.remote_pane(target) else {
             return;
         };

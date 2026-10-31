@@ -4,9 +4,9 @@
 //! - 实现初衷：将传输队列中单个任务项的复杂状态机匹配、方向图标渲染与操作按钮（重试、暂停、恢复、置顶、取消）独立拆分；
 //! - 核心优势：降低主队列容器的圈复杂度，避免大 match 结构膨胀。
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{TransferKind, TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
@@ -26,7 +26,7 @@ pub(super) fn render_queue_task_row(
     task: &TransferTask,
     tab_id: TabId,
     p: &Palette,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<SftpPanelView>,
 ) -> AnyElement {
     let dir_tag = match task.direction {
         TransferDirection::Upload => rust_i18n::t!("sftp.queue.dir_upload").to_string(),
@@ -56,7 +56,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::Pause)
                         .tooltip(rust_i18n::t!("sftp.queue.pause_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_pause_task(tab_id, task_id, cx);
+                            this.pause_task(tab_id, task_id, cx);
                         })),
                 )
                 .child(
@@ -66,7 +66,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::X)
                         .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_cancel_task(tab_id, task_id, cx);
+                            this.cancel_task(tab_id, task_id, cx);
                         })),
                 );
         }
@@ -78,7 +78,7 @@ pub(super) fn render_queue_task_row(
                     .icon(IconName::X)
                     .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.sftp_cancel_task(tab_id, task_id, cx);
+                        this.cancel_task(tab_id, task_id, cx);
                     })),
             );
         }
@@ -91,7 +91,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::ArrowUpToLine)
                         .tooltip(rust_i18n::t!("sftp.queue.prioritize_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_prioritize_task(tab_id, task_id, cx);
+                            this.prioritize_task(tab_id, task_id, cx);
                         })),
                 )
                 .child(
@@ -101,7 +101,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::Play)
                         .tooltip(rust_i18n::t!("sftp.queue.resume_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_resume_task(tab_id, task_id, cx);
+                            this.resume_task(tab_id, task_id, cx);
                         })),
                 )
                 .child(
@@ -111,7 +111,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::X)
                         .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_cancel_task(tab_id, task_id, cx);
+                            this.cancel_task(tab_id, task_id, cx);
                         })),
                 );
         }
@@ -124,7 +124,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::ArrowUpToLine)
                         .tooltip(rust_i18n::t!("sftp.queue.prioritize_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_prioritize_task(tab_id, task_id, cx);
+                            this.prioritize_task(tab_id, task_id, cx);
                         })),
                 )
                 .child(
@@ -134,7 +134,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::X)
                         .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_cancel_task(tab_id, task_id, cx);
+                            this.cancel_task(tab_id, task_id, cx);
                         })),
                 );
         }
@@ -147,7 +147,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::RotateCw)
                         .tooltip(rust_i18n::t!("sftp.queue.retry_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_resume_task(tab_id, task_id, cx);
+                            this.resume_task(tab_id, task_id, cx);
                         })),
                 )
                 .child(
@@ -157,7 +157,7 @@ pub(super) fn render_queue_task_row(
                         .icon(IconName::X)
                         .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_cancel_task(tab_id, task_id, cx);
+                            this.cancel_task(tab_id, task_id, cx);
                         })),
                 );
         }
@@ -169,7 +169,7 @@ pub(super) fn render_queue_task_row(
                     .icon(IconName::Trash)
                     .tooltip(rust_i18n::t!("sftp.overlay_remove").to_string())
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.sftp_remove_task(tab_id, task_id, cx);
+                        this.remove_task(task_id, cx);
                     })),
             );
         }

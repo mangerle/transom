@@ -59,7 +59,7 @@ pub(crate) struct DiffConfirm {
 }
 
 /// 本地对比入口的校验结果。
-enum LocalDiffCheck {
+pub(crate) enum LocalDiffCheck {
     Ready(LocalDiffTarget),
     /// 本地终端没有远端文件：静默忽略。
     NotApplicable,
@@ -67,7 +67,7 @@ enum LocalDiffCheck {
     Rejected(String),
 }
 
-struct LocalDiffTarget {
+pub(crate) struct LocalDiffTarget {
     connection_id: ConnectionId,
     local_path: PathBuf,
     remote_path: String,
@@ -147,27 +147,18 @@ impl AppState {
         &self,
         tab_id: TabId,
         panel: &crate::sftp::SftpPanelState,
-        cx: &App,
     ) -> bool {
         matches!(
-            self.local_diff_check_with_panel(tab_id, panel, cx),
+            self.local_diff_check_with_panel(tab_id, panel),
             LocalDiffCheck::Ready(_)
         )
     }
 
     /// 校验"本地文件 → 远端同名文件"的对比前提；入口置灰与真正打开共用同一套口径。
-    fn local_diff_check(&self, tab_id: TabId, cx: &App) -> LocalDiffCheck {
-        let Some(view) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp_view()) else {
-            return LocalDiffCheck::NotApplicable;
-        };
-        self.local_diff_check_with_panel(tab_id, &view.read(cx).state, cx)
-    }
-
-    fn local_diff_check_with_panel(
+    pub(crate) fn local_diff_check_with_panel(
         &self,
         tab_id: TabId,
         panel: &crate::sftp::SftpPanelState,
-        _cx: &App,
     ) -> LocalDiffCheck {
         let Some(tab) = self.workspace.tab(tab_id) else {
             return LocalDiffCheck::NotApplicable;
@@ -223,22 +214,20 @@ impl AppState {
 }
 
 impl AppShell {
-    /// 本地栏对比入口是否可用：恰好选中一个本地文件，且远端当前目录有同名普通文件。
-    /// 从 SFTP 本地栏打开：选中本地文件，与远端当前目录的同名文件比对。
-    pub(crate) fn sftp_open_local_diff(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    /// 已通过校验的本地对比目标：创建对比面板并请求远端文本。
+    ///
+    /// 不读取实体：SFTP 实体在回调里完成校验后只把目标交回来。
+    pub(crate) fn open_local_diff_with_target(
+        &mut self,
+        tab_id: TabId,
+        target: LocalDiffTarget,
+        cx: &mut Context<Self>,
+    ) {
         let LocalDiffTarget {
             connection_id,
             local_path,
             remote_path,
-        } = match self.state.local_diff_check(tab_id, cx) {
-            LocalDiffCheck::Ready(target) => target,
-            LocalDiffCheck::NotApplicable => return,
-            LocalDiffCheck::Rejected(reason) => {
-                self.state.status = Some(reason);
-                cx.notify();
-                return;
-            }
-        };
+        } = target;
         let max_bytes = MAX_DIFF_BYTES;
         let op_id = TransferId::new();
         self.state.diff_viewer = Some(DiffViewerState::new(

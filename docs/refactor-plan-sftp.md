@@ -1,6 +1,6 @@
 # SFTP 面板实体化执行清单
 
-状态：执行中（方案 A，每窗格一个实体）。下方第 1 步已完成；第 2 步的容器与面板级交互已归实体，内层视图仍由外壳组合。
+状态：基本完成（方案 A，每窗格一个实体）。第 1、2 步完成；第 3、4 步的主体已迁入实体，剩余为对话框/事件边界。
 
 ## 一、为什么是每窗格实体
 
@@ -100,3 +100,17 @@ SFTP 状态挂在窗格上（`SessionPane.sftp: Option<SftpPanelState>`），随
 
 每个提交前均执行：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、
 `cargo check --workspace --all-targets`、`cargo test --workspace`，全部通过。
+
+## 七、第 2 步完成记录
+
+内层视图已整体迁入实体：本地栏、远端栏、工具栏、右键菜单、文件行交互、
+传输队列、并列远端折叠条、顶部标题栏与本地单栏面板全部改为
+`impl SftpPanelView` 或接收 `Context<SftpPanelView>` 的自由函数。面板内容
+组合（`render_panel_content`）直接在实体渲染入口执行，不再经外壳中转。
+
+-view 回调全部改为实体监听器；跨域动作（发命令、开编辑器/对比面板、装配
+  InputState/TextareaState、关闭面板、向工作区申请加宽）经 `with_shell_parts`
+  回交外壳，外壳方法只接收参数/快照，不读写实体。
+- 随之删除约一百个外壳薄委托方法；保留的 `impl AppShell` 仅剩事件回传
+  （`sftp_handlers`）、对话框提交/渲染（`modals/`、`commit`、`sync_modal`、
+  `search`/`sync`/`filter` 的提交动作）、面板创建与切换、列宽布局等边界。

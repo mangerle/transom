@@ -7,8 +7,8 @@
 //!   2. 挂载弹窗逻辑独立，便于统一维护已连接会话的动态筛选规则；
 //!   3. 折叠竖条保持 32px 统一视觉契约。
 
-use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::entity::SftpPanelView;
 use crate::sftp::normalize_remote_cwd;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -17,19 +17,26 @@ use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{Icon, Selectable, Sizable};
 use gpui_kit::*;
 use std::collections::HashSet;
-use transom_core::{Connection, ConnectionId, TabId};
+use transom_core::{Connection, ConnectionId};
 
-impl AppShell {
+type MountCandidate = (
+    ConnectionId,
+    String,
+    Option<gpui_kit::Entity<SftpPanelView>>,
+    Option<String>,
+);
+
+impl SftpPanelView {
     /// 渲染挂载并列远端按钮及其 Popover 菜单。
     pub(crate) fn render_side_remote_mount_button(
         &self,
-        tab_id: TabId,
-        panel: &crate::sftp::SftpPanelState,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let open = panel.mount_menu_open;
-        let mounted_conn_ids: Vec<ConnectionId> = panel
+        let tab_id = self.tab_id;
+        let open = self.state.mount_menu_open;
+        let mounted_conn_ids: Vec<ConnectionId> = self
+            .state
             .side_remotes
             .iter()
             .filter_map(|side| side.connection_id)
@@ -43,48 +50,51 @@ impl AppShell {
             .selected(open)
             .tooltip(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string());
 
-        // 收集当前标签页的连接与排除信息
-        let current_tab = self.state.workspace.tab(tab_id);
-        let current_conn_id = current_tab.and_then(|t| t.connection_id);
-        let current_session_id = current_tab.map(|t| t.session.id);
-        let is_local_only = panel.local.only;
-
-        let mut seen_sessions = HashSet::new();
-        // 如果当前标签页是远端会话（非纯本地模式），排除当前自身所属的会话
-        if !is_local_only && let Some(sid) = current_session_id {
-            seen_sessions.insert(sid);
-        }
-
-        // 收集已建立连接的其他远端标签页，并按会话去重与排除已挂载的会话
+        // 收集当前标签页的连接与排除信息。工作区快照从外壳读取，
+        // 其他标签的 SFTP 实体句柄随后再用实体上下文读取目录。
+        let current_conn_id = self.state.remote.connection_id;
+        let is_local_only = self.state.local.only;
+        let Some(tabs) = crate::sftp::entity::read_shell_parts(&self.app, cx, |shell| {
+            let current_tab = shell.state.workspace.tab(tab_id);
+            let current_conn_id = current_tab.and_then(|t| t.connection_id);
+            let current_session_id = current_tab.map(|t| t.session.id);
+            let mut seen_sessions = HashSet::new();
+            if !is_local_only && let Some(sid) = current_session_id {
+                seen_sessions.insert(sid);
+            }
+            let mut candidates: Vec<MountCandidate> = Vec::new();
+            for t in &shell.state.workspace.tabs {
+                if t.id == tab_id {
+                    continue;
+                }
+                let Some(conn_id) = t.connection_id else {
+                    continue;
+                };
+                if Some(conn_id) == current_conn_id {
+                    continue;
+                }
+                if mounted_conn_ids.contains(&conn_id) {
+                    continue;
+                }
+                if matches!(&t.session.connection, Connection::Local(_)) {
+                    continue;
+                }
+                if !seen_sessions.insert(t.session.id) {
+                    continue;
+                }
+                candidates.push((conn_id, t.display_name(), t.sftp_view(), t.cwd.clone()));
+            }
+            candidates
+        }) else {
+            return div().into_any_element();
+        };
+        let _ = current_conn_id;
         let mut active_candidates: Vec<(ConnectionId, String, String)> = Vec::new();
-        for t in &self.state.workspace.tabs {
-            if t.id == tab_id {
-                continue;
-            }
-            let Some(conn_id) = t.connection_id else {
-                continue;
-            };
-            if Some(conn_id) == current_conn_id {
-                continue;
-            }
-            if mounted_conn_ids.contains(&conn_id) {
-                continue;
-            }
-            // 本地终端会话不提供 SFTP 远端服务
-            if matches!(&t.session.connection, Connection::Local(_)) {
-                continue;
-            }
-            // 针对相同会话 ID 进行去重，避免同一会话打开多个终端标签时在列表中重复出现
-            if !seen_sessions.insert(t.session.id) {
-                continue;
-            }
-
-            let display_name = t.display_name();
-            let initial_path = t
-                .sftp_view()
+        for (conn_id, display_name, view, cwd) in tabs {
+            let initial_path = view
                 .map(|view| view.read(cx).remote.path.clone())
                 .filter(|p| !p.is_empty() && p != ".")
-                .or_else(|| t.cwd.as_deref().and_then(normalize_remote_cwd))
+                .or_else(|| cwd.as_deref().and_then(normalize_remote_cwd))
                 .unwrap_or_else(|| ".".to_string());
             active_candidates.push((conn_id, display_name, initial_path));
         }
@@ -99,11 +109,9 @@ impl AppShell {
         .open(open)
         .on_open_change(move |is_open, _window, cx| {
             let is_open = *is_open;
-            app_open.update(cx, |this, cx| {
-                if let Some(mut panel) = this.sftp_view_mut(tab_id, cx)
-                    && panel.mount_menu_open != is_open
-                {
-                    panel.mount_menu_open = is_open;
+            app_open.update(cx, |view, cx| {
+                if view.state.mount_menu_open != is_open {
+                    view.state.mount_menu_open = is_open;
                 }
                 cx.notify();
             });
@@ -163,8 +171,7 @@ impl AppShell {
                         })
                         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                             app.update(cx, |this, cx| {
-                                this.sftp_mount_side_remote(
-                                    tab_id,
+                                this.mount_side_remote(
                                     conn_id,
                                     title_str.clone(),
                                     path_str.clone(),
@@ -193,7 +200,6 @@ impl AppShell {
     /// 渲染本地文件列折叠后的 32px 竖条。
     pub(crate) fn render_sftp_local_collapsed_bar(
         &self,
-        tab_id: TabId,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -203,7 +209,7 @@ impl AppShell {
             .icon(IconName::PanelLeftOpen)
             .tooltip(rust_i18n::t!("sftp.sidebar.expand_local").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_toggle_local_collapse(tab_id, cx);
+                this.toggle_local_collapse(cx);
             }));
 
         v_flex()
@@ -232,7 +238,6 @@ impl AppShell {
     /// 渲染主远端列折叠后的 32px 紧凑竖条。
     pub(crate) fn render_sftp_remote_collapsed_bar(
         &self,
-        tab_id: TabId,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -242,7 +247,7 @@ impl AppShell {
             .icon(IconName::PanelLeftOpen)
             .tooltip(rust_i18n::t!("sftp.sidebar.expand_remote").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_toggle_remote_collapse(tab_id, cx);
+                this.toggle_remote_collapse(cx);
             }));
 
         v_flex()
@@ -271,7 +276,6 @@ impl AppShell {
     /// 渲染单个并列远端列折叠后的 32px 紧凑竖条。
     pub(crate) fn render_sftp_side_remote_collapsed_bar(
         &self,
-        tab_id: TabId,
         side_index: usize,
         title: &str,
         p: &Palette,
@@ -283,7 +287,7 @@ impl AppShell {
             .icon(IconName::PanelRightOpen)
             .tooltip(rust_i18n::t!("sftp.sidebar.expand_side_remote").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_toggle_side_remote_collapse(tab_id, side_index, cx);
+                this.toggle_side_remote_collapse(side_index, cx);
             }));
 
         let close_btn = Button::new(format!("close-side-{side_index}"))
@@ -292,7 +296,7 @@ impl AppShell {
             .icon(IconName::X)
             .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_close_side_remote(tab_id, side_index, cx);
+                this.close_side_remote(side_index, cx);
             }));
 
         v_flex()

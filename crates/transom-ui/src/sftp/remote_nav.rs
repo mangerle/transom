@@ -249,45 +249,6 @@ impl SftpPanelView {
 }
 
 impl AppShell {
-    pub(crate) fn sftp_navigate_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        path: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.navigate_pane(tab_id, target, path, window, cx)
-            });
-        }
-    }
-
-    pub(crate) fn sftp_go_home_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.go_home_pane(tab_id, target, window, cx));
-        }
-    }
-
-    pub(crate) fn sftp_go_up_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.go_up_pane(tab_id, target, window, cx));
-        }
-    }
-
     pub(crate) fn sftp_enter_path_pane(
         &mut self,
         tab_id: TabId,
@@ -296,63 +257,6 @@ impl AppShell {
     ) {
         if let Some(view) = self.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.enter_path_pane(tab_id, target, cx));
-        }
-    }
-
-    pub(crate) fn sftp_refresh_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.refresh_pane(tab_id, target, cx));
-        }
-    }
-
-    pub(crate) fn sftp_toggle_filter_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_filter_pane(target, window, cx));
-        }
-    }
-
-    pub(crate) fn sftp_toggle_hidden_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_hidden_pane(target, cx));
-        }
-    }
-
-    pub(crate) fn sftp_toggle_local_hidden(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_local_hidden(cx));
-        }
-    }
-
-    pub(crate) fn sftp_toggle_sync_navigation(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_sync_navigation(cx));
-        }
-    }
-
-    pub(crate) fn sftp_toggle_filter_local(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_filter_local(window, cx));
         }
     }
 }

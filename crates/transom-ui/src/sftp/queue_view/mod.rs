@@ -13,9 +13,9 @@ mod status_bar;
 use self::row::render_queue_task_row;
 pub(crate) use self::status_bar::SftpStatusBarProps;
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
-use crate::palette::{Palette, localized_error};
+use crate::palette::Palette;
+use crate::sftp::entity::{SftpPanelView, with_shell_parts};
 use crate::sftp::{TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -37,9 +37,9 @@ pub(crate) struct SftpQueuePaneProps<'a> {
     pub(crate) queue_height: f32,
 }
 
-impl AppShell {
+impl SftpPanelView {
     pub(crate) fn render_sftp_queue_pane(
-        &mut self,
+        &self,
         props: SftpQueuePaneProps<'_>,
         p: &Palette,
         cx: &mut Context<Self>,
@@ -96,7 +96,7 @@ impl AppShell {
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                                this.sftp_start_resize_queue(tab_id, event.position.y.into(), cx);
+                                this.start_resize_queue(event.position.y.into(), cx);
                             }),
                         ),
                 )
@@ -129,11 +129,7 @@ impl AppShell {
                                             .small()
                                             .checked(resume_enabled)
                                             .on_click(cx.listener(move |this, &checked, _, cx| {
-                                                if let Some(mut panel) =
-                                                    this.sftp_view_mut(tab_id, cx)
-                                                {
-                                                    panel.queue.resume_enabled = checked;
-                                                }
+                                                this.state.queue.resume_enabled = checked;
                                                 cx.notify();
                                             })),
                                     ),
@@ -150,40 +146,49 @@ impl AppShell {
                                             .small()
                                             .checked(verify_after_transfer)
                                             .on_click(cx.listener(move |this, &checked, _, cx| {
-                                                this.state.settings.sftp.verify_after_transfer =
-                                                    checked;
-                                                match this
-                                                    .state
-                                                    .services
-                                                    .settings_store
-                                                    .save(&this.state.settings)
-                                                {
-                                                    Ok(()) => {
-                                                        let algo = this
-                                                            .state
-                                                            .settings
-                                                            .sftp
-                                                            .checksum_algorithm
-                                                            .label();
-                                                        this.state.status = Some(if checked {
-                                                            rust_i18n::t!(
-                                                                "sftp.queue.verify_on",
-                                                                algo = algo
-                                                            )
-                                                            .to_string()
-                                                        } else {
-                                                            rust_i18n::t!(
-                                                                "sftp.queue.verify_off",
-                                                                algo = algo
-                                                            )
-                                                            .to_string()
-                                                        });
+                                                let app = this.app.clone();
+                                                with_shell_parts(&app, cx, |shell, _| {
+                                                    shell
+                                                        .state
+                                                        .settings
+                                                        .sftp
+                                                        .verify_after_transfer = checked;
+                                                    match shell
+                                                        .state
+                                                        .services
+                                                        .settings_store
+                                                        .save(&shell.state.settings)
+                                                    {
+                                                        Ok(()) => {
+                                                            let algo = shell
+                                                                .state
+                                                                .settings
+                                                                .sftp
+                                                                .checksum_algorithm
+                                                                .label();
+                                                            shell.state.status = Some(if checked {
+                                                                rust_i18n::t!(
+                                                                    "sftp.queue.verify_on",
+                                                                    algo = algo
+                                                                )
+                                                                .to_string()
+                                                            } else {
+                                                                rust_i18n::t!(
+                                                                    "sftp.queue.verify_off",
+                                                                    algo = algo
+                                                                )
+                                                                .to_string()
+                                                            });
+                                                        }
+                                                        Err(error) => {
+                                                            shell.state.set_error(
+                                                                crate::palette::localized_error(
+                                                                    &error,
+                                                                ),
+                                                            );
+                                                        }
                                                     }
-                                                    Err(error) => {
-                                                        this.state
-                                                            .set_error(localized_error(&error));
-                                                    }
-                                                }
+                                                });
                                                 cx.notify();
                                             })),
                                     ),
@@ -203,7 +208,7 @@ impl AppShell {
                                         rust_i18n::t!("sftp.queue.concurrency_tooltip").to_string(),
                                     )
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.sftp_cycle_concurrency(tab_id, cx);
+                                        this.cycle_concurrency(tab_id, cx);
                                     })),
                             ),
                     )
@@ -228,7 +233,7 @@ impl AppShell {
                                                 .to_string(),
                                         )
                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.sftp_retry_all_failed(tab_id, cx);
+                                            this.retry_all_failed(tab_id, cx);
                                         })),
                                 )
                             })
@@ -242,7 +247,7 @@ impl AppShell {
                                             .to_string(),
                                     )
                                     .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.sftp_open_filter_modal(tab_id, window, cx);
+                                        this.open_filter_modal(window, cx);
                                     })),
                             )
                             .child(
@@ -251,7 +256,7 @@ impl AppShell {
                                     .xsmall()
                                     .label(rust_i18n::t!("sftp.clear_done").to_string())
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.sftp_queue_clear_done(tab_id, cx);
+                                        this.queue_clear_done(cx);
                                     })),
                             )
                             .child(
@@ -269,9 +274,7 @@ impl AppShell {
                                         rust_i18n::t!("sftp.queue.expand").to_string()
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
-                                            panel.queue.expanded = !panel.queue.expanded;
-                                        }
+                                        this.state.queue.expanded = !this.state.queue.expanded;
                                         cx.notify();
                                     })),
                             ),

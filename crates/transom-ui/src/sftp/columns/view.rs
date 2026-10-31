@@ -2,7 +2,7 @@
 
 use super::width::{COLLAPSED_COLUMN_WIDTH, sftp_columns_content_width};
 use super::*;
-use crate::sftp::SftpPanelState;
+use crate::sftp::entity::SftpPanelView;
 
 impl AppShell {
     /// 折叠或展开后同步 SFTP 面板的整体宽度。
@@ -120,19 +120,20 @@ impl AppShell {
             2
         })
     }
+}
 
+impl SftpPanelView {
     /// 渲染 SFTP 面板的列区：所有列始终在同一个可拖拽分栏组里。
     pub(crate) fn render_sftp_columns(
         &mut self,
         tab_id: TabId,
         columns: Vec<SftpColumn>,
-        panel: &mut SftpPanelState,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if columns.is_empty() {
             return div().into_any_element();
         }
-        self.render_sftp_resizable_columns(tab_id, columns, panel, cx)
+        self.render_sftp_resizable_columns(tab_id, columns, cx)
     }
 
     /// 构建分栏组：折叠条是固定 32px 面板，展开列按记忆宽度，最后一个展开列吸收余量。
@@ -140,11 +141,10 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
         columns: Vec<SftpColumn>,
-        panel: &mut SftpPanelState,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let column_state = panel.column_state.clone();
-        let width_memory = panel.column_widths.clone();
+        let column_state = self.state.column_state.clone();
+        let width_memory = self.state.column_widths.clone();
         let last_expanded = columns
             .iter()
             .rev()
@@ -154,23 +154,17 @@ impl AppShell {
         let mut resizable =
             h_resizable(ElementId::Name(format!("sftp-multi-pane-{tab_id}").into()));
         {
-            // 绑定面板自己持有的状态：窗口的 keyed state 会在元素不再渲染时被回收，
-            // 折叠期间分栏组不渲染，尺寸必须另有去处。
             resizable = resizable.with_state(&column_state);
         }
         let mut identities = Vec::with_capacity(columns.len());
         for column in columns {
             identities.push((column.id, column.collapsed));
             let panel = if column.collapsed {
-                // 折叠条固定 32px：size_range 锁死，拖自己的手柄也不会把条拉宽；
-                // 展开列之间的分隔仍由相邻面板的手柄负责。
                 resizable_panel()
                     .size(px(COLLAPSED_COLUMN_WIDTH))
                     .size_range(px(COLLAPSED_COLUMN_WIDTH)..px(COLLAPSED_COLUMN_WIDTH))
                     .fixed()
             } else if Some(column.id) == last_expanded {
-                // 最后一个展开列吸收剩余宽度：面板被最小宽度限制或窗口变宽时，
-                // 余量落在它身上，不会在分栏组右侧留白。
                 resizable_panel()
             } else if let Some(width) = width_memory.get(column.id) {
                 resizable_panel().size(px(width))
@@ -183,7 +177,7 @@ impl AppShell {
         let sizes = column_state.read(cx).sizes().to_vec();
         for ((id, collapsed), width) in identities.iter().zip(sizes.iter()) {
             if !*collapsed {
-                panel.column_widths.remember(*id, f32::from(*width));
+                self.state.column_widths.remember(*id, f32::from(*width));
             }
         }
         resizable.into_any_element()
@@ -192,23 +186,21 @@ impl AppShell {
     /// 按列身份渲染对应的折叠条。
     pub(crate) fn render_sftp_collapsed_bar(
         &self,
-        tab_id: TabId,
         id: SftpColumnId,
         side_titles: &[(usize, String)],
-        _panel: &SftpPanelState,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match id {
-            SftpColumnId::Local => self.render_sftp_local_collapsed_bar(tab_id, p, cx),
-            SftpColumnId::Remote => self.render_sftp_remote_collapsed_bar(tab_id, p, cx),
+            SftpColumnId::Local => self.render_sftp_local_collapsed_bar(p, cx),
+            SftpColumnId::Remote => self.render_sftp_remote_collapsed_bar(p, cx),
             SftpColumnId::Side(index) => {
                 let title = side_titles
                     .iter()
                     .find(|(known, _)| *known == index)
                     .map(|(_, title)| title.clone())
                     .unwrap_or_default();
-                self.render_sftp_side_remote_collapsed_bar(tab_id, index, &title, p, cx)
+                self.render_sftp_side_remote_collapsed_bar(index, &title, p, cx)
             }
         }
     }

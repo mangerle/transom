@@ -8,9 +8,9 @@ mod context_menu;
 pub(super) use self::context_menu::build_remote_blank_context_menu;
 use self::context_menu::{RemoteContextMenuProps, build_remote_context_menu};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
-use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
+use crate::sftp::entity::{SftpPanelView, read_shell_parts};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::spinner::Spinner;
@@ -44,7 +44,7 @@ struct RemoteListParams {
     remote_primary: Option<String>,
 }
 
-impl AppShell {
+impl SftpPanelView {
     /// 远程文件内容区：空态提示或虚拟列表（行内承载选择、双击、右键与拖拽）。
     pub(crate) fn render_remote_content(
         &self,
@@ -174,16 +174,29 @@ impl AppShell {
                 .collect(),
         );
         let remote_entries_rc = std::rc::Rc::new(remote_entries);
+        let Some(menu_app) = read_shell_parts(&self.app, cx, |shell| {
+            shell
+                .state
+                .workspace
+                .tab(tab_id)
+                .map(|_| cx.entity().clone())
+        })
+        .flatten() else {
+            return div().into_any_element();
+        };
         let remote_selection = std::rc::Rc::new(remote_selection);
         let remote_primary = std::rc::Rc::new(remote_primary);
         let p = p.clone();
-        let app_entity = cx.entity().clone();
-        let has_main_remote = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.connection_id)
-            .is_some();
+        let app_entity = menu_app.clone();
+        let has_main_remote = read_shell_parts(&self.app, cx, |shell| {
+            shell
+                .state
+                .workspace
+                .tab(tab_id)
+                .and_then(|tab| tab.connection_id)
+                .is_some()
+        })
+        .unwrap_or(false);
 
         v_virtual_list(
             cx.entity().clone(),
@@ -201,7 +214,7 @@ impl AppShell {
                             || remote_primary.as_deref() == Some(entry.path.as_str());
                         let entry_path_cm = entry.path.clone();
                         let app_cm = app_entity.clone();
-                        let row = this.sftp_file_row(
+                        let row = this.file_row(
                             SftpRowContext {
                                 tab_id,
                                 side: SftpSide::Remote(target),

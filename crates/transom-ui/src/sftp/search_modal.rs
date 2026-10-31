@@ -76,19 +76,6 @@ impl SftpPanelView {
 }
 
 impl AppShell {
-    /// 打开目标远端列的检索模态对话框。
-    pub(crate) fn sftp_open_search_modal_for(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.open_search_modal(target, window, cx));
-        }
-    }
-
     /// 触发执行远程搜索请求。
     pub(crate) fn sftp_execute_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(ref mut modal) = self.state.sftp_modals.search else {

@@ -1,11 +1,10 @@
 //! 远端列下载：把目标列选中条目加入本地下载队列。
 
-use crate::app::AppShell;
 use crate::palette::localized_error;
 use crate::sftp::entity::{SftpPanelView, read_shell_parts};
 use crate::sftp::{SftpRemotePaneRef, TransferMode, TransferTask};
 use gpui_kit::*;
-use transom_core::{TabId, TransferDirection};
+use transom_core::TransferDirection;
 
 impl SftpPanelView {
     /// 下载目标远端列当前选中的条目到本地当前目录。
@@ -114,19 +113,5 @@ impl SftpPanelView {
         );
         self.process_queue(self.tab_id, cx);
         cx.notify();
-    }
-}
-
-impl AppShell {
-    /// 下载目标远端列当前选中的条目到本地当前目录。
-    pub(crate) fn sftp_queue_download_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.download_pane(target, cx));
-        }
     }
 }

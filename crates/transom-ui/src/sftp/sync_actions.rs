@@ -78,18 +78,6 @@ impl AppShell {
         }
     }
 
-    /// 以目标远端列与本地当前目录为根发起目录对比。
-    pub(crate) fn sftp_open_sync_modal_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.open_sync_modal_pane(target, cx));
-        }
-    }
-
     pub(crate) fn sftp_toggle_sync_entry(
         &mut self,
         index: usize,

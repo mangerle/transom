@@ -24,7 +24,9 @@
 mod chmod;
 mod clipboard;
 mod delete;
+mod drop_upload;
 mod file_ops;
+mod local_diff;
 mod queue;
 mod side_remote;
 mod status;
@@ -33,7 +35,6 @@ mod task_control;
 use super::SftpPanelState;
 use crate::app::AppShell;
 use crate::keymap;
-use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId};
@@ -115,16 +116,11 @@ impl std::ops::DerefMut for SftpPanelView {
 /// 渲染期间本实体已被 GPUI 租借，因此外壳拿到的只是 `&mut SftpPanelState`，
 /// 不允许再按句柄回读本实体；状态与交互仍只有一份。
 impl Render for SftpPanelView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let p = Palette::from(&*cx);
-        let SftpPanelView { state, app, .. } = self;
-        let content = with_shell_parts(app, cx, |shell, shell_cx| {
-            shell.render_sftp_panel_with_state(state, window, shell_cx, &p)
-        })
-        .unwrap_or_else(|| div().into_any_element());
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = self.render_panel_content(cx);
 
-        // 面板级键盘与鼠标监听挂在实体上：回调执行时实体由 GPUI 正常租借，
-        // 状态变更直接落在本实体，跨域动作再经 with_shell_parts 回交外壳。
+        // 面板级键盘与鼠标监听挂在实体上：状态变更直接落在本实体，
+        // 跨域动作再经 with_shell_parts 回交外壳。
         v_flex()
             .id(ElementId::Name("sftp-panel-container".into()))
             .track_focus(&self.state.focus_handle)

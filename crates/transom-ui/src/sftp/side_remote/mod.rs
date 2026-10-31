@@ -21,7 +21,7 @@ pub(crate) use self::types::{
 };
 
 use crate::app::AppShell;
-use crate::sftp::{SftpPanelState, SftpTransferRequest};
+use crate::sftp::SftpPanelState;
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId};
 
@@ -51,87 +51,6 @@ pub(crate) fn side_column_width_hint(panel: &SftpPanelState, cx: &App) -> f32 {
 }
 
 impl AppShell {
-    /// 挂载并列远端会话到当前 SFTP 面板。
-    pub(crate) fn sftp_mount_side_remote(
-        &mut self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-        title: String,
-        initial_path: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.mount_side_remote(connection_id, title, initial_path, window, cx)
-            });
-        }
-    }
-
-    /// 关闭并列远端列。
-    pub(crate) fn sftp_close_side_remote(
-        &mut self,
-        tab_id: TabId,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.close_side_remote(index, cx));
-        }
-    }
-
-    /// 切换并列远端列的展开与折叠。
-    pub(crate) fn sftp_toggle_side_remote_collapse(
-        &mut self,
-        tab_id: TabId,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_side_remote_collapse(index, cx));
-        }
-    }
-
-    /// 切换本地列的展开与折叠。
-    pub(crate) fn sftp_toggle_local_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_local_collapse(cx));
-        }
-    }
-
-    /// 切换主远端列的展开与折叠。
-    pub(crate) fn sftp_toggle_remote_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.toggle_remote_collapse(cx));
-        }
-    }
-
-    /// 跨远端互传任务入队；队列状态与调度在实体上完成。
-    pub(crate) fn sftp_enqueue_remote_transfer(
-        &mut self,
-        tab_id: TabId,
-        params: SftpRemoteCopyParams,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.enqueue_remote_transfer(tab_id, params, cx)
-            });
-        }
-    }
-
-    /// 把单条上传/下载请求加入队列并立即尝试调度。
-    pub(crate) fn sftp_enqueue_transfer(
-        &mut self,
-        request: SftpTransferRequest,
-        cx: &mut Context<Self>,
-    ) {
-        let tab_id = request.tab_id;
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.enqueue_transfer(request, cx));
-        }
-    }
-
     /// 辅助方法：直接按 tab_id 获取 sftp 面板可变借用。
     /// 请求特定连接的远端目录列表（用于并列远端）。
     ///

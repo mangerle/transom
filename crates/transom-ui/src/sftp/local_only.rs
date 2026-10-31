@@ -13,13 +13,14 @@ use super::{
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, sftp_text_input};
+use crate::sftp::entity::read_shell_parts;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use transom_core::{Connection, TabId};
+use transom_core::Connection;
 
 impl AppShell {
     pub(crate) fn open_local_file_panel(
@@ -140,32 +141,36 @@ impl AppShell {
         self.spawn_local_dir_refresh(tab_id, None, cx);
         cx.notify();
     }
+}
 
-    pub(crate) fn render_local_only_panel_with_state(
-        &mut self,
-        tab_id: TabId,
-        panel: &mut SftpPanelState,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let local_path_input = panel.local.path_input.clone();
-        let local_filter_input = panel.local.filter_input.clone();
-        let local_scroll_handle = panel.local.scroll_handle.clone();
-        let quick_paths = panel.local.quick_paths.clone();
-        let show_filter = panel.local.show_filter;
-        let show_hidden = panel.local.show_hidden;
-        let local_error = panel.local.error.clone();
-        let status = panel.queue.status.clone();
+impl SftpPanelView {
+    /// 本地终端单栏面板的内容构建；外层容器与监听由实体渲染入口统一挂载。
+    pub(crate) fn render_local_only_content(&self, cx: &mut Context<Self>) -> AnyElement {
+        let p = Palette::from(&*cx);
+        let tab_id = self.tab_id;
+        let state = &self.state;
+        let local_path_input = state.local.path_input.clone();
+        let local_filter_input = state.local.filter_input.clone();
+        let local_scroll_handle = state.local.scroll_handle.clone();
+        let quick_paths = state.local.quick_paths.clone();
+        let show_filter = state.local.show_filter;
+        let show_hidden = state.local.show_hidden;
+        let local_error = state.local.error.clone();
+        let status = state.queue.status.clone();
         let local_filter_query = local_filter_input
             .read(cx)
             .value()
             .trim()
             .to_ascii_lowercase();
+        let hidden_patterns = read_shell_parts(&self.app, cx, |shell| {
+            shell.state.settings.sftp.panel_hidden_patterns.clone()
+        })
+        .unwrap_or_default();
         let local_entries = crate::app::AppState::filter_local_entries(
-            panel,
+            state,
             show_hidden,
             &local_filter_query,
-            &self.state.settings.sftp.panel_hidden_patterns,
+            &hidden_patterns,
         );
 
         let local_pane = self.render_sftp_local_pane(
@@ -179,18 +184,18 @@ impl AppShell {
                 local_scroll_handle,
                 quick_paths,
                 remote_available: false,
-                local_selection: panel.local.selection.clone(),
-                local_primary: panel.local.selected.clone(),
+                local_selection: state.local.selection.clone(),
+                local_primary: state.local.selected.clone(),
                 diff_ready: false,
             },
-            p,
+            &p,
             cx,
         );
-        let mount_btn = self.render_side_remote_mount_button(tab_id, panel, p, cx);
+        let mount_btn = self.render_side_remote_mount_button(&p, cx);
         let header = self.render_sftp_panel_header(
             rust_i18n::t!("sftp.local_files_title").to_string(),
             Some(mount_btn),
-            p,
+            &p,
             cx,
         );
         let status_bar = if let Some(error) = local_error {
@@ -220,8 +225,6 @@ impl AppShell {
             })
         };
 
-        // 外层容器的焦点、键位与监听由实体统一挂载；这里只构建内容，
-        // 避免同一面板出现两套 on_action 导致动作重复执行。
         let mut panel = v_flex()
             .size_full()
             .overflow_hidden()

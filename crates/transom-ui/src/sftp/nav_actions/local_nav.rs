@@ -159,31 +159,6 @@ impl SftpPanelView {
 }
 
 impl AppShell {
-    pub(crate) fn sftp_local_navigate(
-        &mut self,
-        tab_id: TabId,
-        target: PathBuf,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.local_navigate(tab_id, target, window, cx)
-            });
-        }
-    }
-
-    pub(crate) fn sftp_local_go_up(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.local_go_up(tab_id, window, cx));
-        }
-    }
-
     pub(crate) fn sftp_local_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(view) = self.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.local_refresh(cx));
@@ -198,23 +173,6 @@ impl AppShell {
     ) {
         if let Some(view) = self.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.local_enter_path(tab_id, window, cx));
-        }
-    }
-
-    pub(crate) fn sftp_open_local_file_manager(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.local_open_file_manager(cx));
-        }
-    }
-
-    pub(crate) fn sftp_edit_local_file(
-        &mut self,
-        tab_id: TabId,
-        target: PathBuf,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.local_edit_file(target, cx));
         }
     }
 }

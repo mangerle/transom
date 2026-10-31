@@ -25,7 +25,6 @@ use transom_core::{ConnectionId, SftpCommand, SftpOperation, TabId, TransferId};
 pub(crate) struct RemotePaneScope<'a> {
     pub(crate) pane: &'a SftpRemotePaneState,
     pub(crate) connection_id: ConnectionId,
-    pub(crate) side_connection: Option<ConnectionId>,
 }
 
 impl SftpPanelView {
@@ -297,14 +296,9 @@ impl AppShell {
         let panel = self.sftp_state(tab_id, cx)?;
         let pane = panel.remote_pane(target)?;
         let connection_id = panel.remote_connection(target, tab.connection_id)?;
-        let side_connection = match target {
-            SftpRemotePaneRef::Main => None,
-            SftpRemotePaneRef::Side(_) => Some(connection_id),
-        };
         Some(RemotePaneScope {
             pane,
             connection_id,
-            side_connection,
         })
     }
 
@@ -319,94 +313,6 @@ impl AppShell {
             view.update(cx, |view, cx| {
                 view.send_op_for_connection(connection_id, op, cx)
             });
-        }
-    }
-
-    pub(crate) fn activate_remote_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.activate_pane(target, cx));
-        }
-    }
-
-    pub(crate) fn select_remote_entry_for_menu(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        path: String,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.select_entry_for_menu(target, path, cx));
-        }
-    }
-
-    pub(crate) fn sftp_extract_here_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        archive_path: String,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.extract_here(target, archive_path, cx));
-        }
-    }
-
-    pub(crate) fn sftp_edit_remote_file_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        path: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.edit_remote_file(target, path, window, cx)
-            });
-        }
-    }
-
-    pub(crate) fn sftp_upload_local_selection_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.upload_local_selection(target, cx));
-        }
-    }
-
-    pub(crate) fn sftp_copy_remote_entry_to_main(
-        &mut self,
-        tab_id: TabId,
-        source: SftpRemotePaneRef,
-        path: String,
-        is_dir: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.copy_entry_to_main(source, path, is_dir, cx)
-            });
-        }
-    }
-
-    pub(crate) fn set_sftp_pane_error(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        message: String,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.set_pane_error(target, message, cx));
         }
     }
 }

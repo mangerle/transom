@@ -382,21 +382,6 @@ impl SftpPanelView {
 }
 
 impl AppShell {
-    /// 文件行悬停：按标签把事件转给对应实体。
-    pub(crate) fn sftp_hover_preview(
-        &mut self,
-        target: SftpHoverTarget,
-        hovered: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(target.tab_id) {
-            view.update(cx, |view, cx| {
-                view.hover_preview(target, hovered, window, cx)
-            });
-        }
-    }
-
     pub(crate) fn dismiss_sftp_hover_preview(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(view) = self.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.dismiss_hover_preview(cx));

@@ -4,9 +4,9 @@
 //! - 实现初衷：隔离本地文件列顶部的路径导航、快捷目录（主目录、桌面、下载）与增删改按钮；
 //! - 核心优势：使本地主视图更加清晰，避免数百行工具栏布局逻辑杂糅在主面板结构中。
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Disableable;
@@ -38,7 +38,7 @@ pub(super) struct LocalToolbarProps<'a> {
 pub(super) fn render_local_toolbar(
     props: LocalToolbarProps<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<SftpPanelView>,
 ) -> AnyElement {
     let tab_id = props.tab_id;
     let show_filter = props.show_filter;
@@ -72,7 +72,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::ArrowUp)
                         .tooltip(rust_i18n::t!("sftp.menu.go_up").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_local_go_up(tab_id, window, cx)
+                            this.local_go_up(tab_id, window, cx)
                         })),
                 )
                 .child(
@@ -81,9 +81,7 @@ pub(super) fn render_local_toolbar(
                         .xsmall()
                         .icon(IconName::RefreshCw)
                         .tooltip(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
-                        .on_click(
-                            cx.listener(move |this, _, _, cx| this.sftp_local_refresh(tab_id, cx)),
-                        ),
+                        .on_click(cx.listener(move |this, _, _, cx| this.local_refresh(cx))),
                 )
                 .child(
                     Button::new("local-enter")
@@ -92,7 +90,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::ArrowRight)
                         .tooltip(rust_i18n::t!("sftp.nav.enter_path").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_local_enter_path(tab_id, window, cx)
+                            this.local_enter_path(tab_id, window, cx)
                         })),
                 )
                 .when(remote_available, |this| {
@@ -104,7 +102,7 @@ pub(super) fn render_local_toolbar(
                             .disabled(!diff_ready)
                             .tooltip(rust_i18n::t!("sftp.nav.diff_with_remote").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.sftp_open_local_diff(tab_id, cx);
+                                this.open_local_diff(cx);
                             })),
                     )
                 })
@@ -116,7 +114,7 @@ pub(super) fn render_local_toolbar(
                             .icon(IconName::PanelLeftClose)
                             .tooltip(rust_i18n::t!("sftp.sidebar.collapse_local").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.sftp_toggle_local_collapse(tab_id, cx);
+                                this.toggle_local_collapse(cx);
                             })),
                     )
                 }),
@@ -163,7 +161,7 @@ pub(super) fn render_local_toolbar(
                             .icon(IconName::Upload)
                             .tooltip(rust_i18n::t!("sftp.upload").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.sftp_queue_upload(tab_id, cx);
+                                this.queue_upload(tab_id, cx);
                             })),
                     )
                 })
@@ -174,7 +172,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::FolderPlus)
                         .tooltip(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_open_local_mkdir_modal(tab_id, window, cx);
+                            this.open_local_mkdir_modal(window, cx);
                         })),
                 )
                 .child(
@@ -184,7 +182,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::FilePlus)
                         .tooltip(rust_i18n::t!("sftp.menu.new_local_file").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_open_local_new_file_modal(tab_id, window, cx);
+                            this.open_local_new_file_modal(window, cx);
                         })),
                 )
                 .child(
@@ -194,7 +192,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::Pencil)
                         .tooltip(rust_i18n::t!("sftp.rename").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_open_local_rename_modal(tab_id, window, cx);
+                            this.open_local_rename_modal(window, cx);
                         })),
                 )
                 .child(
@@ -204,17 +202,13 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::FilePen)
                         .tooltip(rust_i18n::t!("common.edit").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            let selected = this
-                                .sftp_state(tab_id, cx)
-                                .and_then(|p| p.local.selected.clone());
+                            let selected = this.state.local.selected.clone();
                             if let Some(target) = selected {
-                                this.sftp_edit_local_file(tab_id, target, cx);
+                                this.local_edit_file(target, cx);
                             } else {
-                                if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
-                                    panel.set_local_error(
-                                        rust_i18n::t!("sftp.row.select_local_to_edit").to_string(),
-                                    );
-                                }
+                                this.state.set_local_error(
+                                    rust_i18n::t!("sftp.row.select_local_to_edit").to_string(),
+                                );
                                 cx.notify();
                             }
                         })),
@@ -226,14 +220,14 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::Info)
                         .tooltip(rust_i18n::t!("sftp.menu.properties").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            let path = this.sftp_state(tab_id, cx).and_then(|p| {
-                                p.local
-                                    .selected
-                                    .clone()
-                                    .or_else(|| Some(p.local.path.clone()))
-                            });
+                            let path = this
+                                .state
+                                .local
+                                .selected
+                                .clone()
+                                .or_else(|| Some(this.state.local.path.clone()));
                             if let Some(target) = path {
-                                this.sftp_show_local_properties(tab_id, target, cx);
+                                this.show_local_properties(target, cx);
                             }
                         })),
                 )
@@ -244,7 +238,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::Trash)
                         .tooltip(rust_i18n::t!("sftp.delete").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_local_delete_selection(tab_id, cx);
+                            this.local_delete_selection(tab_id, cx);
                         })),
                 )
                 .child(
@@ -254,7 +248,7 @@ pub(super) fn render_local_toolbar(
                         .icon(IconName::FolderOpen)
                         .tooltip(rust_i18n::t!("sftp.menu.open_file_manager").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_open_local_file_manager(tab_id, cx);
+                            this.local_open_file_manager(cx);
                         })),
                 )
                 .child(
@@ -273,7 +267,7 @@ pub(super) fn render_local_toolbar(
                             rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.sftp_toggle_local_hidden(tab_id, cx);
+                            this.toggle_local_hidden(cx);
                         })),
                 )
                 .child(
@@ -284,7 +278,7 @@ pub(super) fn render_local_toolbar(
                         .selected(show_filter)
                         .tooltip(rust_i18n::t!("sftp.nav.toggle_filter").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.sftp_toggle_filter_local(tab_id, window, cx);
+                            this.toggle_filter_local(window, cx);
                         })),
                 ),
         )
@@ -300,7 +294,7 @@ fn local_quick_path_button(
     label: String,
     target: Option<PathBuf>,
     tab_id: TabId,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<SftpPanelView>,
 ) -> AnyElement {
     let enabled = target.is_some();
     let tooltip = if enabled {
@@ -317,7 +311,7 @@ fn local_quick_path_button(
     };
     button
         .on_click(cx.listener(move |this, _, window, cx| {
-            this.sftp_local_navigate(tab_id, target.clone(), window, cx);
+            this.local_navigate(tab_id, target.clone(), window, cx);
         }))
         .into_any_element()
 }

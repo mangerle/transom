@@ -1,12 +1,11 @@
 //! SFTP 文件属性查看：远端异步 stat 请求与本地同步属性读取。
 
 use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
-use crate::app::AppShell;
 use crate::sftp::SftpRemotePaneRef;
 use chrono::{Local, TimeZone};
 use gpui_kit::*;
 use std::path::Path;
-use transom_core::{RemoteMetadata, SftpOperation, TabId};
+use transom_core::{RemoteMetadata, SftpOperation};
 
 impl SftpPanelView {
     /// 请求目标远端列路径的属性：主远端与并列远端共用同一条 Stat 通道。
@@ -57,33 +56,6 @@ impl SftpPanelView {
             }
         }
         cx.notify();
-    }
-}
-
-impl AppShell {
-    pub(crate) fn sftp_request_remote_properties_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        path: String,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.request_remote_properties(target, path, cx)
-            });
-        }
-    }
-
-    pub(crate) fn sftp_show_local_properties(
-        &mut self,
-        tab_id: TabId,
-        path: std::path::PathBuf,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.show_local_properties(path, cx));
-        }
     }
 }
 

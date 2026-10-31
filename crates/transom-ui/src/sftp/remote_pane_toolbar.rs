@@ -1,10 +1,10 @@
 //! 远端列第二行操作工具栏：主远端与并列远端共用同一套按钮与目标路由。
 
 use super::remote_pane::{RemoteToolbarProps, pane_key};
-use crate::app::AppShell;
 use crate::editor::render_editor_list_popover;
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
+use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::separator::Separator;
@@ -12,13 +12,13 @@ use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
-impl AppShell {
+impl SftpPanelView {
     /// 渲染远端列的操作工具栏（主目录、下载与文件管理入口）。
     pub(super) fn render_remote_toolbar(
         &self,
         props: RemoteToolbarProps<'_>,
         p: &Palette,
-        cx: &mut Context<AppShell>,
+        cx: &mut Context<SftpPanelView>,
     ) -> AnyElement {
         let RemoteToolbarProps {
             tab_id,
@@ -37,7 +37,7 @@ impl AppShell {
             .icon(IconName::House)
             .tooltip(rust_i18n::t!("sftp.home").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_go_home_pane(tab_id, target, window, cx);
+                this.go_home_pane(tab_id, target, window, cx);
             }));
 
         let download_btn = Button::new(format!("remote-download-{key}"))
@@ -46,7 +46,7 @@ impl AppShell {
             .icon(IconName::Download)
             .tooltip(rust_i18n::t!("sftp.download").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_queue_download_pane(tab_id, target, cx);
+                this.download_pane(target, cx);
             }));
 
         let mkdir_btn = Button::new(format!("remote-mkdir-{key}"))
@@ -55,7 +55,7 @@ impl AppShell {
             .icon(IconName::FolderPlus)
             .tooltip(rust_i18n::t!("sftp.new_folder").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_open_mkdir_modal_for(tab_id, target, window, cx);
+                this.open_mkdir_modal_for(target, window, cx);
             }));
 
         let new_file_btn = Button::new(format!("remote-new-file-{key}"))
@@ -64,7 +64,7 @@ impl AppShell {
             .icon(IconName::FilePlus)
             .tooltip(rust_i18n::t!("sftp.remote.new_file_edit").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_open_editor_new_file_modal_for(tab_id, target, window, cx);
+                this.open_editor_new_file_modal_for(target, window, cx);
             }));
 
         let search_btn = Button::new(format!("remote-search-{key}"))
@@ -73,7 +73,7 @@ impl AppShell {
             .icon(IconName::Search)
             .tooltip(rust_i18n::t!("sftp.remote.search").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_open_search_modal_for(tab_id, target, window, cx);
+                this.open_search_modal(target, window, cx);
             }));
 
         let rename_btn = Button::new(format!("remote-rename-{key}"))
@@ -82,7 +82,7 @@ impl AppShell {
             .icon(IconName::Pencil)
             .tooltip(rust_i18n::t!("sftp.rename").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_open_rename_modal_for(tab_id, target, window, cx);
+                this.open_rename_modal_for(target, window, cx);
             }));
 
         let selected = pane.selected.clone();
@@ -93,15 +93,10 @@ impl AppShell {
             .tooltip(rust_i18n::t!("common.edit").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
                 let Some(path) = selected.clone() else {
-                    this.set_sftp_pane_error(
-                        tab_id,
-                        target,
-                        rust_i18n::t!("sftp.select_file").to_string(),
-                        cx,
-                    );
+                    this.set_pane_error(target, rust_i18n::t!("sftp.select_file").to_string(), cx);
                     return;
                 };
-                this.sftp_edit_remote_file_pane(tab_id, target, path, window, cx);
+                this.edit_remote_file(target, path, window, cx);
             }));
 
         let chmod_btn = Button::new(format!("remote-chmod-{key}"))
@@ -110,7 +105,7 @@ impl AppShell {
             .icon(IconName::Settings)
             .tooltip(rust_i18n::t!("sftp.remote.chmod").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_open_chmod_modal_for(tab_id, target, window, cx);
+                this.open_chmod_modal(target, window, cx);
             }));
 
         let delete_btn = Button::new(format!("remote-delete-{key}"))
@@ -119,7 +114,7 @@ impl AppShell {
             .icon(IconName::Trash)
             .tooltip(rust_i18n::t!("sftp.delete").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_delete_selection_for(tab_id, target, cx);
+                this.confirm_remote_delete(target, cx);
             }));
 
         let upload_btn = Button::new(format!("remote-upload-{key}"))
@@ -128,7 +123,7 @@ impl AppShell {
             .icon(IconName::Upload)
             .tooltip(rust_i18n::t!("sftp.upload").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_upload_local_selection_pane(tab_id, target, cx);
+                this.upload_local_selection(target, cx);
             }));
 
         let hidden_btn = Button::new(format!("remote-toggle-hidden-{key}"))
@@ -146,7 +141,7 @@ impl AppShell {
                 rust_i18n::t!("sftp.remote.show_dotfiles").to_string()
             })
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_toggle_hidden_pane(tab_id, target, cx);
+                this.toggle_hidden_pane(target, cx);
             }));
 
         let sync_btn = Button::new(format!("remote-sync-nav-{key}"))
@@ -160,7 +155,7 @@ impl AppShell {
                 rust_i18n::t!("sftp.remote.sync_nav_off").to_string()
             })
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_toggle_sync_navigation(tab_id, cx);
+                this.toggle_sync_navigation(cx);
             }));
         // 同步导航属于"主远端 ↔ 本地"这一对列的关系；并列列不显示该按钮，
         // 避免一列切换时所有列的按钮同时变亮。
@@ -172,7 +167,7 @@ impl AppShell {
             .icon(IconName::GitCompareArrows)
             .tooltip(rust_i18n::t!("sftp.sync.title").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.sftp_open_sync_modal_pane(tab_id, target, cx);
+                this.open_sync_modal_pane(target, cx);
             }));
 
         let filter_btn = Button::new(format!("remote-filter-{key}"))
@@ -182,12 +177,16 @@ impl AppShell {
             .selected(show_filter)
             .tooltip(rust_i18n::t!("sftp.remote.filter").to_string())
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_toggle_filter_pane(tab_id, target, window, cx);
+                this.toggle_filter_pane(target, window, cx);
             }));
 
         // 编辑列表浮层归面板实体渲染，这里只提供实体句柄与当前标签。
         let editor_list = show_editor_list.then(|| {
-            let editors = self.state.editors.clone();
+            let Some(editors) = crate::sftp::entity::read_shell_parts(&self.app, cx, |shell| {
+                shell.state.editors.clone()
+            }) else {
+                return div().into_any_element();
+            };
             render_editor_list_popover(editors.read(cx), &editors, tab_id, p)
         });
 

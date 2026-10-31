@@ -18,8 +18,8 @@ use self::toolbar::{LocalToolbarProps, render_local_toolbar};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use super::side_remote::SftpDragItem;
 use super::{LocalFileEntry, LocalQuickPaths, SftpTransferRequest};
-use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::entity::SftpPanelView;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -48,9 +48,9 @@ pub(crate) struct SftpLocalPaneProps {
     pub(crate) diff_ready: bool,
 }
 
-impl AppShell {
+impl SftpPanelView {
     pub(crate) fn render_sftp_local_pane(
-        &mut self,
+        &self,
         props: SftpLocalPaneProps,
         p: &Palette,
         cx: &mut Context<Self>,
@@ -68,6 +68,7 @@ impl AppShell {
         let local_primary = std::rc::Rc::new(props.local_primary);
         let diff_ready = props.diff_ready;
 
+        let menu_app = cx.entity().clone();
         let local_content = if local_entries.is_empty() {
             div()
                 .p_3()
@@ -85,7 +86,7 @@ impl AppShell {
             );
             let local_entries_rc = std::rc::Rc::new(local_entries);
             let p = p.clone();
-            let app_entity = cx.entity().clone();
+            let app_entity = menu_app.clone();
             v_virtual_list(
                 cx.entity().clone(),
                 format!("sftp-local-virtual-list-{tab_id}"),
@@ -102,7 +103,7 @@ impl AppShell {
                                 || local_primary.as_deref() == Some(entry.path.as_path());
                             let entry_path_cm = entry.path.clone();
                             let app_cm = app_entity.clone();
-                            let row = this.sftp_file_row(
+                            let row = this.file_row(
                                 SftpRowContext {
                                     tab_id,
                                     side: SftpSide::Local,
@@ -160,7 +161,7 @@ impl AppShell {
         );
 
         let app_local_drop = cx.entity().clone();
-        let app_blank_menu = cx.entity().clone();
+        let app_blank_menu = menu_app.clone();
         let drop_bg = p.sidebar_accent.opacity(0.3);
         let drop_border = p.primary;
         let drop_container = v_flex()
@@ -174,31 +175,24 @@ impl AppShell {
             })
             .on_drop(move |drag: &SftpDragItem, _window, cx| {
                 let item = drag.clone();
-                app_local_drop.update(cx, |this, cx| {
+                app_local_drop.update(cx, |view, cx| {
                     let Some(source_connection_id) = item.source_connection_id else {
                         return;
                     };
-                    let Some(local_dir) = this
-                        .sftp_view_mut(tab_id, cx)
-                        .map(|panel| panel.local.path.clone())
-                    else {
-                        return;
-                    };
+                    let local_dir = view.state.local.path.clone();
                     for path in &item.paths {
                         let fname = path.rsplit('/').next().unwrap_or(path);
                         let target_local = match transom_core::safe_local_join(&local_dir, fname) {
                             Ok(path) => path,
                             Err(_) => {
-                                if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
-                                    panel.set_local_error(
-                                        rust_i18n::t!("sftp.invalid_name").to_string(),
-                                    );
-                                }
+                                view.state.set_local_error(
+                                    rust_i18n::t!("sftp.invalid_name").to_string(),
+                                );
                                 cx.notify();
                                 continue;
                             }
                         };
-                        this.sftp_enqueue_transfer(
+                        view.enqueue_transfer(
                             SftpTransferRequest {
                                 tab_id,
                                 connection_id: source_connection_id,

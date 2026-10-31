@@ -52,15 +52,4 @@ impl AppShell {
             view.update(cx, |view, cx| view.remove_task(op_id, cx));
         }
     }
-
-    pub(crate) fn sftp_prioritize_task(
-        &mut self,
-        tab_id: TabId,
-        op_id: TransferId,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.prioritize_task(tab_id, op_id, cx));
-        }
-    }
 }

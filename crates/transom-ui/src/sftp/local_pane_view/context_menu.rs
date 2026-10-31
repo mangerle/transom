@@ -5,7 +5,7 @@
 //!   降低主虚拟列表循环与行渲染逻辑的嵌套深度；
 //! - 核心优势：集中管理本地文件操作契约（上传、新建、软链接、属性、删除等）。
 
-use crate::app::AppShell;
+use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
@@ -23,7 +23,7 @@ pub(super) struct LocalContextMenuProps {
 /// 构建本地列表项右键菜单。
 pub(super) fn build_local_context_menu(
     menu: PopupMenu,
-    app_entity: Entity<AppShell>,
+    app_entity: Entity<SftpPanelView>,
     props: LocalContextMenuProps,
 ) -> PopupMenu {
     let tab_id = props.tab_id;
@@ -40,7 +40,7 @@ pub(super) fn build_local_context_menu(
                     let app = app_entity.clone();
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
-                            this.sftp_local_go_up(tab_id, window, cx);
+                            this.local_go_up(tab_id, window, cx);
                         });
                     }
                 },
@@ -52,7 +52,7 @@ pub(super) fn build_local_context_menu(
                     let app = app_entity;
                     move |_, _, cx| {
                         app.update(cx, |this, cx| {
-                            this.sftp_local_refresh(tab_id, cx);
+                            this.local_refresh(cx);
                         });
                     }
                 },
@@ -79,7 +79,7 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_edit_local_file(tab_id, p_edit.clone(), cx);
+                        this.local_edit_file(p_edit.clone(), cx);
                     });
                 }
             },
@@ -94,14 +94,14 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                        if let Some(panel) = Some(&mut this.state) {
                             if panel.local.selection.contains(&p_up) {
                                 panel.set_local_primary(p_up.clone());
                             } else {
                                 panel.select_local(p_up.clone());
                             }
                         }
-                        this.sftp_queue_upload(tab_id, cx);
+                        this.queue_upload(tab_id, cx);
                     });
                 }
             },
@@ -117,7 +117,7 @@ pub(super) fn build_local_context_menu(
                 move |_, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(p_cp.display().to_string()));
                     app.update(cx, |this, cx| {
-                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                        if let Some(panel) = Some(&mut this.state) {
                             panel.set_status(
                                 rust_i18n::t!("sftp.menu.local_path_copied", path = p_cp.display())
                                     .to_string(),
@@ -135,10 +135,10 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                        if let Some(panel) = Some(&mut this.state) {
                             panel.select_local(p_sym.clone());
                         }
-                        this.sftp_open_local_symlink_modal(tab_id, window, cx);
+                        this.open_local_symlink_modal(window, cx);
                     });
                 }
             },
@@ -150,7 +150,7 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        this.sftp_show_local_properties(tab_id, p_prop.clone(), cx);
+                        this.show_local_properties(p_prop.clone(), cx);
                     });
                 }
             },
@@ -166,14 +166,14 @@ pub(super) fn build_local_context_menu(
                 let app = app_entity.clone();
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                        if let Some(panel) = Some(&mut this.state) {
                             if panel.local.selection.contains(&p_exec) {
                                 panel.set_local_primary(p_exec.clone());
                             } else {
                                 panel.select_local(p_exec.clone());
                             }
                         }
-                        this.sftp_grant_local_exec(tab_id, cx);
+                        this.grant_local_exec(cx);
                     });
                 }
             },
@@ -187,7 +187,7 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_open_local_mkdir_modal(tab_id, window, cx);
+                    this.open_local_mkdir_modal(window, cx);
                 });
             }
         },
@@ -199,7 +199,7 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_open_local_new_file_modal(tab_id, window, cx);
+                    this.open_local_new_file_modal(window, cx);
                 });
             }
         },
@@ -211,10 +211,10 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                    if let Some(panel) = Some(&mut this.state) {
                         panel.select_local(p_ren.clone());
                     }
-                    this.sftp_open_local_rename_modal(tab_id, window, cx);
+                    this.open_local_rename_modal(window, cx);
                 });
             }
         },
@@ -226,12 +226,12 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
-                    if let Some(mut panel) = this.sftp_view_mut(tab_id, cx)
+                    if let Some(panel) = Some(&mut this.state)
                         && !panel.local.selection.contains(&p_del)
                     {
                         panel.select_local(p_del.clone());
                     }
-                    this.sftp_local_delete_selection(tab_id, cx);
+                    this.local_delete_selection(tab_id, cx);
                 });
             }
         },
@@ -243,7 +243,7 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_open_local_file_manager(tab_id, cx);
+                    this.local_open_file_manager(cx);
                 });
             }
         },
@@ -255,7 +255,7 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_local_refresh(tab_id, cx);
+                    this.local_refresh(cx);
                 });
             }
         },
@@ -267,7 +267,7 @@ pub(super) fn build_local_context_menu(
             let app = app_entity.clone();
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_copy_selection(tab_id, cx);
+                    this.copy_selection(cx);
                 });
             }
         },
@@ -277,9 +277,9 @@ pub(super) fn build_local_context_menu(
         IconName::Clipboard,
         {
             let app = app_entity;
-            move |_, window, cx| {
+            move |_, _window, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_paste_clipboard(tab_id, window, cx);
+                    this.paste_clipboard(cx);
                 });
             }
         },
@@ -293,7 +293,7 @@ pub(super) fn build_local_context_menu(
 /// 仍归行菜单，空白区不放一个必然报错的入口。
 pub(super) fn build_local_blank_context_menu(
     menu: PopupMenu,
-    app: Entity<AppShell>,
+    app: Entity<SftpPanelView>,
     tab_id: TabId,
 ) -> PopupMenu {
     menu.item(crate::widgets::menu_item(
@@ -303,7 +303,7 @@ pub(super) fn build_local_blank_context_menu(
             let app = app.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_local_go_up(tab_id, window, cx);
+                    this.local_go_up(tab_id, window, cx);
                 });
             }
         },
@@ -315,7 +315,7 @@ pub(super) fn build_local_blank_context_menu(
             let app = app.clone();
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_local_refresh(tab_id, cx);
+                    this.local_refresh(cx);
                 });
             }
         },
@@ -327,7 +327,7 @@ pub(super) fn build_local_blank_context_menu(
             let app = app.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_open_local_mkdir_modal(tab_id, window, cx);
+                    this.open_local_mkdir_modal(window, cx);
                 });
             }
         },
@@ -339,7 +339,7 @@ pub(super) fn build_local_blank_context_menu(
             let app = app.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    this.sftp_open_local_new_file_modal(tab_id, window, cx);
+                    this.open_local_new_file_modal(window, cx);
                 });
             }
         },
@@ -347,9 +347,9 @@ pub(super) fn build_local_blank_context_menu(
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.paste_here").to_string(),
         IconName::Clipboard,
-        move |_, window, cx| {
+        move |_, _window, cx| {
             app.update(cx, |this, cx| {
-                this.sftp_paste_clipboard(tab_id, window, cx);
+                this.paste_clipboard(cx);
             });
         },
     ))

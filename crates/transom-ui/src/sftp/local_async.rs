@@ -168,13 +168,6 @@ impl AppShell {
         }
     }
 
-    /// 批量删除本地选中项。
-    pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.local_delete_selection(tab_id, cx));
-        }
-    }
-
     /// 执行已确认的本地删除。
     pub(crate) fn perform_sftp_local_delete(
         &mut self,

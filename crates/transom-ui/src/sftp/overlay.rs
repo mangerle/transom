@@ -46,7 +46,7 @@ pub(crate) struct DropOverlayState {
     /// 是否展开明细行；收起时只保留一行汇总。
     pub(crate) expanded: bool,
     /// 队列排空后的收起任务；覆盖句柄即取消（dropping `Task` 会终止任务）。
-    settle_task: Option<Task<()>>,
+    pub(super) settle_task: Option<Task<()>>,
     /// 速率采样锚点：上一次进度事件的时刻与累计字节数。
     rate_anchor: Option<(Instant, u64)>,
     /// 一阶平滑后的字节/秒速率。

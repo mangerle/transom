@@ -6,7 +6,7 @@ use crate::app::AppShell;
 use crate::palette::localized_error;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::*;
-use transom_core::{TabId, validate_transfer_filter};
+use transom_core::validate_transfer_filter;
 
 impl SftpPanelView {
     /// 打开传输排除规则编辑弹窗：文本取自外壳设置，装配在外壳完成。
@@ -30,17 +30,6 @@ impl SftpPanelView {
 }
 
 impl AppShell {
-    pub(crate) fn sftp_open_filter_modal(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.open_filter_modal(window, cx));
-        }
-    }
-
     /// 校验并保存排除规则；非法规则保留弹窗并就地提示，不中断已有传输。
     pub(crate) fn save_sftp_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(mut modal) = self.state.sftp_modals.filter.take() else {

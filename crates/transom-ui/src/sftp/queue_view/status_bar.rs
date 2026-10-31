@@ -7,8 +7,8 @@
 //!   2. 支持一键全部暂停、全部恢复与全部取消；
 //!   3. 避免目录读取等瞬态侵入状态栏导致整个 SFTP 面板布局抖动与闪烁。
 
-use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -37,9 +37,9 @@ pub(crate) struct SftpStatusBarProps {
     pub(crate) total_speed_bps: Option<u64>,
 }
 
-impl AppShell {
+impl SftpPanelView {
     pub(crate) fn render_sftp_status_bar(
-        &mut self,
+        &self,
         props: SftpStatusBarProps,
         p: &Palette,
         cx: &mut Context<Self>,
@@ -134,7 +134,7 @@ impl AppShell {
                                 .icon(IconName::Pause)
                                 .tooltip(rust_i18n::t!("sftp.queue.pause_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_pause_all(tab_id, cx);
+                                    this.pause_all(tab_id, cx);
                                 })),
                         )
                         .child(
@@ -144,7 +144,7 @@ impl AppShell {
                                 .icon(IconName::X)
                                 .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_cancel_all(tab_id, cx);
+                                    this.cancel_all(tab_id, cx);
                                 })),
                         ),
                 );
@@ -160,7 +160,7 @@ impl AppShell {
                                 .icon(IconName::Play)
                                 .tooltip(rust_i18n::t!("sftp.queue.resume_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_resume_all(tab_id, cx);
+                                    this.resume_all(tab_id, cx);
                                 })),
                         )
                         .child(
@@ -170,7 +170,7 @@ impl AppShell {
                                 .icon(IconName::X)
                                 .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.sftp_cancel_all(tab_id, cx);
+                                    this.cancel_all(tab_id, cx);
                                 })),
                         ),
                 );

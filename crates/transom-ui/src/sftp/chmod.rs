@@ -1,9 +1,8 @@
 //! SFTP 文件权限操作：远端 Chmod 弹窗的打开、位切换与保存，以及右键一键授予执行位。
 
 use crate::app::AppShell;
-use crate::sftp::SftpRemotePaneRef;
 use gpui_kit::*;
-use transom_core::{SftpOperation, TabId, format_octal_permissions, parse_octal_permissions};
+use transom_core::{SftpOperation, format_octal_permissions, parse_octal_permissions};
 
 /// 在现有权限上叠加属主/组/其他三方的执行位，其余位（含 setuid、sticky）原样保留。
 ///
@@ -21,43 +20,8 @@ pub(super) fn exec_granted_mode(current: Option<u32>, is_dir: bool) -> u32 {
 }
 
 impl AppShell {
-    /// 远端右键一键授予执行位：对当前定位到的选中项逐个下发 Chmod 操作。
-    ///
-    /// 目标集合的取法与"下载""删除"完全一致：右键项已在多选集里就整批处理，
-    /// 否则只处理它自己，避免同一面板里出现两套批量语义。
-    /// 目标远端列一键授予执行位：主远端与并列远端共用同一套批量口径。
-    pub(crate) fn sftp_grant_remote_exec_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.grant_remote_exec(target, cx));
-        }
-    }
-
     /// 本地右键一键授予执行位（仅 Unix）。
     #[cfg(unix)]
-    pub(crate) fn sftp_grant_local_exec(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.grant_local_exec(cx));
-        }
-    }
-
-    /// 打开目标远端列的 Chmod 弹窗。
-    pub(crate) fn sftp_open_chmod_modal_for(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.open_chmod_modal(target, window, cx));
-        }
-    }
-
     pub(crate) fn sftp_toggle_chmod_bit(
         &mut self,
         mask: u32,

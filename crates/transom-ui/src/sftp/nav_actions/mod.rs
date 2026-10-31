@@ -164,15 +164,4 @@ impl AppShell {
             });
         }
     }
-
-    pub(crate) fn sftp_start_resize_queue(
-        &mut self,
-        tab_id: TabId,
-        start_y: f32,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.start_resize_queue(start_y, cx));
-        }
-    }
 }

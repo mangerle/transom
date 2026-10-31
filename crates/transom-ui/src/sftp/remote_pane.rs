@@ -12,9 +12,9 @@
 use super::SftpTransferRequest;
 use super::remote_content::{RemoteContentProps, build_remote_blank_context_menu};
 use super::side_remote::{SftpDragItem, SftpRemoteCopyParams};
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -55,7 +55,7 @@ pub(super) fn pane_key(target: SftpRemotePaneRef) -> String {
     }
 }
 
-impl AppShell {
+impl SftpPanelView {
     /// 远端列：标题/路径导航、操作工具栏、过滤栏与文件内容区。
     pub(super) fn render_remote_pane(
         &self,
@@ -89,27 +89,23 @@ impl AppShell {
             .xsmall()
             .icon(IconName::ArrowUp)
             .tooltip(rust_i18n::t!("sftp.remote.go_up").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.sftp_go_up_pane(tab_id, target, window, cx)
-            }));
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
+            );
 
         let refresh_btn = Button::new(format!("remote-refresh-{key}"))
             .ghost()
             .xsmall()
             .icon(IconName::RefreshCw)
             .tooltip(rust_i18n::t!("sftp.remote.refresh").to_string())
-            .on_click(
-                cx.listener(move |this, _, _, cx| this.sftp_refresh_pane(tab_id, target, cx)),
-            );
+            .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
 
         let enter_btn = Button::new(format!("remote-enter-{key}"))
             .ghost()
             .xsmall()
             .icon(IconName::ArrowRight)
             .tooltip(rust_i18n::t!("sftp.remote.enter_path").to_string())
-            .on_click(
-                cx.listener(move |this, _, _, cx| this.sftp_enter_path_pane(tab_id, target, cx)),
-            );
+            .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
 
         let collapse_btn = Button::new(format!("remote-collapse-{key}"))
             .ghost()
@@ -125,8 +121,8 @@ impl AppShell {
                 rust_i18n::t!("sftp.remote.collapse").to_string()
             })
             .on_click(cx.listener(move |this, _, _, cx| match side_index {
-                Some(index) => this.sftp_toggle_side_remote_collapse(tab_id, index, cx),
-                None => this.sftp_toggle_remote_collapse(tab_id, cx),
+                Some(index) => this.toggle_side_remote_collapse(index, cx),
+                None => this.toggle_remote_collapse(cx),
             }));
 
         let close_btn = side_index.map(|index| {
@@ -136,7 +132,7 @@ impl AppShell {
                 .icon(IconName::X)
                 .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.sftp_close_side_remote(tab_id, index, cx);
+                    this.close_side_remote(index, cx);
                 }))
         });
 
@@ -240,7 +236,7 @@ impl AppShell {
                             return;
                         }
                         app_upload_drop.update(cx, move |this, cx| {
-                            this.handle_dropped_files_to_pane(tab_id, &dropped, target, cx);
+                            this.drop_files_to_pane(&dropped, target, cx);
                         });
                     })
                     .on_drop(move |drag: &SftpDragItem, _window, cx| {
@@ -255,7 +251,7 @@ impl AppShell {
                                     let fname = path.rsplit('/').next().unwrap_or(path);
                                     let target_path =
                                         format!("{}/{}", dir.trim_end_matches('/'), fname);
-                                    this.sftp_enqueue_remote_transfer(
+                                    this.enqueue_remote_transfer(
                                         tab_id,
                                         SftpRemoteCopyParams {
                                             source_connection_id: src_conn,
@@ -276,7 +272,7 @@ impl AppShell {
                                         .unwrap_or_else(|| "upload".into());
                                     let target_path =
                                         format!("{}/{}", dir.trim_end_matches('/'), fname);
-                                    this.sftp_enqueue_transfer(
+                                    this.enqueue_transfer(
                                         SftpTransferRequest {
                                             tab_id,
                                             connection_id,

@@ -7,12 +7,13 @@ use super::filter::filter_named_entries;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
 use super::remote_pane::RemotePaneProps;
-use super::state::{SftpPanelState, SftpRemotePaneState};
+use super::state::SftpRemotePaneState;
 use super::{LocalFileEntry, SftpRemotePaneRef};
 use crate::app::AppShell;
 use crate::app::AppState;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::sftp::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
@@ -69,37 +70,40 @@ impl AppShell {
             .map(IntoElement::into_any_element)
             .unwrap_or_else(|| div().into_any_element())
     }
+}
 
-    /// 渲染当前活动窗格的 SFTP 面板。
+impl SftpPanelView {
+    /// 构建面板内容：状态、列、队列与状态栏都在实体上下文里完成。
     ///
-    /// 状态由实体在渲染入口传入：实体正被租借，外壳渲染路径**不得**再
-    /// `read`/`update` 同一实体，否则触发 “cannot update while it is already
-    /// being updated”；跨域数据（设置、标签连接）只从外壳自身状态读取。
-    pub(crate) fn render_sftp_panel_with_state(
-        &mut self,
-        panel: &mut super::SftpPanelState,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(tab_id) = self.state.workspace.active_tab else {
+    /// 外层容器由 `impl Render` 统一挂载；跨域数据（设置、标签连接）从外壳
+    /// 只读获取，渲染路径不会回读本实体。
+    pub(crate) fn render_panel_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let p = Palette::from(&*cx);
+        let tab_id = self.tab_id;
+        let app = self.app.clone();
+        let Some((tab_conn_id, settings)) = read_shell_parts(&app, cx, |shell| {
+            (
+                shell
+                    .state
+                    .workspace
+                    .tab(tab_id)
+                    .and_then(|tab| tab.connection_id),
+                shell.state.settings.sftp.clone(),
+            )
+        }) else {
             return div().into_any_element();
         };
-        let tab_conn_id = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.connection_id);
-        if panel.local.only && panel.side_remotes.is_empty() {
-            return self.render_local_only_panel_with_state(tab_id, panel, p, cx);
+        let state = &self.state;
+        if state.local.only && state.side_remotes.is_empty() {
+            return self.render_local_only_content(cx);
         }
 
-        let is_local_only = panel.local.only;
-        let sync_navigation = panel.sync_navigation;
-        let queue_height = panel.queue.height;
-        let _focus_handle = panel.focus_handle.clone();
-        let local_scroll_handle = panel.local.scroll_handle.clone();
-        let local_filter_input = panel.local.filter_input.clone();
+        let is_local_only = state.local.only;
+        let sync_navigation = state.sync_navigation;
+        let queue_height = state.queue.height;
+        let _focus_handle = state.focus_handle.clone();
+        let local_scroll_handle = state.local.scroll_handle.clone();
+        let local_filter_input = state.local.filter_input.clone();
         let local_filter_query = local_filter_input
             .read(cx)
             .value()
@@ -107,29 +111,29 @@ impl AppShell {
             .to_ascii_lowercase();
 
         let local_entries = AppState::filter_local_entries(
-            panel,
-            panel.local.show_hidden,
+            state,
+            state.local.show_hidden,
             &local_filter_query,
-            &self.state.settings.sftp.panel_hidden_patterns,
+            &settings.panel_hidden_patterns,
         );
-        let remote_error = panel.queue.error.clone();
-        let status = panel.queue.status.clone();
-        let progress = panel.queue.progress;
-        let active_count = panel.queue.active_transfers.len();
+        let remote_error = state.queue.error.clone();
+        let status = state.queue.status.clone();
+        let progress = state.queue.progress;
+        let active_count = state.queue.active_transfers.len();
 
-        let local_path_input = panel.local.path_input.clone();
-        let local_error = panel.local.error.clone();
-        let quick_paths = panel.local.quick_paths.clone();
-        let local_collapsed = panel.local.collapsed;
-        let remote_collapsed = panel.remote.collapsed;
-        let side_remotes_info = panel
+        let local_path_input = state.local.path_input.clone();
+        let local_error = state.local.error.clone();
+        let quick_paths = state.local.quick_paths.clone();
+        let local_collapsed = state.local.collapsed;
+        let remote_collapsed = state.remote.collapsed;
+        let side_remotes_info = state
             .side_remotes
             .iter()
             .enumerate()
             .map(|(i, s)| (i, s.collapsed, s.title.clone().unwrap_or_default()))
             .collect::<Vec<_>>();
 
-        let queue = panel.queue.tasks.clone();
+        let queue = state.queue.tasks.clone();
         let total_speed: u64 = queue
             .iter()
             .filter(|t| t.status == TransferStatus::Transferring)
@@ -140,24 +144,19 @@ impl AppShell {
         } else {
             None
         };
-        let resume_enabled = panel.queue.resume_enabled;
-        let verify_after_transfer = self.state.settings.sftp.verify_after_transfer;
-        let max_concurrent_transfers = self
-            .state
-            .settings
-            .sftp
-            .max_concurrent_transfers
-            .clamp(1, 8);
-        let queue_expanded = panel.queue.expanded;
+        let resume_enabled = state.queue.resume_enabled;
+        let verify_after_transfer = settings.verify_after_transfer;
+        let max_concurrent_transfers = settings.max_concurrent_transfers.clamp(1, 8);
+        let queue_expanded = state.queue.expanded;
         // 没有活动任务时回退汇总暂停任务进度，避免暂停后进度条消失
-        let paused_count = panel
+        let paused_count = state
             .queue
             .tasks
             .iter()
             .filter(|task| task.status == TransferStatus::Paused)
             .count();
         let paused_tasks = if active_count == 0 {
-            panel
+            state
                 .queue
                 .tasks
                 .iter()
@@ -184,27 +183,20 @@ impl AppShell {
         };
 
         // 先构建远端列：主远端与并列远端共用同一套视图，只按目标列取状态。
-        // 远端列借用 `panel`，必须在调用 &mut self 的本地列/队列渲染之前完成。
+        // 远端列借用 `state`，必须在调用 &mut self 的本地列/队列渲染之前完成。
         // 列按固定次序编排：本地 | 主远端 | 并列远端；折叠列由固定 32px 折叠条
         // 占住自己的位置，所有列始终在同一个可拖拽分栏组里。
         let side_titles: Vec<(usize, String)> = side_remotes_info
             .iter()
             .map(|(index, _, title)| (*index, title.clone()))
             .collect();
-        let hidden_patterns = self.state.settings.sftp.panel_hidden_patterns.clone();
+        let hidden_patterns = settings.panel_hidden_patterns.clone();
         let mut remote_columns: Vec<SftpColumn> = Vec::new();
         if !is_local_only && let Some(connection_id) = tab_conn_id {
             let content = if remote_collapsed {
-                self.render_sftp_collapsed_bar(
-                    tab_id,
-                    SftpColumnId::Remote,
-                    &side_titles,
-                    panel,
-                    p,
-                    cx,
-                )
+                self.render_sftp_collapsed_bar(SftpColumnId::Remote, &side_titles, &p, cx)
             } else {
-                let filter_query = panel
+                let filter_query = state
                     .remote
                     .filter_input
                     .read(cx)
@@ -212,8 +204,8 @@ impl AppShell {
                     .trim()
                     .to_ascii_lowercase();
                 let entries = AppState::filter_remote_entries(
-                    &panel.remote,
-                    panel.remote.show_hidden,
+                    &state.remote,
+                    state.remote.show_hidden,
                     &filter_query,
                     &hidden_patterns,
                 );
@@ -223,17 +215,17 @@ impl AppShell {
                         target: SftpRemotePaneRef::Main,
                         side_index: None,
                         title: rust_i18n::t!("sftp.remote_title").to_string(),
-                        pane: &panel.remote,
+                        pane: &state.remote,
                         connection_id,
-                        show_filter: panel.remote.show_filter,
-                        show_hidden: panel.remote.show_hidden,
+                        show_filter: state.remote.show_filter,
+                        show_hidden: state.remote.show_hidden,
                         sync_navigation,
                         show_editor_list: true,
                         remote_entries: entries,
-                        remote_selection: panel.remote.selection.clone(),
-                        remote_primary: panel.remote.selected.clone(),
+                        remote_selection: state.remote.selection.clone(),
+                        remote_primary: state.remote.selected.clone(),
                     },
-                    p,
+                    &p,
                     cx,
                 )
             };
@@ -243,16 +235,9 @@ impl AppShell {
                 content,
             });
         }
-        for (side_index, side) in panel.side_remotes.iter().enumerate() {
+        for (side_index, side) in state.side_remotes.iter().enumerate() {
             let content = if side.collapsed {
-                self.render_sftp_collapsed_bar(
-                    tab_id,
-                    SftpColumnId::Side(side_index),
-                    &side_titles,
-                    panel,
-                    p,
-                    cx,
-                )
+                self.render_sftp_collapsed_bar(SftpColumnId::Side(side_index), &side_titles, &p, cx)
             } else {
                 let Some(connection_id) = side.connection_id else {
                     continue;
@@ -285,7 +270,7 @@ impl AppShell {
                         remote_selection: side.selection.clone(),
                         remote_primary: side.selected.clone(),
                     },
-                    p,
+                    &p,
                     cx,
                 )
             };
@@ -296,23 +281,26 @@ impl AppShell {
             });
         }
 
-        let diff_ready = self.state.diff_entry_ready_with_panel(tab_id, panel, cx);
+        let diff_ready = read_shell_parts(&self.app, cx, |shell| {
+            shell.state.diff_entry_ready_with_panel(tab_id, state)
+        })
+        .unwrap_or(false);
         let local_pane = self.render_sftp_local_pane(
             SftpLocalPaneProps {
                 tab_id,
-                show_filter: panel.local.show_filter,
-                show_hidden: panel.local.show_hidden,
+                show_filter: state.local.show_filter,
+                show_hidden: state.local.show_hidden,
                 local_path_input,
                 local_filter_input,
                 local_entries,
                 local_scroll_handle,
                 quick_paths,
                 remote_available: true,
-                local_selection: panel.local.selection.clone(),
-                local_primary: panel.local.selected.clone(),
+                local_selection: state.local.selection.clone(),
+                local_primary: state.local.selected.clone(),
                 diff_ready,
             },
-            p,
+            &p,
             cx,
         );
 
@@ -326,7 +314,7 @@ impl AppShell {
                 queue_expanded,
                 queue_height,
             },
-            p,
+            &p,
             cx,
         );
         let status_bar_element = self.render_sftp_status_bar(
@@ -341,12 +329,12 @@ impl AppShell {
                 status,
                 total_speed_bps,
             },
-            p,
+            &p,
             cx,
         );
 
         let local_content = if local_collapsed {
-            self.render_sftp_collapsed_bar(tab_id, SftpColumnId::Local, &side_titles, panel, p, cx)
+            self.render_sftp_collapsed_bar(SftpColumnId::Local, &side_titles, &p, cx)
         } else {
             local_pane
         };
@@ -359,20 +347,14 @@ impl AppShell {
         columns.extend(remote_columns);
 
         let is_all_collapsed = columns.iter().all(|column| column.collapsed);
-        let header = self.render_sftp_panel_top_header(
-            tab_id,
-            is_all_collapsed,
-            is_local_only,
-            panel,
-            p,
-            cx,
-        );
-        let columns_container = self.render_sftp_columns(tab_id, columns, panel, cx);
+        let header =
+            self.render_sftp_panel_top_header(tab_id, is_all_collapsed, is_local_only, &p, cx);
+        let columns_container = self.render_sftp_columns(tab_id, columns, cx);
 
         // 外层容器与键盘/鼠标监听归实体（见 `impl Render for SftpPanelView`）；
         // 这里只构建内容，避免同一元素上重复挂两套监听。
-        let mut panel_element = v_flex()
-            .id(ElementId::Name("sftp-panel-content".into()))
+        let mut state_element = v_flex()
+            .id(ElementId::Name("sftp-state-content".into()))
             .size_full()
             .overflow_hidden()
             .bg(p.sidebar)
@@ -389,7 +371,7 @@ impl AppShell {
             );
 
         if !is_all_collapsed {
-            panel_element = panel_element.child(queue_pane);
+            state_element = state_element.child(queue_pane);
             if let Some(status_element) = status_bar_element {
                 let status_element = if queue_expanded {
                     status_element
@@ -402,11 +384,11 @@ impl AppShell {
                         .divider_edge(DividerEdge::Top, p.divider_width)
                         .into_any_element()
                 };
-                panel_element = panel_element.child(status_element);
+                state_element = state_element.child(status_element);
             }
         }
 
-        panel_element.into_any_element()
+        state_element.into_any_element()
     }
 
     /// 渲染 SFTP 顶栏标题与操作区。
@@ -415,7 +397,6 @@ impl AppShell {
         tab_id: transom_core::TabId,
         is_all_collapsed: bool,
         is_local_only: bool,
-        panel: &SftpPanelState,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -433,21 +414,16 @@ impl AppShell {
                         .icon(IconName::X)
                         .tooltip(rust_i18n::t!("app.close").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(pane) = this
-                                .state
-                                .workspace
-                                .tab_mut(tab_id)
-                                .and_then(|tab| tab.session_pane_mut())
-                            {
-                                pane.sftp_view = None;
-                            }
-                            cx.notify();
+                            let app = this.app.clone();
+                            with_shell_parts(&app, cx, |shell, _| {
+                                shell.close_sftp_panel(tab_id);
+                            });
                         })),
                 )
                 .divider_edge(DividerEdge::Bottom, p.divider_width)
                 .into_any_element()
         } else {
-            let mount_btn = self.render_side_remote_mount_button(tab_id, panel, p, cx);
+            let mount_btn = self.render_side_remote_mount_button(p, cx);
             let title_text = if is_local_only {
                 rust_i18n::t!("sftp.local_files_title").to_string()
             } else {

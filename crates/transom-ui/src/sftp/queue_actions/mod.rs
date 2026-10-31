@@ -17,12 +17,6 @@ use std::path::PathBuf;
 use transom_core::{ConnectionId, SftpOperation, TabId, TransferDirection, TransferFilter};
 
 impl AppShell {
-    pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.queue_upload(tab_id, cx));
-        }
-    }
-
     /// 把本地列选中的一组路径上传到标签页主远端当前目录。
     pub(crate) fn enqueue_uploads(
         &mut self,
@@ -36,23 +30,6 @@ impl AppShell {
         view.update(cx, |view, cx| view.enqueue_uploads(tab_id, paths, cx))
     }
 
-    /// 把一组本地路径入队为上传任务并启动调度；队列状态与调度都归实体。
-    pub(crate) fn enqueue_uploads_to(
-        &mut self,
-        tab_id: TabId,
-        paths: &[PathBuf],
-        remote_dir: &str,
-        target_connection_id: ConnectionId,
-        cx: &mut Context<Self>,
-    ) -> Result<usize, String> {
-        let Some(view) = self.sftp_view(tab_id) else {
-            return Err(rust_i18n::t!("sftp.upload_file").to_string());
-        };
-        view.update(cx, |view, cx| {
-            view.enqueue_uploads_to(tab_id, paths, remote_dir, target_connection_id, cx)
-        })
-    }
-
     /// 按并发上限启动待处理任务；调度本体在实体上，外壳只负责转发。
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(view) = self.sftp_view(tab_id) {
@@ -60,37 +37,10 @@ impl AppShell {
         }
     }
 
-    pub(crate) fn sftp_queue_clear_done(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.queue_clear_done(cx));
-        }
-    }
-
-    /// 循环切换并发传输数；增加时立即补位启动待处理任务。
-    pub(crate) fn sftp_cycle_concurrency(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.cycle_concurrency(tab_id, cx));
-        }
-    }
-
-    /// 一键重试传输队列中全部处于失败状态（`TransferStatus::Failed`）的任务。
-    pub(crate) fn sftp_retry_all_failed(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.retry_all_failed(tab_id, cx));
-        }
-    }
-
     /// 暂停全部活动与排队任务；队列收起时由状态栏调用。
     pub(crate) fn sftp_pause_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(view) = self.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.pause_all(tab_id, cx));
-        }
-    }
-
-    /// 继续全部暂停任务。
-    pub(crate) fn sftp_resume_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.resume_all(tab_id, cx));
         }
     }
 

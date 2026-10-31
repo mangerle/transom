@@ -4,9 +4,9 @@
 //! - 实现初衷：为 SFTP 双栏文件浏览器主面板及全屏/单栏模式提供统一的标题条渲染；
 //! - 核心优势：集中封装面板标题、关闭事件及额外的右侧按钮扩展点。
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::sftp::entity::{SftpPanelView, with_shell_parts};
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
@@ -14,7 +14,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
-impl AppShell {
+impl SftpPanelView {
     /// 渲染 SFTP 面板顶部通用标题栏，包含标题、扩展按钮插槽与关闭按钮。
     pub(crate) fn render_sftp_panel_header(
         &self,
@@ -29,13 +29,11 @@ impl AppShell {
             .icon(IconName::X)
             .tooltip(rust_i18n::t!("sftp.nav.close_panel").to_string())
             .on_click(cx.listener(|this, _, _, cx| {
-                if let Some(tab_id) = this.state.workspace.active_tab
-                    && let Some(tab) = this.state.workspace.tab_mut(tab_id)
-                    && let Some(pane) = tab.session_pane_mut()
-                {
-                    pane.sftp_view = None;
-                }
-                cx.notify();
+                let app = this.app.clone();
+                let tab_id = this.tab_id;
+                with_shell_parts(&app, cx, |shell, _| {
+                    shell.close_sftp_panel(tab_id);
+                });
             }));
 
         let mut right_actions = h_flex().gap_1().items_center();
