@@ -3,7 +3,7 @@
 //! 面板状态与几何换算在 `editor_panel.rs`，打开与读取在 `editor_open.rs`，
 //! 保存回传在 `editor_ops.rs`，关闭闸门在 `editor_close.rs`，渲染在 `editor_view.rs`。
 
-use super::panel::{EditorPhase, PANEL_KEEP_VISIBLE, PanelConfirm, clamp_axis};
+use super::panel::{EditorPhase, PanelConfirm};
 use crate::app::AppShell;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
@@ -14,14 +14,7 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let found = self.update_editor_panel(editor, |item| {
-            item.collapsed = !item.collapsed;
-            // 折叠与最大化互斥：折叠时先退出全屏，否则只有标题栏的一条横幅铺满整屏。
-            if item.collapsed {
-                item.maximized = false;
-            }
-        });
-        if !found {
+        if !self.state.editors.toggle_collapsed(editor) {
             return;
         }
         cx.notify();
@@ -32,11 +25,7 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let found = self.update_editor_panel(editor, |item| {
-            item.maximized = !item.maximized;
-            item.collapsed = false;
-        });
-        if !found {
+        if !self.state.editors.toggle_maximized(editor) {
             return;
         }
         cx.notify();
@@ -48,20 +37,9 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self
-            .state
-            .editors
-            .panels
-            .iter()
-            .position(|item| item.editor == *editor)
-        else {
-            return;
-        };
-        if index + 1 == self.state.editors.len() {
+        if !self.state.editors.raise(editor) {
             return;
         }
-        let item = self.state.editors.panels.remove(index);
-        self.state.editors.panels.push(item);
         cx.notify();
     }
 
@@ -82,12 +60,8 @@ impl AppShell {
             }
         }
         let (x, y): (f32, f32) = (position.x.into(), position.y.into());
-        self.update_editor_panel(editor, |item| {
-            if item.maximized {
-                return;
-            }
-            item.drag_grab = Some((x - item.left, y - item.top));
-        });
+        // 同一时刻至多一个面板在拖：管理器会清掉其他面板残留的拖拽位。
+        self.state.editors.begin_drag(editor, x, y);
     }
 
     /// 视口级拖拽推进：只有确实有面板在被拖动时才改写状态并重绘。
@@ -99,37 +73,15 @@ impl AppShell {
     ) {
         let (x, y): (f32, f32) = (position.x.into(), position.y.into());
         let (viewport_w, viewport_h): (f32, f32) = (viewport.width.into(), viewport.height.into());
-        let mut dragging = false;
-        for item in self.state.editors.panels.iter_mut() {
-            let Some((grab_x, grab_y)) = item.drag_grab else {
-                continue;
-            };
-            dragging = true;
-            item.left = clamp_axis(x - grab_x, item.width, viewport_w, PANEL_KEEP_VISIBLE);
-            item.top = clamp_axis(
-                y - grab_y,
-                item.current_height(),
-                viewport_h,
-                PANEL_KEEP_VISIBLE,
-            );
-        }
+        let dragging = self.state.editors.drag(x, y, viewport_w, viewport_h);
         if dragging {
             cx.notify();
         }
     }
 
     pub(crate) fn end_editor_panel_drag(&mut self, cx: &mut Context<Self>) {
-        if !self
-            .state
-            .editors
-            .panels
-            .iter()
-            .any(|item| item.drag_grab.is_some())
-        {
+        if !self.state.editors.end_drag() {
             return;
-        }
-        for item in self.state.editors.panels.iter_mut() {
-            item.drag_grab = None;
         }
         cx.notify();
     }
