@@ -27,6 +27,7 @@ mod delete;
 mod file_ops;
 mod queue;
 mod status;
+mod task_control;
 
 use super::SftpPanelState;
 use crate::app::AppShell;
