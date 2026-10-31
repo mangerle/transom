@@ -145,6 +145,20 @@
 - **优先复用 GPUI-kit 现有组件**：在开发 UI 界面与交互功能时，凡是 `gpui-kit` 中已提供的基础组件与容器（如按钮、文本输入框、复选框、下拉菜单、标签页、模态弹窗等），严禁重复造轮子自行手写实现，必须优先引入并基于 `gpui-kit` 现有组件进行组合与扩展，保持全应用 UI 风格统一与交互一致。
 - **严格资产规范与杜绝字符拟态图标**：严禁使用普通文本字符（如 `"+"`, `"-"`, `"x"`, `"X"`, `">"`, `"..."` 等）、Unicode 符号或伪字符当作 UI 图标；凡是 `gpui-kit` 中已存在相应矢量图标资产（`gpui_kit::assets::IconName`），必须严格使用 `Icon::new(IconName::...)` 渲染标准图标。若确无对应图标，需通过标准 SVG 资产接入机制引入，杜绝任何字符拼接 UI 视觉元素的临时做法。
 
+### 14. Transom UI 分层、组件化与异步 IO 契约
+
+- **功能模块归属 `app` 子树**：`transom-ui` 的功能模块必须通过 `app/mod.rs` 的 `#[path]` 声明挂在 `app` 之下；`AppShell` 字段保持模块私有，禁止为了省事改回 `pub(crate)`。crate 根只保留模块重导出与基础模块（theme、palette、keymap 等）。
+- **状态与外壳分离**：应用级状态集中在 `app::state::AppState`，`AppShell` 只保留 `state` 字段并通过 `Deref`/`DerefMut` 复用状态操作；新增状态优先放 `AppState` 或 feature 结构体，禁止继续往 `AppShell` 平铺字段。
+- **表现层组件契约**：跨页面复用的 UI 必须放 `transom-ui/src/widgets/`，只接收数据与回调，禁止依赖 `AppShell`、禁止直接访问 store。组件内部优先复用 `gpui-kit` 的 `Button`、`Dialog`、`Empty`、`Progress`、`Settings`、`Kbd` 等，不重写焦点、键盘与弹层行为。
+- **设计令牌强制**：组件层禁止裸写 `text_xs()`、`text_sm()`、`px(...)`、`gap_N()`；字号、间距、控件尺寸与弹窗宽度必须取 `theme::tokens` 的 `typography`、`space`、`control`、`dialog` 档位。`widgets_use_design_tokens` 源码守卫必须保持通过。
+- **弹窗元数据单一来源**：`ModalKind` 的宽度与 slug 必须由 `ModalSpec` 一次提供；`ORDER` 必须覆盖全部种类且不重复，`order_covers_every_kind_exactly_once` 测试必须保持通过。新增弹窗同时评估是否应拆到独立视图文件。
+- **UI 线程禁止同步磁盘与重解析**：渲染函数、点击回调与事件处理中禁止直接 `std::fs` 读写大文件、解析 `.cast`、扫描审计目录或同步保存设置/会话目录。统一使用 `app::persistence::SnapshotWriter` 做覆盖式异步落盘，或用 `spawn_blocking_local` 执行阻塞 IO；只有退出路径等必须落定的单次写入允许同步保存。
+- **外部文件必须有上限**：解析 `.cast`、审计日志、预览与差异等外部文件必须先检查体积与事件数上限；`MAX_CAST_BYTES` / `MAX_CAST_EVENTS` 等常量不得绕过。
+- **错误不得静默降级**：禁止 `let _ = save(...)` 这类吞错写法；设置保存走 `persist_settings_reported`，目录保存走 `persist_catalog`，后台写盘错误由渲染帧统一转成应用内通知。确实可恢复的降级必须记录日志并说明原因。
+- **平台边界**：桌面注册、启动器与图标安装只经 `transom-desktop`；macOS/Windows 的占位实现必须返回明确错误，不允许静默成功。存储层不再承担桌面集成。
+- **文件拆分准则**：单文件超过 500 行按“状态 / 视图 / 动作 / 测试”拆分，不按行数机械切割；子模块共用导入收敛到 `common.rs` 之类的私有模块，禁止复制一长串 import。拆分后外部路径通过父模块重导出保持稳定。
+- **提交与验证**：一次提交只解决一个问题，提交信息使用 Conventional Commits 中文描述；每次提交前执行 `cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo check --all-targets`，涉及行为变更时执行 `cargo test`。重构提交必须说明取舍与门禁结果。
+
 ---
 
 ## 三、 自动化质量门禁与自检清单 (Quality Gates & Checklist)
@@ -172,3 +186,7 @@
 12. **[测试与文档]** 核心逻辑与错误分支是否编写了单元测试？公开接口与关键算法是否写明了为什么这么实现、优缺点与权衡？代码改动后关联注释是否已同步更新且杜绝了无意义的复述？
 13. **[静态质量门禁]** 是否已执行 `cargo fmt` 并验证 `cargo clippy` 达到零警告？
 14. **[UI 与资产复用]** 是否优先复用了 `gpui-kit` 现有组件而非自建重复实现？图标展示是否严格使用了 `gpui-kit` 标准图标（`IconName`/`Icon`）而非普通字符拟态？
+15. **[UI 状态封装]** 功能模块是否挂在 `app` 子树下？`AppShell` 字段是否保持私有？新增状态是否放进了 `AppState` 或 feature 结构体？
+16. **[UI 线程 IO]** 是否消除了渲染/点击/事件路径上的同步磁盘、`.cast` 解析与审计扫描？异步写盘是否使用覆盖式有界单槽并处理失败？
+17. **[设计令牌]** 新增或迁移的组件是否使用 `theme::tokens` 的字号/间距/控件/弹窗档位？是否通过 `widgets_use_design_tokens` 守卫？
+18. **[平台边界]** 桌面集成是否只经 `transom-desktop`？macOS/Windows 占位实现是否返回明确错误而非静默成功？
