@@ -287,12 +287,12 @@ impl AppShell {
         let error = form.error.clone();
         let content = v_flex()
             .gap_3()
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("snippets.name_column").to_string(),
                 name_input,
                 p,
             ))
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("snippets.command_column").to_string(),
                 command_input,
                 p,
@@ -320,7 +320,7 @@ impl AppShell {
                         |this, _: &ClickEvent, _, cx| this.save_snippet_form(cx),
                     )),
             );
-        Self::dialog_body("snippet-form", title, None::<String>, content, Some(footer))
+        crate::widgets::dialog_body("snippet-form", title, None::<String>, content, Some(footer))
     }
 }
 

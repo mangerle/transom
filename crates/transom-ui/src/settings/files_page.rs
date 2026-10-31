@@ -18,7 +18,7 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.editor_soft_wrap",
                 Some("settings.editor_soft_wrap_desc"),
                 Switch::new("toggle-editor-soft-wrap")
@@ -31,7 +31,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.editor_line_numbers",
                 Some("settings.editor_line_numbers_desc"),
                 Switch::new("toggle-editor-line-numbers")
@@ -55,8 +55,8 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::setting_field_row(
-                Self::form_field(
+            .child(crate::widgets::setting_field_row(
+                crate::widgets::form_field(
                     rust_i18n::t!("settings.panel_hidden").to_string(),
                     self.modals.settings.panel_hidden_patterns.clone(),
                     p,
@@ -79,13 +79,13 @@ impl AppShell {
             Self::setting_stepper(&self.modals.settings.max_concurrent_transfers, px(110.0));
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.max_concurrent_transfers",
                 Some("settings.max_concurrent_transfers_desc"),
                 stepper,
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.verify_after_transfer",
                 Some("settings.verify_after_transfer_desc"),
                 Switch::new("toggle-verify-after-transfer")
@@ -98,7 +98,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.checksum_algorithm",
                 Some("settings.checksum_algorithm_desc"),
                 Self::setting_dropdown(
@@ -122,7 +122,7 @@ impl AppShell {
                 ),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.verify_mode",
                 Some("settings.verify_mode_desc"),
                 Self::setting_dropdown(
@@ -174,7 +174,7 @@ impl AppShell {
         });
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.zmodem_dir",
                 Some("settings.zmodem_dir_desc"),
                 h_flex()
@@ -190,7 +190,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.zmodem_auto_receive",
                 Some("settings.zmodem_auto_receive_desc"),
                 Switch::new("toggle-zmodem-auto-receive")

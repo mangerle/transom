@@ -17,7 +17,7 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_cpu_expanded",
                 Some("settings.monitor_cpu_expanded_desc"),
                 Switch::new("toggle-monitor-cpu-expanded")
@@ -32,7 +32,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_memory_expanded",
                 Some("settings.monitor_memory_expanded_desc"),
                 Switch::new("toggle-monitor-memory-expanded")
@@ -47,7 +47,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_disk_expanded",
                 Some("settings.monitor_disk_expanded_desc"),
                 Switch::new("toggle-monitor-disk-expanded")
@@ -62,7 +62,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_network_expanded",
                 Some("settings.monitor_network_expanded_desc"),
                 Switch::new("toggle-monitor-network-expanded")
@@ -77,7 +77,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_ports_expanded",
                 Some("settings.monitor_ports_expanded_desc"),
                 Switch::new("toggle-monitor-ports-expanded")
@@ -92,7 +92,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_services_expanded",
                 Some("settings.monitor_services_expanded_desc"),
                 Switch::new("toggle-monitor-services-expanded")
@@ -107,7 +107,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_processes_expanded",
                 Some("settings.monitor_processes_expanded_desc"),
                 Switch::new("toggle-monitor-processes-expanded")
@@ -137,7 +137,7 @@ impl AppShell {
 
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_default_width",
                 Some("settings.monitor_default_width_desc"),
                 Self::setting_dropdown(
@@ -163,7 +163,7 @@ impl AppShell {
                 ),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.monitor_default_interval",
                 Some("settings.monitor_default_interval_desc"),
                 Self::setting_dropdown(

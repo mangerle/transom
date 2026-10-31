@@ -69,23 +69,23 @@ pub(crate) fn render_proxy_section(
                 h_flex()
                     .gap_3()
                     .items_end()
-                    .child(div().flex_1().child(AppShell::form_field(
+                    .child(div().flex_1().child(crate::widgets::form_field(
                         rust_i18n::t!("form.proxy_host").to_string(),
                         proxy_host,
                         p,
                     )))
-                    .child(div().w(px(110.0)).child(AppShell::form_field(
+                    .child(div().w(px(110.0)).child(crate::widgets::form_field(
                         rust_i18n::t!("form.proxy_port").to_string(),
                         proxy_port,
                         p,
                     ))),
             )
-            .child(AppShell::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("form.proxy_username").to_string(),
                 proxy_username,
                 p,
             ))
-            .child(AppShell::secret_field(
+            .child(crate::widgets::secret_field(
                 rust_i18n::t!("form.proxy_password").to_string(),
                 proxy_password,
                 p,

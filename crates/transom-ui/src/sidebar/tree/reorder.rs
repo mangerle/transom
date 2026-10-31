@@ -5,15 +5,9 @@ use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::DropSide;
-
-/// 行内动作按钮的命中边长（px）。
-const ROW_ACTION_SIZE: Pixels = px(20.0);
-/// 行内动作按钮的图标边长（px），与折叠箭头同级，避免抢过会话协议图标。
-const ROW_ACTION_ICON_SIZE: Pixels = px(14.0);
 
 /// 侧栏行快捷操作按钮配置属性。
 pub(super) struct RowActionButtonProps<F> {
@@ -39,7 +33,7 @@ pub(super) struct RowActionButtonProps<F> {
 ///   按钮时少 20px；不这么做的话悬停时行名会跟着抖动，比少 20px 更难接受。
 pub(super) fn row_action_button(
     props: RowActionButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
-    p: &Palette,
+    _p: &Palette,
 ) -> AnyElement {
     let RowActionButtonProps {
         element_id,
@@ -48,21 +42,9 @@ pub(super) fn row_action_button(
         idle_color,
         on_click,
     } = props;
-    div()
-        .id(ElementId::Name(element_id.into()))
-        .flex_none()
-        .size(ROW_ACTION_SIZE)
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(p.radius.md)
-        .cursor_pointer()
+    crate::widgets::icon_button(ElementId::Name(element_id.into()), icon, tooltip)
         .text_color(idle_color)
-        .hover(|style| style.bg(p.foreground.opacity(0.10)))
-        .active(|style| style.bg(p.border))
-        .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
         .on_click(on_click)
-        .child(Icon::new(icon).with_size(ROW_ACTION_ICON_SIZE))
         .into_any_element()
 }
 

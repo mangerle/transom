@@ -148,7 +148,7 @@ pub(crate) fn render_serial_fields(
                     h_flex()
                         .gap_2()
                         .items_end()
-                        .child(div().flex_1().child(AppShell::form_field(
+                        .child(div().flex_1().child(crate::widgets::form_field(
                             rust_i18n::t!("form.serial_port").to_string(),
                             form.serial_port.clone(),
                             p,
@@ -182,7 +182,7 @@ pub(crate) fn render_serial_fields(
             h_flex()
                 .gap_3()
                 .items_end()
-                .child(div().w(px(160.0)).child(AppShell::form_field(
+                .child(div().w(px(160.0)).child(crate::widgets::form_field(
                     rust_i18n::t!("form.serial_baud").to_string(),
                     form.serial_baud.clone(),
                     p,

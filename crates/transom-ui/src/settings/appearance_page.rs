@@ -210,7 +210,10 @@ impl AppShell {
             .gap_3()
             .child(mode_row)
             .child(density_row)
-            .child(Self::setting_frame(card_block.into_any_element(), p))
+            .child(crate::widgets::setting_frame(
+                card_block.into_any_element(),
+                p,
+            ))
             .into_any_element()
     }
 
@@ -280,13 +283,13 @@ impl AppShell {
         let width_control = Self::setting_stepper(&self.modals.settings.divider_width, px(110.0));
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.divider_color",
                 Some("settings.divider_color_desc"),
                 color_control,
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.divider_width",
                 Some("settings.divider_width_desc"),
                 width_control,
@@ -356,13 +359,13 @@ impl AppShell {
             .into_any_element();
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.window_background",
                 Some("settings.window_background_desc"),
                 mode_buttons,
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.window_transparency",
                 Some("settings.window_transparency_desc"),
                 Self::percent_slider(&self.modals.settings.window_transparency, transparency, p),

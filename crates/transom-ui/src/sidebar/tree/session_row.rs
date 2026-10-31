@@ -111,19 +111,19 @@ impl AppShell {
                 let app_entity = app_entity.clone();
                 move |menu, _window, _cx| {
                     let app = app_entity.clone();
-                    let mut menu = menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("menu.connect").to_string())
-                            .icon(IconName::Terminal)
-                            .on_click({
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.connect_session(session_id, window, cx);
-                                        this.reveal_vertical_tabs_panel(cx);
-                                    });
-                                }
-                            }),
-                    );
+                    let mut menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("menu.connect").to_string(),
+                        IconName::Terminal,
+                        {
+                            let app = app.clone();
+                            move |_, window, cx| {
+                                app.update(cx, |this, cx| {
+                                    this.connect_session(session_id, window, cx);
+                                    this.reveal_vertical_tabs_panel(cx);
+                                });
+                            }
+                        },
+                    ));
                     if folder_id.is_some() {
                         menu = menu.item(
                             PopupMenuItem::new(rust_i18n::t!("menu.move_to_root").to_string())

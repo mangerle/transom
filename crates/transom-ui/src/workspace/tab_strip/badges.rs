@@ -58,7 +58,7 @@ pub(super) struct TabStripButtonProps<F> {
 /// 渲染标签栏普通图标按钮。
 pub(super) fn tab_strip_button(
     props: TabStripButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
-    p: &Palette,
+    _p: &Palette,
 ) -> AnyElement {
     let TabStripButtonProps {
         id,
@@ -67,27 +67,12 @@ pub(super) fn tab_strip_button(
         enabled,
         on_click,
     } = props;
-    let mut button = div()
-        .id(id)
-        .size(px(22.0))
-        .rounded(p.radius.sm)
-        .flex()
-        .items_center()
-        .justify_center()
-        .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx));
+    let button = crate::widgets::IconButton::new(id, icon, tooltip).disabled(!enabled);
     if enabled {
-        button = button
-            .cursor_pointer()
-            .text_color(p.muted_foreground)
-            .hover(|s| s.bg(p.sidebar_accent).text_color(p.foreground))
-            .active(|s| s.bg(p.border))
-            .on_click(on_click);
+        button.render().on_click(on_click).into_any_element()
     } else {
-        button = button
-            .cursor_not_allowed()
-            .text_color(p.muted_foreground.opacity(0.4));
+        button.render().into_any_element()
     }
-    button.child(Icon::new(icon).xsmall()).into_any_element()
 }
 
 /// 构建并排组徽标元素。

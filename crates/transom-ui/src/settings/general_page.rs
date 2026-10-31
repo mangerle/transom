@@ -24,7 +24,7 @@ impl AppShell {
         let current = self.settings.language.clone();
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "app.language",
                 Some("settings.language_desc"),
                 Self::setting_dropdown(
@@ -87,13 +87,13 @@ impl AppShell {
 
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.bell_style",
                 Some("settings.bell_style_desc"),
                 bell_dropdown,
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "notify.desktop_switch",
                 Some("settings.desktop_notifications_desc"),
                 Switch::new("toggle-desktop-notifications")
@@ -105,7 +105,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "notify.threshold",
                 Some("notify.threshold_note"),
                 stepper,
@@ -153,7 +153,7 @@ impl AppShell {
             },
             cx,
         );
-        let mut content = v_flex().gap_2().child(Self::setting_row(
+        let mut content = v_flex().gap_2().child(crate::widgets::setting_row(
             "settings.proxy_mode",
             Some("settings.proxy_mode_desc"),
             mode_control,
@@ -161,18 +161,26 @@ impl AppShell {
         ));
         if kind != ProxyProtocol::Direct {
             content = content
-                .child(Self::setting_field_row(
-                    Self::form_field(rust_i18n::t!("settings.proxy_host").to_string(), host, p),
+                .child(crate::widgets::setting_field_row(
+                    crate::widgets::form_field(
+                        rust_i18n::t!("settings.proxy_host").to_string(),
+                        host,
+                        p,
+                    ),
                     None,
                     p,
                 ))
-                .child(Self::setting_field_row(
-                    Self::form_field(rust_i18n::t!("settings.proxy_port").to_string(), port, p),
+                .child(crate::widgets::setting_field_row(
+                    crate::widgets::form_field(
+                        rust_i18n::t!("settings.proxy_port").to_string(),
+                        port,
+                        p,
+                    ),
                     None,
                     p,
                 ))
-                .child(Self::setting_field_row(
-                    Self::form_field(
+                .child(crate::widgets::setting_field_row(
+                    crate::widgets::form_field(
                         rust_i18n::t!("settings.proxy_username").to_string(),
                         username,
                         p,
@@ -180,8 +188,8 @@ impl AppShell {
                     None,
                     p,
                 ))
-                .child(Self::setting_field_row(
-                    Self::secret_field(
+                .child(crate::widgets::setting_field_row(
+                    crate::widgets::secret_field(
                         rust_i18n::t!("settings.proxy_password").to_string(),
                         password,
                         p,
@@ -205,7 +213,7 @@ impl AppShell {
         let rows_input = self.modals.settings.block_collapse_rows.clone();
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.block_view_enable",
                 Some("settings.block_view_enable_desc"),
                 Switch::new("toggle-block-view")
@@ -217,7 +225,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.shell_integration_enable",
                 Some("settings.shell_integration_enable_desc"),
                 Switch::new("toggle-shell-integration")
@@ -229,7 +237,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.block_view_style",
                 None,
                 h_flex()
@@ -262,8 +270,8 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_field_row(
-                Self::form_field(
+            .child(crate::widgets::setting_field_row(
+                crate::widgets::form_field(
                     rust_i18n::t!("settings.block_view_rows").to_string(),
                     rows_input,
                     p,
@@ -286,7 +294,7 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "desktop.default_terminal_switch",
                 Some("desktop.default_terminal_desc"),
                 Switch::new("toggle-default-terminal")
@@ -325,7 +333,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        Self::setting_frame(
+        crate::widgets::setting_frame(
             v_flex()
                 .w_full()
                 .gap_2()

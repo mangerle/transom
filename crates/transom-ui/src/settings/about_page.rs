@@ -42,7 +42,7 @@ fn platform_label() -> &'static str {
 
 /// 只读值行：标题走 i18n，值本身是构建期常量或系统信息，不参与本地化。
 fn value_row(title_key: &'static str, value: String, p: &Palette) -> AnyElement {
-    AppShell::setting_row(
+    crate::widgets::setting_row(
         title_key,
         None,
         div()
@@ -77,7 +77,7 @@ fn openable_row(
         button_key,
         on_open,
     } = props;
-    AppShell::setting_row(
+    crate::widgets::setting_row(
         title_key,
         description_key,
         h_flex()

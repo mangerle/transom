@@ -2,12 +2,9 @@
 
 use crate::app::AppShell;
 use crate::keymap;
-use gpui_kit::base::{RadiusTokens, v_flex};
+use gpui_kit::base::RadiusTokens;
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::dialog::{
-    DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-};
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use transom_core::{AppError, DividerWidth, ErrorCode};
 
@@ -147,37 +144,6 @@ impl Palette {
 }
 
 impl AppShell {
-    /// 迁移到组件库弹窗栈后的弹窗体。
-    ///
-    /// 与 `dialog_frame` 的差别只在"谁提供表面"：宽度、底色、边框、阴影、
-    /// 内边距与超高滚动都由 Dialog 容器负责，这里只保留标题、说明、内容
-    /// 与页脚的纵向结构，避免在容器表面里再套一层自绘外框。
-    pub(crate) fn dialog_body(
-        id: impl Into<ElementId>,
-        title: impl Into<String>,
-        description: Option<String>,
-        content: impl IntoElement,
-        footer: Option<impl IntoElement>,
-    ) -> AnyElement {
-        let mut header = DialogHeader::new().child(DialogTitle::new().child(title.into()));
-        if let Some(desc) = description {
-            header = header.child(DialogDescription::new().child(desc));
-        }
-
-        let mut frame = v_flex()
-            .id(id.into())
-            .w_full()
-            .gap_4()
-            .child(header)
-            .child(DialogContent::new().child(content));
-
-        if let Some(f) = footer {
-            frame = frame.child(DialogFooter::new().child(f));
-        }
-
-        frame.into_any_element()
-    }
-
     /// 自绘遮罩浮层：仅命令面板还在用。
     ///
     /// 其余模态已迁入组件库的弹窗栈（见 `dialog_host`），那里遮罩、焦点捕获、
@@ -205,36 +171,6 @@ impl AppShell {
                 cx.stop_propagation();
             })
             .child(content)
-            .into_any_element()
-    }
-
-    pub(crate) fn form_field(label: String, input: Entity<InputState>, p: &Palette) -> AnyElement {
-        Self::field_with_reveal(label, input, false, p)
-    }
-
-    /// 机密字段（登录密码、私钥口令）：在普通字段之上启用输入框自带的明文切换按钮。
-    ///
-    /// 复用组件库的 `mask_toggle` 而不是自己画一只眼睛：图标朝向、无障碍标签与掩码
-    /// 状态都由输入框自身维护，切换只影响显示，取值仍是真实文本。
-    pub(crate) fn secret_field(
-        label: String,
-        input: Entity<InputState>,
-        p: &Palette,
-    ) -> AnyElement {
-        Self::field_with_reveal(label, input, true, p)
-    }
-
-    fn field_with_reveal(
-        label: String,
-        input: Entity<InputState>,
-        reveal: bool,
-        p: &Palette,
-    ) -> AnyElement {
-        let field = Input::new(&input).w_full();
-        v_flex()
-            .gap_1()
-            .child(div().text_xs().text_color(p.muted_foreground).child(label))
-            .child(if reveal { field.mask_toggle() } else { field })
             .into_any_element()
     }
 }

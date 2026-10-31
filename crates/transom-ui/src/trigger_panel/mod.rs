@@ -280,7 +280,7 @@ impl AppShell {
 
         let mut body = v_flex()
             .gap_3()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "trigger.master_switch",
                 Some("trigger.master_switch_desc"),
                 Switch::new("toggle-triggers-master")
@@ -337,12 +337,12 @@ impl AppShell {
                         .to_string(),
                     ),
                 )
-                .child(Self::form_field(
+                .child(crate::widgets::form_field(
                     rust_i18n::t!("trigger.rule_name").to_string(),
                     edit_state.name.clone(),
                     p,
                 ))
-                .child(Self::form_field(
+                .child(crate::widgets::form_field(
                     rust_i18n::t!("trigger.rule_pattern").to_string(),
                     edit_state.pattern.clone(),
                     p,
@@ -430,7 +430,7 @@ impl AppShell {
                 );
 
             if action_kind != ActionKindChoice::Bell {
-                form = form.child(Self::form_field(
+                form = form.child(crate::widgets::form_field(
                     rust_i18n::t!(if action_kind == ActionKindChoice::AutoResponse {
                         "trigger.response_text"
                     } else {

@@ -50,12 +50,12 @@ pub(crate) fn render_telnet_fields(
             h_flex()
                 .gap_3()
                 .items_end()
-                .child(div().flex_1().child(AppShell::form_field(
+                .child(div().flex_1().child(crate::widgets::form_field(
                     rust_i18n::t!("form.host").to_string(),
                     form.host.clone(),
                     p,
                 )))
-                .child(div().w(px(110.0)).child(AppShell::form_field(
+                .child(div().w(px(110.0)).child(crate::widgets::form_field(
                     rust_i18n::t!("form.port").to_string(),
                     form.port.clone(),
                     p,
@@ -95,12 +95,12 @@ pub(crate) fn render_telnet_fields(
             h_flex()
                 .gap_3()
                 .items_end()
-                .child(div().flex_1().child(AppShell::form_field(
+                .child(div().flex_1().child(crate::widgets::form_field(
                     rust_i18n::t!("form.connect_timeout").to_string(),
                     form.connect_timeout.clone(),
                     p,
                 )))
-                .child(div().flex_1().child(AppShell::form_field(
+                .child(div().flex_1().child(crate::widgets::form_field(
                     rust_i18n::t!("form.keepalive").to_string(),
                     form.keepalive.clone(),
                     p,

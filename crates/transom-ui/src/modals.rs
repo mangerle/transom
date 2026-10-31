@@ -149,7 +149,7 @@ impl AppShell {
                 },
             ));
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "known-hosts-modal",
             rust_i18n::t!("known_hosts.title").to_string(),
             None,

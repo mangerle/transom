@@ -296,7 +296,7 @@ impl AppShell {
 
         let mut content = v_flex()
             .gap_3()
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("folder.name").to_string(),
                 form.name.clone(),
                 p,
@@ -319,12 +319,12 @@ impl AppShell {
                     .child(
                         h_flex()
                             .gap_2()
-                            .child(div().flex_1().child(Self::form_field(
+                            .child(div().flex_1().child(crate::widgets::form_field(
                                 rust_i18n::t!("folder.default_port").to_string(),
                                 form.default_port.clone(),
                                 p,
                             )))
-                            .child(div().flex_1().child(Self::form_field(
+                            .child(div().flex_1().child(crate::widgets::form_field(
                                 rust_i18n::t!("folder.default_username").to_string(),
                                 form.default_username.clone(),
                                 p,
@@ -370,7 +370,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "folder-form-modal",
             title,
             Some(description),

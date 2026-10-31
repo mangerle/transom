@@ -169,7 +169,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "clipboard-consent-modal",
             rust_i18n::t!("clipboard_consent.title").to_string(),
             Some(rust_i18n::t!("clipboard_consent.subtitle").to_string()),

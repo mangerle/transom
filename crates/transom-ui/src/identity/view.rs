@@ -118,12 +118,12 @@ impl AppShell {
             .rounded(p.radius.md)
             .border_1()
             .border_color(p.border)
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("identity.name").to_string(),
                 edit.name.clone(),
                 p,
             ))
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("identity.username").to_string(),
                 edit.username.clone(),
                 p,
@@ -151,7 +151,7 @@ impl AppShell {
         match auth {
             AuthChoice::Password => {
                 content = content
-                    .child(Self::secret_field(
+                    .child(crate::widgets::secret_field(
                         rust_i18n::t!("identity.password").to_string(),
                         edit.password.clone(),
                         p,
@@ -182,12 +182,12 @@ impl AppShell {
             }
             AuthChoice::PrivateKey => {
                 content = content
-                    .child(Self::form_field(
+                    .child(crate::widgets::form_field(
                         rust_i18n::t!("identity.key_path").to_string(),
                         edit.key_path.clone(),
                         p,
                     ))
-                    .child(Self::secret_field(
+                    .child(crate::widgets::secret_field(
                         rust_i18n::t!("identity.passphrase").to_string(),
                         edit.passphrase.clone(),
                         p,

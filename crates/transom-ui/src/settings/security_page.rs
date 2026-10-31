@@ -17,7 +17,7 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.history_enabled",
                 Some("settings.history_enabled_desc"),
                 Switch::new("toggle-history-enabled")
@@ -56,7 +56,7 @@ impl AppShell {
         });
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.audit_enabled",
                 Some("settings.audit_enabled_desc"),
                 Switch::new("toggle-audit-enabled")
@@ -69,7 +69,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.audit_dir",
                 Some("settings.audit_dir_desc"),
                 h_flex()

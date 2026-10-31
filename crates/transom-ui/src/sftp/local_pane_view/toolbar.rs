@@ -316,16 +316,13 @@ fn local_quick_path_button(
     } else {
         format!("{label} ({})", rust_i18n::t!("sftp.missing_dir"))
     };
-    let mut button = Button::new(id)
-        .ghost()
-        .xsmall()
-        .icon(icon)
-        .tooltip(tooltip)
-        .disabled(!enabled);
-    if let Some(target) = target {
-        button = button.on_click(cx.listener(move |this, _, window, cx| {
+    let button = crate::widgets::icon_button(id, icon, tooltip).disabled(!enabled);
+    let Some(target) = target else {
+        return button.into_any_element();
+    };
+    button
+        .on_click(cx.listener(move |this, _, window, cx| {
             this.sftp_local_navigate(tab_id, target.clone(), window, cx);
-        }));
-    }
-    button.into_any_element()
+        }))
+        .into_any_element()
 }

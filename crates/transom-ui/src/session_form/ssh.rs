@@ -84,12 +84,12 @@ pub(crate) fn render_ssh_fields(
         h_flex()
             .gap_3()
             .items_end()
-            .child(div().flex_1().child(AppShell::form_field(
+            .child(div().flex_1().child(crate::widgets::form_field(
                 rust_i18n::t!("form.host").to_string(),
                 form.host.clone(),
                 p,
             )))
-            .child(div().w(px(110.0)).child(AppShell::form_field(
+            .child(div().w(px(110.0)).child(crate::widgets::form_field(
                 rust_i18n::t!("form.port").to_string(),
                 form.port.clone(),
                 p,
@@ -150,7 +150,7 @@ pub(crate) fn render_ssh_fields(
 
     if form.identity_choice.is_none() {
         fields = fields
-            .child(AppShell::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("form.username").to_string(),
                 form.username.clone(),
                 p,
@@ -227,17 +227,17 @@ pub(crate) fn render_ssh_fields(
         );
 
     fields = fields
-        .child(AppShell::form_field(
+        .child(crate::widgets::form_field(
             rust_i18n::t!("form.connect_timeout").to_string(),
             form.connect_timeout.clone(),
             p,
         ))
-        .child(AppShell::form_field(
+        .child(crate::widgets::form_field(
             rust_i18n::t!("form.keepalive").to_string(),
             form.keepalive.clone(),
             p,
         ))
-        .child(AppShell::form_field(
+        .child(crate::widgets::form_field(
             rust_i18n::t!("form.wol_mac").to_string(),
             form.wol_mac.clone(),
             p,
@@ -393,7 +393,7 @@ fn render_auth_credential_fields(
                     ),
             );
             if form.save_password {
-                fields.child(AppShell::secret_field(
+                fields.child(crate::widgets::secret_field(
                     rust_i18n::t!("form.password").to_string(),
                     form.password.clone(),
                     p,
@@ -408,7 +408,7 @@ fn render_auth_credential_fields(
                     h_flex()
                         .gap_2()
                         .items_end()
-                        .child(div().flex_1().child(AppShell::form_field(
+                        .child(div().flex_1().child(crate::widgets::form_field(
                             rust_i18n::t!("form.key_path").to_string(),
                             form.key_path.clone(),
                             p,
@@ -431,7 +431,7 @@ fn render_auth_credential_fields(
                     h_flex()
                         .gap_2()
                         .items_end()
-                        .child(div().flex_1().child(AppShell::form_field(
+                        .child(div().flex_1().child(crate::widgets::form_field(
                             rust_i18n::t!("form.cert_path").to_string(),
                             form.cert_path.clone(),
                             p,
@@ -482,7 +482,7 @@ fn render_auth_credential_fields(
                         ),
                 );
             if form.save_passphrase {
-                fields.child(AppShell::secret_field(
+                fields.child(crate::widgets::secret_field(
                     rust_i18n::t!("form.passphrase").to_string(),
                     form.passphrase.clone(),
                     p,

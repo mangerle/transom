@@ -48,7 +48,7 @@ impl AppShell {
 
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.startup_tabs",
                 Some("settings.startup_tabs_desc"),
                 Self::setting_dropdown(
@@ -66,7 +66,7 @@ impl AppShell {
                 ),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.sidebar_startup",
                 Some("settings.sidebar_startup_desc"),
                 Self::setting_dropdown(

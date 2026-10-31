@@ -168,7 +168,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "editor-goto-line-modal",
             rust_i18n::t!("editor.goto_title").to_string(),
             None,

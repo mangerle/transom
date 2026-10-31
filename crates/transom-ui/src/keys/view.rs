@@ -79,7 +79,7 @@ impl AppShell {
                 |this, _: &ClickEvent, _, cx| this.close_key_wizard(cx),
             ));
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "key-wizard-modal",
             rust_i18n::t!("keys.title").to_string(),
             Some(rust_i18n::t!("keys.hint").to_string()),
@@ -140,17 +140,17 @@ impl AppShell {
                         }),
                     ),
             )
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("keys.comment").to_string(),
                 comment,
                 p,
             ))
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("keys.path").to_string(),
                 path,
                 p,
             ))
-            .child(Self::form_field(
+            .child(crate::widgets::form_field(
                 rust_i18n::t!("keys.passphrase").to_string(),
                 passphrase,
                 p,

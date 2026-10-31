@@ -299,7 +299,7 @@ impl AppShell {
                 )
             });
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "sftp-sync-modal",
             rust_i18n::t!("sftp.sync.title").to_string(),
             Some(

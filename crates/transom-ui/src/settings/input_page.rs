@@ -44,13 +44,13 @@ impl AppShell {
 
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.right_click_action",
                 Some("settings.right_click_action_desc"),
                 rc_dropdown,
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.middle_click_paste",
                 Some("settings.middle_click_paste_desc"),
                 Switch::new("toggle-middle-click-paste")
@@ -74,8 +74,8 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::setting_field_row(
-                Self::form_field(
+            .child(crate::widgets::setting_field_row(
+                crate::widgets::form_field(
                     rust_i18n::t!("settings.word_separators").to_string(),
                     self.modals.settings.word_separators.clone(),
                     p,
@@ -94,7 +94,7 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.copy_on_select",
                 Some("settings.copy_on_select_desc"),
                 Switch::new("toggle-copy-on-select")
@@ -107,7 +107,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.multiline_paste",
                 Some("settings.multiline_paste_desc"),
                 Switch::new("toggle-multiline-paste")
@@ -120,7 +120,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.trim_trailing_whitespace",
                 Some("settings.trim_trailing_whitespace_desc"),
                 Switch::new("toggle-trim-whitespace")
@@ -133,7 +133,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.suppress_ctrl_v",
                 Some("settings.suppress_ctrl_v_desc"),
                 Switch::new("toggle-suppress-ctrl-v")

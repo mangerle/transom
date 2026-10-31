@@ -309,7 +309,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "audit-viewer-modal",
             title,
             selected_file.map(|f| f.file_name.clone()),

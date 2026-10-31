@@ -132,7 +132,7 @@ impl AppShell {
         }
         footer_block = footer_block.child(footer);
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "session-form-modal",
             title,
             None,
@@ -192,7 +192,7 @@ impl AppShell {
             .child(
                 h_flex()
                     .gap_3()
-                    .child(div().flex_1().child(Self::form_field(
+                    .child(div().flex_1().child(crate::widgets::form_field(
                         rust_i18n::t!("form.name").to_string(),
                         form.name.clone(),
                         p,
@@ -548,12 +548,12 @@ impl AppShell {
             .child(
                 h_flex()
                     .gap_3()
-                    .child(div().flex_1().child(Self::form_field(
+                    .child(div().flex_1().child(crate::widgets::form_field(
                         rust_i18n::t!("form.mosh.server_path").to_string(),
                         form.mosh_server_path.clone(),
                         p,
                     )))
-                    .child(div().flex_1().child(Self::form_field(
+                    .child(div().flex_1().child(crate::widgets::form_field(
                         rust_i18n::t!("form.mosh.server_port").to_string(),
                         form.mosh_server_port.clone(),
                         p,

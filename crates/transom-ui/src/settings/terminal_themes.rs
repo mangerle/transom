@@ -252,7 +252,7 @@ impl AppShell {
             .collect();
 
         // 主题卡是自带边框的卡片网格，不按行画线；整块作为一项，在组末补一条。
-        Self::setting_frame(
+        crate::widgets::setting_frame(
             v_flex()
                 .w_full()
                 .gap_3()

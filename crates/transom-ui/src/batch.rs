@@ -447,7 +447,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "batch-edit-modal",
             rust_i18n::t!("batch.title").to_string(),
             Some(rust_i18n::t!("batch.apply_hint").to_string()),

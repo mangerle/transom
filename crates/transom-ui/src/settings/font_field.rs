@@ -78,7 +78,7 @@ impl AppShell {
             )
             .into_any_element();
         let note = note_key.map(|key| rust_i18n::t!(key).to_string());
-        Self::setting_text_row(label, note, control, p)
+        crate::widgets::setting_text_row(label, note, control, p)
     }
 
     /// 唤起系统文件选择器导入外部字体文件（.ttf, .otf, .ttc 等），注册后选中新族名。

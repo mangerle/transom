@@ -187,13 +187,13 @@ impl AppShell {
                         ),
                 );
             if prompt.encrypt {
-                content = content.child(Self::form_field(
+                content = content.child(crate::widgets::form_field(
                     rust_i18n::t!("backup.passphrase").to_string(),
                     prompt.passphrase.clone(),
                     p,
                 ));
                 if let Some(confirm) = &prompt.confirm {
-                    content = content.child(Self::form_field(
+                    content = content.child(crate::widgets::form_field(
                         rust_i18n::t!("backup.confirm").to_string(),
                         confirm.clone(),
                         p,
@@ -253,7 +253,7 @@ impl AppShell {
                     ),
             );
             if prompt.encrypted_file {
-                content = content.child(Self::form_field(
+                content = content.child(crate::widgets::form_field(
                     rust_i18n::t!("backup.passphrase").to_string(),
                     prompt.passphrase.clone(),
                     p,
@@ -305,7 +305,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "backup-prompt-modal",
             title,
             Some(rust_i18n::t!("backup.dialog_hint").to_string()),

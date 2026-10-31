@@ -64,7 +64,7 @@ impl AppShell {
 
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.log_level",
                 Some("settings.log_level_desc"),
                 Self::setting_dropdown(
@@ -83,7 +83,7 @@ impl AppShell {
                 ),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.log_dir",
                 Some("settings.log_dir_desc"),
                 h_flex()
@@ -99,7 +99,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.log_cleanup",
                 Some("settings.log_cleanup_desc"),
                 Button::new("log-cleanup")

@@ -23,8 +23,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
-use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable, v_virtual_list};
+use gpui_kit::component::{Sizable, v_virtual_list};
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::SessionId;
@@ -217,7 +216,7 @@ impl AppShell {
 
     fn sidebar_icon_button(
         props: SidebarButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
-        p: &Palette,
+        _p: &Palette,
     ) -> AnyElement {
         let SidebarButtonProps {
             id,
@@ -226,29 +225,10 @@ impl AppShell {
             active,
             on_click,
         } = props;
-        let mut button = div()
-            .id(id)
-            .size(px(26.0))
-            .flex_none()
-            .rounded(p.radius.md)
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx));
-        if active {
-            button = button
-                .bg(p.sidebar_accent)
-                .text_color(p.sidebar_accent_foreground);
-        } else {
-            button = button
-                .text_color(p.muted_foreground)
-                .hover(|s| s.bg(p.sidebar_accent).text_color(p.sidebar_foreground));
-        }
-        button
-            .active(|s| s.bg(p.border))
+        crate::widgets::IconButton::new(id, icon, tooltip)
+            .selected(active)
+            .render()
             .on_click(on_click)
-            .child(Icon::new(icon).xsmall())
             .into_any_element()
     }
 
@@ -266,14 +246,6 @@ impl AppShell {
                 rust_i18n::t!("app.no_sessions_hint").to_string(),
             )
         };
-        v_flex()
-            .p_4()
-            .gap_2()
-            .items_center()
-            .justify_center()
-            .child(Icon::new(icon).text_color(p.muted_foreground))
-            .child(div().text_sm().text_color(p.muted_foreground).child(title))
-            .child(div().text_xs().text_color(p.muted_foreground).child(hint))
-            .into_any_element()
+        crate::widgets::empty_state(icon, title, hint, p)
     }
 }

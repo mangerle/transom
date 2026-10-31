@@ -25,17 +25,14 @@ pub(crate) use font_field::FontFieldSpec;
 pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearanceSnapshot};
 
 use crate::app::AppShell;
-use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{InputState, NumberInput};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::slider::SliderValue;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{AppearanceSettings, FOLLOW_UI_THEME};
 use transom_terminal::TerminalView;
@@ -75,109 +72,6 @@ pub(super) fn slider_percent(value: &SliderValue) -> u8 {
 }
 
 impl AppShell {
-    /// Zed 风格设置行：左侧标题与说明、右侧控件。
-    ///
-    /// 全设置页的开关/按钮行共用这一构造，行高与对齐才一致；说明文字用弱色
-    /// 小字，缺省时标题与控件垂直居中。多行输入行仍用 `form_field` 纵排（输入框
-    /// 需要完整宽度，且多带独立说明）；字体族行的文案是运行期组装的，走
-    /// [`Self::setting_text_row`]，骨架与这里完全相同。
-    ///
-    /// 宽度约束是这里的重点：左列必须 `flex_1 + min_w_0`，控件必须 `flex_none`。
-    /// 少任一条，弹性布局就会按内容固有宽度排版——一句长中文说明能把整行撑到比
-    /// 面板内容区还宽，右侧开关/按钮被推到面板外截断（审计目录、命令历史、日志
-    /// 目录都踩过这个坑）。左列拿到有界宽度后说明文字自然换行，而不是溢出裁切。
-    ///
-    /// 行距与分割线也在这里统一：上下各 8px，底部一条分割线；粗细与颜色取外观
-    /// 设置里的「分割线」档位（与弹窗页头线同一来源），改设置不必再改这里。
-    /// 自定义行（表单、卡片）走 [`Self::setting_frame`]、
-    /// [`Self::setting_field_row`]，保证全页节奏相同。
-    pub(crate) fn setting_row(
-        title_key: &'static str,
-        description_key: Option<&'static str>,
-        control: AnyElement,
-        p: &Palette,
-    ) -> AnyElement {
-        Self::setting_text_row(
-            rust_i18n::t!(title_key).to_string(),
-            description_key.map(|key| rust_i18n::t!(key).to_string()),
-            control,
-            p,
-        )
-    }
-
-    /// 与 [`Self::setting_row`] 同构，但标题与说明由调用方传入已本地化文本。
-    ///
-    /// 字体族行需要运行期组装的文案（`FontFieldSpec` 里的 `String`），又必须和
-    /// 其它行共用同一套行距、分割线与"左列弹性、右列不收缩"的宽度约束；另写
-    /// 一份骨架的话，两处对齐与分割线迟早会漂。
-    pub(crate) fn setting_text_row(
-        title: String,
-        description: Option<String>,
-        control: AnyElement,
-        p: &Palette,
-    ) -> AnyElement {
-        h_flex()
-            .w_full()
-            .py_2()
-            .border_color(p.divider(p.border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .justify_between()
-            .items_center()
-            .gap_4()
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap_0p5()
-                    .child(div().text_sm().child(title))
-                    .when_some(description, |this, description| {
-                        this.child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(description),
-                        )
-                    }),
-            )
-            .child(div().flex_none().child(control))
-            .into_any_element()
-    }
-
-    /// 设置行外框：统一行距并在行底画一条分割线。
-    ///
-    /// 为什么把线画在行上而不是在行间插线元素：每组最后一行也要有线（组标题
-    /// 负责与下一组分隔），插线方案就得维护"最后一行不插"的游标，或者多一个
-    /// 尾线分支；边框随行高走，天然没有这个状态。
-    pub(crate) fn setting_frame(content: AnyElement, p: &Palette) -> AnyElement {
-        v_flex()
-            .w_full()
-            .py_2()
-            .border_color(p.divider(p.border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .child(content)
-            .into_any_element()
-    }
-
-    /// 带分割线的输入行：输入框与其说明同属一行。
-    ///
-    /// 说明必须和输入框一起画线：它解释的是这个输入框的格式或口径，落到线下面
-    /// 会被读成下一项的内容。
-    pub(crate) fn setting_field_row(
-        field: AnyElement,
-        note: Option<String>,
-        p: &Palette,
-    ) -> AnyElement {
-        let inner = v_flex()
-            .w_full()
-            .gap_1()
-            .child(field)
-            .when_some(note, |this, note| {
-                this.child(div().text_xs().text_color(p.muted_foreground).child(note))
-            })
-            .into_any_element();
-        Self::setting_frame(inner, p)
-    }
-
     /// 数字步进器控件（直接复用 gpui-kit 内置的 NumberInput 组件）：
     /// 原生集成减加微调按钮与居中文本输入框，内置键盘上下键微调与 min/max/step 约束。
     pub(crate) fn setting_stepper(input: &Entity<InputState>, width: Pixels) -> AnyElement {

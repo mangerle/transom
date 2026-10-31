@@ -415,7 +415,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "forward-confirm-modal",
             rust_i18n::t!("forward.confirm_any_title").to_string(),
             Some(rust_i18n::t!("forward.confirm_any_hint").to_string()),

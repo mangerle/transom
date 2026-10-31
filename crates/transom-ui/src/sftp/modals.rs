@@ -84,35 +84,29 @@ impl AppShell {
             .text_sm()
             .text_color(p.muted_foreground)
             .child(description);
-        let footer = h_flex()
-            .gap_2()
-            .child(
-                Button::new("cancel-sftp-delete")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.sftp_modals.confirm = None;
-                            this.focus_active_sftp_panel(window, cx);
-                            cx.notify();
-                        },
-                    )),
-            )
-            .child(
-                Button::new("confirm-sftp-delete")
-                    .danger()
-                    .label(rust_i18n::t!("common.confirm_delete").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.sftp_confirm_delete(cx);
-                            this.focus_active_sftp_panel(window, cx);
-                        },
-                    )),
-            );
+        let cancel = crate::widgets::dialog_cancel_button(
+            "cancel-sftp-delete",
+            rust_i18n::t!("common.cancel").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                this.sftp_modals.confirm = None;
+                this.focus_active_sftp_panel(window, cx);
+                cx.notify();
+            }),
+        );
+        let confirm = crate::widgets::dialog_confirm_button(
+            "confirm-sftp-delete",
+            rust_i18n::t!("common.confirm_delete").to_string(),
+            None,
+            crate::widgets::DialogConfirmKind::Danger,
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                this.sftp_confirm_delete(cx);
+                this.focus_active_sftp_panel(window, cx);
+            }),
+        );
+        let footer =
+            crate::widgets::dialog_actions([cancel.into_any_element(), confirm.into_any_element()]);
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "sftp-confirm-modal",
             title,
             None::<String>,
@@ -174,7 +168,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "sftp-filter-modal",
             rust_i18n::t!("sftp.filter_rules").to_string(),
             Some(rust_i18n::t!("sftp.modals.filter_scope_hint").to_string()),
@@ -375,7 +369,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "sftp-chmod-modal",
             rust_i18n::t!("sftp.chmod.title", name = file_name.as_str()).to_string(),
             Some(rust_i18n::t!("sftp.chmod.remote_path", path = remote_path.as_str()).to_string()),
@@ -433,7 +427,7 @@ impl AppShell {
                     )),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "sftp-input-modal",
             title,
             Some(prompt),
@@ -549,7 +543,7 @@ impl AppShell {
             rust_i18n::t!("sftp.modals.scope_remote").to_string()
         };
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "sftp-properties-modal",
             rust_i18n::t!("sftp.properties.title", name = name.as_str()).to_string(),
             Some(

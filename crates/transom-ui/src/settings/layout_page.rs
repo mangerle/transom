@@ -52,7 +52,7 @@ impl AppShell {
         }
 
         // 显隐卡自带边框，不按行画线；卡片网格与恢复按钮作为一项，在组末补一条。
-        Self::setting_frame(
+        crate::widgets::setting_frame(
             v_flex()
                 .w_full()
                 .gap_2p5()
@@ -122,7 +122,7 @@ impl AppShell {
             ));
         }
 
-        Self::setting_frame(
+        crate::widgets::setting_frame(
             v_flex()
                 .w_full()
                 .gap_2p5()

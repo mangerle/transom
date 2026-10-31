@@ -368,7 +368,7 @@ impl AppShell {
                     ),
             );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "replay-cast-modal",
             rust_i18n::t!("recorder.replay_title").to_string(),
             Some(rust_i18n::t!("recorder.format_notice").to_string()),

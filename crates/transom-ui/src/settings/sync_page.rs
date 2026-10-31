@@ -17,8 +17,8 @@ use transom_core::SyncEndpoint;
 /// 本页说明文字都跨多个字段（凭据口径、Git 权限要求），由调用方单独挂在
 /// 对应的那一行上，不随辅助函数硬绑某个输入框。
 fn sync_form_row(label_key: &'static str, input: Entity<InputState>, p: &Palette) -> AnyElement {
-    AppShell::setting_field_row(
-        AppShell::form_field(rust_i18n::t!(label_key).to_string(), input, p),
+    crate::widgets::setting_field_row(
+        crate::widgets::form_field(rust_i18n::t!(label_key).to_string(), input, p),
         None,
         p,
     )
@@ -54,7 +54,7 @@ impl AppShell {
         let form = &self.modals.settings.sync_form;
         let mut content = v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "sync.endpoint",
                 Some("sync.endpoint_desc"),
                 endpoint_control,
@@ -69,7 +69,7 @@ impl AppShell {
 
         match current_kind {
             "off" => {
-                content = content.child(Self::setting_frame(
+                content = content.child(crate::widgets::setting_frame(
                     div()
                         .w_full()
                         .text_xs()
@@ -115,12 +115,12 @@ impl AppShell {
                 let stepper = Self::setting_stepper(&form.git_interval, px(110.0));
                 content = content
                     .child(sync_form_row("sync.git_remote", form.git_remote.clone(), p))
-                    .child(Self::setting_frame(
+                    .child(crate::widgets::setting_frame(
                         h_flex()
                             .w_full()
                             .gap_4()
                             .items_center()
-                            .child(div().flex_1().child(Self::form_field(
+                            .child(div().flex_1().child(crate::widgets::form_field(
                                 rust_i18n::t!("sync.git_branch").to_string(),
                                 form.git_branch.clone(),
                                 p,
@@ -140,8 +140,8 @@ impl AppShell {
                             .into_any_element(),
                         p,
                     ))
-                    .child(Self::setting_field_row(
-                        Self::secret_field(
+                    .child(crate::widgets::setting_field_row(
+                        crate::widgets::secret_field(
                             rust_i18n::t!("sync.git_token").to_string(),
                             form.git_token.clone(),
                             p,
@@ -155,8 +155,8 @@ impl AppShell {
 
         // 只要启用了任一同步方式（WebDAV / S3 / Git），就展示同步口令
         if current_kind != "off" {
-            content = content.child(Self::setting_field_row(
-                Self::form_field(
+            content = content.child(crate::widgets::setting_field_row(
+                crate::widgets::form_field(
                     rust_i18n::t!("sync.passphrase").to_string(),
                     form.passphrase.clone(),
                     p,
@@ -169,7 +169,7 @@ impl AppShell {
         // WebDAV 或 S3 提供包含密钥开关、状态行与上传/下载操作
         if current_kind == "webdav" || current_kind == "s3" {
             content = content
-                .child(Self::setting_row(
+                .child(crate::widgets::setting_row(
                     "sync.include_secrets",
                     Some("sync.include_secrets_desc"),
                     Switch::new("toggle-sync-include-secrets")
@@ -182,8 +182,8 @@ impl AppShell {
                         .into_any_element(),
                     p,
                 ))
-                .child(Self::setting_frame(self.sync_status_row(p), p))
-                .child(Self::setting_frame(
+                .child(crate::widgets::setting_frame(self.sync_status_row(p), p))
+                .child(crate::widgets::setting_frame(
                     h_flex()
                         .w_full()
                         .gap_2()
@@ -209,7 +209,7 @@ impl AppShell {
                     p,
                 ));
         } else if current_kind == "git" {
-            content = content.child(Self::setting_frame(
+            content = content.child(crate::widgets::setting_frame(
                 Button::new("sync-git-now")
                     .small()
                     .icon(IconName::GitBranch)

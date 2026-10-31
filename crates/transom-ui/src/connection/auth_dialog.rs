@@ -192,9 +192,9 @@ impl AppShell {
                 PromptKind::Text => prompt_info.prompt.clone(),
             };
             let field = if prompt_info.echo {
-                Self::form_field(label, input, p)
+                crate::widgets::form_field(label, input, p)
             } else {
-                Self::secret_field(label, input, p)
+                crate::widgets::secret_field(label, input, p)
             };
             content = content.child(field);
         }
@@ -261,7 +261,7 @@ impl AppShell {
         } else {
             rust_i18n::t!("prompt.auth_hint").to_string()
         };
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "auth-prompt-modal",
             rust_i18n::t!("prompt.auth_title").to_string(),
             Some(hint),
@@ -315,28 +315,25 @@ impl AppShell {
                     .text_color(p.danger)
                     .child(rust_i18n::t!("prompt.host_key_warning").to_string()),
             );
-        let footer = h_flex()
-            .gap_2()
-            .justify_end()
-            .child(
-                Button::new("reject-host-key")
-                    .ghost()
-                    .label(rust_i18n::t!("prompt.host_key_reject").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.reject_host_key(cx),
-                    )),
-            )
-            .child(
-                Button::new("accept-host-key")
-                    .primary()
-                    .label(rust_i18n::t!("prompt.host_key_trust").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.accept_host_key(cx),
-                    )),
-            );
-        Self::dialog_body(
+        let reject = crate::widgets::dialog_cancel_button(
+            "reject-host-key",
+            rust_i18n::t!("prompt.host_key_reject").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                this.reject_host_key(cx)
+            }),
+        );
+        let accept = crate::widgets::dialog_confirm_button(
+            "accept-host-key",
+            rust_i18n::t!("prompt.host_key_trust").to_string(),
+            None,
+            crate::widgets::DialogConfirmKind::Primary,
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                this.accept_host_key(cx)
+            }),
+        );
+        let footer =
+            crate::widgets::dialog_actions([reject.into_any_element(), accept.into_any_element()]);
+        crate::widgets::dialog_body(
             "host-key-modal",
             rust_i18n::t!("prompt.host_key_title").to_string(),
             Some(rust_i18n::t!("prompt.host_key_hint").to_string()),

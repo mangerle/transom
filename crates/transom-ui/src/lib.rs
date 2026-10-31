@@ -20,6 +20,7 @@ mod keymap;
 mod palette;
 mod pane_tree;
 mod theme;
+mod widgets;
 mod window_appearance;
 
 // 功能模块统一挂在 `app` 之下：AppShell 的字段对其后代模块可见，

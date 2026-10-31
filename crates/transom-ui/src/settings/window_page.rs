@@ -90,7 +90,7 @@ impl AppShell {
                     })),
             );
 
-        let position_row = Self::setting_row(
+        let position_row = crate::widgets::setting_row(
             "settings.tab_position",
             Some("settings.tab_position_desc"),
             Self::setting_dropdown(
@@ -151,7 +151,7 @@ impl AppShell {
         let side = self.settings.window.sftp_panel_side;
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.sftp_panel_side",
                 Some("settings.sftp_panel_side_desc"),
                 Self::setting_dropdown(
@@ -174,7 +174,7 @@ impl AppShell {
                 ),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.remember_window_bounds",
                 Some("settings.remember_window_bounds_desc"),
                 Switch::new("toggle-remember-bounds")

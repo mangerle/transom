@@ -111,13 +111,13 @@ impl AppShell {
 
         v_flex()
             .gap_2()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.cursor_shape",
                 Some("settings.cursor_shape_desc"),
                 cursor_dropdown,
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.cursor_blink",
                 Some("settings.cursor_blink_desc"),
                 Switch::new("toggle-cursor-blink")
@@ -130,7 +130,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.bold_is_bright",
                 Some("settings.bold_is_bright_desc"),
                 Switch::new("toggle-bold-is-bright")
@@ -143,7 +143,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.alternate_scroll",
                 Some("settings.alternate_scroll_desc"),
                 Switch::new("toggle-alternate-scroll")
@@ -156,7 +156,7 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.scroll_on_input",
                 Some("settings.scroll_on_input_desc"),
                 Switch::new("toggle-scroll-on-input")
@@ -169,8 +169,8 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_field_row(
-                Self::form_field(
+            .child(crate::widgets::setting_field_row(
+                crate::widgets::form_field(
                     rust_i18n::t!("settings.scrollback").to_string(),
                     self.modals.settings.scrollback.clone(),
                     p,
@@ -189,7 +189,7 @@ impl AppShell {
     ) -> AnyElement {
         v_flex()
             .gap_3()
-            .child(Self::setting_row(
+            .child(crate::widgets::setting_row(
                 "settings.keyword_highlight",
                 Some("settings.keyword_highlight_desc"),
                 Switch::new("toggle-keyword-highlight")
@@ -201,8 +201,8 @@ impl AppShell {
                     .into_any_element(),
                 p,
             ))
-            .child(Self::setting_field_row(
-                Self::form_field(
+            .child(crate::widgets::setting_field_row(
+                crate::widgets::form_field(
                     rust_i18n::t!("settings.highlight_keywords").to_string(),
                     self.modals.settings.highlight_keywords.clone(),
                     p,
@@ -219,7 +219,7 @@ impl AppShell {
         p: &Palette,
         _cx: &mut Context<Self>,
     ) -> AnyElement {
-        Self::setting_frame(
+        crate::widgets::setting_frame(
             v_flex()
                 .w_full()
                 .gap_1()

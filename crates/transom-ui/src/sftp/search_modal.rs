@@ -316,7 +316,7 @@ impl AppShell {
                 )),
         );
 
-        Self::dialog_body(
+        crate::widgets::dialog_body(
             "sftp-search-modal",
             rust_i18n::t!("sftp.search.title").to_string(),
             None::<String>,
