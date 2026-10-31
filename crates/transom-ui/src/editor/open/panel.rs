@@ -1,6 +1,10 @@
-//! 远端编辑面板的打开、新建与初始读取。
+//! 远端编辑面板的打开、新建与初始读取（外壳入口）。
+//!
+//! 目录项闸门与错误提示属于工作区状态，留在外壳；面板装配与读取请求由
+//! `EditorPanels` 完成，外壳只负责投递读取命令。
 
 use super::*;
+use crate::sftp::format_size;
 
 impl AppShell {
     pub(crate) fn sftp_edit_remote_file_on(
@@ -79,16 +83,9 @@ impl AppShell {
         };
 
         // 同一文件已在编辑中就不再重复取文件：抬到最前并聚焦编辑器。
-        if let Some(index) = self
-            .state
-            .editors
-            .panels
-            .iter()
-            .position(|item| item.same_file(tab_id, connection_id, &remote_path))
-        {
-            let item = self.state.editors.panels.remove(index);
-            let editor = item.editor.clone();
-            self.state.editors.panels.push(item);
+        if let Some(editor) = self.state.editors.update(cx, |panels, _| {
+            panels.raise_existing(tab_id, connection_id, &remote_path)
+        }) {
             editor.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
@@ -97,26 +94,25 @@ impl AppShell {
         // 这里的尺寸闸门只是第一道：目录列表的尺寸可能过期，net 层还会在读取循环内
         // 按同一上限二次设限，两道一起才挡得住"列出之后文件变大"的情况。
         let op_id = TransferId::new();
-        self.spawn_editor_panel(
-            SpawnEditorPanelParams {
-                tab_id,
-                connection_id,
-                remote_path: remote_path.clone(),
-                file_name,
-                seed: PanelSeed::Reading { op_id, permissions },
-            },
-            window,
-            cx,
-        );
-        self.request_remote_text_read(
-            RemoteTextReadParams {
-                tab_id,
-                connection_id,
-                remote_path,
-                op_id,
-            },
-            cx,
-        );
+        let settings = self.editor_panel_settings();
+        let request = self.state.editors.update(cx, |panels, cx| {
+            panels.spawn_editor_panel(
+                SpawnEditorPanelParams {
+                    tab_id,
+                    connection_id,
+                    remote_path,
+                    file_name,
+                    seed: PanelSeed::Reading { op_id, permissions },
+                    pending_goto: None,
+                },
+                settings,
+                window,
+                cx,
+            )
+        });
+        if let Some(request) = request {
+            self.request_remote_text_read(request, cx);
+        }
     }
 
     /// 新建远端文件并打开编辑面板：空缓冲区立即可编辑，首次保存才创建远端文件。
@@ -132,164 +128,29 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.spawn_editor_panel(
-            SpawnEditorPanelParams {
-                tab_id,
-                connection_id,
-                remote_path,
-                file_name,
-                seed: PanelSeed::NewFile,
-            },
-            window,
-            cx,
-        );
+        let settings = self.editor_panel_settings();
+        self.state.editors.update(cx, |panels, cx| {
+            panels.spawn_editor_panel(
+                SpawnEditorPanelParams {
+                    tab_id,
+                    connection_id,
+                    remote_path,
+                    file_name,
+                    seed: PanelSeed::NewFile,
+                    pending_goto: None,
+                },
+                settings,
+                window,
+                cx,
+            )
+        });
     }
 
-    /// 建立编辑面板：空缓冲区、订阅就位、按已开面板数量级联落位。
-    ///
-    /// 读取态与新建态共用一套装配，只差初始状态字段（见 `PanelSeed`）；
-    /// 新建面板可编辑、无在途任务，读取面板等待 `SftpTextRead` 装载内容。
-    pub(crate) fn spawn_editor_panel(
-        &mut self,
-        params: SpawnEditorPanelParams,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let SpawnEditorPanelParams {
-            tab_id,
-            connection_id,
-            remote_path,
-            file_name,
-            seed,
-        } = params;
-        let language = editor_language_token(&remote_path);
-        // 软换行与行号跟随设置页选择：日志类内容常关行号开换行，
-        // 配置文件则相反，属于高频个性化项。
-        let editor = cx.new(|cx| {
-            EditorState::new(window, cx)
-                .language(language.clone())
-                .line_number(self.state.settings.sftp.editor_line_numbers)
-                .folding(true)
-                .searchable(true)
-                .soft_wrap(self.state.settings.sftp.editor_soft_wrap)
-        });
-        // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
-        // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。
-        // 新建文件没有已存在的权限位可依据，视作可写。
-        let permissions = match &seed {
-            PanelSeed::Reading { permissions, .. } => *permissions,
-            PanelSeed::NewFile => None,
-        };
-        let writable = permissions_writable(permissions);
-        if !writable {
-            editor.update(cx, |state, cx| state.set_readonly(true, cx));
+    /// 面板编辑器外观设置快照：实体装配时直接使用，避免反向读取工作区。
+    fn editor_panel_settings(&self) -> EditorPanelSettings {
+        EditorPanelSettings {
+            line_numbers: self.state.settings.sftp.editor_line_numbers,
+            soft_wrap: self.state.settings.sftp.editor_soft_wrap,
         }
-        editor.update(cx, |state, cx| state.focus(window, cx));
-        let caret = caret_of(&editor, cx);
-        let cascade = self.state.editors.len();
-        let viewport = window.viewport_size();
-        let (left, top) = cascade_origin(cascade, viewport);
-        let change_sub = cx.subscribe(&editor, |this, editor, event: &InputEvent, cx| {
-            if !matches!(event, InputEvent::Change) {
-                return;
-            }
-            if let Some(item) = this
-                .state
-                .editors
-                .panels
-                .iter_mut()
-                .find(|item| item.editor == editor)
-            {
-                // 未成功装载远端内容的缓冲区不允许变成"可保存的改动"，
-                // 否则读取失败后随手打几个字就能把远端文件覆盖掉。
-                if !item.loaded {
-                    return;
-                }
-                item.dirty = true;
-                item.phase = EditorPhase::Idle;
-                item.written_size = None;
-                item.error = None;
-            }
-            cx.notify();
-        });
-        // 光标移动只 notify、不 emit 事件，因此观察通知本身；只在行列真的变了时
-        // 才重绘，既让状态栏实时，也切断「面板重绘 → 编辑器通知 → 面板重绘」的自激。
-        let caret_sub = cx.observe(&editor, |this, editor, cx| {
-            let next = caret_of(&editor, cx);
-            let changed = this
-                .state
-                .editors
-                .panels
-                .iter_mut()
-                .find(|item| item.editor == editor)
-                .is_some_and(|item| {
-                    if item.caret == next {
-                        false
-                    } else {
-                        item.caret = next;
-                        true
-                    }
-                });
-            if changed {
-                cx.notify();
-            }
-        });
-        let (loaded, phase, pending_op, remote_meta, new_file) = match seed {
-            PanelSeed::Reading { op_id, .. } => {
-                (false, EditorPhase::Reading, Some(op_id), None, false)
-            }
-            // 新建面板：可编辑即可打字；零尺寸指纹让首次保存具备同名覆盖保护。
-            PanelSeed::NewFile => (
-                true,
-                EditorPhase::Idle,
-                None,
-                Some(RemoteTextMeta {
-                    size: 0,
-                    mtime: None,
-                    bom: false,
-                    crlf: false,
-                    transcoded: false,
-                }),
-                true,
-            ),
-        };
-        self.state.editors.panels.push(EditorPanelState {
-            tab_id,
-            connection_id,
-            remote_path,
-            file_name,
-            language,
-            editor,
-            baseline: SharedString::default(),
-            remote_meta,
-            new_file,
-            pending_goto: None,
-            pending_sudo_probe: None,
-            sudo_probe_attempted: false,
-            caret,
-            dirty: false,
-            loaded,
-            phase,
-            written_size: None,
-            pending_op,
-            error: None,
-            permissions,
-            writable,
-            close_after_write: false,
-            diff: None,
-            showing_diff: false,
-            conflict: false,
-            confirm: None,
-            collapsed: false,
-            maximized: false,
-            left,
-            top,
-            width: PANEL_WIDTH,
-            height: PANEL_HEIGHT,
-            drag_grab: None,
-            _change_sub: change_sub,
-            _caret_sub: caret_sub,
-        });
-        cx.notify();
     }
 }

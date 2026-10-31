@@ -4,7 +4,7 @@
 //! 读取通道与面板装配；单独成文件是为了让 `open.rs` 只保留列表行与新建文件的入口，
 //! 两条触达路径各自可读。
 
-use super::open::{PanelSeed, RemoteTextReadParams, SpawnEditorPanelParams};
+use super::open::{EditorPanelSettings, PanelSeed, SpawnEditorPanelParams};
 use crate::app::AppShell;
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId, TransferId};
@@ -30,9 +30,6 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.jump_open_editor_at_location(&target, window, cx) {
-            return;
-        }
         let RemoteCodeLocation {
             tab_id,
             connection_id,
@@ -40,6 +37,13 @@ impl AppShell {
             line,
             column,
         } = target;
+        if let Some(editor) = self.state.editors.update(cx, |panels, _| {
+            panels.raise_existing(tab_id, connection_id, &remote_path)
+        }) {
+            super::navigate::apply_editor_goto(&editor, line, column, window, cx);
+            cx.notify();
+            return;
+        }
         let file_name = remote_path
             .rsplit('/')
             .next()
@@ -49,57 +53,30 @@ impl AppShell {
                 |name| name.to_string(),
             );
         let op_id = TransferId::new();
-        self.spawn_editor_panel(
-            SpawnEditorPanelParams {
-                tab_id,
-                connection_id,
-                remote_path: remote_path.clone(),
-                file_name,
-                seed: PanelSeed::Reading {
-                    op_id,
-                    permissions: None,
-                },
-            },
-            window,
-            cx,
-        );
-        if let Some(item) = self
-            .state
-            .editors
-            .panels
-            .iter_mut()
-            .find(|item| item.pending_op == Some(op_id))
-        {
-            item.pending_goto = Some((line, column));
-        }
-        self.request_remote_text_read(
-            RemoteTextReadParams {
-                tab_id,
-                connection_id,
-                remote_path,
-                op_id,
-            },
-            cx,
-        );
-    }
-
-    /// 目标文件已在编辑器里打开时直接跳行并聚焦，返回是否命中。
-    fn jump_open_editor_at_location(
-        &mut self,
-        target: &RemoteCodeLocation,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(index) = self.state.editors.panels.iter().position(|item| {
-            item.same_file(target.tab_id, target.connection_id, &target.remote_path)
-        }) else {
-            return false;
+        let settings = EditorPanelSettings {
+            line_numbers: self.state.settings.sftp.editor_line_numbers,
+            soft_wrap: self.state.settings.sftp.editor_soft_wrap,
         };
-        let item = self.state.editors.panels.remove(index);
-        let editor = item.editor.clone();
-        self.state.editors.panels.push(item);
-        super::navigate::apply_editor_goto(&editor, target.line, target.column, window, cx);
-        cx.notify();
-        true
+        let request = self.state.editors.update(cx, |panels, cx| {
+            panels.spawn_editor_panel(
+                SpawnEditorPanelParams {
+                    tab_id,
+                    connection_id,
+                    remote_path,
+                    file_name,
+                    seed: PanelSeed::Reading {
+                        op_id,
+                        permissions: None,
+                    },
+                    pending_goto: Some((line, column)),
+                },
+                settings,
+                window,
+                cx,
+            )
+        });
+        if let Some(request) = request {
+            self.request_remote_text_read(request, cx);
+        }
     }
 }

@@ -185,6 +185,12 @@ impl AppShell {
                 this.sftp_toggle_filter_pane(tab_id, target, window, cx);
             }));
 
+        // 编辑列表浮层归面板实体渲染，这里只提供实体句柄与当前标签。
+        let editor_list = show_editor_list.then(|| {
+            let editors = self.state.editors.clone();
+            render_editor_list_popover(editors.read(cx), &editors, tab_id, p)
+        });
+
         // 主远端与并列列使用同一组按钮：列宽度不足时由横向裁切吸收，
         // 不再为某类列偷偷删减入口。
         crate::widgets::toolbar()
@@ -201,9 +207,7 @@ impl AppShell {
             .child(search_btn)
             .child(rename_btn)
             .child(edit_btn)
-            .when(show_editor_list, |this| {
-                this.child(render_editor_list_popover(self, tab_id, p, cx))
-            })
+            .when_some(editor_list, |this, el| this.child(el))
             .child(chmod_btn)
             .child(delete_btn)
             .child(upload_btn)

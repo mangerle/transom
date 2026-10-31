@@ -139,6 +139,7 @@ impl AppShell {
         // 左侧标签模式启动即以标签面板作为槽位主视图；顶部模式该标志无效。
         let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;
         let monitor = cx.new(|cx| crate::monitor::MonitorView::new(window, &settings.monitor, cx));
+        let editors = cx.new(|_| EditorPanels::new());
 
         let persistence = Persistence::new(
             services.session_store.clone(),
@@ -178,7 +179,7 @@ impl AppShell {
             history_provider,
             probe_badges: HashMap::new(),
             monitor,
-            editors: EditorManager::new(),
+            editors,
             diff_viewer: None,
             sftp_modals: SftpModals {
                 chmod: None,
@@ -217,7 +218,10 @@ impl AppShell {
         let app_weak = cx.entity().downgrade();
         this.state
             .monitor
-            .update(cx, |view, _| view.attach(app_weak));
+            .update(cx, |view, _| view.attach(app_weak.clone()));
+        this.state
+            .editors
+            .update(cx, |panels, _| panels.attach(app_weak));
 
         cx.subscribe_in(
             &this.state.broadcast.input,

@@ -758,6 +758,103 @@ fn monitor_rendering_belongs_to_entity() {
     );
 }
 
+/// 编辑面板实体回调回交外壳时，被调用方法不得再读写编辑面板实体。
+///
+/// 与监控面板同一约束：实体点击/输入回调执行期间 `EditorPanels` 已被租借，
+/// 外壳方法里再 `state.editors.read/update` 会触发 “cannot update while it is
+/// already being updated” 崩溃。这里扫描编辑器目录里的 `with_shell` 目标，
+/// 在编辑器、对比面板与 SFTP 动作源码中定位其函数体做检查。
+#[test]
+fn editor_with_shell_targets_do_not_reenter_panel() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut targets: Vec<String> = Vec::new();
+    for entry in walkdir_like(&root.join("editor")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        collect_with_shell_targets(&content, &mut targets);
+    }
+    assert!(!targets.is_empty(), "未找到任何 with_shell 调用，守卫失效");
+
+    let mut sources = Vec::new();
+    for entry in walkdir_like(&root.join("editor")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        if let Ok(content) = std::fs::read_to_string(&entry) {
+            sources.push(content);
+        }
+    }
+    for extra in ["diff_viewer/mod.rs", "sftp/nav_actions/init.rs"] {
+        if let Ok(content) = std::fs::read_to_string(root.join(extra)) {
+            sources.push(content);
+        }
+    }
+
+    let mut offenders = Vec::new();
+    let mut checked = 0usize;
+    for name in targets {
+        for source in &sources {
+            let Some(body) = function_body(source, &name) else {
+                continue;
+            };
+            checked += 1;
+            if body.contains("state.editors") {
+                offenders.push(name.clone());
+            }
+        }
+    }
+    assert!(checked > 0, "未能定位任何 with_shell 目标函数体，守卫失效");
+    offenders.sort();
+    offenders.dedup();
+    assert!(
+        offenders.is_empty(),
+        "以下外壳方法在编辑面板回调里被调用，却再次访问 EditorPanels，会触发双重租借：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 收集 `with_shell(cx, |shell, ..| shell.foo(..))` 的目标方法名。
+fn collect_with_shell_targets(content: &str, out: &mut Vec<String>) {
+    for capture in content.split("with_shell(cx,").skip(1) {
+        let tail: String = capture.chars().take(400).collect();
+        let Some(start) = tail.find("shell.") else {
+            continue;
+        };
+        let after = &tail[start + "shell.".len()..];
+        let name: String = after
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+            .collect();
+        if !name.is_empty() {
+            out.push(name);
+        }
+    }
+}
+
+/// 粗粒度提取 `fn name(` 的函数体：按花括号配平，足以覆盖本仓库风格。
+fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
+    let pos = source.find(&format!("fn {name}("))?;
+    let open = source[pos..].find('{').map(|i| pos + i)?;
+    let mut depth = 0usize;
+    for (offset, ch) in source[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&source[open..=open + offset]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// 外壳不得通过 `Deref` 继承状态方法：那会让 `AppState` 的方法隐式长在
 /// `AppShell` 上，调用点看不出归属，且任意模块都能拿到 `&mut AppState`
 /// 改状态而不触发重绘。状态访问必须显式写出 `.state`。

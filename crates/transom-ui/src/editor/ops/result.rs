@@ -1,30 +1,64 @@
-//! 编辑器写回结果、冲突与失败处理。
+//! 编辑器写回结果、提权探测结果与失败处理。
+//!
+//! 两段式：实体落到面板状态并返回决策（回传成功快照、探测请求、口令弹窗
+//! 快照），外壳按决策发命令/开弹窗；外壳方法不读写本实体。
 
+use super::super::close::PendingEditorClose;
+use super::save::{SudoPasswordRequest, SudoProbeRequest};
 use super::*;
+use transom_core::RemoteTextMeta;
 
-impl AppShell {
-    /// 回传成功：脏基准与版本指纹都换成远端确认后的新值，目录列表条目就地
-    /// 补丁；请求过"保存并关闭"时在此关闭面板。
-    ///
-    /// 保存成功即脏面板清零，可能因此满足挂起的标签关闭，续行检查。
-    pub(crate) fn note_editor_text_written(
+/// 回传成功后交给外壳的跨域动作快照。
+pub(super) struct EditorWrittenAction {
+    pub(super) tab_id: TabId,
+    pub(super) remote_path: String,
+    pub(super) meta: RemoteTextMeta,
+    /// 新建文件首次落盘：列表里还没有该条目，需要按需刷新当前目录。
+    pub(super) was_new_file: bool,
+    /// 面板因"保存并关闭"已从集合移除，外壳需要把焦点交还 SFTP。
+    pub(super) dropped: bool,
+    /// 挂起的标签关闭意图快照；由外壳结合受影响标签判定能否续行。
+    pub(super) pending_close: Option<PendingEditorClose>,
+    /// 当前仍为脏的标签快照。
+    pub(super) dirty_tabs: Vec<TabId>,
+}
+
+/// 提权探测结果落地后的下一步。
+pub(super) enum SudoProbeOutcome {
+    /// 免密可用：直接提交提权写入。
+    WritePasswordless { editor: Entity<EditorState> },
+    /// 必须口令：外壳打开口令输入框。
+    AskPassword(SudoPasswordRequest),
+    /// 已落到失败态，无后续动作。
+    None,
+}
+
+/// 读取/回传失败落地后的下一步。
+pub(super) enum EditorFailureAction {
+    /// 权限拒绝且尚未自动探测过：外壳投递提权探测。
+    Probe(SudoProbeRequest),
+    /// sudo 票据失效：外壳重新询问口令。
+    AskPassword(SudoPasswordRequest),
+    /// 已落到失败态，无后续动作。
+    None,
+}
+
+impl EditorPanels {
+    /// 回传成功：脏基准与版本指纹都换成远端确认后的新值，目录列表条目由外壳
+    /// 就地补丁；请求过"保存并关闭"时在这里移除面板。
+    fn note_editor_text_written(
         &mut self,
         op_id: TransferId,
         meta: RemoteTextMeta,
-        window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
-        let Some(index) = self
-            .state
-            .editors
+    ) -> Option<EditorWrittenAction> {
+        let index = self
+            .manager()
             .panels
             .iter()
-            .position(|item| item.pending_op == Some(op_id))
-        else {
-            return;
-        };
+            .position(|item| item.pending_op == Some(op_id))?;
         let (editor, close_after, was_new_file, tab_id, remote_path) = {
-            let item = &mut self.state.editors.panels[index];
+            let item = &mut self.manager_mut().panels[index];
             item.pending_op = None;
             item.baseline = item.editor.read(cx).value();
             item.remote_meta = Some(meta);
@@ -49,39 +83,21 @@ impl AppShell {
                 item.remote_path.clone(),
             )
         };
-        // 目录列表条目就地补丁：size/mtime 都来自写后 stat，与远端一致，
-        // 无需为刷新列表再发一次目录请求。
-        if let Some(tab) = self.state.workspace.tab_mut(tab_id)
-            && let Some(panel) = tab.sftp_mut()
-            && let Some(entry) = panel
-                .remote
-                .entries
-                .iter_mut()
-                .find(|entry| entry.path == remote_path)
-        {
-            entry.size = meta.size;
-            entry.modified = meta.mtime;
-        }
-        // 新建文件首次落盘：列表里还没有这个条目，就地补丁无效，按需刷新
-        // 当前目录（仅当用户仍停留在该文件所在目录时）。
-        if was_new_file
-            && let Some(parent) = parent_dir(&remote_path)
-            && self
-                .state
-                .workspace
-                .tab(tab_id)
-                .and_then(|tab| tab.sftp())
-                .is_some_and(|panel| panel.remote.path == parent)
-        {
-            self.request_sftp_list(tab_id, parent.to_string(), cx);
-        }
         if close_after {
-            self.drop_editor_panel(&editor, window, cx);
-            self.resume_pending_editor_close(window, cx);
-            return;
+            self.remove_panel(&editor);
         }
+        let pending_close = self.pending_close();
+        let dirty_tabs = self.dirty_tabs();
         cx.notify();
-        self.resume_pending_editor_close(window, cx);
+        Some(EditorWrittenAction {
+            tab_id,
+            remote_path,
+            meta,
+            was_new_file,
+            dropped: close_after,
+            pending_close,
+            dirty_tabs,
+        })
     }
 
     /// 回传被版本指纹拦截：远端已被修改，置冲突横幅交用户决策，内容原样保留。
@@ -95,8 +111,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
-            .state
-            .editors
+            .manager_mut()
             .panels
             .iter_mut()
             .find(|item| item.pending_op == Some(op_id))
@@ -119,67 +134,89 @@ impl AppShell {
     /// 写回失败且错误码是权限拒绝时，自动转入提权探测而不是只留一条错误文本：
     /// 这是唯一有明确恢复路径的失败。探测只自动走一次，避免提权仍被拒时形成循环；
     /// sudo 票据失效（`AuthFailed`）则直接重新询问口令。
-    pub(crate) fn note_editor_text_failed(
+    fn note_editor_text_failed(
         &mut self,
         op_id: TransferId,
         message: String,
         code: ErrorCode,
-        window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
-        let Some(index) = self.state.editors.panels.iter().position(|item| {
+    ) -> EditorFailureAction {
+        let Some(index) = self.manager().panels.iter().position(|item| {
             item.pending_op == Some(op_id) || item.pending_sudo_probe == Some(op_id)
         }) else {
-            return;
+            return EditorFailureAction::None;
         };
-        let item = &mut self.state.editors.panels[index];
-        if item.pending_sudo_probe == Some(op_id) {
+        if self.manager().panels[index].pending_sudo_probe == Some(op_id) {
             // 探测失败：没有可继续的提权结论，直接回到失败态并保留远端原文。
+            let item = &mut self.manager_mut().panels[index];
             item.pending_sudo_probe = None;
             item.phase = EditorPhase::Failed;
             item.error = Some(
                 rust_i18n::t!("editor.error_sudo_probe_failed", message = message).to_string(),
             );
             cx.notify();
-            return;
+            return EditorFailureAction::None;
         }
-        let was_writing = item.phase == EditorPhase::Writing;
-        let detail = if item.phase == EditorPhase::Reading {
-            rust_i18n::t!("editor.error_read_failed", message = message).to_string()
-        } else {
-            rust_i18n::t!("editor.error_write_failed", message = message).to_string()
+        let (editor, tab_id, file_name, should_probe, should_reask) = {
+            let item = &mut self.manager_mut().panels[index];
+            let was_writing = item.phase == EditorPhase::Writing;
+            let detail = if item.phase == EditorPhase::Reading {
+                rust_i18n::t!("editor.error_read_failed", message = message).to_string()
+            } else {
+                rust_i18n::t!("editor.error_write_failed", message = message).to_string()
+            };
+            let should_probe =
+                was_writing && code == ErrorCode::PermissionDenied && !item.sudo_probe_attempted;
+            let should_reask = was_writing && code == ErrorCode::AuthFailed;
+            item.pending_op = None;
+            item.phase = EditorPhase::Failed;
+            item.written_size = None;
+            item.close_after_write = false;
+            item.error = Some(detail);
+            if should_probe {
+                item.error =
+                    Some(rust_i18n::t!("editor.status_probing_sudo_after_denied").to_string());
+            } else if should_reask {
+                item.phase = EditorPhase::Idle;
+                item.error = None;
+            }
+            (
+                item.editor.clone(),
+                item.tab_id,
+                item.file_name.clone(),
+                should_probe,
+                should_reask,
+            )
         };
-        let editor = item.editor.clone();
-        let should_probe =
-            was_writing && code == ErrorCode::PermissionDenied && !item.sudo_probe_attempted;
-        let should_reask = was_writing && code == ErrorCode::AuthFailed;
-        item.pending_op = None;
-        item.phase = EditorPhase::Failed;
-        item.written_size = None;
-        item.close_after_write = false;
-        item.error = Some(detail);
         if should_probe {
-            item.error = Some(rust_i18n::t!("editor.status_probing_sudo_after_denied").to_string());
-            self.request_sudo_probe(&editor, cx);
-        } else if should_reask {
-            item.phase = EditorPhase::Idle;
-            item.error = None;
-            self.open_sudo_password_modal(&editor, window, cx);
-            return;
+            let request = self.prepare_sudo_probe(&editor);
+            cx.notify();
+            return match request {
+                Some(request) => EditorFailureAction::Probe(request),
+                None => EditorFailureAction::None,
+            };
+        }
+        if should_reask {
+            cx.notify();
+            return EditorFailureAction::AskPassword(SudoPasswordRequest {
+                editor,
+                tab_id,
+                file_name,
+            });
         }
         cx.notify();
+        EditorFailureAction::None
     }
 
     /// 命令投递失败这类本地错误的兜底：按在途 ID 定位面板并置失败态。
-    pub(crate) fn fail_editor_panel_by_op(
+    pub(crate) fn fail_by_op(
         &mut self,
         op_id: TransferId,
         message: String,
         cx: &mut Context<Self>,
     ) {
         if let Some(item) = self
-            .state
-            .editors
+            .manager_mut()
             .panels
             .iter_mut()
             .find(|item| item.pending_op == Some(op_id))
@@ -189,6 +226,176 @@ impl AppShell {
             item.error = Some(message);
         }
         cx.notify();
+    }
+
+    /// 提权探测结果：免密直接写、需要口令才弹框、不可用则说明原因。
+    fn note_sudo_probed(
+        &mut self,
+        op_id: TransferId,
+        capability: SudoCapability,
+        cx: &mut Context<Self>,
+    ) -> SudoProbeOutcome {
+        let Some(index) = self
+            .manager()
+            .panels
+            .iter()
+            .position(|item| item.pending_sudo_probe == Some(op_id))
+        else {
+            return SudoProbeOutcome::None;
+        };
+        let item = &mut self.manager_mut().panels[index];
+        let editor = item.editor.clone();
+        item.pending_sudo_probe = None;
+        match capability {
+            SudoCapability::Passwordless => {
+                item.phase = EditorPhase::Idle;
+                item.error = None;
+                cx.notify();
+                SudoProbeOutcome::WritePasswordless { editor }
+            }
+            SudoCapability::PasswordRequired => {
+                item.phase = EditorPhase::Idle;
+                item.error = None;
+                item.confirm = None;
+                let request = SudoPasswordRequest {
+                    editor,
+                    tab_id: item.tab_id,
+                    file_name: item.file_name.clone(),
+                };
+                cx.notify();
+                SudoProbeOutcome::AskPassword(request)
+            }
+            SudoCapability::Unavailable { reason, detail } => {
+                item.phase = EditorPhase::Failed;
+                item.error = Some(
+                    rust_i18n::t!(
+                        "editor.sudo_unavailable",
+                        reason = sudo_unavailable_text(reason),
+                        detail = detail
+                    )
+                    .to_string(),
+                );
+                cx.notify();
+                SudoProbeOutcome::None
+            }
+        }
+    }
+}
+
+impl AppShell {
+    /// 回传成功事件：先由实体落到新基线，再执行目录补丁、焦点与续行关闭。
+    pub(crate) fn on_editor_text_written(
+        &mut self,
+        op_id: TransferId,
+        meta: RemoteTextMeta,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(action) = self.state.editors.update(cx, |panels, cx| {
+            panels.note_editor_text_written(op_id, meta, cx)
+        }) else {
+            return;
+        };
+        self.apply_editor_written(action, window, cx);
+    }
+
+    fn apply_editor_written(
+        &mut self,
+        action: EditorWrittenAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // 目录列表条目就地补丁：size/mtime 都来自写后 stat，与远端一致，
+        // 无需为刷新列表再发一次目录请求。
+        if let Some(tab) = self.state.workspace.tab_mut(action.tab_id)
+            && let Some(panel) = tab.sftp_mut()
+            && let Some(entry) = panel
+                .remote
+                .entries
+                .iter_mut()
+                .find(|entry| entry.path == action.remote_path)
+        {
+            entry.size = action.meta.size;
+            entry.modified = action.meta.mtime;
+        }
+        // 新建文件首次落盘：列表里还没有这个条目，就地补丁无效，按需刷新
+        // 当前目录（仅当用户仍停留在该文件所在目录时）。
+        if action.was_new_file
+            && let Some(parent) = parent_dir(&action.remote_path)
+            && self
+                .state
+                .workspace
+                .tab(action.tab_id)
+                .and_then(|tab| tab.sftp())
+                .is_some_and(|panel| panel.remote.path == parent)
+        {
+            self.request_sftp_list(action.tab_id, parent.to_string(), cx);
+        }
+        if action.dropped {
+            self.focus_active_sftp_panel(window, cx);
+        }
+        if let Some(intent) = action.pending_close {
+            self.try_finish_pending_close(intent, &action.dirty_tabs, window, cx);
+        } else {
+            cx.notify();
+        }
+    }
+
+    /// 回传冲突事件。
+    pub(crate) fn note_editor_text_conflict(
+        &mut self,
+        op_id: TransferId,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.editors.update(cx, |panels, cx| {
+            panels.note_editor_text_conflict(op_id, message, cx)
+        });
+    }
+
+    /// 读取或回传失败事件：按实体返回的决策投递探测或重新询问口令。
+    pub(crate) fn note_editor_text_failed(
+        &mut self,
+        op_id: TransferId,
+        message: String,
+        code: ErrorCode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let action = self.state.editors.update(cx, |panels, cx| {
+            panels.note_editor_text_failed(op_id, message, code, cx)
+        });
+        match action {
+            EditorFailureAction::Probe(request) => {
+                self.dispatch_sudo_probe(request, cx);
+            }
+            EditorFailureAction::AskPassword(request) => {
+                self.open_sudo_password_modal(request, window, cx);
+            }
+            EditorFailureAction::None => {}
+        }
+    }
+
+    /// 提权探测结果事件：免密直接写、需要口令开弹窗、不可用已就地显示原因。
+    pub(crate) fn on_sudo_probed(
+        &mut self,
+        op_id: TransferId,
+        capability: SudoCapability,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let outcome = self.state.editors.update(cx, |panels, cx| {
+            panels.note_sudo_probed(op_id, capability, cx)
+        });
+        match outcome {
+            SudoProbeOutcome::WritePasswordless { editor } => {
+                self.submit_sudo_editor_write(&editor, None, window, cx);
+            }
+            SudoProbeOutcome::AskPassword(request) => {
+                self.open_sudo_password_modal(request, window, cx);
+            }
+            SudoProbeOutcome::None => {}
+        }
     }
 
     /// 把编辑入口的拒绝原因写到目标远端列的错误位上。
@@ -212,96 +419,29 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 面板内保存快捷键：焦点在哪个面板就存哪个，取不到焦点时存最上层，
-    /// 避免键位静默失效让用户以为没按到。
-    pub(crate) fn on_save_editor_panel(
+    /// 投递提权探测；失败时把错误落回实体并交给面板显示。
+    pub(super) fn dispatch_sudo_probe(
         &mut self,
-        _: &keymap::SaveEditorFile,
-        window: &mut Window,
+        request: SudoProbeRequest,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.focused_editor_panel_index(window, cx) else {
-            return;
-        };
-        let Some(editor) = self
-            .state
-            .editors
-            .panels
-            .get(index)
-            .map(|item| item.editor.clone())
-        else {
-            return;
-        };
-        self.save_editor_panel(&editor, window, cx);
-    }
-
-    /// 当前应接收"保存"快捷键的面板下标：优先编辑器持有焦点的那个，
-    /// 没有焦点信息时退到最上层，避免快捷键静默失效。
-    pub(crate) fn focused_editor_panel_index(&self, window: &Window, cx: &App) -> Option<usize> {
-        if self.state.editors.panels.is_empty() {
-            return None;
+        let op_id = request.op_id;
+        if self.send_sudo_probe(&request).is_err() {
+            self.state
+                .editors
+                .update(cx, |panels, cx| panels.fail_sudo_probe_dispatch(op_id, cx));
         }
-        self.state
-            .editors
-            .panels
-            .iter()
-            .position(|item| {
-                item.editor
-                    .read(cx)
-                    .focus_handle(cx)
-                    .contains_focused(window, cx)
-            })
-            .or(Some(self.state.editors.panels.len() - 1))
     }
 
-    /// 按编辑视图定位面板并就地修改；返回是否找到该面板。
-    ///
-    /// 为什么用闭包而不是返回 `Option<&mut EditorPanelState>`：面板状态后续要搬进
-    /// 独立实体，实体的借用必须通过 `Entity::update` 的闭包完成，不能把可变引用
-    /// 借出实体生命周期之外。先统一成闭包式，迁移时只换实现不动调用点。
-    pub(crate) fn update_editor_panel(
+    /// 读取命令投递失败的兜底入口：状态由实体落定。
+    pub(crate) fn fail_editor_panel_by_op(
         &mut self,
-        editor: &Entity<EditorState>,
-        action: impl FnOnce(&mut EditorPanelState),
-    ) -> bool {
-        let Some(item) = self
-            .state
-            .editors
-            .panels
-            .iter_mut()
-            .find(|item| item.editor == *editor)
-        else {
-            return false;
-        };
-        action(item);
-        true
-    }
-
-    /// 与 [`Self::update_editor_panel`] 同形，但把闭包结果带出借用作用域。
-    pub(crate) fn map_editor_panel<R>(
-        &mut self,
-        editor: &Entity<EditorState>,
-        action: impl FnOnce(&mut EditorPanelState) -> R,
-    ) -> Option<R> {
-        self.state
-            .editors
-            .panels
-            .iter_mut()
-            .find(|item| item.editor == *editor)
-            .map(action)
-    }
-
-    pub(crate) fn drop_editor_panel(
-        &mut self,
-        editor: &Entity<EditorState>,
-        window: &mut Window,
+        op_id: TransferId,
+        message: String,
         cx: &mut Context<Self>,
     ) {
         self.state
             .editors
-            .panels
-            .retain(|item| item.editor != *editor);
-        self.focus_active_sftp_panel(window, cx);
-        cx.notify();
+            .update(cx, |panels, cx| panels.fail_by_op(op_id, message, cx));
     }
 }

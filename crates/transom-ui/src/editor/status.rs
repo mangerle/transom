@@ -8,10 +8,12 @@
 //!   承载；Ctrl+S 已在键位表里，不依赖视觉上的大色块按钮。
 //! - 编码与行尾直接取自读回时的 `RemoteTextMeta`：GBK 转码只读预览、CRLF
 //!   回传保留形态，都是用户需要一眼确认的事实，放在状态栏比藏在提示里更可靠。
+//! - 菜单与按钮回调都改调实体方法；"与本地对比"属于跨域动作，经 `with_shell`
+//!   回交外壳打开对比面板。
 
 use super::diff::diff_entry_allowed;
+use super::entity::EditorPanels;
 use super::panel::{EditorPanelState, EditorPhase};
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::format_size;
@@ -29,76 +31,184 @@ use transom_core::format_octal_permissions;
 /// 状态栏高度：单行小字，与编辑器画布之间只留一条分隔线。
 const STATUS_BAR_HEIGHT: f32 = 26.0;
 
-/// 渲染编辑器式状态栏：左侧位置，右侧文件属性、回传阶段与动作。
-pub(crate) fn render_panel_status(
-    item: &EditorPanelState,
-    editor: &Entity<EditorState>,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
-    let total_lines = editor.read(cx).text().lines_len();
-    let busy = matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing);
-    let caret = if item.phase == EditorPhase::Reading {
-        rust_i18n::t!("editor.status_caret_pending").to_string()
-    } else {
-        rust_i18n::t!(
-            "editor.status_caret",
-            line = item.caret.0,
-            column = item.caret.1,
-            total = total_lines
-        )
-        .to_string()
-    };
-    let encoding = item
-        .remote_meta
-        .map(|meta| if meta.transcoded { "GBK" } else { "UTF-8" });
-    let eol = item
-        .remote_meta
-        .map(|meta| if meta.crlf { "CRLF" } else { "LF" });
-    let phase = render_phase(item, p);
-
-    h_flex()
-        .h(px(STATUS_BAR_HEIGHT))
-        .items_center()
-        .gap_2()
-        .px_2()
-        .bg(p.popover)
-        .border_color(p.divider(p.border))
-        .divider_edge(DividerEdge::Top, p.divider_width)
-        .text_xs()
-        .text_color(p.muted_foreground)
-        .child(div().flex_none().child(caret))
-        .child(div().flex_1())
-        .when_some(encoding, |this, label| {
-            this.child(div().flex_none().child(label))
-        })
-        .when_some(eol, |this, label| {
-            this.child(div().flex_none().child(label))
-        })
-        .child(div().flex_none().child(item.language.clone()))
-        // 权限八进制与只读标记来自打开时刻的目录项快照，可能过期，仅作提示。
-        .when_some(item.permissions, |this, permissions| {
-            this.child(
-                div()
-                    .flex_none()
-                    .child(format_octal_permissions(permissions)),
+impl EditorPanels {
+    /// 渲染编辑器式状态栏：左侧位置，右侧文件属性、回传阶段与动作。
+    pub(super) fn render_panel_status(
+        &self,
+        item: &EditorPanelState,
+        editor: &Entity<EditorState>,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let total_lines = editor.read(cx).text().lines_len();
+        let busy = matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing);
+        let caret = if item.phase == EditorPhase::Reading {
+            rust_i18n::t!("editor.status_caret_pending").to_string()
+        } else {
+            rust_i18n::t!(
+                "editor.status_caret",
+                line = item.caret.0,
+                column = item.caret.1,
+                total = total_lines
             )
-        })
-        .when(!item.writable, |this| {
-            let transcoded = item.remote_meta.is_some_and(|meta| meta.transcoded);
-            let label = if transcoded {
-                rust_i18n::t!("editor.status_read_only_preview").to_string()
-            } else {
-                rust_i18n::t!("editor.status_read_only").to_string()
-            };
-            this.child(div().flex_none().text_color(p.danger).child(label))
-        })
-        .child(phase)
-        .when_some(render_panel_actions(item, editor, cx), |this, actions| {
-            this.child(actions)
-        })
-        .child(render_primary_action(item, editor, busy, cx))
-        .into_any_element()
+            .to_string()
+        };
+        let encoding = item
+            .remote_meta
+            .map(|meta| if meta.transcoded { "GBK" } else { "UTF-8" });
+        let eol = item
+            .remote_meta
+            .map(|meta| if meta.crlf { "CRLF" } else { "LF" });
+        let phase = render_phase(item, p);
+
+        h_flex()
+            .h(px(STATUS_BAR_HEIGHT))
+            .items_center()
+            .gap_2()
+            .px_2()
+            .bg(p.popover)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
+            .text_xs()
+            .text_color(p.muted_foreground)
+            .child(div().flex_none().child(caret))
+            .child(div().flex_1())
+            .when_some(encoding, |this, label| {
+                this.child(div().flex_none().child(label))
+            })
+            .when_some(eol, |this, label| {
+                this.child(div().flex_none().child(label))
+            })
+            .child(div().flex_none().child(item.language.clone()))
+            // 权限八进制与只读标记来自打开时刻的目录项快照，可能过期，仅作提示。
+            .when_some(item.permissions, |this, permissions| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .child(format_octal_permissions(permissions)),
+                )
+            })
+            .when(!item.writable, |this| {
+                let transcoded = item.remote_meta.is_some_and(|meta| meta.transcoded);
+                let label = if transcoded {
+                    rust_i18n::t!("editor.status_read_only_preview").to_string()
+                } else {
+                    rust_i18n::t!("editor.status_read_only").to_string()
+                };
+                this.child(div().flex_none().text_color(p.danger).child(label))
+            })
+            .child(phase)
+            .when_some(
+                self.render_panel_actions(item, editor, cx),
+                |this, actions| this.child(actions),
+            )
+            .child(self.render_primary_action(item, editor, busy, cx))
+            .into_any_element()
+    }
+
+    /// 溢出菜单：对比差异、与本地对比、放弃修改。全部不可用时整块不渲染。
+    fn render_panel_actions(
+        &self,
+        item: &EditorPanelState,
+        editor: &Entity<EditorState>,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let busy = matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing);
+        let can_diff = diff_entry_allowed(item);
+        // 与本地对比取远端基线（磁盘上的两端），面板新建、读取中或冲突期间不提供。
+        let can_local =
+            item.loaded && !item.new_file && !busy && !item.showing_diff && !item.conflict;
+        // 冲突期间"放弃修改"恢复到的是过期基线，正确出口是横幅上的重新载入。
+        let can_revert = item.dirty && !busy && !item.conflict && !item.showing_diff;
+        if !(can_diff || can_local || can_revert) {
+            return None;
+        }
+        let panels = cx.entity();
+        let menu_editor = editor.clone();
+        let trigger = Button::new("editor-panel-actions")
+            .ghost()
+            .xsmall()
+            .icon(IconName::Ellipsis)
+            .tooltip(rust_i18n::t!("editor.actions_more").to_string())
+            .dropdown_menu(move |menu, _window, _cx| {
+                let mut menu = menu;
+                if can_diff {
+                    let panels = panels.clone();
+                    let editor = menu_editor.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("editor.action_compare").to_string(),
+                        IconName::FileDiff,
+                        move |_, _, cx| {
+                            panels.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
+                        },
+                    ));
+                }
+                if can_local {
+                    let panels = panels.clone();
+                    let editor = menu_editor.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("editor.action_compare_local").to_string(),
+                        IconName::FileDiff,
+                        move |_, _, cx| {
+                            panels.update(cx, |this, cx| {
+                                let Some(source) = this.diff_source(&editor) else {
+                                    return;
+                                };
+                                this.with_shell(cx, |shell, cx| {
+                                    shell.open_editor_local_diff(source, cx)
+                                });
+                            });
+                        },
+                    ));
+                }
+                if can_revert {
+                    let panels = panels.clone();
+                    let editor = menu_editor.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("editor.action_revert").to_string(),
+                        IconName::RotateCcw,
+                        move |_, _, cx| {
+                            panels.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
+                        },
+                    ));
+                }
+                menu
+            });
+        Some(trigger.into_any_element())
+    }
+
+    /// 常驻动作：可写时是保存，只读时是 Sudo 提权保存。
+    fn render_primary_action(
+        &self,
+        item: &EditorPanelState,
+        editor: &Entity<EditorState>,
+        busy: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let action_editor = editor.clone();
+        if item.writable {
+            return Button::new("editor-save-upload")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Check)
+                .tooltip(rust_i18n::t!("editor.save_upload_tooltip").to_string())
+                .disabled(!item.dirty || busy)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.save_editor_panel(&action_editor, window, cx);
+                }))
+                .into_any_element();
+        }
+        Button::new("editor-sudo-save")
+            .warning()
+            .xsmall()
+            .icon(IconName::Shield)
+            .tooltip(rust_i18n::t!("editor.sudo_save").to_string())
+            .disabled(!item.dirty || busy)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.prompt_sudo_save(&action_editor, window, cx);
+            }))
+            .into_any_element()
+    }
 }
 
 /// 回传/读取阶段：忙碌时转圈，脏内容前加一个状态点，冲突时文字转危险色。
@@ -146,101 +256,5 @@ fn render_phase(item: &EditorPanelState, p: &Palette) -> AnyElement {
             )
         })
         .child(div().child(label))
-        .into_any_element()
-}
-
-/// 溢出菜单：对比差异、与本地对比、放弃修改。全部不可用时整块不渲染。
-fn render_panel_actions(
-    item: &EditorPanelState,
-    editor: &Entity<EditorState>,
-    cx: &mut Context<AppShell>,
-) -> Option<AnyElement> {
-    let busy = matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing);
-    let can_diff = diff_entry_allowed(item);
-    // 与本地对比取远端基线（磁盘上的两端），面板新建、读取中或冲突期间不提供。
-    let can_local = item.loaded && !item.new_file && !busy && !item.showing_diff && !item.conflict;
-    // 冲突期间"放弃修改"恢复到的是过期基线，正确出口是横幅上的重新载入。
-    let can_revert = item.dirty && !busy && !item.conflict && !item.showing_diff;
-    if !(can_diff || can_local || can_revert) {
-        return None;
-    }
-    let app = cx.entity().clone();
-    let menu_editor = editor.clone();
-    let trigger = Button::new("editor-panel-actions")
-        .ghost()
-        .xsmall()
-        .icon(IconName::Ellipsis)
-        .tooltip(rust_i18n::t!("editor.actions_more").to_string())
-        .dropdown_menu(move |menu, _window, _cx| {
-            let mut menu = menu;
-            if can_diff {
-                let app = app.clone();
-                let editor = menu_editor.clone();
-                menu = menu.item(crate::widgets::menu_item(
-                    rust_i18n::t!("editor.action_compare").to_string(),
-                    IconName::FileDiff,
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
-                    },
-                ));
-            }
-            if can_local {
-                let app = app.clone();
-                let editor = menu_editor.clone();
-                menu = menu.item(crate::widgets::menu_item(
-                    rust_i18n::t!("editor.action_compare_local").to_string(),
-                    IconName::FileDiff,
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            this.open_editor_local_diff(&editor, cx);
-                        });
-                    },
-                ));
-            }
-            if can_revert {
-                let app = app.clone();
-                let editor = menu_editor.clone();
-                menu = menu.item(crate::widgets::menu_item(
-                    rust_i18n::t!("editor.action_revert").to_string(),
-                    IconName::RotateCcw,
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
-                    },
-                ));
-            }
-            menu
-        });
-    Some(trigger.into_any_element())
-}
-
-/// 常驻动作：可写时是保存，只读时是 Sudo 提权保存。
-fn render_primary_action(
-    item: &EditorPanelState,
-    editor: &Entity<EditorState>,
-    busy: bool,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
-    let action_editor = editor.clone();
-    if item.writable {
-        return Button::new("editor-save-upload")
-            .ghost()
-            .xsmall()
-            .icon(IconName::Check)
-            .tooltip(rust_i18n::t!("editor.save_upload_tooltip").to_string())
-            .disabled(!item.dirty || busy)
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.save_editor_panel(&action_editor, window, cx);
-            }))
-            .into_any_element();
-    }
-    Button::new("editor-sudo-save")
-        .warning()
-        .xsmall()
-        .icon(IconName::Shield)
-        .tooltip(rust_i18n::t!("editor.sudo_save").to_string())
-        .disabled(!item.dirty || busy)
-        .on_click(cx.listener(move |this, _, window, cx| {
-            this.prompt_sudo_save(&action_editor, window, cx);
-        }))
         .into_any_element()
 }

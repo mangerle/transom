@@ -84,13 +84,15 @@ impl AppShell {
             } => {
                 // 对比面板与编辑器共用同一条只读通道，按在途请求归属分发。
                 if !self.diff_handle_remote_read(op_id, &content, meta, cx) {
-                    self.apply_editor_text(op_id, content, meta, window, cx);
+                    self.state.editors.update(cx, |panels, cx| {
+                        panels.apply_editor_text(op_id, content, meta, window, cx)
+                    });
                 }
                 true
             }
             SftpAppEvent::SftpTextWritten { op_id, meta, .. } => {
                 if !self.diff_handle_remote_written(op_id, meta, window, cx) {
-                    self.note_editor_text_written(op_id, meta, window, cx);
+                    self.on_editor_text_written(op_id, meta, window, cx);
                 }
                 true
             }

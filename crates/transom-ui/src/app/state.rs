@@ -20,7 +20,7 @@ use super::task_hub::TaskHub;
 use super::types::PendingNotices;
 use crate::UiServices;
 use crate::cloud_sync::GitSyncScheduler;
-use crate::editor::EditorManager;
+use crate::editor::EditorPanels;
 use crate::keymap::ShortcutRecordingState;
 use crate::palette::localized_error;
 use crate::sftp::SftpModals;
@@ -67,8 +67,8 @@ pub(crate) struct AppState {
     pub(in crate::app) probe_badges: HashMap<SessionId, ProbeBadge>,
     /// 主机监控看板与进程管理器状态。
     pub(in crate::app) monitor: Entity<crate::monitor::MonitorView>,
-    /// 统一托管的远端文本编辑器管理器。
-    pub(in crate::app) editors: EditorManager,
+    /// 远端文本编辑面板实体：面板集合、关闭拦截与渲染都归它。
+    pub(in crate::app) editors: Entity<EditorPanels>,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
     pub(in crate::app) sftp_modals: SftpModals,
     /// 远程与本地文件分栏对比面板；同一时刻至多一个。

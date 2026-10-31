@@ -308,6 +308,7 @@ impl AppShell {
         }));
         if !self.state.send_command(command) {
             self.state.remove_tab(tab_id);
+            self.prune_tab_overlays(cx);
         }
         cx.notify();
     }

@@ -13,7 +13,6 @@
 //!   最后一行（与常见编辑器行为一致），而不是拒绝服务。
 
 use crate::app::AppShell;
-use crate::keymap;
 use crate::palette::{Palette, sftp_text_input};
 use crate::sftp::EditorGotoLineModalState;
 use gpui_kit::assets::IconName;
@@ -46,20 +45,16 @@ pub(crate) fn apply_editor_goto(
 }
 
 impl AppShell {
-    /// 面板内"跳转到行"快捷键：打开行号输入模态，捕获当前焦点面板的编辑器。
-    pub(crate) fn on_goto_editor_line(
+    /// 打开行号输入模态，目标编辑器由实体在快捷键触发时捕获。
+    ///
+    /// 模态在打开瞬间捕获目标编辑器实体，而不是确认时再找焦点面板：模态输入框
+    /// 会抢走焦点，届时"焦点所在面板"已经不再是用户想跳转的那个。
+    pub(crate) fn open_editor_goto_line(
         &mut self,
-        _: &keymap::GoToEditorLine,
+        editor: Entity<EditorState>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self
-            .focused_editor_panel_index(window, cx)
-            .and_then(|index| self.state.editors.panels.get(index))
-            .map(|item| item.editor.clone())
-        else {
-            return;
-        };
         let input = sftp_text_input(window, cx, "", &rust_i18n::t!("editor.goto_placeholder"));
         input.update(cx, |state, cx| state.focus(window, cx));
         // 输入框内按回车直接确认：订阅句柄随模态存亡，关闭模态即退订。

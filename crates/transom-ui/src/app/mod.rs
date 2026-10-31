@@ -113,7 +113,7 @@ pub(crate) use task_hub::TaskHub;
 
 use self::broadcast::BroadcastBarState;
 use self::cloud_sync::GitSyncScheduler;
-use self::editor::EditorManager;
+use self::editor::EditorPanels;
 use self::keys::KnownHostsModalState;
 use self::settings::SettingsModalState;
 use self::sftp::SftpModals;

@@ -65,7 +65,7 @@ pub(crate) use self::state::{
 pub(crate) use self::task::{
     SftpTransferRequest, TransferKind, TransferMode, TransferStatus, TransferTask,
 };
-pub(crate) use crate::editor::{EditorDragTracker, PendingEditorClose};
+pub(crate) use crate::editor::PendingEditorClose;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;

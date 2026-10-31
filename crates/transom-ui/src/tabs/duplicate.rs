@@ -80,7 +80,7 @@ impl AppShell {
             .workspace
             .tabs
             .retain(|tab| tab.session_id != session_id);
-        self.state.prune_tab_overlays();
+        self.prune_tab_overlays(cx);
         let tiled_focus = self
             .state
             .active_tiling()

@@ -1,20 +1,23 @@
 //! SFTP 编辑面板的窗体动作：折叠/最大化、置顶与拖拽、关闭与恢复的确认流程。
 //!
-//! 面板状态与几何换算在 `editor_panel.rs`，打开与读取在 `editor_open.rs`，
-//! 保存回传在 `editor_ops.rs`，关闭闸门在 `editor_close.rs`，渲染在 `editor_view.rs`。
+//! 面板状态与几何换算在 `panel.rs`，打开与读取在 `open.rs`，
+//! 保存回传在 `ops.rs`，关闭闸门在 `close.rs`，渲染在 `view.rs`。
+//!
+//! 这些方法都挂在 `EditorPanels` 实体上：状态变更在本实体完成，需要发命令、
+//! 开弹窗或聚焦其它面板时通过 `with_shell` 回交外壳。
 
+use super::entity::EditorPanels;
 use super::panel::{EditorPhase, PanelConfirm};
-use crate::app::AppShell;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
 
-impl AppShell {
+impl EditorPanels {
     pub(crate) fn toggle_editor_panel_collapsed(
         &mut self,
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        if !self.state.editors.toggle_collapsed(editor) {
+        if !self.manager_mut().toggle_collapsed(editor) {
             return;
         }
         cx.notify();
@@ -25,7 +28,7 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        if !self.state.editors.toggle_maximized(editor) {
+        if !self.manager_mut().toggle_maximized(editor) {
             return;
         }
         cx.notify();
@@ -37,7 +40,7 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        if !self.state.editors.raise(editor) {
+        if !self.manager_mut().raise(editor) {
             return;
         }
         cx.notify();
@@ -51,17 +54,11 @@ impl AppShell {
         position: Point<Pixels>,
         cx: &mut Context<Self>,
     ) {
-        self.raise_editor_panel(editor, cx);
-        // 同一时刻至多一个面板在拖：清掉其他面板可能残留的拖拽位，
-        // 防御任何未来遗漏收尾的路径导致双面板同时跟随鼠标。
-        for other in self.state.editors.panels.iter_mut() {
-            if other.editor != *editor {
-                other.drag_grab = None;
-            }
-        }
+        self.manager_mut().raise(editor);
         let (x, y): (f32, f32) = (position.x.into(), position.y.into());
-        // 同一时刻至多一个面板在拖：管理器会清掉其他面板残留的拖拽位。
-        self.state.editors.begin_drag(editor, x, y);
+        // 管理器会顺手清掉其它面板残留的拖拽位，保证同一时刻只有一个面板跟随鼠标。
+        self.manager_mut().begin_drag(editor, x, y);
+        cx.notify();
     }
 
     /// 视口级拖拽推进：只有确实有面板在被拖动时才改写状态并重绘。
@@ -73,14 +70,13 @@ impl AppShell {
     ) {
         let (x, y): (f32, f32) = (position.x.into(), position.y.into());
         let (viewport_w, viewport_h): (f32, f32) = (viewport.width.into(), viewport.height.into());
-        let dragging = self.state.editors.drag(x, y, viewport_w, viewport_h);
-        if dragging {
+        if self.manager_mut().drag(x, y, viewport_w, viewport_h) {
             cx.notify();
         }
     }
 
     pub(crate) fn end_editor_panel_drag(&mut self, cx: &mut Context<Self>) {
-        if !self.state.editors.end_drag() {
+        if !self.manager_mut().end_drag() {
             return;
         }
         cx.notify();
@@ -93,21 +89,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let dirty = self
-            .state
-            .editors
-            .panels
-            .iter()
-            .find(|item| item.editor == *editor)
-            .is_some_and(|item| item.dirty);
+        let dirty = self.map_panel(editor, |item| item.dirty).unwrap_or(false);
         if dirty {
-            self.update_editor_panel(editor, |item| {
+            self.update_panel(editor, |item| {
                 item.confirm = Some(PanelConfirm::DiscardClose);
             });
             cx.notify();
             return;
         }
-        self.drop_editor_panel(editor, window, cx);
+        self.drop_panel(editor);
+        self.focus_active_sftp(window, cx);
+        cx.notify();
     }
 
     /// 确认丢弃：放弃未保存改动并关闭面板；若关闭是被标签关闭闸门拦下的，
@@ -118,12 +110,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.update_editor_panel(editor, |item| {
+        self.update_panel(editor, |item| {
             item.confirm = None;
             item.dirty = false;
         });
-        self.drop_editor_panel(editor, window, cx);
-        self.resume_pending_editor_close(window, cx);
+        self.drop_panel(editor);
+        self.focus_active_sftp(window, cx);
+        self.defer_close_resume(window, cx);
+        cx.notify();
     }
 
     /// 留在面板：撤销二次确认并把焦点交还编辑器。
@@ -136,10 +130,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.update_editor_panel(editor, |item| {
+        self.update_panel(editor, |item| {
             item.confirm = None;
         });
-        self.state.editors.pending_close = None;
+        self.clear_pending_close();
         editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
     }
@@ -150,7 +144,7 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        self.update_editor_panel(editor, |item| {
+        self.update_panel(editor, |item| {
             item.confirm = Some(PanelConfirm::Revert);
         });
         cx.notify();
@@ -166,14 +160,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(baseline) = self.map_editor_panel(editor, |item| {
+        let Some(baseline) = self.map_panel(editor, |item| {
             item.confirm = None;
             item.baseline.clone()
         }) else {
             return;
         };
         editor.update(cx, |state, cx| state.set_value(baseline, window, cx));
-        self.update_editor_panel(editor, |item| {
+        self.update_panel(editor, |item| {
             item.dirty = false;
             item.phase = EditorPhase::Idle;
             item.written_size = None;
@@ -182,7 +176,7 @@ impl AppShell {
             item.showing_diff = false;
             item.diff = None;
         });
-        self.resume_pending_editor_close(window, cx);
+        self.defer_close_resume(window, cx);
         cx.notify();
     }
 
@@ -194,10 +188,55 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.update_editor_panel(editor, |item| {
+        self.update_panel(editor, |item| {
             item.conflict = false;
         });
         editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
+    }
+
+    /// 面板内保存快捷键：焦点在哪个面板就存哪个。
+    pub(crate) fn on_save_editor_panel(
+        &mut self,
+        _: &crate::keymap::SaveEditorFile,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(editor) = self.focused_editor(window, cx) else {
+            return;
+        };
+        self.save_editor_panel(&editor, window, cx);
+    }
+
+    /// 面板内"跳转到行"快捷键：找到焦点面板后由外壳打开行号输入模态。
+    pub(crate) fn on_goto_editor_line(
+        &mut self,
+        _: &crate::keymap::GoToEditorLine,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(editor) = self.focused_editor(window, cx) else {
+            return;
+        };
+        self.with_shell(cx, |shell, cx| {
+            shell.open_editor_goto_line(editor, window, cx)
+        });
+    }
+
+    fn drop_panel(&mut self, editor: &Entity<EditorState>) {
+        self.manager_mut()
+            .panels
+            .retain(|item| item.editor != *editor);
+    }
+
+    /// 面板移除后把焦点交还当前 SFTP 面板。
+    fn focus_active_sftp(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.with_shell(cx, |shell, cx| shell.focus_active_sftp_panel(window, cx));
+    }
+
+    /// 挂起关闭可能在任意面板处理完后满足；延后到本次实体租借结束后再续行，
+    /// 避免外壳续行时重新读写本实体造成双重租借。
+    fn defer_close_resume(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.with_shell(cx, |shell, cx| shell.defer_editor_close_resume(window, cx));
     }
 }

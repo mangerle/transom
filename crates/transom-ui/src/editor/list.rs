@@ -1,17 +1,17 @@
 //! SFTP 工具栏的"已打开编辑器"浮层：列出当前标签打开的编辑面板，
 //! 点击置顶、聚焦并还原折叠，替代在层叠悬浮面板里凭记忆找回文件。
 //!
-//! 面板状态在 `editor_panel.rs`，窗体动作在 `editor_actions.rs`。
+//! 面板状态在 `panel.rs`，窗体动作在 `actions.rs`。
 //!
 //! 设计原理（Why）：
 //! - 面板按 `TabId` 挂在窗格上，列表也只展示当前标签的面板，与"同一文件
 //!   不会跨标签开两个面板"的身份规则一致。
 //! - 行数据在渲染时快照：Popover 的内容闭包运行在浮层自身上下文里，拿不到
-//!   `AppShell` 状态，点击动作通过捕获的 `Entity<AppShell>` 回写。
+//!   面板状态，点击动作通过捕获的 `Entity<EditorPanels>` 回写。
 //! - 悬浮面板以层叠顺序表达"当前在看哪个"，列表只是跳转入口，不复制面板
 //!   自身的关闭/折叠按钮，避免两套并行的管理入口。
 
-use crate::app::AppShell;
+use super::entity::EditorPanels;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -24,25 +24,42 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
 
+impl EditorPanels {
+    /// 从列表行跳转：展开、置顶并聚焦目标面板，然后收起浮层。
+    pub(super) fn focus_listed_editor(
+        &mut self,
+        editor: &Entity<EditorState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // 折叠的面板先展开，否则置顶后仍只剩标题条，看起来像没反应。
+        self.update_panel(editor, |item| {
+            item.collapsed = false;
+        });
+        self.manager_mut().raise(editor);
+        editor.update(cx, |state, cx| state.focus(window, cx));
+        self.set_list_open(false, cx);
+        cx.notify();
+    }
+}
+
 /// 渲染"已打开编辑器"浮层：触发按钮 + 当前面板的文件列表。
 pub(crate) fn render_editor_list_popover(
-    this: &AppShell,
+    panels: &EditorPanels,
+    entity: &Entity<EditorPanels>,
     tab_id: TabId,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let open = this.state.editors.list_open;
-    // 渲染时快照面板数据：浮层内容闭包运行在 Popover 上下文，无法回读 AppShell。
-    let panels: Vec<_> = this
-        .state
-        .editors
+    let open = panels.list_open();
+    // 渲染时快照面板数据：浮层内容闭包运行在 Popover 上下文，无法回读面板实体。
+    let rows: Vec<_> = panels
+        .manager()
         .panels
         .iter()
         .filter(|item| item.tab_id == tab_id)
         .map(|item| (item.editor.clone(), item.file_name.clone(), item.dirty))
         .collect();
-    let app = cx.entity().clone();
-    let count = panels.len();
+    let count = rows.len();
     let card_palette = p.clone();
     let trigger = Button::new("sftp-open-editors")
         .ghost()
@@ -55,7 +72,8 @@ pub(crate) fn render_editor_list_popover(
             rust_i18n::t!("editor.open_editors").to_string()
         });
 
-    let app_open = app.clone();
+    let open_entity = entity.clone();
+    let content_entity = entity.clone();
     Popover::new(ElementId::Name(
         format!("editor-list-popover-{tab_id}").into(),
     ))
@@ -63,25 +81,20 @@ pub(crate) fn render_editor_list_popover(
     .open(open)
     .on_open_change(move |open, _window, cx| {
         let open = *open;
-        app_open.update(cx, |this, cx| {
-            if this.state.editors.list_open != open {
-                this.state.editors.list_open = open;
-                cx.notify();
-            }
-        });
+        open_entity.update(cx, |this, cx| this.set_list_open(open, cx));
     })
     .trigger(trigger)
-    .content(move |_, _, _| render_editor_list_card(&app, &panels, &card_palette))
+    .content(move |_, _, _| render_editor_list_card(&content_entity, &rows, &card_palette))
     .into_any_element()
 }
 
 /// 浮层卡片：逐行列出文件，点击置顶并聚焦；行上区分脏/净图标。
 fn render_editor_list_card(
-    app: &Entity<AppShell>,
-    panels: &[(Entity<EditorState>, String, bool)],
+    entity: &Entity<EditorPanels>,
+    rows: &[(Entity<EditorState>, String, bool)],
     p: &Palette,
 ) -> AnyElement {
-    if panels.is_empty() {
+    if rows.is_empty() {
         return v_flex()
             .w(px(240.0))
             .items_center()
@@ -91,10 +104,10 @@ fn render_editor_list_card(
             .child(rust_i18n::t!("editor.list_empty").to_string())
             .into_any_element();
     }
-    let rows: Vec<_> = panels
+    let items: Vec<_> = rows
         .iter()
         .map(|(editor, file_name, dirty)| {
-            let row_app = app.clone();
+            let row_entity = entity.clone();
             let row_editor = editor.clone();
             h_flex()
                 .id(ElementId::Name(
@@ -110,15 +123,8 @@ fn render_editor_list_card(
                 .cursor_pointer()
                 .hover(|style| style.bg(p.foreground.opacity(0.10)))
                 .on_click(move |_, window, cx| {
-                    row_app.update(cx, |this, cx| {
-                        // 折叠的面板先展开，否则置顶后仍只剩标题条，看起来像没反应。
-                        this.update_editor_panel(&row_editor, |item| {
-                            item.collapsed = false;
-                        });
-                        this.raise_editor_panel(&row_editor, cx);
-                        row_editor.update(cx, |state, cx| state.focus(window, cx));
-                        this.state.editors.list_open = false;
-                        cx.notify();
+                    row_entity.update(cx, |this, cx| {
+                        this.focus_listed_editor(&row_editor, window, cx);
                     });
                 })
                 .child(
@@ -150,6 +156,6 @@ fn render_editor_list_card(
         .overflow_y_scrollbar()
         .gap_1()
         .p_1()
-        .children(rows)
+        .children(items)
         .into_any_element()
 }

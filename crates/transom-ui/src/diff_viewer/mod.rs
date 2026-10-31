@@ -26,9 +26,9 @@ mod view;
 mod tests;
 
 use crate::app::{AppShell, AppState};
+use crate::editor::EditorDiffSource;
 use crate::format::format_size;
 use gpui_kit::component::diff::DiffState;
-use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
 use local_io::read_local_text;
 use std::path::PathBuf;
@@ -71,15 +71,6 @@ struct LocalDiffTarget {
     connection_id: ConnectionId,
     local_path: PathBuf,
     remote_path: String,
-}
-
-/// 编辑器面板中参与对比的远端快照。
-struct EditorDiffSnapshot {
-    tab_id: TabId,
-    remote_path: String,
-    file_name: String,
-    remote_text: String,
-    remote_meta: Option<RemoteTextMeta>,
 }
 
 /// 一个对比面板的完整运行态。
@@ -258,21 +249,22 @@ impl AppShell {
     }
 
     /// 从编辑器打开：用编辑器当前基线（远端实际内容）与选中的本地文件比对。
+    /// 打开"与本地对比"面板。
+    ///
+    /// 远端快照由编辑面板实体在回调里先算好再传入：本方法运行在实体回调的
+    /// 回交路径上，禁止再 `read`/`update` 该实体，否则会双重租借崩溃。
     pub(crate) fn open_editor_local_diff(
         &mut self,
-        editor: &Entity<EditorState>,
+        source: EditorDiffSource,
         cx: &mut Context<Self>,
     ) {
-        let Some(snapshot) = self.editor_diff_snapshot(editor) else {
-            return;
-        };
-        let EditorDiffSnapshot {
+        let EditorDiffSource {
             tab_id,
             remote_path,
             file_name,
             remote_text,
             remote_meta,
-        } = snapshot;
+        } = source;
         let Some(connection_id) = self
             .state
             .workspace
@@ -294,30 +286,6 @@ impl AppShell {
         self.spawn_diff_local_read(cx);
         self.recompute_diff(cx);
         cx.notify();
-    }
-
-    /// 取编辑器面板中可参与对比的远端快照；未装载、新建文件或读写中返回 `None`。
-    fn editor_diff_snapshot(&self, editor: &Entity<EditorState>) -> Option<EditorDiffSnapshot> {
-        self.state
-            .editors
-            .panels
-            .iter()
-            .find(|item| item.editor == *editor)
-            .filter(|item| {
-                item.loaded
-                    && !item.new_file
-                    && !matches!(
-                        item.phase,
-                        crate::editor::EditorPhase::Reading | crate::editor::EditorPhase::Writing
-                    )
-            })
-            .map(|item| EditorDiffSnapshot {
-                tab_id: item.tab_id,
-                remote_path: item.remote_path.clone(),
-                file_name: item.file_name.clone(),
-                remote_text: item.baseline.to_string(),
-                remote_meta: item.remote_meta,
-            })
     }
 
     /// 选择参与对比的本地文件；取消返回 `None`，条件不满足时写状态栏并返回 `None`。

@@ -3,7 +3,6 @@
 use super::local_io::write_local_text;
 use super::{DiffConfirm, DiffPhase};
 use crate::app::{AppShell, AppState};
-use crate::editor::EditorPhase;
 use gpui_kit::*;
 use transom_core::{
     ConnectionId, MergeDirection, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId,
@@ -274,35 +273,19 @@ impl AppShell {
         let Some(connection_id) = connection_id else {
             return;
         };
-        let Some(index) = self
-            .state
-            .editors
-            .panels
-            .iter()
-            .position(|item| item.same_file(tab_id, connection_id, remote_path))
-        else {
-            return;
-        };
-        let item = &mut self.state.editors.panels[index];
-        item.baseline = SharedString::from(text.to_string());
-        item.remote_meta = Some(meta);
-        // 合并已成功落盘，编辑器上旧的冲突/失败横幅针对的是过期远端状态。
-        item.conflict = false;
-        item.error = None;
-        if item.phase == EditorPhase::Failed {
-            item.phase = EditorPhase::Idle;
-        }
-        // 未改动的编辑器缓冲区直接跟随远端新内容；有未保存修改时保留用户输入，
-        // 下一次保存会以新指纹为基准，而不是把这次合并当成冲突。
-        // 远端基线变了，编辑器里正在展示的"保存前 diff"随即过期。
-        item.showing_diff = false;
-        item.diff = None;
-        if !item.dirty {
-            item.editor
-                .update(cx, |state, cx| state.set_value(text, window, cx));
-            item.caret = crate::editor::caret_of(&item.editor, cx);
-            item.written_size = Some(meta.size);
-        }
+        self.state.editors.update(cx, |panels, cx| {
+            panels.sync_after_diff_write(
+                crate::editor::EditorDiffWriteSync {
+                    tab_id,
+                    connection_id,
+                    remote_path,
+                    text,
+                    meta,
+                },
+                window,
+                cx,
+            )
+        });
     }
 
     /// 远端读取或写回失败：按在途操作归属更新对比面板，不触碰编辑器状态。

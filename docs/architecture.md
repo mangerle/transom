@@ -65,17 +65,22 @@ apps/transom (组合根 + 控制平面)
 窗口级面板独立为 `Entity<面板>`，外壳只持有句柄：
 
 ```
-AppShell { monitor: Entity<MonitorView>, ... }
-MonitorView { state: MonitorState, app: Option<WeakEntity<AppShell>> }
-impl Render for MonitorView  →  面板自己渲染
-impl MonitorView             →  面板自己的动作，跨域动作 with_shell 回交
+AppShell { monitor: Entity<MonitorView>, editors: Entity<EditorPanels>, ... }
+MonitorView  { state: MonitorState, app: Option<WeakEntity<AppShell>> }
+EditorPanels { manager: EditorManager, app: Option<WeakEntity<AppShell>> }
+impl Render for MonitorView / EditorPanels  →  面板自己渲染
+impl MonitorView / EditorPanels             →  面板自己的动作，跨域动作 with_shell 回交
 ```
 
 约定：面板反引用外壳用弱引用（外壳强持有面板，强引用会成环）；跨域动作通过
 `with_shell(cx, |shell, cx| ...)` 显式调用，与 Zed 面板对 `Workspace` 的调用同形；
 跨面板的数据由外壳读好后传入（如 `MonitorTabParams`），面板不为取值克隆整份会话。
 
-已完成：监控面板（`MonitorView`）。待迁：编辑器面板、SFTP 面板、设置面板。
+实体回调回交外壳时，被调用的外壳方法不得再 `read`/`update` 同一实体：状态变更先在
+面板内完成并返回决策值（请求快照、布尔结果、挂起意图），外壳只发命令、开弹窗或
+执行关闭。异步收回的动作（如挂起关闭续行）通过 `cx.defer_in` 延后到实体租借结束。
+
+已完成：监控面板（`MonitorView`）、编辑器面板（`EditorPanels`）。待迁：SFTP 面板、设置面板。
 
 ## 数据流
 

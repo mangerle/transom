@@ -1,8 +1,8 @@
 //! SFTP 编辑面板的打开与读取生命周期：整份拉取远端文本、装载缓冲区、
 //! 失败重试与冲突后的重新载入。
 //!
-//! 面板状态与窗体动作在 `editor_panel.rs`，保存回传在 `editor_ops.rs`，
-//! 关闭保护在 `editor_close.rs`，渲染在 `editor_view.rs`。
+//! 面板状态与窗体动作在 `panel.rs` / `actions.rs`，保存回传在 `ops.rs`，
+//! 关闭保护在 `close.rs`，渲染在 `view.rs`。
 //!
 //! 设计原理（Why）：
 //! - 读写走 `SftpOperation::ReadText` / `WriteText` 独立通道，**不进入传输队列**。
@@ -15,16 +15,20 @@
 //!   本地读写。读取时顺带回传版本指纹（字节数 + mtime），保存前据此做并发冲突比对。
 //! - 面板先于读取结果出现，处于 `Reading` 态：用户双击后立刻得到反馈，比"等整份
 //!   传输完成才弹窗"更符合编辑器的交互预期。
+//! - 实体化边界：面板装配、读取结果装载与重读状态都在 `EditorPanels`；外壳只
+//!   发读取命令并在投递失败时把错误交回实体。
 
+use super::entity::EditorPanels;
 use super::panel::{
-    EditorPanelState, EditorPhase, PANEL_HEIGHT, PANEL_WIDTH, caret_of, cascade_origin,
-    editor_language_token,
+    EditorPanelState, EditorPhase, PANEL_HEIGHT, PANEL_WIDTH, PendingGoto, caret_of,
+    cascade_origin, editor_language_token,
 };
 use crate::app::AppShell;
-use crate::sftp::format_size;
 use gpui_kit::component::input::{EditorState, InputEvent};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
+
+mod panel;
 
 /// 编辑入口的准入判定结果。
 ///
@@ -69,6 +73,14 @@ pub(crate) enum PanelSeed {
     NewFile,
 }
 
+/// 建立面板时需要从设置页带进来的编辑器外观选项。
+///
+/// 由外壳读设置后传入：实体不直接读工作区，避免渲染与状态边界纠缠。
+pub(crate) struct EditorPanelSettings {
+    pub(crate) line_numbers: bool,
+    pub(crate) soft_wrap: bool,
+}
+
 /// 取远端路径的父目录；根目录文件返回 `/`，无 `/` 的相对路径返回 `None`。
 pub(crate) fn parent_dir(path: &str) -> Option<&str> {
     let trimmed = path.strip_suffix('/').unwrap_or(path);
@@ -90,12 +102,15 @@ pub(crate) struct SpawnEditorPanelParams {
     pub(crate) remote_path: String,
     pub(crate) file_name: String,
     pub(crate) seed: PanelSeed,
+    /// 打开后一次性消费的行列定位；终端代码链接用它把光标送到目标行。
+    pub(crate) pending_goto: PendingGoto,
 }
 
 /// 远端文本读取请求：列表打开、终端代码链接与失败重读共用同一条读取通道。
 ///
 /// 参数对象化：四类信息里有三个是"目标"、一个是面板登记的任务标识，
 /// 平铺成参数列表容易把连接与路径配错。
+#[derive(Clone)]
 pub(crate) struct RemoteTextReadParams {
     pub(crate) tab_id: TabId,
     pub(crate) connection_id: ConnectionId,
@@ -104,47 +119,184 @@ pub(crate) struct RemoteTextReadParams {
     pub(crate) op_id: TransferId,
 }
 
-mod panel;
-
-impl AppShell {
-    /// 投递 `ReadText`：读取上限取投递时的当前设置，失败按任务标识回填面板。
-    ///
-    /// 设计原理（Why）：三处读取入口只差路径与任务标识，装配与投递失败兜底
-    /// 完全一致；集中在一处，避免任何一处漏掉 `fail_editor_panel_by_op` 而让
-    /// 面板永远停在读取态。
-    pub(crate) fn request_remote_text_read(
+impl EditorPanels {
+    /// 同一文件已在编辑中：把它抬到最上层并返回编辑器实体，调用方负责聚焦或
+    /// 按代码链接定位；没有同文件面板时返回 `None`。
+    pub(crate) fn raise_existing(
         &mut self,
-        params: RemoteTextReadParams,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        remote_path: &str,
+    ) -> Option<Entity<EditorState>> {
+        let index = self
+            .manager()
+            .panels
+            .iter()
+            .position(|item| item.same_file(tab_id, connection_id, remote_path))?;
+        let item = self.manager_mut().panels.remove(index);
+        let editor = item.editor.clone();
+        self.manager_mut().panels.push(item);
+        Some(editor)
+    }
+
+    /// 建立编辑面板：空缓冲区、订阅就位、按已开面板数量级联落位。
+    ///
+    /// 读取态与新建态共用一套装配，只差初始状态字段（见 `PanelSeed`）；
+    /// 新建面板可编辑、无在途任务，读取面板等待 `SftpTextRead` 装载内容。
+    /// 返回读取请求：只有读取态需要外壳投递 `ReadText`。
+    pub(crate) fn spawn_editor_panel(
+        &mut self,
+        params: SpawnEditorPanelParams,
+        settings: EditorPanelSettings,
+        window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
-        let RemoteTextReadParams {
+    ) -> Option<RemoteTextReadParams> {
+        let SpawnEditorPanelParams {
             tab_id,
             connection_id,
             remote_path,
-            op_id,
+            file_name,
+            seed,
+            pending_goto,
         } = params;
-        let max_bytes = self.state.settings.sftp.edit_max_bytes;
-        if !self.state.send_command(SftpCommand::Sftp {
+        let language = editor_language_token(&remote_path);
+        // 软换行与行号跟随设置页选择：日志类内容常关行号开换行，
+        // 配置文件则相反，属于高频个性化项。
+        let editor = cx.new(|cx| {
+            EditorState::new(window, cx)
+                .language(language.clone())
+                .line_number(settings.line_numbers)
+                .folding(true)
+                .searchable(true)
+                .soft_wrap(settings.soft_wrap)
+        });
+        // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
+        // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。
+        // 新建文件没有已存在的权限位可依据，视作可写。
+        let permissions = match &seed {
+            PanelSeed::Reading { permissions, .. } => *permissions,
+            PanelSeed::NewFile => None,
+        };
+        let writable = permissions_writable(permissions);
+        if !writable {
+            editor.update(cx, |state, cx| state.set_readonly(true, cx));
+        }
+        editor.update(cx, |state, cx| state.focus(window, cx));
+        let caret = caret_of(&editor, cx);
+        let cascade = self.len();
+        let viewport = window.viewport_size();
+        let (left, top) = cascade_origin(cascade, viewport);
+        let change_sub = cx.subscribe(&editor, |this, editor, event: &InputEvent, cx| {
+            if !matches!(event, InputEvent::Change) {
+                return;
+            }
+            if let Some(item) = this
+                .manager_mut()
+                .panels
+                .iter_mut()
+                .find(|item| item.editor == editor)
+            {
+                // 未成功装载远端内容的缓冲区不允许变成"可保存的改动"，
+                // 否则读取失败后随手打几个字就能把远端文件覆盖掉。
+                if !item.loaded {
+                    return;
+                }
+                item.dirty = true;
+                item.phase = EditorPhase::Idle;
+                item.written_size = None;
+                item.error = None;
+            }
+            cx.notify();
+        });
+        // 光标移动只 notify、不 emit 事件，因此观察通知本身；只在行列真的变了时
+        // 才重绘，既让状态栏实时，也切断「面板重绘 → 编辑器通知 → 面板重绘」的自激。
+        let caret_sub = cx.observe(&editor, |this, editor, cx| {
+            let next = caret_of(&editor, cx);
+            let changed = this
+                .manager_mut()
+                .panels
+                .iter_mut()
+                .find(|item| item.editor == editor)
+                .is_some_and(|item| {
+                    if item.caret == next {
+                        false
+                    } else {
+                        item.caret = next;
+                        true
+                    }
+                });
+            if changed {
+                cx.notify();
+            }
+        });
+        let (loaded, phase, pending_op, remote_meta, new_file) = match seed {
+            PanelSeed::Reading { op_id, .. } => {
+                (false, EditorPhase::Reading, Some(op_id), None, false)
+            }
+            // 新建面板：可编辑即可打字；零尺寸指纹让首次保存具备同名覆盖保护。
+            PanelSeed::NewFile => (
+                true,
+                EditorPhase::Idle,
+                None,
+                Some(RemoteTextMeta {
+                    size: 0,
+                    mtime: None,
+                    bom: false,
+                    crlf: false,
+                    transcoded: false,
+                }),
+                true,
+            ),
+        };
+        self.manager_mut().panels.push(EditorPanelState {
             tab_id,
             connection_id,
-            op_id,
-            op: SftpOperation::ReadText {
-                path: remote_path,
-                max_bytes,
-            },
-        }) {
-            self.fail_editor_panel_by_op(
-                op_id,
-                rust_i18n::t!("editor.error_read_dispatch").to_string(),
-                cx,
-            );
+            remote_path: remote_path.clone(),
+            file_name,
+            language,
+            editor,
+            baseline: SharedString::default(),
+            remote_meta,
+            new_file,
+            pending_goto,
+            pending_sudo_probe: None,
+            sudo_probe_attempted: false,
+            caret,
+            dirty: false,
+            loaded,
+            phase,
+            written_size: None,
+            pending_op,
+            error: None,
+            permissions,
+            writable,
+            close_after_write: false,
+            diff: None,
+            showing_diff: false,
+            conflict: false,
+            confirm: None,
+            collapsed: false,
+            maximized: false,
+            left,
+            top,
+            width: PANEL_WIDTH,
+            height: PANEL_HEIGHT,
+            drag_grab: None,
+            _change_sub: change_sub,
+            _caret_sub: caret_sub,
+        });
+        cx.notify();
+        match phase {
+            EditorPhase::Reading => Some(RemoteTextReadParams {
+                tab_id,
+                connection_id,
+                remote_path,
+                op_id: pending_op?,
+            }),
+            _ => None,
         }
     }
 
-    /// 在指定连接上打开远端文本文件：主远端与并列远端列共用同一条编辑通道。
-    ///
-    /// 目录列表里的元数据与读写都按 `connection_id` 定位；面板随后记住这条
-    /// 连接，保存与重新载入不会回落到标签页主连接上。
     /// 远端文本读回来了：填充缓冲区并切到可编辑态，同时缓存版本指纹。
     ///
     /// `set_value` 在库内显式关闭了事件外发并重置了撤销栈，因此装载远端内容不会被
@@ -158,13 +310,13 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(index) =
-            self.state.editors.panels.iter().position(|item| {
+            self.manager().panels.iter().position(|item| {
                 item.pending_op == Some(op_id) && item.phase == EditorPhase::Reading
             })
         else {
             return;
         };
-        let item = &mut self.state.editors.panels[index];
+        let item = &mut self.manager_mut().panels[index];
         item.editor
             .update(cx, |state, cx| state.set_value(content, window, cx));
         item.baseline = item.editor.read(cx).value();
@@ -186,7 +338,7 @@ impl AppShell {
                 .update(cx, |state, cx| state.set_readonly(true, cx));
         }
         // 终端代码链接带进来的定位请求在内容落地后一次性消费；普通打开仍聚焦到
-        // 上次位置之外的行首，两种来源共用同一个跳转helper，边界口径一致。
+        // 上次位置之外的行首，两种来源共用同一个跳转 helper，边界口径一致。
         let goto = item.pending_goto.take();
         let editor = item.editor.clone();
         if let Some((line, column)) = goto {
@@ -202,31 +354,31 @@ impl AppShell {
     ///
     /// 面板回到 `Reading` 态，主体区被读取占位替换——既给出进行中状态，也避免
     /// 用户继续在即将被整体覆盖的旧内容上打字。缓冲区旧内容保持到新内容抵达，
-    /// 重新载人失败时旧内容与脏标记原样保留。
+    /// 重新载入失败时旧内容与脏标记原样保留。
     pub(crate) fn redrive_editor_read(
         &mut self,
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self
-            .state
-            .editors
-            .panels
-            .iter()
-            .find(|item| item.editor == *editor)
+        let Some((tab_id, connection_id, remote_path, can_retry)) =
+            self.map_panel(editor, |item| {
+                // 读取或回传在途不接受重复触发：连点重试只保留第一次。
+                let can_retry = item.phase != EditorPhase::Reading && item.pending_op.is_none();
+                (
+                    item.tab_id,
+                    item.connection_id,
+                    item.remote_path.clone(),
+                    can_retry,
+                )
+            })
         else {
             return;
         };
-        // 读取或回传在途不接受重复触发：连点重试只保留第一次。
-        if matches!(item.phase, EditorPhase::Reading) || item.pending_op.is_some() {
+        if !can_retry {
             return;
         }
-        let tab_id = item.tab_id;
-        // 读写必须回到打开面板时的那条连接：并列远端的文件不属于标签页主连接。
-        let connection_id = item.connection_id;
-        let remote_path = item.remote_path.clone();
         let op_id = TransferId::new();
-        self.update_editor_panel(editor, |item| {
+        self.update_panel(editor, |item| {
             item.phase = EditorPhase::Reading;
             item.pending_op = Some(op_id);
             item.error = None;
@@ -235,16 +387,68 @@ impl AppShell {
             item.showing_diff = false;
             item.diff = None;
         });
-        self.request_remote_text_read(
-            RemoteTextReadParams {
-                tab_id,
-                connection_id,
-                remote_path,
+        let request = RemoteTextReadParams {
+            tab_id,
+            connection_id,
+            remote_path,
+            op_id,
+        };
+        let max_bytes = self.edit_max_bytes(cx);
+        let sent = self
+            .with_shell(cx, |shell, _| shell.send_editor_read(request, max_bytes))
+            .unwrap_or(Err(()));
+        if sent.is_err() {
+            self.fail_by_op(
                 op_id,
-            },
-            cx,
-        );
+                rust_i18n::t!("editor.error_read_dispatch").to_string(),
+                cx,
+            );
+        }
         cx.notify();
+    }
+}
+
+impl AppShell {
+    /// 投递 `ReadText`：读取上限取投递时的当前设置，失败按任务标识回填面板。
+    ///
+    /// 设计原理（Why）：三处读取入口只差路径与任务标识，装配与投递失败兜底
+    /// 完全一致；集中在一处，避免任何一处漏掉 `fail_editor_panel_by_op` 而让
+    /// 面板永远停在读取态。
+    pub(crate) fn request_remote_text_read(
+        &mut self,
+        params: RemoteTextReadParams,
+        cx: &mut Context<Self>,
+    ) {
+        let op_id = params.op_id;
+        let max_bytes = self.state.settings.sftp.edit_max_bytes;
+        if self.send_editor_read(params, max_bytes).is_err() {
+            self.fail_editor_panel_by_op(
+                op_id,
+                rust_i18n::t!("editor.error_read_dispatch").to_string(),
+                cx,
+            );
+        }
+    }
+
+    /// 单纯的读取命令投递：实体回调直接调用它，失败结果由实体自己落定。
+    pub(super) fn send_editor_read(
+        &mut self,
+        params: RemoteTextReadParams,
+        max_bytes: u64,
+    ) -> Result<(), ()> {
+        if self.state.send_command(SftpCommand::Sftp {
+            tab_id: params.tab_id,
+            connection_id: params.connection_id,
+            op_id: params.op_id,
+            op: SftpOperation::ReadText {
+                path: params.remote_path,
+                max_bytes,
+            },
+        }) {
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 }
 

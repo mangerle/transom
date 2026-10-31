@@ -4,7 +4,7 @@ use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled, h_resizable};
 use crate::keymap;
 use crate::palette::{Palette, localized_error};
-use crate::sftp::{EditorDragTracker, SftpPanelState};
+use crate::sftp::SftpPanelState;
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::WindowExt;
@@ -207,7 +207,6 @@ impl Render for AppShell {
         }
         // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现
         // 弹窗在面板下面、用户点不到确认按钮的层序错误。
-        let editor_layers = self.render_editor_panels(window, &p, cx);
         let overlays = self.render_overlays(window, cx);
 
         let mut root = div()
@@ -243,8 +242,8 @@ impl Render for AppShell {
             .on_key_down(cx.listener(Self::on_zmodem_cancel_key))
             // 拖拽悬浮面板的位移与收尾由 EditorDragTracker 的窗口级监听接管：
             // 普通元素监听带"指针命中"门槛，拖拽中指针会移出面板乃至窗口，
-            // 元素级监听收不到这些事件。追踪器以无视觉元素的形式挂在本容器
-            // 末尾，paint 阶段注册的窗口级监听对所有鼠标事件可见。
+            // 元素级监听收不到这些事件。追踪器随编辑面板实体渲染挂载，
+            // paint 阶段注册的窗口级监听对所有鼠标事件可见。
             .relative()
             .size_full()
             .flex()
@@ -258,14 +257,11 @@ impl Render for AppShell {
         if let Some(status_bar) = status_bar {
             root = root.child(status_bar);
         }
-        root = root.children(editor_layers);
+        root = root.child(self.state.editors.clone());
         // 弹窗栈的压暗层铺在编辑面板之上：弹窗本体由组件库在窗口根上渲染，
         // 层序天然更高，这里只需要把窗面压暗并阻断下层命中。
         root = root.children(self.dialog_dim(&p));
-        // 追踪器必须最后挂载：bubble 阶段按注册序的逆序派发，最后注册的
-        // 监听最先执行，拖拽位移与收尾不会被其他监听的 stop_propagation 挡掉。
-        root.child(EditorDragTracker::new(cx.entity()))
-            .children(overlays)
+        root.children(overlays)
     }
 }
 

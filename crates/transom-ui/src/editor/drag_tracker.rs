@@ -6,21 +6,22 @@
 //!
 //! 窗口级监听（`window.on_mouse_event`）不受命中门槛限制，任何到达窗口的
 //! move/up 都能收到，但它只能在元素 paint 阶段注册。因此本元素不绘制任何
-//! 内容，仅作为挂载点存在于根容器中，模式与 gpui-component 的
+//! 内容，仅作为挂载点存在于编辑面板实体的渲染树中，模式与 gpui-component 的
 //! `DockResizeTracker` 一致。Linux 的 X11/Wayland 在按下期间有隐式抓取，
 //! 释放事件即使落在窗口外也会投递到本窗口，收尾由此闭环。
 
-use crate::app::{AppShell, AppState};
+use super::entity::EditorPanels;
 use gpui_kit::*;
 
 /// 无视觉输出的 paint 挂载点：每帧注册窗口级的拖拽位移与收尾监听。
 pub(crate) struct EditorDragTracker {
-    shell: Entity<AppShell>,
+    /// 面板实体弱引用：追踪器本身不拥有面板，避免与渲染树形成引用环。
+    panels: WeakEntity<EditorPanels>,
 }
 
 impl EditorDragTracker {
-    pub(crate) fn new(shell: Entity<AppShell>) -> Self {
-        Self { shell }
+    pub(crate) fn new(panels: WeakEntity<EditorPanels>) -> Self {
+        Self { panels }
     }
 }
 
@@ -75,37 +76,33 @@ impl Element for EditorDragTracker {
         window: &mut Window,
         _: &mut App,
     ) {
-        let shell = self.shell.clone();
+        let panels = self.panels.clone();
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
             if !phase.bubble() {
                 return;
             }
-            shell.update(cx, |this, cx| {
-                if this.state.editor_drag_in_progress() {
+            let Some(panels) = panels.upgrade() else {
+                return;
+            };
+            panels.update(cx, |this, cx| {
+                if this.drag_in_progress() {
                     this.drag_editor_panels(event.position, window.viewport_size(), cx);
                 }
             });
         });
-        let shell = self.shell.clone();
+        let panels = self.panels.clone();
         window.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
             if !phase.bubble() {
                 return;
             }
-            shell.update(cx, |this, cx| {
-                if this.state.editor_drag_in_progress() {
+            let Some(panels) = panels.upgrade() else {
+                return;
+            };
+            panels.update(cx, |this, cx| {
+                if this.drag_in_progress() {
                     this.end_editor_panel_drag(cx);
                 }
             });
         });
     }
 }
-
-impl AppState {
-    /// 是否有面板处于拖拽中；窗口级监听以此作廉价闸门，
-    /// 避免每次鼠标移动都推进无意义的重绘。
-    pub(crate) fn editor_drag_in_progress(&self) -> bool {
-        self.editors.drag_in_progress()
-    }
-}
-
-impl AppShell {}
