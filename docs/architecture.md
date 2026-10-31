@@ -105,8 +105,10 @@ AppCommand::Connect
 
 ### 存储（原子写 + 异步落盘）
 
-- 会话/设置/历史：`file_io::write_atomic`（唯一临时名 → 写入 → `sync_all`
-  → rename），均在工作区确认后写出；
+- 会话/设置：内存态立即生效，`app::persistence::SnapshotWriter` 以覆盖式
+  有界单槽在后台线程写盘（唯一临时名 → 写入 → `sync_all` → rename），
+  Drop 时停机并 join；退出路径仍同步保存窗口状态，保证最后一次快照落定；
+- 历史：`file_io::write_atomic`（唯一临时名 → 写入 → `sync_all` → rename）；
 - known_hosts：内存态权威，常驻写盘线程异步落盘（覆盖式单槽，Drop 时
   join），`record` 返回 Ok 表示"已进入内存与待写槽"而非"已落盘"；
 - 凭据（口令/口令短语）：只进系统钥匙串，文件里只有 `save: bool` 开关；
@@ -172,6 +174,7 @@ apps/transom/src/controller/
 | 桌面集成独立为 transom-desktop | 存储层只做持久化；启动器/注册表逻辑有独立平台边界，macOS/Windows 可分别扩展 | 多维护一个轻量 crate；非 Linux 暂为占位实现 |
 | 连接参数随命令携带（ZMODEM/SHA1 策略） | 控制循环零同步 IO，磁盘慢不拖控制平面 | 命令载荷变宽，UI 有责任携带最新快照 |
 | known_hosts 异步落盘 | 握手路径不带写盘 IO | record 成功 ≠ 已落盘；极端崩溃丢最后若干条 |
+| 会话/设置覆盖式异步写盘 | UI 点击不承受 fsync；单槽天然幂等，内存不会积压 | 成功入队 ≠ 已落盘；后台失败由渲染帧提示 |
 | 原子写必带 fsync | rename 只保证"旧或新"，不保证已持久 | 每次保存多一次 fsync（毫秒级） |
 | 单实例 + 深链 socket（0600/0700） | 二次启动转交请求，不堆进程 | 多实例并行调试需伪装环境变量 |
 | 统计采样按机器共享（本地标签） | 标签一多避免 N 倍 /proc 与 df | 新标签等下一轮（3-5 秒）才见数据 |
