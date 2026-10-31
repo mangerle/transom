@@ -17,7 +17,7 @@ use crate::sidebar::{
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -143,7 +143,10 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 侧栏搜索框：首次渲染时创建并订阅变化，之后复用同一实体。
+    /// 侧栏搜索框：首次渲染时创建，之后复用同一实体。
+    ///
+    /// 与会话树同一口径：不额外订阅输入变化，输入框自身的刷新会带动整壳重绘；
+    /// 在渲染期订阅并 notify 容易引入重入渲染。
     fn ensure_engine_search(
         &mut self,
         window: &mut Window,
@@ -156,13 +159,7 @@ impl AppShell {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.sidebar.search").to_string())
         });
-        let subscription = cx.subscribe_in(&search, window, |_, _, event: &InputEvent, _, cx| {
-            if matches!(event, InputEvent::Change) {
-                cx.notify();
-            }
-        });
         self.containers.sidebar_search = Some(search.clone());
-        self.containers.sidebar_search_subscription = Some(subscription);
         search
     }
 
@@ -215,6 +212,7 @@ impl AppShell {
             .cursor_pointer()
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 if event.click_count() >= 2 {
+                    log::debug!("双击打开引擎工作区，连接: {id}");
                     if let Some(profile) = this
                         .catalog
                         .engines
@@ -758,6 +756,7 @@ impl AppShell {
             .catalog
             .engine_folder(folder_id)
             .map(|folder| !folder.collapsed);
+        log::debug!("切换引擎分组折叠，分组: {folder_id}，折叠后: {collapsed:?}");
         if let Some(collapsed) = collapsed {
             let _ = self
                 .catalog
@@ -775,6 +774,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        log::debug!("打开引擎分组表单，父级: {parent:?}，编辑: {editing:?}");
         let name = editing
             .and_then(|id| self.catalog.engine_folder(id))
             .map(|folder| folder.name.clone())
@@ -811,6 +811,7 @@ impl AppShell {
         let name = form.input.read(cx).value().trim().to_string();
         let parent = form.parent;
         let editing = form.editing;
+        log::debug!("提交引擎分组表单，编辑: {editing:?}，名称: {name}");
         let result = match editing {
             Some(id) => self.catalog.rename_engine_folder(id, &name),
             None => self.catalog.add_engine_folder(&name, parent).map(|_| ()),
@@ -836,6 +837,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        log::info!("删除引擎分组，分组: {folder_id}");
         match self.catalog.delete_engine_folder(folder_id) {
             Ok(name) => {
                 self.persist_catalog();
@@ -874,6 +876,7 @@ impl AppShell {
         target: ContainerSidebarTarget,
         cx: &mut Context<Self>,
     ) {
+        log::info!("引擎侧栏拖放，载荷: {:?}，落点: {:?}", drag, target);
         match self.apply_container_sidebar_drop(drag, target) {
             Ok(landed) => {
                 // 目标分组被折叠时自动展开，保证拖进去的条目可见。

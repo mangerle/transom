@@ -472,6 +472,8 @@ pub(crate) struct ContainerFilesState {
     pub(crate) path: String,
     pub(crate) entries: Vec<ContainerFileEntry>,
     pub(crate) loading: bool,
+    /// 文件列表的滚动句柄：切换目录后复位到顶部，列表本身不重建。
+    pub(crate) scroll: ScrollHandle,
     /// 在途的目录列表请求：目录切换可能连点，旧请求的结果必须丢弃。
     pub(crate) request: Option<ContainerRequestId>,
     /// 当前预览：路径、内容、是否截断。
@@ -857,7 +859,6 @@ pub(crate) struct ContainerUiState {
     pub(crate) sidebar_selected: Option<transom_core::EngineProfileId>,
     /// 侧栏搜索框：首次渲染时创建，随后复用。
     pub(crate) sidebar_search: Option<Entity<InputState>>,
-    pub(crate) sidebar_search_subscription: Option<Subscription>,
     /// 引擎分组的新建/重命名弹窗。
     pub(crate) engine_folder_form: Option<EngineFolderForm>,
     /// 从分组菜单新建连接时暂存目标分组；保存成功后落到新连接上。

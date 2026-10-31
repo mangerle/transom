@@ -124,6 +124,7 @@ impl AppShell {
             workspace.files.rename_input.clone(),
             workspace.files.new_dir_open,
             workspace.files.new_dir_input.clone(),
+            workspace.files.scroll.clone(),
         );
         let status_text = workspace.notice.clone();
 
@@ -231,6 +232,7 @@ impl AppShell {
                     rename_input: files.5.as_ref(),
                     new_dir_open: files.6,
                     new_dir_input: files.7.as_ref(),
+                    scroll: &files.8,
                 },
                 p,
                 cx,
@@ -1679,6 +1681,7 @@ struct ContainerFilesView<'a> {
     rename_input: Option<&'a Entity<InputState>>,
     new_dir_open: bool,
     new_dir_input: Option<&'a Entity<InputState>>,
+    scroll: &'a ScrollHandle,
 }
 
 /// 「新建目录」条：在当前目录下建子目录，上传与整理都要先有目录。
@@ -1753,6 +1756,7 @@ fn render_files(
         rename_input,
         new_dir_open,
         new_dir_input,
+        scroll,
     } = view;
     let current_path = if path.is_empty() { "/" } else { path };
     let parent = parent_path(current_path);
@@ -1825,7 +1829,7 @@ fn render_files(
 
     let app = cx.entity().clone();
     let mut list = v_flex().gap_0p5();
-    if loading {
+    if loading && entries.is_empty() {
         list = list.child(
             div()
                 .text_xs()
@@ -2110,14 +2114,13 @@ fn render_files(
         .children(rename_bar);
     let mut body = v_flex().size_full().overflow_hidden().child(header).child(
         div()
-            // 滚动 id 跟随目录：换目录时换一份滚动状态，既回到顶部，也避免
-            // 新列表较短时沿用旧偏移导致滚动区间越界。
-            .id(ElementId::Name(
-                format!("container-files-scroll-{current_path}").into(),
-            ))
+            // 滚动容器用稳定 id，切目录只复位偏移不重建整块列表；换 id 会让
+            // GPUI 丢弃该元素并在同一帧重新挂载，肉眼就是一次闪烁。
+            .id("container-files-scroll")
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
+            .track_scroll(scroll)
             .p_2()
             .child(list),
     );

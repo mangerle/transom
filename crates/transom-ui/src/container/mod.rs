@@ -375,6 +375,7 @@ impl AppShell {
                     workspace.files.path = path;
                     workspace.files.entries = entries;
                     workspace.files.loading = false;
+                    workspace.files.scroll.set_offset(point(px(0.0), px(0.0)));
                 }
             }
             ContainerAppEvent::FilePreview {
