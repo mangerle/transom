@@ -33,15 +33,19 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self.editor_panel_mut(editor) else {
+        let Some((baseline, language)) = self
+            .map_editor_panel(editor, |item| {
+                if !item.loaded || matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing)
+                {
+                    return None;
+                }
+                Some((item.baseline.to_string(), item.language.clone()))
+            })
+            .flatten()
+        else {
             return;
         };
-        if !item.loaded || matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing) {
-            return;
-        }
-        let baseline = item.baseline.to_string();
         let current = editor.read(cx).value().to_string();
-        let language = item.language.clone();
         let header_old = rust_i18n::t!("editor.diff_header_old");
         let header_new = rust_i18n::t!("editor.diff_header_new");
         let patch = TextDiff::from_lines(&baseline, &current)
@@ -61,10 +65,10 @@ impl AppShell {
             return;
         }
         let diff = cx.new(|cx| DiffState::new(files, cx));
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.diff = Some(diff);
             item.showing_diff = true;
-        }
+        });
         cx.notify();
     }
 
@@ -75,10 +79,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.showing_diff = false;
             item.diff = None;
-        }
+        });
         editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
     }

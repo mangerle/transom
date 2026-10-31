@@ -14,13 +14,15 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self.editor_panel_mut(editor) else {
+        let found = self.update_editor_panel(editor, |item| {
+            item.collapsed = !item.collapsed;
+            // 折叠与最大化互斥：折叠时先退出全屏，否则只有标题栏的一条横幅铺满整屏。
+            if item.collapsed {
+                item.maximized = false;
+            }
+        });
+        if !found {
             return;
-        };
-        item.collapsed = !item.collapsed;
-        // 折叠与最大化互斥：折叠时先退出全屏，否则只有标题栏的一条横幅铺满整屏。
-        if item.collapsed {
-            item.maximized = false;
         }
         cx.notify();
     }
@@ -30,11 +32,13 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self.editor_panel_mut(editor) else {
+        let found = self.update_editor_panel(editor, |item| {
+            item.maximized = !item.maximized;
+            item.collapsed = false;
+        });
+        if !found {
             return;
-        };
-        item.maximized = !item.maximized;
-        item.collapsed = false;
+        }
         cx.notify();
     }
 
@@ -77,14 +81,13 @@ impl AppShell {
                 other.drag_grab = None;
             }
         }
-        let Some(item) = self.editor_panel_mut(editor) else {
-            return;
-        };
-        if item.maximized {
-            return;
-        }
         let (x, y): (f32, f32) = (position.x.into(), position.y.into());
-        item.drag_grab = Some((x - item.left, y - item.top));
+        self.update_editor_panel(editor, |item| {
+            if item.maximized {
+                return;
+            }
+            item.drag_grab = Some((x - item.left, y - item.top));
+        });
     }
 
     /// 视口级拖拽推进：只有确实有面板在被拖动时才改写状态并重绘。
@@ -146,9 +149,9 @@ impl AppShell {
             .find(|item| item.editor == *editor)
             .is_some_and(|item| item.dirty);
         if dirty {
-            if let Some(item) = self.editor_panel_mut(editor) {
+            self.update_editor_panel(editor, |item| {
                 item.confirm = Some(PanelConfirm::DiscardClose);
-            }
+            });
             cx.notify();
             return;
         }
@@ -163,10 +166,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.confirm = None;
             item.dirty = false;
-        }
+        });
         self.drop_editor_panel(editor, window, cx);
         self.resume_pending_editor_close(window, cx);
     }
@@ -181,9 +184,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.confirm = None;
-        }
+        });
         self.state.editors.pending_close = None;
         editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
@@ -195,9 +198,9 @@ impl AppShell {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.confirm = Some(PanelConfirm::Revert);
-        }
+        });
         cx.notify();
     }
 
@@ -211,14 +214,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let baseline = if let Some(item) = self.editor_panel_mut(editor) {
+        let Some(baseline) = self.map_editor_panel(editor, |item| {
             item.confirm = None;
             item.baseline.clone()
-        } else {
+        }) else {
             return;
         };
         editor.update(cx, |state, cx| state.set_value(baseline, window, cx));
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.dirty = false;
             item.phase = EditorPhase::Idle;
             item.written_size = None;
@@ -226,7 +229,7 @@ impl AppShell {
             // 差异预览展示的是"待回传变更"，内容已回到基线，预览随之失效。
             item.showing_diff = false;
             item.diff = None;
-        }
+        });
         self.resume_pending_editor_close(window, cx);
         cx.notify();
     }
@@ -239,9 +242,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.conflict = false;
-        }
+        });
         editor.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
     }

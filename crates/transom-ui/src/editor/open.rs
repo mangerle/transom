@@ -226,7 +226,7 @@ impl AppShell {
         let connection_id = item.connection_id;
         let remote_path = item.remote_path.clone();
         let op_id = TransferId::new();
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.phase = EditorPhase::Reading;
             item.pending_op = Some(op_id);
             item.error = None;
@@ -234,7 +234,7 @@ impl AppShell {
             // 重新载入会整体替换缓冲区，差异预览展示的旧基线随之失效。
             item.showing_diff = false;
             item.diff = None;
-        }
+        });
         self.request_remote_text_read(
             RemoteTextReadParams {
                 tab_id,

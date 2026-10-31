@@ -113,14 +113,16 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(item) = self.editor_panel_mut(editor) else {
+        let Some((tab_id, file_name)) = self.map_editor_panel(editor, |item| {
+            let tab_id = item.tab_id;
+            let file_name = item.file_name.clone();
+            item.confirm = None;
+            item.pending_sudo_probe = None;
+            item.error = None;
+            (tab_id, file_name)
+        }) else {
             return;
         };
-        let tab_id = item.tab_id;
-        let file_name = item.file_name.clone();
-        item.confirm = None;
-        item.pending_sudo_probe = None;
-        item.error = None;
         self.open_sftp_input_modal(
             SftpInputModalParams {
                 tab_id,
@@ -170,10 +172,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.close_after_write = true;
             item.confirm = None;
-        }
+        });
         self.submit_editor_write(editor, false, window, cx);
     }
 
@@ -257,17 +259,17 @@ impl AppShell {
             }
             .into(),
         ) {
-            if let Some(item) = self.editor_panel_mut(editor) {
+            self.update_editor_panel(editor, |item| {
                 item.phase = EditorPhase::Failed;
                 item.close_after_write = false;
                 item.error = Some(crate::app::command_send_error_text(error));
-            }
+            });
             self.focus_active_sftp_panel(window, cx);
             cx.notify();
             return;
         }
         // 在途 ID 先落到面板：完成事件与本次调用同处一个事件循环，回来时归属已确定。
-        if let Some(item) = self.editor_panel_mut(editor) {
+        self.update_editor_panel(editor, |item| {
             item.pending_op = Some(op_id);
             item.phase = EditorPhase::Writing;
             item.error = None;
@@ -277,7 +279,7 @@ impl AppShell {
             } else if force {
                 item.conflict = false;
             }
-        }
+        });
         cx.notify();
     }
 

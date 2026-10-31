@@ -112,9 +112,9 @@ fn render_editor_list_card(
                 .on_click(move |_, window, cx| {
                     row_app.update(cx, |this, cx| {
                         // 折叠的面板先展开，否则置顶后仍只剩标题条，看起来像没反应。
-                        if let Some(item) = this.editor_panel_mut(&row_editor) {
+                        this.update_editor_panel(&row_editor, |item| {
                             item.collapsed = false;
-                        }
+                        });
                         this.raise_editor_panel(&row_editor, cx);
                         row_editor.update(cx, |state, cx| state.focus(window, cx));
                         this.state.editors.list_open = false;

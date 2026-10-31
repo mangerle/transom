@@ -254,15 +254,41 @@ impl AppShell {
             .or(Some(self.state.editors.panels.len() - 1))
     }
 
-    pub(crate) fn editor_panel_mut(
+    /// 按编辑视图定位面板并就地修改；返回是否找到该面板。
+    ///
+    /// 为什么用闭包而不是返回 `Option<&mut EditorPanelState>`：面板状态后续要搬进
+    /// 独立实体，实体的借用必须通过 `Entity::update` 的闭包完成，不能把可变引用
+    /// 借出实体生命周期之外。先统一成闭包式，迁移时只换实现不动调用点。
+    pub(crate) fn update_editor_panel(
         &mut self,
         editor: &Entity<EditorState>,
-    ) -> Option<&mut EditorPanelState> {
+        action: impl FnOnce(&mut EditorPanelState),
+    ) -> bool {
+        let Some(item) = self
+            .state
+            .editors
+            .panels
+            .iter_mut()
+            .find(|item| item.editor == *editor)
+        else {
+            return false;
+        };
+        action(item);
+        true
+    }
+
+    /// 与 [`Self::update_editor_panel`] 同形，但把闭包结果带出借用作用域。
+    pub(crate) fn map_editor_panel<R>(
+        &mut self,
+        editor: &Entity<EditorState>,
+        action: impl FnOnce(&mut EditorPanelState) -> R,
+    ) -> Option<R> {
         self.state
             .editors
             .panels
             .iter_mut()
             .find(|item| item.editor == *editor)
+            .map(action)
     }
 
     pub(crate) fn drop_editor_panel(

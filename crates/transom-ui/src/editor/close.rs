@@ -75,13 +75,13 @@ impl AppShell {
         }
         self.state.editors.pending_close = Some(intent);
         for editor in dirty_editors {
-            if let Some(item) = self.editor_panel_mut(&editor) {
+            self.update_editor_panel(&editor, |item| {
                 // 确认横幅渲染在主体区：折叠会把它整个藏掉，先展开；冲突横幅
                 // 与确认横幅同区互斥展示，关闭意图优先，先收起冲突。
                 item.confirm = Some(PanelConfirm::DiscardClose);
                 item.conflict = false;
                 item.collapsed = false;
-            }
+            });
             self.raise_editor_panel(&editor, cx);
         }
         cx.notify();
