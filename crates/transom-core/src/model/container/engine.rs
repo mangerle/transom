@@ -59,6 +59,9 @@ pub struct ContainerEngineProfile {
     pub name: String,
     #[serde(default)]
     pub engine: ContainerEngineRef,
+    /// 所属引擎分组；`None` 表示根层级。
+    #[serde(default)]
+    pub folder_id: Option<crate::ids::FolderId>,
     /// 最后修改时间（Unix 毫秒），供多端合并判定谁更新。
     #[serde(default)]
     pub updated_at: u64,
@@ -70,6 +73,7 @@ impl ContainerEngineProfile {
             id: EngineProfileId::new(),
             name: name.into(),
             engine,
+            folder_id: None,
             updated_at: now_millis(),
         }
     }

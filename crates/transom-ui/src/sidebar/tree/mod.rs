@@ -3,7 +3,8 @@
 //! 行元素拼装见 `render` 子模块，扁平化行构建见 `rows` 子模块。
 
 mod folder_row;
-mod reorder;
+pub(crate) mod reorder;
+pub(crate) use reorder::{RowActionButtonProps, SidebarDragPreview, row_action_button};
 mod rows;
 mod session_row;
 
@@ -14,19 +15,19 @@ use gpui_kit::*;
 use transom_core::{CatalogError, DropSide, FolderId, Session, SessionId};
 
 /// 行槽位高度：虚拟列表按它分配空间，渲染时必须严格一致，否则行会错位或裁切。
-const ROW_HEIGHT: Pixels = px(38.0);
+pub(crate) const ROW_HEIGHT: Pixels = px(38.0);
 /// 内层高亮条高度：小于行槽位，留出上下间隙，同时把背景限制在内容区，缩进区保持透明。
-const BAND_HEIGHT: Pixels = px(34.0);
+pub(crate) const BAND_HEIGHT: Pixels = px(34.0);
 /// 缩进基准与每级步长（逻辑像素）。
 const INDENT_BASE: f32 = 6.0;
 const INDENT_STEP: f32 = 18.0;
 /// 行内图标尺寸：与 34px 内容条匹配，默认的 14px 图标在这个高度下显得偏弱。
-const ROW_ICON_SIZE: Pixels = px(18.0);
+pub(crate) const ROW_ICON_SIZE: Pixels = px(18.0);
 /// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
-const ROW_CHEVRON_SIZE: Pixels = px(14.0);
+pub(crate) const ROW_CHEVRON_SIZE: Pixels = px(14.0);
 
 /// 按层级计算行左内边距，文件夹与会话共用，保证同层对齐。
-fn indent_padding(depth: usize) -> Pixels {
+pub(crate) fn indent_padding(depth: usize) -> Pixels {
     px(INDENT_BASE + depth as f32 * INDENT_STEP)
 }
 

@@ -11,7 +11,7 @@
 //! 代价与局限：没有共同祖先时（推送/拉取）无法区分"远端删除"与"本机新增"，
 //! 删除不会传播；文件夹覆盖仍保留本机折叠态。合并按稳定 ID 对齐。
 
-use super::{SessionCatalog, SessionFolder};
+use super::{EngineFolder, SessionCatalog, SessionFolder};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -29,6 +29,9 @@ pub struct SyncMergeReport {
     /// 引擎连接的新增/更新计数。
     pub engines_added: usize,
     pub engines_updated: usize,
+    /// 引擎分组的新增/更新计数。
+    pub engine_folders_added: usize,
+    pub engine_folders_updated: usize,
     /// 需要人工关注的冲突条目数：三路两端都改，或无共同祖先时最终保留本机版本。
     pub conflicts: usize,
 }
@@ -137,12 +140,33 @@ pub fn merge_catalogs(
     );
     report.engines_added = engines.added;
     report.engines_updated = engines.updated;
+    let engine_folders = merge_keyed(
+        base.map(|catalog| &catalog.engine_folders[..]),
+        &local.engine_folders,
+        &remote.engine_folders,
+        |folder| folder.id,
+        |local, remote| match preference {
+            MergePreference::Local => (local.clone(), false),
+            // 与会话文件夹同一口径：折叠是每台设备的界面偏好，覆盖时保留本机值。
+            MergePreference::Remote => (
+                EngineFolder {
+                    collapsed: local.collapsed,
+                    ..remote.clone()
+                },
+                true,
+            ),
+        },
+        &mut report.conflicts,
+    );
+    report.engine_folders_added = engine_folders.added;
+    report.engine_folders_updated = engine_folders.updated;
     (
         SessionCatalog {
             folders: folders.items,
             sessions: sessions.items,
             identities: identities.items,
             engines: engines.items,
+            engine_folders: engine_folders.items,
         },
         report,
     )

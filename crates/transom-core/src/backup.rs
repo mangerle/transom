@@ -103,6 +103,9 @@ pub struct BackupDocument {
     /// 容器引擎连接清单；老备份文件没有该字段时按空清单导入。
     #[serde(default)]
     pub engines: Vec<crate::model::container::ContainerEngineProfile>,
+    /// 引擎分组树；老备份文件没有该字段时按空清单导入。
+    #[serde(default)]
+    pub engine_folders: Vec<crate::model::catalog::EngineFolder>,
     /// 钥匙串口令快照；未勾选"包含口令"时整个字段不出现。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secrets: Option<Vec<BackupSecret>>,
@@ -116,6 +119,7 @@ impl BackupDocument {
             sessions: catalog.sessions.clone(),
             identities: catalog.identities.clone(),
             engines: catalog.engines.clone(),
+            engine_folders: catalog.engine_folders.clone(),
             secrets: None,
         }
     }
@@ -128,6 +132,7 @@ impl BackupDocument {
                 sessions: self.sessions,
                 identities: self.identities,
                 engines: self.engines,
+                engine_folders: self.engine_folders,
             },
             self.secrets,
         )
@@ -151,6 +156,7 @@ impl BackupDocument {
             sessions: std::mem::take(&mut self.sessions),
             identities: std::mem::take(&mut self.identities),
             engines: std::mem::take(&mut self.engines),
+            engine_folders: std::mem::take(&mut self.engine_folders),
         }
     }
 
@@ -159,6 +165,7 @@ impl BackupDocument {
         self.sessions = catalog.sessions;
         self.identities = catalog.identities;
         self.engines = catalog.engines;
+        self.engine_folders = catalog.engine_folders;
     }
 }
 
@@ -327,6 +334,7 @@ mod tests {
             sessions: vec![session.clone()],
             identities: Vec::new(),
             engines: Vec::new(),
+            engine_folders: Vec::new(),
             secrets: Some(vec![BackupSecret {
                 owner: SecretOwner::Session(session.id),
                 kind: SecretKind::Password,
@@ -403,6 +411,7 @@ mod tests {
             sessions: vec![session],
             identities: vec![identity],
             engines: Vec::new(),
+            engine_folders: Vec::new(),
             secrets: None,
         };
 

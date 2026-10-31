@@ -38,6 +38,8 @@ struct SessionFileRaw {
     identities: Vec<Identity>,
     #[serde(default)]
     engines: Vec<ContainerEngineProfile>,
+    #[serde(default)]
+    engine_folders: Vec<transom_core::EngineFolder>,
 }
 
 fn schema_version() -> u32 {
@@ -61,6 +63,7 @@ impl JsonSessionStore {
             sessions: Vec::with_capacity(file.sessions.len()),
             identities: file.identities,
             engines: file.engines,
+            engine_folders: file.engine_folders,
         };
         catalog.normalize();
         for value in file.sessions {

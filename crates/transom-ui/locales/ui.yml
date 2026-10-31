@@ -4805,6 +4805,63 @@ container:
       en: Engine disconnected
       zh-CN: 引擎已断开
   sidebar:
+    search:
+      en: Search engine connections
+      zh-CN: 搜索引擎连接
+    no_match:
+      en: No matching connections
+      zh-CN: 没有匹配的连接
+    new_folder:
+      en: New group
+      zh-CN: 新建分组
+    folder_new_title:
+      en: New group
+      zh-CN: 新建分组
+    folder_edit_title:
+      en: Rename group
+      zh-CN: 重命名分组
+    folder_name:
+      en: Group name
+      zh-CN: 分组名称
+    folder_parent:
+      en: 'Parent: %{path}'
+      zh-CN: '上级：%{path}'
+    folder_deleted:
+      en: 'Group deleted: %{name}'
+      zh-CN: '已删除分组：%{name}'
+    open:
+      en: Open workspace
+      zh-CN: 打开工作区
+    edit:
+      en: Edit connection
+      zh-CN: 编辑连接
+    rename:
+      en: Rename group
+      zh-CN: 重命名分组
+    move_to_root:
+      en: Move to top level
+      zh-CN: 移到根层级
+    copy_endpoint:
+      en: Copy endpoint
+      zh-CN: 复制端点
+    copy_name:
+      en: Copy name
+      zh-CN: 复制名称
+    endpoint_copied:
+      en: 'Endpoint copied: %{endpoint}'
+      zh-CN: '已复制端点：%{endpoint}'
+    name_copied:
+      en: 'Name copied: %{name}'
+      zh-CN: '已复制名称：%{name}'
+    new_engine_here:
+      en: New connection in this group
+      zh-CN: 在此分组新建连接
+    new_subfolder:
+      en: New subgroup
+      zh-CN: 新建子分组
+    delete_folder:
+      en: Delete group
+      zh-CN: 删除分组
     empty:
       en: No engine connections yet. Discover local engines or create one manually.
       zh-CN: 还没有引擎连接。可以自动发现本机引擎，或手动新建一个。

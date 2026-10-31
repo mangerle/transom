@@ -30,6 +30,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // 编辑已有连接时清掉暂存分组；从分组入口新建时调用方刚设好目标，不能覆盖。
+        if profile.is_some() {
+            self.containers.form_folder = None;
+        }
         let form = ContainerFormState::new(window, cx, profile.as_ref());
         self.containers.form = Some(form);
         cx.notify();
@@ -158,6 +162,7 @@ impl AppShell {
                             this.containers.form.as_ref().and_then(|form| form.editing)
                         {
                             this.containers.form = None;
+                            this.containers.form_folder = None;
                             this.delete_container_profile(id, window, cx);
                         }
                     })),
@@ -178,6 +183,7 @@ impl AppShell {
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.containers.form = None;
+                        this.containers.form_folder = None;
                         cx.notify();
                     })),
             )
@@ -206,6 +212,7 @@ impl AppShell {
             .justify_center()
             .on_click(cx.listener(|this, _, _, cx| {
                 this.containers.form = None;
+                this.containers.form_folder = None;
                 cx.notify();
             }))
             .key_context(keymap::OVERLAY_CONTEXT)

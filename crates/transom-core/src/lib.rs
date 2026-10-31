@@ -35,8 +35,8 @@ pub use ids::{
     SessionId, SnippetId, SplitId, TabId, TransferId, TriggerId,
 };
 pub use model::catalog::{
-    CatalogError, DropSide, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH, MergePreference,
-    SessionCatalog, SessionFolder, SyncMergeReport, merge_catalogs,
+    CatalogError, DropSide, EngineFolder, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH,
+    MergePreference, SessionCatalog, SessionFolder, SyncMergeReport, merge_catalogs,
 };
 pub use model::color::Rgb;
 pub use model::container::{

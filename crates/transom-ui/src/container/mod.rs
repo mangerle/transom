@@ -3,6 +3,7 @@
 mod detail;
 mod form;
 mod list;
+mod sidebar;
 mod stats;
 mod toast;
 mod types;
@@ -1247,6 +1248,11 @@ impl AppShell {
         if !event.keystroke.key.eq_ignore_ascii_case("escape") {
             return;
         }
+        if self.containers.engine_folder_form.is_some() {
+            self.containers.engine_folder_form = None;
+            cx.notify();
+            return;
+        }
         if self.containers.create_dialog.is_some() {
             self.dismiss_container_create(cx);
             return;
@@ -1257,6 +1263,7 @@ impl AppShell {
         }
         if self.containers.form.is_some() {
             self.containers.form = None;
+            self.containers.form_folder = None;
             cx.notify();
             return;
         }
@@ -1706,11 +1713,24 @@ impl AppShell {
         self.open_engine_workspace(profile, window, cx);
     }
 
+    /// 新建连接并放进指定分组（`None` 为根层级）。
+    pub(crate) fn open_new_container_in_folder(
+        &mut self,
+        folder: Option<transom_core::FolderId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.containers.form_folder = folder;
+        self.open_container_form(None, window, cx);
+    }
+
     pub(crate) fn save_container_profile(
         &mut self,
         profile: ContainerEngineProfile,
         cx: &mut Context<Self>,
     ) {
+        let form_folder = self.containers.form_folder.take();
+        let mut profile = profile;
         if let Some(existing) = self
             .catalog
             .engines
@@ -1719,6 +1739,11 @@ impl AppShell {
         {
             *existing = profile;
         } else {
+            // 从分组菜单新建的连接直接落到该分组，不需要用户再拖一次。
+            if let Some(folder) = form_folder {
+                profile.folder_id = Some(folder);
+                profile.touch();
+            }
             self.catalog.engines.push(profile);
         }
         self.persist_catalog();

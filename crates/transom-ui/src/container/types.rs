@@ -859,6 +859,24 @@ pub(crate) struct ContainerUiState {
     /// 不可逆动作；市场工具都要求二次确认，而这里只有一条待确认记录，
     /// 用弹条反而更啰嗦。
     pub(crate) pending_delete: Option<transom_core::EngineProfileId>,
+    /// 侧栏当前单选高亮的引擎连接。
+    pub(crate) sidebar_selected: Option<transom_core::EngineProfileId>,
+    /// 侧栏搜索框：首次渲染时创建，随后复用。
+    pub(crate) sidebar_search: Option<Entity<InputState>>,
+    pub(crate) sidebar_search_subscription: Option<Subscription>,
+    /// 引擎分组的新建/重命名弹窗。
+    pub(crate) engine_folder_form: Option<EngineFolderForm>,
+    /// 从分组菜单新建连接时暂存目标分组；保存成功后落到新连接上。
+    pub(crate) form_folder: Option<transom_core::FolderId>,
+}
+
+/// 引擎分组表单：只编辑名称，父级与“是否重命名”在打开时确定。
+pub(crate) struct EngineFolderForm {
+    pub(crate) parent: Option<transom_core::FolderId>,
+    /// 正在重命名的分组；`None` 表示新建。
+    pub(crate) editing: Option<transom_core::FolderId>,
+    pub(crate) input: Entity<InputState>,
+    pub(crate) error: Option<String>,
 }
 
 impl ContainerUiState {
