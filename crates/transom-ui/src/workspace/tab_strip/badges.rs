@@ -67,7 +67,9 @@ pub(super) fn tab_strip_button(
         enabled,
         on_click,
     } = props;
-    let button = crate::widgets::IconButton::new(id, icon, tooltip).disabled(!enabled);
+    let button = crate::widgets::IconButton::new(id, icon, tooltip)
+        .size(crate::widgets::IconButtonSize::Compact)
+        .disabled(!enabled);
     if enabled {
         button.render().on_click(on_click).into_any_element()
     } else {

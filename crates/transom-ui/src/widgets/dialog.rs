@@ -1,5 +1,6 @@
 //! 弹窗内容骨架与页脚动作容器。
 
+use crate::theme::tokens::space;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::dialog::{
     DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -25,7 +26,7 @@ pub(crate) fn dialog_body(
     let mut frame = v_flex()
         .id(id.into())
         .w_full()
-        .gap_4()
+        .gap(rems(space::LG))
         .child(header)
         .child(DialogContent::new().child(content));
 
@@ -39,7 +40,7 @@ pub(crate) fn dialog_body(
 pub(crate) fn dialog_actions(actions: impl IntoIterator<Item = AnyElement>) -> AnyElement {
     h_flex()
         .w_full()
-        .gap_2()
+        .gap(rems(space::SM))
         .items_center()
         .justify_end()
         .children(actions)

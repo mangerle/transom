@@ -3,6 +3,7 @@
 //! 只统一“长什么样”，不接管“点了做什么”。回调仍由调用方提供，因此同一套
 //! 按钮可以用于页面、工具栏、弹窗与测试，不会把 `AppShell` 的更新逻辑带进来。
 
+use crate::theme::tokens::control;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Selectable;
@@ -17,6 +18,28 @@ pub(crate) struct IconButton {
     tooltip: SharedString,
     selected: bool,
     disabled: bool,
+    size: IconButtonSize,
+}
+
+/// 图标按钮尺寸档位；统一走设计令牌，避免各页面各写 20/22/26px。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IconButtonSize {
+    /// 26px：侧栏与主工具栏。
+    Regular,
+    /// 22px：标签栏等紧凑位置。
+    Compact,
+    /// 20px：列表行内动作。
+    RowAction,
+}
+
+impl IconButtonSize {
+    fn rem(self) -> f32 {
+        match self {
+            Self::Regular => control::ICON_BUTTON,
+            Self::Compact => control::COMPACT_ICON_BUTTON,
+            Self::RowAction => control::ROW_ACTION,
+        }
+    }
 }
 
 impl IconButton {
@@ -32,6 +55,7 @@ impl IconButton {
             tooltip: tooltip.into(),
             selected: false,
             disabled: false,
+            size: IconButtonSize::Regular,
         }
     }
 
@@ -47,8 +71,15 @@ impl IconButton {
         self
     }
 
+    /// 尺寸档位：同一套视觉语义在侧栏、标签栏与列表行内复用。
+    pub(crate) fn size(mut self, size: IconButtonSize) -> Self {
+        self.size = size;
+        self
+    }
+
     /// 生成底层 `Button`；调用方继续链式接 `.on_click(...)`。
     pub(crate) fn render(self) -> Button {
+        let size = rems(self.size.rem());
         Button::new(self.id)
             .ghost()
             .xsmall()
@@ -56,16 +87,9 @@ impl IconButton {
             .tooltip(self.tooltip)
             .selected(self.selected)
             .disabled(self.disabled)
+            .w(size)
+            .h(size)
     }
-}
-
-/// 常用图标按钮的快捷构造函数。
-pub(crate) fn icon_button(
-    id: impl Into<ElementId>,
-    icon: IconName,
-    tooltip: impl Into<SharedString>,
-) -> Button {
-    IconButton::new(id, icon, tooltip).render()
 }
 
 /// 弹窗取消按钮：统一的 ghost 样式与默认文案。

@@ -131,34 +131,57 @@ impl ModalKind {
     fn spec(self, window: &Window) -> ModalSpec {
         let rem = window.rem_size();
         let (px_width, slug) = match self {
-            ModalKind::AuthPrompt => (Some(440.0), "auth"),
-            ModalKind::HostKeyConfirm => (Some(440.0), "host-key"),
-            ModalKind::ClipboardPrompt => (Some(520.0), "clipboard"),
-            ModalKind::ForwardConfirm => (Some(460.0), "forward"),
-            ModalKind::SftpConfirm => (Some(460.0), "sftp-confirm"),
-            ModalKind::SftpInput => (Some(420.0), "sftp-input"),
-            ModalKind::SftpChmod => (Some(520.0), "sftp-chmod"),
-            ModalKind::SftpProperties => (Some(520.0), "sftp-properties"),
-            ModalKind::SftpFilter => (Some(560.0), "sftp-filter"),
-            ModalKind::SftpSearch => (Some(560.0), "sftp-search"),
+            ModalKind::AuthPrompt => (Some(crate::theme::tokens::dialog::AUTH), "auth"),
+            ModalKind::HostKeyConfirm => (Some(crate::theme::tokens::dialog::AUTH), "host-key"),
+            ModalKind::ClipboardPrompt => {
+                (Some(crate::theme::tokens::dialog::CLIPBOARD), "clipboard")
+            }
+            ModalKind::ForwardConfirm => (Some(crate::theme::tokens::dialog::CONFIRM), "forward"),
+            ModalKind::SftpConfirm => (Some(crate::theme::tokens::dialog::CONFIRM), "sftp-confirm"),
+            ModalKind::SftpInput => (Some(crate::theme::tokens::dialog::INPUT), "sftp-input"),
+            ModalKind::SftpChmod => (Some(crate::theme::tokens::dialog::CHMOD), "sftp-chmod"),
+            ModalKind::SftpProperties => {
+                (Some(crate::theme::tokens::dialog::CHMOD), "sftp-properties")
+            }
+            ModalKind::SftpFilter => (Some(crate::theme::tokens::dialog::FILTER), "sftp-filter"),
+            ModalKind::SftpSearch => (Some(crate::theme::tokens::dialog::SEARCH), "sftp-search"),
             // 同步弹窗与密钥向导用全局弹窗宽度上限档位，随密度缩放。
             ModalKind::SftpSync => (None, "sftp-sync"),
             ModalKind::KeyWizard => (None, "key-wizard"),
-            ModalKind::EditorGotoLine => (Some(420.0), "editor-goto-line"),
-            ModalKind::SessionForm => (Some(620.0), "session-form"),
-            ModalKind::FolderForm => (Some(480.0), "folder-form"),
-            ModalKind::BatchEdit => (Some(560.0), "batch-edit"),
-            ModalKind::SnippetForm => (Some(420.0), "snippet-form"),
-            ModalKind::KnownHosts => (Some(580.0), "known-hosts"),
-            ModalKind::BackupPrompt => (Some(520.0), "backup-prompt"),
-            ModalKind::AuditViewer => (Some(900.0), "audit-viewer"),
-            ModalKind::Replay => (Some(560.0), "replay"),
+            ModalKind::EditorGotoLine => (
+                Some(crate::theme::tokens::dialog::EDITOR),
+                "editor-goto-line",
+            ),
+            ModalKind::SessionForm => (
+                Some(crate::theme::tokens::dialog::SESSION_FORM),
+                "session-form",
+            ),
+            ModalKind::FolderForm => (
+                Some(crate::theme::tokens::dialog::FOLDER_FORM),
+                "folder-form",
+            ),
+            ModalKind::BatchEdit => (Some(crate::theme::tokens::dialog::BATCH_EDIT), "batch-edit"),
+            ModalKind::SnippetForm => (
+                Some(crate::theme::tokens::dialog::SNIPPET_FORM),
+                "snippet-form",
+            ),
+            ModalKind::KnownHosts => (
+                Some(crate::theme::tokens::dialog::KNOWN_HOSTS),
+                "known-hosts",
+            ),
+            ModalKind::BackupPrompt => {
+                (Some(crate::theme::tokens::dialog::BACKUP), "backup-prompt")
+            }
+            ModalKind::AuditViewer => (Some(crate::theme::tokens::dialog::AUDIT), "audit-viewer"),
+            ModalKind::Replay => (Some(crate::theme::tokens::dialog::REPLAY), "replay"),
             // 设置弹窗宽度按密度档位；差异对比按视口比例（迁移前 relative(0.94)）。
             ModalKind::Settings => (
-                Some(rem.as_f32() * crate::theme::tokens::size::SETTINGS_DIALOG_WIDTH),
+                Some(crate::theme::tokens::size::SETTINGS_DIALOG_WIDTH),
                 "settings",
             ),
-            ModalKind::ShortcutCapture => (Some(440.0), "shortcut-capture"),
+            ModalKind::ShortcutCapture => {
+                (Some(crate::theme::tokens::dialog::AUTH), "shortcut-capture")
+            }
             ModalKind::DiffViewer => {
                 return ModalSpec {
                     width: window.viewport_size().width * 0.94,
@@ -167,7 +190,10 @@ impl ModalKind {
             }
         };
         ModalSpec {
-            width: px_width.map_or(rem * crate::theme::tokens::size::DIALOG_MAX_WIDTH, px),
+            width: px_width.map_or(
+                rem * crate::theme::tokens::size::DIALOG_MAX_WIDTH,
+                |width| rem * width,
+            ),
             slug,
         }
     }

@@ -316,7 +316,10 @@ fn local_quick_path_button(
     } else {
         format!("{label} ({})", rust_i18n::t!("sftp.missing_dir"))
     };
-    let button = crate::widgets::icon_button(id, icon, tooltip).disabled(!enabled);
+    let button = crate::widgets::IconButton::new(id, icon, tooltip)
+        .size(crate::widgets::IconButtonSize::Compact)
+        .disabled(!enabled)
+        .render();
     let Some(target) = target else {
         return button.into_any_element();
     };

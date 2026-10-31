@@ -22,7 +22,7 @@ mod form;
 mod menu;
 
 pub(crate) use button::{
-    DialogConfirmKind, IconButton, dialog_cancel_button, dialog_confirm_button, icon_button,
+    DialogConfirmKind, IconButton, IconButtonSize, dialog_cancel_button, dialog_confirm_button,
 };
 pub(crate) use dialog::{dialog_actions, dialog_body};
 pub(crate) use empty::empty_state;

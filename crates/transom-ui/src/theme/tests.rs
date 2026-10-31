@@ -635,3 +635,32 @@ fn string_literals(line: &str) -> Vec<String> {
     }
     out
 }
+
+/// 组件层必须走设计令牌：字号、间距、控件尺寸与弹窗宽度不能在这里重新写
+/// `text_xs()` / `px(...)`，否则页面迁移到组件层后仍会随密度切换失调。
+#[test]
+fn widgets_use_design_tokens() {
+    let mut offenders = Vec::new();
+    for (path, content) in ui_source_files() {
+        if !path.contains("/widgets/") {
+            continue;
+        }
+        for (index, line) in content.lines().enumerate() {
+            if line.contains("text_xs(")
+                || line.contains("text_sm(")
+                || line.contains("px(")
+                || line.contains("gap_1(")
+                || line.contains("gap_2(")
+                || line.contains("gap_3(")
+                || line.contains("gap_4(")
+            {
+                offenders.push(format!("{path}:{}: {}", index + 1, line.trim()));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "widgets 组件必须使用 theme::tokens 中的字号/间距/控件令牌：\n{}",
+        offenders.join("\n")
+    );
+}

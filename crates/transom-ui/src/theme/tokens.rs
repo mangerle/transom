@@ -59,7 +59,6 @@ pub(crate) mod size {
     pub const TAB_MAX_WIDTH: f32 = 13.75;
     /// 通用弹窗最大宽度（标准档 760px）。
     pub const DIALOG_MAX_WIDTH: f32 = 47.5;
-    /// 通用弹窗最大高度（标准档 640px）。
     /// 设置弹窗宽度（标准档 896px）。
     ///
     /// 收窄自 1088px：设置行是"左标题 + 右控件"的两列结构，面板越宽，两列之间
@@ -68,4 +67,62 @@ pub(crate) mod size {
     pub const SETTINGS_DIALOG_WIDTH: f32 = 56.0;
     /// 设置弹窗高度（标准档 736px）。
     pub const SETTINGS_DIALOG_HEIGHT: f32 = 46.0;
+}
+/// 间距档位：以 rem 表达，供组件层替换 `gap_2` / `py_2` 这类魔法数字。
+///
+/// 现有页面仍大量使用 gpui 的 `gap_2()` 等快捷方法；新组件与新页面必须从
+/// 这里取值，逐步迁移，避免一次性改动全部布局导致视觉回归。
+pub(crate) mod space {
+    /// 2px：行内极紧间距。
+    pub const XXS: f32 = 0.125;
+    /// 4px：图标与文字、紧凑控件间距。
+    pub const XS: f32 = 0.25;
+    /// 8px：表单行内、按钮组默认间距。
+    pub const SM: f32 = 0.5;
+    /// 12px：卡片内区块间距。
+    pub const MD: f32 = 0.75;
+    /// 16px：页面级区块间距。
+    pub const LG: f32 = 1.0;
+    /// 24px：大区块或空状态留白。
+    pub const XL: f32 = 1.5;
+}
+
+/// 字号档位：以 rem 表达，组件层统一用 `text_size(rems(...))`。
+pub(crate) mod typography {
+    /// 12px：说明、辅助信息与表头。
+    pub const CAPTION: f32 = 0.75;
+    /// 14px：正文与设置行标题。
+    pub const BODY: f32 = 0.875;
+    /// 16px：区块标题。
+    pub const TITLE: f32 = 1.0;
+}
+
+/// 控件尺寸档位：像素语义的点击目标，随密度等比缩放。
+pub(crate) mod control {
+    /// 26px：侧栏工具按钮。
+    pub const ICON_BUTTON: f32 = 1.625;
+    /// 22px：标签栏紧凑按钮。
+    pub const COMPACT_ICON_BUTTON: f32 = 1.375;
+    /// 20px：列表行内动作按钮。
+    pub const ROW_ACTION: f32 = 1.25;
+}
+
+/// 弹窗宽度档位：以 rem 表达，所有弹窗都随密度缩放。
+pub(crate) mod dialog {
+    pub const AUTH: f32 = 27.5;
+    pub const CLIPBOARD: f32 = 32.5;
+    pub const CONFIRM: f32 = 28.75;
+    pub const INPUT: f32 = 26.25;
+    pub const CHMOD: f32 = 32.5;
+    pub const FILTER: f32 = 35.0;
+    pub const SEARCH: f32 = 35.0;
+    pub const EDITOR: f32 = 26.25;
+    pub const SESSION_FORM: f32 = 38.75;
+    pub const FOLDER_FORM: f32 = 30.0;
+    pub const BATCH_EDIT: f32 = 35.0;
+    pub const SNIPPET_FORM: f32 = 26.25;
+    pub const KNOWN_HOSTS: f32 = 36.25;
+    pub const BACKUP: f32 = 32.5;
+    pub const AUDIT: f32 = 56.25;
+    pub const REPLAY: f32 = 35.0;
 }

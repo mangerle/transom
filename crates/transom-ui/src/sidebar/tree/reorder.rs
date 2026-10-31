@@ -42,7 +42,9 @@ pub(super) fn row_action_button(
         idle_color,
         on_click,
     } = props;
-    crate::widgets::icon_button(ElementId::Name(element_id.into()), icon, tooltip)
+    crate::widgets::IconButton::new(ElementId::Name(element_id.into()), icon, tooltip)
+        .size(crate::widgets::IconButtonSize::RowAction)
+        .render()
         .text_color(idle_color)
         .on_click(on_click)
         .into_any_element()

@@ -5,6 +5,7 @@
 
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::theme::tokens::{space, typography};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::prelude::FluentBuilder;
@@ -38,22 +39,22 @@ pub(crate) fn setting_text_row(
 ) -> AnyElement {
     h_flex()
         .w_full()
-        .py_2()
+        .py(rems(space::SM))
         .border_color(p.divider(p.border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
         .justify_between()
         .items_center()
-        .gap_4()
+        .gap(rems(space::LG))
         .child(
             v_flex()
                 .flex_1()
                 .min_w_0()
-                .gap_0p5()
-                .child(div().text_sm().child(title))
+                .gap(rems(space::XXS))
+                .child(div().text_size(rems(typography::BODY)).child(title))
                 .when_some(description, |this, description| {
                     this.child(
                         div()
-                            .text_xs()
+                            .text_size(rems(typography::CAPTION))
                             .text_color(p.muted_foreground)
                             .child(description),
                     )
@@ -67,7 +68,7 @@ pub(crate) fn setting_text_row(
 pub(crate) fn setting_frame(content: AnyElement, p: &Palette) -> AnyElement {
     v_flex()
         .w_full()
-        .py_2()
+        .py(rems(space::SM))
         .border_color(p.divider(p.border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
         .child(content)
@@ -82,10 +83,15 @@ pub(crate) fn setting_field_row(
 ) -> AnyElement {
     let inner = v_flex()
         .w_full()
-        .gap_1()
+        .gap(rems(space::MD))
         .child(field)
         .when_some(note, |this, note| {
-            this.child(div().text_xs().text_color(p.muted_foreground).child(note))
+            this.child(
+                div()
+                    .text_size(rems(typography::CAPTION))
+                    .text_color(p.muted_foreground)
+                    .child(note),
+            )
         })
         .into_any_element();
     setting_frame(inner, p)
@@ -110,8 +116,13 @@ pub(crate) fn field_with_reveal(
 ) -> AnyElement {
     let field = Input::new(&input).w_full();
     v_flex()
-        .gap_1()
-        .child(div().text_xs().text_color(p.muted_foreground).child(label))
+        .gap(rems(space::XS))
+        .child(
+            div()
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.muted_foreground)
+                .child(label),
+        )
         .child(if reveal { field.mask_toggle() } else { field })
         .into_any_element()
 }
