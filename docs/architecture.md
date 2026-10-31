@@ -60,6 +60,23 @@ apps/transom (组合根 + 控制平面)
 
 新增功能时：状态放 `AppState` 或对应 feature 结构体，纯状态方法写 `impl AppState`，纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。
 
+### 面板实体化（进行中）
+
+窗口级面板独立为 `Entity<面板>`，外壳只持有句柄：
+
+```
+AppShell { monitor: Entity<MonitorView>, ... }
+MonitorView { state: MonitorState, app: Option<WeakEntity<AppShell>> }
+impl Render for MonitorView  →  面板自己渲染
+impl MonitorView             →  面板自己的动作，跨域动作 with_shell 回交
+```
+
+约定：面板反引用外壳用弱引用（外壳强持有面板，强引用会成环）；跨域动作通过
+`with_shell(cx, |shell, cx| ...)` 显式调用，与 Zed 面板对 `Workspace` 的调用同形；
+跨面板的数据由外壳读好后传入（如 `MonitorTabParams`），面板不为取值克隆整份会话。
+
+已完成：监控面板（`MonitorView`）。待迁：编辑器面板、SFTP 面板、设置面板。
+
 ## 数据流
 
 ### 终端字节流（热路径，不走事件总线）
