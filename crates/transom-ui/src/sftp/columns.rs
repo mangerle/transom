@@ -12,14 +12,14 @@ use super::state::SftpPanelState;
 use crate::app::AppShell;
 use crate::divider::h_resizable;
 use crate::palette::Palette;
-use gpui_kit::component::resizable::{ResizableState, resizable_panel};
+use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 use transom_core::TabId;
 
 mod view;
 mod width;
 
-pub(crate) use width::plan_side_mount;
+pub(crate) use width::{column_layout, plan_side_mount};
 
 /// SFTP 面板内的列身份。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

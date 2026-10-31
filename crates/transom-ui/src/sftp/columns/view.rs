@@ -1,6 +1,6 @@
 //! SFTP 多列分栏的 UI 测量、折叠与拖拽状态。
 
-use super::width::{COLLAPSED_COLUMN_WIDTH, column_layout, sftp_columns_content_width};
+use super::width::{COLLAPSED_COLUMN_WIDTH, sftp_columns_content_width};
 use super::*;
 use crate::sftp::SftpPanelState;
 
@@ -119,43 +119,6 @@ impl AppShell {
         } else {
             2
         })
-    }
-
-    /// 折叠前把当前分栏尺寸记进列宽记忆。
-    ///
-    /// 必须在折叠发生的那一刻取：之后列宽会按折叠状态重排。折叠列本身不覆盖
-    /// 宽度记忆，展开时要恢复它原来的展开宽度。
-    pub(crate) fn remember_sftp_column_widths(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some((layout, sizes)) = self.sftp_state(tab_id, cx).map(|panel| {
-            (
-                column_layout(panel),
-                panel.column_state.read(cx).sizes().to_vec(),
-            )
-        }) else {
-            return;
-        };
-        // 状态刚重建时尺寸数量可能与新布局不一致，等下一页测量完成再记。
-        if sizes.len() != layout.len() {
-            return;
-        }
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            for ((id, collapsed), width) in layout.iter().zip(sizes.iter()) {
-                if !*collapsed {
-                    panel.column_widths.remember(*id, f32::from(*width));
-                }
-            }
-        }
-    }
-
-    /// 折叠状态变化后重建分栏状态：下一次渲染用列宽记忆与固定折叠条宽度重新初始化。
-    ///
-    /// 直接修改旧状态的尺寸会与“折叠列 32px、展开列记忆宽度”的初始布局冲突；
-    /// 重建状态只在折叠/展开/挂载/关闭的瞬间发生，拖拽期间状态保持不动。
-    pub(crate) fn reset_sftp_column_state(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let column_state = cx.new(|_| ResizableState::default());
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.column_state = column_state;
-        }
     }
 
     /// 渲染 SFTP 面板的列区：所有列始终在同一个可拖拽分栏组里。

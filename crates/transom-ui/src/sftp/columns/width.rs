@@ -126,7 +126,7 @@ fn collapsed_content_width(collapsed_count: usize, expanded_widths: &[f32]) -> f
 ///
 /// 分栏状态始终包含全部列（折叠列是 32px 固定面板），所以宽度测量与列身份
 /// 必须按完整顺序对齐，不能只取展开列。
-pub(super) fn column_layout(panel: &SftpPanelState) -> Vec<(SftpColumnId, bool)> {
+pub(crate) fn column_layout(panel: &SftpPanelState) -> Vec<(SftpColumnId, bool)> {
     let mut layout = Vec::with_capacity(2 + panel.side_remotes.len());
     layout.push((SftpColumnId::Local, panel.local.collapsed));
     if !panel.local.only {

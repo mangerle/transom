@@ -175,9 +175,9 @@ impl AppShell {
     }
 }
 
-pub(crate) fn sftp_text_input(
+pub(crate) fn sftp_text_input<T: 'static>(
     window: &mut Window,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<T>,
     value: &str,
     placeholder: &str,
 ) -> Entity<InputState> {

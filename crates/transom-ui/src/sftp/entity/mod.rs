@@ -26,6 +26,7 @@ mod clipboard;
 mod delete;
 mod file_ops;
 mod queue;
+mod side_remote;
 mod status;
 mod task_control;
 

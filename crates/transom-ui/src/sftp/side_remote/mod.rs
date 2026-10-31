@@ -21,9 +21,7 @@ pub(crate) use self::types::{
 };
 
 use crate::app::AppShell;
-use crate::sftp::columns::SftpColumnId;
-use crate::sftp::{SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, SftpTransferRequest};
-use gpui_kit::component::input::InputEvent;
+use crate::sftp::{SftpPanelState, SftpTransferRequest};
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId};
 
@@ -33,7 +31,7 @@ use transom_core::{ConnectionId, TabId};
 /// 与路径框有基本空间，上限避免新列一上来就吃掉主远端；同时给现有列留出
 /// 各自的最小宽度，面板本身很窄时不把已有列挤到裁切。分栏组还没有测量值时
 /// 退回固定默认宽度。
-fn side_column_width_hint(panel: &SftpPanelState, cx: &App) -> f32 {
+pub(crate) fn side_column_width_hint(panel: &SftpPanelState, cx: &App) -> f32 {
     let sizes = panel.column_state.read(cx).sizes();
     let total: f32 = sizes.iter().map(|size| f32::from(*size)).sum();
     let columns = panel.expanded_column_ids().len().max(1);
@@ -63,78 +61,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((already_mounted, side_count)) = self.sftp_state(tab_id, cx).map(|panel| {
-            (
-                panel
-                    .side_remotes
-                    .iter()
-                    .any(|s| s.connection_id == Some(connection_id)),
-                panel.side_remotes.len(),
-            )
-        }) else {
-            return;
-        };
-        // 避免重复挂载相同连接
-        if already_mounted {
-            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-                panel.set_status(
-                    rust_i18n::t!("sftp.sidebar.already_mounted", title = title.as_str())
-                        .to_string(),
-                );
-            }
-            cx.notify();
-            return;
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.mount_side_remote(connection_id, title, initial_path, window, cx)
+            });
         }
-
-        let mut side_state =
-            SftpRemotePaneState::new_side(connection_id, title, initial_path.clone(), window, cx);
-        // 路径输入框回车 = 进入目录：并列列与主远端保持同一交互。
-        let enter_sub = cx.subscribe_in(
-            &side_state.path_input,
-            window,
-            move |this, _, event: &InputEvent, _window, cx| {
-                if matches!(event, InputEvent::PressEnter { .. }) {
-                    this.sftp_enter_path_pane(tab_id, SftpRemotePaneRef::Side(connection_id), cx);
-                }
-            },
-        );
-        side_state.subscriptions.push(enter_sub);
-        // 新列若交给分栏组自行测量，会被压到 0 或最小宽度：现有列已经把容器
-        // 占满，新列没有可增长的空间，工具栏只剩一两个按钮甚至整列空白。挂载时
-        // 按实测列宽重新分配现有展开列，给新列留出可读宽度；面板本身也放不下时
-        // 再向工作区申请加宽。
-        let Some((width_hint, mount_plan)) = self.sftp_state(tab_id, cx).map(|panel| {
-            let width_hint = side_column_width_hint(panel, cx);
-            let mount_plan = super::columns::plan_side_mount(panel, width_hint, cx);
-            (width_hint, mount_plan)
-        }) else {
-            return;
-        };
-        let extra_width = mount_plan
-            .as_ref()
-            .map(|plan| plan.extra_width)
-            .unwrap_or(0.0);
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            if let Some(plan) = &mount_plan {
-                for (id, width) in &plan.widths {
-                    panel.column_widths.remember(*id, *width);
-                }
-            }
-            panel
-                .column_widths
-                .remember(SftpColumnId::Side(side_count), width_hint);
-            panel.side_remotes.push(side_state);
-            panel.mount_menu_open = false;
-        }
-        self.reset_sftp_column_state(tab_id, cx);
-        if extra_width > 0.5 {
-            self.grow_sftp_panel_width(extra_width, window, cx);
-        }
-        log::info!(
-            "挂载并列远端列，窗格: {tab_id}，连接: {connection_id}，初始目录: {initial_path}，建议列宽: {width_hint:.0}，面板加宽: {extra_width:.0}"
-        );
-        self.request_sftp_list_for_connection(tab_id, connection_id, initial_path, cx);
-        cx.notify();
     }
 
     /// 关闭并列远端列。
@@ -144,21 +75,8 @@ impl AppShell {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let removed = if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && index < panel.side_remotes.len()
-        {
-            let removed = panel.side_remotes[index].connection_id;
-            panel.side_remotes.remove(index);
-            if let Some(removed) = removed {
-                panel.active_pane = active_pane_after_removing(panel.active_pane, removed);
-            }
-            true
-        } else {
-            false
-        };
-        if removed {
-            self.reset_sftp_column_state(tab_id, cx);
-            cx.notify();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.close_side_remote(index, cx));
         }
     }
 
@@ -169,37 +87,23 @@ impl AppShell {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        // 折叠前先记下当前列宽：折叠后这一列不再参与展开宽度测量。
-        self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && let Some(side) = panel.side_remotes.get_mut(index)
-        {
-            side.collapsed = !side.collapsed;
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.toggle_side_remote_collapse(index, cx));
         }
-        self.reset_sftp_column_state(tab_id, cx);
-        cx.notify();
     }
 
     /// 切换本地列的展开与折叠。
     pub(crate) fn sftp_toggle_local_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        // 折叠前先记下当前列宽：折叠条不参与展开宽度测量。
-        self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.local.collapsed = !panel.local.collapsed;
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.toggle_local_collapse(cx));
         }
-        self.reset_sftp_column_state(tab_id, cx);
-        cx.notify();
     }
 
     /// 切换主远端列的展开与折叠。
     pub(crate) fn sftp_toggle_remote_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        // 折叠前先记下当前列宽：折叠条不参与展开宽度测量。
-        self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.remote.collapsed = !panel.remote.collapsed;
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.toggle_remote_collapse(cx));
         }
-        self.reset_sftp_column_state(tab_id, cx);
-        cx.notify();
     }
 
     /// 跨远端互传任务入队；队列状态与调度在实体上完成。

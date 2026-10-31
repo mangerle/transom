@@ -4,8 +4,8 @@
 //! - 实现初衷：定义跨栏拖拽载荷 SftpDragItem、拖拽浮层视觉 SftpDragPreview 与剪贴板状态 SftpClipboardData；
 //! - 核心优势：纯数据契约与共享列构造，供视图渲染与动作调度解耦引用。
 
-use crate::app::AppShell;
 use crate::sftp::SftpRemotePaneState;
+use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle};
@@ -132,7 +132,7 @@ impl SftpRemotePaneState {
         title: String,
         path: String,
         window: &mut Window,
-        cx: &mut Context<AppShell>,
+        cx: &mut Context<SftpPanelView>,
     ) -> Self {
         let path_input = crate::palette::sftp_text_input(
             window,
