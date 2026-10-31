@@ -52,9 +52,13 @@ apps/transom (组合根 + 控制平面)
 
 `transom-ui` 的功能模块通过 `#[path]` 挂在 `app` 模块之下，`AppShell` 的字段只对 `app` 及其后代可见，crate 其它模块无法绕过外壳直接改状态。应用状态集中在 `app::state::AppState`，`AppShell` 只保留一个 `state` 字段，通过 `Deref`/`DerefMut` 复用状态操作。
 
-可复用的表现层组件在 `transom-ui/src/widgets/`：图标按钮、弹窗动作按钮与动作条、设置/表单行、空状态、菜单项。组件只接收数据与回调，不依赖 `AppShell`、不直接访问 store；字号、间距、控件尺寸与弹窗宽度统一取 `theme::tokens`。
+可复用的表现层组件在 `transom-ui/src/widgets/`：图标按钮、弹窗动作按钮与动作条、设置/表单行、空状态、菜单项（含禁用态）、列表行与表头、状态徽标、工具栏。组件只接收数据与回调，不依赖 `AppShell`、不直接访问 store；字号、间距、控件尺寸与弹窗宽度统一取 `theme::tokens`。
 
-新增功能时：状态放 `AppState` 或对应 feature 结构体，纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。
+方法是按“是否需要 GPUI 上下文”划分的：不依赖 `Window`/`Entity`/`Context` 的状态查询与变更写在 `impl AppState`，其余渲染、事件路由与生命周期入口留在 `AppShell`。抽取时优先判断能否落到 `AppState`，再考虑是否真的需要外壳。
+
+三条回归闸门固化上述约定：`app_shell_keeps_single_state_field` 禁止外壳重新平铺字段；`widgets_use_design_tokens` 禁止组件层写裸字号与间距；`menu_items_use_widget_constructor` 禁止手写菜单项链。
+
+新增功能时：状态放 `AppState` 或对应 feature 结构体，纯状态方法写 `impl AppState`，纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。
 
 ## 数据流
 
