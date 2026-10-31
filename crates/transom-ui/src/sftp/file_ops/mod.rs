@@ -22,7 +22,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((targets, side_connection)) =
-            self.remote_pane_scope(tab_id, target).map(|scope| {
+            self.state.remote_pane_scope(tab_id, target).map(|scope| {
                 let targets = scope
                     .pane
                     .selected_paths()
@@ -54,7 +54,7 @@ impl AppShell {
             return;
         }
         let count = targets.len();
-        self.sftp_modals.confirm = Some(SftpConfirmModalState {
+        self.state.sftp_modals.confirm = Some(SftpConfirmModalState {
             action: SftpPendingDelete::Remote {
                 tab_id,
                 connection_id: side_connection,
@@ -76,9 +76,12 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let count = targets.len();
-        let Some(connection_id) =
-            connection_id.or_else(|| self.workspace.tab(tab_id).and_then(|tab| tab.connection_id))
-        else {
+        let Some(connection_id) = connection_id.or_else(|| {
+            self.state
+                .workspace
+                .tab(tab_id)
+                .and_then(|tab| tab.connection_id)
+        }) else {
             return;
         };
         self.send_sftp_op_for_connection(
@@ -88,6 +91,7 @@ impl AppShell {
             cx,
         );
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -101,7 +105,7 @@ impl AppShell {
 
     /// 执行确认弹窗中挂起的删除动作。
     pub(crate) fn sftp_confirm_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.sftp_modals.confirm.take() else {
+        let Some(modal) = self.state.sftp_modals.confirm.take() else {
             return;
         };
         match modal.action {
@@ -126,6 +130,7 @@ impl AppShell {
     /// `sftp_delete_selection` 与 `sftp_local_delete_selection` 统一弹出。
     pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(active_pane) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -150,7 +155,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.workspace.active_tab {
+        if let Some(tab_id) = self.state.workspace.active_tab {
             self.sftp_delete_selected(tab_id, cx);
         }
     }
@@ -185,6 +190,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(side_connection) = self
+            .state
             .remote_pane_scope(tab_id, target)
             .map(|scope| scope.side_connection)
         else {
@@ -215,6 +221,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(side_connection) = self
+            .state
             .remote_pane_scope(tab_id, target)
             .map(|scope| scope.side_connection)
         else {
@@ -264,6 +271,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(selected) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -299,6 +307,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((selected, side_connection)) = self
+            .state
             .remote_pane_scope(tab_id, target)
             .and_then(|scope| Some((scope.pane.selected.clone()?, scope.side_connection)))
         else {
@@ -345,6 +354,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(selected) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())

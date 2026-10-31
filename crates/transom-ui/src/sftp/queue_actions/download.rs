@@ -17,10 +17,10 @@ impl AppShell {
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let verify = self.settings.sftp.verify_after_transfer;
-        let verify_mode = self.settings.sftp.verify_mode;
-        let checksum_algorithm = self.settings.sftp.checksum_algorithm;
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let verify = self.state.settings.sftp.verify_after_transfer;
+        let verify_mode = self.state.settings.sftp.verify_mode;
+        let checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         let main_conn = tab.connection_id;

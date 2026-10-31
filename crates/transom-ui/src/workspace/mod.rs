@@ -28,8 +28,9 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let disconnected_tab = self.workspace.active_tab.and_then(|tab_id| {
-            self.workspace
+        let disconnected_tab = self.state.workspace.active_tab.and_then(|tab_id| {
+            self.state
+                .workspace
                 .tabs
                 .iter()
                 .find(|tab| tab.id == tab_id && matches!(&tab.status, TabStatus::Disconnected))
@@ -44,7 +45,7 @@ impl AppShell {
             .h_full()
             .overflow_hidden()
             .bg(p.background);
-        if !self.immersive && self.settings.window.tab_position != TabPosition::Left {
+        if !self.state.immersive && self.state.settings.window.tab_position != TabPosition::Left {
             main = main.child(self.render_tab_strip(p, cx));
         }
         if let Some(tab_id) = disconnected_tab {
@@ -52,7 +53,7 @@ impl AppShell {
         }
         main = main.child(content);
         // 广播条贴在终端区底部、状态栏之上；关闭时完全不参与布局。
-        if self.broadcast.open {
+        if self.state.broadcast.open {
             main = main.child(self.render_broadcast_bar(cx, p));
         }
         main.into_any_element()
@@ -97,8 +98,8 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let tab_id = self.workspace.tabs[index].id;
-        let status = &self.workspace.tabs[index].status;
+        let tab_id = self.state.workspace.tabs[index].id;
+        let status = &self.state.workspace.tabs[index].status;
         let (label, detail) = match status {
             TabStatus::Connecting => (
                 rust_i18n::t!("tab.connecting").to_string(),

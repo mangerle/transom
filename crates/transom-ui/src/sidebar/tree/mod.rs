@@ -82,14 +82,18 @@ impl SidebarRow {
 impl AppShell {
     /// 折叠或展开文件夹，并持久化收纳状态。
     pub(crate) fn toggle_folder_collapsed(&mut self, id: FolderId, cx: &mut Context<Self>) {
-        let collapsed = self.catalog.folder(id).map(|folder| !folder.collapsed);
+        let collapsed = self
+            .state
+            .catalog
+            .folder(id)
+            .map(|folder| !folder.collapsed);
         if let Some(collapsed) = collapsed {
-            if let Err(error) = self.catalog.set_folder_collapsed(id, collapsed) {
-                self.set_error(error.to_string());
+            if let Err(error) = self.state.catalog.set_folder_collapsed(id, collapsed) {
+                self.state.set_error(error.to_string());
                 cx.notify();
                 return;
             }
-            self.persist_catalog();
+            self.state.persist_catalog();
         }
         cx.notify();
     }
@@ -107,14 +111,18 @@ impl AppShell {
         match self.apply_sidebar_drop(drag, target) {
             Ok(landed) => {
                 if let Some(folder_id) = landed
-                    && let Some(folder) =
-                        self.catalog.folders.iter_mut().find(|f| f.id == folder_id)
+                    && let Some(folder) = self
+                        .state
+                        .catalog
+                        .folders
+                        .iter_mut()
+                        .find(|f| f.id == folder_id)
                 {
                     folder.collapsed = false;
                 }
-                self.persist_catalog();
+                self.state.persist_catalog();
             }
-            Err(error) => self.set_error(error.to_string()),
+            Err(error) => self.state.set_error(error.to_string()),
         }
         cx.notify();
     }
@@ -130,49 +138,60 @@ impl AppShell {
     ) -> Result<Option<FolderId>, CatalogError> {
         match (drag, target) {
             (SidebarDrag::Session(session_id), SidebarTarget::Root) => {
-                self.catalog.move_session(session_id, None)?;
+                self.state.catalog.move_session(session_id, None)?;
                 Ok(None)
             }
             (SidebarDrag::Folder(folder_id), SidebarTarget::Root) => {
-                self.catalog.move_folder(folder_id, None)?;
+                self.state.catalog.move_folder(folder_id, None)?;
                 Ok(None)
             }
             (SidebarDrag::Session(session_id), SidebarTarget::Folder(folder_id)) => {
-                self.catalog.move_session(session_id, Some(folder_id))?;
+                self.state
+                    .catalog
+                    .move_session(session_id, Some(folder_id))?;
                 Ok(Some(folder_id))
             }
             (SidebarDrag::Folder(moved_id), SidebarTarget::Folder(parent_id)) => {
                 if moved_id == parent_id {
                     return Ok(Some(parent_id));
                 }
-                self.catalog.move_folder(moved_id, Some(parent_id))?;
+                self.state.catalog.move_folder(moved_id, Some(parent_id))?;
                 Ok(Some(parent_id))
             }
             (drag, SidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
                 (SidebarDrag::Session(session_id), SidebarDrag::Session(anchor_id)) => {
-                    self.catalog.reorder_session(session_id, anchor_id, side)?;
+                    self.state
+                        .catalog
+                        .reorder_session(session_id, anchor_id, side)?;
                     Ok(self
+                        .state
                         .catalog
                         .folder_of_session(anchor_id)
                         .map(|folder| folder.id))
                 }
                 (SidebarDrag::Folder(folder_id), SidebarDrag::Folder(anchor_id)) => {
-                    self.catalog.reorder_folder(folder_id, anchor_id, side)?;
+                    self.state
+                        .catalog
+                        .reorder_folder(folder_id, anchor_id, side)?;
                     Ok(self
+                        .state
                         .catalog
                         .folder(folder_id)
                         .and_then(|folder| folder.parent))
                 }
                 (SidebarDrag::Session(session_id), SidebarDrag::Folder(anchor_id)) => {
-                    self.catalog.move_session(session_id, Some(anchor_id))?;
+                    self.state
+                        .catalog
+                        .move_session(session_id, Some(anchor_id))?;
                     Ok(Some(anchor_id))
                 }
                 (SidebarDrag::Folder(folder_id), SidebarDrag::Session(anchor_id)) => {
                     let parent = self
+                        .state
                         .catalog
                         .folder_of_session(anchor_id)
                         .map(|folder| folder.id);
-                    self.catalog.move_folder(folder_id, parent)?;
+                    self.state.catalog.move_folder(folder_id, parent)?;
                     Ok(parent)
                 }
             },

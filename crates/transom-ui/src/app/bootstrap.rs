@@ -95,7 +95,7 @@ impl AppShell {
         let app_entity = cx.entity();
         let appearance_subscription = window.observe_window_appearance(move |window, cx| {
             let follows_system =
-                app_entity.read(cx).settings.appearance.mode == UiThemeMode::System;
+                app_entity.read(cx).state.settings.appearance.mode == UiThemeMode::System;
             if follows_system {
                 crate::theme::sync_with_system(window, cx);
             }
@@ -215,10 +215,12 @@ impl AppShell {
         let mut this = Self { state };
         // 面板需要回到外壳执行跨域动作；外壳此时才构造完成，因此两段式绑定。
         let app_weak = cx.entity().downgrade();
-        this.monitor.update(cx, |view, _| view.attach(app_weak));
+        this.state
+            .monitor
+            .update(cx, |view, _| view.attach(app_weak));
 
         cx.subscribe_in(
-            &this.broadcast.input,
+            &this.state.broadcast.input,
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
@@ -228,7 +230,7 @@ impl AppShell {
         )
         .detach();
         cx.subscribe_in(
-            &this.broadcast.textarea,
+            &this.state.broadcast.textarea,
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
@@ -239,7 +241,7 @@ impl AppShell {
         .detach();
         // 搜索词变化时整壳重绘，纵向标签列表的过滤结果才会跟着输入实时更新。
         cx.subscribe(
-            &this.vertical_tabs_search,
+            &this.state.vertical_tabs_search,
             |_, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
@@ -248,13 +250,13 @@ impl AppShell {
         )
         .detach();
 
-        if this.settings.appearance.mode == UiThemeMode::System {
+        if this.state.settings.appearance.mode == UiThemeMode::System {
             crate::theme::sync_with_system(window, cx);
         }
         this.sync_terminal_palette(cx);
         this.restore_startup_tabs(window, cx);
 
-        this.tasks.git_sync = Some(cx.spawn(async move |this, cx| {
+        this.state.tasks.git_sync = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_secs(60))

@@ -34,7 +34,7 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, window, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
+                        if let Some(form) = this.state.modals.form.as_mut() {
                             let port_name = port_name.clone();
                             form.serial_port.update(cx, |state, cx| {
                                 state.set_value(&port_name, window, cx);
@@ -64,7 +64,7 @@ pub(crate) fn render_serial_fields(
             .on_click(crate::dialog_host::on_event(
                 app,
                 move |this, _: &ClickEvent, _, cx| {
-                    if let Some(form) = this.modals.form.as_mut() {
+                    if let Some(form) = this.state.modals.form.as_mut() {
                         form.serial_data_bits = bits;
                     }
                     cx.notify();
@@ -86,7 +86,7 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
+                        if let Some(form) = this.state.modals.form.as_mut() {
                             form.serial_parity = parity;
                         }
                         cx.notify();
@@ -108,7 +108,7 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
+                        if let Some(form) = this.state.modals.form.as_mut() {
                             form.serial_stop_bits = stop_bits;
                         }
                         cx.notify();
@@ -131,7 +131,7 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
+                        if let Some(form) = this.state.modals.form.as_mut() {
                             form.serial_flow_control = flow;
                         }
                         cx.notify();

@@ -26,7 +26,7 @@ impl AppShell {
         // 并排菜单在每个标签上都显示：条目不足两个时置灰，避免用户以为功能
         // 不存在；右键标签时由 `tile_tab` 取标签栏左边那一条作搭档，左边是
         // 并排合并条目则整组加入，不会把网格里的成员拆出来。
-        let entries = self.strip_entries();
+        let entries = self.state.strip_entries();
         let can_tile = entries.len() >= 2;
 
         for entry in &entries {

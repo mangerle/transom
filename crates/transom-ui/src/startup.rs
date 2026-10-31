@@ -28,6 +28,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(commands) = self
+            .state
             .workspace
             .tabs
             .iter()
@@ -43,6 +44,7 @@ impl AppShell {
             for command in commands {
                 let delivered = this.update_in(cx, |this, _window, cx| {
                     let Some(tab) = this
+                        .state
                         .workspace
                         .tab(tab_id)
                         .filter(|tab| tab.connection_id == Some(connection_id))
@@ -65,6 +67,7 @@ impl AppShell {
         });
 
         if let Some(pane) = self
+            .state
             .workspace
             .tabs
             .iter_mut()

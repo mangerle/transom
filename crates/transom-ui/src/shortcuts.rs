@@ -20,7 +20,7 @@ impl AppShell {
     ) {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
-        self.shortcut_recording.capture = Some(ShortcutCapture {
+        self.state.shortcut_recording.capture = Some(ShortcutCapture {
             id,
             error: None,
             focus,
@@ -34,15 +34,15 @@ impl AppShell {
     /// 抑制绑定，再追加本次完整键位；这样旧键位立即失效，且无需重建
     /// 输入框、命令面板等组件自带的默认绑定。
     pub(crate) fn apply_shortcut_settings(&mut self, cx: &mut Context<Self>) {
-        let previous = std::mem::take(&mut self.shortcut_recording.applied_keys);
+        let previous = std::mem::take(&mut self.state.shortcut_recording.applied_keys);
         let suppression = keymap::suppression_bindings(&previous);
-        let bindings = keymap::bindings(&self.settings.shortcuts);
-        let reserved = keymap::reserved_keystrokes(&self.settings.shortcuts);
-        self.shortcut_recording.applied_keys =
-            keymap::effective_key_strings(&self.settings.shortcuts);
+        let bindings = keymap::bindings(&self.state.settings.shortcuts);
+        let reserved = keymap::reserved_keystrokes(&self.state.settings.shortcuts);
+        self.state.shortcut_recording.applied_keys =
+            keymap::effective_key_strings(&self.state.settings.shortcuts);
         cx.bind_keys(suppression);
         cx.bind_keys(bindings);
-        *self.shortcut_recording.filter.write() = reserved;
+        *self.state.shortcut_recording.filter.write() = reserved;
         cx.notify();
     }
 
@@ -52,13 +52,13 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(capture) = self.shortcut_recording.capture.as_ref() else {
+        let Some(capture) = self.state.shortcut_recording.capture.as_ref() else {
             return;
         };
         let id = capture.id;
         let keystroke = &event.keystroke;
         if keystroke.key.eq_ignore_ascii_case("escape") {
-            self.shortcut_recording.capture = None;
+            self.state.shortcut_recording.capture = None;
             cx.notify();
             return;
         }
@@ -66,21 +66,23 @@ impl AppShell {
         match keymap::format_captured(keystroke) {
             Ok(candidate) => {
                 if let Some(conflict) =
-                    keymap::conflict_with(id, &candidate, &self.settings.shortcuts)
+                    keymap::conflict_with(id, &candidate, &self.state.settings.shortcuts)
                 {
                     let name = rust_i18n::t!(conflict.label_key).to_string();
-                    if let Some(capture) = self.shortcut_recording.capture.as_mut() {
+                    if let Some(capture) = self.state.shortcut_recording.capture.as_mut() {
                         capture.error = Some(
                             rust_i18n::t!("settings.shortcut_conflict", name = name).to_string(),
                         );
                     }
                 } else {
-                    self.settings
+                    self.state
+                        .settings
                         .shortcuts
                         .bindings
                         .insert(id.to_string(), vec![candidate]);
-                    self.shortcut_recording.capture = None;
-                    self.status = Some(rust_i18n::t!("settings.shortcut_recorded").to_string());
+                    self.state.shortcut_recording.capture = None;
+                    self.state.status =
+                        Some(rust_i18n::t!("settings.shortcut_recorded").to_string());
                 }
             }
             Err(issue) => {
@@ -92,7 +94,7 @@ impl AppShell {
                         rust_i18n::t!("settings.shortcut_needs_modifier").to_string()
                     }
                 };
-                if let Some(capture) = self.shortcut_recording.capture.as_mut() {
+                if let Some(capture) = self.state.shortcut_recording.capture.as_mut() {
                     capture.error = Some(message);
                 }
             }
@@ -111,7 +113,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(capture) = self.shortcut_recording.capture.as_ref() else {
+        let Some(capture) = self.state.shortcut_recording.capture.as_ref() else {
             return div().into_any_element();
         };
         let focus = capture.focus.clone();
@@ -140,7 +142,7 @@ impl AppShell {
             "cancel-shortcut-capture",
             rust_i18n::t!("common.cancel").to_string(),
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                this.shortcut_recording.capture = None;
+                this.state.shortcut_recording.capture = None;
                 cx.notify();
             }),
         ));

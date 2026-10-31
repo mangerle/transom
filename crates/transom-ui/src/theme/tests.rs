@@ -757,3 +757,35 @@ fn monitor_rendering_belongs_to_entity() {
         offenders.join("\n")
     );
 }
+
+/// 外壳不得通过 `Deref` 继承状态方法：那会让 `AppState` 的方法隐式长在
+/// `AppShell` 上，调用点看不出归属，且任意模块都能拿到 `&mut AppState`
+/// 改状态而不触发重绘。状态访问必须显式写出 `.state`。
+#[test]
+fn app_shell_does_not_deref_state() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if entry.ends_with("theme/tests.rs") {
+            continue;
+        }
+        if content.contains("ops::Deref for AppShell")
+            || content.contains("ops::DerefMut for AppShell")
+            || content.contains("impl Deref for AppShell")
+            || content.contains("impl DerefMut for AppShell")
+        {
+            offenders.push(entry.display().to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "禁止为 AppShell 实现 Deref/DerefMut，请显式写 self.state.xxx：\n{}",
+        offenders.join("\n")
+    );
+}

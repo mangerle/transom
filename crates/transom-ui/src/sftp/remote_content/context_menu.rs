@@ -186,7 +186,8 @@ pub(crate) fn build_remote_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         let mut sources = Vec::new();
-                        if let Some(panel) = this.workspace.tab(tab_id).and_then(|tab| tab.sftp())
+                        if let Some(panel) =
+                            this.state.workspace.tab(tab_id).and_then(|tab| tab.sftp())
                             && let Some(pane) = panel.remote_pane(target)
                             && pane.selection.contains(&p_archive_gz)
                         {
@@ -216,7 +217,8 @@ pub(crate) fn build_remote_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         let mut sources = Vec::new();
-                        if let Some(panel) = this.workspace.tab(tab_id).and_then(|tab| tab.sftp())
+                        if let Some(panel) =
+                            this.state.workspace.tab(tab_id).and_then(|tab| tab.sftp())
                             && let Some(pane) = panel.remote_pane(target)
                             && pane.selection.contains(&p_archive_zip)
                         {
@@ -269,7 +271,7 @@ pub(crate) fn build_remote_context_menu(
             move |_, _, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(p_cp.clone()));
                 app.update(cx, |this, cx| {
-                    if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
+                    if let Some(panel) = this.state.sftp_panel_mut_tab(tab_id) {
                         panel.set_status(
                             rust_i18n::t!("sftp.menu.remote_path_copied", path = p_cp).to_string(),
                         );

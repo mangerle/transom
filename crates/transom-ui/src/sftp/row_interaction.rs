@@ -183,7 +183,12 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(row.tab_id, cx);
-        if let Some(panel) = self.workspace.tab(row.tab_id).and_then(|tab| tab.sftp()) {
+        if let Some(panel) = self
+            .state
+            .workspace
+            .tab(row.tab_id)
+            .and_then(|tab| tab.sftp())
+        {
             window.focus(&panel.focus_handle, cx);
         }
         if event.click_count >= 2 {
@@ -229,6 +234,7 @@ impl AppShell {
             return;
         }
         let Some(panel) = self
+            .state
             .workspace
             .tab_mut(row.tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -323,6 +329,7 @@ impl AppShell {
     ) {
         self.dismiss_sftp_hover_preview(row.tab_id, cx);
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(row.tab_id)
             .and_then(|tab| tab.sftp_mut())

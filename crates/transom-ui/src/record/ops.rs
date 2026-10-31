@@ -18,7 +18,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(active_id) = self.workspace.active_tab else {
+        let Some(active_id) = self.state.workspace.active_tab else {
             return;
         };
         self.toggle_recording(active_id, window, cx);
@@ -31,7 +31,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(terminal) = tab.terminal() else {
@@ -47,7 +47,8 @@ impl AppShell {
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("session.cast");
-                self.status = Some(rust_i18n::t!("recorder.saved_notice", name = name).to_string());
+                self.state.status =
+                    Some(rust_i18n::t!("recorder.saved_notice", name = name).to_string());
             }
         } else {
             // 开始录制
@@ -65,9 +66,10 @@ impl AppShell {
             let res = terminal.update(cx, |term, _| term.start_recording(path, title));
             if let Err(e) = res {
                 log::error!("启动终端录制失败: {e}");
-                self.set_error(rust_i18n::t!("recorder.start_failed").to_string());
+                self.state
+                    .set_error(rust_i18n::t!("recorder.start_failed").to_string());
             } else {
-                self.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
+                self.state.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
             }
         }
         cx.notify();
@@ -81,7 +83,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let dir = paths::recordings_dir();
-        self.modals.replay = Some(ReplayModalState {
+        self.state.modals.replay = Some(ReplayModalState {
             target_tab_id: tab_id,
             entries: Vec::new(),
             selected_index: 0,
@@ -92,7 +94,7 @@ impl AppShell {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                if let Some(modal) = this.modals.replay.as_mut() {
+                if let Some(modal) = this.state.modals.replay.as_mut() {
                     modal.entries = entries;
                     modal.selected_index = 0;
                 }
@@ -117,7 +119,8 @@ impl AppShell {
             else {
                 log::error!("解析会话录制文件的线程创建失败");
                 let _ = this.update(cx, |this, cx| {
-                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    this.state
+                        .set_error(rust_i18n::t!("recorder.parse_failed").to_string());
                     cx.notify();
                 });
                 return;
@@ -128,7 +131,8 @@ impl AppShell {
                 }
                 Err(error) => {
                     log::error!("解析会话录制文件失败，原因: {error}");
-                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    this.state
+                        .set_error(rust_i18n::t!("recorder.parse_failed").to_string());
                     cx.notify();
                 }
             });
@@ -164,9 +168,9 @@ impl AppShell {
         let tab_title =
             rust_i18n::t!("recorder.player_tab_title", name = display_title).to_string();
 
-        let mut profile = self.settings.terminal_profile.clone();
-        profile.palette = self.settings.terminal_profile.palette.clone();
-        profile.background_transparency = self.settings.window.window_transparency;
+        let mut profile = self.state.settings.terminal_profile.clone();
+        profile.palette = self.state.settings.terminal_profile.palette.clone();
+        profile.background_transparency = self.state.settings.window.window_transparency;
 
         let player = cx.new(|cx| {
             CastPlayerView::new(
@@ -192,12 +196,12 @@ impl AppShell {
             }),
         );
         let session_id = dummy_session.id;
-        dummy_session.terminal = self.settings.terminal_profile.clone();
+        dummy_session.terminal = self.state.settings.terminal_profile.clone();
 
         let tab = TerminalTab::player_tab(tab_id, dummy_session, tab_title, player);
 
-        self.create_group(tab_id, session_id);
-        self.workspace.tabs.push(tab);
+        self.state.create_group(tab_id, session_id);
+        self.state.workspace.tabs.push(tab);
         self.activate_tab(tab_id, window, cx);
         cx.notify();
     }
@@ -251,7 +255,8 @@ impl AppShell {
             else {
                 log::error!("解析回放脚本的线程创建失败");
                 let _ = this.update(cx, |this, cx| {
-                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    this.state
+                        .set_error(rust_i18n::t!("recorder.parse_failed").to_string());
                     cx.notify();
                 });
                 return;
@@ -260,7 +265,8 @@ impl AppShell {
                 Ok((header, events)) => this.execute_replay_events(tab_id, header, events, cx),
                 Err(error) => {
                     log::error!("解析回放脚本失败: {error}");
-                    this.set_error(rust_i18n::t!("recorder.parse_failed").to_string());
+                    this.state
+                        .set_error(rust_i18n::t!("recorder.parse_failed").to_string());
                     cx.notify();
                 }
             });
@@ -278,12 +284,12 @@ impl AppShell {
     ) {
         let steps = extract_replay_inputs(&events, 1.5);
         if steps.is_empty() {
-            self.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());
+            self.state.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());
             cx.notify();
             return;
         }
 
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
         let Some(terminal) = tab.terminal() else {
@@ -291,7 +297,7 @@ impl AppShell {
         };
 
         let step_count = steps.len();
-        self.status = Some(
+        self.state.status = Some(
             rust_i18n::t!(
                 "recorder.replaying_start",
                 title = header
@@ -315,7 +321,7 @@ impl AppShell {
                 });
             }
             let _ = this.update(cx, |app, cx| {
-                app.status = Some(rust_i18n::t!("recorder.replay_completed").to_string());
+                app.state.status = Some(rust_i18n::t!("recorder.replay_completed").to_string());
                 cx.notify();
             });
         })

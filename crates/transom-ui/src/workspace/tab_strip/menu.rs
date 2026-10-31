@@ -109,7 +109,8 @@ pub(crate) fn build_tab_context_menu(
                 let text = host.clone();
                 cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
                 copy_app.update(cx, |this, cx| {
-                    this.status = Some(rust_i18n::t!("menu.copied_host", host = text).to_string());
+                    this.state.status =
+                        Some(rust_i18n::t!("menu.copied_host", host = text).to_string());
                     cx.notify();
                 });
             },
@@ -251,9 +252,9 @@ pub(crate) fn build_tab_context_menu(
                 app.update(cx, |this, cx| {
                     if let Some(group) = this.add_groups_to_tiling(set_id, groups.clone(), window) {
                         this.activate_group(group, window, cx);
-                        this.workspace.tab_selection.clear();
+                        this.state.workspace.tab_selection.clear();
                     } else {
-                        this.set_error(
+                        this.state.set_error(
                             rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string(),
                         );
                     }

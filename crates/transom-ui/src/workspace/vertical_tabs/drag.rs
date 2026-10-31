@@ -58,7 +58,7 @@ fn vertical_reorder_half(
     half.on_drop(move |drag: &TabDrag, window, cx| {
         let dragged = drag.0;
         app.update(cx, |this, cx| {
-            reorder_groups(&mut this.workspace.groups, dragged, anchor, !top);
+            reorder_groups(&mut this.state.workspace.groups, dragged, anchor, !top);
             cx.notify();
             window.refresh();
         });

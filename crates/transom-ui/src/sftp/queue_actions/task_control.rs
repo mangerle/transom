@@ -18,6 +18,7 @@ impl AppShell {
     ) {
         let mut needs_cancel = false;
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -37,7 +38,8 @@ impl AppShell {
         }
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if needs_cancel {
-            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
+            self.state
+                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }
@@ -49,6 +51,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -87,6 +90,7 @@ impl AppShell {
         log::debug!("取消传输任务，窗格: {tab_id}，任务: {op_id}");
         let mut should_cancel = false;
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -106,7 +110,8 @@ impl AppShell {
         }
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if should_cancel {
-            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
+            self.state
+                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }
@@ -118,6 +123,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -137,6 +143,7 @@ impl AppShell {
     ) {
         let mut needs_cancel = false;
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -165,7 +172,8 @@ impl AppShell {
         }
         // 发送在 panel 借用结束后：send_command 需要整体可变借用 self
         if needs_cancel {
-            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
+            self.state
+                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
         self.process_sftp_queue(tab_id, cx);
     }

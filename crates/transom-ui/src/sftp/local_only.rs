@@ -29,7 +29,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tabs.get(index) else {
+        let Some(tab) = self.state.workspace.tabs.get(index) else {
             return;
         };
         let tab_id = tab.id;
@@ -84,7 +84,7 @@ impl AppShell {
             },
         );
 
-        let Some(pane) = self.workspace.tabs[index].session_pane_mut() else {
+        let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
             return;
         };
         pane.sftp = Some(SftpPanelState {
@@ -141,7 +141,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(panel) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
+        let Some(panel) = self.state.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
             return div().into_any_element();
         };
         let local_path_input = panel.local.path_input.clone();
@@ -162,7 +162,7 @@ impl AppShell {
             panel,
             show_hidden,
             &local_filter_query,
-            &self.settings.sftp.panel_hidden_patterns,
+            &self.state.settings.sftp.panel_hidden_patterns,
         );
 
         let local_pane = self.render_sftp_local_pane(

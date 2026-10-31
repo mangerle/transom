@@ -12,7 +12,7 @@ pub(super) fn cancel_modal(
     let closed = app.update(cx, |shell, cx| kind.cancel(shell, window, cx));
     app.update(cx, |shell, cx| {
         if closed {
-            shell.open_modals.drop(kind);
+            shell.state.open_modals.drop(kind);
         }
         cx.notify();
     });
@@ -28,7 +28,7 @@ pub(super) fn commit_modal(
     let closed = app.update(cx, |shell, cx| kind.commit(shell, window, cx));
     app.update(cx, |shell, cx| {
         if closed {
-            shell.open_modals.drop(kind);
+            shell.state.open_modals.drop(kind);
         }
         cx.notify();
     });
@@ -37,7 +37,7 @@ pub(super) fn commit_modal(
 
 pub(super) fn close_layer(app: &Entity<AppShell>, kind: ModalKind, cx: &mut App) {
     app.update(cx, |shell, cx| {
-        shell.open_modals.drop(kind);
+        shell.state.open_modals.drop(kind);
         cx.notify();
     });
 }
@@ -92,6 +92,7 @@ impl AppShell {
     pub(crate) fn reconcile_dialogs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let desired = self.desired_modal_stack();
         let actual: Vec<ModalKind> = self
+            .state
             .open_modals
             .layers
             .iter()
@@ -123,7 +124,7 @@ impl AppShell {
             }
         });
         // 影子栈先按期望落定：延后执行的那批开关完成后即与之一致。
-        self.open_modals.layers.truncate(common);
+        self.state.open_modals.layers.truncate(common);
         for kind in missing {
             // 基线在开弹窗这一刻取：此后任何文本变化都算未提交内容。
             let baseline = kind.field_values(self, cx);
@@ -137,7 +138,7 @@ impl AppShell {
                     _observe: observe,
                 }
             });
-            self.open_modals.layers.push(ModalLayer {
+            self.state.open_modals.layers.push(ModalLayer {
                 kind,
                 body,
                 baseline,
@@ -148,6 +149,7 @@ impl AppShell {
     /// 压入一层弹窗：外壳只负责容器属性，内容交给弹窗体。
     fn push_dialog(&mut self, kind: ModalKind, window: &mut Window, cx: &mut Context<Self>) {
         let Some(body) = self
+            .state
             .open_modals
             .layers
             .iter()
@@ -202,7 +204,7 @@ impl AppShell {
     /// 于是压暗层上沿正好卡在顶栏中间。宿主元素铺满整个窗面，层序在编辑面板
     /// 之上、弹窗层之下，与迁移前的自绘遮罩一致。
     pub(crate) fn dialog_dim(&self, p: &Palette) -> Option<AnyElement> {
-        if self.open_modals.layers.is_empty() {
+        if self.state.open_modals.layers.is_empty() {
             return None;
         }
         Some(
@@ -236,7 +238,7 @@ impl AppShell {
     where
         F: FnOnce(&mut crate::sftp::SftpModals),
     {
-        clear(&mut self.sftp_modals);
+        clear(&mut self.state.sftp_modals);
         self.focus_active_sftp_panel(window, cx);
         cx.notify();
         true

@@ -23,9 +23,9 @@ impl AppShell {
                 Some("settings.editor_soft_wrap_desc"),
                 Switch::new("toggle-editor-soft-wrap")
                     .small()
-                    .checked(self.settings.sftp.editor_soft_wrap)
+                    .checked(self.state.settings.sftp.editor_soft_wrap)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.sftp.editor_soft_wrap = checked;
+                        this.state.settings.sftp.editor_soft_wrap = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -36,9 +36,9 @@ impl AppShell {
                 Some("settings.editor_line_numbers_desc"),
                 Switch::new("toggle-editor-line-numbers")
                     .small()
-                    .checked(self.settings.sftp.editor_line_numbers)
+                    .checked(self.state.settings.sftp.editor_line_numbers)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.sftp.editor_line_numbers = checked;
+                        this.state.settings.sftp.editor_line_numbers = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -58,7 +58,7 @@ impl AppShell {
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.panel_hidden").to_string(),
-                    self.modals.settings.panel_hidden_patterns.clone(),
+                    self.state.modals.settings.panel_hidden_patterns.clone(),
                     p,
                 ),
                 Some(rust_i18n::t!("settings.panel_hidden_note").to_string()),
@@ -73,10 +73,12 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_algo = self.settings.sftp.checksum_algorithm;
-        let current_mode = self.settings.sftp.verify_mode;
-        let stepper =
-            Self::setting_stepper(&self.modals.settings.max_concurrent_transfers, px(110.0));
+        let current_algo = self.state.settings.sftp.checksum_algorithm;
+        let current_mode = self.state.settings.sftp.verify_mode;
+        let stepper = Self::setting_stepper(
+            &self.state.modals.settings.max_concurrent_transfers,
+            px(110.0),
+        );
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -90,9 +92,9 @@ impl AppShell {
                 Some("settings.verify_after_transfer_desc"),
                 Switch::new("toggle-verify-after-transfer")
                     .small()
-                    .checked(self.settings.sftp.verify_after_transfer)
+                    .checked(self.state.settings.sftp.verify_after_transfer)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.sftp.verify_after_transfer = checked;
+                        this.state.settings.sftp.verify_after_transfer = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -115,7 +117,7 @@ impl AppShell {
                         ),
                     ],
                     |this, algo, cx| {
-                        this.settings.sftp.checksum_algorithm = algo;
+                        this.state.settings.sftp.checksum_algorithm = algo;
                         cx.notify();
                     },
                     cx,
@@ -139,7 +141,7 @@ impl AppShell {
                         ),
                     ],
                     |this, mode, cx| {
-                        this.settings.sftp.verify_mode = mode;
+                        this.state.settings.sftp.verify_mode = mode;
                         cx.notify();
                     },
                     cx,
@@ -158,8 +160,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let resolved = self.settings.zmodem.resolved_download_dir();
-        let dir_label = match self.settings.zmodem.download_dir.clone() {
+        let resolved = self.state.settings.zmodem.resolved_download_dir();
+        let dir_label = match self.state.settings.zmodem.download_dir.clone() {
             Some(dir) => dir.display().to_string(),
             None => format!(
                 "{}（{}）",
@@ -169,7 +171,7 @@ impl AppShell {
         };
         let browse = cx.listener(|this, _, _, _cx| {
             if let Some(dir) = rfd::FileDialog::new().pick_folder() {
-                this.settings.zmodem.download_dir = Some(dir);
+                this.state.settings.zmodem.download_dir = Some(dir);
             }
         });
         v_flex()
@@ -195,9 +197,9 @@ impl AppShell {
                 Some("settings.zmodem_auto_receive_desc"),
                 Switch::new("toggle-zmodem-auto-receive")
                     .small()
-                    .checked(self.settings.zmodem.auto_receive)
+                    .checked(self.state.settings.zmodem.auto_receive)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.zmodem.auto_receive = checked;
+                        this.state.settings.zmodem.auto_receive = checked;
                         cx.notify();
                     }))
                     .into_any_element(),

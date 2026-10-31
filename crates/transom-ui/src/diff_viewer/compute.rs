@@ -24,7 +24,7 @@ impl AppShell {
     /// 可能占用数百毫秒，放在 UI 线程会让整个窗口卡住。每次重算生成新的
     /// `compute_token`，迟到的旧结果直接丢弃，避免合并后又被前一次计算覆盖。
     pub(crate) fn recompute_diff(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return;
         };
         let (Some(local), Some(remote)) = (viewer.local_text.clone(), viewer.remote_text.clone())
@@ -57,7 +57,7 @@ impl AppShell {
         prepared: Option<PreparedDiff>,
         cx: &mut Context<Self>,
     ) {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return;
         };
         if viewer.compute_token != token {
@@ -77,7 +77,7 @@ impl AppShell {
         } else {
             Some(cx.new(|cx| DiffState::new(prepared.files, cx).with_mode(DiffMode::Split)))
         };
-        if let Some(viewer) = self.diff_viewer.as_mut() {
+        if let Some(viewer) = self.state.diff_viewer.as_mut() {
             if viewer.compute_token != token {
                 return;
             }
@@ -101,7 +101,7 @@ impl AppShell {
 
     /// 上一处/下一处变更；到端点时循环。
     pub(crate) fn step_diff_hunk(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return;
         };
         let Some(diff) = viewer.diff.as_ref() else {
@@ -124,7 +124,7 @@ impl AppShell {
     }
 
     fn scroll_diff_to_hunk(&self, index: usize, cx: &mut Context<Self>) {
-        let Some(viewer) = self.diff_viewer.as_ref() else {
+        let Some(viewer) = self.state.diff_viewer.as_ref() else {
             return;
         };
         let (Some(view), Some(path), Some(diff)) = (

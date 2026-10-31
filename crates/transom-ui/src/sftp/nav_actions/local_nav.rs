@@ -19,7 +19,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -47,7 +47,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -72,6 +72,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let sync_remote_target = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -100,6 +101,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let (parent, sync_remote_parent) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -133,6 +135,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let target = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -146,6 +149,7 @@ impl AppShell {
 
     pub(crate) fn sftp_open_local_file_manager(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(local_path) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -156,6 +160,7 @@ impl AppShell {
         crate::audit::reveal_in_file_manager(local_path.clone());
 
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -179,14 +184,24 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if !target.is_file() {
-            if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+            if let Some(panel) = self
+                .state
+                .workspace
+                .tab_mut(tab_id)
+                .and_then(|t| t.sftp_mut())
+            {
                 panel.set_local_error(rust_i18n::t!("sftp.row.select_local_to_edit").to_string());
                 cx.notify();
             }
             return;
         }
         crate::audit::reveal_in_file_manager(target.clone());
-        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+        if let Some(panel) = self
+            .state
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|t| t.sftp_mut())
+        {
             panel.set_status(
                 rust_i18n::t!(
                     "sftp.nav.opened_with_default",

@@ -23,6 +23,7 @@ use transom_core::{
 impl AppShell {
     pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let paths = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -40,11 +41,13 @@ impl AppShell {
         paths: &[PathBuf],
         cx: &mut Context<Self>,
     ) -> Result<usize, String> {
-        let Some((target_connection_id, remote_dir)) = self.workspace.tab(tab_id).and_then(|tab| {
-            let connection_id = tab.connection_id?;
-            let remote_dir = tab.sftp()?.remote.path.clone();
-            Some((connection_id, remote_dir))
-        }) else {
+        let Some((target_connection_id, remote_dir)) =
+            self.state.workspace.tab(tab_id).and_then(|tab| {
+                let connection_id = tab.connection_id?;
+                let remote_dir = tab.sftp()?.remote.path.clone();
+                Some((connection_id, remote_dir))
+            })
+        else {
             return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
         };
         self.enqueue_uploads_to(tab_id, paths, &remote_dir, target_connection_id, cx)
@@ -65,10 +68,10 @@ impl AppShell {
         if paths.is_empty() {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         }
-        let verify = self.settings.sftp.verify_after_transfer;
-        let verify_mode = self.settings.sftp.verify_mode;
-        let algorithm = self.settings.sftp.checksum_algorithm;
-        let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
+        let verify = self.state.settings.sftp.verify_after_transfer;
+        let verify_mode = self.state.settings.sftp.verify_mode;
+        let algorithm = self.state.settings.sftp.checksum_algorithm;
+        let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
         let tasks = upload_tasks(
@@ -94,6 +97,7 @@ impl AppShell {
 
     fn set_sftp_panel_error(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -105,9 +109,14 @@ impl AppShell {
 
     /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let filter = TransferFilter::from_text(&self.settings.sftp.transfer_filter);
-        let max_concurrent = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let filter = TransferFilter::from_text(&self.state.settings.sftp.transfer_filter);
+        let max_concurrent = self
+            .state
+            .settings
+            .sftp
+            .max_concurrent_transfers
+            .clamp(1, 8);
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -151,7 +160,7 @@ impl AppShell {
         panel.clear_queue_error();
         panel.recompute_progress();
         for (op_id, connection_id, op) in commands {
-            self.send_command(SftpCommand::Sftp {
+            self.state.send_command(SftpCommand::Sftp {
                 tab_id,
                 connection_id,
                 op_id,
@@ -163,6 +172,7 @@ impl AppShell {
 
     pub(crate) fn sftp_queue_clear_done(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -176,15 +186,20 @@ impl AppShell {
 
     /// 循环切换并发传输数；增加时立即补位启动待处理任务。
     pub(crate) fn sftp_cycle_concurrency(&mut self, cx: &mut Context<Self>) {
-        let current = self.settings.sftp.max_concurrent_transfers.clamp(1, 4);
+        let current = self
+            .state
+            .settings
+            .sftp
+            .max_concurrent_transfers
+            .clamp(1, 4);
         let next = if current >= 4 { 1 } else { current + 1 };
-        self.settings.sftp.max_concurrent_transfers = next;
-        if let Err(error) = self.persist_settings() {
-            self.set_error(localized_error(&error));
+        self.state.settings.sftp.max_concurrent_transfers = next;
+        if let Err(error) = self.state.persist_settings() {
+            self.state.set_error(localized_error(&error));
         }
-        self.status =
+        self.state.status =
             Some(rust_i18n::t!("sftp.queue_actions.concurrency_set", count = next).to_string());
-        if let Some(tab_id) = self.workspace.active_tab {
+        if let Some(tab_id) = self.state.workspace.active_tab {
             self.process_sftp_queue(tab_id, cx);
         }
         cx.notify();
@@ -194,6 +209,7 @@ impl AppShell {
     pub(crate) fn sftp_retry_all_failed(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let mut retried_count: usize = 0;
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -230,6 +246,7 @@ impl AppShell {
         log::debug!("暂停整列传输任务，窗格: {tab_id}");
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -255,7 +272,8 @@ impl AppShell {
             cx.notify();
         }
         for op_id in active_ids {
-            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
+            self.state
+                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
     }
 
@@ -263,6 +281,7 @@ impl AppShell {
     pub(crate) fn sftp_resume_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let mut resumed = 0u32;
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -291,6 +310,7 @@ impl AppShell {
         log::debug!("取消整列传输任务，窗格: {tab_id}");
         let mut active_ids: Vec<TransferId> = Vec::new();
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -316,7 +336,8 @@ impl AppShell {
             cx.notify();
         }
         for op_id in active_ids {
-            self.send_command(SftpCommand::SftpCancel { tab_id, op_id });
+            self.state
+                .send_command(SftpCommand::SftpCancel { tab_id, op_id });
         }
     }
 }

@@ -74,11 +74,12 @@ impl AppShell {
 
         // 筛选存在于当前目录中的有效最近会话
         let valid_recent: Vec<&Session> = self
+            .state
             .settings
             .window
             .recent_sessions
             .iter()
-            .filter_map(|id| self.catalog.sessions.iter().find(|s| s.id == *id))
+            .filter_map(|id| self.state.catalog.sessions.iter().find(|s| s.id == *id))
             .collect();
 
         let mut cards = Vec::with_capacity(MAX_CARDS);
@@ -131,7 +132,7 @@ impl AppShell {
 
     /// 渲染本地终端快捷卡片。
     fn render_empty_local_terminal_card(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let shell_desc = match self.settings.local_shell.as_deref() {
+        let shell_desc = match self.state.settings.local_shell.as_deref() {
             Some(shell) => shell.to_string(),
             None => rust_i18n::t!("app.empty_local_shell").to_string(),
         };

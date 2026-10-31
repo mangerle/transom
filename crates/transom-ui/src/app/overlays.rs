@@ -21,7 +21,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.workspace.active_tab {
+        if let Some(tab_id) = self.state.workspace.active_tab {
             self.close_tab(tab_id, window, cx);
         }
     }
@@ -50,7 +50,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.workspace.active_tab {
+        if let Some(tab_id) = self.state.workspace.active_tab {
             self.reconnect_tab(tab_id, window, cx);
         }
     }
@@ -61,7 +61,7 @@ impl AppShell {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.sidebar.toggle_visible();
+        self.state.sidebar.toggle_visible();
         cx.notify();
     }
 
@@ -72,16 +72,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.immersive = !self.immersive;
+        self.state.immersive = !self.state.immersive;
         window.toggle_fullscreen();
-        if self.immersive {
-            self.modals.close_transient();
+        if self.state.immersive {
+            self.state.modals.close_transient();
         }
-        if self.immersive
+        if self.state.immersive
             && let Some(focus_handle) = self
+                .state
                 .workspace
                 .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
+                .and_then(|tab_id| self.state.workspace.tab(tab_id))
                 .and_then(|tab| tab.terminal())
                 .map(|terminal| terminal.read(cx).focus_handle().clone())
         {
@@ -105,7 +106,7 @@ impl AppShell {
         if let Some(preview) = self.render_sftp_hover_preview(window, &p) {
             overlays.push(preview);
         }
-        if self.modals.show_quick_open {
+        if self.state.modals.show_quick_open {
             overlays.push(self.render_command_palette_modal(window, cx, &p));
         }
         overlays

@@ -43,8 +43,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         // 代码字号独立于界面密度；配置里的越界值按边界处理，避免极端值撑坏布局。
-        let font_size = self.settings.sftp.editor_font_size.clamp(9.0, 40.0);
-        self.editors
+        let font_size = self.state.settings.sftp.editor_font_size.clamp(9.0, 40.0);
+        self.state
+            .editors
             .panels
             .iter()
             .map(|item| render_editor_panel(item, window, p, font_size, cx))

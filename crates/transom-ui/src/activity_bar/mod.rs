@@ -108,16 +108,18 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let top: Vec<ActivityItemId> = self
+            .state
             .settings
             .activity_bar
             .top_items()
-            .filter(|id| self.activity_item_available(*id))
+            .filter(|id| self.state.activity_item_available(*id))
             .collect();
         let bottom: Vec<ActivityItemId> = self
+            .state
             .settings
             .activity_bar
             .bottom_items()
-            .filter(|id| self.activity_item_available(*id))
+            .filter(|id| self.state.activity_item_available(*id))
             .collect();
         let mut top_children = Vec::with_capacity(top.len());
         for id in top {
@@ -140,7 +142,7 @@ impl AppShell {
             .bg(p.sidebar);
         // 侧栏展开时，活动栏右缘就是与侧栏的分界线；侧栏收起后主面板的
         // 手柄线紧贴这条边，这里再画一条会并排成 2px，所以收起时不画。
-        if self.sidebar.visible {
+        if self.state.sidebar.visible {
             bar = bar
                 .border_color(p.divider(p.border))
                 .divider_edge(DividerEdge::Right, p.divider_width);
@@ -172,9 +174,11 @@ impl AppShell {
     ) -> AnyElement {
         let label = activity_item_label(id);
         let icon = activity_item_icon(id);
-        let tooltip = self.activity_item_tooltip(id, &label);
-        let selected = self.activity_item_selected(id, self.monitor.read(cx).is_open());
-        let disabled = self.activity_item_disabled(id);
+        let tooltip = self.state.activity_item_tooltip(id, &label);
+        let selected = self
+            .state
+            .activity_item_selected(id, self.state.monitor.read(cx).is_open());
+        let disabled = self.state.activity_item_disabled(id);
         let app = cx.entity().clone();
 
         let mut button = div()
@@ -237,23 +241,23 @@ impl AppShell {
             ActivityItemId::Sessions => {
                 // 会话树与标签面板共用左侧槽位：点击非当前视图时切过去，
                 // 点击当前视图时收起槽位，与原有的侧栏开关习惯一致。
-                if self.sidebar.visible && !self.vertical_tabs_open {
-                    self.sidebar.visible = false;
+                if self.state.sidebar.visible && !self.state.vertical_tabs_open {
+                    self.state.sidebar.visible = false;
                 } else {
-                    self.sidebar.visible = true;
-                    self.vertical_tabs_open = false;
+                    self.state.sidebar.visible = true;
+                    self.state.vertical_tabs_open = false;
                 }
                 cx.notify();
             }
             ActivityItemId::Tabs => {
-                if self.settings.window.tab_position != TabPosition::Left {
+                if self.state.settings.window.tab_position != TabPosition::Left {
                     return;
                 }
-                if self.sidebar.visible && self.vertical_tabs_open {
-                    self.sidebar.visible = false;
+                if self.state.sidebar.visible && self.state.vertical_tabs_open {
+                    self.state.sidebar.visible = false;
                 } else {
-                    self.sidebar.visible = true;
-                    self.vertical_tabs_open = true;
+                    self.state.sidebar.visible = true;
+                    self.state.vertical_tabs_open = true;
                 }
                 cx.notify();
             }
@@ -264,7 +268,7 @@ impl AppShell {
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
             ActivityItemId::KnownHosts => {
-                self.modals.known_hosts.open = true;
+                self.state.modals.known_hosts.open = true;
                 self.refresh_known_hosts();
                 cx.notify();
             }

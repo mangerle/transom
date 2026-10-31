@@ -12,7 +12,7 @@ use transom_core::{SftpOperation, TabId};
 impl AppShell {
     /// 提交当前打开的 SFTP 输入模态对话框，执行创建文件夹、新建文件编辑、重命名或软链接。
     pub(crate) fn commit_sftp_input_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(modal) = self.sftp_modals.input.take() else {
+        let Some(modal) = self.state.sftp_modals.input.take() else {
             return;
         };
         let tab_id = modal.tab_id;
@@ -21,7 +21,7 @@ impl AppShell {
             let mut modal = modal;
             modal.error = Some(rust_i18n::t!("sftp.file_ops.name_empty").to_string());
             let input = modal.input.clone();
-            self.sftp_modals.input = Some(modal);
+            self.state.sftp_modals.input = Some(modal);
             input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
@@ -30,7 +30,7 @@ impl AppShell {
             let mut modal = modal;
             modal.error = Some(message);
             let input = modal.input.clone();
-            self.sftp_modals.input = Some(modal);
+            self.state.sftp_modals.input = Some(modal);
             input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
@@ -42,7 +42,7 @@ impl AppShell {
             Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
             None => SftpRemotePaneRef::Main,
         };
-        let remote_scope = self.remote_pane_scope(tab_id, target).map(|scope| {
+        let remote_scope = self.state.remote_pane_scope(tab_id, target).map(|scope| {
             (
                 scope.connection_id,
                 scope.pane.path.clone(),
@@ -70,7 +70,7 @@ impl AppShell {
                             .to_string(),
                     );
                     let input = modal.input.clone();
-                    self.sftp_modals.input = Some(modal);
+                    self.state.sftp_modals.input = Some(modal);
                     input.update(cx, |state, cx| state.focus(window, cx));
                     cx.notify();
                 }
@@ -154,14 +154,24 @@ impl AppShell {
                 self.submit_sudo_editor_write(&editor, password, window, cx);
             }
             SftpInputTarget::LocalMkdir => {
-                let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+                let Some(panel) = self
+                    .state
+                    .workspace
+                    .tab_mut(tab_id)
+                    .and_then(|t| t.sftp_mut())
+                else {
                     return;
                 };
                 let op = LocalFsOp::Mkdir(panel.local.path.join(&name));
                 self.spawn_local_fs(tab_id, op, cx);
             }
             SftpInputTarget::LocalNewFile => {
-                let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+                let Some(panel) = self
+                    .state
+                    .workspace
+                    .tab_mut(tab_id)
+                    .and_then(|t| t.sftp_mut())
+                else {
                     return;
                 };
                 let op = LocalFsOp::NewFile(panel.local.path.join(&name));
@@ -169,7 +179,12 @@ impl AppShell {
             }
             SftpInputTarget::LocalRename { old_path } => {
                 let Some(parent) = old_path.parent() else {
-                    if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+                    if let Some(panel) = self
+                        .state
+                        .workspace
+                        .tab_mut(tab_id)
+                        .and_then(|t| t.sftp_mut())
+                    {
                         panel.set_local_error(
                             rust_i18n::t!(
                                 "sftp.file_ops.local_rename_failed",
@@ -185,7 +200,12 @@ impl AppShell {
                 self.spawn_local_fs(tab_id, op, cx);
             }
             SftpInputTarget::LocalSymlink { target_path } => {
-                let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+                let Some(panel) = self
+                    .state
+                    .workspace
+                    .tab_mut(tab_id)
+                    .and_then(|t| t.sftp_mut())
+                else {
                     return;
                 };
                 let op = LocalFsOp::Symlink(target_path, panel.local.path.join(&name));
@@ -348,7 +368,12 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let (select, reveal) = {
-            let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+            let Some(panel) = self
+                .state
+                .workspace
+                .tab_mut(tab_id)
+                .and_then(|t| t.sftp_mut())
+            else {
                 return;
             };
             if let Some(error) = outcome.error {

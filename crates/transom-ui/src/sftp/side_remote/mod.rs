@@ -77,7 +77,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp_mut() else {
@@ -145,7 +145,7 @@ impl AppShell {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let removed = if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
+        let removed = if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
             && index < panel.side_remotes.len()
         {
             let removed = panel.side_remotes[index].connection_id;
@@ -172,7 +172,7 @@ impl AppShell {
     ) {
         // 折叠前先记下当前列宽：折叠后这一列不再参与展开宽度测量。
         self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
             && let Some(side) = panel.side_remotes.get_mut(index)
         {
             side.collapsed = !side.collapsed;
@@ -185,7 +185,7 @@ impl AppShell {
     pub(crate) fn sftp_toggle_local_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         // 折叠前先记下当前列宽：折叠条不参与展开宽度测量。
         self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
             panel.local.collapsed = !panel.local.collapsed;
         }
         self.reset_sftp_column_state(tab_id, cx);
@@ -196,7 +196,7 @@ impl AppShell {
     pub(crate) fn sftp_toggle_remote_collapse(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         // 折叠前先记下当前列宽：折叠条不参与展开宽度测量。
         self.remember_sftp_column_widths(tab_id, cx);
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
             panel.remote.collapsed = !panel.remote.collapsed;
         }
         self.reset_sftp_column_state(tab_id, cx);
@@ -210,7 +210,7 @@ impl AppShell {
         params: SftpRemoteCopyParams,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self.sftp_panel_mut_tab(tab_id) else {
+        let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) else {
             return;
         };
         let src_path = params.source_path.clone();
@@ -245,10 +245,10 @@ impl AppShell {
         request: SftpTransferRequest,
         cx: &mut Context<Self>,
     ) {
-        let verify = self.settings.sftp.verify_after_transfer;
-        let verify_mode = self.settings.sftp.verify_mode;
-        let checksum_algorithm = self.settings.sftp.checksum_algorithm;
-        let Some(panel) = self.sftp_panel_mut_tab(request.tab_id) else {
+        let verify = self.state.settings.sftp.verify_after_transfer;
+        let verify_mode = self.state.settings.sftp.verify_mode;
+        let checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
+        let Some(panel) = self.state.sftp_panel_mut_tab(request.tab_id) else {
             return;
         };
         let mode = if panel.queue.resume_enabled {
@@ -315,7 +315,7 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        let target = self.workspace.tab(tab_id).and_then(|tab| {
+        let target = self.state.workspace.tab(tab_id).and_then(|tab| {
             tab.sftp()
                 .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
         });

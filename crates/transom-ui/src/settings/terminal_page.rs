@@ -18,8 +18,9 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let stepper_size = Self::setting_stepper(&self.modals.settings.font_size, px(110.0));
-        let stepper_height = Self::setting_stepper(&self.modals.settings.line_height, px(110.0));
+        let stepper_size = Self::setting_stepper(&self.state.modals.settings.font_size, px(110.0));
+        let stepper_height =
+            Self::setting_stepper(&self.state.modals.settings.line_height, px(110.0));
         let metrics_row = h_flex()
             .w_full()
             .gap_6()
@@ -57,7 +58,7 @@ impl AppShell {
                 FontFieldSpec {
                     id: "terminal-font-family",
                     label: rust_i18n::t!("settings.font_family").to_string(),
-                    select: self.modals.settings.font_family.clone(),
+                    select: self.state.modals.settings.font_family.clone(),
                     note_key: None,
                 },
                 p,
@@ -67,7 +68,7 @@ impl AppShell {
                 FontFieldSpec {
                     id: "terminal-cjk-font",
                     label: rust_i18n::t!("settings.cjk_font").to_string(),
-                    select: self.modals.settings.cjk_font.clone(),
+                    select: self.state.modals.settings.cjk_font.clone(),
                     note_key: Some("settings.cjk_font_note"),
                 },
                 p,
@@ -83,7 +84,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let cursor_shape = self.settings.terminal_profile.cursor_shape;
+        let cursor_shape = self.state.settings.terminal_profile.cursor_shape;
         let cursor_options = vec![
             (
                 TerminalCursorShape::Block,
@@ -103,7 +104,7 @@ impl AppShell {
             cursor_shape,
             cursor_options,
             |this, shape, cx| {
-                this.settings.terminal_profile.cursor_shape = shape;
+                this.state.settings.terminal_profile.cursor_shape = shape;
                 cx.notify();
             },
             cx,
@@ -122,9 +123,9 @@ impl AppShell {
                 Some("settings.cursor_blink_desc"),
                 Switch::new("toggle-cursor-blink")
                     .small()
-                    .checked(self.settings.terminal_profile.cursor_blink)
+                    .checked(self.state.settings.terminal_profile.cursor_blink)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.terminal_profile.cursor_blink = checked;
+                        this.state.settings.terminal_profile.cursor_blink = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -135,9 +136,9 @@ impl AppShell {
                 Some("settings.bold_is_bright_desc"),
                 Switch::new("toggle-bold-is-bright")
                     .small()
-                    .checked(self.settings.terminal_profile.bold_is_bright)
+                    .checked(self.state.settings.terminal_profile.bold_is_bright)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.terminal_profile.bold_is_bright = checked;
+                        this.state.settings.terminal_profile.bold_is_bright = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -148,9 +149,9 @@ impl AppShell {
                 Some("settings.alternate_scroll_desc"),
                 Switch::new("toggle-alternate-scroll")
                     .small()
-                    .checked(self.settings.terminal_profile.alternate_scroll)
+                    .checked(self.state.settings.terminal_profile.alternate_scroll)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.terminal_profile.alternate_scroll = checked;
+                        this.state.settings.terminal_profile.alternate_scroll = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -161,9 +162,9 @@ impl AppShell {
                 Some("settings.scroll_on_input_desc"),
                 Switch::new("toggle-scroll-on-input")
                     .small()
-                    .checked(self.settings.terminal_profile.scroll_on_input)
+                    .checked(self.state.settings.terminal_profile.scroll_on_input)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.terminal_profile.scroll_on_input = checked;
+                        this.state.settings.terminal_profile.scroll_on_input = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -172,7 +173,7 @@ impl AppShell {
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.scrollback").to_string(),
-                    self.modals.settings.scrollback.clone(),
+                    self.state.modals.settings.scrollback.clone(),
                     p,
                 ),
                 None,
@@ -193,9 +194,9 @@ impl AppShell {
                 "settings.keyword_highlight",
                 Some("settings.keyword_highlight_desc"),
                 Switch::new("toggle-keyword-highlight")
-                    .checked(self.settings.terminal_profile.highlight.enabled)
+                    .checked(self.state.settings.terminal_profile.highlight.enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.terminal_profile.highlight.enabled = checked;
+                        this.state.settings.terminal_profile.highlight.enabled = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -204,7 +205,7 @@ impl AppShell {
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.highlight_keywords").to_string(),
-                    self.modals.settings.highlight_keywords.clone(),
+                    self.state.modals.settings.highlight_keywords.clone(),
                     p,
                 ),
                 Some(rust_i18n::t!("settings.highlight_keywords_note").to_string()),
@@ -230,7 +231,7 @@ impl AppShell {
                         .child(rust_i18n::t!("settings.key_bindings_desc").to_string()),
                 )
                 .child(
-                    Textarea::new(&self.modals.settings.terminal_key_bindings)
+                    Textarea::new(&self.state.modals.settings.terminal_key_bindings)
                         .h(px(120.0))
                         .w_full(),
                 )

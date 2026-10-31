@@ -30,7 +30,7 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.modals.form.as_ref() else {
+        let Some(form) = self.state.modals.form.as_ref() else {
             return div().into_any_element();
         };
         let title = if form.base.is_some() {
@@ -97,7 +97,7 @@ impl AppShell {
                         .on_click(crate::dialog_host::on_event(
                             app,
                             |this, _: &ClickEvent, _, cx| {
-                                if let Some(form) = this.modals.form.as_mut() {
+                                if let Some(form) = this.state.modals.form.as_mut() {
                                     form.confirm_delete = true;
                                 }
                                 cx.notify();
@@ -111,7 +111,7 @@ impl AppShell {
                 "cancel-session",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.modals.form = None;
+                    this.state.modals.form = None;
                     cx.notify();
                 }),
             ))

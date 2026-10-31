@@ -48,19 +48,19 @@ impl AppShell {
         if paths.is_empty() {
             return;
         }
-        let Some(index) = self.workspace.tab_index(tab_id) else {
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return;
         };
         if let Some(key) = drop_rejection(
-            &self.workspace.tabs[index].session,
-            &self.workspace.tabs[index].status,
+            &self.state.workspace.tabs[index].session,
+            &self.state.workspace.tabs[index].status,
         ) {
             let message = rust_i18n::t!(key).to_string();
             log::warn!(
                 "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
                 paths.len()
             );
-            self.status = Some(message);
+            self.state.status = Some(message);
             cx.notify();
             return;
         }
@@ -68,18 +68,18 @@ impl AppShell {
         // 面板已存在时沿用它当前的远端目录（用户看到哪儿就传到哪儿）；不存在则
         // 建一份隐藏状态：队列、续传与校验都照旧，只是进度改由终端右下角浮层呈现，
         // 不再为了传一个文件而弹开一整列文件管理器。
-        if self.workspace.tabs[index].sftp().is_none() {
+        if self.state.workspace.tabs[index].sftp().is_none() {
             self.build_sftp_panel(tab_id, index, false, window, cx);
         }
         if let Err(message) = self.enqueue_uploads(tab_id, paths, cx) {
-            self.set_error(message);
+            self.state.set_error(message);
             cx.notify();
             return;
         }
         log::info!(
             "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
             paths.len(),
-            crate::connection::describe_target(&self.workspace.tabs[index].session)
+            crate::connection::describe_target(&self.state.workspace.tabs[index].session)
         );
         self.show_drop_overlay(tab_id, cx);
     }
@@ -99,7 +99,7 @@ impl AppShell {
         if paths.is_empty() {
             return;
         }
-        let Some((connection_id, remote_dir)) = self.workspace.tab(tab_id).and_then(|tab| {
+        let Some((connection_id, remote_dir)) = self.state.workspace.tab(tab_id).and_then(|tab| {
             let panel = tab.sftp()?;
             let pane = panel.remote_pane(target)?;
             let connection_id = panel.remote_connection(target, tab.connection_id)?;
@@ -109,7 +109,7 @@ impl AppShell {
         };
         if let Err(message) = self.enqueue_uploads_to(tab_id, paths, &remote_dir, connection_id, cx)
         {
-            self.set_error(message);
+            self.state.set_error(message);
             cx.notify();
             return;
         }

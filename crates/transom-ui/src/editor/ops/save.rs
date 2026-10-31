@@ -23,6 +23,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self
+            .state
             .editors
             .panels
             .iter()
@@ -30,7 +31,7 @@ impl AppShell {
         else {
             return;
         };
-        let item = &mut self.editors.panels[index];
+        let item = &mut self.state.editors.panels[index];
         if !item.loaded
             || item.pending_sudo_probe.is_some()
             || matches!(item.phase, EditorPhase::Reading | EditorPhase::Writing)
@@ -46,13 +47,13 @@ impl AppShell {
         // 复用忙碌态阻止保存与关闭；状态栏按 pending_sudo_probe 显示"探测提权中"。
         item.phase = EditorPhase::Writing;
         item.error = Some(rust_i18n::t!("editor.status_probing_sudo").to_string());
-        if !self.send_command(SftpCommand::Sftp {
+        if !self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
             op: SftpOperation::ProbeSudo,
         }) {
-            let item = &mut self.editors.panels[index];
+            let item = &mut self.state.editors.panels[index];
             item.pending_sudo_probe = None;
             item.phase = EditorPhase::Failed;
             item.error = Some(rust_i18n::t!("editor.error_probe_dispatch").to_string());
@@ -69,6 +70,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self
+            .state
             .editors
             .panels
             .iter()
@@ -76,22 +78,22 @@ impl AppShell {
         else {
             return;
         };
-        let editor = self.editors.panels[index].editor.clone();
-        self.editors.panels[index].pending_sudo_probe = None;
+        let editor = self.state.editors.panels[index].editor.clone();
+        self.state.editors.panels[index].pending_sudo_probe = None;
         match capability {
             SudoCapability::Passwordless => {
-                self.editors.panels[index].phase = EditorPhase::Idle;
-                self.editors.panels[index].error = None;
+                self.state.editors.panels[index].phase = EditorPhase::Idle;
+                self.state.editors.panels[index].error = None;
                 self.submit_sudo_editor_write(&editor, None, window, cx);
             }
             SudoCapability::PasswordRequired => {
-                self.editors.panels[index].phase = EditorPhase::Idle;
-                self.editors.panels[index].error = None;
+                self.state.editors.panels[index].phase = EditorPhase::Idle;
+                self.state.editors.panels[index].error = None;
                 self.open_sudo_password_modal(&editor, window, cx);
             }
             SudoCapability::Unavailable { reason, detail } => {
-                self.editors.panels[index].phase = EditorPhase::Failed;
-                self.editors.panels[index].error = Some(
+                self.state.editors.panels[index].phase = EditorPhase::Failed;
+                self.state.editors.panels[index].error = Some(
                     rust_i18n::t!(
                         "editor.sudo_unavailable",
                         reason = sudo_unavailable_text(reason),
@@ -199,6 +201,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
+            .state
             .editors
             .panels
             .iter()
@@ -219,7 +222,7 @@ impl AppShell {
         // 由 force 表达。新文件面板指纹为 None，net 层据此不做比对与还原。
         let expected = item.remote_meta;
         let content = editor.read(cx).value().as_bytes().to_vec();
-        let backup = self.settings.sftp.editor_write_backup;
+        let backup = self.state.settings.sftp.editor_write_backup;
         let (sudo, force) = match &mode {
             EditorWriteMode::Normal { force } => (false, *force),
             EditorWriteMode::Sudo { .. } => (true, false),
@@ -245,7 +248,7 @@ impl AppShell {
         };
 
         let op_id = TransferId::new();
-        if let Err(error) = self.services.command_tx.try_send(
+        if let Err(error) = self.state.services.command_tx.try_send(
             SftpCommand::Sftp {
                 tab_id,
                 connection_id,

@@ -69,20 +69,20 @@ impl AppShell {
         op: SftpOperation,
         cx: &mut Context<Self>,
     ) {
-        let target = self.workspace.tab(tab_id).and_then(|tab| {
+        let target = self.state.workspace.tab(tab_id).and_then(|tab| {
             tab.sftp()
                 .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
         });
         let Some(target) = target else {
             return;
         };
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
             panel.clear_status();
             if let Some(pane) = panel.remote_pane_mut(target) {
                 pane.error = None;
             }
         }
-        self.send_command(SftpCommand::Sftp {
+        self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id: TransferId::new(),
@@ -98,7 +98,7 @@ impl AppShell {
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
             panel.active_pane = target.into();
         }
         cx.notify();
@@ -112,7 +112,7 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
             && let Some(pane) = panel.remote_pane_mut(target)
         {
             if pane.selection.contains(&path) {
@@ -133,7 +133,7 @@ impl AppShell {
         archive_path: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(connection_id) = self.remote_pane_connection(tab_id, target) else {
+        let Some(connection_id) = self.state.remote_pane_connection(tab_id, target) else {
             return;
         };
         let dest_dir = parent_remote(&archive_path);
@@ -157,7 +157,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(connection_id) = self.remote_pane_connection(tab_id, target) else {
+        let Some(connection_id) = self.state.remote_pane_connection(tab_id, target) else {
             return;
         };
         self.sftp_edit_remote_file_on(tab_id, connection_id, path, window, cx);
@@ -170,16 +170,18 @@ impl AppShell {
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let Some((paths, target_dir, connection_id)) = self.workspace.tab(tab_id).and_then(|tab| {
-            let panel = tab.sftp()?;
-            let pane = panel.remote_pane(target)?;
-            let connection_id = panel.remote_connection(target, tab.connection_id)?;
-            Some((
-                panel.selected_local_paths(),
-                pane.path.clone(),
-                connection_id,
-            ))
-        }) else {
+        let Some((paths, target_dir, connection_id)) =
+            self.state.workspace.tab(tab_id).and_then(|tab| {
+                let panel = tab.sftp()?;
+                let pane = panel.remote_pane(target)?;
+                let connection_id = panel.remote_connection(target, tab.connection_id)?;
+                Some((
+                    panel.selected_local_paths(),
+                    pane.path.clone(),
+                    connection_id,
+                ))
+            })
+        else {
             return;
         };
         if paths.is_empty() {
@@ -207,14 +209,16 @@ impl AppShell {
         is_dir: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(source_connection_id) = self.remote_pane_connection(tab_id, source) else {
+        let Some(source_connection_id) = self.state.remote_pane_connection(tab_id, source) else {
             return;
         };
-        let Some((target_connection_id, target_dir)) = self.workspace.tab(tab_id).and_then(|tab| {
-            let connection_id = tab.connection_id?;
-            let target_dir = tab.sftp()?.remote.path.clone();
-            Some((connection_id, target_dir))
-        }) else {
+        let Some((target_connection_id, target_dir)) =
+            self.state.workspace.tab(tab_id).and_then(|tab| {
+                let connection_id = tab.connection_id?;
+                let target_dir = tab.sftp()?.remote.path.clone();
+                Some((connection_id, target_dir))
+            })
+        else {
             return;
         };
         let fname = path.rsplit('/').next().unwrap_or(&path);
@@ -236,7 +240,7 @@ impl AppShell {
     ///
     /// 错误与加载态自本列统一后，不再区分面板状态栏与列内两套存储。
     pub(crate) fn begin_sftp_pane_load(&mut self, tab_id: TabId, target: SftpRemotePaneRef) {
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
             && let Some(pane) = panel.remote_pane_mut(target)
         {
             pane.loading = true;
@@ -252,7 +256,7 @@ impl AppShell {
         message: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
             && let Some(pane) = panel.remote_pane_mut(target)
         {
             pane.error = Some(message);

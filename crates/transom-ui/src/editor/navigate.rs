@@ -55,7 +55,7 @@ impl AppShell {
     ) {
         let Some(editor) = self
             .focused_editor_panel_index(window, cx)
-            .and_then(|index| self.editors.panels.get(index))
+            .and_then(|index| self.state.editors.panels.get(index))
             .map(|item| item.editor.clone())
         else {
             return;
@@ -69,7 +69,7 @@ impl AppShell {
                     this.commit_editor_goto_line(window, cx);
                 }
             });
-        self.sftp_modals.goto_line = Some(EditorGotoLineModalState {
+        self.state.sftp_modals.goto_line = Some(EditorGotoLineModalState {
             editor,
             input,
             error: None,
@@ -80,7 +80,12 @@ impl AppShell {
 
     /// 关闭跳转模态并把焦点还给编辑器。
     pub(crate) fn cancel_editor_goto_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let editor = self.sftp_modals.goto_line.take().map(|modal| modal.editor);
+        let editor = self
+            .state
+            .sftp_modals
+            .goto_line
+            .take()
+            .map(|modal| modal.editor);
         if let Some(editor) = editor {
             editor.update(cx, |state, cx| state.focus(window, cx));
         }
@@ -89,20 +94,20 @@ impl AppShell {
 
     /// 确认跳转：解析行号，越界收敛到 [1, 总行数]，展开遮挡折叠后移动光标。
     pub(crate) fn commit_editor_goto_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(modal) = self.sftp_modals.goto_line.as_ref() else {
+        let Some(modal) = self.state.sftp_modals.goto_line.as_ref() else {
             return;
         };
         let editor = modal.editor.clone();
         let raw = modal.input.read(cx).value().trim().to_string();
         let Some(line) = raw.parse::<usize>().ok().filter(|line| *line >= 1) else {
-            if let Some(modal) = self.sftp_modals.goto_line.as_mut() {
+            if let Some(modal) = self.state.sftp_modals.goto_line.as_mut() {
                 modal.error = Some(rust_i18n::t!("editor.goto_error").to_string());
             }
             cx.notify();
             return;
         };
         apply_editor_goto(&editor, line as u32, None, window, cx);
-        self.sftp_modals.goto_line = None;
+        self.state.sftp_modals.goto_line = None;
         cx.notify();
     }
 
@@ -113,7 +118,7 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_modals.goto_line.as_ref() else {
+        let Some(modal) = self.state.sftp_modals.goto_line.as_ref() else {
             return div().into_any_element();
         };
         let editor = modal.editor.clone();

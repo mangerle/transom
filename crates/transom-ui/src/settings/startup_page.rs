@@ -43,8 +43,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let tabs = self.settings.window.startup_tabs;
-        let sidebar = self.settings.window.sidebar_startup;
+        let tabs = self.state.settings.window.startup_tabs;
+        let sidebar = self.state.settings.window.sidebar_startup;
 
         v_flex()
             .gap_2()
@@ -59,7 +59,7 @@ impl AppShell {
                         .map(|tab| (tab, rust_i18n::t!(startup_tabs_label(tab)).to_string()))
                         .collect(),
                     |this, tab, cx| {
-                        this.settings.window.startup_tabs = tab;
+                        this.state.settings.window.startup_tabs = tab;
                         cx.notify();
                     },
                     cx,
@@ -82,7 +82,7 @@ impl AppShell {
                         })
                         .collect(),
                     |this, startup, cx| {
-                        this.settings.window.sidebar_startup = startup;
+                        this.state.settings.window.sidebar_startup = startup;
                         cx.notify();
                     },
                     cx,

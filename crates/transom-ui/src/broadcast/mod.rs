@@ -107,7 +107,7 @@ impl AppState {
 
 impl AppShell {
     pub(crate) fn toggle_broadcast_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.broadcast.open {
+        if self.state.broadcast.open {
             self.close_broadcast_bar(window, cx);
         } else {
             self.open_broadcast_bar(window, cx);
@@ -115,26 +115,27 @@ impl AppShell {
     }
 
     fn open_broadcast_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.broadcast.open = true;
-        self.broadcast.multiline = false;
-        self.broadcast.targets_open = false;
-        let scope = self.current_visual_groups();
-        self.broadcast.targets = self.default_broadcast_targets_for(&scope);
-        self.broadcast.targets_scope = scope;
-        self.broadcast.input.update(cx, |state, cx| {
+        self.state.broadcast.open = true;
+        self.state.broadcast.multiline = false;
+        self.state.broadcast.targets_open = false;
+        let scope = self.state.current_visual_groups();
+        self.state.broadcast.targets = self.state.default_broadcast_targets_for(&scope);
+        self.state.broadcast.targets_scope = scope;
+        self.state.broadcast.input.update(cx, |state, cx| {
             state.set_value("", window, cx);
             state.focus(window, cx);
         });
-        self.broadcast
+        self.state
+            .broadcast
             .textarea
             .update(cx, |state, cx| state.set_value("", window, cx));
         cx.notify();
     }
 
     fn close_broadcast_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.broadcast.open = false;
-        self.broadcast.targets_open = false;
-        if let Some(active) = self.workspace.active_tab {
+        self.state.broadcast.open = false;
+        self.state.broadcast.targets_open = false;
+        if let Some(active) = self.state.workspace.active_tab {
             self.activate_tab(active, window, cx);
         } else {
             cx.notify();
@@ -147,24 +148,24 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.broadcast.open {
+        if !self.state.broadcast.open {
             return;
         }
-        let text = if self.broadcast.multiline {
-            self.broadcast.textarea.read(cx).value().to_string()
+        let text = if self.state.broadcast.multiline {
+            self.state.broadcast.textarea.read(cx).value().to_string()
         } else {
-            self.broadcast.input.read(cx).value().to_string()
+            self.state.broadcast.input.read(cx).value().to_string()
         };
-        self.broadcast.multiline = !self.broadcast.multiline;
-        if self.broadcast.multiline {
-            self.broadcast.textarea.update(cx, |state, cx| {
+        self.state.broadcast.multiline = !self.state.broadcast.multiline;
+        if self.state.broadcast.multiline {
+            self.state.broadcast.textarea.update(cx, |state, cx| {
                 state.set_value(&text, window, cx);
                 state.focus(window, cx);
             });
         } else {
             // 单行输入框不能承载换行；收起来时把换行折成空格，保留可编辑内容。
             let single = text.replace("\r\n", "\n").replace('\n', " ");
-            self.broadcast.input.update(cx, |state, cx| {
+            self.state.broadcast.input.update(cx, |state, cx| {
                 state.set_value(&single, window, cx);
                 state.focus(window, cx);
             });
@@ -174,13 +175,13 @@ impl AppShell {
 
     /// 把当前输入发送到所有已选目标；单行补回车，多行按粘贴语义整段发送。
     pub(crate) fn broadcast_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.broadcast.open {
+        if !self.state.broadcast.open {
             return;
         }
-        let raw = if self.broadcast.multiline {
-            self.broadcast.textarea.read(cx).value().to_string()
+        let raw = if self.state.broadcast.multiline {
+            self.state.broadcast.textarea.read(cx).value().to_string()
         } else {
-            self.broadcast.input.read(cx).value().to_string()
+            self.state.broadcast.input.read(cx).value().to_string()
         };
         let text = raw.trim_end_matches(['\r', '\n']).to_string();
         if text.trim().is_empty() {
@@ -189,23 +190,27 @@ impl AppShell {
         // 目标集合必须仍然落在当前视觉标签内：标签切换或窗格关闭后，残留的
         // 旧目标不能继续收到命令。
         let allowed: HashSet<TabId> = self
+            .state
             .current_visual_groups()
             .into_iter()
-            .filter_map(|group_id| self.workspace.group(group_id))
+            .filter_map(|group_id| self.state.workspace.group(group_id))
             .flat_map(|group| group.pane_ids())
             .collect();
-        self.broadcast.targets.retain(|id| allowed.contains(id));
-        let targets: Vec<TabId> = self.broadcast.targets.iter().copied().collect();
+        self.state
+            .broadcast
+            .targets
+            .retain(|id| allowed.contains(id));
+        let targets: Vec<TabId> = self.state.broadcast.targets.iter().copied().collect();
         if targets.is_empty() {
-            self.status = Some(rust_i18n::t!("broadcast.no_targets").to_string());
+            self.state.status = Some(rust_i18n::t!("broadcast.no_targets").to_string());
             cx.notify();
             return;
         }
 
-        let multiline = self.broadcast.multiline;
+        let multiline = self.state.broadcast.multiline;
         let mut failed = 0usize;
         for tab_id in &targets {
-            let Some(tab) = self.workspace.tab(*tab_id) else {
+            let Some(tab) = self.state.workspace.tab(*tab_id) else {
                 failed += 1;
                 continue;
             };
@@ -225,7 +230,8 @@ impl AppShell {
             }
         }
         if failed > 0 {
-            self.set_error(rust_i18n::t!("broadcast.send_failed").to_string());
+            self.state
+                .set_error(rust_i18n::t!("broadcast.send_failed").to_string());
         }
         // 命令内容可能含敏感信息，只记录目标数量与失败数，绝不落盘正文。
         log::info!(
@@ -234,18 +240,22 @@ impl AppShell {
             failed
         );
 
-        self.broadcast
+        self.state
+            .broadcast
             .input
             .update(cx, |state, cx| state.set_value("", window, cx));
-        self.broadcast
+        self.state
+            .broadcast
             .textarea
             .update(cx, |state, cx| state.set_value("", window, cx));
         if multiline {
-            self.broadcast
+            self.state
+                .broadcast
                 .textarea
                 .update(cx, |state, cx| state.focus(window, cx));
         } else {
-            self.broadcast
+            self.state
+                .broadcast
                 .input
                 .update(cx, |state, cx| state.focus(window, cx));
         }
@@ -259,25 +269,26 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if selected {
-            self.broadcast.targets.insert(tab_id);
+            self.state.broadcast.targets.insert(tab_id);
         } else {
-            self.broadcast.targets.remove(&tab_id);
+            self.state.broadcast.targets.remove(&tab_id);
         }
         cx.notify();
     }
 
     /// 目标选择列表：只列当前视觉标签内的窗格，不跨标签。
     fn broadcast_target_rows(&self, p: &Palette) -> Vec<BroadcastTargetRow> {
-        let groups = self.current_visual_groups();
-        let mut rows = Vec::with_capacity(self.workspace.tabs.len());
+        let groups = self.state.current_visual_groups();
+        let mut rows = Vec::with_capacity(self.state.workspace.tabs.len());
         for group_id in groups {
-            let Some(group) = self.workspace.group(group_id) else {
+            let Some(group) = self.state.workspace.group(group_id) else {
                 continue;
             };
             let pane_ids = group.pane_ids();
             let multi = pane_ids.len() > 1;
             for (position, pane_id) in pane_ids.iter().enumerate() {
                 let Some(tab) = self
+                    .state
                     .workspace
                     .tabs
                     .iter()
@@ -300,7 +311,7 @@ impl AppShell {
                     title,
                     dot_color,
                     icon: connection_icon(&tab.session.connection),
-                    selected: self.broadcast.targets.contains(pane_id),
+                    selected: self.state.broadcast.targets.contains(pane_id),
                 });
             }
         }
@@ -313,7 +324,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::Megaphone)
-            .selected(self.broadcast.open)
+            .selected(self.state.broadcast.open)
             .tooltip(rust_i18n::t!("broadcast.title").to_string())
             .on_click(cx.listener(|this, _, window, cx| {
                 this.toggle_broadcast_bar(window, cx);
@@ -326,13 +337,13 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let multiline = self.broadcast.multiline;
+        let multiline = self.state.broadcast.multiline;
         let target_trigger = Button::new("broadcast-targets-trigger")
             .ghost()
             .xsmall()
             .icon(IconName::SquareCheck)
             .label(rust_i18n::t!("broadcast.targets").to_string())
-            .selected(self.broadcast.targets_open)
+            .selected(self.state.broadcast.targets_open)
             .tooltip(rust_i18n::t!("broadcast.targets").to_string());
         let app = cx.entity().clone();
         let app_open = app.clone();
@@ -342,12 +353,12 @@ impl AppShell {
             .anchor(Anchor::BottomLeft)
             .offset(px(-1.0))
             .trigger_style(StyleRefinement::default().flex_none().flex().items_center())
-            .open(self.broadcast.targets_open)
+            .open(self.state.broadcast.targets_open)
             .on_open_change(move |open, _window, cx| {
                 let open = *open;
                 app_open.update(cx, |this, cx| {
-                    if this.broadcast.targets_open != open {
-                        this.broadcast.targets_open = open;
+                    if this.state.broadcast.targets_open != open {
+                        this.state.broadcast.targets_open = open;
                         cx.notify();
                     }
                 });
@@ -403,7 +414,7 @@ impl AppShell {
                 )
                 .child(
                     div().px_2().pb_2().w_full().child(
-                        Textarea::new(&self.broadcast.textarea)
+                        Textarea::new(&self.state.broadcast.textarea)
                             .appearance(false)
                             .bordered(false)
                             .h(rems(7.0))
@@ -424,7 +435,7 @@ impl AppShell {
                 .child(targets_popover)
                 .child(
                     div().flex_1().min_w_0().child(
-                        Input::new(&self.broadcast.input)
+                        Input::new(&self.state.broadcast.input)
                             .appearance(false)
                             .bordered(false)
                             .w_full(),

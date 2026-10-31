@@ -48,12 +48,12 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current = self.settings.logs.level;
+        let current = self.state.settings.logs.level;
         let log_dir = paths::log_dir();
         let dir_label = log_dir.display().to_string();
         let open_dir = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(log_dir.clone());
-            this.status = Some(rust_i18n::t!("settings.log_revealed").to_string());
+            this.state.status = Some(rust_i18n::t!("settings.log_revealed").to_string());
             cx.notify();
         });
         let cleanup = cx.listener(|_this, _, _, cx| {
@@ -63,7 +63,7 @@ impl AppShell {
                     return;
                 };
                 let _ = this.update(cx, |this, cx| {
-                    this.status = Some(
+                    this.state.status = Some(
                         rust_i18n::t!("settings.log_cleanup_done", count = removed).to_string(),
                     );
                     cx.notify();
@@ -85,7 +85,7 @@ impl AppShell {
                         .map(|level| (level, rust_i18n::t!(level_label_key(level)).to_string()))
                         .collect(),
                     |this, level, cx| {
-                        this.settings.logs.level = level;
+                        this.state.settings.logs.level = level;
                         log::set_max_level(level.to_filter());
                         cx.notify();
                     },

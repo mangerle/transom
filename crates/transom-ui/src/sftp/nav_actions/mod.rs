@@ -23,7 +23,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(connection_id) = self.remote_pane_connection(tab_id, target) else {
+        let Some(connection_id) = self.state.remote_pane_connection(tab_id, target) else {
             log::warn!("远端目录请求找不到目标列，窗格: {tab_id}，目标: {target:?}，路径: {path}");
             return;
         };
@@ -31,7 +31,7 @@ impl AppShell {
             "请求远端目录列表，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}"
         );
         self.begin_sftp_pane_load(tab_id, target);
-        self.send_command(SftpCommand::Sftp {
+        self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id: TransferId::new(),
@@ -60,7 +60,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
+        let Some(panel) = self.state.workspace.tab(tab_id).and_then(|tab| tab.sftp()) else {
             return;
         };
         if panel.local.only {
@@ -84,6 +84,7 @@ impl AppShell {
         }
         let open = panel.open;
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -105,7 +106,12 @@ impl AppShell {
         start_y: f32,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+        if let Some(panel) = self
+            .state
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|t| t.sftp_mut())
+        {
             panel.queue.drag_start_y = Some(start_y);
             panel.queue.drag_start_height = panel.queue.height;
             cx.notify();
@@ -118,7 +124,11 @@ impl AppShell {
         current_y: f32,
         cx: &mut Context<Self>,
     ) {
-        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+        if let Some(panel) = self
+            .state
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|t| t.sftp_mut())
             && let Some(start_y) = panel.queue.drag_start_y
         {
             let delta = start_y - current_y;
@@ -129,7 +139,11 @@ impl AppShell {
     }
 
     pub(crate) fn sftp_stop_resize_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut())
+        if let Some(panel) = self
+            .state
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|t| t.sftp_mut())
             && panel.queue.drag_start_y.is_some()
         {
             panel.queue.drag_start_y = None;

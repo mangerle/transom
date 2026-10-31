@@ -20,10 +20,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(tab_id) = self.workspace.active_tab else {
+        let Some(tab_id) = self.state.workspace.active_tab else {
             return div().into_any_element();
         };
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return div().into_any_element();
         };
         let Some(pane) = tab.session_pane() else {
@@ -33,6 +33,7 @@ impl AppShell {
             return div().into_any_element();
         };
         let Some(session) = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -86,8 +87,8 @@ impl AppShell {
                     .xsmall()
                     .icon(IconName::X)
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(tab_id) = this.workspace.active_tab
-                            && let Some(tab) = this.workspace.tab_mut(tab_id)
+                        if let Some(tab_id) = this.state.workspace.active_tab
+                            && let Some(tab) = this.state.workspace.tab_mut(tab_id)
                             && let Some(pane) = tab.session_pane_mut()
                         {
                             pane.forwards_panel = None;
@@ -268,8 +269,8 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.local").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.workspace.active_tab
-                && let Some(panel) = this.forward_panel_mut(tab_id)
+            if let Some(tab_id) = this.state.workspace.active_tab
+                && let Some(panel) = this.state.forward_panel_mut(tab_id)
             {
                 panel.kind = ForwardKindChoice::Local;
             }
@@ -287,8 +288,8 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.remote").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.workspace.active_tab
-                && let Some(panel) = this.forward_panel_mut(tab_id)
+            if let Some(tab_id) = this.state.workspace.active_tab
+                && let Some(panel) = this.state.forward_panel_mut(tab_id)
             {
                 panel.kind = ForwardKindChoice::Remote;
             }
@@ -306,8 +307,8 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.dynamic").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.workspace.active_tab
-                && let Some(panel) = this.forward_panel_mut(tab_id)
+            if let Some(tab_id) = this.state.workspace.active_tab
+                && let Some(panel) = this.state.forward_panel_mut(tab_id)
             {
                 panel.kind = ForwardKindChoice::Dynamic;
             }
@@ -378,7 +379,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(pending) = self.modals.confirm_forward_any.as_ref() else {
+        let Some(pending) = self.state.modals.confirm_forward_any.as_ref() else {
             return div().into_any_element();
         };
         let rule_name = pending.rule.name.clone();

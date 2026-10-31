@@ -52,7 +52,7 @@ impl AppShell {
         match node {
             TilingNode::Slot(slot) => match tiled.group_at(*slot) {
                 Some(group) => {
-                    let Some(index) = self.workspace.group_index(group) else {
+                    let Some(index) = self.state.workspace.group_index(group) else {
                         return div().into_any_element();
                     };
                     self.render_tiled_zone(index, group, *slot == tiled.focused, window, cx, p)
@@ -91,10 +91,10 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let (pane_id, serial) = {
-            let group = &self.workspace.groups[group_index];
+            let group = &self.state.workspace.groups[group_index];
             (group.active_pane, group.serial)
         };
-        let (title, dot_color, tab_icon) = match self.workspace.tab(pane_id) {
+        let (title, dot_color, tab_icon) = match self.state.workspace.tab(pane_id) {
             Some(tab) => {
                 let (dot_color, _) = super::pane_status_indicator(&tab.status, p);
                 let mut title = tab.tab_label();
@@ -157,11 +157,12 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let mut rows: Vec<(GroupId, String)> = Vec::new();
-        for group_id in self.available_tiling_groups() {
-            let Some(group) = self.workspace.group(group_id) else {
+        for group_id in self.state.available_tiling_groups() {
+            let Some(group) = self.state.workspace.group(group_id) else {
                 continue;
             };
             let Some(tab) = self
+                .state
                 .workspace
                 .tabs
                 .iter()

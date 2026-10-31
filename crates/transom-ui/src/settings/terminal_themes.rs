@@ -19,7 +19,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let themes = preset_themes();
-        let current_theme_name = self.settings.terminal_profile.theme_name.clone();
+        let current_theme_name = self.state.settings.terminal_profile.theme_name.clone();
 
         // "跟随界面主题"卡：终端配色默认随 UI 主题明暗联动（Islands Dark 配
         // Islands 终端色），显式选预设即覆盖。置于列表首位。
@@ -50,7 +50,7 @@ impl AppShell {
                 }
             })
             .on_click(cx.listener(|this, _, _, cx| {
-                this.settings.terminal_profile.theme_name = FOLLOW_UI_THEME.to_string();
+                this.state.settings.terminal_profile.theme_name = FOLLOW_UI_THEME.to_string();
                 this.sync_terminal_palette(cx);
                 cx.notify();
             }))
@@ -117,8 +117,8 @@ impl AppShell {
                         }
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.settings.terminal_profile.theme_name = theme_clone.name.clone();
-                        this.settings.terminal_profile.palette = theme_clone.palette.clone();
+                        this.state.settings.terminal_profile.theme_name = theme_clone.name.clone();
+                        this.state.settings.terminal_profile.palette = theme_clone.palette.clone();
                         cx.notify();
                     }))
                     .child(

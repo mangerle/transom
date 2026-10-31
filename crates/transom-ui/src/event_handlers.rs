@@ -32,46 +32,47 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(index) = self.workspace.tab_index(tab_id) else {
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return false;
         };
-        if self.workspace.tabs[index].connection_id != Some(connection_id) {
+        if self.state.workspace.tabs[index].connection_id != Some(connection_id) {
             return false;
         }
-        let session_id = self.workspace.tabs[index].session_id;
+        let session_id = self.state.workspace.tabs[index].session_id;
         let mut profile = self
+            .state
             .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
             .map(|session| session.terminal.clone())
-            .unwrap_or_else(|| self.workspace.tabs[index].session.terminal.clone());
+            .unwrap_or_else(|| self.state.workspace.tabs[index].session.terminal.clone());
         // 光标外观与外观偏好（字体族、中文字体、字号、行高、关键词高亮）属于全局设置，
         // 覆盖会话里可能残留的旧默认值：界面上没有任何会话级字体入口，
         // 若这里不覆盖，用户在设置里改的字体只会作用于已打开的窗格。
-        profile.cursor_shape = self.settings.terminal_profile.cursor_shape;
-        profile.cursor_blink = self.settings.terminal_profile.cursor_blink;
-        profile.font_family = self.settings.terminal_profile.font_family.clone();
-        profile.cjk_font_family = self.settings.terminal_profile.cjk_font_family.clone();
-        profile.font_size = self.settings.terminal_profile.font_size;
-        profile.line_height = self.settings.terminal_profile.line_height;
+        profile.cursor_shape = self.state.settings.terminal_profile.cursor_shape;
+        profile.cursor_blink = self.state.settings.terminal_profile.cursor_blink;
+        profile.font_family = self.state.settings.terminal_profile.font_family.clone();
+        profile.cjk_font_family = self.state.settings.terminal_profile.cjk_font_family.clone();
+        profile.font_size = self.state.settings.terminal_profile.font_size;
+        profile.line_height = self.state.settings.terminal_profile.line_height;
         // 分隔符同样没有会话级入口，且老会话文件里存的是内核默认值；
         // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
-        profile.word_separators = self.settings.terminal_profile.word_separators.clone();
+        profile.word_separators = self.state.settings.terminal_profile.word_separators.clone();
         // 自定义按键映射属于全局终端偏好：会话文件里的旧副本不参与生效。
-        profile.key_bindings = self.settings.terminal_profile.key_bindings.clone();
-        profile.highlight = self.settings.terminal_profile.highlight.clone();
-        profile.alternate_scroll = self.settings.terminal_profile.alternate_scroll;
+        profile.key_bindings = self.state.settings.terminal_profile.key_bindings.clone();
+        profile.highlight = self.state.settings.terminal_profile.highlight.clone();
+        profile.alternate_scroll = self.state.settings.terminal_profile.alternate_scroll;
         // 终端配色同理：会话文件里残留的旧调色板会压掉全局选择，
         // 表现为"改了终端配色但重开会话不生效"。运行期程序仍可通过
         // OSC 4/10/11 动态改色，不受此静态基线影响。
-        profile.theme_name = self.settings.terminal_profile.theme_name.clone();
-        profile.palette = self.settings.terminal_profile.palette.clone();
+        profile.theme_name = self.state.settings.terminal_profile.theme_name.clone();
+        profile.palette = self.state.settings.terminal_profile.palette.clone();
         // 终端背景透明度跟随窗口整体透明：窗口半透明时终端区也要透出
         // 桌面，否则只有界面变透明、终端仍是一块实色。
-        profile.background_transparency = self.settings.window.window_transparency;
-        let interaction = self.settings.terminal_interaction;
-        let reserved = self.shortcut_recording.filter.clone();
+        profile.background_transparency = self.state.settings.window.window_transparency;
+        let interaction = self.state.settings.terminal_interaction;
+        let reserved = self.state.shortcut_recording.filter.clone();
         let key_filter: KeyFilter = Arc::new(move |keystroke| {
             reserved
                 .read()
@@ -79,16 +80,19 @@ impl AppShell {
                 .any(|binding| keystroke.should_match(binding))
         });
         // 审计落盘按连接粒度开启：路径在派发前算好，读线程内才创建文件。
-        let audit_path =
-            crate::audit::audit_path_for(&self.workspace.tabs[index], self.settings.audit.enabled);
+        let audit_path = crate::audit::audit_path_for(
+            &self.state.workspace.tabs[index],
+            self.state.settings.audit.enabled,
+        );
         // 开关在闭包外取值：`cx.new` 的闭包里再读 `self` 会与外层借用冲突。
         // 命令执行标签（X-TerminalArgExec）不是交互式 Shell：集成探针会直接写进
         // 目标程序，必须关闭，否则 htop 这类全屏程序会收到一串注入序列。
         let exec_local = matches!(
-            &self.workspace.tabs[index].session.connection,
+            &self.state.workspace.tabs[index].session.connection,
             transom_core::Connection::Local(local) if local.command.is_some()
         );
-        let shell_integration_enabled = self.settings.block_view.shell_integration && !exec_local;
+        let shell_integration_enabled =
+            self.state.settings.block_view.shell_integration && !exec_local;
         let terminal = cx.new(|cx| {
             TerminalView::new(
                 window,
@@ -104,9 +108,10 @@ impl AppShell {
             )
         });
         // 建议能力挂到视图：查询回调是全应用共享的一份内存快照。
-        let provider = self.history_provider.clone();
-        let triggers = self.settings.triggers.clone();
+        let provider = self.state.history_provider.clone();
+        let triggers = self.state.settings.triggers.clone();
         let block_override = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -114,7 +119,7 @@ impl AppShell {
             .map_or(transom_core::BlockViewOverride::FollowGlobal, |session| {
                 session.block_view
             });
-        let block_view = self.settings.block_view.resolved(block_override);
+        let block_view = self.state.settings.block_view.resolved(block_override);
         terminal.update(cx, |view, cx| {
             view.attach_history(provider);
             view.reload_triggers(&triggers);
@@ -130,7 +135,7 @@ impl AppShell {
                 this.handle_terminal_event(tab_id, event, window, cx)
             },
         );
-        let tab = &mut self.workspace.tabs[index];
+        let tab = &mut self.state.workspace.tabs[index];
         tab.status = TabStatus::Connected;
         if let Some(pane) = tab.session_pane_mut() {
             pane.terminal = Some(terminal);
@@ -146,9 +151,9 @@ impl AppShell {
         // 连接建立期间用户可能已经切走：启动期的默认标签与深链目录标签
         // 会并发建连，晚完成者若无条件激活，会把焦点从后创建的深链标签
         // 抢回启动标签。只有该窗格仍是当前选中项时才切换组内焦点并聚焦。
-        let still_active = self.workspace.active_tab == Some(tab_id);
-        if still_active && let Some(group_index) = self.group_index_for_tab(tab_id) {
-            self.workspace.groups[group_index].active_pane = tab_id;
+        let still_active = self.state.workspace.active_tab == Some(tab_id);
+        if still_active && let Some(group_index) = self.state.group_index_for_tab(tab_id) {
+            self.state.workspace.groups[group_index].active_pane = tab_id;
         }
         // 认证已确定通过，此刻才允许把用户勾选保存的凭据写入钥匙串。
         self.flush_pending_credential(session_id, connection_id, cx);
@@ -157,7 +162,7 @@ impl AppShell {
         }
         self.schedule_startup_commands(tab_id, connection_id, window, cx);
         self.auto_start_forwards(tab_id, connection_id, session_id, cx);
-        if still_active && self.monitor.read(cx).is_open() {
+        if still_active && self.state.monitor.read(cx).is_open() {
             self.sample_processes(cx);
         }
         true
@@ -177,7 +182,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(tab) = self.workspace.tab_mut(tab_id)
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
         {
             tab.status = TabStatus::Failed(error.clone());
@@ -190,10 +195,10 @@ impl AppShell {
                 tab.session.name,
                 crate::connection::describe_target(&tab.session)
             );
-            self.set_error(message);
+            self.state.set_error(message);
         }
-        self.discard_pending_credential(connection_id);
-        self.mark_forwards_stopped(tab_id);
+        self.state.discard_pending_credential(connection_id);
+        self.state.mark_forwards_stopped(tab_id);
         self.schedule_auto_reconnect(tab_id, connection_id, cx);
         true
     }
@@ -211,7 +216,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(tab) = self.workspace.tab_mut(tab_id)
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
             && !matches!(tab.status, TabStatus::Failed(_))
         {
@@ -225,7 +230,7 @@ impl AppShell {
                 crate::connection::describe_target(&tab.session)
             );
         }
-        self.mark_forwards_stopped(tab_id);
+        self.state.mark_forwards_stopped(tab_id);
         self.schedule_auto_reconnect(tab_id, connection_id, cx);
         true
     }
@@ -250,7 +255,7 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return false;
         };
         if tab.connection_id != Some(connection_id) {
@@ -259,7 +264,7 @@ impl AppShell {
         let session_id = tab.session_id;
         // 同一连接的新问题会作废上一次答案的保存意图：只有最后一次提交的
         // 凭据才可能认证成功，留着旧值会把已被拒绝的口令写进钥匙串。
-        self.discard_pending_credential(connection_id);
+        self.state.discard_pending_credential(connection_id);
         let inputs = prompts
             .iter()
             .map(|prompt| {
@@ -278,7 +283,7 @@ impl AppShell {
             Some(PromptKind::Passphrase) => Some(SecretKind::KeyPassphrase),
             _ => None,
         };
-        self.modals.auth_prompt = Some(AuthPromptState {
+        self.state.modals.auth_prompt = Some(AuthPromptState {
             connection_id,
             name,
             instructions,
@@ -309,13 +314,13 @@ impl AppShell {
         else {
             return true;
         };
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return false;
         };
         if tab.connection_id != Some(connection_id) {
             return false;
         }
-        self.modals.host_key_confirm = Some(HostKeyConfirmState {
+        self.state.modals.host_key_confirm = Some(HostKeyConfirmState {
             host,
             port,
             key_type,
@@ -338,16 +343,18 @@ impl AppShell {
             return true;
         };
         // 看板打开时先把统计快照推入时序历史，再移动 stats。
-        if self.monitor.read(cx).is_open() && self.workspace.active_tab == Some(tab_id) {
+        if self.state.monitor.read(cx).is_open() && self.state.workspace.active_tab == Some(tab_id)
+        {
             let open = true;
             if open {
-                self.monitor
+                self.state
+                    .monitor
                     .update(cx, |view, _| view.record_stats(tab_id, &stats));
             }
         }
 
         let mut applied = false;
-        if let Some(tab) = self.workspace.tab_mut(tab_id)
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
             && let Some(pane) = tab.session_pane_mut()
         {
@@ -360,8 +367,8 @@ impl AppShell {
         }
         // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
         if applied
-            && self.workspace.active_tab == Some(tab_id)
-            && (!self.immersive || self.monitor.read(cx).is_open())
+            && self.state.workspace.active_tab == Some(tab_id)
+            && (!self.state.immersive || self.state.monitor.read(cx).is_open())
         {
             cx.notify();
         }
@@ -385,7 +392,7 @@ impl AppShell {
             return true;
         };
         let mut applied = false;
-        if let Some(tab) = self.workspace.tab_mut(tab_id)
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id)
             && tab.connection_id == Some(connection_id)
             && let Some(pane) = tab.session_pane_mut()
         {
@@ -397,7 +404,7 @@ impl AppShell {
             pane.network_traffic = Some(traffic);
             applied = true;
         }
-        if applied && self.workspace.active_tab == Some(tab_id) && !self.immersive {
+        if applied && self.state.workspace.active_tab == Some(tab_id) && !self.state.immersive {
             cx.notify();
         }
         false

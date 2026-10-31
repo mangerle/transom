@@ -229,16 +229,16 @@ impl AppShell {
             );
             model.push(
                 rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle),
+                self.state.snippet_items(&needle),
             );
         } else {
             model.push(
                 rust_i18n::t!("app.sessions").to_string(),
-                self.session_items(term, &needle),
+                self.state.session_items(term, &needle),
             );
             model.push(
                 rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle),
+                self.state.snippet_items(&needle),
             );
             model.push(
                 rust_i18n::t!("app.palette_actions").to_string(),
@@ -255,7 +255,7 @@ impl AppShell {
         );
         model.push(
             rust_i18n::t!("app.palette_terminal_themes").to_string(),
-            self.terminal_theme_items(&needle),
+            self.state.terminal_theme_items(&needle),
         );
         model
     }

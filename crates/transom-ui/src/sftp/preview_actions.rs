@@ -64,6 +64,7 @@ impl AppShell {
             return;
         };
         let same_target = self
+            .state
             .sftp_panel_mut_by_tab(target.tab_id)
             .and_then(|panel| panel.hover_preview.as_ref())
             .is_some_and(|preview| preview.key == target.key);
@@ -73,7 +74,7 @@ impl AppShell {
 
         let anchor = window.mouse_position();
         let delay_task = Self::schedule_preview_start(cx, target.clone(), anchor, kind);
-        let Some(panel) = self.sftp_panel_mut_by_tab(target.tab_id) else {
+        let Some(panel) = self.state.sftp_panel_mut_by_tab(target.tab_id) else {
             return;
         };
         // 旧状态若已渲染卡片则需清理重绘，若仅为 Pending 则无需重绘
@@ -103,7 +104,7 @@ impl AppShell {
         key: &PreviewKey,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self.sftp_panel_mut_by_tab(tab_id) else {
+        let Some(panel) = self.state.sftp_panel_mut_by_tab(tab_id) else {
             return;
         };
         if panel
@@ -122,7 +123,7 @@ impl AppShell {
 
     /// 无条件收起当前预览（点击、刷新、切换目录时调用）。
     pub(crate) fn dismiss_sftp_hover_preview(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(panel) = self.sftp_panel_mut_by_tab(tab_id) else {
+        let Some(panel) = self.state.sftp_panel_mut_by_tab(tab_id) else {
             return;
         };
         if let Some(prev) = panel.hover_preview.take()
@@ -155,8 +156,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let connection_id = target.key.connection_id;
-        let command_tx = self.services.command_tx.clone();
-        let Some(panel) = self.sftp_panel_mut_by_tab(target.tab_id) else {
+        let command_tx = self.state.services.command_tx.clone();
+        let Some(panel) = self.state.sftp_panel_mut_by_tab(target.tab_id) else {
             return;
         };
         let Some(preview) = panel.hover_preview.as_mut() else {
@@ -194,7 +195,7 @@ impl AppShell {
             };
             let op_id = TransferId::new();
             preview.op_id = Some(op_id);
-            // panel/preview 借用活跃，无法走 self.send_command：用预克隆的
+            // panel/preview 借用活跃，无法走 self.state.send_command：用预克隆的
             // 发送端 try_send，失败把原因写进预览气泡而不是静默丢弃
             if let Err(error) = command_tx.try_send(
                 SftpCommand::Sftp {
@@ -261,7 +262,7 @@ impl AppShell {
             op_id,
             result,
         } = response;
-        let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) else {
+        let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id) else {
             return;
         };
         let Some(preview) = panel.hover_preview.as_mut() else {
@@ -361,7 +362,7 @@ impl AppShell {
         result: Result<Arc<RenderImage>, String>,
         cx: &mut Context<Self>,
     ) {
-        let Some(panel) = self.sftp_panel_mut_by_tab(tab_id) else {
+        let Some(panel) = self.state.sftp_panel_mut_by_tab(tab_id) else {
             return;
         };
         let Some(preview) = panel.hover_preview.as_mut() else {

@@ -176,9 +176,10 @@ impl MonitorView {
         let app = self.app.as_ref()?.upgrade()?;
         let shell = app.read(cx);
         shell
+            .state
             .workspace
             .active_tab
-            .and_then(|tab_id| shell.workspace.tab(tab_id))
+            .and_then(|tab_id| shell.state.workspace.tab(tab_id))
             .and_then(|tab| tab.system_stats().cloned())
     }
 }

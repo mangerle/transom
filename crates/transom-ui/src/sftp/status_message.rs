@@ -33,6 +33,7 @@ impl AppShell {
             cx.background_executor().timer(STATUS_MESSAGE_TTL).await;
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
+                    .state
                     .workspace
                     .tab_mut(tab_id)
                     .and_then(|tab| tab.sftp_mut())

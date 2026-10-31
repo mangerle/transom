@@ -31,7 +31,7 @@ impl AppShell {
             return true;
         };
         let mut update_input = None;
-        if let Some(tab) = self.workspace.tab_mut(tab_id) {
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
             let main_connection = tab.connection_id;
             if let Some(panel) = tab.sftp_mut() {
                 if let Some(target) =
@@ -92,7 +92,7 @@ impl AppShell {
             return true;
         };
         let mut applied = false;
-        if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id)
+        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id)
             && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
         {
             task.transferred = transferred;
@@ -111,7 +111,7 @@ impl AppShell {
             // 分屏里两个窗格可以同时显示各自的浮层。
             self.note_drop_overlay_progress(tab_id, cx);
         }
-        if applied && self.workspace.active_tab == Some(tab_id) && !self.immersive {
+        if applied && self.state.workspace.active_tab == Some(tab_id) && !self.state.immersive {
             cx.notify();
         }
         false
@@ -131,7 +131,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id)
+        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id)
             && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
         {
             task.status = TransferStatus::Verifying;
@@ -164,8 +164,12 @@ impl AppShell {
         let mut refresh_side = None;
         let mut refresh_local = false;
         let mut notify_info: Option<(TransferDirection, String, u64)> = None;
-        let main_conn = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id);
-        if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
+        let main_conn = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id);
+        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id) {
             let mut completed_transfer = false;
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 completed_transfer = true;
@@ -301,11 +305,11 @@ impl AppShell {
         else {
             return true;
         };
-        if self.sftp_panel_mut(tab_id, connection_id).is_none() {
+        if self.state.sftp_panel_mut(tab_id, connection_id).is_none() {
             // 标签页已关闭（或连接已切换）：忽略迟到的属性响应，不再弹出属性窗
             return false;
         }
-        self.sftp_modals.properties = Some(SftpPropertiesModalState {
+        self.state.sftp_modals.properties = Some(SftpPropertiesModalState {
             scope: "远端".to_string(),
             properties: remote_file_properties(&metadata),
         });
@@ -375,7 +379,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(modal) = self.sftp_modals.sync.as_mut()
+        if let Some(modal) = self.state.sftp_modals.sync.as_mut()
             && modal.op_id == op_id
             && modal.connection_id == connection_id
         {
@@ -403,7 +407,7 @@ impl AppShell {
         else {
             return true;
         };
-        if let Some(modal) = self.sftp_modals.sync.as_mut()
+        if let Some(modal) = self.state.sftp_modals.sync.as_mut()
             && modal.op_id == op_id
             && modal.connection_id == connection_id
         {
@@ -413,8 +417,12 @@ impl AppShell {
             return false;
         }
         let mut failed_notify: Option<(String, String)> = None;
-        let main_conn = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id);
-        if let Some(panel) = self.sftp_panel_mut(tab_id, connection_id) {
+        let main_conn = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id);
+        if let Some(panel) = self.state.sftp_panel_mut(tab_id, connection_id) {
             let err_msg = localized_error(&error);
             let mut failed_transfer = false;
             if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {

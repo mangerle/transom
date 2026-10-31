@@ -20,7 +20,7 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(viewer) = self.modals.audit_viewer.as_ref() else {
+        let Some(viewer) = self.state.modals.audit_viewer.as_ref() else {
             return div().into_any_element();
         };
 
@@ -85,6 +85,7 @@ impl AppShell {
                     app,
                     move |this, _: &ClickEvent, _, cx| {
                         let idx = this
+                            .state
                             .modals
                             .audit_viewer
                             .as_ref()
@@ -137,7 +138,7 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
-                                    this.modals.audit_viewer = None;
+                                    this.state.modals.audit_viewer = None;
                                     this.open_settings_modal(window, cx);
                                 },
                             )),
@@ -303,7 +304,7 @@ impl AppShell {
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.modals.audit_viewer = None;
+                            this.state.modals.audit_viewer = None;
                             cx.notify();
                         },
                     )),

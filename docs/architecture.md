@@ -50,7 +50,7 @@ apps/transom (组合根 + 控制平面)
 
 ## UI 内部结构
 
-`transom-ui` 的功能模块通过 `#[path]` 挂在 `app` 模块之下，`AppShell` 的字段只对 `app` 及其后代可见，crate 其它模块无法绕过外壳直接改状态。应用状态集中在 `app::state::AppState`，`AppShell` 只保留一个 `state` 字段，通过 `Deref`/`DerefMut` 复用状态操作。
+`transom-ui` 的功能模块通过 `#[path]` 挂在 `app` 模块之下，`AppShell` 的字段只对 `app` 及其后代可见，crate 其它模块无法绕过外壳直接改状态。应用状态集中在 `app::state::AppState`，`AppShell` 只保留一个 `state` 字段；状态访问一律显式写 `self.state.xxx`，不用 `Deref` 继承方法。
 
 可复用的表现层组件在 `transom-ui/src/widgets/`：图标按钮、弹窗动作按钮与动作条、设置/表单行、空状态、菜单项（含禁用态）、列表行与表头、状态徽标、工具栏。组件只接收数据与回调，不依赖 `AppShell`、不直接访问 store；字号、间距、控件尺寸与弹窗宽度统一取 `theme::tokens`。
 

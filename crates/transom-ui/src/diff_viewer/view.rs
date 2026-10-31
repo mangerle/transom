@@ -26,7 +26,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(viewer) = self.diff_viewer.as_ref() else {
+        let Some(viewer) = self.state.diff_viewer.as_ref() else {
             return div().into_any_element();
         };
         let title = rust_i18n::t!(

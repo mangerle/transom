@@ -10,7 +10,8 @@ impl AppShell {
         }
         let settings = self.collect_sync_settings(cx);
         if settings.git.is_none() {
-            self.set_error(rust_i18n::t!("sync.git_no_config").to_string());
+            self.state
+                .set_error(rust_i18n::t!("sync.git_no_config").to_string());
             cx.notify();
             return;
         }
@@ -19,7 +20,7 @@ impl AppShell {
 
     /// 定时同步入口：秘密已经在钥匙串里，不再触碰设置表单。
     pub(crate) fn start_git_sync_scheduled(&mut self, cx: &mut Context<Self>) {
-        let settings = self.settings.sync.clone();
+        let settings = self.state.settings.sync.clone();
         if settings.git.is_none() {
             return;
         }
@@ -27,10 +28,14 @@ impl AppShell {
     }
 
     fn send_git_sync(&mut self, settings: SyncSettings, cx: &mut Context<Self>) {
-        self.status = Some(rust_i18n::t!("sync.git_running").to_string());
-        let catalog = self.catalog.clone();
-        if !self.send_command(SyncCommand::GitSync { settings, catalog }) {
-            self.set_error(rust_i18n::t!("sync.git_no_config").to_string());
+        self.state.status = Some(rust_i18n::t!("sync.git_running").to_string());
+        let catalog = self.state.catalog.clone();
+        if !self
+            .state
+            .send_command(SyncCommand::GitSync { settings, catalog })
+        {
+            self.state
+                .set_error(rust_i18n::t!("sync.git_no_config").to_string());
         }
         cx.notify();
     }
@@ -44,12 +49,12 @@ impl AppShell {
         match result {
             Ok(result) => {
                 let report = result.report;
-                self.catalog = result.catalog;
-                self.catalog.normalize();
-                self.persist_catalog();
-                self.refresh_tab_sessions();
-                self.settings.sync.last_pull_at = Some(result.at);
-                self.status = Some(
+                self.state.catalog = result.catalog;
+                self.state.catalog.normalize();
+                self.state.persist_catalog();
+                self.state.refresh_tab_sessions();
+                self.state.settings.sync.last_pull_at = Some(result.at);
+                self.state.status = Some(
                     rust_i18n::t!(
                         "sync.git_done",
                         added = report.sessions_added,
@@ -60,7 +65,7 @@ impl AppShell {
                 );
             }
             Err(error) => {
-                self.set_error(localized_error(&error));
+                self.state.set_error(localized_error(&error));
             }
         }
         cx.notify();
@@ -74,15 +79,19 @@ impl AppShell {
         }
         let settings = self.collect_sync_settings(cx);
         if settings.endpoint.is_none() {
-            self.set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
+            self.state
+                .set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
             cx.notify();
             return;
         }
-        let catalog = self.catalog.clone();
-        if !self.send_command(SyncCommand::CloudSyncPush { settings, catalog }) {
+        let catalog = self.state.catalog.clone();
+        if !self
+            .state
+            .send_command(SyncCommand::CloudSyncPush { settings, catalog })
+        {
             return;
         }
-        self.status = Some(rust_i18n::t!("sync.push_started").to_string());
+        self.state.status = Some(rust_i18n::t!("sync.push_started").to_string());
         cx.notify();
     }
 
@@ -94,14 +103,18 @@ impl AppShell {
         }
         let settings = self.collect_sync_settings(cx);
         if settings.endpoint.is_none() {
-            self.set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
+            self.state
+                .set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
             cx.notify();
             return;
         }
-        if !self.send_command(SyncCommand::CloudSyncPull { settings }) {
+        if !self
+            .state
+            .send_command(SyncCommand::CloudSyncPull { settings })
+        {
             return;
         }
-        self.status = Some(rust_i18n::t!("sync.pull_started").to_string());
+        self.state.status = Some(rust_i18n::t!("sync.pull_started").to_string());
         cx.notify();
     }
 
@@ -113,11 +126,11 @@ impl AppShell {
     ) {
         match result {
             Ok(report) => {
-                self.settings.sync.last_push_at = Some(report.at);
-                if let Err(error) = self.persist_settings() {
-                    self.set_error(localized_error(&error));
+                self.state.settings.sync.last_push_at = Some(report.at);
+                if let Err(error) = self.state.persist_settings() {
+                    self.state.set_error(localized_error(&error));
                 }
-                self.status = Some(
+                self.state.status = Some(
                     rust_i18n::t!(
                         "sync.pushed",
                         sessions = report.sessions,
@@ -127,7 +140,7 @@ impl AppShell {
                 );
             }
             Err(error) => {
-                self.set_error(localized_error(&error));
+                self.state.set_error(localized_error(&error));
             }
         }
         cx.notify();

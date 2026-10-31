@@ -17,7 +17,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let existing = id.and_then(|id| self.catalog.identity(id).cloned());
+        let existing = id.and_then(|id| self.state.catalog.identity(id).cloned());
         let (auth, key_path) = match existing.as_ref().map(|identity| &identity.auth) {
             Some(AuthMethod::PrivateKey { path, .. }) => {
                 (AuthChoice::PrivateKey, path.display().to_string())
@@ -77,7 +77,7 @@ impl AppShell {
             save_passphrase,
             error: None,
         };
-        self.modals.settings.identity_edit = Some(state);
+        self.state.modals.settings.identity_edit = Some(state);
         if let Some(owner) = owner {
             self.prefill_identity_secrets(owner, window, cx);
         }
@@ -91,7 +91,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(edit) = self.modals.settings.identity_edit.as_ref() else {
+        let Some(edit) = self.state.modals.settings.identity_edit.as_ref() else {
             return;
         };
         let fields = vec![
@@ -101,20 +101,20 @@ impl AppShell {
         crate::app::prefill_secret_fields(
             owner,
             fields,
-            self.services.secret_store.clone(),
+            self.state.services.secret_store.clone(),
             window,
             cx,
         );
     }
 
     pub(crate) fn cancel_identity_edit(&mut self, cx: &mut Context<Self>) {
-        self.modals.settings.identity_edit = None;
+        self.state.modals.settings.identity_edit = None;
         cx.notify();
     }
 
     /// 保存模板：写目录并后台落口令。
     pub(crate) fn save_identity(&mut self, cx: &mut Context<Self>) {
-        let Some(edit) = self.modals.settings.identity_edit.as_ref() else {
+        let Some(edit) = self.state.modals.settings.identity_edit.as_ref() else {
             return;
         };
         let name = edit.name.read(cx).value().to_string();
@@ -137,7 +137,7 @@ impl AppShell {
         let built = match built {
             Ok(built) => built,
             Err(error) => {
-                if let Some(edit) = self.modals.settings.identity_edit.as_mut() {
+                if let Some(edit) = self.state.modals.settings.identity_edit.as_mut() {
                     edit.error = Some(error);
                 }
                 cx.notify();
@@ -147,6 +147,7 @@ impl AppShell {
 
         let identity = built.identity;
         let replaced = match self
+            .state
             .catalog
             .identities
             .iter_mut()
@@ -159,12 +160,12 @@ impl AppShell {
             None => false,
         };
         if !replaced {
-            self.catalog.identities.push(identity);
+            self.state.catalog.identities.push(identity);
         }
-        self.modals.settings.identity_edit = None;
-        self.refresh_tab_sessions();
-        self.persist_catalog();
-        self.status = Some(
+        self.state.modals.settings.identity_edit = None;
+        self.state.refresh_tab_sessions();
+        self.state.persist_catalog();
+        self.state.status = Some(
             rust_i18n::t!(if replaced {
                 "identity.updated"
             } else {
@@ -175,7 +176,7 @@ impl AppShell {
 
         let writes = built.writes;
         if !writes.is_empty() {
-            let secret_store = self.services.secret_store.clone();
+            let secret_store = self.state.services.secret_store.clone();
             cx.spawn(async move |this, cx| {
                 let error = cx
                     .background_executor()
@@ -195,7 +196,7 @@ impl AppShell {
                     .await;
                 let _ = this.update(cx, |this, cx| {
                     if let Some(error) = error {
-                        this.set_error(localized_error(&error));
+                        this.state.set_error(localized_error(&error));
                     }
                     cx.notify();
                 });
@@ -208,30 +209,32 @@ impl AppShell {
     /// 删除模板；仍被会话引用时拒绝并说明引用数，成功后清理其口令槽位。
     pub(crate) fn delete_identity(&mut self, id: IdentityId, cx: &mut Context<Self>) {
         let name = self
+            .state
             .catalog
             .identity(id)
             .map(|identity| identity.name.clone())
             .unwrap_or_default();
-        if let Err(error) = self.catalog.delete_identity(id) {
-            self.set_error(
+        if let Err(error) = self.state.catalog.delete_identity(id) {
+            self.state.set_error(
                 AppError::with_detail(ErrorCode::Configuration, error.to_string()).to_string(),
             );
             cx.notify();
             return;
         }
         if self
+            .state
             .modals
             .settings
             .identity_edit
             .as_ref()
             .is_some_and(|edit| edit.base == Some(id))
         {
-            self.modals.settings.identity_edit = None;
+            self.state.modals.settings.identity_edit = None;
         }
-        self.status = Some(rust_i18n::t!("identity.deleted", name = name).to_string());
-        self.persist_catalog();
+        self.state.status = Some(rust_i18n::t!("identity.deleted", name = name).to_string());
+        self.state.persist_catalog();
 
-        let secret_store = self.services.secret_store.clone();
+        let secret_store = self.state.services.secret_store.clone();
         cx.spawn(async move |this, cx| {
             let error = cx
                 .background_executor()
@@ -249,7 +252,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
-                    this.set_error(localized_error(&error));
+                    this.state.set_error(localized_error(&error));
                 }
                 cx.notify();
             });

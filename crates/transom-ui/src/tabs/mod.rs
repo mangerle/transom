@@ -135,11 +135,12 @@ impl AppShell {
     ) -> Option<GroupId> {
         let pane_count = LayoutNode::saved_pane_count(&saved.layout).unwrap_or(1);
 
-        let groups_before = self.workspace.groups.len();
+        let groups_before = self.state.workspace.groups.len();
         if saved.session == "local" {
             self.open_local_terminal(window, cx);
         } else {
             let session = self
+                .state
                 .catalog
                 .sessions
                 .iter()
@@ -147,16 +148,16 @@ impl AppShell {
                 .cloned()?;
             self.connect_session(session.id, window, cx);
         }
-        if self.workspace.groups.len() <= groups_before {
+        if self.state.workspace.groups.len() <= groups_before {
             return None;
         }
-        let group_index = self.workspace.groups.len() - 1;
-        let group_id = self.workspace.groups[group_index].id;
+        let group_index = self.state.workspace.groups.len() - 1;
+        let group_id = self.state.workspace.groups[group_index].id;
         if pane_count < 2 {
             return Some(group_id);
         }
-        let first = self.workspace.groups[group_index].active_pane;
-        let Some(session) = self.session_for_tab(first) else {
+        let first = self.state.workspace.groups[group_index].active_pane;
+        let Some(session) = self.state.session_for_tab(first) else {
             return Some(group_id);
         };
         if matches!(session.connection, Connection::Serial(_)) {
@@ -167,9 +168,10 @@ impl AppShell {
         let Some(root) = LayoutNode::from_saved(&saved.layout, &mut ids) else {
             return Some(group_id);
         };
-        self.workspace.groups[group_index].root = root;
+        self.state.workspace.groups[group_index].root = root;
         for pane_id in extra {
-            self.workspace
+            self.state
+                .workspace
                 .tabs
                 .push(TerminalTab::pending(pane_id, session.clone()));
             self.start_connection(pane_id, session.clone(), cx);
@@ -190,24 +192,24 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.workspace.tab_index(tab_id) else {
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return;
         };
-        let Some(session) = self.session_for_tab(tab_id) else {
+        let Some(session) = self.state.session_for_tab(tab_id) else {
             return;
         };
-        let tab = &mut self.workspace.tabs[index];
+        let tab = &mut self.state.workspace.tabs[index];
         tab.content = TabContent::Session(Box::default());
         tab.connection_id = None;
         tab.status = TabStatus::Connecting;
         // 新连接尚未收到 OSC 0/2 与 OSC 7：标签回落会话名，SFTP 重新等待上报。
         tab.title.clear();
         tab.cwd = None;
-        self.workspace.active_tab = Some(tab_id);
-        if let Some(group_index) = self.group_index_for_tab(tab_id) {
-            self.workspace.groups[group_index].active_pane = tab_id;
+        self.state.workspace.active_tab = Some(tab_id);
+        if let Some(group_index) = self.state.group_index_for_tab(tab_id) {
+            self.state.workspace.groups[group_index].active_pane = tab_id;
         }
-        self.present_active_group();
+        self.state.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 
@@ -217,16 +219,18 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(previous) = self.workspace.active_tab
+        if let Some(previous) = self.state.workspace.active_tab
             && previous != tab_id
         {
             self.dismiss_sftp_hover_preview(previous, cx);
         }
         let group_id = self
+            .state
             .group_index_for_tab(tab_id)
-            .map(|index| self.workspace.groups[index].id);
+            .map(|index| self.state.workspace.groups[index].id);
         if let Some(group_id) = group_id
             && let Some(tiled) = self
+                .state
                 .workspace
                 .tiled_sets
                 .iter_mut()
@@ -235,17 +239,24 @@ impl AppShell {
         {
             tiled.focused = slot;
         }
-        self.workspace.active_tab = Some(tab_id);
-        if let Some(group_index) = self.group_index_for_tab(tab_id) {
-            self.workspace.groups[group_index].active_pane = tab_id;
+        self.state.workspace.active_tab = Some(tab_id);
+        if let Some(group_index) = self.state.group_index_for_tab(tab_id) {
+            self.state.workspace.groups[group_index].active_pane = tab_id;
         }
-        if let Some(terminal) = self.workspace.tab(tab_id).and_then(|tab| tab.terminal()) {
+        if let Some(terminal) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.terminal())
+        {
             let focus_handle = terminal.read(cx).focus_handle().clone();
             window.focus(&focus_handle, cx);
         }
-        self.sync_broadcast_targets();
-        if self.monitor.read(cx).is_open() {
-            self.monitor.update(cx, |view, _| view.reset_history());
+        self.state.sync_broadcast_targets();
+        if self.state.monitor.read(cx).is_open() {
+            self.state
+                .monitor
+                .update(cx, |view, _| view.reset_history());
             self.sample_processes(cx);
         }
         cx.notify();

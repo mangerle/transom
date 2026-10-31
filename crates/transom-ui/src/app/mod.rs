@@ -152,27 +152,13 @@ pub(crate) struct AppShell {
     state: AppState,
 }
 
-impl std::ops::Deref for AppShell {
-    type Target = AppState;
-
-    fn deref(&self) -> &Self::Target {
-        &self.state
-    }
-}
-
-impl std::ops::DerefMut for AppShell {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.state
-    }
-}
-
 impl AppShell {
     /// 设置工具面板（SFTP/转发）停靠方向。
     pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<Self>) {
-        if self.settings.window.sftp_panel_side == side {
+        if self.state.settings.window.sftp_panel_side == side {
             return;
         }
-        self.settings.window.sftp_panel_side = side;
+        self.state.settings.window.sftp_panel_side = side;
         let state = &mut self.state;
         std::mem::swap(
             &mut state.workspace_panels,
@@ -183,10 +169,10 @@ impl AppShell {
 
     /// 按启动档位恢复工作台。
     fn restore_startup_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.settings.window.startup_tabs {
+        match self.state.settings.window.startup_tabs {
             StartupTabs::RestoreLast => {
-                let saved_groups = self.settings.window.previous_tab_groups.clone();
-                let saved_tilings = self.settings.window.tab_tilings.clone();
+                let saved_groups = self.state.settings.window.previous_tab_groups.clone();
+                let saved_tilings = self.state.settings.window.tab_tilings.clone();
                 if !saved_groups.is_empty() {
                     let mut restored = Vec::with_capacity(saved_groups.len());
                     for group in &saved_groups {
@@ -194,22 +180,23 @@ impl AppShell {
                     }
                     let mut focus = None;
                     for saved in &saved_tilings {
-                        if let Some(group) = self.restore_tab_tiling(saved, &restored) {
+                        if let Some(group) = self.state.restore_tab_tiling(saved, &restored) {
                             focus.get_or_insert(group);
                         }
                     }
                     if let Some(group) = focus
-                        && let Some(index) = self.workspace.group_index(group)
+                        && let Some(index) = self.state.workspace.group_index(group)
                     {
-                        let pane = self.workspace.groups[index].active_pane;
+                        let pane = self.state.workspace.groups[index].active_pane;
                         self.activate_tab(pane, window, cx);
                     }
-                } else if !self.settings.window.previous_tab_sessions.is_empty() {
-                    let session_keys = self.settings.window.previous_tab_sessions.clone();
+                } else if !self.state.settings.window.previous_tab_sessions.is_empty() {
+                    let session_keys = self.state.settings.window.previous_tab_sessions.clone();
                     for key in session_keys {
                         if key == "local" {
                             self.open_local_terminal(window, cx);
                         } else if let Some(session) = self
+                            .state
                             .catalog
                             .sessions
                             .iter()
@@ -229,12 +216,13 @@ impl AppShell {
     /// 每分钟节拍：达到配置间隔时触发一次后台 Git 同步。
     fn tick_git_sync(&mut self, cx: &mut Context<Self>) {
         let interval = self
+            .state
             .settings
             .sync
             .git
             .as_ref()
             .map_or(0, |git| git.interval_minutes);
-        if self.git_sync_schedule.tick(interval) {
+        if self.state.git_sync_schedule.tick(interval) {
             self.start_git_sync_scheduled(cx);
         }
     }

@@ -115,7 +115,7 @@ impl AppShell {
         let config_path_label = config_dir.display().to_string();
         let open_config_dir = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(config_dir.clone());
-            this.status = Some(rust_i18n::t!("settings.about_dir_revealed").to_string());
+            this.state.status = Some(rust_i18n::t!("settings.about_dir_revealed").to_string());
             cx.notify();
         });
         let build_label = if cfg!(debug_assertions) {

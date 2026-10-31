@@ -66,7 +66,7 @@ impl AppShell {
         // 跳页时换组件 id：`Settings` 的选中页存在 keyed state 里，只有首次创建
         // 才读取默认页；用带页号的 id 让"从命令面板指定页"与"从菜单回到上次
         // 位置"两条路径各自持有独立的组件状态。
-        let (settings_id, jump_index) = match self.modals.settings.jump_page {
+        let (settings_id, jump_index) = match self.state.modals.settings.jump_page {
             Some(page) => (
                 format!("app-settings-page-{page}"),
                 Some(SelectIndex {
@@ -144,7 +144,7 @@ impl AppShell {
                                     rust_i18n::t!("settings.current_ui_theme"),
                                     cx.theme().theme_name(),
                                     rust_i18n::t!("settings.current_theme"),
-                                    self.settings.terminal_profile.theme_name
+                                    self.state.settings.terminal_profile.theme_name
                                 )),
                         ),
                     )

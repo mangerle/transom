@@ -50,7 +50,7 @@ impl Render for ModalBody {
             }
         }
         let body = kind.render_body(app.read(cx), &app, window, cx, &p);
-        let hint = app.read(cx).dialog_hint.clone();
+        let hint = app.read(cx).state.dialog_hint.clone();
         div()
             .id(ElementId::Name(
                 format!("modal-body-{}", kind.spec(window).slug).into(),

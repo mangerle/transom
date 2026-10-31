@@ -89,10 +89,11 @@ pub(super) fn build_tiled_group_badge(
         let Some(group_id) = *group_id else {
             continue;
         };
-        let Some(group) = shell.workspace.group(group_id) else {
+        let Some(group) = shell.state.workspace.group(group_id) else {
             continue;
         };
         let Some(tab) = shell
+            .state
             .workspace
             .tabs
             .iter()

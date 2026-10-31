@@ -15,6 +15,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self
+            .state
             .editors
             .panels
             .iter()
@@ -23,7 +24,7 @@ impl AppShell {
             return;
         };
         let (editor, close_after, was_new_file, tab_id, remote_path) = {
-            let item = &mut self.editors.panels[index];
+            let item = &mut self.state.editors.panels[index];
             item.pending_op = None;
             item.baseline = item.editor.read(cx).value();
             item.remote_meta = Some(meta);
@@ -50,7 +51,7 @@ impl AppShell {
         };
         // 目录列表条目就地补丁：size/mtime 都来自写后 stat，与远端一致，
         // 无需为刷新列表再发一次目录请求。
-        if let Some(tab) = self.workspace.tab_mut(tab_id)
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id)
             && let Some(panel) = tab.sftp_mut()
             && let Some(entry) = panel
                 .remote
@@ -66,6 +67,7 @@ impl AppShell {
         if was_new_file
             && let Some(parent) = parent_dir(&remote_path)
             && self
+                .state
                 .workspace
                 .tab(tab_id)
                 .and_then(|tab| tab.sftp())
@@ -93,6 +95,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
+            .state
             .editors
             .panels
             .iter_mut()
@@ -124,12 +127,12 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.editors.panels.iter().position(|item| {
+        let Some(index) = self.state.editors.panels.iter().position(|item| {
             item.pending_op == Some(op_id) || item.pending_sudo_probe == Some(op_id)
         }) else {
             return;
         };
-        let item = &mut self.editors.panels[index];
+        let item = &mut self.state.editors.panels[index];
         if item.pending_sudo_probe == Some(op_id) {
             // 探测失败：没有可继续的提权结论，直接回到失败态并保留远端原文。
             item.pending_sudo_probe = None;
@@ -175,6 +178,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if let Some(item) = self
+            .state
             .editors
             .panels
             .iter_mut()
@@ -195,7 +199,7 @@ impl AppShell {
         message: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab) = self.workspace.tab_mut(tab_id) {
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
             let main_connection = tab.connection_id;
             if let Some(panel) = tab.sftp_mut()
                 && let Some(target) =
@@ -220,6 +224,7 @@ impl AppShell {
             return;
         };
         let Some(editor) = self
+            .state
             .editors
             .panels
             .get(index)
@@ -233,10 +238,11 @@ impl AppShell {
     /// 当前应接收"保存"快捷键的面板下标：优先编辑器持有焦点的那个，
     /// 没有焦点信息时退到最上层，避免快捷键静默失效。
     pub(crate) fn focused_editor_panel_index(&self, window: &Window, cx: &App) -> Option<usize> {
-        if self.editors.panels.is_empty() {
+        if self.state.editors.panels.is_empty() {
             return None;
         }
-        self.editors
+        self.state
+            .editors
             .panels
             .iter()
             .position(|item| {
@@ -245,14 +251,15 @@ impl AppShell {
                     .focus_handle(cx)
                     .contains_focused(window, cx)
             })
-            .or(Some(self.editors.panels.len() - 1))
+            .or(Some(self.state.editors.panels.len() - 1))
     }
 
     pub(crate) fn editor_panel_mut(
         &mut self,
         editor: &Entity<EditorState>,
     ) -> Option<&mut EditorPanelState> {
-        self.editors
+        self.state
+            .editors
             .panels
             .iter_mut()
             .find(|item| item.editor == *editor)
@@ -264,7 +271,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.editors.panels.retain(|item| item.editor != *editor);
+        self.state
+            .editors
+            .panels
+            .retain(|item| item.editor != *editor);
         self.focus_active_sftp_panel(window, cx);
         cx.notify();
     }

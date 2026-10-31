@@ -64,6 +64,7 @@ impl AppShell {
             cx,
         );
         if let Some(item) = self
+            .state
             .editors
             .panels
             .iter_mut()
@@ -89,14 +90,14 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(index) = self.editors.panels.iter().position(|item| {
+        let Some(index) = self.state.editors.panels.iter().position(|item| {
             item.same_file(target.tab_id, target.connection_id, &target.remote_path)
         }) else {
             return false;
         };
-        let item = self.editors.panels.remove(index);
+        let item = self.state.editors.panels.remove(index);
         let editor = item.editor.clone();
-        self.editors.panels.push(item);
+        self.state.editors.panels.push(item);
         super::navigate::apply_editor_goto(&editor, target.line, target.column, window, cx);
         cx.notify();
         true

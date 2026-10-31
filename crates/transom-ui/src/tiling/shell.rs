@@ -150,14 +150,19 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(target_pane) = self.workspace.group(target).map(|group| group.active_pane) else {
+        let Some(target_pane) = self
+            .state
+            .workspace
+            .group(target)
+            .map(|group| group.active_pane)
+        else {
             return;
         };
-        if self.tiling_of_group(target).is_some() {
+        if self.state.tiling_of_group(target).is_some() {
             self.activate_group(target, window, cx);
             return;
         }
-        let Some(previous) = self.previous_strip_entry(target) else {
+        let Some(previous) = self.state.previous_strip_entry(target) else {
             return;
         };
         match previous {
@@ -165,7 +170,8 @@ impl AppShell {
                 if let Some(group) = self.add_groups_to_tiling(id, vec![target], window) {
                     self.activate_group(group, window, cx);
                 } else {
-                    self.set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS));
+                    self.state
+                        .set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS));
                     cx.notify();
                 }
             }
@@ -177,8 +183,8 @@ impl AppShell {
                 let Some(tiled) = TiledTabs::new(vec![partner, target], rows, cols, false) else {
                     return;
                 };
-                self.workspace.tiled_sets.push(tiled);
-                self.prune_pane_split_states();
+                self.state.workspace.tiled_sets.push(tiled);
+                self.state.prune_pane_split_states();
                 self.activate_tab(target_pane, window, cx);
             }
             StripEntry::Single(_) => {
@@ -194,7 +200,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(groups) = self.tiling_by_id(id).map(|tiled| tiled.occupied_groups()) else {
+        let Some(groups) = self
+            .state
+            .tiling_by_id(id)
+            .map(|tiled| tiled.occupied_groups())
+        else {
             return;
         };
         self.close_tiling_groups(groups, window, cx);
@@ -210,7 +220,8 @@ impl AppShell {
         let panes: Vec<TabId> = groups
             .iter()
             .filter_map(|group_id| {
-                self.workspace
+                self.state
+                    .workspace
                     .groups
                     .iter()
                     .find(|group| group.id == *group_id)
@@ -226,6 +237,7 @@ impl AppShell {
         }
         for group_id in groups {
             if self
+                .state
                 .workspace
                 .groups
                 .iter()
@@ -238,11 +250,14 @@ impl AppShell {
 
     /// 退出指定并排组，只改变显示方式：组内标签都保持打开与连接。
     pub(crate) fn untile_tiling(&mut self, id: TilingId, cx: &mut Context<Self>) {
-        let before = self.workspace.tiled_sets.len();
-        self.workspace.tiled_sets.retain(|tiled| tiled.id != id);
-        if self.workspace.tiled_sets.len() != before {
-            self.prune_pane_split_states();
-            self.sync_broadcast_targets();
+        let before = self.state.workspace.tiled_sets.len();
+        self.state
+            .workspace
+            .tiled_sets
+            .retain(|tiled| tiled.id != id);
+        if self.state.workspace.tiled_sets.len() != before {
+            self.state.prune_pane_split_states();
+            self.state.sync_broadcast_targets();
             cx.notify();
         }
     }
@@ -254,10 +269,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.workspace.group_index(group) else {
+        let Some(index) = self.state.workspace.group_index(group) else {
             return;
         };
-        let pane = self.workspace.groups[index].active_pane;
+        let pane = self.state.workspace.groups[index].active_pane;
         self.activate_tab(pane, window, cx);
     }
 
@@ -268,10 +283,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tiled) = self.active_tiling().cloned() else {
+        let Some(tiled) = self.state.active_tiling().cloned() else {
             return;
         };
-        let Some(active) = self.active_group_id() else {
+        let Some(active) = self.state.active_group_id() else {
             return;
         };
         let Some(slot) = tiled.slot_of(active) else {
@@ -293,22 +308,22 @@ impl AppShell {
         }
         let all_selected = groups
             .iter()
-            .all(|group| self.workspace.tab_selection.contains(group));
+            .all(|group| self.state.workspace.tab_selection.contains(group));
         if all_selected {
             for group in groups {
-                self.workspace.tab_selection.remove(group);
+                self.state.workspace.tab_selection.remove(group);
             }
         } else {
             for group in groups {
-                self.workspace.tab_selection.insert(*group);
+                self.state.workspace.tab_selection.insert(*group);
             }
         }
         cx.notify();
     }
 
     pub(crate) fn clear_tab_selection(&mut self, cx: &mut Context<Self>) {
-        if !self.workspace.tab_selection.is_empty() {
-            self.workspace.tab_selection.clear();
+        if !self.state.workspace.tab_selection.is_empty() {
+            self.state.workspace.tab_selection.clear();
             cx.notify();
         }
     }
@@ -323,13 +338,20 @@ impl AppShell {
     ) {
         let groups: Vec<GroupId> = groups
             .into_iter()
-            .filter(|group| self.workspace.groups.iter().any(|item| item.id == *group))
+            .filter(|group| {
+                self.state
+                    .workspace
+                    .groups
+                    .iter()
+                    .any(|item| item.id == *group)
+            })
             .collect();
         if groups.len() < 2 {
             return;
         }
         if groups.len() > MAX_TILING_SLOTS {
-            self.set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string());
+            self.state
+                .set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string());
             cx.notify();
             return;
         }
@@ -341,6 +363,7 @@ impl AppShell {
             TilingLayoutChoice::Grid { rows, cols } => (rows, cols, false),
         };
         let touched: Vec<TilingId> = self
+            .state
             .workspace
             .tiled_sets
             .iter()
@@ -353,13 +376,14 @@ impl AppShell {
                     return;
                 };
                 let focus = tiled.focused_group();
-                self.workspace.tiled_sets.push(tiled);
-                self.workspace.tab_selection.clear();
-                self.prune_pane_split_states();
+                self.state.workspace.tiled_sets.push(tiled);
+                self.state.workspace.tab_selection.clear();
+                self.state.prune_pane_split_states();
                 self.activate_group_by_id(focus, window, cx);
             }
             [id] => {
                 let Some(index) = self
+                    .state
                     .workspace
                     .tiled_sets
                     .iter()
@@ -369,11 +393,11 @@ impl AppShell {
                 };
                 if !groups
                     .iter()
-                    .all(|group| self.workspace.tiled_sets[index].contains(*group))
+                    .all(|group| self.state.workspace.tiled_sets[index].contains(*group))
                 {
                     return;
                 }
-                let focus = self.workspace.tiled_sets[index].focused_group();
+                let focus = self.state.workspace.tiled_sets[index].focused_group();
                 let Some(mut tiled) = TiledTabs::new(groups, rows, cols, auto) else {
                     return;
                 };
@@ -383,14 +407,14 @@ impl AppShell {
                 {
                     tiled.focused = slot;
                 }
-                self.workspace.tiled_sets[index] = tiled;
-                self.prune_pane_split_states();
-                let focus = self.workspace.tiled_sets[index].focused_group();
+                self.state.workspace.tiled_sets[index] = tiled;
+                self.state.prune_pane_split_states();
+                let focus = self.state.workspace.tiled_sets[index].focused_group();
                 self.activate_group_by_id(focus, window, cx);
             }
             _ => return,
         }
-        self.sync_broadcast_targets();
+        self.state.sync_broadcast_targets();
         cx.notify();
     }
 
@@ -416,14 +440,21 @@ impl AppShell {
     ) -> Option<GroupId> {
         let groups: Vec<GroupId> = groups
             .into_iter()
-            .filter(|group| self.workspace.groups.iter().any(|item| item.id == *group))
-            .filter(|group| self.tiling_of_group(*group).is_none())
+            .filter(|group| {
+                self.state
+                    .workspace
+                    .groups
+                    .iter()
+                    .any(|item| item.id == *group)
+            })
+            .filter(|group| self.state.tiling_of_group(*group).is_none())
             .collect();
         if groups.is_empty() {
             return None;
         }
         let first_group = {
             let tiled = self
+                .state
                 .workspace
                 .tiled_sets
                 .iter_mut()
@@ -432,8 +463,8 @@ impl AppShell {
             tiled.group_at(slot)
         };
         let first_group = first_group?;
-        self.prune_pane_split_states();
-        self.sync_broadcast_targets();
+        self.state.prune_pane_split_states();
+        self.state.sync_broadcast_targets();
         Some(first_group)
     }
 
@@ -446,10 +477,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.tiling_of_group(group).is_some() {
+        if self.state.tiling_of_group(group).is_some() {
             return;
         }
         let filled = self
+            .state
             .workspace
             .tiled_sets
             .iter_mut()
@@ -459,6 +491,6 @@ impl AppShell {
             return;
         }
         self.activate_group(group, window, cx);
-        self.sync_broadcast_targets();
+        self.state.sync_broadcast_targets();
     }
 }

@@ -55,7 +55,7 @@ impl AppShell {
             )
             .child(Self::setting_dropdown(
                 "dropdown-ui-mode",
-                self.settings.appearance.mode,
+                self.state.settings.appearance.mode,
                 vec![
                     (
                         UiThemeMode::System,
@@ -90,7 +90,7 @@ impl AppShell {
             )
             .child(Self::setting_dropdown(
                 "dropdown-ui-density",
-                self.settings.appearance.density,
+                self.state.settings.appearance.density,
                 UiDensity::ALL
                     .into_iter()
                     .map(|d| (d, rust_i18n::t!(d.label_key()).to_string()))
@@ -171,7 +171,7 @@ impl AppShell {
         // 明暗反差提示：界面主题与终端配色一个深一个浅时给出文案，不改用户选择。
         let terminal_mode = preset_themes()
             .into_iter()
-            .find(|theme| theme.name == self.settings.terminal_profile.theme_name)
+            .find(|theme| theme.name == self.state.settings.terminal_profile.theme_name)
             .map(|theme| theme.mode);
         let contrast_hint = matches!(
             (cx.theme().is_dark(), terminal_mode),
@@ -231,7 +231,7 @@ impl AppShell {
                 FontFieldSpec {
                     id: "ui-font-family",
                     label: rust_i18n::t!("settings.ui_font_family").to_string(),
-                    select: self.modals.settings.ui_font_family.clone(),
+                    select: self.state.modals.settings.ui_font_family.clone(),
                     note_key: Some("settings.ui_font_note"),
                 },
                 p,

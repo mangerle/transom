@@ -54,7 +54,7 @@ impl AppShell {
         });
         let default_key_path =
             cx.new(|cx| InputState::new(window, cx).placeholder("~/.ssh/id_ed25519".to_string()));
-        self.modals.folder_form = Some(FolderForm {
+        self.state.modals.folder_form = Some(FolderForm {
             base: None,
             parent,
             name,
@@ -72,7 +72,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(folder) = self.catalog.folder(folder_id) else {
+        let Some(folder) = self.state.catalog.folder(folder_id) else {
             return;
         };
         let name = folder.name.clone();
@@ -107,7 +107,7 @@ impl AppShell {
                 .default_value(key_text)
                 .placeholder("~/.ssh/id_ed25519".to_string())
         });
-        self.modals.folder_form = Some(FolderForm {
+        self.state.modals.folder_form = Some(FolderForm {
             base: Some(folder_id),
             parent: None,
             name: input,
@@ -126,21 +126,21 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = self.catalog.folder_path(folder_id);
+        let path = self.state.catalog.folder_path(folder_id);
         let mut form = SessionForm::new(
             window,
             cx,
             crate::session_form::SessionFormInit {
                 base: None,
                 folder_path: path.clone(),
-                identities: self.identity_options(),
-                jump_options: self.jump_options(None),
-                folder_options: self.folder_paths(),
-                global_proxy: self.settings.proxy.clone(),
+                identities: self.state.identity_options(),
+                jump_options: self.state.jump_options(None),
+                folder_options: self.state.folder_paths(),
+                global_proxy: self.state.settings.proxy.clone(),
                 block_view: transom_core::BlockViewOverride::FollowGlobal,
             },
         );
-        let defaults = self.catalog.inherited_folder_defaults(folder_id);
+        let defaults = self.state.catalog.inherited_folder_defaults(folder_id);
         if let Some(folder_path) = path {
             form.apply_folder_selection(&folder_path, &defaults, window, cx);
         }
@@ -153,7 +153,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(form) = self.modals.folder_form.as_mut() else {
+        let Some(form) = self.state.modals.folder_form.as_mut() else {
             return;
         };
         let title = rust_i18n::t!("form.pick_key").to_string();
@@ -171,7 +171,7 @@ impl AppShell {
     }
 
     pub(crate) fn save_folder_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.modals.folder_form.as_ref() else {
+        let Some(form) = self.state.modals.folder_form.as_ref() else {
             return;
         };
         let name = form.name.read(cx).value().trim().to_string();
@@ -197,7 +197,7 @@ impl AppShell {
         let base = form.base;
         let parent = form.parent;
         let result = match base {
-            Some(folder_id) => self.catalog.update_folder(
+            Some(folder_id) => self.state.catalog.update_folder(
                 folder_id,
                 &name,
                 default_port,
@@ -205,6 +205,7 @@ impl AppShell {
                 default_key_path,
             ),
             None => self
+                .state
                 .catalog
                 .add_folder_with_defaults(
                     &name,
@@ -216,6 +217,7 @@ impl AppShell {
                 .map(|_| {
                     if let Some(parent_id) = parent
                         && let Some(folder) = self
+                            .state
                             .catalog
                             .folders
                             .iter_mut()
@@ -227,16 +229,16 @@ impl AppShell {
         };
         match result {
             Ok(()) => {
-                self.modals.folder_form = None;
-                self.persist_catalog();
-                self.status = Some(if base.is_some() {
+                self.state.modals.folder_form = None;
+                self.state.persist_catalog();
+                self.state.status = Some(if base.is_some() {
                     rust_i18n::t!("folder.renamed").to_string()
                 } else {
                     rust_i18n::t!("folder.created").to_string()
                 });
             }
             Err(error) => {
-                if let Some(form) = self.modals.folder_form.as_mut() {
+                if let Some(form) = self.state.modals.folder_form.as_mut() {
                     form.error = Some(error.to_string());
                 }
             }
@@ -246,12 +248,12 @@ impl AppShell {
 
     /// 删除文件夹但保留全部内容，子项提升到父层级。
     pub(crate) fn delete_folder(&mut self, folder_id: FolderId, cx: &mut Context<Self>) {
-        match self.catalog.delete_folder(folder_id) {
+        match self.state.catalog.delete_folder(folder_id) {
             Ok(name) => {
-                self.persist_catalog();
-                self.status = Some(rust_i18n::t!("folder.deleted", name = name).to_string());
+                self.state.persist_catalog();
+                self.state.status = Some(rust_i18n::t!("folder.deleted", name = name).to_string());
             }
-            Err(error) => self.set_error(error.to_string()),
+            Err(error) => self.state.set_error(error.to_string()),
         }
         cx.notify();
     }
@@ -263,7 +265,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.modals.folder_form.as_ref() else {
+        let Some(form) = self.state.modals.folder_form.as_ref() else {
             return div().into_any_element();
         };
         let editing = form.base.is_some();
@@ -274,7 +276,7 @@ impl AppShell {
         };
         let description = form
             .parent
-            .and_then(|parent| self.catalog.folder_path(parent))
+            .and_then(|parent| self.state.catalog.folder_path(parent))
             .map(|path| rust_i18n::t!("folder.parent_hint", path = path).to_string())
             .unwrap_or_else(|| rust_i18n::t!("folder.root_hint").to_string());
 
@@ -352,7 +354,7 @@ impl AppShell {
                 "cancel-folder",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.modals.folder_form = None;
+                    this.state.modals.folder_form = None;
                     cx.notify();
                 }),
             ))

@@ -18,19 +18,21 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        if self.modals.settings.key_wizard.is_none() {
+        if self.state.modals.settings.key_wizard.is_none() {
             return div().into_any_element();
         }
         let generate = self.render_key_generate_section(app, p, cx);
         let list = self.render_key_list_section(app, p, cx);
         let deploy = self.render_key_deploy_section(app, p, cx);
         let message = self
+            .state
             .modals
             .settings
             .key_wizard
             .as_ref()
             .and_then(|state| state.message.clone());
         let error = self
+            .state
             .modals
             .settings
             .key_wizard
@@ -93,7 +95,7 @@ impl AppShell {
         p: &Palette,
         _cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.modals.settings.key_wizard.as_ref() else {
+        let Some(state) = self.state.modals.settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let current_algorithm = state.algorithm;
@@ -194,7 +196,7 @@ impl AppShell {
         p: &Palette,
         _cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.modals.settings.key_wizard.as_ref() else {
+        let Some(state) = self.state.modals.settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let keys = state.keys.clone();
@@ -330,14 +332,14 @@ impl AppShell {
         p: &Palette,
         _cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.modals.settings.key_wizard.as_ref() else {
+        let Some(state) = self.state.modals.settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let selected_key = state
             .selected
             .and_then(|index| state.keys.get(index))
             .cloned();
-        let targets = self.key_targets();
+        let targets = self.state.key_targets();
 
         let selected_summary = selected_key.as_ref().map(|key| {
             let file_name = key

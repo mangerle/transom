@@ -21,7 +21,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current = self.settings.language.clone();
+        let current = self.state.settings.language.clone();
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -52,8 +52,9 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_bell = self.settings.window.bell_style;
-        let stepper = Self::setting_stepper(&self.modals.settings.notify_threshold, px(110.0));
+        let current_bell = self.state.settings.window.bell_style;
+        let stepper =
+            Self::setting_stepper(&self.state.modals.settings.notify_threshold, px(110.0));
         let bell_options = vec![
             (
                 "bell-none",
@@ -79,7 +80,7 @@ impl AppShell {
                 .map(|(_, label, val)| (val, label))
                 .collect(),
             |this, style, cx| {
-                this.settings.window.bell_style = style;
+                this.state.settings.window.bell_style = style;
                 cx.notify();
             },
             cx,
@@ -97,9 +98,9 @@ impl AppShell {
                 "notify.desktop_switch",
                 Some("settings.desktop_notifications_desc"),
                 Switch::new("toggle-desktop-notifications")
-                    .checked(self.settings.window.desktop_notifications)
+                    .checked(self.state.settings.window.desktop_notifications)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.window.desktop_notifications = checked;
+                        this.state.settings.window.desktop_notifications = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -123,11 +124,11 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let kind = self.modals.settings.proxy.kind;
-        let host = self.modals.settings.proxy.host.clone();
-        let port = self.modals.settings.proxy.port.clone();
-        let username = self.modals.settings.proxy.username.clone();
-        let password = self.modals.settings.proxy.password.clone();
+        let kind = self.state.modals.settings.proxy.kind;
+        let host = self.state.modals.settings.proxy.host.clone();
+        let port = self.state.modals.settings.proxy.port.clone();
+        let username = self.state.modals.settings.proxy.username.clone();
+        let password = self.state.modals.settings.proxy.password.clone();
         // 代理模式与全页其它枚举项统一走下拉：三档选项长度不一，分段按钮
         // 长短参差且窄面板下会把整行占满，下拉的控件宽度稳定、靠右对齐。
         let mode_control = Self::setting_dropdown(
@@ -148,7 +149,7 @@ impl AppShell {
                 ),
             ],
             |this, protocol, cx| {
-                this.modals.settings.proxy.kind = protocol;
+                this.state.modals.settings.proxy.kind = protocol;
                 cx.notify();
             },
             cx,
@@ -207,10 +208,10 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let enabled = self.settings.block_view.enabled;
-        let integrate = self.settings.block_view.shell_integration;
-        let style = self.settings.block_view.style;
-        let rows_input = self.modals.settings.block_collapse_rows.clone();
+        let enabled = self.state.settings.block_view.enabled;
+        let integrate = self.state.settings.block_view.shell_integration;
+        let style = self.state.settings.block_view.style;
+        let rows_input = self.state.modals.settings.block_collapse_rows.clone();
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -219,7 +220,7 @@ impl AppShell {
                 Switch::new("toggle-block-view")
                     .checked(enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.block_view.enabled = checked;
+                        this.state.settings.block_view.enabled = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -231,7 +232,7 @@ impl AppShell {
                 Switch::new("toggle-shell-integration")
                     .checked(integrate)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.block_view.shell_integration = checked;
+                        this.state.settings.block_view.shell_integration = checked;
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -262,7 +263,7 @@ impl AppShell {
                                 .label(rust_i18n::t!(key).to_string())
                                 .selected(style == value)
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.settings.block_view.style = value;
+                                    this.state.settings.block_view.style = value;
                                     cx.notify();
                                 }))
                         }),
@@ -298,21 +299,21 @@ impl AppShell {
                 "desktop.default_terminal_switch",
                 Some("desktop.default_terminal_desc"),
                 Switch::new("toggle-default-terminal")
-                    .checked(self.settings.window.default_terminal)
+                    .checked(self.state.settings.window.default_terminal)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        let previous = this.settings.window.default_terminal;
-                        this.settings.window.default_terminal = checked;
+                        let previous = this.state.settings.window.default_terminal;
+                        this.state.settings.window.default_terminal = checked;
                         match transom_desktop::apply_default_terminal(checked) {
                             Ok(()) => {
-                                this.persist_settings_reported();
+                                this.state.persist_settings_reported();
                             }
                             Err(error) => {
                                 log::error!(
                                     "默认终端{}失败，界面已回滚，原因: {error}",
                                     if checked { "注册" } else { "撤销" }
                                 );
-                                this.settings.window.default_terminal = previous;
-                                this.set_error(localized_error(&error));
+                                this.state.settings.window.default_terminal = previous;
+                                this.state.set_error(localized_error(&error));
                             }
                         }
                         cx.notify();

@@ -12,14 +12,15 @@ use gpui_kit::*;
 
 impl AppShell {
     pub(crate) fn refresh_known_hosts(&mut self) {
-        self.modals.known_hosts.records = self.services.known_hosts.list().unwrap_or_default();
+        self.state.modals.known_hosts.records =
+            self.state.services.known_hosts.list().unwrap_or_default();
     }
 
     pub(crate) fn remove_known_host(&mut self, host: &str, port: u16, cx: &mut Context<Self>) {
-        if let Err(error) = self.services.known_hosts.remove(host, port) {
-            self.set_error(localized_error(&error));
+        if let Err(error) = self.state.services.known_hosts.remove(host, port) {
+            self.state.set_error(localized_error(&error));
         } else {
-            self.status = Some(rust_i18n::t!("known_hosts.deleted").to_string());
+            self.state.status = Some(rust_i18n::t!("known_hosts.deleted").to_string());
         }
         self.refresh_known_hosts();
         cx.notify();
@@ -32,8 +33,9 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let records = self.modals.known_hosts.records.clone();
+        let records = self.state.modals.known_hosts.records.clone();
         let search_query = self
+            .state
             .modals
             .known_hosts
             .search
@@ -129,7 +131,7 @@ impl AppShell {
 
         let content = v_flex()
             .gap_3()
-            .child(Input::new(&self.modals.known_hosts.search).w_full())
+            .child(Input::new(&self.state.modals.known_hosts.search).w_full())
             .child(
                 v_flex()
                     .id(ElementId::Name("known-hosts-list".into()))
@@ -144,7 +146,7 @@ impl AppShell {
             .on_click(crate::dialog_host::on_event(
                 app,
                 |this, _: &ClickEvent, _, cx| {
-                    this.modals.known_hosts.open = false;
+                    this.state.modals.known_hosts.open = false;
                     cx.notify();
                 },
             ));

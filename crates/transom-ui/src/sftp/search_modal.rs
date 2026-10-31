@@ -46,6 +46,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((root_path, side_connection)) = self
+            .state
             .remote_pane_scope(tab_id, target)
             .map(|scope| (scope.pane.path.clone(), scope.side_connection))
         else {
@@ -57,7 +58,7 @@ impl AppShell {
         });
         input.update(cx, |state, cx| state.focus(window, cx));
 
-        self.sftp_modals.search = Some(SftpSearchModalState {
+        self.state.sftp_modals.search = Some(SftpSearchModalState {
             tab_id,
             connection_id: side_connection,
             root_path,
@@ -73,7 +74,7 @@ impl AppShell {
 
     /// 触发执行远程搜索请求。
     pub(crate) fn sftp_execute_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(ref mut modal) = self.sftp_modals.search else {
+        let Some(ref mut modal) = self.state.sftp_modals.search else {
             return;
         };
         let pattern = modal.input.read(cx).value().trim().to_string();
@@ -106,9 +107,12 @@ impl AppShell {
             query.pattern,
             query.is_content
         );
-        let Some(connection_id) = target_connection
-            .or_else(|| self.workspace.tab(tab_id).and_then(|tab| tab.connection_id))
-        else {
+        let Some(connection_id) = target_connection.or_else(|| {
+            self.state
+                .workspace
+                .tab(tab_id)
+                .and_then(|tab| tab.connection_id)
+        }) else {
             return;
         };
         self.send_sftp_op_for_connection(
@@ -127,7 +131,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_modals.search.as_ref() else {
+        let Some(modal) = self.state.sftp_modals.search.as_ref() else {
             return div().into_any_element();
         };
 
@@ -179,7 +183,7 @@ impl AppShell {
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     |this, checked: &bool, _, cx| {
-                                        if let Some(ref mut m) = this.sftp_modals.search {
+                                        if let Some(ref mut m) = this.state.sftp_modals.search {
                                             m.is_content = *checked;
                                             cx.notify();
                                         }
@@ -193,7 +197,7 @@ impl AppShell {
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     |this, checked: &bool, _, cx| {
-                                        if let Some(ref mut m) = this.sftp_modals.search {
+                                        if let Some(ref mut m) = this.state.sftp_modals.search {
                                             m.case_sensitive = *checked;
                                             cx.notify();
                                         }
@@ -279,7 +283,7 @@ impl AppShell {
                         move |this, _: &ClickEvent, window, cx| {
                             // 点击条目：关闭弹窗并导航到目标所在文件夹。
                             // 并列远端的检索结果必须回到该列自己的连接，不能落到主远端。
-                            this.sftp_modals.search = None;
+                            this.state.sftp_modals.search = None;
                             let dir = parent_remote(&target_path);
                             if let Some(connection_id) = target_connection {
                                 this.request_sftp_list_for_connection(
@@ -309,7 +313,7 @@ impl AppShell {
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, window, cx| {
-                        this.sftp_modals.search = None;
+                        this.state.sftp_modals.search = None;
                         this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     },

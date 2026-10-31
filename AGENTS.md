@@ -152,7 +152,7 @@
 ### 14. Transom UI 分层、组件化与异步 IO 契约
 
 - **功能模块归属 `app` 子树**：`transom-ui` 的功能模块必须通过 `app/mod.rs` 的 `#[path]` 声明挂在 `app` 之下；`AppShell` 字段保持模块私有，禁止为了省事改回 `pub(crate)`。crate 根只保留模块重导出与基础模块（theme、palette、keymap 等）。
-- **状态与外壳分离**：应用级状态集中在 `app::state::AppState`，`AppShell` 只保留 `state` 字段并通过 `Deref`/`DerefMut` 复用状态操作；新增状态优先放 `AppState` 或 feature 结构体，禁止继续往 `AppShell` 平铺字段。
+- **状态与外壳分离**：应用级状态集中在 `app::state::AppState`，`AppShell` 只保留 `state` 字段；访问必须显式写 `self.state.xxx`，**严禁为外壳实现 `Deref`/`DerefMut`**——那会让状态方法隐式长在外壳上，调用点看不出归属，且任意模块都能拿到 `&mut AppState` 改状态而不触发重绘（守卫：`app_shell_does_not_deref_state`）。新增状态优先放 `AppState` 或 feature 结构体，禁止继续往 `AppShell` 平铺字段。
 - **表现层组件契约**：跨页面复用的 UI 必须放 `transom-ui/src/widgets/`，只接收数据与回调，禁止依赖 `AppShell`、禁止直接访问 store。组件内部优先复用 `gpui-kit` 的 `Button`、`Dialog`、`Empty`、`Progress`、`Settings`、`Kbd` 等，不重写焦点、键盘与弹层行为。
 - **设计令牌强制**：组件层禁止裸写 `text_xs()`、`text_sm()`、`px(...)`、`gap_N()`；字号、间距、控件尺寸与弹窗宽度必须取 `theme::tokens` 的 `typography`、`space`、`control`、`dialog` 档位。`widgets_use_design_tokens` 源码守卫必须保持通过。
 - **弹窗元数据单一来源**：`ModalKind` 的宽度与 slug 必须由 `ModalSpec` 一次提供；`ORDER` 必须覆盖全部种类且不重复，`order_covers_every_kind_exactly_once` 测试必须保持通过。新增弹窗同时评估是否应拆到独立视图文件。
@@ -198,5 +198,5 @@
 16. **[UI 线程 IO]** 是否消除了渲染/点击/事件路径上的同步磁盘、`.cast` 解析与审计扫描？异步写盘是否使用覆盖式有界单槽并处理失败？
 17. **[设计令牌]** 新增或迁移的组件是否使用 `theme::tokens` 的字号/间距/控件/弹窗档位？是否通过 `widgets_use_design_tokens` 守卫？
 18. **[平台边界]** 桌面集成是否只经 `transom-desktop`？macOS/Windows 占位实现是否返回明确错误而非静默成功？
-19. **[状态归属]** 新方法是否确实需要 `Context<Self>`/`Window`？纯状态查询是否写进了 `impl AppState`？`AppShell` 字段是否仍然只有一个 `state`？
+19. **[状态归属]** 新方法是否确实需要 `Context<Self>`/`Window`？纯状态查询是否写进了 `impl AppState`？`AppShell` 字段是否仍然只有一个 `state`、且状态访问是否显式写 `.state`（不得用 Deref 继承）？
 20. **[构造器复用]** 菜单项、弹窗按钮、空状态、列表行、表头是否复用了 `widgets` 构造器？是否新增了手写 `PopupMenuItem::new(...).icon(...)` 链？

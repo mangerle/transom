@@ -16,7 +16,7 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(connection_id) = self.remote_pane_connection(tab_id, target) else {
+        let Some(connection_id) = self.state.remote_pane_connection(tab_id, target) else {
             return;
         };
         self.send_sftp_op_for_connection(tab_id, connection_id, SftpOperation::Stat { path }, cx);
@@ -34,13 +34,18 @@ impl AppShell {
     ) {
         match local_file_properties(&path) {
             Ok(properties) => {
-                self.sftp_modals.properties = Some(SftpPropertiesModalState {
+                self.state.sftp_modals.properties = Some(SftpPropertiesModalState {
                     scope: "本地".to_string(),
                     properties,
                 });
             }
             Err(err) => {
-                if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+                if let Some(panel) = self
+                    .state
+                    .workspace
+                    .tab_mut(tab_id)
+                    .and_then(|t| t.sftp_mut())
+                {
                     panel.set_local_error(
                         rust_i18n::t!("sftp.properties.read_local_failed", error = err).to_string(),
                     );

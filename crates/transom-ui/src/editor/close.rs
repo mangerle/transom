@@ -63,6 +63,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> bool {
         let dirty_editors: Vec<_> = self
+            .state
             .editors
             .panels
             .iter()
@@ -72,7 +73,7 @@ impl AppShell {
         if dirty_editors.is_empty() {
             return false;
         }
-        self.editors.pending_close = Some(intent);
+        self.state.editors.pending_close = Some(intent);
         for editor in dirty_editors {
             if let Some(item) = self.editor_panel_mut(&editor) {
                 // 确认横幅渲染在主体区：折叠会把它整个藏掉，先展开；冲突横幅
@@ -94,17 +95,18 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(intent) = self.editors.pending_close.clone() else {
+        let Some(intent) = self.state.editors.pending_close.clone() else {
             return;
         };
         let tab_ids = self.tabs_for_pending_close(&intent);
         if tab_ids.is_empty() {
             // 目标标签已全部消失：关闭已在别处发生或不再相关，意图作废。
-            self.editors.pending_close = None;
+            self.state.editors.pending_close = None;
             cx.notify();
             return;
         }
         let still_dirty = self
+            .state
             .editors
             .panels
             .iter()
@@ -112,7 +114,7 @@ impl AppShell {
         if still_dirty {
             return;
         }
-        self.editors.pending_close = None;
+        self.state.editors.pending_close = None;
         match intent {
             PendingEditorClose::Group(group_id) => self.close_group(group_id, window, cx),
             PendingEditorClose::Pane(tab_id) => self.close_pane(tab_id, window, cx),
@@ -127,6 +129,7 @@ impl AppShell {
     fn tabs_for_pending_close(&self, intent: &PendingEditorClose) -> Vec<TabId> {
         match intent {
             PendingEditorClose::Group(group_id) => self
+                .state
                 .workspace
                 .groups
                 .iter()
@@ -135,6 +138,7 @@ impl AppShell {
                 .unwrap_or_default(),
             PendingEditorClose::Pane(tab_id) => Vec::from([*tab_id]),
             PendingEditorClose::Session(session_id) => self
+                .state
                 .workspace
                 .tabs
                 .iter()
@@ -144,7 +148,8 @@ impl AppShell {
             PendingEditorClose::Tiling(groups) => groups
                 .iter()
                 .filter_map(|group_id| {
-                    self.workspace
+                    self.state
+                        .workspace
                         .groups
                         .iter()
                         .find(|group| group.id == *group_id)

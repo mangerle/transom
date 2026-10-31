@@ -9,7 +9,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_modals.input.as_ref() else {
+        let Some(modal) = self.state.sftp_modals.input.as_ref() else {
             return div().into_any_element();
         };
         let title = modal.title.clone();
@@ -30,7 +30,7 @@ impl AppShell {
                 "cancel-sftp-input",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                    this.sftp_modals.input = None;
+                    this.state.sftp_modals.input = None;
                     this.focus_active_sftp_panel(window, cx);
                     cx.notify();
                 }),

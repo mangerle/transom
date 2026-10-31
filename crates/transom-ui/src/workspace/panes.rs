@@ -38,12 +38,12 @@ impl AppShell {
     ) -> AnyElement {
         // 并排网格是持久的，但只有活动标签属于某张网格时才铺格子；否则单屏显示
         // 当前标签，那张网格保留在标签栏里等用户点回来。
-        if let Some(tiled) = self.active_tiling().cloned()
+        if let Some(tiled) = self.state.active_tiling().cloned()
             && let Some(content) = self.render_tiled_content(&tiled, window, cx, p)
         {
             return content;
         }
-        let Some(group_index) = self.active_group_index() else {
+        let Some(group_index) = self.state.active_group_index() else {
             return self.render_empty_state(window, cx, p);
         };
         self.render_group_content(group_index, window, cx, p)
@@ -60,8 +60,8 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let group = &self.workspace.groups[group_index];
-        // 克隆布局树：渲染期间会改动 self.workspace.tabs，避免与 self.workspace.groups 的借用冲突。
+        let group = &self.state.workspace.groups[group_index];
+        // 克隆布局树：渲染期间会改动 self.state.workspace.tabs，避免与 self.state.workspace.groups 的借用冲突。
         let root = group.root.clone();
         let order = root.pane_ids();
         let frame = PaneFrame {
@@ -122,11 +122,14 @@ impl AppShell {
         id: SplitId,
         cx: &mut Context<Self>,
     ) -> Entity<ResizableState> {
-        if let Some(state) = self.workspace.pane_split_states.get(&id) {
+        if let Some(state) = self.state.workspace.pane_split_states.get(&id) {
             return state.clone();
         }
         let state = cx.new(|_| ResizableState::default());
-        self.workspace.pane_split_states.insert(id, state.clone());
+        self.state
+            .workspace
+            .pane_split_states
+            .insert(id, state.clone());
         state
     }
 
@@ -141,7 +144,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(index) = self.workspace.tab_index(tab_id) else {
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return div().into_any_element();
         };
         let p = frame.palette;
@@ -154,7 +157,7 @@ impl AppShell {
         let zoomed_here = frame.zoomed == Some(tab_id);
         let app_entity = cx.entity().clone();
         let (dot_color, status_icon) =
-            super::pane_status_indicator(&self.workspace.tabs[index].status, p);
+            super::pane_status_indicator(&self.state.workspace.tabs[index].status, p);
         let (zoom_label, zoom_icon) = if zoomed_here {
             (
                 rust_i18n::t!("menu.restore_panes").to_string(),
@@ -174,7 +177,7 @@ impl AppShell {
                 active,
                 dot_color,
                 icon: status_icon,
-                title: self.workspace.tabs[index].display_name(),
+                title: self.state.workspace.tabs[index].display_name(),
                 ordinal: Some(ordinal),
                 palette: p,
             },
@@ -263,19 +266,22 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(index) = self.workspace.tab_index(tab_id) else {
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return div().into_any_element();
         };
-        if let Some(player) = self.workspace.tabs[index].player() {
+        if let Some(player) = self.state.workspace.tabs[index].player() {
             return div().size_full().child(player).into_any_element();
         }
-        if let crate::app::TabContent::Monitor(target_id) = self.workspace.tabs[index].content {
+        if let crate::app::TabContent::Monitor(target_id) = self.state.workspace.tabs[index].content
+        {
             let target_title = self
+                .state
                 .workspace
                 .tab(target_id)
                 .map(|tab| tab.display_name())
                 .unwrap_or_else(|| rust_i18n::t!("monitor.view.host_fallback").to_string());
             let stats = self
+                .state
                 .workspace
                 .tab(target_id)
                 .and_then(|tab| tab.system_stats().cloned());
@@ -285,11 +291,11 @@ impl AppShell {
                 target_title,
                 stats,
             };
-            return self.monitor.update(cx, |view, cx| {
+            return self.state.monitor.update(cx, |view, cx| {
                 view.render_monitor_tab_content(params, window, cx, p)
             });
         }
-        if let Some(terminal) = self.workspace.tabs[index].terminal() {
+        if let Some(terminal) = self.state.workspace.tabs[index].terminal() {
             // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的
             // 最小外包块，绝对定位因此不受侧栏与面板列宽度变化的影响。
             let overlay = self.render_drop_overlay(tab_id, p, cx);

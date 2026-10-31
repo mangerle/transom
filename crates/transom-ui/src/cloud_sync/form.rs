@@ -70,8 +70,8 @@ impl SyncFormInputs {
 impl AppShell {
     /// 打开设置弹窗时回填云同步表单；秘密一律留空。
     pub(crate) fn fill_sync_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let sync = self.settings.sync.clone();
-        let form = &self.modals.settings.sync_form;
+        let sync = self.state.settings.sync.clone();
+        let form = &self.state.modals.settings.sync_form;
         let mut set = |input: &Entity<InputState>, value: &str| {
             input.update(cx, |state, cx| state.set_value(value, window, cx));
         };
@@ -123,9 +123,9 @@ impl AppShell {
     /// 端点类型以设置内存态为准（用户在页上点选），字段值取输入框现状，
     /// 因此"填完直接点上传"无需先保存；汇总后再做一次清洗兜底。
     pub(crate) fn collect_sync_settings(&self, cx: &App) -> SyncSettings {
-        let form = &self.modals.settings.sync_form;
+        let form = &self.state.modals.settings.sync_form;
         let read = |input: &Entity<InputState>| input.read(cx).value().trim().to_string();
-        let endpoint = match self.settings.sync.endpoint.clone() {
+        let endpoint = match self.state.settings.sync.endpoint.clone() {
             Some(SyncEndpoint::Webdav { .. }) => Some(SyncEndpoint::Webdav {
                 url: read(&form.webdav_url),
                 username: read(&form.webdav_username),
@@ -140,7 +140,7 @@ impl AppShell {
             }),
             None => None,
         };
-        let mut sync = self.settings.sync.clone();
+        let mut sync = self.state.settings.sync.clone();
         sync.endpoint = endpoint.and_then(SyncEndpoint::sanitized);
         let git_remote = read(&form.git_remote);
         sync.git = if git_remote.is_empty() {
@@ -170,9 +170,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let form = &self.modals.settings.sync_form;
+        let form = &self.state.modals.settings.sync_form;
         let is_webdav = matches!(
-            self.settings.sync.endpoint,
+            self.state.settings.sync.endpoint,
             Some(SyncEndpoint::Webdav { .. })
         );
         let credential = if is_webdav {
@@ -184,7 +184,7 @@ impl AppShell {
 
         if !credential.is_empty() {
             let key = SecretKey::cloud_sync_credential();
-            match self.services.secret_store.set(&key, &credential) {
+            match self.state.services.secret_store.set(&key, &credential) {
                 Ok(()) => {
                     let cleared = if is_webdav {
                         &form.webdav_password
@@ -194,7 +194,7 @@ impl AppShell {
                     cleared.update(cx, |state, cx| state.set_value("", window, cx));
                 }
                 Err(error) => {
-                    self.set_error(localized_error(&error));
+                    self.state.set_error(localized_error(&error));
                     return false;
                 }
             }
@@ -202,29 +202,30 @@ impl AppShell {
         let git_token = form.git_token.read(cx).value().trim().to_string();
         if !git_token.is_empty() {
             let key = SecretKey::git_sync_token();
-            match self.services.secret_store.set(&key, &git_token) {
+            match self.state.services.secret_store.set(&key, &git_token) {
                 Ok(()) => form
                     .git_token
                     .update(cx, |state, cx| state.set_value("", window, cx)),
                 Err(error) => {
-                    self.set_error(localized_error(&error));
+                    self.state.set_error(localized_error(&error));
                     return false;
                 }
             }
         }
         if !passphrase.is_empty() {
             if passphrase.chars().count() < 8 {
-                self.set_error(rust_i18n::t!("backup.error_short").to_string());
+                self.state
+                    .set_error(rust_i18n::t!("backup.error_short").to_string());
                 return false;
             }
             let key = SecretKey::cloud_sync_passphrase();
-            match self.services.secret_store.set(&key, &passphrase) {
+            match self.state.services.secret_store.set(&key, &passphrase) {
                 Ok(()) => {
                     form.passphrase
                         .update(cx, |state, cx| state.set_value("", window, cx));
                 }
                 Err(error) => {
-                    self.set_error(localized_error(&error));
+                    self.state.set_error(localized_error(&error));
                     return false;
                 }
             }

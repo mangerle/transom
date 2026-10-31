@@ -59,9 +59,9 @@ impl AppShell {
         let session_color = session_color(session.color);
         let icon_name = session_icon(session.icon).unwrap_or(icon_name);
         let is_active = active_session == Some(session_id);
-        let selection_mode = self.sidebar.selection_mode;
-        let is_selected = self.sidebar.selected_sessions.contains(&session_id);
-        let is_marked = self.sidebar.tree_selection == Some(session_id);
+        let selection_mode = self.state.sidebar.selection_mode;
+        let is_selected = self.state.sidebar.selected_sessions.contains(&session_id);
+        let is_marked = self.state.sidebar.tree_selection == Some(session_id);
         let drag_label = session.name.clone();
         let drag_icon = icon_name;
         let element = div()
@@ -76,8 +76,8 @@ impl AppShell {
             // 单击只负责选中这一行，双击才建立连接：会话行是列表里最容易被顺手点到的
             // 元素，把连接挂在单击上会让"看一眼"和"连上去"没法区分。
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if this.sidebar.selection_mode {
-                    let selected = this.sidebar.selected_sessions.contains(&session_id);
+                if this.state.sidebar.selection_mode {
+                    let selected = this.state.sidebar.selected_sessions.contains(&session_id);
                     this.toggle_session_selection(session_id, !selected, cx);
                 } else if event.click_count() >= 2 {
                     this.connect_session(session_id, window, cx);
@@ -85,7 +85,7 @@ impl AppShell {
                     // 左侧标签模式自动把槽位切到标签面板。
                     this.reveal_vertical_tabs_panel(cx);
                 } else {
-                    this.sidebar.tree_selection = Some(session_id);
+                    this.state.sidebar.tree_selection = Some(session_id);
                     cx.notify();
                 }
             }))
@@ -190,7 +190,7 @@ impl AppShell {
                                 let text = host.clone();
                                 cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
                                 copy_app.update(cx, |this, cx| {
-                                    this.status = Some(
+                                    this.state.status = Some(
                                         rust_i18n::t!("sidebar.host_copied", host = text)
                                             .to_string(),
                                     );
@@ -302,6 +302,7 @@ impl AppShell {
             );
         // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
         let probe_badge = self
+            .state
             .probe_badges
             .get(&session_id)
             .map(|badge| AppShell::render_probe_badge(session_id, badge, p));

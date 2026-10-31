@@ -81,7 +81,7 @@ impl Element for EditorDragTracker {
                 return;
             }
             shell.update(cx, |this, cx| {
-                if this.editor_drag_in_progress() {
+                if this.state.editor_drag_in_progress() {
                     this.drag_editor_panels(event.position, window.viewport_size(), cx);
                 }
             });
@@ -92,7 +92,7 @@ impl Element for EditorDragTracker {
                 return;
             }
             shell.update(cx, |this, cx| {
-                if this.editor_drag_in_progress() {
+                if this.state.editor_drag_in_progress() {
                     this.end_editor_panel_drag(cx);
                 }
             });

@@ -69,7 +69,7 @@ impl AppState {
 
 impl AppShell {
     pub(crate) fn submit_auth_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.modals.auth_prompt.take() else {
+        let Some(state) = self.state.modals.auth_prompt.take() else {
             return;
         };
         let answers: Vec<String> = state
@@ -81,9 +81,9 @@ impl AppShell {
             && state.save
             && let Some(value) = answers.first().filter(|value| !value.is_empty())
         {
-            self.modals.pending_credential = Some(PendingCredential {
+            self.state.modals.pending_credential = Some(PendingCredential {
                 session_id: state.session_id,
-                owner: self.secret_owner_for(state.session_id),
+                owner: self.state.secret_owner_for(state.session_id),
                 connection_id: state.connection_id,
                 kind,
                 value: Zeroizing::new(value.clone()),
@@ -101,6 +101,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let matched = self
+            .state
             .modals
             .pending_credential
             .as_ref()
@@ -110,12 +111,12 @@ impl AppShell {
         if !matched {
             return;
         }
-        let Some(pending) = self.modals.pending_credential.take() else {
+        let Some(pending) = self.state.modals.pending_credential.take() else {
             return;
         };
         let key = SecretKey::new(pending.owner, pending.kind);
-        self.mark_credential_saved(pending.owner);
-        let secret_store = self.services.secret_store.clone();
+        self.state.mark_credential_saved(pending.owner);
+        let secret_store = self.state.services.secret_store.clone();
         cx.spawn(async move |this, cx| {
             let error = cx
                 .background_executor()
@@ -128,7 +129,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
-                    this.set_error(localized_error(&error));
+                    this.state.set_error(localized_error(&error));
                 }
                 cx.notify();
             });
@@ -139,7 +140,7 @@ impl AppShell {
     /// 连接失败时丢弃待保存凭据。
     /// 用户信任首连主机指纹。
     pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.modals.host_key_confirm.take() {
+        if let Some(state) = self.state.modals.host_key_confirm.take() {
             let _ = state.responder.try_send(true);
             cx.notify();
         }
@@ -147,7 +148,7 @@ impl AppShell {
 
     /// 用户拒绝首连主机指纹。
     pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.modals.host_key_confirm.take() {
+        if let Some(state) = self.state.modals.host_key_confirm.take() {
             let _ = state.responder.try_send(false);
             cx.notify();
         }
@@ -163,7 +164,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(prompt) = self.modals.auth_prompt.as_ref() else {
+        let Some(prompt) = self.state.modals.auth_prompt.as_ref() else {
             return div().into_any_element();
         };
         let client_generated = prompt
@@ -218,7 +219,7 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, checked: &bool, _, cx| {
-                                    if let Some(state) = this.modals.auth_prompt.as_mut() {
+                                    if let Some(state) = this.state.modals.auth_prompt.as_mut() {
                                         state.save = *checked;
                                     }
                                     cx.notify();
@@ -240,7 +241,7 @@ impl AppShell {
                     "cancel-auth",
                     rust_i18n::t!("common.cancel").to_string(),
                     crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        this.cancel_auth_prompt();
+                        this.state.cancel_auth_prompt();
                         cx.notify();
                     }),
                 ))
@@ -279,7 +280,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(state) = self.modals.host_key_confirm.as_ref() else {
+        let Some(state) = self.state.modals.host_key_confirm.as_ref() else {
             return div().into_any_element();
         };
         let body = rust_i18n::t!(

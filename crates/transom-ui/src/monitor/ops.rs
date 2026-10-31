@@ -22,8 +22,8 @@ impl AppState {
 impl AppShell {
     /// 活动栏入口：打开/关闭监控抽屉，打开时立即拉取一轮进程快照。
     pub(crate) fn toggle_monitor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let open = !self.monitor.read(cx).is_open();
-        self.monitor.update(cx, |view, _| {
+        let open = !self.state.monitor.read(cx).is_open();
+        self.state.monitor.update(cx, |view, _| {
             view.set_open(open);
             if open {
                 view.reset_history();
@@ -31,12 +31,14 @@ impl AppShell {
         });
         if open {
             let has_focused_terminal = self
+                .state
                 .workspace
                 .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
+                .and_then(|tab_id| self.state.workspace.tab(tab_id))
                 .is_some_and(|tab| tab.session_pane().is_some());
             if !has_focused_terminal {
                 let existing_local = self
+                    .state
                     .workspace
                     .tabs
                     .iter()
@@ -59,11 +61,11 @@ impl AppShell {
 
     /// 保证进程轮询任务已启动；任务常驻但在面板关闭或进程卡片收起时不发命令。
     pub(crate) fn ensure_monitor_task(&mut self, cx: &mut Context<Self>) {
-        if self.tasks.monitor.is_some() {
+        if self.state.tasks.monitor.is_some() {
             return;
         }
-        let interval = self.monitor.read(cx).interval_mode().interval();
-        self.tasks.monitor = Some(cx.spawn(async move |this, cx| {
+        let interval = self.state.monitor.read(cx).interval_mode().interval();
+        self.state.tasks.monitor = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(interval).await;
                 if this
@@ -83,17 +85,18 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if self
+            .state
             .monitor
             .update(cx, |view, _| view.set_interval_mode(mode))
         {
-            self.tasks.monitor = None;
+            self.state.tasks.monitor = None;
             self.ensure_monitor_task(cx);
             cx.notify();
         }
     }
 
     fn sample_processes_if_open(&mut self, cx: &mut Context<Self>) {
-        if !self.monitor.read(cx).is_open() {
+        if !self.state.monitor.read(cx).is_open() {
             return;
         }
         self.sample_processes(cx);
@@ -101,16 +104,16 @@ impl AppShell {
 
     /// 采样进程列表：卡片折叠时只取总数维持摘要计数，展开时拉全量明细。
     pub(crate) fn sample_processes(&mut self, cx: &mut Context<Self>) {
-        let Some((tab_id, connection_id)) = self.active_monitor_target() else {
+        let Some((tab_id, connection_id)) = self.state.active_monitor_target() else {
             return;
         };
-        if self.monitor.read(cx).processes_collapsed() {
-            self.send_command(HostCommand::SampleProcessCount {
+        if self.state.monitor.read(cx).processes_collapsed() {
+            self.state.send_command(HostCommand::SampleProcessCount {
                 tab_id,
                 connection_id,
             });
         } else {
-            self.send_command(HostCommand::SampleProcesses {
+            self.state.send_command(HostCommand::SampleProcesses {
                 tab_id,
                 connection_id,
             });
@@ -121,17 +124,18 @@ impl AppShell {
     /// 切换各板块展开/折叠状态。
     pub(crate) fn toggle_section_collapse(&mut self, section: &str, cx: &mut Context<Self>) {
         let expanded_processes = self
+            .state
             .monitor
             .update(cx, |view, _| view.toggle_collapse(section));
-        let collapse = self.monitor.read(cx).collapse_snapshot();
-        self.settings.monitor.cpu_expanded = !collapse.cpu;
-        self.settings.monitor.memory_expanded = !collapse.memory;
-        self.settings.monitor.disk_expanded = !collapse.disk;
-        self.settings.monitor.network_expanded = !collapse.network;
-        self.settings.monitor.ports_expanded = !collapse.ports;
-        self.settings.monitor.services_expanded = !collapse.services;
-        self.settings.monitor.processes_expanded = !collapse.processes;
-        self.persist_settings_reported();
+        let collapse = self.state.monitor.read(cx).collapse_snapshot();
+        self.state.settings.monitor.cpu_expanded = !collapse.cpu;
+        self.state.settings.monitor.memory_expanded = !collapse.memory;
+        self.state.settings.monitor.disk_expanded = !collapse.disk;
+        self.state.settings.monitor.network_expanded = !collapse.network;
+        self.state.settings.monitor.ports_expanded = !collapse.ports;
+        self.state.settings.monitor.services_expanded = !collapse.services;
+        self.state.settings.monitor.processes_expanded = !collapse.processes;
+        self.state.persist_settings_reported();
         if expanded_processes {
             self.sample_processes(cx);
         }
@@ -140,8 +144,8 @@ impl AppShell {
 
     /// 向当前活动终端发送一行命令输入。
     pub(crate) fn send_terminal_input(&mut self, cmd: &str, cx: &mut Context<Self>) {
-        if let Some(tab_id) = self.workspace.active_tab
-            && let Some(tab) = self.workspace.tab(tab_id)
+        if let Some(tab_id) = self.state.workspace.active_tab
+            && let Some(tab) = self.state.workspace.tab(tab_id)
             && let Some(terminal) = tab.terminal()
         {
             terminal.update(cx, |view, cx| {
@@ -166,7 +170,7 @@ impl AppShell {
     /// 安全终止进程（对核心系统进程施加保护拦截）。
     pub(crate) fn send_kill_process_safe(&mut self, pid: u32, force: bool, cx: &mut Context<Self>) {
         if pid <= 1 {
-            self.monitor.update(cx, |view, _| {
+            self.state.monitor.update(cx, |view, _| {
                 view.set_error(Some(rust_i18n::t!("monitor.error_kill_pid1").to_string()));
             });
             cx.notify();
@@ -176,10 +180,10 @@ impl AppShell {
     }
 
     pub(crate) fn send_kill_process(&mut self, pid: u32, force: bool, cx: &mut Context<Self>) {
-        let Some((tab_id, connection_id)) = self.active_monitor_target() else {
+        let Some((tab_id, connection_id)) = self.state.active_monitor_target() else {
             return;
         };
-        self.send_command(HostCommand::KillProcess {
+        self.state.send_command(HostCommand::KillProcess {
             tab_id,
             connection_id,
             pid,
@@ -195,10 +199,11 @@ impl AppShell {
         processes: Vec<ProcessInfo>,
         cx: &mut Context<Self>,
     ) {
-        if self.active_monitor_target() != Some((tab_id, connection_id)) {
+        if self.state.active_monitor_target() != Some((tab_id, connection_id)) {
             return;
         }
-        self.monitor
+        self.state
+            .monitor
             .update(cx, |view, _| view.set_processes(processes));
         cx.notify();
     }
@@ -210,10 +215,11 @@ impl AppShell {
         count: u32,
         cx: &mut Context<Self>,
     ) {
-        if self.active_monitor_target() != Some((tab_id, connection_id)) {
+        if self.state.active_monitor_target() != Some((tab_id, connection_id)) {
             return;
         }
-        self.monitor
+        self.state
+            .monitor
             .update(cx, |view, _| view.set_process_total(count));
         cx.notify();
     }
@@ -225,10 +231,10 @@ impl AppShell {
         error: AppError,
         cx: &mut Context<Self>,
     ) {
-        if self.active_monitor_target() != Some((tab_id, connection_id)) {
+        if self.state.active_monitor_target() != Some((tab_id, connection_id)) {
             return;
         }
-        self.monitor.update(cx, |view, _| {
+        self.state.monitor.update(cx, |view, _| {
             view.set_error(Some(crate::palette::localized_error(&error)));
         });
         cx.notify();
@@ -242,18 +248,20 @@ impl AppShell {
         error: Option<AppError>,
         cx: &mut Context<Self>,
     ) {
-        if self.active_monitor_target() != Some((tab_id, connection_id)) {
+        if self.state.active_monitor_target() != Some((tab_id, connection_id)) {
             return;
         }
         match error {
             Some(error) => {
-                self.monitor.update(cx, |view, _| {
+                self.state.monitor.update(cx, |view, _| {
                     view.set_error(Some(crate::palette::localized_error(&error)));
                 });
             }
             None => {
-                self.monitor.update(cx, |view, _| view.set_error(None));
-                self.status = Some(rust_i18n::t!("monitor.kill_sent", pid = pid).to_string());
+                self.state
+                    .monitor
+                    .update(cx, |view, _| view.set_error(None));
+                self.state.status = Some(rust_i18n::t!("monitor.kill_sent", pid = pid).to_string());
                 self.sample_processes(cx);
             }
         }
@@ -309,19 +317,20 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let new_width = if self.monitor.read(cx).drawer_width() > 480.0 {
+        let new_width = if self.state.monitor.read(cx).drawer_width() > 480.0 {
             420.0
         } else {
             600.0
         };
-        self.monitor
+        self.state
+            .monitor
             .update(cx, |view, _| view.set_drawer_width(new_width));
-        self.settings.monitor.drawer_width = new_width;
+        self.state.settings.monitor.drawer_width = new_width;
         self.persist_layout_settings(cx);
-        let panels_state = if self.settings.window.sftp_panel_side.is_left() {
-            &self.workspace_panels_left
+        let panels_state = if self.state.settings.window.sftp_panel_side.is_left() {
+            &self.state.workspace_panels_left
         } else {
-            &self.workspace_panels
+            &self.state.workspace_panels
         };
         let panel_count = panels_state.read(cx).sizes().len();
         if panel_count > 0 {
@@ -336,9 +345,9 @@ impl AppShell {
     /// 将监控抽屉脱离为全屏独立的 Workspace Tab。
     pub(crate) fn maximize_monitor_to_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // 1. 寻找当前关联的主机会话 TabId
-        let active_tab_id = self.workspace.active_tab;
+        let active_tab_id = self.state.workspace.active_tab;
         let target_tab_id = active_tab_id
-            .and_then(|id| self.workspace.tab(id))
+            .and_then(|id| self.state.workspace.tab(id))
             .and_then(|tab| {
                 if let TabContent::Monitor(tid) = tab.content {
                     Some(tid)
@@ -349,7 +358,8 @@ impl AppShell {
                 }
             })
             .or_else(|| {
-                self.workspace
+                self.state
+                    .workspace
                     .tabs
                     .iter()
                     .find(|tab| !tab.is_player() && !tab.is_monitor())
@@ -361,7 +371,7 @@ impl AppShell {
         };
 
         // 2. 如果已经存在针对该 target_tab_id 的监控 Tab，直接切过去
-        if let Some(existing) = self.workspace.tabs.iter().find(|t| {
+        if let Some(existing) = self.state.workspace.tabs.iter().find(|t| {
             if let TabContent::Monitor(tid) = t.content {
                 tid == target_tab_id
             } else {
@@ -369,14 +379,16 @@ impl AppShell {
             }
         }) {
             let existing_id = existing.id;
-            self.monitor.update(cx, |view, _| view.set_open(false));
+            self.state
+                .monitor
+                .update(cx, |view, _| view.set_open(false));
             self.activate_tab(existing_id, window, cx);
             cx.notify();
             return;
         }
 
         // 3. 构建全屏监控独立标签页
-        let Some(target_tab) = self.workspace.tab(target_tab_id) else {
+        let Some(target_tab) = self.state.workspace.tab(target_tab_id) else {
             return;
         };
         let target_title = target_tab.display_name();
@@ -395,9 +407,11 @@ impl AppShell {
             target_connection_id,
         );
 
-        self.create_group(monitor_tab_id, target_session_id);
-        self.workspace.tabs.push(new_tab);
-        self.monitor.update(cx, |view, _| view.set_open(false));
+        self.state.create_group(monitor_tab_id, target_session_id);
+        self.state.workspace.tabs.push(new_tab);
+        self.state
+            .monitor
+            .update(cx, |view, _| view.set_open(false));
         self.activate_tab(monitor_tab_id, window, cx);
         cx.notify();
     }
@@ -412,10 +426,10 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         // 1. 打开抽屉
-        self.monitor.update(cx, |view, _| view.set_open(true));
+        self.state.monitor.update(cx, |view, _| view.set_open(true));
 
         // 2. 切回原会话标签页
-        if self.workspace.tab(target_tab_id).is_some() {
+        if self.state.workspace.tab(target_tab_id).is_some() {
             self.activate_tab(target_tab_id, window, cx);
         }
 

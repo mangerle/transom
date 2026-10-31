@@ -29,6 +29,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(dir) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -44,6 +45,7 @@ impl AppShell {
             };
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
+                    .state
                     .workspace
                     .tab_mut(tab_id)
                     .and_then(|tab| tab.sftp_mut())
@@ -83,6 +85,7 @@ impl AppShell {
     pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
         let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -96,7 +99,7 @@ impl AppShell {
             return;
         }
         let count = paths.len();
-        self.sftp_modals.confirm = Some(SftpConfirmModalState {
+        self.state.sftp_modals.confirm = Some(SftpConfirmModalState {
             action: SftpPendingDelete::Local { tab_id, paths },
             title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
             description: rust_i18n::t!("sftp.local_async.delete_body", count = count).to_string(),
@@ -116,6 +119,7 @@ impl AppShell {
     ) {
         self.dismiss_sftp_hover_preview(tab_id, cx);
         let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())
@@ -138,6 +142,7 @@ impl AppShell {
             let entries = spawn_blocking_local(move || list_local_dir(&scan_dir)).await;
             let _ = this.update(cx, |this, cx| {
                 let Some(panel) = this
+                    .state
                     .workspace
                     .tab_mut(tab_id)
                     .and_then(|tab| tab.sftp_mut())

@@ -135,14 +135,14 @@ impl AppShell {
     /// 会话树里的连接动作完成后调用：连接入口在会话树，连接完成后用户要看
     /// 的是终端列表，因此自动把槽位切到标签面板。
     pub(crate) fn reveal_vertical_tabs_panel(&mut self, cx: &mut Context<Self>) {
-        if self.settings.window.tab_position != TabPosition::Left {
+        if self.state.settings.window.tab_position != TabPosition::Left {
             return;
         }
-        if self.sidebar.visible && self.vertical_tabs_open {
+        if self.state.sidebar.visible && self.state.vertical_tabs_open {
             return;
         }
-        self.sidebar.visible = true;
-        self.vertical_tabs_open = true;
+        self.state.sidebar.visible = true;
+        self.state.vertical_tabs_open = true;
         cx.notify();
     }
 
@@ -152,12 +152,12 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let query = self.vertical_tabs_search.read(cx).value().to_string();
+        let query = self.state.vertical_tabs_search.read(cx).value().to_string();
         let query_lower = query.trim().to_lowercase();
-        let total = self.workspace.groups.len();
+        let total = self.state.workspace.groups.len();
         let mut visible: Vec<GroupId> = Vec::with_capacity(total);
-        for group in &self.workspace.groups {
-            if self.group_matches(group.id, &query_lower) {
+        for group in &self.state.workspace.groups {
+            if self.state.group_matches(group.id, &query_lower) {
                 visible.push(group.id);
             }
         }
@@ -203,7 +203,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let menu_data = self.new_session_menu_data();
+        let menu_data = self.state.new_session_menu_data();
         let menu_app = cx.entity().clone();
         h_flex()
             .w_full()
@@ -214,10 +214,11 @@ impl AppShell {
             .border_b_1()
             .border_color(p.sidebar_border)
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(Input::new(&self.vertical_tabs_search).small().w_full()),
+                div().flex_1().min_w_0().child(
+                    Input::new(&self.state.vertical_tabs_search)
+                        .small()
+                        .w_full(),
+                ),
             )
             .child(
                 Button::new("vertical-tabs-new")
@@ -319,8 +320,8 @@ fn build_new_session_menu(
             IconName::Server,
             move |_, _, cx| {
                 tree_app.update(cx, |this, cx| {
-                    this.sidebar.visible = true;
-                    this.vertical_tabs_open = false;
+                    this.state.sidebar.visible = true;
+                    this.state.vertical_tabs_open = false;
                     cx.notify();
                 });
             },

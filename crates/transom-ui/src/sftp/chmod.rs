@@ -35,13 +35,14 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((connection_id, targets)) = self
+            .state
             .remote_pane_scope(tab_id, target)
             .map(|scope| (scope.connection_id, scope.pane.selected_paths()))
         else {
             return;
         };
         let mut plans: Vec<(String, u32)> = Vec::with_capacity(targets.len());
-        if let Some(panel) = self.workspace.tab(tab_id).and_then(|tab| tab.sftp()) {
+        if let Some(panel) = self.state.workspace.tab(tab_id).and_then(|tab| tab.sftp()) {
             let Some(pane) = panel.remote_pane(target) else {
                 return;
             };
@@ -65,6 +66,7 @@ impl AppShell {
         }
         let count = plans.len();
         let dir = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -82,7 +84,12 @@ impl AppShell {
         log::info!("远端赋予执行权限已下发，窗格: {tab_id}，条目数: {count}，目录: {dir}");
         // 状态只声明"已下发"：Chmod 是异步往返，此刻列表里的权限徽章尚未更新，
         // 说"已生效"就是在骗用户；刷新目录后即可看到新值。
-        if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+        if let Some(panel) = self
+            .state
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|t| t.sftp_mut())
+        {
             panel.set_status(rust_i18n::t!("sftp.chmod.granted_remote", count = count).to_string());
             cx.notify();
         }
@@ -98,13 +105,19 @@ impl AppShell {
         use std::path::PathBuf;
 
         let targets: Vec<PathBuf> = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|t| t.sftp_mut())
             .map(|panel| panel.selected_local_paths())
             .unwrap_or_default();
         if targets.is_empty() {
-            if let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) {
+            if let Some(panel) = self
+                .state
+                .workspace
+                .tab_mut(tab_id)
+                .and_then(|t| t.sftp_mut())
+            {
                 panel.set_local_error(rust_i18n::t!("sftp.select_file").to_string());
                 cx.notify();
             }
@@ -132,7 +145,12 @@ impl AppShell {
             }
         }
 
-        let Some(panel) = self.workspace.tab_mut(tab_id).and_then(|t| t.sftp_mut()) else {
+        let Some(panel) = self
+            .state
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|t| t.sftp_mut())
+        else {
             return;
         };
         if let Some(first) = failures.first() {
@@ -161,16 +179,18 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((entry, side_connection)) =
-            self.remote_pane_scope(tab_id, target).and_then(|scope| {
-                let selected = scope.pane.selected.clone()?;
-                let entry = scope
-                    .pane
-                    .entries
-                    .iter()
-                    .find(|entry| entry.path == selected)?
-                    .clone();
-                Some((entry, scope.side_connection))
-            })
+            self.state
+                .remote_pane_scope(tab_id, target)
+                .and_then(|scope| {
+                    let selected = scope.pane.selected.clone()?;
+                    let entry = scope
+                        .pane
+                        .entries
+                        .iter()
+                        .find(|entry| entry.path == selected)?
+                        .clone();
+                    Some((entry, scope.side_connection))
+                })
         else {
             self.set_sftp_pane_error(
                 tab_id,
@@ -190,7 +210,7 @@ impl AppShell {
             &rust_i18n::t!("sftp.chmod.octal_placeholder"),
         );
         octal_input.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_modals.chmod = Some(SftpChmodModalState {
+        self.state.sftp_modals.chmod = Some(SftpChmodModalState {
             tab_id,
             connection_id: side_connection,
             remote_path: entry.path,
@@ -209,7 +229,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(modal) = self.sftp_modals.chmod.as_mut() else {
+        let Some(modal) = self.state.sftp_modals.chmod.as_mut() else {
             return;
         };
         if checked {
@@ -232,7 +252,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(modal) = self.sftp_modals.chmod.as_mut() else {
+        let Some(modal) = self.state.sftp_modals.chmod.as_mut() else {
             return;
         };
         modal.permissions = mode & 0o777;
@@ -246,7 +266,7 @@ impl AppShell {
     }
 
     pub(crate) fn save_sftp_chmod_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(mut modal) = self.sftp_modals.chmod.take() else {
+        let Some(mut modal) = self.state.sftp_modals.chmod.take() else {
             return;
         };
         let input_text = modal.octal_input.read(cx).value().trim().to_string();
@@ -258,7 +278,7 @@ impl AppShell {
                 None => {
                     modal.error = Some(rust_i18n::t!("sftp.chmod.octal_invalid").to_string());
                     let input = modal.octal_input.clone();
-                    self.sftp_modals.chmod = Some(modal);
+                    self.state.sftp_modals.chmod = Some(modal);
                     input.update(cx, |state, cx| state.focus(window, cx));
                     cx.notify();
                     return;
@@ -266,10 +286,12 @@ impl AppShell {
             }
         };
         let tab_id = modal.tab_id;
-        let Some(connection_id) = modal
-            .connection_id
-            .or_else(|| self.workspace.tab(tab_id).and_then(|tab| tab.connection_id))
-        else {
+        let Some(connection_id) = modal.connection_id.or_else(|| {
+            self.state
+                .workspace
+                .tab(tab_id)
+                .and_then(|tab| tab.connection_id)
+        }) else {
             return;
         };
         let op = SftpOperation::Chmod {

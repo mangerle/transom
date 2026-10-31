@@ -34,6 +34,7 @@ impl AppShell {
         // 渲染期读取查询词：面板的条目集合由本函数按当前查询重建，因此
         // 只要 on_query 触发一次重绘，列表就与输入框内容保持同步。
         let query = self
+            .state
             .modals
             .quick_open_state
             .read(cx)
@@ -58,7 +59,7 @@ impl AppShell {
         };
 
         let muted = p.muted_foreground;
-        let mut command = Command::new(&self.modals.quick_open_state)
+        let mut command = Command::new(&self.state.modals.quick_open_state)
             .placeholder(placeholder)
             // 外框由宿主面板提供：组件自带的圆角边框会在直角浮层里套出一层内圆角。
             .bordered(false)
@@ -87,7 +88,7 @@ impl AppShell {
                         .and_then(|group| group.get(index_path.row))
                         .cloned();
                     app.update(cx, |this, cx| {
-                        this.modals.show_quick_open = false;
+                        this.state.modals.show_quick_open = false;
                         match target {
                             Some(PaletteTarget::Local) => {
                                 this.open_local_terminal(window, cx);
@@ -98,6 +99,7 @@ impl AppShell {
                             Some(PaletteTarget::QuickConnect) => {
                                 // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
                                 let host = this
+                                    .state
                                     .modals
                                     .quick_open_state
                                     .read(cx)
@@ -117,6 +119,7 @@ impl AppShell {
                             }
                             Some(PaletteTarget::Snippet(id)) => {
                                 let snippet = this
+                                    .state
                                     .settings
                                     .snippets
                                     .items
@@ -124,7 +127,7 @@ impl AppShell {
                                     .find(|snippet| snippet.id == id)
                                     .cloned();
                                 if let Some(snippet) = snippet {
-                                    let execute = this.settings.snippets.execute_directly;
+                                    let execute = this.state.settings.snippets.execute_directly;
                                     this.apply_snippet(&snippet, execute, cx);
                                 }
                             }
@@ -139,7 +142,7 @@ impl AppShell {
                 let app = app_entity.clone();
                 move |_window, cx| {
                     app.update(cx, |this, cx| {
-                        this.modals.show_quick_open = false;
+                        this.state.modals.show_quick_open = false;
                         cx.notify();
                     });
                 }
@@ -199,16 +202,16 @@ impl AppShell {
             log::warn!("命令面板选择终端配色失败，配色不在预设中: {name}");
             return;
         };
-        self.settings.terminal_profile.theme_name = theme.name;
-        self.settings.terminal_profile.palette = theme.palette;
+        self.state.settings.terminal_profile.theme_name = theme.name;
+        self.state.settings.terminal_profile.palette = theme.palette;
         self.apply_appearance_to_live_panes(cx);
         self.persist_theme_choice(cx);
     }
 
     fn persist_theme_choice(&mut self, cx: &mut Context<Self>) {
-        if let Err(error) = self.persist_settings() {
+        if let Err(error) = self.state.persist_settings() {
             log::error!("保存主题选择失败，界面仍是新主题但下次启动会回退，原因: {error}");
-            self.set_error(localized_error(&error));
+            self.state.set_error(localized_error(&error));
         }
         cx.notify();
     }

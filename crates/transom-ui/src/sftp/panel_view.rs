@@ -67,10 +67,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(tab_id) = self.workspace.active_tab else {
+        let Some(tab_id) = self.state.workspace.active_tab else {
             return div().into_any_element();
         };
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return div().into_any_element();
         };
         let tab_conn_id = tab.connection_id;
@@ -97,7 +97,7 @@ impl AppShell {
             panel,
             panel.local.show_hidden,
             &local_filter_query,
-            &self.settings.sftp.panel_hidden_patterns,
+            &self.state.settings.sftp.panel_hidden_patterns,
         );
         let remote_error = panel.queue.error.clone();
         let status = panel.queue.status.clone();
@@ -128,8 +128,13 @@ impl AppShell {
             None
         };
         let resume_enabled = panel.queue.resume_enabled;
-        let verify_after_transfer = self.settings.sftp.verify_after_transfer;
-        let max_concurrent_transfers = self.settings.sftp.max_concurrent_transfers.clamp(1, 8);
+        let verify_after_transfer = self.state.settings.sftp.verify_after_transfer;
+        let max_concurrent_transfers = self
+            .state
+            .settings
+            .sftp
+            .max_concurrent_transfers
+            .clamp(1, 8);
         let queue_expanded = panel.queue.expanded;
         // 没有活动任务时回退汇总暂停任务进度，避免暂停后进度条消失
         let paused_count = panel
@@ -173,7 +178,7 @@ impl AppShell {
             .iter()
             .map(|(index, _, title)| (*index, title.clone()))
             .collect();
-        let hidden_patterns = self.settings.sftp.panel_hidden_patterns.clone();
+        let hidden_patterns = self.state.settings.sftp.panel_hidden_patterns.clone();
         let mut remote_columns: Vec<SftpColumn> = Vec::new();
         if !is_local_only && let Some(connection_id) = tab_conn_id {
             let content = if remote_collapsed {
@@ -414,6 +419,7 @@ impl AppShell {
                         .tooltip(rust_i18n::t!("app.close").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if let Some(pane) = this
+                                .state
                                 .workspace
                                 .tab_mut(tab_id)
                                 .and_then(|tab| tab.session_pane_mut())

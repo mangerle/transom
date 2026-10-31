@@ -29,7 +29,7 @@ pub(super) fn render_auth_credential_fields(
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, checked: &bool, _, cx| {
-                                    if let Some(form) = this.modals.form.as_mut() {
+                                    if let Some(form) = this.state.modals.form.as_mut() {
                                         form.save_password = *checked;
                                     }
                                     cx.notify();
@@ -118,7 +118,7 @@ pub(super) fn render_auth_credential_fields(
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     |this, checked: &bool, _, cx| {
-                                        if let Some(form) = this.modals.form.as_mut() {
+                                        if let Some(form) = this.state.modals.form.as_mut() {
                                             form.save_passphrase = *checked;
                                         }
                                         cx.notify();

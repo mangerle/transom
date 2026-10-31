@@ -51,7 +51,7 @@ impl AppShell {
             cx,
         );
 
-        let form = &self.modals.settings.sync_form;
+        let form = &self.state.modals.settings.sync_form;
         let mut content = v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -174,9 +174,9 @@ impl AppShell {
                     Some("sync.include_secrets_desc"),
                     Switch::new("toggle-sync-include-secrets")
                         .small()
-                        .checked(self.settings.sync.include_secrets)
+                        .checked(self.state.settings.sync.include_secrets)
                         .on_click(cx.listener(|this, &checked, _, cx| {
-                            this.settings.sync.include_secrets = checked;
+                            this.state.settings.sync.include_secrets = checked;
                             cx.notify();
                         }))
                         .into_any_element(),
@@ -243,22 +243,22 @@ impl AppShell {
             .child(format!(
                 "{}: {}",
                 rust_i18n::t!("sync.last_push"),
-                format(self.settings.sync.last_push_at)
+                format(self.state.settings.sync.last_push_at)
             ))
             .child(format!(
                 "{}: {}",
                 rust_i18n::t!("sync.last_pull"),
-                format(self.settings.sync.last_pull_at)
+                format(self.state.settings.sync.last_pull_at)
             ))
             .into_any_element()
     }
 
     /// 当前生效的同步端点类型：Git 优先（`git` 有值时端点字段恒为空）。
     fn sync_endpoint_kind(&self) -> &'static str {
-        if self.settings.sync.git.is_some() {
+        if self.state.settings.sync.git.is_some() {
             "git"
         } else {
-            match self.settings.sync.endpoint {
+            match self.state.settings.sync.endpoint {
                 Some(SyncEndpoint::Webdav { .. }) => "webdav",
                 Some(SyncEndpoint::S3 { .. }) => "s3",
                 None => "off",
@@ -282,9 +282,10 @@ impl AppShell {
         }
         match kind {
             "off" => {
-                self.settings.sync.endpoint = None;
-                self.settings.sync.git = None;
-                self.modals
+                self.state.settings.sync.endpoint = None;
+                self.state.settings.sync.git = None;
+                self.state
+                    .modals
                     .settings
                     .sync_form
                     .git_remote
@@ -293,8 +294,9 @@ impl AppShell {
                     });
             }
             "webdav" => {
-                self.settings.sync.git = None;
-                self.modals
+                self.state.settings.sync.git = None;
+                self.state
+                    .modals
                     .settings
                     .sync_form
                     .git_remote
@@ -302,10 +304,10 @@ impl AppShell {
                         input.set_value(String::new(), window, cx);
                     });
                 if !matches!(
-                    self.settings.sync.endpoint,
+                    self.state.settings.sync.endpoint,
                     Some(SyncEndpoint::Webdav { .. })
                 ) {
-                    self.settings.sync.endpoint = Some(SyncEndpoint::Webdav {
+                    self.state.settings.sync.endpoint = Some(SyncEndpoint::Webdav {
                         url: String::new(),
                         username: String::new(),
                         directory: DEFAULT_SYNC_DIRECTORY.to_string(),
@@ -313,16 +315,20 @@ impl AppShell {
                 }
             }
             "s3" => {
-                self.settings.sync.git = None;
-                self.modals
+                self.state.settings.sync.git = None;
+                self.state
+                    .modals
                     .settings
                     .sync_form
                     .git_remote
                     .update(cx, |input, cx| {
                         input.set_value(String::new(), window, cx);
                     });
-                if !matches!(self.settings.sync.endpoint, Some(SyncEndpoint::S3 { .. })) {
-                    self.settings.sync.endpoint = Some(SyncEndpoint::S3 {
+                if !matches!(
+                    self.state.settings.sync.endpoint,
+                    Some(SyncEndpoint::S3 { .. })
+                ) {
+                    self.state.settings.sync.endpoint = Some(SyncEndpoint::S3 {
                         endpoint: String::new(),
                         region: String::new(),
                         bucket: String::new(),
@@ -332,9 +338,9 @@ impl AppShell {
                 }
             }
             "git" => {
-                self.settings.sync.endpoint = None;
-                if self.settings.sync.git.is_none() {
-                    self.settings.sync.git = Some(transom_core::GitSyncSettings {
+                self.state.settings.sync.endpoint = None;
+                if self.state.settings.sync.git.is_none() {
+                    self.state.settings.sync.git = Some(transom_core::GitSyncSettings {
                         remote: String::new(),
                         branch: "transom-sync".to_string(),
                         interval_minutes: 0,

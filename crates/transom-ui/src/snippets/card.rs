@@ -63,9 +63,9 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
         .on_click(move |_, _, cx| {
             let item = row_item.clone();
             row_app.update(cx, |this, cx| {
-                let execute = this.settings.snippets.execute_directly;
+                let execute = this.state.settings.snippets.execute_directly;
                 this.apply_snippet(&item, execute, cx);
-                this.modals.snippet_panel.open = false;
+                this.state.modals.snippet_panel.open = false;
                 cx.notify();
             });
         })
@@ -182,7 +182,7 @@ pub(super) fn render_snippets_card(
             move |checked, _, cx| {
                 let checked = *checked;
                 app.update(cx, |this, cx| {
-                    this.settings.snippets.execute_directly = checked;
+                    this.state.settings.snippets.execute_directly = checked;
                     this.persist_layout_settings(cx);
                 });
             }

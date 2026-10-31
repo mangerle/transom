@@ -14,8 +14,8 @@ use gpui_kit::*;
 
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(error) = self.take_persistence_error() {
-            self.set_error(localized_error(&error));
+        if let Some(error) = self.state.take_persistence_error() {
+            self.state.set_error(localized_error(&error));
         }
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
@@ -25,13 +25,14 @@ impl Render for AppShell {
         // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
         // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
         let rem = window.rem_size();
-        let top_bar = (!self.immersive).then(|| self.render_top_bar(window, cx, &p));
-        let activity_bar = (!self.immersive).then(|| self.render_activity_bar(window, cx, &p));
+        let top_bar = (!self.state.immersive).then(|| self.render_top_bar(window, cx, &p));
+        let activity_bar =
+            (!self.state.immersive).then(|| self.render_activity_bar(window, cx, &p));
 
         // 沉浸模式使用独立分组：侧边栏完全不参与布局，主面板成为首面板，
         // 避免其左侧残留一条用于拖动侧边栏的 1px 分隔线；
         // 独立 key 也保证退出沉浸后原分组的全部尺寸状态原样恢复。
-        let resizable_id = if self.immersive {
+        let resizable_id = if self.state.immersive {
             "workspace-panels-immersive"
         } else {
             "workspace-panels"
@@ -45,10 +46,10 @@ impl Render for AppShell {
             .size(rem_px(size::SIDEBAR_WIDTH, rem))
             .size_range(sidebar_min_width..sidebar_max_width)
             .fixed()
-            .visible(self.sidebar.visible);
-        if self.sidebar.visible {
+            .visible(self.state.sidebar.visible);
+        if self.state.sidebar.visible {
             // 左侧槽位一次只承载一种内容：纵向标签面板或会话树。
-            let content = if self.show_vertical_tabs_panel() {
+            let content = if self.state.show_vertical_tabs_panel() {
                 self.render_vertical_tabs_panel(&p, cx)
             } else {
                 self.render_sidebar(window, cx, &p)
@@ -60,15 +61,15 @@ impl Render for AppShell {
         // 本帧的面板尺寸才能反映新的宽度。
         self.sync_sftp_panel_width(window, cx);
         let panels_state = if plan.side_left {
-            self.workspace_panels_left.clone()
+            self.state.workspace_panels_left.clone()
         } else {
-            self.workspace_panels.clone()
+            self.state.workspace_panels.clone()
         };
 
         let side_left = plan.side_left;
         let show_sftp = plan.show_sftp;
         let show_forwards = plan.show_forwards;
-        let mut resizable_group = if self.immersive {
+        let mut resizable_group = if self.state.immersive {
             // 沉浸模式只保留主面板，使用独立分组与临时状态；
             // 严禁复用 panels_state，否则主面板在全屏下会覆盖索引 0（侧栏）的尺寸记录，
             // 导致退出沉浸模式后侧边栏继承全屏宽度并撑满窗口。
@@ -76,10 +77,10 @@ impl Render for AppShell {
         } else {
             h_resizable(resizable_id).with_state(&panels_state)
         };
-        if !self.immersive {
+        if !self.state.immersive {
             resizable_group = resizable_group.child(sidebar_panel);
         }
-        if !self.immersive && side_left {
+        if !self.state.immersive && side_left {
             // 停靠左：SFTP 与转发整体挪到主面板之前，贴着侧栏。
             if show_sftp {
                 resizable_group = resizable_group.child(
@@ -101,7 +102,7 @@ impl Render for AppShell {
         }
         resizable_group =
             resizable_group.child(resizable_panel().child(self.render_main(window, cx, &p)));
-        if !self.immersive && !side_left {
+        if !self.state.immersive && !side_left {
             if show_sftp {
                 resizable_group = resizable_group.child(
                     resizable_panel()
@@ -121,21 +122,23 @@ impl Render for AppShell {
             }
         }
 
-        if !self.immersive && self.monitor.read(cx).is_open() {
+        if !self.state.immersive && self.state.monitor.read(cx).is_open() {
             // 监控抽屉停靠在主面板右侧，支持拖拽调整宽度（360px 至屏幕宽度的 75%）。
             let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(520.0);
             if let Some(actual_w) = panels_state.read(cx).sizes().last().copied() {
                 let actual_f32 = actual_w.as_f32();
                 if actual_f32 >= 360.0
                     && actual_f32 <= max_drawer_width
-                    && (self.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
+                    && (self.state.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
                 {
-                    self.monitor
+                    self.state
+                        .monitor
                         .update(cx, |view, _| view.set_drawer_width(actual_f32));
-                    self.settings.monitor.drawer_width = actual_f32;
+                    self.state.settings.monitor.drawer_width = actual_f32;
                 }
             }
             let monitor_width = self
+                .state
                 .monitor
                 .read(cx)
                 .drawer_width()
@@ -144,18 +147,19 @@ impl Render for AppShell {
                 resizable_panel()
                     .size(px(monitor_width))
                     .size_range(px(360.0)..px(max_drawer_width))
-                    .child(self.monitor.clone()),
+                    .child(self.state.monitor.clone()),
             );
         }
 
         let mut main_row = h_flex().flex_1().overflow_hidden();
-        if !self.immersive {
+        if !self.state.immersive {
             // 主内容区只在朝窗口边缘的一侧补轮廓，且只在右侧真的空到窗口边缘时
             // 才补：面板之间由可拖拽手柄画唯一的分割线，这里再叠一条轮廓/面板
             // 边框就会并排成 2px。停靠左侧时主面板右侧是监控抽屉或窗口边缘，
             // 左边一律交给手柄，不再补左轮廓。
-            let has_right_panel = show_sftp || show_forwards || self.monitor.read(cx).is_open();
-            if !self.settings.window.sftp_panel_side.is_left() && !has_right_panel {
+            let has_right_panel =
+                show_sftp || show_forwards || self.state.monitor.read(cx).is_open();
+            if !self.state.settings.window.sftp_panel_side.is_left() && !has_right_panel {
                 main_row = main_row
                     .border_color(p.divider(p.border))
                     .divider_edge(DividerEdge::Right, p.divider_width);
@@ -173,8 +177,8 @@ impl Render for AppShell {
         );
         // 状态栏按活动栏加侧栏的实测宽度切分。尺寸取自工作区分组的上一帧布局，
         // 拖动侧栏时由 ResizableState 的通知驱动整帧重绘，分界线落后一帧。
-        let status_bar = (!self.immersive).then(|| {
-            let divider_x = if self.sidebar.visible {
+        let status_bar = (!self.state.immersive).then(|| {
+            let divider_x = if self.state.sidebar.visible {
                 // 侧栏折叠期间仍以空面板参与分组，拖动其他分隔线可能把它的记录
                 // 宽度同步成 0；小于最小宽度或大于最大宽度的值一律视为无效，回退到默认宽度。
                 let sidebar_width = panels_state
@@ -193,7 +197,7 @@ impl Render for AppShell {
         });
         // 错误在写入时入队（见 AppShell::set_error），这里统一转成应用内通知。
         // 延迟到绘制结束后推送，避免在渲染期间修改通知层。
-        let pending_errors = self.pending_notices.drain();
+        let pending_errors = self.state.pending_notices.drain();
         if !pending_errors.is_empty() {
             cx.defer_in(window, move |_, window, cx| {
                 for message in pending_errors {
@@ -282,9 +286,10 @@ impl AppShell {
     fn plan_workspace_layout(&self, window: &Window, cx: &App) -> WorkspaceChromeLayout {
         let rem = window.rem_size();
         let active_panel = self
+            .state
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id));
+            .and_then(|tab_id| self.state.workspace.tab(tab_id));
         let show_sftp = active_panel.is_some_and(|tab| tab.sftp().is_some_and(|panel| panel.open));
         let sftp_panel = active_panel.and_then(|tab| tab.sftp());
         let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);
@@ -324,11 +329,11 @@ impl AppShell {
         // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
         let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
         let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
-        let sidebar_width = if self.sidebar.visible {
-            let panels_state = if self.settings.window.sftp_panel_side.is_left() {
-                &self.workspace_panels_left
+        let sidebar_width = if self.state.sidebar.visible {
+            let panels_state = if self.state.settings.window.sftp_panel_side.is_left() {
+                &self.state.workspace_panels_left
             } else {
-                &self.workspace_panels
+                &self.state.workspace_panels
             };
             panels_state
                 .read(cx)
@@ -363,7 +368,7 @@ impl AppShell {
             sftp_width,
             sftp_min_width,
             sftp_max_width,
-            side_left: self.settings.window.sftp_panel_side.is_left(),
+            side_left: self.state.settings.window.sftp_panel_side.is_left(),
         }
     }
 }

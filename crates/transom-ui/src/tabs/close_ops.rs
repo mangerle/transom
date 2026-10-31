@@ -97,15 +97,16 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(target_group) = self.group_index_for_tab(tab_id) else {
+        let Some(target_group) = self.state.group_index_for_tab(tab_id) else {
             return;
         };
-        let target_group_id = self.workspace.groups[target_group].id;
+        let target_group_id = self.state.workspace.groups[target_group].id;
         let mut keep = vec![target_group_id];
-        if let Some(tiled) = self.tiling_of_group(target_group_id) {
+        if let Some(tiled) = self.state.tiling_of_group(target_group_id) {
             keep.extend(tiled.occupied_groups());
         }
         let others: Vec<GroupId> = self
+            .state
             .workspace
             .groups
             .iter()
@@ -120,8 +121,9 @@ impl AppShell {
     /// 关闭窗格所属的整个标签组。
     pub(crate) fn close_tab(&mut self, tab_id: TabId, window: &mut Window, cx: &mut Context<Self>) {
         let Some(group_id) = self
+            .state
             .group_index_for_tab(tab_id)
-            .map(|index| self.workspace.groups[index].id)
+            .map(|index| self.state.workspace.groups[index].id)
         else {
             return;
         };
@@ -135,49 +137,58 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(index) = self.workspace.group_index(group_id) else {
+        let Some(index) = self.state.workspace.group_index(group_id) else {
             return;
         };
-        let panes = self.workspace.groups[index].pane_ids();
+        let panes = self.state.workspace.groups[index].pane_ids();
         if self.block_close_for_dirty_editors(&panes, PendingEditorClose::Group(group_id), cx) {
             return;
         }
         let tiled_focus = self
+            .state
             .tiling_of_group(group_id)
             .and_then(|tiled| tiled.focused_group());
-        self.workspace.groups.remove(index);
+        self.state.workspace.groups.remove(index);
         for tab_id in &panes {
-            self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
+            self.state
+                .send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
-        self.workspace.tabs.retain(|tab| !panes.contains(&tab.id));
-        self.prune_tab_overlays();
-        self.prune_tilings();
+        self.state
+            .workspace
+            .tabs
+            .retain(|tab| !panes.contains(&tab.id));
+        self.state.prune_tab_overlays();
+        self.state.prune_tilings();
 
         let active_removed = self
+            .state
             .workspace
             .active_tab
             .is_some_and(|id| panes.contains(&id));
         if active_removed {
             let tiled_return = self
+                .state
                 .active_tiling()
                 .and_then(|tiled| tiled.focused_group())
                 .or(tiled_focus)
-                .and_then(|id| self.workspace.group(id))
+                .and_then(|id| self.state.workspace.group(id))
                 .map(|group| group.active_pane);
-            self.workspace.active_tab = tiled_return.or_else(|| {
-                self.workspace
+            self.state.workspace.active_tab = tiled_return.or_else(|| {
+                self.state
+                    .workspace
                     .groups
                     .get(index.saturating_sub(1))
-                    .or_else(|| self.workspace.groups.first())
+                    .or_else(|| self.state.workspace.groups.first())
                     .map(|group| group.active_pane)
             });
-            if let Some(active) = self.workspace.active_tab {
+            if let Some(active) = self.state.workspace.active_tab {
                 self.activate_tab(active, window, cx);
             }
         }
-        self.prune_tab_selection();
-        self.sync_broadcast_targets();
-        if self.workspace.groups.is_empty() && self.settings.window.close_window_on_all_tabs_closed
+        self.state.prune_tab_selection();
+        self.state.sync_broadcast_targets();
+        if self.state.workspace.groups.is_empty()
+            && self.state.settings.window.close_window_on_all_tabs_closed
         {
             self.close_app(window, cx);
             return;
@@ -192,11 +203,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(group_index) = self.group_index_for_tab(tab_id) else {
+        let Some(group_index) = self.state.group_index_for_tab(tab_id) else {
             return;
         };
-        if self.workspace.groups[group_index].pane_count() == 1 {
-            let group_id = self.workspace.groups[group_index].id;
+        if self.state.workspace.groups[group_index].pane_count() == 1 {
+            let group_id = self.state.workspace.groups[group_index].id;
             self.close_group(group_id, window, cx);
             return;
         }
@@ -208,11 +219,12 @@ impl AppShell {
             return;
         }
 
-        self.send_command(TerminalCommand::CloseTab { tab_id });
-        self.workspace.tabs.retain(|tab| tab.id != tab_id);
-        self.prune_tab_overlays();
-        let replacement = self.detach_pane_from_group(tab_id);
-        self.prune_tilings();
+        self.state
+            .send_command(TerminalCommand::CloseTab { tab_id });
+        self.state.workspace.tabs.retain(|tab| tab.id != tab_id);
+        self.state.prune_tab_overlays();
+        let replacement = self.state.detach_pane_from_group(tab_id);
+        self.state.prune_tilings();
         if let Some(next) = replacement {
             self.activate_tab(next, window, cx);
         }
@@ -222,16 +234,17 @@ impl AppShell {
     /// 连接尚未建立时的静默移除，不向控制器发送关闭命令。
     /// 在标签栏条目之间轮转：并排网格算一条，组内成员不单独占位。
     pub(crate) fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let entries = self.strip_entries();
+        let entries = self.state.strip_entries();
         if entries.len() <= 1 {
             return;
         }
         let current = self
+            .state
             .active_group_id()
             .and_then(|group| {
                 entries
                     .iter()
-                    .position(|entry| self.entry_contains(*entry, group))
+                    .position(|entry| self.state.entry_contains(*entry, group))
             })
             .unwrap_or(0);
         let next = if forward {
@@ -242,6 +255,7 @@ impl AppShell {
         let target = match entries[next] {
             StripEntry::Single(group) => Some(group),
             StripEntry::Tiled { id, .. } => self
+                .state
                 .tiling_by_id(id)
                 .and_then(|tiled| tiled.focused_group()),
         };
@@ -252,20 +266,22 @@ impl AppShell {
 
     /// 设置界面语言并立即落盘；空串表示跟随系统。
     pub(crate) fn set_language(&mut self, language: String, cx: &mut Context<Self>) {
-        if self.settings.language == language {
+        if self.state.settings.language == language {
             return;
         }
-        self.settings.language = language;
-        set_locale(&crate::i18n::resolve_language(&self.settings.language));
-        if let Err(error) = self.persist_settings() {
-            self.set_error(localized_error(&error));
+        self.state.settings.language = language;
+        set_locale(&crate::i18n::resolve_language(
+            &self.state.settings.language,
+        ));
+        if let Err(error) = self.state.persist_settings() {
+            self.state.set_error(localized_error(&error));
         }
         cx.notify();
     }
 
     /// 活动栏的语言按钮：在中文与英文之间切换（跟随系统时以当前生效语言为起点）。
     pub(crate) fn toggle_language(&mut self, cx: &mut Context<Self>) {
-        let next = if crate::i18n::resolve_language(&self.settings.language) == "zh-CN" {
+        let next = if crate::i18n::resolve_language(&self.state.settings.language) == "zh-CN" {
             "en"
         } else {
             "zh-CN"

@@ -88,6 +88,7 @@ fn render_activity_reorder_half(
         let dragged = drag.0;
         app.update(cx, |this, cx| {
             if this
+                .state
                 .settings
                 .activity_bar
                 .move_relative_to(dragged, anchor, !before)
@@ -130,9 +131,12 @@ pub(super) fn render_activity_blank_zone(
         let dragged = drag.0;
         app.update(cx, |this, cx| {
             let changed = if top_end {
-                this.settings.activity_bar.move_to_top_end(dragged)
+                this.state.settings.activity_bar.move_to_top_end(dragged)
             } else {
-                this.settings.activity_bar.move_to_bottom_start(dragged)
+                this.state
+                    .settings
+                    .activity_bar
+                    .move_to_bottom_start(dragged)
             };
             if changed {
                 this.persist_layout_settings(cx);

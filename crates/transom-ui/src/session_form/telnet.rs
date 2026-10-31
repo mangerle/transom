@@ -35,7 +35,7 @@ pub(crate) fn render_telnet_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
+                        if let Some(form) = this.state.modals.form.as_mut() {
                             form.telnet_encoding = encoding;
                         }
                         cx.notify();
@@ -83,7 +83,7 @@ pub(crate) fn render_telnet_fields(
                         .on_click(crate::dialog_host::on_event(
                             app,
                             |this, checked: &bool, _, cx| {
-                                if let Some(form) = this.modals.form.as_mut() {
+                                if let Some(form) = this.state.modals.form.as_mut() {
                                     form.auto_reconnect = *checked;
                                 }
                                 cx.notify();

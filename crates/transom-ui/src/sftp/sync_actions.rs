@@ -23,9 +23,9 @@ impl AppShell {
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let filter_text = self.settings.sftp.transfer_filter.clone();
+        let filter_text = self.state.settings.sftp.transfer_filter.clone();
         let Some((connection_id, local_root, remote_root)) =
-            self.workspace.tab(tab_id).and_then(|tab| {
+            self.state.workspace.tab(tab_id).and_then(|tab| {
                 let panel = tab.sftp()?;
                 let pane = panel.remote_pane(target)?;
                 let connection_id = panel.remote_connection(target, tab.connection_id)?;
@@ -35,7 +35,7 @@ impl AppShell {
             return;
         };
         let op_id = TransferId::new();
-        self.send_command(SftpCommand::Sftp {
+        self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -45,7 +45,7 @@ impl AppShell {
                 filter: TransferFilter::from_text(&filter_text),
             },
         });
-        self.sftp_modals.sync = Some(SftpSyncModalState {
+        self.state.sftp_modals.sync = Some(SftpSyncModalState {
             tab_id,
             connection_id,
             op_id,
@@ -67,7 +67,7 @@ impl AppShell {
         checked: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(modal) = self.sftp_modals.sync.as_mut() else {
+        let Some(modal) = self.state.sftp_modals.sync.as_mut() else {
             return;
         };
         let Some(entry) = modal.entries.get(index) else {
@@ -84,7 +84,7 @@ impl AppShell {
 
     /// 全选/全不选可同步项；类型冲突始终保持不可选。
     pub(crate) fn sftp_select_all_sync(&mut self, selected: bool, cx: &mut Context<Self>) {
-        let Some(modal) = self.sftp_modals.sync.as_mut() else {
+        let Some(modal) = self.state.sftp_modals.sync.as_mut() else {
             return;
         };
         for (index, entry) in modal.entries.iter().enumerate() {
@@ -97,12 +97,12 @@ impl AppShell {
 
     /// 将勾选的差异项打包成一个同步任务入队并启动队列。
     pub(crate) fn start_sftp_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let verify = self.settings.sftp.verify_after_transfer;
-        let Some(mut modal) = self.sftp_modals.sync.take() else {
+        let verify = self.state.settings.sftp.verify_after_transfer;
+        let Some(mut modal) = self.state.sftp_modals.sync.take() else {
             return;
         };
         if modal.scanning || modal.error.is_some() {
-            self.sftp_modals.sync = Some(modal);
+            self.state.sftp_modals.sync = Some(modal);
             return;
         }
         let tab_id = modal.tab_id;
@@ -131,7 +131,7 @@ impl AppShell {
 
         if items.is_empty() {
             modal.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
-            self.sftp_modals.sync = Some(modal);
+            self.state.sftp_modals.sync = Some(modal);
             cx.notify();
             return;
         }
@@ -143,10 +143,11 @@ impl AppShell {
             Some(total_size),
         );
         task.verify = verify;
-        task.verify_mode = self.settings.sftp.verify_mode;
-        task.checksum_algorithm = self.settings.sftp.checksum_algorithm;
+        task.verify_mode = self.state.settings.sftp.verify_mode;
+        task.checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
         task.target_connection_id = Some(modal.connection_id);
         if let Some(panel) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.sftp_mut())

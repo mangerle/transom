@@ -112,7 +112,7 @@ impl AppShell {
                 true
             }
             SftpAppEvent::SftpSearchResults { items, .. } => {
-                if let Some(ref mut modal) = self.sftp_modals.search {
+                if let Some(ref mut modal) = self.state.sftp_modals.search {
                     modal.is_searching = false;
                     modal.results = items;
                 }
@@ -142,6 +142,7 @@ impl AppShell {
             } => {
                 let mut error_message = None;
                 if let Some(tab) = self
+                    .state
                     .workspace
                     .tabs
                     .iter_mut()
@@ -154,7 +155,7 @@ impl AppShell {
                 }
                 // 先结束标签表的可变借用，再入队错误：set_error 需要 &mut self。
                 if let Some(message) = error_message {
-                    self.set_error(message);
+                    self.state.set_error(message);
                 }
             }
         }
@@ -234,7 +235,7 @@ impl AppShell {
                     self.handle_cloud_sync_missing(cx);
                 }
                 Err(error) => {
-                    self.set_error(localized_error(&error));
+                    self.state.set_error(localized_error(&error));
                 }
             },
             SyncAppEvent::GitSynced { result } => {
@@ -262,28 +263,28 @@ impl AppShell {
     ) {
         match event {
             TerminalEvent::Title(title) => {
-                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.title = title.clone();
                 }
             }
             // 标题栈弹出或终端要求恢复默认标题：运行期标题清空，标签回落会话名。
             TerminalEvent::ResetTitle => {
-                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.title.clear();
                 }
             }
             TerminalEvent::Cwd(path) => {
                 log::debug!("收到终端 OSC 7 cwd，窗格: {tab_id}，路径: {path}");
-                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.cwd = Some(path.clone());
                 }
                 self.sftp_sync_with_terminal_cwd(tab_id, path, window, cx);
             }
             TerminalEvent::Bell => {
-                self.status = Some(rust_i18n::t!("status.bell").to_string());
+                self.state.status = Some(rust_i18n::t!("status.bell").to_string());
             }
             TerminalEvent::ClipboardStored => {
-                self.status = Some(rust_i18n::t!("status.copied").to_string());
+                self.state.status = Some(rust_i18n::t!("status.copied").to_string());
             }
             TerminalEvent::ClipboardWriteRequest { text } => {
                 self.request_clipboard_permission(tab_id, text.clone(), cx);
@@ -294,13 +295,13 @@ impl AppShell {
                 // 动作，统一在这里响应才不会漏掉某个出口。
                 let hint = rust_i18n::t!("copy_mode.hint").to_string();
                 if *active {
-                    self.status = Some(hint);
-                } else if self.status.as_deref() == Some(hint.as_str()) {
-                    self.status = None;
+                    self.state.status = Some(hint);
+                } else if self.state.status.as_deref() == Some(hint.as_str()) {
+                    self.state.status = None;
                 }
             }
             TerminalEvent::Exit => {
-                if let Some(tab) = self.workspace.tab_mut(tab_id)
+                if let Some(tab) = self.state.workspace.tab_mut(tab_id)
                     && !matches!(tab.status, TabStatus::Failed(_))
                 {
                     tab.status = TabStatus::Disconnected;
@@ -327,7 +328,7 @@ impl AppShell {
             }
             TerminalEvent::TriggerFired { rule_name, action } => match action {
                 transom_core::TriggerAction::AutoResponse(reply) => {
-                    self.status = Some(
+                    self.state.status = Some(
                         rust_i18n::t!(
                             "trigger.auto_response_notice",
                             name = rule_name,
@@ -337,7 +338,7 @@ impl AppShell {
                     );
                 }
                 transom_core::TriggerAction::Bell => {
-                    self.status = Some(rust_i18n::t!("status.bell").to_string());
+                    self.state.status = Some(rust_i18n::t!("status.bell").to_string());
                 }
                 _ => {}
             },

@@ -40,7 +40,7 @@ fn action_summary(action: &TriggerAction) -> String {
 impl AppShell {
     /// 打开新建触发器规则弹窗。
     pub(crate) fn open_new_trigger(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.modals.settings.trigger_edit = Some(TriggerEditState::new(None, window, cx));
+        self.state.modals.settings.trigger_edit = Some(TriggerEditState::new(None, window, cx));
         cx.notify();
     }
 
@@ -51,15 +51,16 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(rule) = self.settings.triggers.find_rule(id) {
-            self.modals.settings.trigger_edit = Some(TriggerEditState::new(Some(rule), window, cx));
+        if let Some(rule) = self.state.settings.triggers.find_rule(id) {
+            self.state.modals.settings.trigger_edit =
+                Some(TriggerEditState::new(Some(rule), window, cx));
             cx.notify();
         }
     }
 
     /// 提交保存触发器规则。
     pub(crate) fn save_trigger_edit(&mut self, cx: &mut Context<Self>) {
-        let Some(edit) = self.modals.settings.trigger_edit.as_ref() else {
+        let Some(edit) = self.state.modals.settings.trigger_edit.as_ref() else {
             return;
         };
 
@@ -112,13 +113,13 @@ impl AppShell {
             case_sensitive,
         };
 
-        if let Some(existing) = self.settings.triggers.find_rule_mut(rule_id) {
+        if let Some(existing) = self.state.settings.triggers.find_rule_mut(rule_id) {
             *existing = rule;
         } else {
-            self.settings.triggers.rules.push(rule);
+            self.state.settings.triggers.rules.push(rule);
         }
 
-        self.modals.settings.trigger_edit = None;
+        self.state.modals.settings.trigger_edit = None;
 
         self.sync_triggers_to_live_panes(cx);
         cx.notify();
@@ -126,7 +127,7 @@ impl AppShell {
 
     /// 切换编辑表单中的动作类型。
     fn set_trigger_action_kind(&mut self, kind: ActionKindChoice, cx: &mut Context<Self>) {
-        if let Some(e) = self.modals.settings.trigger_edit.as_mut() {
+        if let Some(e) = self.state.modals.settings.trigger_edit.as_mut() {
             e.action_kind = kind;
         }
         cx.notify();
@@ -134,7 +135,7 @@ impl AppShell {
 
     /// 设置编辑表单错误提示。
     fn set_trigger_edit_error(&mut self, err: String, cx: &mut Context<Self>) {
-        if let Some(edit) = self.modals.settings.trigger_edit.as_mut() {
+        if let Some(edit) = self.state.modals.settings.trigger_edit.as_mut() {
             edit.error = Some(err);
         }
         cx.notify();
@@ -142,14 +143,14 @@ impl AppShell {
 
     /// 取消编辑触发器表单。
     fn cancel_trigger_edit(&mut self, cx: &mut Context<Self>) {
-        self.modals.settings.trigger_edit = None;
+        self.state.modals.settings.trigger_edit = None;
         cx.notify();
     }
 
     /// 将触发器规则同步下发至当前所有活跃终端窗格。
     pub(crate) fn sync_triggers_to_live_panes(&self, cx: &mut Context<Self>) {
-        let triggers = self.settings.triggers.clone();
-        for tab in &self.workspace.tabs {
+        let triggers = self.state.settings.triggers.clone();
+        for tab in &self.state.workspace.tabs {
             if let Some(term) = tab.terminal() {
                 term.update(cx, |view, _| view.reload_triggers(&triggers));
             }
@@ -163,7 +164,7 @@ impl AppShell {
         enabled: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(rule) = self.settings.triggers.find_rule_mut(id) {
+        if let Some(rule) = self.state.settings.triggers.find_rule_mut(id) {
             rule.enabled = enabled;
             self.sync_triggers_to_live_panes(cx);
             cx.notify();
@@ -172,15 +173,16 @@ impl AppShell {
 
     /// 删除指定触发器规则。
     pub(crate) fn delete_trigger_rule(&mut self, id: TriggerId, cx: &mut Context<Self>) {
-        self.settings.triggers.remove_rule(id);
+        self.state.settings.triggers.remove_rule(id);
         if self
+            .state
             .modals
             .settings
             .trigger_edit
             .as_ref()
             .is_some_and(|edit| edit.base_id == Some(id))
         {
-            self.modals.settings.trigger_edit = None;
+            self.state.modals.settings.trigger_edit = None;
         }
         self.sync_triggers_to_live_panes(cx);
         cx.notify();
@@ -192,9 +194,9 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let enabled = self.settings.triggers.enabled;
-        let rules = self.settings.triggers.rules.clone();
-        let edit = self.modals.settings.trigger_edit.clone();
+        let enabled = self.state.settings.triggers.enabled;
+        let rules = self.state.settings.triggers.rules.clone();
+        let edit = self.state.modals.settings.trigger_edit.clone();
 
         let mut list = v_flex().gap_1();
         if rules.is_empty() {
@@ -286,7 +288,7 @@ impl AppShell {
                 Switch::new("toggle-triggers-master")
                     .checked(enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.triggers.enabled = checked;
+                        this.state.settings.triggers.enabled = checked;
                         this.sync_triggers_to_live_panes(cx);
                         cx.notify();
                     }))
@@ -361,7 +363,9 @@ impl AppShell {
                             Switch::new("trigger-case-sensitive-switch")
                                 .checked(edit_state.case_sensitive)
                                 .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(e) = this.modals.settings.trigger_edit.as_mut() {
+                                    if let Some(e) =
+                                        this.state.modals.settings.trigger_edit.as_mut()
+                                    {
                                         e.case_sensitive = checked;
                                     }
                                     cx.notify();

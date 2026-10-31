@@ -57,7 +57,7 @@ impl AppShell {
     }
 
     fn hide_activity_item(&mut self, id: ActivityItemId, cx: &mut Context<Self>) {
-        if self.settings.activity_bar.set_visible(id, false) {
+        if self.state.settings.activity_bar.set_visible(id, false) {
             self.persist_layout_settings(cx);
         } else {
             cx.notify();
@@ -65,7 +65,7 @@ impl AppShell {
     }
 
     pub(crate) fn restore_activity_bar(&mut self, cx: &mut Context<Self>) {
-        if self.settings.activity_bar.restore_defaults() {
+        if self.state.settings.activity_bar.restore_defaults() {
             self.persist_layout_settings(cx);
         } else {
             cx.notify();

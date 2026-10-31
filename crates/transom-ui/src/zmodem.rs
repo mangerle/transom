@@ -33,6 +33,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(pane) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.session_pane_mut())
@@ -48,7 +49,7 @@ impl AppShell {
                     total: None,
                 });
                 let text = rust_i18n::t!("zmodem.started").to_string();
-                self.status = Some(text);
+                self.state.status = Some(text);
             }
             ZmodemEvent::Progress {
                 direction,
@@ -85,7 +86,7 @@ impl AppShell {
                         reason
                     }
                 };
-                self.status = Some(text);
+                self.state.status = Some(text);
             }
         }
         cx.notify();
@@ -94,16 +95,16 @@ impl AppShell {
     /// 提交上传决策；命令通道满时丢弃并提示（低频用户操作，不排队）。
     fn send_zmodem_upload(&mut self, tab_id: transom_core::TabId, files: Vec<PathBuf>) {
         let command = ZmodemCommand::ZmodemUpload { tab_id, files };
-        if let Err(error) = self.services.command_tx.try_send(command.into()) {
+        if let Err(error) = self.state.services.command_tx.try_send(command.into()) {
             log::warn!("ZMODEM 上传命令发送失败: {error}");
-            self.status = Some(rust_i18n::t!("zmodem.command_busy").to_string());
+            self.state.status = Some(rust_i18n::t!("zmodem.command_busy").to_string());
         }
     }
 
     /// 请求取消当前标签的 ZMODEM 传输。
     pub(crate) fn send_zmodem_cancel(&mut self, tab_id: transom_core::TabId) {
         let command = ZmodemCommand::ZmodemCancel { tab_id };
-        if let Err(error) = self.services.command_tx.try_send(command.into()) {
+        if let Err(error) = self.state.services.command_tx.try_send(command.into()) {
             log::warn!("ZMODEM 取消命令发送失败: {error}");
         }
     }
@@ -126,10 +127,11 @@ impl AppShell {
         if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
             return;
         }
-        let Some(tab_id) = self.workspace.active_tab else {
+        let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
         if self
+            .state
             .workspace
             .tabs
             .iter()
@@ -148,6 +150,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let state = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.zmodem().cloned())?;

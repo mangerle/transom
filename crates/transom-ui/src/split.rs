@@ -17,59 +17,62 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(active_id) = self.workspace.active_tab else {
+        let Some(active_id) = self.state.workspace.active_tab else {
             return;
         };
-        let Some(group_index) = self.group_index_for_tab(active_id) else {
+        let Some(group_index) = self.state.group_index_for_tab(active_id) else {
             return;
         };
-        let Some(session) = self.session_for_tab(active_id) else {
+        let Some(session) = self.state.session_for_tab(active_id) else {
             return;
         };
         if matches!(session.connection, Connection::Serial(_)) {
-            self.set_error(rust_i18n::t!("error.serial_no_split").to_string());
+            self.state
+                .set_error(rust_i18n::t!("error.serial_no_split").to_string());
             cx.notify();
             return;
         }
-        if self.workspace.groups[group_index].pane_count() >= MAX_PANES {
-            self.set_error(rust_i18n::t!("error.too_many_panes", max = MAX_PANES).to_string());
+        if self.state.workspace.groups[group_index].pane_count() >= MAX_PANES {
+            self.state
+                .set_error(rust_i18n::t!("error.too_many_panes", max = MAX_PANES).to_string());
             cx.notify();
             return;
         }
 
         let pane_id = TabId::new();
-        if !self.workspace.groups[group_index]
+        if !self.state.workspace.groups[group_index]
             .root
             .split_leaf(active_id, axis, pane_id)
         {
             return;
         }
-        let group = &mut self.workspace.groups[group_index];
+        let group = &mut self.state.workspace.groups[group_index];
         group.active_pane = pane_id;
         // 切分后新窗格接管焦点，若仍停留在原窗格的最大化上会把它藏起来。
         group.zoomed = None;
-        self.workspace
+        self.state
+            .workspace
             .tabs
             .push(TerminalTab::pending(pane_id, session.clone()));
-        self.workspace.active_tab = Some(pane_id);
+        self.state.workspace.active_tab = Some(pane_id);
         self.start_connection(pane_id, session, cx);
         cx.notify();
     }
 
     /// 翻转焦点窗格所在那一刀的方向，外层结构与兄弟窗格尺寸不受影响。
     pub(crate) fn toggle_split_axis(&mut self, cx: &mut Context<Self>) {
-        let Some(group_index) = self.active_group_index() else {
+        let Some(group_index) = self.state.active_group_index() else {
             return;
         };
-        let active_pane = self.workspace.groups[group_index].active_pane;
+        let active_pane = self.state.workspace.groups[group_index].active_pane;
         // 单窗格没有父分割节点，toggle_axis 自然返回 false。
-        if !self.workspace.groups[group_index]
+        if !self.state.workspace.groups[group_index]
             .root
             .toggle_axis(active_pane)
         {
             return;
         }
-        self.workspace.groups[group_index].zoomed = None;
+        self.state.workspace.groups[group_index].zoomed = None;
         cx.notify();
     }
 
@@ -79,13 +82,13 @@ impl AppShell {
     /// 目标窗格由调用方显式传入，而不是回读"当前活动标签组"：标签栏徽标可以在
     /// 未激活的标签上点开，依赖激活顺序会让操作落到错误的组上。
     pub(crate) fn toggle_zoom_pane(&mut self, pane: TabId, cx: &mut Context<Self>) {
-        let Some(group_index) = self.group_index_for_tab(pane) else {
+        let Some(group_index) = self.state.group_index_for_tab(pane) else {
             return;
         };
-        if self.workspace.groups[group_index].pane_count() < 2 {
+        if self.state.workspace.groups[group_index].pane_count() < 2 {
             return;
         }
-        let group = &mut self.workspace.groups[group_index];
+        let group = &mut self.state.workspace.groups[group_index];
         group.zoomed = if group.zoomed == Some(pane) {
             None
         } else {
@@ -101,18 +104,19 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(group_index) = self.group_index_for_tab(tab_id) else {
+        let Some(group_index) = self.state.group_index_for_tab(tab_id) else {
             return;
         };
-        if self.workspace.groups[group_index].pane_count() < 2 {
+        if self.state.workspace.groups[group_index].pane_count() < 2 {
             return;
         }
-        let RemoveOutcome::Removed { next_focus } =
-            self.workspace.groups[group_index].root.remove_leaf(tab_id)
+        let RemoveOutcome::Removed { next_focus } = self.state.workspace.groups[group_index]
+            .root
+            .remove_leaf(tab_id)
         else {
             return;
         };
-        let group = &mut self.workspace.groups[group_index];
+        let group = &mut self.state.workspace.groups[group_index];
         if group.active_pane == tab_id {
             group.active_pane = next_focus;
         }
@@ -121,21 +125,24 @@ impl AppShell {
         }
         // 摘出后的标签仍属于原会话：SSH 按会话序号继续排；本地终端每次都是
         // 新 Session，改按基础标题序号排，否则会与已有本地标签重名。
-        let Some((session_id, base_title, is_local)) = self.workspace.tab(tab_id).map(|tab| {
-            (
-                tab.session_id,
-                tab.session.name.clone(),
-                matches!(tab.session.connection, Connection::Local(_)),
-            )
-        }) else {
+        let Some((session_id, base_title, is_local)) =
+            self.state.workspace.tab(tab_id).map(|tab| {
+                (
+                    tab.session_id,
+                    tab.session.name.clone(),
+                    matches!(tab.session.connection, Connection::Local(_)),
+                )
+            })
+        else {
             return;
         };
         if is_local {
-            self.create_local_group(tab_id, session_id, &base_title);
+            self.state
+                .create_local_group(tab_id, session_id, &base_title);
         } else {
-            self.create_group(tab_id, session_id);
+            self.state.create_group(tab_id, session_id);
         }
-        self.prune_pane_split_states();
+        self.state.prune_pane_split_states();
         // 摘出的窗格是一个新标签：单屏显示，原并排对保留；点回配对标签即恢复。
         self.activate_tab(tab_id, window, cx);
         cx.notify();
@@ -151,10 +158,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(group_index) = self.group_index_for_tab(tab_id)
-            && self.workspace.groups[group_index].zoomed.is_some()
+        if let Some(group_index) = self.state.group_index_for_tab(tab_id)
+            && self.state.workspace.groups[group_index].zoomed.is_some()
         {
-            self.workspace.groups[group_index].zoomed = Some(tab_id);
+            self.state.workspace.groups[group_index].zoomed = Some(tab_id);
         }
         self.activate_tab(tab_id, window, cx);
     }
@@ -166,11 +173,11 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(group_index) = self.active_group_index() else {
+        let Some(group_index) = self.state.active_group_index() else {
             return;
         };
-        let active_pane = self.workspace.groups[group_index].active_pane;
-        let Some(next) = self.workspace.groups[group_index]
+        let active_pane = self.state.workspace.groups[group_index].active_pane;
+        let Some(next) = self.state.workspace.groups[group_index]
             .root
             .focus_neighbor(active_pane, direction)
         else {
@@ -205,7 +212,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.workspace.active_tab {
+        if let Some(tab_id) = self.state.workspace.active_tab {
             self.close_pane(tab_id, window, cx);
         }
     }
@@ -225,7 +232,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(pane) = self.workspace.active_tab {
+        if let Some(pane) = self.state.workspace.active_tab {
             self.toggle_zoom_pane(pane, cx);
         }
     }

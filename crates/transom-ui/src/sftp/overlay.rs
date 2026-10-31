@@ -98,7 +98,7 @@ impl AppShell {
 
     /// 拖入即显示：展开明细并撤掉待收起定时器。
     pub(crate) fn show_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(panel) = Self::panel_of(&mut self.workspace.tabs, tab_id) else {
+        let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id) else {
             return;
         };
         // 面板已经展开时不弹浮层：它的队列区就在旁边，两处同时刷进度是纯重复。
@@ -113,7 +113,7 @@ impl AppShell {
 
     /// 队列状态变化后同步浮层：面板展开即退出，繁忙则常驻，排空则起停留定时器。
     pub(crate) fn sync_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(panel) = Self::panel_of(&mut self.workspace.tabs, tab_id) else {
+        let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id) else {
             return;
         };
         // 面板展开时由面板的队列区呈现进度，浮层不再重复。
@@ -134,7 +134,7 @@ impl AppShell {
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(OVERLAY_LINGER).await;
             let _ = this.update(cx, |this, cx| {
-                let Some(panel) = Self::panel_of(&mut this.workspace.tabs, tab_id) else {
+                let Some(panel) = Self::panel_of(&mut this.state.workspace.tabs, tab_id) else {
                     return;
                 };
                 // 停留期间若又忙起来，`sync_drop_overlay` 已把本句柄换成 None；
@@ -152,21 +152,21 @@ impl AppShell {
     ///
     /// 进度事件是高频信号，后台标签的浮层不值得整帧重绘外壳。
     pub(crate) fn note_drop_overlay_progress(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = Self::panel_of(&mut self.workspace.tabs, tab_id)
+        if let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id)
             && !panel.open
             && panel.queue.drop_overlay.visible
         {
             let done_bytes = panel.queue.progress.map_or(0, |(done, _)| done);
             panel.queue.drop_overlay.sample_rate(done_bytes);
         }
-        if self.is_rendered_pane(tab_id) {
+        if self.state.is_rendered_pane(tab_id) {
             cx.notify();
         }
     }
 
     /// 用户点关闭：撤下浮层与定时器，下次拖入会重新出现。
     fn dismiss_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = Self::panel_of(&mut self.workspace.tabs, tab_id) {
+        if let Some(panel) = Self::panel_of(&mut self.state.workspace.tabs, tab_id) {
             panel.queue.drop_overlay.visible = false;
             panel.queue.drop_overlay.settle_task = None;
             panel.queue.drop_overlay.reset_rate();
@@ -181,7 +181,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let panel = self.workspace.tab(tab_id)?.sftp()?;
+        let panel = self.state.workspace.tab(tab_id)?.sftp()?;
         if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
             return None;
         }
@@ -242,7 +242,8 @@ impl AppShell {
                     })
                     .tooltip(rust_i18n::t!("sftp.overlay_expand"))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        let Some(panel) = Self::panel_of(&mut this.workspace.tabs, tab_id) else {
+                        let Some(panel) = Self::panel_of(&mut this.state.workspace.tabs, tab_id)
+                        else {
                             return;
                         };
                         panel.queue.drop_overlay.expanded = !panel.queue.drop_overlay.expanded;

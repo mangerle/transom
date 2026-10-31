@@ -130,6 +130,7 @@ impl AppShell {
                                             .checked(resume_enabled)
                                             .on_click(cx.listener(move |this, &checked, _, cx| {
                                                 if let Some(panel) = this
+                                                    .state
                                                     .workspace
                                                     .tab_mut(tab_id)
                                                     .and_then(|tab| tab.sftp_mut())
@@ -152,19 +153,22 @@ impl AppShell {
                                             .small()
                                             .checked(verify_after_transfer)
                                             .on_click(cx.listener(move |this, &checked, _, cx| {
-                                                this.settings.sftp.verify_after_transfer = checked;
+                                                this.state.settings.sftp.verify_after_transfer =
+                                                    checked;
                                                 match this
+                                                    .state
                                                     .services
                                                     .settings_store
-                                                    .save(&this.settings)
+                                                    .save(&this.state.settings)
                                                 {
                                                     Ok(()) => {
                                                         let algo = this
+                                                            .state
                                                             .settings
                                                             .sftp
                                                             .checksum_algorithm
                                                             .label();
-                                                        this.status = Some(if checked {
+                                                        this.state.status = Some(if checked {
                                                             rust_i18n::t!(
                                                                 "sftp.queue.verify_on",
                                                                 algo = algo
@@ -179,7 +183,8 @@ impl AppShell {
                                                         });
                                                     }
                                                     Err(error) => {
-                                                        this.set_error(localized_error(&error));
+                                                        this.state
+                                                            .set_error(localized_error(&error));
                                                     }
                                                 }
                                                 cx.notify();
@@ -268,6 +273,7 @@ impl AppShell {
                                     })
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(panel) = this
+                                            .state
                                             .workspace
                                             .tab_mut(tab_id)
                                             .and_then(|tab| tab.sftp_mut())

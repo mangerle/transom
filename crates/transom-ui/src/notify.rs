@@ -21,8 +21,8 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let settings = &self.settings.window;
-        let pane_active = self.workspace.active_tab == Some(tab_id);
+        let settings = &self.state.settings.window;
+        let pane_active = self.state.workspace.active_tab == Some(tab_id);
         if !should_notify(
             settings.desktop_notifications,
             duration_ms,
@@ -33,6 +33,7 @@ impl AppShell {
             return;
         }
         let pane_name = self
+            .state
             .workspace
             .tab(tab_id)
             .map(|tab| tab.display_name())
@@ -54,7 +55,7 @@ impl AppShell {
             )
             .as_ref(),
         );
-        self.status = Some(rust_i18n::t!("notify.command_done_status").to_string());
+        self.state.status = Some(rust_i18n::t!("notify.command_done_status").to_string());
         cx.notify();
     }
 
@@ -66,7 +67,7 @@ impl AppShell {
         body: &str,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.window.desktop_notifications {
+        if !self.state.settings.window.desktop_notifications {
             return;
         }
         let summary = if title.is_empty() {
@@ -75,7 +76,7 @@ impl AppShell {
             format!("Transom · {title}")
         };
         send_desktop_notification(&summary, body);
-        self.status = Some(rust_i18n::t!("notify.desktop_sent").to_string());
+        self.state.status = Some(rust_i18n::t!("notify.desktop_sent").to_string());
         cx.notify();
     }
 }

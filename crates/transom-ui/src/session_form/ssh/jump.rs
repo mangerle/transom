@@ -58,7 +58,8 @@ pub(super) fn render_jump_section(
                                         let app = app.clone();
                                         move |_, _, cx| {
                                             app.update(cx, |this, cx| {
-                                                if let Some(form) = this.modals.form.as_mut() {
+                                                if let Some(form) = this.state.modals.form.as_mut()
+                                                {
                                                     form.jump_choice = None;
                                                 }
                                                 cx.notify();
@@ -81,7 +82,8 @@ pub(super) fn render_jump_section(
                                         IconName::Route,
                                         move |_, _, cx| {
                                             app.update(cx, |this, cx| {
-                                                if let Some(form) = this.modals.form.as_mut() {
+                                                if let Some(form) = this.state.modals.form.as_mut()
+                                                {
                                                     form.jump_choice = Some(id);
                                                 }
                                                 cx.notify();

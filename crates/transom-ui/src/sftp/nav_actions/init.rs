@@ -47,9 +47,10 @@ impl AppShell {
     /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
     pub(crate) fn focus_active_sftp_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(panel) = self
+            .state
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id))
+            .and_then(|tab_id| self.state.workspace.tab(tab_id))
             .and_then(|tab| tab.sftp())
         {
             window.focus(&panel.focus_handle, cx);
@@ -57,28 +58,31 @@ impl AppShell {
     }
 
     pub(crate) fn toggle_sftp(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(tab_id) = self.workspace.active_tab else {
+        let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
-        let Some(index) = self.workspace.tab_index(tab_id) else {
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return;
         };
         // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，
         // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
-        match self.workspace.tabs[index].sftp().map(|panel| panel.open) {
+        match self.state.workspace.tabs[index]
+            .sftp()
+            .map(|panel| panel.open)
+        {
             Some(true) => {
-                if let Some(pane) = self.workspace.tabs[index].session_pane_mut() {
+                if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
                     pane.sftp = None;
                 }
                 cx.notify();
                 return;
             }
             Some(false) => {
-                let path = self.workspace.tabs[index]
+                let path = self.state.workspace.tabs[index]
                     .sftp()
                     .map(|panel| panel.remote.path.clone())
                     .unwrap_or_else(|| ".".to_string());
-                if let Some(panel) = self.workspace.tabs[index].sftp_mut() {
+                if let Some(panel) = self.state.workspace.tabs[index].sftp_mut() {
                     panel.open = true;
                 }
                 // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。
@@ -91,11 +95,11 @@ impl AppShell {
             None => {}
         }
         let is_local = matches!(
-            &self.workspace.tabs[index].session.connection,
+            &self.state.workspace.tabs[index].session.connection,
             Connection::Local(_)
         );
         let is_ssh = matches!(
-            &self.workspace.tabs[index].session.connection,
+            &self.state.workspace.tabs[index].session.connection,
             Connection::Ssh(_)
         );
         if is_local {
@@ -103,12 +107,17 @@ impl AppShell {
             return;
         }
         if !is_ssh {
-            self.set_error(rust_i18n::t!("error.sftp_requires_ssh").to_string());
+            self.state
+                .set_error(rust_i18n::t!("error.sftp_requires_ssh").to_string());
             cx.notify();
             return;
         }
-        if !matches!(self.workspace.tabs[index].status, TabStatus::Connected) {
-            self.set_error(rust_i18n::t!("error.channel_failed").to_string());
+        if !matches!(
+            self.state.workspace.tabs[index].status,
+            TabStatus::Connected
+        ) {
+            self.state
+                .set_error(rust_i18n::t!("error.channel_failed").to_string());
             cx.notify();
             return;
         }
@@ -131,14 +140,14 @@ impl AppShell {
             .or_else(|| quick_paths.home.clone())
             .unwrap_or_else(|| PathBuf::from("."));
         // 初始远端目录优先用终端 OSC 7 上报的 cwd；还没上报时回落到远端 Home。
-        let initial_remote_path = self.workspace.tabs[index]
+        let initial_remote_path = self.state.workspace.tabs[index]
             .cwd
             .as_deref()
             .and_then(normalize_remote_cwd)
             .unwrap_or_else(|| ".".to_string());
         log::info!(
             "打开远端文件面板，窗格: {tab_id}，初始目录: {initial_remote_path}，终端 cwd: {:?}",
-            self.workspace.tabs[index].cwd
+            self.state.workspace.tabs[index].cwd
         );
         let path_input = sftp_text_input(
             window,
@@ -184,7 +193,7 @@ impl AppShell {
             rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
         );
 
-        let Some(pane) = self.workspace.tabs[index].session_pane_mut() else {
+        let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
             return;
         };
         pane.sftp = Some(SftpPanelState {

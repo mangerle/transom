@@ -9,10 +9,10 @@ use transom_core::validate_transfer_filter;
 
 impl AppShell {
     pub(crate) fn sftp_open_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.settings.sftp.transfer_filter.clone();
+        let text = self.state.settings.sftp.transfer_filter.clone();
         let textarea = cx.new(|cx| TextareaState::new(window, cx).default_value(text));
         textarea.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_modals.filter = Some(SftpFilterModalState {
+        self.state.sftp_modals.filter = Some(SftpFilterModalState {
             textarea,
             error: None,
         });
@@ -21,7 +21,7 @@ impl AppShell {
 
     /// 校验并保存排除规则；非法规则保留弹窗并就地提示，不中断已有传输。
     pub(crate) fn save_sftp_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(mut modal) = self.sftp_modals.filter.take() else {
+        let Some(mut modal) = self.state.sftp_modals.filter.take() else {
             return;
         };
         let text = modal.textarea.read(cx).value().to_string();
@@ -32,18 +32,18 @@ impl AppShell {
                     .unwrap_or_else(|| rust_i18n::t!("sftp.filter.invalid").to_string()),
             );
             let textarea = modal.textarea.clone();
-            self.sftp_modals.filter = Some(modal);
+            self.state.sftp_modals.filter = Some(modal);
             textarea.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
         }
-        self.settings.sftp.transfer_filter = text;
-        match self.persist_settings() {
+        self.state.settings.sftp.transfer_filter = text;
+        match self.state.persist_settings() {
             Ok(()) => {
-                self.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());
+                self.state.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());
             }
             Err(error) => {
-                self.set_error(localized_error(&error));
+                self.state.set_error(localized_error(&error));
             }
         }
         self.focus_active_sftp_panel(window, cx);

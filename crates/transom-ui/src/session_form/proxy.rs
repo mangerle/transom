@@ -49,7 +49,7 @@ pub(crate) fn render_proxy_section(
             ),
         ],
         |this, choice, _window, cx| {
-            if let Some(form) = this.modals.form.as_mut() {
+            if let Some(form) = this.state.modals.form.as_mut() {
                 form.proxy_choice = choice;
             }
             cx.notify();

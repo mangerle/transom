@@ -9,7 +9,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_modals.properties.as_ref() else {
+        let Some(modal) = self.state.sftp_modals.properties.as_ref() else {
             return div().into_any_element();
         };
         let scope = modal.scope.clone();
@@ -97,7 +97,7 @@ impl AppShell {
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, window, cx| {
-                        this.sftp_modals.properties = None;
+                        this.state.sftp_modals.properties = None;
                         this.focus_active_sftp_panel(window, cx);
                         cx.notify();
                     },

@@ -10,30 +10,30 @@ impl ModalKind {
     /// 该弹窗此刻是否应当存在。只读状态、不产生副作用：对账每帧都会问一次。
     pub(super) fn is_open(self, shell: &AppShell) -> bool {
         match self {
-            ModalKind::AuthPrompt => shell.modals.auth_prompt.is_some(),
-            ModalKind::HostKeyConfirm => shell.modals.host_key_confirm.is_some(),
-            ModalKind::ClipboardPrompt => shell.modals.clipboard_request.is_some(),
-            ModalKind::ForwardConfirm => shell.modals.confirm_forward_any.is_some(),
-            ModalKind::SftpConfirm => shell.sftp_modals.confirm.is_some(),
-            ModalKind::SftpInput => shell.sftp_modals.input.is_some(),
-            ModalKind::SftpChmod => shell.sftp_modals.chmod.is_some(),
-            ModalKind::SftpProperties => shell.sftp_modals.properties.is_some(),
-            ModalKind::SftpFilter => shell.sftp_modals.filter.is_some(),
-            ModalKind::SftpSearch => shell.sftp_modals.search.is_some(),
-            ModalKind::SftpSync => shell.sftp_modals.sync.is_some(),
-            ModalKind::EditorGotoLine => shell.sftp_modals.goto_line.is_some(),
-            ModalKind::SessionForm => shell.modals.form.is_some(),
-            ModalKind::FolderForm => shell.modals.folder_form.is_some(),
-            ModalKind::BatchEdit => shell.modals.batch_edit.is_some(),
-            ModalKind::SnippetForm => shell.modals.snippet_panel.form.is_some(),
-            ModalKind::KnownHosts => shell.modals.known_hosts.open,
-            ModalKind::KeyWizard => shell.modals.settings.key_wizard.is_some(),
-            ModalKind::BackupPrompt => shell.modals.backup_prompt.is_some(),
-            ModalKind::AuditViewer => shell.modals.audit_viewer.is_some(),
-            ModalKind::Replay => shell.modals.replay.is_some(),
-            ModalKind::Settings => shell.modals.settings.open,
-            ModalKind::ShortcutCapture => shell.shortcut_recording.capture.is_some(),
-            ModalKind::DiffViewer => shell.diff_viewer.is_some(),
+            ModalKind::AuthPrompt => shell.state.modals.auth_prompt.is_some(),
+            ModalKind::HostKeyConfirm => shell.state.modals.host_key_confirm.is_some(),
+            ModalKind::ClipboardPrompt => shell.state.modals.clipboard_request.is_some(),
+            ModalKind::ForwardConfirm => shell.state.modals.confirm_forward_any.is_some(),
+            ModalKind::SftpConfirm => shell.state.sftp_modals.confirm.is_some(),
+            ModalKind::SftpInput => shell.state.sftp_modals.input.is_some(),
+            ModalKind::SftpChmod => shell.state.sftp_modals.chmod.is_some(),
+            ModalKind::SftpProperties => shell.state.sftp_modals.properties.is_some(),
+            ModalKind::SftpFilter => shell.state.sftp_modals.filter.is_some(),
+            ModalKind::SftpSearch => shell.state.sftp_modals.search.is_some(),
+            ModalKind::SftpSync => shell.state.sftp_modals.sync.is_some(),
+            ModalKind::EditorGotoLine => shell.state.sftp_modals.goto_line.is_some(),
+            ModalKind::SessionForm => shell.state.modals.form.is_some(),
+            ModalKind::FolderForm => shell.state.modals.folder_form.is_some(),
+            ModalKind::BatchEdit => shell.state.modals.batch_edit.is_some(),
+            ModalKind::SnippetForm => shell.state.modals.snippet_panel.form.is_some(),
+            ModalKind::KnownHosts => shell.state.modals.known_hosts.open,
+            ModalKind::KeyWizard => shell.state.modals.settings.key_wizard.is_some(),
+            ModalKind::BackupPrompt => shell.state.modals.backup_prompt.is_some(),
+            ModalKind::AuditViewer => shell.state.modals.audit_viewer.is_some(),
+            ModalKind::Replay => shell.state.modals.replay.is_some(),
+            ModalKind::Settings => shell.state.modals.settings.open,
+            ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture.is_some(),
+            ModalKind::DiffViewer => shell.state.diff_viewer.is_some(),
         }
     }
 
@@ -45,31 +45,35 @@ impl ModalKind {
     /// 量级是二十来个字符串，可忽略。
     pub(super) fn is_dirty(self, shell: &AppShell, cx: &App) -> bool {
         let current = self.field_values(shell, cx);
-        !current.is_empty() && current != shell.open_modals.baseline(self)
+        !current.is_empty() && current != shell.state.open_modals.baseline(self)
     }
 
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
         match self {
             ModalKind::SessionForm => shell
+                .state
                 .modals
                 .form
                 .as_ref()
                 .map(|form| form.text_values(cx))
                 .unwrap_or_default(),
             ModalKind::FolderForm => shell
+                .state
                 .modals
                 .folder_form
                 .as_ref()
                 .map(|form| form.text_values(cx))
                 .unwrap_or_default(),
             ModalKind::BatchEdit => shell
+                .state
                 .modals
                 .batch_edit
                 .as_ref()
                 .map(|form| form.text_values(cx))
                 .unwrap_or_default(),
             ModalKind::SnippetForm => shell
+                .state
                 .modals
                 .snippet_panel
                 .form
@@ -80,7 +84,7 @@ impl ModalKind {
             // 遍所有设置页且新增控件必漏；这里直接比整份设置的序列化快照，
             // 覆盖全字段。序列化失败按"不脏"处理：宁可少拦一次，也不能让
             // Esc 永远关不掉弹窗。
-            ModalKind::Settings => serde_json::to_string(&shell.settings)
+            ModalKind::Settings => serde_json::to_string(&shell.state.settings)
                 .map(|signature| vec![signature])
                 .unwrap_or_default(),
             _ => Vec::new(),
@@ -100,14 +104,14 @@ impl ModalKind {
     ) -> bool {
         if self.is_dirty(shell, cx) {
             // 拦截必须可见：文案说明为什么按了没反应，行为与提示一致。
-            shell.dialog_hint = Some(rust_i18n::t!("dialog.dirty_block_hint").to_string());
+            shell.state.dialog_hint = Some(rust_i18n::t!("dialog.dirty_block_hint").to_string());
             cx.notify();
             return false;
         }
-        shell.dialog_hint = None;
+        shell.state.dialog_hint = None;
         match self {
             ModalKind::SftpConfirm => {
-                shell.sftp_modals.confirm = None;
+                shell.state.sftp_modals.confirm = None;
                 shell.focus_active_sftp_panel(window, cx);
                 true
             }
@@ -124,7 +128,7 @@ impl ModalKind {
                 true
             }
             ModalKind::AuthPrompt => {
-                shell.cancel_auth_prompt();
+                shell.state.cancel_auth_prompt();
                 true
             }
             ModalKind::SftpInput => shell.close_sftp_modal(|hub| hub.input = None, window, cx),
@@ -140,39 +144,39 @@ impl ModalKind {
                 true
             }
             ModalKind::SessionForm => {
-                shell.modals.form = None;
+                shell.state.modals.form = None;
                 true
             }
             ModalKind::FolderForm => {
-                shell.modals.folder_form = None;
+                shell.state.modals.folder_form = None;
                 true
             }
             ModalKind::BatchEdit => {
-                shell.modals.batch_edit = None;
+                shell.state.modals.batch_edit = None;
                 true
             }
             ModalKind::SnippetForm => {
-                shell.modals.snippet_panel.form = None;
+                shell.state.modals.snippet_panel.form = None;
                 true
             }
             ModalKind::KnownHosts => {
-                shell.modals.known_hosts.open = false;
+                shell.state.modals.known_hosts.open = false;
                 true
             }
             ModalKind::KeyWizard => {
-                shell.modals.settings.key_wizard = None;
+                shell.state.modals.settings.key_wizard = None;
                 true
             }
             ModalKind::BackupPrompt => {
-                shell.modals.backup_prompt = None;
+                shell.state.modals.backup_prompt = None;
                 true
             }
             ModalKind::AuditViewer => {
-                shell.modals.audit_viewer = None;
+                shell.state.modals.audit_viewer = None;
                 true
             }
             ModalKind::Replay => {
-                shell.modals.replay = None;
+                shell.state.modals.replay = None;
                 true
             }
             ModalKind::Settings => {
@@ -180,7 +184,7 @@ impl ModalKind {
                 true
             }
             ModalKind::ShortcutCapture => {
-                shell.shortcut_recording.capture = None;
+                shell.state.shortcut_recording.capture = None;
                 true
             }
             ModalKind::DiffViewer => {
@@ -241,12 +245,12 @@ impl ModalKind {
             ModalKind::SnippetForm => shell.save_snippet_form(cx),
             ModalKind::BackupPrompt => shell.submit_backup(window, cx),
             // 查看与管理类弹窗只有一个"关闭"主按钮，Enter 与它同义。
-            ModalKind::KnownHosts => shell.modals.known_hosts.open = false,
-            ModalKind::KeyWizard => shell.modals.settings.key_wizard = None,
-            ModalKind::AuditViewer => shell.modals.audit_viewer = None,
-            ModalKind::Replay => shell.modals.replay = None,
+            ModalKind::KnownHosts => shell.state.modals.known_hosts.open = false,
+            ModalKind::KeyWizard => shell.state.modals.settings.key_wizard = None,
+            ModalKind::AuditViewer => shell.state.modals.audit_viewer = None,
+            ModalKind::Replay => shell.state.modals.replay = None,
             ModalKind::Settings => shell.cancel_settings(window, cx),
-            ModalKind::ShortcutCapture => shell.shortcut_recording.capture = None,
+            ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
             ModalKind::DiffViewer => shell.close_diff_viewer(cx),
         }
     }
@@ -261,6 +265,7 @@ impl ModalKind {
         match self {
             ModalKind::SftpInput => input(
                 shell
+                    .state
                     .sftp_modals
                     .input
                     .as_ref()
@@ -268,6 +273,7 @@ impl ModalKind {
             ),
             ModalKind::SftpChmod => input(
                 shell
+                    .state
                     .sftp_modals
                     .chmod
                     .as_ref()
@@ -275,6 +281,7 @@ impl ModalKind {
             ),
             ModalKind::SftpSearch => input(
                 shell
+                    .state
                     .sftp_modals
                     .search
                     .as_ref()
@@ -282,16 +289,23 @@ impl ModalKind {
             ),
             ModalKind::EditorGotoLine => input(
                 shell
+                    .state
                     .sftp_modals
                     .goto_line
                     .as_ref()
                     .map(|modal| modal.input.clone()),
             ),
-            ModalKind::SessionForm => {
-                input(shell.modals.form.as_ref().map(|form| form.name.clone()))
-            }
+            ModalKind::SessionForm => input(
+                shell
+                    .state
+                    .modals
+                    .form
+                    .as_ref()
+                    .map(|form| form.name.clone()),
+            ),
             ModalKind::FolderForm => input(
                 shell
+                    .state
                     .modals
                     .folder_form
                     .as_ref()
@@ -299,6 +313,7 @@ impl ModalKind {
             ),
             ModalKind::SnippetForm => input(
                 shell
+                    .state
                     .modals
                     .snippet_panel
                     .form
@@ -306,6 +321,7 @@ impl ModalKind {
                     .map(|form| form.name_input()),
             ),
             ModalKind::SftpFilter => shell
+                .state
                 .sftp_modals
                 .filter
                 .as_ref()
@@ -329,6 +345,7 @@ impl ModalKind {
             | ModalKind::AuthPrompt => ModalFocus::None,
             // 改键录入面板自己持有焦点句柄：录键期间按键要落在这块面板上。
             ModalKind::ShortcutCapture => shell
+                .state
                 .shortcut_recording
                 .capture
                 .as_ref()

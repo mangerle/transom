@@ -22,16 +22,16 @@ impl AppShell {
                 Some("settings.history_enabled_desc"),
                 Switch::new("toggle-history-enabled")
                     .small()
-                    .checked(self.settings.history.enabled)
+                    .checked(self.state.settings.history.enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.history.enabled = checked;
+                        this.state.settings.history.enabled = checked;
                         // 关掉时把内存里的建议一起收起：下次开回来仍从文件恢复，
                         // 不做删除，避免"关一下就把历史清空"的误伤。
                         if !checked {
-                            this.history.write().clear();
-                        } else if this.history.read().is_empty() {
-                            let loaded = this.services.history.load();
-                            *this.history.write() = loaded;
+                            this.state.history.write().clear();
+                        } else if this.state.history.read().is_empty() {
+                            let loaded = this.state.services.history.load();
+                            *this.state.history.write() = loaded;
                         }
                         cx.notify();
                     }))
@@ -51,7 +51,7 @@ impl AppShell {
         let reveal_dir = dir.clone();
         let reveal = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(reveal_dir.clone());
-            this.status = Some(rust_i18n::t!("settings.audit_revealed").to_string());
+            this.state.status = Some(rust_i18n::t!("settings.audit_revealed").to_string());
             cx.notify();
         });
         v_flex()
@@ -61,9 +61,9 @@ impl AppShell {
                 Some("settings.audit_enabled_desc"),
                 Switch::new("toggle-audit-enabled")
                     .small()
-                    .checked(self.settings.audit.enabled)
+                    .checked(self.state.settings.audit.enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.audit.enabled = checked;
+                        this.state.settings.audit.enabled = checked;
                         cx.notify();
                     }))
                     .into_any_element(),

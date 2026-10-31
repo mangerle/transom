@@ -100,10 +100,11 @@ impl AppShell {
     /// 误判"整组都通了"。
     pub(crate) fn probe_folder(&mut self, folder_id: FolderId, cx: &mut Context<Self>) {
         let targets = self
+            .state
             .catalog
             .sessions
             .iter()
-            .filter(|session| session_in_folder(&self.catalog, session, folder_id))
+            .filter(|session| session_in_folder(&self.state.catalog, session, folder_id))
             .map(|session| session.id)
             .collect::<Vec<_>>();
         self.dispatch_probes(&targets, cx);
@@ -117,6 +118,7 @@ impl AppShell {
         let requested: HashSet<SessionId> = targets.iter().copied().collect();
         // 本地 Shell 与串口没有网络地址，派生即落空，静默跳过。
         let probeable: Vec<HostAction> = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -128,21 +130,25 @@ impl AppShell {
                 "批量拨测没有可探测的网络主机，请求会话数: {}",
                 requested.len()
             );
-            self.set_error(rust_i18n::t!("probe.no_target").to_string());
+            self.state
+                .set_error(rust_i18n::t!("probe.no_target").to_string());
             cx.notify();
             return;
         }
         // 已在途的会话不再重复派发：控制器还没回报就再发一次，只会多占并发额度。
         let fresh: Vec<HostAction> = probeable
             .into_iter()
-            .filter(|action| !self.is_probe_pending(action.session_id()))
+            .filter(|action| !self.state.is_probe_pending(action.session_id()))
             .collect();
         if fresh.is_empty() {
             return;
         }
         let dispatched: Vec<SessionId> = fresh.iter().map(HostAction::session_id).collect();
         log::info!("派发批量拨测，目标数: {}", dispatched.len());
-        if !self.send_command(HostCommand::RunHostActions { actions: fresh }) {
+        if !self
+            .state
+            .send_command(HostCommand::RunHostActions { actions: fresh })
+        {
             // 命令通道已关闭：不点亮状态点，否则在途态永远等不到回报。
             return;
         }
@@ -159,8 +165,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         // tooltip 里带上目标地址：列表里同名会话不少，光说"可达"定位不到是哪台。
-        let target = self.session_target(session_id);
-        let label = self.session_label(session_id);
+        let target = self.state.session_target(session_id);
+        let label = self.state.session_label(session_id);
         let (badge, ttl) = match outcome {
             HostOutcome::Reachable { latency_ms } => {
                 // 可达按 `debug` 记：一次分组拨测上百台，逐条 info 会把有意义
@@ -202,18 +208,18 @@ impl AppShell {
     ) {
         // 先摘掉旧的到期句柄：dropping `Task` 即取消任务，新一批结果必须活满
         // 自己的 TTL，不能被上一批的定时器抹掉。
-        self.tasks.probe_expiry.remove(&session_id);
-        self.probe_badges.insert(session_id, badge);
+        self.state.tasks.probe_expiry.remove(&session_id);
+        self.state.probe_badges.insert(session_id, badge);
         if let Some(ttl) = ttl {
             let task = cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(ttl).await;
                 let _ = this.update(cx, |this, cx| {
-                    this.probe_badges.remove(&session_id);
-                    this.tasks.probe_expiry.remove(&session_id);
+                    this.state.probe_badges.remove(&session_id);
+                    this.state.tasks.probe_expiry.remove(&session_id);
                     cx.notify();
                 });
             });
-            self.tasks.probe_expiry.insert(session_id, task);
+            self.state.tasks.probe_expiry.insert(session_id, task);
         }
         cx.notify();
     }

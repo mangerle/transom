@@ -18,7 +18,7 @@ use transom_core::{TabId, TransferDirection};
 impl AppShell {
     /// 触发剪贴板复制（Ctrl+C 或右键复制）。
     pub(crate) fn sftp_copy_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         let main_conn_id = tab.connection_id;
@@ -122,7 +122,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
         let Some(panel) = tab.sftp() else {
@@ -150,7 +150,7 @@ impl AppShell {
                 let target_path = match transom_core::safe_local_join(&local_dir, &file_name) {
                     Ok(path) => path,
                     Err(_) => {
-                        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+                        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
                             panel.set_local_error(rust_i18n::t!("sftp.invalid_name").to_string());
                         }
                         continue;

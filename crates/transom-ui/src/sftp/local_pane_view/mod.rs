@@ -84,6 +84,7 @@ impl AppShell {
                 local_sizes,
                 move |this, range, _window, cx| {
                     let (local_selection, local_primary) = this
+                        .state
                         .workspace
                         .tab(tab_id)
                         .and_then(|tab| tab.sftp())
@@ -142,7 +143,7 @@ impl AppShell {
 
         // 对比入口只在"选中单个本地文件且远端有同名文件"时可用；
         // 目录、多选与远端缺失都置灰，避免点击后才发现没有对手方。
-        let diff_ready = remote_available && self.diff_entry_ready(tab_id);
+        let diff_ready = remote_available && self.state.diff_entry_ready(tab_id);
         let toolbar = render_local_toolbar(
             LocalToolbarProps {
                 tab_id,
@@ -178,6 +179,7 @@ impl AppShell {
                         return;
                     };
                     let Some(local_dir) = this
+                        .state
                         .sftp_panel_mut_tab(tab_id)
                         .map(|panel| panel.local.path.clone())
                     else {
@@ -188,7 +190,7 @@ impl AppShell {
                         let target_local = match transom_core::safe_local_join(&local_dir, fname) {
                             Ok(path) => path,
                             Err(_) => {
-                                if let Some(panel) = this.sftp_panel_mut_tab(tab_id) {
+                                if let Some(panel) = this.state.sftp_panel_mut_tab(tab_id) {
                                     panel.set_local_error(
                                         rust_i18n::t!("sftp.invalid_name").to_string(),
                                     );

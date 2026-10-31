@@ -32,7 +32,7 @@ impl AppShell {
     ) {
         let input = sftp_text_input(window, cx, &params.value, &params.placeholder);
         input.update(cx, |state, cx| state.focus(window, cx));
-        self.sftp_modals.input = Some(SftpInputModalState {
+        self.state.sftp_modals.input = Some(SftpInputModalState {
             tab_id: params.tab_id,
             connection_id: params.connection_id,
             title: params.title,

@@ -28,6 +28,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let (open, mounted_conn_ids) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|t| t.sftp())
@@ -50,7 +51,7 @@ impl AppShell {
             .tooltip(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string());
 
         // 收集当前标签页的连接与排除信息
-        let current_tab = self.workspace.tab(tab_id);
+        let current_tab = self.state.workspace.tab(tab_id);
         let current_conn_id = current_tab.and_then(|t| t.connection_id);
         let current_session_id = current_tab.map(|t| t.session.id);
         let is_local_only = current_tab
@@ -66,7 +67,7 @@ impl AppShell {
 
         // 收集已建立连接的其他远端标签页，并按会话去重与排除已挂载的会话
         let mut active_candidates: Vec<(ConnectionId, String, String)> = Vec::new();
-        for t in &self.workspace.tabs {
+        for t in &self.state.workspace.tabs {
             if t.id == tab_id {
                 continue;
             }
@@ -109,7 +110,7 @@ impl AppShell {
         .on_open_change(move |is_open, _window, cx| {
             let is_open = *is_open;
             app_open.update(cx, |this, cx| {
-                if let Some(panel) = this.sftp_panel_mut_tab(tab_id)
+                if let Some(panel) = this.state.sftp_panel_mut_tab(tab_id)
                     && panel.mount_menu_open != is_open
                 {
                     panel.mount_menu_open = is_open;

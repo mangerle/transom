@@ -59,7 +59,7 @@ impl AppState {
 impl AppShell {
     /// 请求合并当前变更块：先进入确认态，真正写回在用户确认后才发生。
     pub(crate) fn request_diff_merge(&mut self, direction: MergeDirection, cx: &mut Context<Self>) {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return;
         };
         if viewer.phase != DiffPhase::Ready {
@@ -80,7 +80,7 @@ impl AppShell {
     }
 
     pub(crate) fn cancel_diff_merge(&mut self, cx: &mut Context<Self>) {
-        if let Some(viewer) = self.diff_viewer.as_mut() {
+        if let Some(viewer) = self.state.diff_viewer.as_mut() {
             viewer.confirm = None;
         }
         cx.notify();
@@ -88,7 +88,7 @@ impl AppShell {
 
     /// 确认合并：把选中的变更块从源侧应用到目标侧。
     pub(crate) fn confirm_diff_merge(&mut self, cx: &mut Context<Self>) {
-        let Some(plan) = self.build_merge_plan() else {
+        let Some(plan) = self.state.build_merge_plan() else {
             return;
         };
         match plan.direction {
@@ -101,10 +101,10 @@ impl AppShell {
         let Some(connection_id) = plan.connection_id else {
             return;
         };
-        let backup = self.settings.sftp.editor_write_backup;
+        let backup = self.state.settings.sftp.editor_write_backup;
         let op_id = TransferId::new();
         let merged = plan.merged;
-        let sent = self.send_command(SftpCommand::Sftp {
+        let sent = self.state.send_command(SftpCommand::Sftp {
             tab_id: plan.tab_id,
             connection_id,
             op_id,
@@ -116,7 +116,7 @@ impl AppShell {
                 backup,
             },
         });
-        if let Some(viewer) = self.diff_viewer.as_mut() {
+        if let Some(viewer) = self.state.diff_viewer.as_mut() {
             if sent {
                 viewer.pending_write = Some(op_id);
                 viewer.pending_merged = Some(merged);
@@ -130,7 +130,7 @@ impl AppShell {
     }
 
     fn submit_diff_local_write(&mut self, merged: String, cx: &mut Context<Self>) {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return;
         };
         let path = viewer.local_path.clone();
@@ -158,7 +158,7 @@ impl AppShell {
         result: Option<Result<(), String>>,
         cx: &mut Context<Self>,
     ) {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return;
         };
         match result {
@@ -192,7 +192,7 @@ impl AppShell {
         meta: RemoteTextMeta,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return false;
         };
         if viewer.pending_read != Some(op_id) {
@@ -215,7 +215,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return false;
         };
         if viewer.pending_write != Some(op_id) {
@@ -230,7 +230,7 @@ impl AppShell {
         let tab_id = viewer.tab_id;
         let connection_id = viewer.connection_id;
         let remote_path = viewer.remote_path.clone();
-        if let Some(tab) = self.workspace.tab_mut(tab_id)
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id)
             && let Some(panel) = tab.sftp_mut()
             && let Some(entry) = panel
                 .remote
@@ -275,6 +275,7 @@ impl AppShell {
             return;
         };
         let Some(index) = self
+            .state
             .editors
             .panels
             .iter()
@@ -282,7 +283,7 @@ impl AppShell {
         else {
             return;
         };
-        let item = &mut self.editors.panels[index];
+        let item = &mut self.state.editors.panels[index];
         item.baseline = SharedString::from(text.to_string());
         item.remote_meta = Some(meta);
         // 合并已成功落盘，编辑器上旧的冲突/失败横幅针对的是过期远端状态。
@@ -315,7 +316,7 @@ impl AppShell {
         conflict: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return false;
         };
         if viewer.pending_read == Some(op_id) {

@@ -16,7 +16,7 @@ pub(super) fn render_pane_badge(
         .into_iter()
         .enumerate()
         .filter_map(|(position, pane_id)| {
-            let tab = shell.workspace.tab(pane_id)?;
+            let tab = shell.state.workspace.tab(pane_id)?;
             let (dot_color, icon) = crate::workspace::pane_status_indicator(&tab.status, p);
             Some(PaneRow {
                 tab_id: pane_id,

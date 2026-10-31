@@ -22,12 +22,13 @@ impl AppShell {
                 Some("settings.monitor_cpu_expanded_desc"),
                 Switch::new("toggle-monitor-cpu-expanded")
                     .small()
-                    .checked(self.settings.monitor.cpu_expanded)
+                    .checked(self.state.settings.monitor.cpu_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.monitor.cpu_expanded = checked;
-                        this.monitor
+                        this.state.settings.monitor.cpu_expanded = checked;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.state.collapse.cpu = !checked);
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -38,12 +39,13 @@ impl AppShell {
                 Some("settings.monitor_memory_expanded_desc"),
                 Switch::new("toggle-monitor-memory-expanded")
                     .small()
-                    .checked(self.settings.monitor.memory_expanded)
+                    .checked(self.state.settings.monitor.memory_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.monitor.memory_expanded = checked;
-                        this.monitor
+                        this.state.settings.monitor.memory_expanded = checked;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.state.collapse.memory = !checked);
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -54,12 +56,13 @@ impl AppShell {
                 Some("settings.monitor_disk_expanded_desc"),
                 Switch::new("toggle-monitor-disk-expanded")
                     .small()
-                    .checked(self.settings.monitor.disk_expanded)
+                    .checked(self.state.settings.monitor.disk_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.monitor.disk_expanded = checked;
-                        this.monitor
+                        this.state.settings.monitor.disk_expanded = checked;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.state.collapse.disk = !checked);
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -70,12 +73,13 @@ impl AppShell {
                 Some("settings.monitor_network_expanded_desc"),
                 Switch::new("toggle-monitor-network-expanded")
                     .small()
-                    .checked(self.settings.monitor.network_expanded)
+                    .checked(self.state.settings.monitor.network_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.monitor.network_expanded = checked;
-                        this.monitor
+                        this.state.settings.monitor.network_expanded = checked;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.state.collapse.network = !checked);
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -86,12 +90,13 @@ impl AppShell {
                 Some("settings.monitor_ports_expanded_desc"),
                 Switch::new("toggle-monitor-ports-expanded")
                     .small()
-                    .checked(self.settings.monitor.ports_expanded)
+                    .checked(self.state.settings.monitor.ports_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.monitor.ports_expanded = checked;
-                        this.monitor
+                        this.state.settings.monitor.ports_expanded = checked;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.state.collapse.ports = !checked);
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -102,12 +107,13 @@ impl AppShell {
                 Some("settings.monitor_services_expanded_desc"),
                 Switch::new("toggle-monitor-services-expanded")
                     .small()
-                    .checked(self.settings.monitor.services_expanded)
+                    .checked(self.state.settings.monitor.services_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.monitor.services_expanded = checked;
-                        this.monitor
+                        this.state.settings.monitor.services_expanded = checked;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.state.collapse.services = !checked);
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -118,12 +124,13 @@ impl AppShell {
                 Some("settings.monitor_processes_expanded_desc"),
                 Switch::new("toggle-monitor-processes-expanded")
                     .small()
-                    .checked(self.settings.monitor.processes_expanded)
+                    .checked(self.state.settings.monitor.processes_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.settings.monitor.processes_expanded = checked;
-                        this.monitor
+                        this.state.settings.monitor.processes_expanded = checked;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.state.collapse.processes = !checked);
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -138,9 +145,9 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_width = self.settings.monitor.drawer_width;
+        let current_width = self.state.settings.monitor.drawer_width;
         let is_wide = current_width > 480.0;
-        let current_interval = self.monitor.read(cx).interval_mode();
+        let current_interval = self.state.monitor.read(cx).interval_mode();
 
         v_flex()
             .gap_2()
@@ -161,10 +168,11 @@ impl AppShell {
                         ),
                     ],
                     |this, width, cx| {
-                        this.settings.monitor.drawer_width = width;
-                        this.monitor
+                        this.state.settings.monitor.drawer_width = width;
+                        this.state
+                            .monitor
                             .update(cx, |view, _| view.set_drawer_width(width));
-                        this.persist_settings_reported();
+                        this.state.persist_settings_reported();
                         cx.notify();
                     },
                     cx,

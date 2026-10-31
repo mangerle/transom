@@ -23,13 +23,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
         let connection_id = tab.connection_id;
         let remote_dir = tab.sftp().map(|panel| panel.remote.path.clone());
         let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
-            self.status =
+            self.state.status =
                 Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
             cx.notify();
             return;
@@ -40,7 +40,7 @@ impl AppShell {
             if local.is_absolute() {
                 crate::audit::open_local_path(local);
             } else {
-                self.status =
+                self.state.status =
                     Some(rust_i18n::t!("editor.error_local_absolute", path = resolved).to_string());
                 cx.notify();
             }

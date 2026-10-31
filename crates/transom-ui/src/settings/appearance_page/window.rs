@@ -8,7 +8,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let divider = self.settings.appearance.divider;
+        let divider = self.state.settings.appearance.divider;
         // 预览色点与真实渲染走同一条解析：跟随主题时显示当前主题边框色。
         let preview = p.divider(p.border);
         let color_control = h_flex()
@@ -43,7 +43,8 @@ impl AppShell {
             .into_any_element();
         // 粗细是 1/2/3 的连续小数值：步进器比下拉少一次点击，和字号/行高一致；
         // 量纲写在说明文案里，输入框内只留数字，避免控件被单位挤窄。
-        let width_control = Self::setting_stepper(&self.modals.settings.divider_width, px(110.0));
+        let width_control =
+            Self::setting_stepper(&self.state.modals.settings.divider_width, px(110.0));
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -68,6 +69,7 @@ impl AppShell {
     /// 避免界面闪一帧错误线宽。
     pub(crate) fn apply_divider_width_from_input(&mut self, cx: &mut Context<Self>) {
         let value = self
+            .state
             .modals
             .settings
             .divider_width
@@ -77,7 +79,7 @@ impl AppShell {
         let Some(width) = divider_width_from_value(&value) else {
             return;
         };
-        if self.settings.appearance.divider.width == width {
+        if self.state.settings.appearance.divider.width == width {
             return;
         }
         self.update_appearance(|appearance| appearance.divider.width = width, cx);
@@ -89,9 +91,16 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let mode = self.settings.window.window_background;
-        let transparency =
-            slider_percent(&self.modals.settings.window_transparency.read(cx).value());
+        let mode = self.state.settings.window.window_background;
+        let transparency = slider_percent(
+            &self
+                .state
+                .modals
+                .settings
+                .window_transparency
+                .read(cx)
+                .value(),
+        );
         let mode_buttons = h_flex()
             .gap_1()
             .children(
@@ -131,7 +140,11 @@ impl AppShell {
             .child(crate::widgets::setting_row(
                 "settings.window_transparency",
                 Some("settings.window_transparency_desc"),
-                Self::percent_slider(&self.modals.settings.window_transparency, transparency, p),
+                Self::percent_slider(
+                    &self.state.modals.settings.window_transparency,
+                    transparency,
+                    p,
+                ),
                 p,
             ))
             .into_any_element()
@@ -156,10 +169,10 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let percent = percent.min(100);
-        if self.settings.window.window_transparency == percent {
+        if self.state.settings.window.window_transparency == percent {
             return;
         }
-        self.settings.window.window_transparency = percent;
+        self.state.settings.window.window_transparency = percent;
         self.refresh_window_appearance(window, cx);
     }
 
@@ -171,14 +184,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.settings.window.window_background == mode {
+        if self.state.settings.window.window_background == mode {
             return;
         }
-        self.settings.window.window_background = mode;
-        if mode != WindowBackgroundMode::Opaque && self.settings.window.window_transparency == 0 {
-            self.settings.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY;
+        self.state.settings.window.window_background = mode;
+        if mode != WindowBackgroundMode::Opaque
+            && self.state.settings.window.window_transparency == 0
+        {
+            self.state.settings.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY;
             let value = f32::from(DEFAULT_WINDOW_TRANSPARENCY);
-            self.modals
+            self.state
+                .modals
                 .settings
                 .window_transparency
                 .update(cx, |state, cx| {
@@ -199,10 +215,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        crate::window_appearance::apply_window_appearance(&self.settings.window, cx);
-        crate::theme::apply_appearance(&self.settings.appearance, cx);
+        crate::window_appearance::apply_window_appearance(&self.state.settings.window, cx);
+        crate::theme::apply_appearance(&self.state.settings.appearance, cx);
         window.set_background_appearance(crate::window_appearance::background_appearance(
-            &self.settings.window,
+            &self.state.settings.window,
         ));
         cx.notify();
     }

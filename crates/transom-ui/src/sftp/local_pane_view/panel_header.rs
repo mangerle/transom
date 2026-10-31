@@ -29,8 +29,8 @@ impl AppShell {
             .icon(IconName::X)
             .tooltip(rust_i18n::t!("sftp.nav.close_panel").to_string())
             .on_click(cx.listener(|this, _, _, cx| {
-                if let Some(tab_id) = this.workspace.active_tab
-                    && let Some(tab) = this.workspace.tab_mut(tab_id)
+                if let Some(tab_id) = this.state.workspace.active_tab
+                    && let Some(tab) = this.state.workspace.tab_mut(tab_id)
                     && let Some(pane) = tab.session_pane_mut()
                 {
                     pane.sftp = None;

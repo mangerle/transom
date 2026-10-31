@@ -11,8 +11,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let max_bytes = self.settings.sftp.edit_max_bytes;
+        let max_bytes = self.state.settings.sftp.edit_max_bytes;
         let gate = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| {
@@ -79,14 +80,15 @@ impl AppShell {
 
         // 同一文件已在编辑中就不再重复取文件：抬到最前并聚焦编辑器。
         if let Some(index) = self
+            .state
             .editors
             .panels
             .iter()
             .position(|item| item.same_file(tab_id, connection_id, &remote_path))
         {
-            let item = self.editors.panels.remove(index);
+            let item = self.state.editors.panels.remove(index);
             let editor = item.editor.clone();
-            self.editors.panels.push(item);
+            self.state.editors.panels.push(item);
             editor.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
@@ -166,10 +168,10 @@ impl AppShell {
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
                 .language(language.clone())
-                .line_number(self.settings.sftp.editor_line_numbers)
+                .line_number(self.state.settings.sftp.editor_line_numbers)
                 .folding(true)
                 .searchable(true)
-                .soft_wrap(self.settings.sftp.editor_soft_wrap)
+                .soft_wrap(self.state.settings.sftp.editor_soft_wrap)
         });
         // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
         // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。
@@ -184,7 +186,7 @@ impl AppShell {
         }
         editor.update(cx, |state, cx| state.focus(window, cx));
         let caret = caret_of(&editor, cx);
-        let cascade = self.editors.len();
+        let cascade = self.state.editors.len();
         let viewport = window.viewport_size();
         let (left, top) = cascade_origin(cascade, viewport);
         let change_sub = cx.subscribe(&editor, |this, editor, event: &InputEvent, cx| {
@@ -192,6 +194,7 @@ impl AppShell {
                 return;
             }
             if let Some(item) = this
+                .state
                 .editors
                 .panels
                 .iter_mut()
@@ -214,6 +217,7 @@ impl AppShell {
         let caret_sub = cx.observe(&editor, |this, editor, cx| {
             let next = caret_of(&editor, cx);
             let changed = this
+                .state
                 .editors
                 .panels
                 .iter_mut()
@@ -249,7 +253,7 @@ impl AppShell {
                 true,
             ),
         };
-        self.editors.panels.push(EditorPanelState {
+        self.state.editors.panels.push(EditorPanelState {
             tab_id,
             connection_id,
             remote_path,

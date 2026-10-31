@@ -48,6 +48,7 @@ impl AppShell {
         // 会话下任一标签存在未保存的编辑面板时，删除会被闸门挂起，
         // 待用户处理完毕后续行（同关闭标签组的保护水位）。
         let removed_tabs: Vec<TabId> = self
+            .state
             .workspace
             .tabs
             .iter()
@@ -61,40 +62,50 @@ impl AppShell {
         ) {
             return;
         }
-        self.catalog
+        self.state
+            .catalog
             .sessions
             .retain(|session| session.id != session_id);
-        self.sidebar.selected_sessions.remove(&session_id);
-        self.settings
+        self.state.sidebar.selected_sessions.remove(&session_id);
+        self.state
+            .settings
             .window
             .recent_sessions
             .retain(|id| *id != session_id);
         for tab_id in &removed_tabs {
-            self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
+            self.state
+                .send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
         }
-        self.workspace
+        self.state
+            .workspace
             .tabs
             .retain(|tab| tab.session_id != session_id);
-        self.prune_tab_overlays();
-        let tiled_focus = self.active_tiling().and_then(|tiled| tiled.focused_group());
+        self.state.prune_tab_overlays();
+        let tiled_focus = self
+            .state
+            .active_tiling()
+            .and_then(|tiled| tiled.focused_group());
         let mut replacement = None;
         for tab_id in removed_tabs {
-            if let Some(next) = self.detach_pane_from_group(tab_id) {
+            if let Some(next) = self.state.detach_pane_from_group(tab_id) {
                 replacement = Some(next);
             }
         }
-        self.prune_tilings();
+        self.state.prune_tilings();
         if self
+            .state
             .workspace
             .active_tab
-            .is_none_or(|id| !self.workspace.has_tab(id))
+            .is_none_or(|id| !self.state.workspace.has_tab(id))
         {
-            self.workspace.active_tab = self.fallback_active_pane(replacement, tiled_focus);
+            self.state.workspace.active_tab =
+                self.state.fallback_active_pane(replacement, tiled_focus);
         }
-        self.prune_tab_selection();
-        self.sync_broadcast_targets();
+        self.state.prune_tab_selection();
+        self.state.sync_broadcast_targets();
         for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
             if let Err(error) = self
+                .state
                 .services
                 .secret_store
                 .delete(&SecretKey::new(session_id, kind))
@@ -106,12 +117,13 @@ impl AppShell {
                 );
             }
         }
-        self.persist_catalog();
+        self.state.persist_catalog();
         cx.notify();
     }
 
     pub(crate) fn duplicate_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
         let Some(mut session) = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -123,10 +135,10 @@ impl AppShell {
         let new_id = SessionId::new();
         let name = session.name.clone();
         session.id = new_id;
-        session.name = self.unique_duplicate_name(&name);
-        self.catalog.sessions.push(session);
-        self.copy_secrets(session_id, new_id);
-        self.persist_catalog();
+        session.name = self.state.unique_duplicate_name(&name);
+        self.state.catalog.sessions.push(session);
+        self.state.copy_secrets(session_id, new_id);
+        self.state.persist_catalog();
         cx.notify();
     }
 }

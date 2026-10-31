@@ -67,9 +67,9 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let query = self.sidebar.search.read(cx).value().to_string();
+        let query = self.state.sidebar.search.read(cx).value().to_string();
         // 目录与搜索词都没变时复用上次构建的行表（见 `sidebar_rows`）。
-        let rows = self.sidebar_rows(&query);
+        let rows = self.state.sidebar_rows(&query);
         let content = if rows.is_empty() {
             self.render_sidebar_empty(&query, p)
         } else {
@@ -84,7 +84,7 @@ impl AppShell {
                 "sidebar-sessions-virtual-list",
                 item_sizes,
                 move |this, range, _window, cx| {
-                    let active_session = this.active_session_id();
+                    let active_session = this.state.active_session_id();
                     range
                         .filter_map(|index| {
                             let row = rows.get(index)?;
@@ -118,14 +118,14 @@ impl AppShell {
                     .child(
                         div()
                             .flex_1()
-                            .child(Input::new(&self.sidebar.search).w_full()),
+                            .child(Input::new(&self.state.sidebar.search).w_full()),
                     )
                     .child(Self::sidebar_icon_button(
                         SidebarButtonProps {
                             id: "sidebar-select",
                             icon: IconName::ListChecks,
                             tooltip: rust_i18n::t!("batch.select_mode").to_string(),
-                            active: self.sidebar.selection_mode,
+                            active: self.state.sidebar.selection_mode,
                             on_click: cx.listener(|this, _, _, cx| {
                                 this.toggle_selection_mode(cx);
                             }),
@@ -157,8 +157,8 @@ impl AppShell {
                         p,
                     )),
             );
-        if self.sidebar.selection_mode {
-            let selected_count = self.sidebar.selected_sessions.len();
+        if self.state.sidebar.selection_mode {
+            let selected_count = self.state.sidebar.selected_sessions.len();
             header = header.child(
                 h_flex()
                     .w_full()

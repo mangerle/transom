@@ -69,6 +69,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let rules: Vec<ForwardRule> = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -79,7 +80,7 @@ impl AppShell {
             // 自动启动不能成为“导入会话后静默开放公网端口”的通道：
             // 公网 bind 一律留待用户在转发面板手动启动并二次确认。
             if is_public_bind_address(forward_bind_host(&rule)) {
-                self.set_forward_status(
+                self.state.set_forward_status(
                     tab_id,
                     rule.id,
                     ForwardState::NeedsConfirmation,
@@ -90,8 +91,9 @@ impl AppShell {
                 );
                 continue;
             }
-            self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-            self.send_command(ForwardCommand::ForwardStart {
+            self.state
+                .set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
+            self.state.send_command(ForwardCommand::ForwardStart {
                 tab_id,
                 connection_id,
                 rule,
@@ -101,29 +103,34 @@ impl AppShell {
     }
 
     pub(crate) fn toggle_forward_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(tab_id) = self.workspace.active_tab else {
+        let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
-        let Some(index) = self.workspace.tab_index(tab_id) else {
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return;
         };
-        if self.workspace.tabs[index].forwards_panel().is_some() {
-            if let Some(pane) = self.workspace.tabs[index].session_pane_mut() {
+        if self.state.workspace.tabs[index].forwards_panel().is_some() {
+            if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
                 pane.forwards_panel = None;
             }
             cx.notify();
             return;
         }
         if !matches!(
-            self.workspace.tabs[index].session.connection,
+            self.state.workspace.tabs[index].session.connection,
             Connection::Ssh(_)
         ) {
-            self.set_error(rust_i18n::t!("error.forward_requires_ssh").to_string());
+            self.state
+                .set_error(rust_i18n::t!("error.forward_requires_ssh").to_string());
             cx.notify();
             return;
         }
-        if !matches!(self.workspace.tabs[index].status, TabStatus::Connected) {
-            self.set_error(rust_i18n::t!("error.forward_failed").to_string());
+        if !matches!(
+            self.state.workspace.tabs[index].status,
+            TabStatus::Connected
+        ) {
+            self.state
+                .set_error(rust_i18n::t!("error.forward_failed").to_string());
             cx.notify();
             return;
         }
@@ -152,7 +159,7 @@ impl AppShell {
             "80",
             rust_i18n::t!("forward.target_port").as_ref(),
         );
-        if let Some(pane) = self.workspace.tabs[index].session_pane_mut() {
+        if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
             pane.forwards_panel = Some(ForwardPanelState {
                 name_input: name,
                 bind_host_input: bind_host,
@@ -167,7 +174,7 @@ impl AppShell {
     }
 
     pub(crate) fn add_forward_rule(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -183,7 +190,7 @@ impl AppShell {
         let bind_port: u16 = match panel.bind_port_input.read(cx).value().trim().parse() {
             Ok(port) if port > 0 => port,
             _ => {
-                if let Some(panel) = self.forward_panel_mut(tab_id) {
+                if let Some(panel) = self.state.forward_panel_mut(tab_id) {
                     panel.error = Some(rust_i18n::t!("forward.error_port").to_string());
                 }
                 cx.notify();
@@ -193,7 +200,7 @@ impl AppShell {
         let target_port: u16 = match panel.target_port_input.read(cx).value().trim().parse() {
             Ok(port) if port > 0 => port,
             _ => {
-                if let Some(panel) = self.forward_panel_mut(tab_id) {
+                if let Some(panel) = self.state.forward_panel_mut(tab_id) {
                     panel.error = Some(rust_i18n::t!("forward.error_port").to_string());
                 }
                 cx.notify();
@@ -201,14 +208,14 @@ impl AppShell {
             }
         };
         if bind_host.is_empty() {
-            if let Some(panel) = self.forward_panel_mut(tab_id) {
+            if let Some(panel) = self.state.forward_panel_mut(tab_id) {
                 panel.error = Some(rust_i18n::t!("forward.bind_host").to_string());
             }
             cx.notify();
             return;
         }
         if panel.kind != ForwardKindChoice::Dynamic && target_host.is_empty() {
-            if let Some(panel) = self.forward_panel_mut(tab_id) {
+            if let Some(panel) = self.state.forward_panel_mut(tab_id) {
                 panel.error = Some(rust_i18n::t!("forward.error_target").to_string());
             }
             cx.notify();
@@ -250,6 +257,7 @@ impl AppShell {
         };
         let rule = ForwardRule::new(name, kind);
         if let Some(session) = self
+            .state
             .catalog
             .sessions
             .iter_mut()
@@ -257,13 +265,13 @@ impl AppShell {
         {
             session.forwards.push(rule.clone());
         }
-        self.persist_catalog();
-        if let Some(panel) = self.forward_panel_mut(tab_id) {
+        self.state.persist_catalog();
+        if let Some(panel) = self.state.forward_panel_mut(tab_id) {
             panel.error = None;
         }
 
         if is_public_bind_address(&bind_host) {
-            self.modals.confirm_forward_any = Some(PendingForwardConfirm {
+            self.state.modals.confirm_forward_any = Some(PendingForwardConfirm {
                 tab_id,
                 connection_id,
                 rule,
@@ -272,8 +280,9 @@ impl AppShell {
             return;
         }
 
-        self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-        self.send_command(ForwardCommand::ForwardStart {
+        self.state
+            .set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
+        self.state.send_command(ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -287,7 +296,7 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -295,6 +304,7 @@ impl AppShell {
         };
         let session_id = tab.session_id;
         let Some(rule) = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -308,7 +318,7 @@ impl AppShell {
         let bind_host = forward_bind_host(&rule);
 
         if is_public_bind_address(bind_host) {
-            self.modals.confirm_forward_any = Some(PendingForwardConfirm {
+            self.state.modals.confirm_forward_any = Some(PendingForwardConfirm {
                 tab_id,
                 connection_id,
                 rule,
@@ -318,6 +328,7 @@ impl AppShell {
         }
 
         if let Some(session) = self
+            .state
             .catalog
             .sessions
             .iter_mut()
@@ -326,9 +337,10 @@ impl AppShell {
         {
             rule.enabled = true;
         }
-        self.persist_catalog();
-        self.set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
-        self.send_command(ForwardCommand::ForwardStart {
+        self.state.persist_catalog();
+        self.state
+            .set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
+        self.state.send_command(ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -337,7 +349,7 @@ impl AppShell {
     }
 
     pub(crate) fn confirm_forward_start(&mut self, cx: &mut Context<Self>) {
-        let Some(pending) = self.modals.confirm_forward_any.take() else {
+        let Some(pending) = self.state.modals.confirm_forward_any.take() else {
             return;
         };
         let PendingForwardConfirm {
@@ -345,9 +357,10 @@ impl AppShell {
             connection_id,
             rule,
         } = pending;
-        let session_id = self.workspace.tab(tab_id).map(|t| t.session_id);
+        let session_id = self.state.workspace.tab(tab_id).map(|t| t.session_id);
         if let Some(session_id) = session_id {
             if let Some(session) = self
+                .state
                 .catalog
                 .sessions
                 .iter_mut()
@@ -356,10 +369,11 @@ impl AppShell {
             {
                 r.enabled = true;
             }
-            self.persist_catalog();
+            self.state.persist_catalog();
         }
-        self.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-        self.send_command(ForwardCommand::ForwardStart {
+        self.state
+            .set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
+        self.state.send_command(ForwardCommand::ForwardStart {
             tab_id,
             connection_id,
             rule,
@@ -368,7 +382,7 @@ impl AppShell {
     }
 
     pub(crate) fn cancel_forward_confirm(&mut self, cx: &mut Context<Self>) {
-        self.modals.confirm_forward_any = None;
+        self.state.modals.confirm_forward_any = None;
         cx.notify();
     }
 
@@ -378,7 +392,7 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
         let Some(connection_id) = tab.connection_id else {
@@ -386,6 +400,7 @@ impl AppShell {
         };
         let session_id = tab.session_id;
         if let Some(session) = self
+            .state
             .catalog
             .sessions
             .iter_mut()
@@ -394,9 +409,10 @@ impl AppShell {
         {
             rule.enabled = false;
         }
-        self.persist_catalog();
-        self.set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
-        self.send_command(ForwardCommand::ForwardStop {
+        self.state.persist_catalog();
+        self.state
+            .set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
+        self.state.send_command(ForwardCommand::ForwardStop {
             tab_id,
             connection_id,
             rule_id,
@@ -410,14 +426,15 @@ impl AppShell {
         rule_id: ForwardId,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab) = self.workspace.tab(tab_id) else {
+        let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
         let connection_id = tab.connection_id;
         let session_id = tab.session_id;
         if let (Some(connection_id), Some(status)) = (
             connection_id,
-            self.workspace
+            self.state
+                .workspace
                 .tab(tab_id)
                 .and_then(|tab| tab.session_pane())
                 .and_then(|pane| pane.forward_statuses.get(&rule_id)),
@@ -425,13 +442,14 @@ impl AppShell {
             status.state,
             ForwardState::Active { .. } | ForwardState::Starting
         ) {
-            self.send_command(ForwardCommand::ForwardStop {
+            self.state.send_command(ForwardCommand::ForwardStop {
                 tab_id,
                 connection_id,
                 rule_id,
             });
         }
         if let Some(pane) = self
+            .state
             .workspace
             .tab_mut(tab_id)
             .and_then(|tab| tab.session_pane_mut())
@@ -439,6 +457,7 @@ impl AppShell {
             pane.forward_statuses.remove(&rule_id);
         }
         if let Some(session) = self
+            .state
             .catalog
             .sessions
             .iter_mut()
@@ -446,7 +465,7 @@ impl AppShell {
         {
             session.forwards.retain(|rule| rule.id != rule_id);
         }
-        self.persist_catalog();
+        self.state.persist_catalog();
         cx.notify();
     }
 

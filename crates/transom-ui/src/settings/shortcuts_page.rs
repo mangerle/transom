@@ -19,8 +19,8 @@ impl AppShell {
         let rows: Vec<AnyElement> = keymap::specs()
             .iter()
             .map(|spec| {
-                let effective = keymap::effective_keys(spec, &self.settings.shortcuts);
-                let customized = self.settings.shortcuts.bindings.contains_key(spec.id);
+                let effective = keymap::effective_keys(spec, &self.state.settings.shortcuts);
+                let customized = self.state.settings.shortcuts.bindings.contains_key(spec.id);
                 let id = spec.id;
                 let key_elements =
                     h_flex()
@@ -75,7 +75,7 @@ impl AppShell {
                                     .xsmall()
                                     .label(rust_i18n::t!("settings.shortcut_reset").to_string())
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.settings.shortcuts.bindings.remove(id);
+                                        this.state.settings.shortcuts.bindings.remove(id);
                                         cx.notify();
                                     })),
                             )
@@ -85,7 +85,7 @@ impl AppShell {
             })
             .collect();
 
-        let conflicts = keymap::conflict_pairs(&self.settings.shortcuts);
+        let conflicts = keymap::conflict_pairs(&self.state.settings.shortcuts);
         let conflict_warning = (!conflicts.is_empty()).then(|| {
             let detail = conflicts
                 .iter()
@@ -104,7 +104,7 @@ impl AppShell {
                 .child(rust_i18n::t!("settings.shortcut_conflicts", list = detail).to_string())
         });
 
-        let has_custom = !self.settings.shortcuts.bindings.is_empty();
+        let has_custom = !self.state.settings.shortcuts.bindings.is_empty();
         v_flex()
             .gap_3()
             .child(
@@ -124,7 +124,7 @@ impl AppShell {
                                 .xsmall()
                                 .label(rust_i18n::t!("settings.shortcut_reset_all").to_string())
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.settings.shortcuts.bindings.clear();
+                                    this.state.settings.shortcuts.bindings.clear();
                                     cx.notify();
                                 })),
                         )

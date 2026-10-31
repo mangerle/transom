@@ -70,13 +70,14 @@ impl AppShell {
     /// 记录最近打开的会话 ID，并异步落盘保存。
     /// 从最近打开会话记录中移除指定会话，并异步落盘保存。
     pub(crate) fn remove_recent_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        let before_len = self.settings.window.recent_sessions.len();
-        self.settings
+        let before_len = self.state.settings.window.recent_sessions.len();
+        self.state
+            .settings
             .window
             .recent_sessions
             .retain(|id| *id != session_id);
-        if self.settings.window.recent_sessions.len() != before_len {
-            if let Err(error) = self.persist_settings() {
+        if self.state.settings.window.recent_sessions.len() != before_len {
+            if let Err(error) = self.state.persist_settings() {
                 log::warn!("保存最近打开会话设置失败，原因: {error}");
             }
             cx.notify();
@@ -91,6 +92,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(found) = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -98,16 +100,17 @@ impl AppShell {
         else {
             return;
         };
-        let session = self.catalog.resolved_session(found);
-        self.record_recent_session(session_id);
+        let session = self.state.catalog.resolved_session(found);
+        self.state.record_recent_session(session_id);
 
         let tab_id = TabId::new();
-        self.create_group(tab_id, session_id);
-        self.workspace
+        self.state.create_group(tab_id, session_id);
+        self.state
+            .workspace
             .tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
-        self.workspace.active_tab = Some(tab_id);
-        self.present_active_group();
+        self.state.workspace.active_tab = Some(tab_id);
+        self.state.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 
@@ -119,7 +122,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         const BACKOFF_SECS: [u64; 3] = [2, 5, 10];
-        let Some(tab) = self.workspace.tab_mut(tab_id) else {
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
             return;
         };
         if tab.connection_id != Some(failed_connection) {
@@ -168,7 +171,7 @@ impl AppShell {
                 .timer(std::time::Duration::from_secs(delay_secs))
                 .await;
             let _ = this.update(cx, |this, cx| {
-                let Some(tab) = this.workspace.tab(tab_id) else {
+                let Some(tab) = this.state.workspace.tab(tab_id) else {
                     return;
                 };
                 if tab.connection_id != Some(failed_connection) || tab.session_id != session_id {
@@ -192,7 +195,7 @@ impl AppShell {
             session.name,
             describe_target(&session)
         );
-        if let Some(tab) = self.workspace.tab_mut(tab_id) {
+        if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
             tab.connection_id = Some(connection_id);
             // 新通道上的 Shell 还没上报 OSC 7，旧目录不再代表当前 cwd；
             // 等新连接上的提示符钩子回报后再恢复 SFTP 跟随。
@@ -211,19 +214,20 @@ impl AppShell {
                 | Connection::Serial(_)
                 | Connection::Telnet(_)
         ) {
-            self.set_error(rust_i18n::t!("error.configuration").to_string());
+            self.state
+                .set_error(rust_i18n::t!("error.configuration").to_string());
             return;
         }
 
-        let chain = match self.catalog.proxy_jump_chain(&session) {
+        let chain = match self.state.catalog.proxy_jump_chain(&session) {
             Ok(chain) => chain,
             Err(error) => {
                 log::warn!(
                     "跳板机链路解析失败，窗格: {tab_id}，会话: {}，原因: {error}",
                     session.name
                 );
-                self.set_error(localized_error(&error));
-                if let Some(tab) = self.workspace.tab_mut(tab_id) {
+                self.state.set_error(localized_error(&error));
+                if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Failed(error);
                 }
                 cx.notify();
@@ -231,22 +235,22 @@ impl AppShell {
             }
         };
 
-        let proxy = session.effective_proxy(&self.settings.proxy);
+        let proxy = session.effective_proxy(&self.state.settings.proxy);
         if let Err(reason) = proxy.validate() {
             log::warn!(
                 "出站代理配置非法，窗格: {tab_id}，会话: {}，原因: {reason}",
                 session.name
             );
             let error = AppError::with_detail(ErrorCode::Configuration, reason);
-            self.set_error(localized_error(&error));
-            if let Some(tab) = self.workspace.tab_mut(tab_id) {
+            self.state.set_error(localized_error(&error));
+            if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                 tab.status = TabStatus::Failed(error);
             }
             cx.notify();
             return;
         }
 
-        let secret_store = self.services.secret_store.clone();
+        let secret_store = self.state.services.secret_store.clone();
         let load_session = session.clone();
         cx.spawn(async move |this, cx| {
             let (secrets, hops, error) = cx
@@ -263,7 +267,7 @@ impl AppShell {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
-                    this.set_error(error);
+                    this.state.set_error(error);
                 }
                 this.send_connect(
                     tab_id,
@@ -298,12 +302,12 @@ impl AppShell {
             proxy: payload.proxy,
             secrets: payload.secrets,
             size,
-            zmodem: self.settings.zmodem.clone(),
-            allow_sha1_publickey_auth: self.settings.allow_sha1_publickey_auth,
-            shell_integration: self.settings.block_view.shell_integration,
+            zmodem: self.state.settings.zmodem.clone(),
+            allow_sha1_publickey_auth: self.state.settings.allow_sha1_publickey_auth,
+            shell_integration: self.state.settings.block_view.shell_integration,
         }));
-        if !self.send_command(command) {
-            self.remove_tab(tab_id);
+        if !self.state.send_command(command) {
+            self.state.remove_tab(tab_id);
         }
         cx.notify();
     }

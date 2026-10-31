@@ -109,20 +109,23 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let defaults = self
+            .state
             .catalog
             .folders
             .iter()
-            .find(|folder| self.catalog.folder_path(folder.id).as_deref() == Some(folder_path))
-            .map(|folder| self.catalog.inherited_folder_defaults(folder.id))
+            .find(|folder| {
+                self.state.catalog.folder_path(folder.id).as_deref() == Some(folder_path)
+            })
+            .map(|folder| self.state.catalog.inherited_folder_defaults(folder.id))
             .unwrap_or_default();
-        if let Some(form) = self.modals.form.as_mut() {
+        if let Some(form) = self.state.modals.form.as_mut() {
             form.apply_folder_selection(folder_path, &defaults, window, cx);
         }
     }
 
     /// 在会话表单中清除分组（选择根层级）。
     pub(crate) fn clear_form_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(form) = self.modals.form.as_mut() {
+        if let Some(form) = self.state.modals.form.as_mut() {
             form.folder_path
                 .update(cx, |state, cx| state.set_value("", window, cx));
             cx.notify();
@@ -136,10 +139,10 @@ impl AppShell {
             crate::session_form::SessionFormInit {
                 base: None,
                 folder_path: None,
-                identities: self.identity_options(),
-                jump_options: self.jump_options(None),
-                folder_options: self.folder_paths(),
-                global_proxy: self.settings.proxy.clone(),
+                identities: self.state.identity_options(),
+                jump_options: self.state.jump_options(None),
+                folder_options: self.state.folder_paths(),
+                global_proxy: self.state.settings.proxy.clone(),
                 block_view: transom_core::BlockViewOverride::FollowGlobal,
             },
         );
@@ -157,7 +160,7 @@ impl AppShell {
             if !matches!(event, InputEvent::Change) {
                 return;
             }
-            let Some(form) = this.modals.form.as_mut() else {
+            let Some(form) = this.state.modals.form.as_mut() else {
                 return;
             };
             if form.folder_open {
@@ -166,7 +169,7 @@ impl AppShell {
             }
         })
         .detach();
-        self.modals.form = Some(form);
+        self.state.modals.form = Some(form);
     }
 
     pub(crate) fn open_edit_session(
@@ -176,6 +179,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(session) = self
+            .state
             .catalog
             .sessions
             .iter()
@@ -186,7 +190,7 @@ impl AppShell {
         };
         let folder_path = session
             .folder_id
-            .and_then(|id| self.catalog.folder_path(id));
+            .and_then(|id| self.state.catalog.folder_path(id));
         let is_serial = matches!(session.connection, Connection::Serial(_));
         let block_override = session.block_view;
         let mut form = SessionForm::new(
@@ -195,10 +199,10 @@ impl AppShell {
             crate::session_form::SessionFormInit {
                 base: Some(session),
                 folder_path,
-                identities: self.identity_options(),
-                jump_options: self.jump_options(Some(session_id)),
-                folder_options: self.folder_paths(),
-                global_proxy: self.settings.proxy.clone(),
+                identities: self.state.identity_options(),
+                jump_options: self.state.jump_options(Some(session_id)),
+                folder_options: self.state.folder_paths(),
+                global_proxy: self.state.settings.proxy.clone(),
                 block_view: block_override,
             },
         );
@@ -233,7 +237,7 @@ impl AppShell {
         crate::app::prefill_secret_fields(
             session_id.into(),
             fields,
-            self.services.secret_store.clone(),
+            self.state.services.secret_store.clone(),
             window,
             cx,
         );
@@ -241,7 +245,7 @@ impl AppShell {
 
     /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
     pub(crate) fn save_session_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.modals.form.as_mut() else {
+        let Some(form) = self.state.modals.form.as_mut() else {
             return;
         };
         let editing = form.base.is_some();
@@ -255,13 +259,13 @@ impl AppShell {
                 return;
             }
         };
-        self.modals.form = None;
+        self.state.modals.form = None;
 
         let mut built = built;
         built.session.folder_id = built
             .folder_path
             .as_deref()
-            .and_then(|path| self.catalog.ensure_folder_path(path));
+            .and_then(|path| self.state.catalog.ensure_folder_path(path));
         let password_key = SecretKey::new(built.session.id, SecretKind::Password);
         let passphrase_key = SecretKey::new(built.session.id, SecretKind::KeyPassphrase);
 
@@ -288,7 +292,7 @@ impl AppShell {
                 secret_writes.push(SecretWrite::Delete(passphrase_key));
             }
         }
-        let secret_store = self.services.secret_store.clone();
+        let secret_store = self.state.services.secret_store.clone();
         cx.spawn(async move |this, cx| {
             let error = if secret_writes.is_empty() {
                 None
@@ -301,7 +305,7 @@ impl AppShell {
             };
             let _ = this.update(cx, |this, cx| {
                 if let Some(error) = error {
-                    this.set_error(localized_error(&error));
+                    this.state.set_error(localized_error(&error));
                     cx.notify();
                 }
             });
@@ -311,6 +315,7 @@ impl AppShell {
         let session_id = built.session.id;
         if editing {
             if let Some(existing) = self
+                .state
                 .catalog
                 .sessions
                 .iter_mut()
@@ -319,14 +324,14 @@ impl AppShell {
                 *existing = built.session;
             }
         } else {
-            self.catalog.sessions.push(built.session);
+            self.state.catalog.sessions.push(built.session);
         }
-        self.persist_catalog();
+        self.state.persist_catalog();
         cx.notify();
     }
 
     pub(crate) fn delete_session_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.modals.form.take() else {
+        let Some(form) = self.state.modals.form.take() else {
             return;
         };
         let Some(base) = form.base else {

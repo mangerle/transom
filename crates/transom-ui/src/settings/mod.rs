@@ -212,8 +212,8 @@ impl AppShell {
         change: impl FnOnce(&mut AppearanceSettings),
         cx: &mut Context<Self>,
     ) {
-        change(&mut self.settings.appearance);
-        crate::theme::apply_appearance(&self.settings.appearance, cx);
+        change(&mut self.state.settings.appearance);
+        crate::theme::apply_appearance(&self.state.settings.appearance, cx);
         self.sync_terminal_palette(cx);
         cx.notify();
     }
@@ -222,13 +222,13 @@ impl AppShell {
     /// 伴生终端调色板写入终端 profile 并热应用到活窗格。显式选了预设的用户
     /// 不受影响。设置页外观变化、保存落盘、系统明暗切换三个触发点共用。
     pub(crate) fn sync_terminal_palette(&mut self, cx: &mut Context<Self>) {
-        if self.settings.terminal_profile.theme_name != FOLLOW_UI_THEME {
+        if self.state.settings.terminal_profile.theme_name != FOLLOW_UI_THEME {
             return;
         }
         let active = cx.theme().theme_name().to_string();
         if let Some(palette) = crate::theme::resolve_terminal_palette(FOLLOW_UI_THEME, &active, cx)
         {
-            self.settings.terminal_profile.palette = palette;
+            self.state.settings.terminal_profile.palette = palette;
             self.apply_appearance_to_live_panes(cx);
         }
     }
@@ -239,12 +239,13 @@ impl AppShell {
     /// 会话本身也带 profile，但当前没有任何界面在会话级别改字体，因此以全局偏好为准；
     /// 将来开放会话级字体时，这里必须改成只补空白、不覆盖会话选择。
     pub(crate) fn apply_appearance_to_live_panes(&self, cx: &mut Context<Self>) {
-        let mut profile = self.settings.terminal_profile.clone();
+        let mut profile = self.state.settings.terminal_profile.clone();
         // 终端背景随窗口整体透明：窗口半透明时，终端区要透出桌面，
         // 否则只有侧栏与标签栏变透明，终端仍是一块实色。
-        profile.background_transparency = self.settings.window.window_transparency;
-        // 先收集实体再逐个更新：遍历 self.workspace.tabs 与逐条 update 会同时借用 self。
+        profile.background_transparency = self.state.settings.window.window_transparency;
+        // 先收集实体再逐个更新：遍历 self.state.workspace.tabs 与逐条 update 会同时借用 self。
         let terminals: Vec<Entity<TerminalView>> = self
+            .state
             .workspace
             .tabs
             .iter()
@@ -260,14 +261,16 @@ impl AppShell {
     /// 每个窗格按自己会话的覆盖档位解析，不能统一吃全局值：生产构建机可能
     /// 强制开启，而同一窗口里的交换机 Console 强制关闭。
     pub(crate) fn apply_block_view_settings(&self, cx: &mut Context<Self>) {
-        let global = self.settings.block_view;
+        let global = self.state.settings.block_view;
         let terminals: Vec<(Entity<TerminalView>, transom_core::BlockViewSettings)> = self
+            .state
             .workspace
             .tabs
             .iter()
             .filter_map(|tab| {
                 let terminal = tab.terminal()?;
                 let override_ = self
+                    .state
                     .catalog
                     .sessions
                     .iter()

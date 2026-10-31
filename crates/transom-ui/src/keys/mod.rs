@@ -111,12 +111,12 @@ impl AppShell {
             }
             Err(error) => state.error = Some(localized_error(&error)),
         }
-        self.modals.settings.key_wizard = Some(state);
+        self.state.modals.settings.key_wizard = Some(state);
         cx.notify();
     }
 
     pub(crate) fn close_key_wizard(&mut self, cx: &mut Context<Self>) {
-        self.modals.settings.key_wizard = None;
+        self.state.modals.settings.key_wizard = None;
         cx.notify();
     }
 
@@ -127,7 +127,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.modals.settings.key_wizard.as_mut() else {
+        let Some(state) = self.state.modals.settings.key_wizard.as_mut() else {
             return;
         };
         if state.algorithm == algorithm {
@@ -155,7 +155,7 @@ impl AppShell {
     }
 
     pub(crate) fn generate_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(state) = self.modals.settings.key_wizard.as_mut() else {
+        let Some(state) = self.state.modals.settings.key_wizard.as_mut() else {
             return;
         };
         if state.generating {
@@ -192,7 +192,7 @@ impl AppShell {
                 this.finish_key_generation(result, ssh_dir, window, cx);
             });
         });
-        if let Some(state) = self.modals.settings.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.settings.key_wizard.as_mut() {
             state._task = Some(task);
         }
         cx.notify();
@@ -205,7 +205,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.modals.settings.key_wizard.as_mut() else {
+        let Some(state) = self.state.modals.settings.key_wizard.as_mut() else {
             return;
         };
         state.generating = false;
@@ -245,7 +245,7 @@ impl AppShell {
     }
 
     pub(crate) fn select_key(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(state) = self.modals.settings.key_wizard.as_mut() else {
+        let Some(state) = self.state.modals.settings.key_wizard.as_mut() else {
             return;
         };
         if index < state.keys.len() {
@@ -256,7 +256,7 @@ impl AppShell {
     }
 
     pub(crate) fn copy_selected_key(&mut self, cx: &mut Context<Self>) {
-        let Some(key) = self.selected_key().cloned() else {
+        let Some(key) = self.state.selected_key().cloned() else {
             self.set_key_error(rust_i18n::t!("keys.error_select_first").as_ref(), cx);
             return;
         };
@@ -265,7 +265,7 @@ impl AppShell {
     }
 
     pub(crate) fn export_selected_key(&mut self, cx: &mut Context<Self>) {
-        let Some(key) = self.selected_key().cloned() else {
+        let Some(key) = self.state.selected_key().cloned() else {
             self.set_key_error(rust_i18n::t!("keys.error_select_first").as_ref(), cx);
             return;
         };
@@ -297,7 +297,7 @@ impl AppShell {
     }
 
     pub(crate) fn deploy_selected_key(&mut self, target: KeyTarget, cx: &mut Context<Self>) {
-        let Some(key) = self.selected_key().cloned() else {
+        let Some(key) = self.state.selected_key().cloned() else {
             self.set_key_error(rust_i18n::t!("keys.error_select_first").as_ref(), cx);
             return;
         };
@@ -313,8 +313,8 @@ impl AppShell {
             public_key: key.openssh,
         };
         // 先提交命令再借用向导状态：send_command 需要可变借用 self
-        let sent = self.send_command(command);
-        let Some(state) = self.modals.settings.key_wizard.as_mut() else {
+        let sent = self.state.send_command(command);
+        let Some(state) = self.state.modals.settings.key_wizard.as_mut() else {
             return;
         };
         if sent {
@@ -339,7 +339,7 @@ impl AppShell {
         error: Option<AppError>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(state) = self.modals.settings.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.settings.key_wizard.as_mut() {
             match error {
                 Some(error) => {
                     state.error = Some(localized_error(&error));
@@ -355,9 +355,9 @@ impl AppShell {
             return;
         }
         match error {
-            Some(error) => self.set_error(localized_error(&error)),
+            Some(error) => self.state.set_error(localized_error(&error)),
             None => {
-                self.status =
+                self.state.status =
                     Some(rust_i18n::t!("keys.deployed_status", key = key_name.as_str()).to_string())
             }
         }
@@ -365,7 +365,7 @@ impl AppShell {
     }
 
     fn set_key_notice(&mut self, message: &str, cx: &mut Context<Self>) {
-        if let Some(state) = self.modals.settings.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.settings.key_wizard.as_mut() {
             state.message = Some(message.to_string());
             state.error = None;
         }
@@ -373,7 +373,7 @@ impl AppShell {
     }
 
     fn set_key_error(&mut self, message: &str, cx: &mut Context<Self>) {
-        if let Some(state) = self.modals.settings.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.settings.key_wizard.as_mut() {
             state.error = Some(message.to_string());
             state.message = None;
         }

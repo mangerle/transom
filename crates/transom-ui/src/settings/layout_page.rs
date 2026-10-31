@@ -28,7 +28,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let items: Vec<ActivityItemId> = self.settings.activity_bar.order().to_vec();
+        let items: Vec<ActivityItemId> = self.state.settings.activity_bar.order().to_vec();
         let mut cards = Vec::with_capacity(items.len());
         for id in items {
             cards.push(Self::layout_visibility_card(
@@ -36,11 +36,11 @@ impl AppShell {
                     key: format!("activity-{}", id.key()),
                     label: activity_item_label(id),
                     icon: activity_item_icon(id),
-                    visible: !self.settings.activity_bar.is_hidden(id),
+                    visible: !self.state.settings.activity_bar.is_hidden(id),
                     pinned: id.is_pinned(),
                 },
                 move |this, checked, cx| {
-                    if this.settings.activity_bar.set_visible(id, checked) {
+                    if this.state.settings.activity_bar.set_visible(id, checked) {
                         this.persist_layout_settings(cx);
                     } else {
                         cx.notify();
@@ -99,7 +99,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let items: Vec<StatusItemId> = self.settings.status_bar.order().to_vec();
+        let items: Vec<StatusItemId> = self.state.settings.status_bar.order().to_vec();
         let mut cards = Vec::with_capacity(items.len());
         for id in items {
             cards.push(Self::layout_visibility_card(
@@ -107,11 +107,11 @@ impl AppShell {
                     key: format!("status-{}", id.key()),
                     label: status_item_label(id),
                     icon: status_item_icon(id),
-                    visible: !self.settings.status_bar.is_hidden(id),
+                    visible: !self.state.settings.status_bar.is_hidden(id),
                     pinned: false,
                 },
                 move |this, checked, cx| {
-                    if this.settings.status_bar.set_visible(id, checked) {
+                    if this.state.settings.status_bar.set_visible(id, checked) {
                         this.persist_layout_settings(cx);
                     } else {
                         cx.notify();

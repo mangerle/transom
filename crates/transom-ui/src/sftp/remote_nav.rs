@@ -20,6 +20,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let sync_local_target = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -48,7 +49,7 @@ impl AppShell {
 
         // 即时路径更新与 SWR 短期缓存命中呈现（消除点击假死感）
         let mut update_path_input = None;
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
             && let Some(pane) = panel.remote_pane_mut(target)
         {
             pane.path = path.clone();
@@ -94,7 +95,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((parent, sync_local_parent)) = self.workspace.tab(tab_id).and_then(|tab| {
+        let Some((parent, sync_local_parent)) = self.state.workspace.tab(tab_id).and_then(|tab| {
             let panel = tab.sftp()?;
             let pane = panel.remote_pane(target)?;
             let remote_parent = parent_remote(&pane.path);
@@ -121,6 +122,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(path) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -142,6 +144,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(path) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -150,7 +153,7 @@ impl AppShell {
         else {
             return;
         };
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id)
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id)
             && let Some(pane) = panel.remote_pane_mut(target)
         {
             pane.dir_cache.remove(&path);
@@ -166,7 +169,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((show_filter, input)) = self.sftp_panel_mut_tab(tab_id).and_then(|panel| {
+        let Some((show_filter, input)) = self.state.sftp_panel_mut_tab(tab_id).and_then(|panel| {
             let pane = panel.remote_pane_mut(target)?;
             pane.show_filter = !pane.show_filter;
             Some((pane.show_filter, pane.filter_input.clone()))
@@ -192,14 +195,14 @@ impl AppShell {
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let Some(show_hidden) = self.sftp_panel_mut_tab(tab_id).and_then(|panel| {
+        let Some(show_hidden) = self.state.sftp_panel_mut_tab(tab_id).and_then(|panel| {
             let pane = panel.remote_pane_mut(target)?;
             pane.show_hidden = !pane.show_hidden;
             Some(pane.show_hidden)
         }) else {
             return;
         };
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
             panel.set_status(if show_hidden {
                 rust_i18n::t!("sftp.nav.hidden_shown").to_string()
             } else {
@@ -211,7 +214,7 @@ impl AppShell {
 
     /// 切换本地列的隐藏文件显示。
     pub(crate) fn sftp_toggle_local_hidden(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
             panel.local.show_hidden = !panel.local.show_hidden;
             panel.set_status(if panel.local.show_hidden {
                 rust_i18n::t!("sftp.nav.hidden_shown").to_string()
@@ -224,7 +227,7 @@ impl AppShell {
 
     /// 切换"主远端导航联动本地"开关（面板级，只有主远端显示该按钮）。
     pub(crate) fn sftp_toggle_sync_navigation(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(panel) = self.sftp_panel_mut_tab(tab_id) {
+        if let Some(panel) = self.state.sftp_panel_mut_tab(tab_id) {
             panel.sync_navigation = !panel.sync_navigation;
             panel.set_status(
                 if panel.sync_navigation {
@@ -245,10 +248,11 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.workspace.active_tab else {
+        let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
         let Some(active) = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.sftp())
@@ -260,6 +264,7 @@ impl AppShell {
             SftpActivePane::Local => self.sftp_toggle_local_hidden(tab_id, cx),
             SftpActivePane::Remote => {
                 let is_local_only = self
+                    .state
                     .workspace
                     .tab(tab_id)
                     .and_then(|tab| tab.sftp())
@@ -283,7 +288,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((show_filter, input)) = self.sftp_panel_mut_tab(tab_id).map(|panel| {
+        let Some((show_filter, input)) = self.state.sftp_panel_mut_tab(tab_id).map(|panel| {
             panel.local.show_filter = !panel.local.show_filter;
             (panel.local.show_filter, panel.local.filter_input.clone())
         }) else {
@@ -308,10 +313,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.workspace.active_tab else {
+        let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
-        let target = self.workspace.tab(tab_id).and_then(|tab| {
+        let target = self.state.workspace.tab(tab_id).and_then(|tab| {
             let panel = tab.sftp()?;
             match panel.active_pane {
                 SftpActivePane::Local => None,

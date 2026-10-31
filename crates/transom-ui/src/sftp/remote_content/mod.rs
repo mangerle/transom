@@ -166,6 +166,7 @@ impl AppShell {
         let p = p.clone();
         let app_entity = cx.entity().clone();
         let has_main_remote = self
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.connection_id)
@@ -177,6 +178,7 @@ impl AppShell {
             remote_sizes,
             move |this, range, _window, cx| {
                 let (remote_selection, remote_primary) = this
+                    .state
                     .workspace
                     .tab(tab_id)
                     .and_then(|tab| tab.sftp())

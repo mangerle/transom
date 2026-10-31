@@ -111,7 +111,7 @@ impl AppShell {
             let Some(result) = spawn_blocking_local(move || std::fs::read(&read_path)).await else {
                 log::error!("读取本地字体文件的线程创建失败");
                 let _ = this.update(cx, |this, cx| {
-                    this.status = Some(
+                    this.state.status = Some(
                         rust_i18n::t!(
                             "settings.font_read_failed",
                             error = rust_i18n::t!("settings.font_thread_failed")
@@ -144,7 +144,7 @@ impl AppShell {
                     cx.text_system().all_font_names().into_iter().collect();
                 if let Err(err) = cx.text_system().add_fonts(vec![Cow::Owned(bytes)]) {
                     log::warn!("加载外部字体文件失败，路径: {:?}，原因: {err}", path);
-                    self.status =
+                    self.state.status =
                         Some(rust_i18n::t!("settings.font_load_failed", error = err).to_string());
                     cx.notify();
                     return;
@@ -158,7 +158,7 @@ impl AppShell {
 
                 let Some(family) = family else {
                     log::warn!("字体文件未注册新的字体族，路径: {:?}", path);
-                    self.status =
+                    self.state.status =
                         Some(rust_i18n::t!("settings.font_import_no_new_family").to_string());
                     cx.notify();
                     return;
@@ -169,14 +169,14 @@ impl AppShell {
                     state.set_selected_value(&family, window, cx);
                 });
                 log::info!("成功注册本地字体: {}，路径: {:?}", family, path);
-                self.status = Some(
+                self.state.status = Some(
                     rust_i18n::t!("settings.font_imported_success", name = family).to_string(),
                 );
                 cx.notify();
             }
             Err(err) => {
                 log::error!("读取本地字体文件失败，路径: {:?}，原因: {err}", path);
-                self.status =
+                self.state.status =
                     Some(rust_i18n::t!("settings.font_read_failed", error = err).to_string());
                 cx.notify();
             }
@@ -186,9 +186,15 @@ impl AppShell {
     /// 重建三个字体字段的选项：系统字体集合是全局的，导入后三个下拉都要看到新族名。
     fn refresh_font_selects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let fields = [
-            (self.modals.settings.font_family.clone(), MONO_DEFAULT_KEY),
-            (self.modals.settings.cjk_font.clone(), CJK_DEFAULT_KEY),
-            (self.modals.settings.ui_font_family.clone(), UI_DEFAULT_KEY),
+            (
+                self.state.modals.settings.font_family.clone(),
+                MONO_DEFAULT_KEY,
+            ),
+            (self.state.modals.settings.cjk_font.clone(), CJK_DEFAULT_KEY),
+            (
+                self.state.modals.settings.ui_font_family.clone(),
+                UI_DEFAULT_KEY,
+            ),
         ];
 
         for (select, key) in fields {

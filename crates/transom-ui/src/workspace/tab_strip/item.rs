@@ -37,14 +37,15 @@ pub(super) fn render_tab_entry(
     let (group_id, composite, tiled_set) = match entry {
         StripEntry::Single(group) => (*group, false, None),
         StripEntry::Tiled { id, focus } => {
-            let tiled = shell.tiling_by_id(*id)?.clone();
+            let tiled = shell.state.tiling_by_id(*id)?.clone();
             (*focus, true, Some(tiled))
         }
     };
 
-    let group = shell.workspace.group(group_id)?;
+    let group = shell.state.workspace.group(group_id)?;
     let tile_enabled = !composite && can_tile;
     let tab = shell
+        .state
         .workspace
         .tabs
         .iter()
@@ -60,7 +61,7 @@ pub(super) fn render_tab_entry(
     let serial = group.serial;
     let is_extra = serial > 0;
     let is_local = matches!(tab.session.connection, Connection::Local(_));
-    let active = shell.workspace.active_tab == Some(active_pane);
+    let active = shell.state.workspace.active_tab == Some(active_pane);
     let tiled_paired = composite;
     // 底边由条目内的绝对定位色条绘制，内边距预留同一高度，保证各条目
     // 的内容区一致，不会因活动条目的强调线更粗而上下错位。
@@ -74,20 +75,22 @@ pub(super) fn render_tab_entry(
     let entry_selected = !selection_groups.is_empty()
         && selection_groups
             .iter()
-            .all(|group| shell.workspace.tab_selection.contains(group));
+            .all(|group| shell.state.workspace.tab_selection.contains(group));
 
     let selected_singles: Vec<GroupId> = shell
+        .state
         .workspace
         .groups
         .iter()
         .filter(|group| {
-            shell.workspace.tab_selection.contains(&group.id)
-                && shell.tiling_of_group(group.id).is_none()
+            shell.state.workspace.tab_selection.contains(&group.id)
+                && shell.state.tiling_of_group(group.id).is_none()
         })
         .map(|group| group.id)
         .collect();
 
     let touched_sets: Vec<crate::tiling::TilingId> = shell
+        .state
         .workspace
         .tiled_sets
         .iter()
@@ -95,7 +98,7 @@ pub(super) fn render_tab_entry(
             tiled
                 .occupied_groups()
                 .iter()
-                .any(|group| shell.workspace.tab_selection.contains(group))
+                .any(|group| shell.state.workspace.tab_selection.contains(group))
         })
         .map(|tiled| tiled.id)
         .collect();
@@ -279,7 +282,7 @@ pub(super) fn render_tab_entry(
         element = element.child(build_tiled_group_badge(shell, tiled, app_entity, p));
     }
 
-    if shell.settings.window.show_tab_close_button {
+    if shell.state.settings.window.show_tab_close_button {
         let close_btn =
             render_tab_close_button(group_id, active, tiled_set.as_ref(), app_entity, p, cx);
         element = element.child(close_btn);

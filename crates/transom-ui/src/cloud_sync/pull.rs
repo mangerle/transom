@@ -14,7 +14,7 @@ impl AppShell {
             log::info!("下载合并前已保存本机安全副本，路径: {}", path.display());
         }
 
-        let backup = self.services.backup.clone();
+        let backup = self.state.services.backup.clone();
         let (catalog, secrets) = document.into_parts();
         let task = cx.spawn_in(window, async move |this, cx| {
             let secrets = cx
@@ -30,7 +30,7 @@ impl AppShell {
                 this.apply_cloud_sync_pull(catalog, secrets, safety_path, cx);
             });
         });
-        self.tasks.sync_pull = Some(task);
+        self.state.tasks.sync_pull = Some(task);
     }
 
     /// 把合并前的本机目录导出为明文安全副本；失败不阻断合并，只记日志。
@@ -39,7 +39,12 @@ impl AppShell {
         let path =
             transom_platform::paths::config_dir().join(format!("sync-safety-{timestamp}.json"));
         let options = BackupExportOptions::default();
-        match self.services.backup.export(&path, &self.catalog, &options) {
+        match self
+            .state
+            .services
+            .backup
+            .export(&path, &self.state.catalog, &options)
+        {
             Ok(_) => Some(path),
             Err(error) => {
                 log::warn!(
@@ -61,13 +66,13 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let (merged, report) =
-            merge_catalogs(None, &self.catalog, &catalog, MergePreference::Remote);
-        self.catalog = merged;
-        let saved = self.persist_catalog();
-        self.refresh_tab_sessions();
-        self.settings.sync.last_pull_at = Some(chrono::Utc::now().timestamp());
-        if let Err(error) = self.persist_settings() {
-            self.set_error(localized_error(&error));
+            merge_catalogs(None, &self.state.catalog, &catalog, MergePreference::Remote);
+        self.state.catalog = merged;
+        let saved = self.state.persist_catalog();
+        self.state.refresh_tab_sessions();
+        self.state.settings.sync.last_pull_at = Some(chrono::Utc::now().timestamp());
+        if let Err(error) = self.state.persist_settings() {
+            self.state.set_error(localized_error(&error));
         }
 
         let mut message = rust_i18n::t!(
@@ -92,15 +97,15 @@ impl AppShell {
             );
         }
         if saved {
-            self.status = Some(message);
+            self.state.status = Some(message);
         }
-        self.tasks.sync_pull = None;
+        self.state.tasks.sync_pull = None;
         cx.notify();
     }
 
     /// 同步端点上还没有备份：首次拉取属预期状态，按提示而非错误展示。
     pub(crate) fn handle_cloud_sync_missing(&mut self, cx: &mut Context<Self>) {
-        self.status = Some(rust_i18n::t!("sync.missing_remote").to_string());
+        self.state.status = Some(rust_i18n::t!("sync.missing_remote").to_string());
         cx.notify();
     }
 }

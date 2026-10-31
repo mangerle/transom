@@ -123,8 +123,8 @@ impl AppShell {
             remote_path,
             op_id,
         } = params;
-        let max_bytes = self.settings.sftp.edit_max_bytes;
-        if !self.send_command(SftpCommand::Sftp {
+        let max_bytes = self.state.settings.sftp.edit_max_bytes;
+        if !self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -158,13 +158,13 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(index) =
-            self.editors.panels.iter().position(|item| {
+            self.state.editors.panels.iter().position(|item| {
                 item.pending_op == Some(op_id) && item.phase == EditorPhase::Reading
             })
         else {
             return;
         };
-        let item = &mut self.editors.panels[index];
+        let item = &mut self.state.editors.panels[index];
         item.editor
             .update(cx, |state, cx| state.set_value(content, window, cx));
         item.baseline = item.editor.read(cx).value();
@@ -209,6 +209,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some(item) = self
+            .state
             .editors
             .panels
             .iter()

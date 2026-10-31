@@ -102,6 +102,7 @@ fn status_reorder_half(
         let dragged = drag.0;
         app.update(cx, |this, cx| {
             if this
+                .state
                 .settings
                 .status_bar
                 .move_relative_to(dragged, anchor, !before)
@@ -131,7 +132,7 @@ pub(super) fn status_front_drop_zone(app: &Entity<AppShell>, p: &Palette) -> Any
         .on_drop(move |drag: &StatusDrag, window, cx| {
             let dragged = drag.0;
             app.update(cx, |this, cx| {
-                if this.settings.status_bar.move_to_front(dragged) {
+                if this.state.settings.status_bar.move_to_front(dragged) {
                     this.persist_layout_settings(cx);
                 } else {
                     cx.notify();
@@ -180,7 +181,7 @@ pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -
 
 impl AppShell {
     fn hide_status_item(&mut self, id: StatusItemId, cx: &mut Context<Self>) {
-        if self.settings.status_bar.set_visible(id, false) {
+        if self.state.settings.status_bar.set_visible(id, false) {
             self.persist_layout_settings(cx);
         } else {
             cx.notify();
@@ -188,7 +189,7 @@ impl AppShell {
     }
 
     pub(crate) fn restore_status_bar(&mut self, cx: &mut Context<Self>) {
-        if self.settings.status_bar.restore_defaults() {
+        if self.state.settings.status_bar.restore_defaults() {
             self.persist_layout_settings(cx);
         } else {
             cx.notify();

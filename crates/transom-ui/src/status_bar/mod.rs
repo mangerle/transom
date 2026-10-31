@@ -40,7 +40,8 @@ impl AppShell {
     /// 底栏的会话作用域入口用它判定"有没有可操作对象"。刻意不看活动标签：
     /// 广播目标跨标签，录制也常在非活动标签上进行。
     pub(crate) fn has_any_terminal(&self) -> bool {
-        self.workspace
+        self.state
+            .workspace
             .tabs
             .iter()
             .any(|tab| tab.terminal().is_some())
@@ -48,7 +49,8 @@ impl AppShell {
 
     /// 是否有标签正在录制：录制中必须保住停止入口。
     pub(crate) fn is_any_tab_recording(&self, cx: &App) -> bool {
-        self.workspace
+        self.state
+            .workspace
             .tabs
             .iter()
             .filter_map(|tab| tab.terminal())
@@ -63,9 +65,10 @@ impl AppShell {
         divider_x: Pixels,
     ) -> AnyElement {
         let active_tab_info = self
+            .state
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id));
+            .and_then(|tab_id| self.state.workspace.tab(tab_id));
 
         let (status_dot_color, status_text) = if let Some(tab) = active_tab_info {
             let (color, text) = match &tab.status {
@@ -88,7 +91,7 @@ impl AppShell {
         };
 
         let data = StatusData::from_tab(active_tab_info);
-        let items: Vec<StatusItemId> = self.settings.status_bar.visible_items().collect();
+        let items: Vec<StatusItemId> = self.state.settings.status_bar.visible_items().collect();
         let app = cx.entity().clone();
         let mut right_elements = Vec::with_capacity(items.len());
         for id in items {
@@ -99,6 +102,7 @@ impl AppShell {
 
         if right_elements.is_empty() {
             let text = self
+                .state
                 .status
                 .clone()
                 .unwrap_or_else(|| format!("{} v{}", crate::APP_NAME, crate::APP_VERSION));
@@ -152,16 +156,17 @@ impl AppShell {
         // 三条兜底：已打开的卡片与输入条、以及正在录制的标签，都不允许因为
         // 图标消失而失去关闭/停止的入口。
         let session_scoped = self.has_any_terminal();
-        let snippets_entry = (session_scoped || self.modals.snippet_panel.open)
+        let snippets_entry = (session_scoped || self.state.modals.snippet_panel.open)
             .then(|| self.render_snippets_popover(p, cx));
-        let broadcast_entry =
-            (session_scoped || self.broadcast.open).then(|| self.render_broadcast_trigger(cx));
+        let broadcast_entry = (session_scoped || self.state.broadcast.open)
+            .then(|| self.render_broadcast_trigger(cx));
         let recording_badge = (session_scoped || self.is_any_tab_recording(cx))
             .then(|| self.render_recording_badge(p, cx));
         let front_zone = drag::status_front_drop_zone(&app, p);
         let menu_app = app.clone();
         // ZMODEM 传输徽章优先于常规状态项：传输进行中用户最关心进度与取消。
         let zmodem_badge = self
+            .state
             .workspace
             .active_tab
             .and_then(|tab_id| self.render_zmodem_badge(tab_id, p, cx));

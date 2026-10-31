@@ -221,18 +221,18 @@ impl AppShell {
             connection_id,
             local_path,
             remote_path,
-        } = match self.local_diff_check(tab_id) {
+        } = match self.state.local_diff_check(tab_id) {
             LocalDiffCheck::Ready(target) => target,
             LocalDiffCheck::NotApplicable => return,
             LocalDiffCheck::Rejected(reason) => {
-                self.status = Some(reason);
+                self.state.status = Some(reason);
                 cx.notify();
                 return;
             }
         };
         let max_bytes = MAX_DIFF_BYTES;
         let op_id = TransferId::new();
-        self.diff_viewer = Some(DiffViewerState::new(
+        self.state.diff_viewer = Some(DiffViewerState::new(
             tab_id,
             Some(connection_id),
             local_path,
@@ -240,7 +240,7 @@ impl AppShell {
             Some(op_id),
         ));
         self.spawn_diff_local_read(cx);
-        if !self.send_command(SftpCommand::Sftp {
+        if !self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -248,7 +248,7 @@ impl AppShell {
                 path: remote_path,
                 max_bytes,
             },
-        }) && let Some(viewer) = self.diff_viewer.as_mut()
+        }) && let Some(viewer) = self.state.diff_viewer.as_mut()
         {
             viewer.pending_read = None;
             viewer.phase = DiffPhase::Ready;
@@ -273,9 +273,13 @@ impl AppShell {
             remote_text,
             remote_meta,
         } = snapshot;
-        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
+        let Some(connection_id) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
         else {
-            self.status = Some("所属连接已断开，无法对比".to_string());
+            self.state.status = Some("所属连接已断开，无法对比".to_string());
             cx.notify();
             return;
         };
@@ -286,7 +290,7 @@ impl AppShell {
             DiffViewerState::new(tab_id, Some(connection_id), local_path, remote_path, None);
         viewer.remote_text = Some(remote_text);
         viewer.remote_meta = remote_meta;
-        self.diff_viewer = Some(viewer);
+        self.state.diff_viewer = Some(viewer);
         self.spawn_diff_local_read(cx);
         self.recompute_diff(cx);
         cx.notify();
@@ -294,7 +298,8 @@ impl AppShell {
 
     /// 取编辑器面板中可参与对比的远端快照；未装载、新建文件或读写中返回 `None`。
     fn editor_diff_snapshot(&self, editor: &Entity<EditorState>) -> Option<EditorDiffSnapshot> {
-        self.editors
+        self.state
+            .editors
             .panels
             .iter()
             .find(|item| item.editor == *editor)
@@ -326,16 +331,16 @@ impl AppShell {
             .pick_file()?;
         match std::fs::metadata(&local_path) {
             Ok(meta) if meta.len() > MAX_DIFF_BYTES => {
-                self.status = Some(format!(
+                self.state.status = Some(format!(
                     "本地文件超过对比上限 {}",
                     format_size(MAX_DIFF_BYTES)
                 ));
             }
             Ok(meta) if !meta.is_file() => {
-                self.status = Some("请选择普通文件".to_string());
+                self.state.status = Some("请选择普通文件".to_string());
             }
             Err(error) => {
-                self.status = Some(format!("无法读取本地文件属性: {error}"));
+                self.state.status = Some(format!("无法读取本地文件属性: {error}"));
             }
             Ok(_) => return Some(local_path),
         }
@@ -344,7 +349,7 @@ impl AppShell {
     }
 
     fn spawn_diff_local_read(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.diff_viewer.as_ref() else {
+        let Some(viewer) = self.state.diff_viewer.as_ref() else {
             return;
         };
         let path = viewer.local_path.clone();
@@ -362,7 +367,7 @@ impl AppShell {
         result: Option<Result<String, String>>,
         cx: &mut Context<Self>,
     ) {
-        let Some(viewer) = self.diff_viewer.as_mut() else {
+        let Some(viewer) = self.state.diff_viewer.as_mut() else {
             return;
         };
         match result {
@@ -384,7 +389,7 @@ impl AppShell {
     }
 
     pub(crate) fn close_diff_viewer(&mut self, cx: &mut Context<Self>) {
-        self.diff_viewer = None;
+        self.state.diff_viewer = None;
         cx.notify();
     }
 }

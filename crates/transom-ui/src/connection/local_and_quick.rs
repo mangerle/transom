@@ -25,9 +25,9 @@ impl AppShell {
     }
 
     pub(crate) fn toggle_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.modals.show_quick_open = !self.modals.show_quick_open;
-        if self.modals.show_quick_open {
-            self.modals.quick_open_state.update(cx, |state, cx| {
+        self.state.modals.show_quick_open = !self.state.modals.show_quick_open;
+        if self.state.modals.show_quick_open {
+            self.state.modals.quick_open_state.update(cx, |state, cx| {
                 state.set_query("", window, cx);
                 state.focus(window, cx);
             });
@@ -81,17 +81,19 @@ impl AppShell {
         let session = Session::new(
             title,
             transom_core::Connection::Local(LocalConnection {
-                shell: self.settings.local_shell.clone(),
+                shell: self.state.settings.local_shell.clone(),
                 working_dir,
                 command,
             }),
         );
-        self.create_local_group(tab_id, session.id, &session.name);
-        self.workspace
+        self.state
+            .create_local_group(tab_id, session.id, &session.name);
+        self.state
+            .workspace
             .tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
-        self.workspace.active_tab = Some(tab_id);
-        self.present_active_group();
+        self.state.workspace.active_tab = Some(tab_id);
+        self.state.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 
@@ -100,18 +102,19 @@ impl AppShell {
         let session = match transom_core::quick_connect_session(host) {
             Ok(session) => session,
             Err(error) => {
-                self.set_error(error);
+                self.state.set_error(error);
                 cx.notify();
                 return;
             }
         };
         let tab_id = TabId::new();
-        self.create_group(tab_id, session.id);
-        self.workspace
+        self.state.create_group(tab_id, session.id);
+        self.state
+            .workspace
             .tabs
             .push(TerminalTab::pending(tab_id, session.clone()));
-        self.workspace.active_tab = Some(tab_id);
-        self.present_active_group();
+        self.state.workspace.active_tab = Some(tab_id);
+        self.state.present_active_group();
         self.start_connection(tab_id, session, cx);
     }
 
@@ -136,18 +139,18 @@ impl AppShell {
 
     /// 记录一条采集到的命令：更新内存快照并后台落盘。
     pub(crate) fn record_history_command(&mut self, command: &str, cx: &mut Context<Self>) {
-        if !self.settings.history.enabled {
+        if !self.state.settings.history.enabled {
             return;
         }
         let recorded = {
-            let mut snapshot = self.history.write();
+            let mut snapshot = self.state.history.write();
             transom_core::record_command(&mut snapshot, command)
         };
         if !recorded {
             return;
         }
-        let snapshot: Vec<String> = self.history.read().clone();
-        let store = self.services.history.clone();
+        let snapshot: Vec<String> = self.state.history.read().clone();
+        let store = self.state.services.history.clone();
         cx.spawn(async move |_, cx| {
             let error = cx
                 .background_executor()
@@ -166,13 +169,15 @@ impl AppShell {
             directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));
 
         let Some(path) = ssh_config_path else {
-            self.set_error(rust_i18n::t!("app.import_none").to_string());
+            self.state
+                .set_error(rust_i18n::t!("app.import_none").to_string());
             cx.notify();
             return;
         };
 
         if !path.exists() {
-            self.set_error(rust_i18n::t!("app.import_none").to_string());
+            self.state
+                .set_error(rust_i18n::t!("app.import_none").to_string());
             cx.notify();
             return;
         }
@@ -180,7 +185,7 @@ impl AppShell {
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(e) => {
-                self.set_error(e.to_string());
+                self.state.set_error(e.to_string());
                 cx.notify();
                 return;
             }
@@ -188,28 +193,35 @@ impl AppShell {
 
         let parsed = parse_ssh_config(&content);
         if parsed.is_empty() {
-            self.set_error(rust_i18n::t!("app.import_none").to_string());
+            self.state
+                .set_error(rust_i18n::t!("app.import_none").to_string());
             cx.notify();
             return;
         }
 
-        let folder = self.catalog.ensure_folder_path("SSH Config");
+        let folder = self.state.catalog.ensure_folder_path("SSH Config");
         let mut added_count = 0;
         for mut session in parsed {
-            if !self.catalog.sessions.iter().any(|s| s.name == session.name) {
+            if !self
+                .state
+                .catalog
+                .sessions
+                .iter()
+                .any(|s| s.name == session.name)
+            {
                 session.folder_id = folder;
-                self.catalog.sessions.push(session);
+                self.state.catalog.sessions.push(session);
                 added_count += 1;
             }
         }
 
         if added_count > 0 {
-            if self.persist_catalog() {
-                self.status =
+            if self.state.persist_catalog() {
+                self.state.status =
                     Some(rust_i18n::t!("app.import_success", count = added_count).to_string());
             }
         } else {
-            self.status = Some(rust_i18n::t!("app.import_none").to_string());
+            self.state.status = Some(rust_i18n::t!("app.import_none").to_string());
         }
         cx.notify();
     }

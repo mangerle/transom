@@ -80,6 +80,7 @@ impl AppShell {
     /// 重连；本地终端没有目录条目，用标签自带的会话快照。
     pub(crate) fn session_appearance(&self, tab: &TerminalTab) -> SessionAppearance {
         let session = self
+            .state
             .catalog
             .sessions
             .iter()

@@ -21,7 +21,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.sftp_modals.sync.as_ref() else {
+        let Some(modal) = self.state.sftp_modals.sync.as_ref() else {
             return div().into_any_element();
         };
         let tab_id = modal.tab_id;
@@ -251,7 +251,7 @@ impl AppShell {
                 "cancel-sftp-sync",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                    this.sftp_modals.sync = None;
+                    this.state.sftp_modals.sync = None;
                     this.focus_active_sftp_panel(window, cx);
                     cx.notify();
                 }),

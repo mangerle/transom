@@ -21,6 +21,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((side_connection, parent_dir)) = self
+            .state
             .remote_pane_scope(tab_id, target)
             .map(|scope| (scope.side_connection, scope.pane.path.clone()))
         else {
@@ -56,6 +57,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((side_connection, parent_dir)) = self
+            .state
             .remote_pane_scope(tab_id, target)
             .map(|scope| (scope.side_connection, scope.pane.path.clone()))
         else {
@@ -88,16 +90,18 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((side_connection, entry)) =
-            self.remote_pane_scope(tab_id, target).and_then(|scope| {
-                let selected = scope.pane.selected.clone()?;
-                let entry = scope
-                    .pane
-                    .entries
-                    .iter()
-                    .find(|entry| entry.path == selected)?
-                    .clone();
-                Some((scope.side_connection, entry))
-            })
+            self.state
+                .remote_pane_scope(tab_id, target)
+                .and_then(|scope| {
+                    let selected = scope.pane.selected.clone()?;
+                    let entry = scope
+                        .pane
+                        .entries
+                        .iter()
+                        .find(|entry| entry.path == selected)?
+                        .clone();
+                    Some((scope.side_connection, entry))
+                })
         else {
             return;
         };
