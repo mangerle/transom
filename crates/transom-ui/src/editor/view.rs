@@ -148,7 +148,9 @@ impl EditorPanels {
 
         h_flex()
             .h(px(PANEL_HEADER_HEIGHT))
-            .cursor_move()
+            // 标题栏可拖拽，但保持系统默认箭头：组件库的 cursor_move 实际映射为
+            // 闭合手形，悬停时会让人误以为在抓取文件内容而不是移动面板。
+            .cursor_default()
             .items_center()
             .gap_2()
             .px_2()
