@@ -208,19 +208,22 @@ pub(crate) fn clamp_axis(origin: f32, panel_len: f32, viewport_len: f32, min_vis
     origin.clamp(PANEL_EDGE_MARGIN, upper)
 }
 
-/// 级联落位：第 n 个面板相对前一个向右下偏移。
+/// 级联落位：首个面板落在视口中央，后续面板逐次向右下轻微偏移。
+///
+/// 居中而不是贴左上角：编辑面板是用户主动双击文件后的主工作对象，落在中央
+/// 更符合“打开一个窗口”的直觉；偏移只用于避免多个面板完全重叠。
 pub(crate) fn cascade_origin(index: usize, viewport: Size<Pixels>) -> (f32, f32) {
     let (viewport_w, viewport_h): (f32, f32) = (viewport.width.into(), viewport.height.into());
     let step = (index as f32) * PANEL_CASCADE_STEP;
     (
         clamp_axis(
-            PANEL_EDGE_MARGIN + step,
+            (viewport_w - PANEL_WIDTH) / 2.0 + step,
             PANEL_WIDTH,
             viewport_w,
             PANEL_KEEP_VISIBLE,
         ),
         clamp_axis(
-            PANEL_EDGE_MARGIN + step,
+            (viewport_h - PANEL_HEIGHT) / 2.0 + step,
             PANEL_HEIGHT,
             viewport_h,
             PANEL_KEEP_VISIBLE,
@@ -268,7 +271,11 @@ fn extension_token(ext: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{PANEL_EDGE_MARGIN, clamp_axis, editor_language_token, extension_token};
+    use super::{
+        PANEL_CASCADE_STEP, PANEL_EDGE_MARGIN, PANEL_HEIGHT, PANEL_WIDTH, cascade_origin,
+        clamp_axis, editor_language_token, extension_token,
+    };
+    use gpui_kit::{Size, px};
 
     #[test]
     fn test_language_token_uses_extension() {
@@ -296,6 +303,27 @@ mod tests {
         assert_eq!(editor_language_token("/build/Makefile"), "makefile");
         assert_eq!(editor_language_token("/build/Dockerfile"), "dockerfile");
         assert_eq!(editor_language_token(""), "text");
+    }
+
+    #[test]
+    fn test_cascade_origin_centers_first_panel() {
+        let viewport = Size::new(px(1920.0), px(1080.0));
+        let (left, top) = cascade_origin(0, viewport);
+        assert_eq!(left, (1920.0 - PANEL_WIDTH) / 2.0);
+        assert_eq!(top, (1080.0 - PANEL_HEIGHT) / 2.0);
+        // 后续面板从中心向右下偏移，避免完全重叠。
+        let (next_left, next_top) = cascade_origin(1, viewport);
+        assert_eq!(next_left, left + PANEL_CASCADE_STEP);
+        assert_eq!(next_top, top + PANEL_CASCADE_STEP);
+    }
+
+    #[test]
+    fn test_cascade_origin_clamps_when_viewport_is_small() {
+        let viewport = Size::new(px(500.0), px(400.0));
+        assert_eq!(
+            cascade_origin(0, viewport),
+            (PANEL_EDGE_MARGIN, PANEL_EDGE_MARGIN)
+        );
     }
 
     #[test]
