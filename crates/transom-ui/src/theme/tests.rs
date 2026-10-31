@@ -425,7 +425,9 @@ fn ui_sources_have_no_hardcoded_chinese() {
 fn allowlisted_literal(path: &str, literal: &str) -> bool {
     let literal = literal.trim();
     (literal == "本地"
-        && (path.ends_with("sftp/properties.rs") || path.ends_with("sftp/modals.rs")))
+        && (path.ends_with("sftp/properties.rs")
+            || path.ends_with("sftp/modals.rs")
+            || path.ends_with("sftp/modals/properties.rs")))
         || (literal == "远端" && path.ends_with("sftp_handlers.rs"))
         || (literal == "中文" && path.ends_with("settings/general_page.rs"))
         || (literal == "校验"
