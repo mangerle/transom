@@ -24,10 +24,10 @@ use crate::session_appearance::session_icon;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenu, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{GroupId, SessionId, TabPosition};
@@ -245,17 +245,7 @@ impl AppShell {
                 rust_i18n::t!("tab.vertical_empty_hint").to_string(),
             )
         };
-        v_flex()
-            .flex_1()
-            .w_full()
-            .p_4()
-            .gap_2()
-            .items_center()
-            .justify_center()
-            .child(Icon::new(IconName::Terminal).text_color(p.muted_foreground))
-            .child(div().text_sm().text_color(p.muted_foreground).child(title))
-            .child(div().text_xs().text_color(p.muted_foreground).child(hint))
-            .into_any_element()
+        crate::widgets::empty_state(IconName::Terminal, title, hint, p)
     }
 }
 
