@@ -97,9 +97,13 @@ impl MonitorView {
                             .label(SampleIntervalMode::Fast.label())
                             .selected(current_interval == SampleIntervalMode::Fast)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.set_monitor_interval_mode(SampleIntervalMode::Fast, cx)
-                                });
+                                if this.set_interval_mode(SampleIntervalMode::Fast) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    this.with_shell(cx, |shell, cx| {
+                                        shell.restart_monitor_task(interval, cx)
+                                    });
+                                }
                             })),
                     )
                     .child(
@@ -108,9 +112,13 @@ impl MonitorView {
                             .label(SampleIntervalMode::Normal.label())
                             .selected(current_interval == SampleIntervalMode::Normal)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.set_monitor_interval_mode(SampleIntervalMode::Normal, cx)
-                                });
+                                if this.set_interval_mode(SampleIntervalMode::Normal) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    this.with_shell(cx, |shell, cx| {
+                                        shell.restart_monitor_task(interval, cx)
+                                    });
+                                }
                             })),
                     )
                     .child(
@@ -119,9 +127,13 @@ impl MonitorView {
                             .label(SampleIntervalMode::Eco.label())
                             .selected(current_interval == SampleIntervalMode::Eco)
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.set_monitor_interval_mode(SampleIntervalMode::Eco, cx)
-                                });
+                                if this.set_interval_mode(SampleIntervalMode::Eco) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    this.with_shell(cx, |shell, cx| {
+                                        shell.restart_monitor_task(interval, cx)
+                                    });
+                                }
                             })),
                     ),
             )
@@ -132,7 +144,8 @@ impl MonitorView {
                     .icon(IconName::RefreshCw)
                     .tooltip(rust_i18n::t!("monitor.view.refresh_tooltip").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.with_shell(cx, |shell, cx| shell.sample_processes(cx));
+                        let collapsed = this.state.collapse.processes;
+                        this.with_shell(cx, |shell, cx| shell.sample_processes(collapsed, cx));
                     })),
             )
             .child(
@@ -143,6 +156,9 @@ impl MonitorView {
                     .label(rust_i18n::t!("monitor.view.dock_label").to_string())
                     .tooltip(rust_i18n::t!("monitor.view.dock_tooltip").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
+                        // 抽屉开合属于面板状态，先自己落定再回交外壳切标签与关标签。
+                        this.set_open(true);
+                        cx.notify();
                         this.with_shell(cx, |shell, cx| {
                             shell.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx)
                         });

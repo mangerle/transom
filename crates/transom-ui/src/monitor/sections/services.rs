@@ -109,8 +109,11 @@ impl MonitorView {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
+                let expanded = this.toggle_collapse("services");
+                let collapse = this.collapse_snapshot();
+                cx.notify();
                 this.with_shell(cx, |shell, cx| {
-                    shell.toggle_section_collapse("services", cx)
+                    shell.after_monitor_collapse(collapse, expanded, cx)
                 });
             }),
         )

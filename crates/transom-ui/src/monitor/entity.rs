@@ -162,6 +162,12 @@ impl MonitorView {
     /// 回到外壳执行一次跨域动作。
     ///
     /// 返回 `None` 表示外壳已释放（窗口关闭中），调用方直接跳过即可。
+    ///
+    /// # 调用约束
+    /// 本方法通常在面板自己的点击回调里执行，此时 `MonitorView` 正被 GPUI 租借。
+    /// 因此被调用的外壳方法**绝对不得**再读写本实体（`state.monitor.read/update`），
+    /// 否则会触发 “cannot update while it is already being updated” 的 panic。
+    /// 需要改面板状态时先在本实体上改完，再只把结果（快照/布尔/宽度）交给外壳。
     pub(super) fn with_shell<R>(
         &self,
         cx: &mut Context<Self>,

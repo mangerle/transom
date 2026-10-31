@@ -253,12 +253,21 @@ impl AppShell {
             window.focus(&focus_handle, cx);
         }
         self.state.sync_broadcast_targets();
-        if self.state.monitor.read(cx).is_open() {
-            self.state
-                .monitor
-                .update(cx, |view, _| view.reset_history());
-            self.sample_processes(cx);
-        }
+        // 监控面板的重置排到绘制之后：本方法也会被监控面板自己的按钮调用
+        // （脱离为标签页、收回抽屉），此刻面板实体正被租借，立即读写会双重租借。
+        let app = cx.entity().clone();
+        window.defer(cx, move |_window, cx| {
+            app.update(cx, |shell, cx| {
+                if shell.state.monitor.read(cx).is_open() {
+                    shell
+                        .state
+                        .monitor
+                        .update(cx, |view, _| view.reset_history());
+                    let collapsed = shell.state.monitor.read(cx).processes_collapsed();
+                    shell.sample_processes(collapsed, cx);
+                }
+            });
+        });
         cx.notify();
     }
 }

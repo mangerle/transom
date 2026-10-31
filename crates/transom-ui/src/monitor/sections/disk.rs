@@ -104,7 +104,12 @@ impl MonitorView {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
-                this.with_shell(cx, |shell, cx| shell.toggle_section_collapse("disk", cx));
+                let expanded = this.toggle_collapse("disk");
+                let collapse = this.collapse_snapshot();
+                cx.notify();
+                this.with_shell(cx, |shell, cx| {
+                    shell.after_monitor_collapse(collapse, expanded, cx)
+                });
             }),
         )
     }

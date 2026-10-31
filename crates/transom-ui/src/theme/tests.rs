@@ -789,3 +789,75 @@ fn app_shell_does_not_deref_state() {
         offenders.join("\n")
     );
 }
+
+/// 面板回调回交外壳时，被调用方法不得再读写同一面板实体。
+///
+/// 面板点击回调执行期间实体已被 GPUI 租借；外壳方法里再 `state.monitor.read/update`
+/// 会触发 “cannot update while it is already being updated” 崩溃。这里扫描
+/// `with_shell` 的调用目标，确保它们不碰监控实体。
+#[test]
+fn monitor_with_shell_targets_do_not_reenter_panel() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let ops_path = root.join("monitor/ops.rs");
+    let ops = std::fs::read_to_string(&ops_path).expect("读取监控动作文件失败");
+
+    let mut targets: Vec<String> = Vec::new();
+    for entry in walkdir_like(&root.join("monitor")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for capture in content.split("with_shell(cx,").skip(1) {
+            let tail = &capture[..capture.len().min(400)];
+            let Some(start) = tail.find("shell.") else {
+                continue;
+            };
+            let after = &tail[start + "shell.".len()..];
+            let name: String = after
+                .chars()
+                .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+                .collect();
+            if !name.is_empty() {
+                targets.push(name);
+            }
+        }
+    }
+    assert!(!targets.is_empty(), "未找到任何 with_shell 调用，守卫失效");
+
+    let mut offenders = Vec::new();
+    for name in targets {
+        let Some(pos) = ops.find(&format!("fn {name}(")) else {
+            continue;
+        };
+        let Some(open) = ops[pos..].find('{').map(|i| pos + i) else {
+            continue;
+        };
+        let mut depth = 0usize;
+        let mut end = open;
+        for (offset, ch) in ops[open..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = open + offset;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if ops[open..=end].contains("state.monitor") {
+            offenders.push(name);
+        }
+    }
+    offenders.sort();
+    offenders.dedup();
+    assert!(
+        offenders.is_empty(),
+        "以下外壳方法在面板回调里被调用，却再次访问监控实体，会触发双重租借：\n{}",
+        offenders.join("\n")
+    );
+}

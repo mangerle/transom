@@ -163,7 +163,7 @@ impl AppShell {
         self.schedule_startup_commands(tab_id, connection_id, window, cx);
         self.auto_start_forwards(tab_id, connection_id, session_id, cx);
         if still_active && self.state.monitor.read(cx).is_open() {
-            self.sample_processes(cx);
+            self.sample_processes(self.state.monitor.read(cx).processes_collapsed(), cx);
         }
         true
     }

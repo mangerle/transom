@@ -139,8 +139,11 @@ impl MonitorView {
         .render(
             p,
             cx.listener(|this, _, _, cx| {
+                let expanded = this.toggle_collapse("processes");
+                let collapse = this.collapse_snapshot();
+                cx.notify();
                 this.with_shell(cx, |shell, cx| {
-                    shell.toggle_section_collapse("processes", cx)
+                    shell.after_monitor_collapse(collapse, expanded, cx)
                 });
             }),
         )
@@ -411,8 +414,15 @@ impl MonitorView {
                         IconName::CircleX,
                         move |_, _, cx| {
                             safe_kill.update(cx, |this, cx| {
+                                if pid <= 1 {
+                                    this.set_error(Some(
+                                        rust_i18n::t!("monitor.error_kill_pid1").to_string(),
+                                    ));
+                                    cx.notify();
+                                    return;
+                                }
                                 this.with_shell(cx, |shell, cx| {
-                                    shell.send_kill_process_safe(pid, false, cx)
+                                    shell.send_kill_process(pid, false, cx)
                                 });
                             });
                         },
@@ -422,8 +432,15 @@ impl MonitorView {
                         IconName::Ban,
                         move |_, _, cx| {
                             force_kill.update(cx, |this, cx| {
+                                if pid <= 1 {
+                                    this.set_error(Some(
+                                        rust_i18n::t!("monitor.error_kill_pid1").to_string(),
+                                    ));
+                                    cx.notify();
+                                    return;
+                                }
                                 this.with_shell(cx, |shell, cx| {
-                                    shell.send_kill_process_safe(pid, true, cx)
+                                    shell.send_kill_process(pid, true, cx)
                                 });
                             });
                         },

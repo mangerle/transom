@@ -53,18 +53,21 @@ impl AppShell {
                     self.open_local_terminal(window, cx);
                 }
             }
-            self.sample_processes(cx);
-            self.ensure_monitor_task(cx);
+            self.sample_processes(self.state.monitor.read(cx).processes_collapsed(), cx);
+            self.ensure_monitor_task(self.state.monitor.read(cx).interval_mode().interval(), cx);
         }
         cx.notify();
     }
 
     /// 保证进程轮询任务已启动；任务常驻但在面板关闭或进程卡片收起时不发命令。
-    pub(crate) fn ensure_monitor_task(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn ensure_monitor_task(
+        &mut self,
+        interval: std::time::Duration,
+        cx: &mut Context<Self>,
+    ) {
         if self.state.tasks.monitor.is_some() {
             return;
         }
-        let interval = self.state.monitor.read(cx).interval_mode().interval();
         self.state.tasks.monitor = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(interval).await;
@@ -78,7 +81,24 @@ impl AppShell {
         }));
     }
 
+    /// 面板已切换采样档位后重启轮询任务。
+    ///
+    /// 档位状态由面板自己写（见 `MonitorView::set_interval_mode`）：面板点击回调
+    /// 执行期间实体被租借，这里不能再读写它。
+    pub(crate) fn restart_monitor_task(
+        &mut self,
+        interval: std::time::Duration,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.tasks.monitor = None;
+        self.ensure_monitor_task(interval, cx);
+        cx.notify();
+    }
+
     /// 切换采样频率档位（1s/3s/10s），并重启轮询任务。
+    ///
+    /// 仅用于面板之外（设置页）的调用点；面板内点击走
+    /// [`Self::restart_monitor_task`]。
     pub(crate) fn set_monitor_interval_mode(
         &mut self,
         mode: SampleIntervalMode,
@@ -90,7 +110,7 @@ impl AppShell {
             .update(cx, |view, _| view.set_interval_mode(mode))
         {
             self.state.tasks.monitor = None;
-            self.ensure_monitor_task(cx);
+            self.ensure_monitor_task(self.state.monitor.read(cx).interval_mode().interval(), cx);
             cx.notify();
         }
     }
@@ -99,15 +119,18 @@ impl AppShell {
         if !self.state.monitor.read(cx).is_open() {
             return;
         }
-        self.sample_processes(cx);
+        self.sample_processes(self.state.monitor.read(cx).processes_collapsed(), cx);
     }
 
     /// 采样进程列表：卡片折叠时只取总数维持摘要计数，展开时拉全量明细。
-    pub(crate) fn sample_processes(&mut self, cx: &mut Context<Self>) {
+    ///
+    /// `collapsed` 由调用方给出而不是在这里读面板实体：面板自身的点击回调执行
+    /// 期间实体正被租借，此时再读会触发 GPUI 的双重租借 panic。
+    pub(crate) fn sample_processes(&mut self, collapsed: bool, cx: &mut Context<Self>) {
         let Some((tab_id, connection_id)) = self.state.active_monitor_target() else {
             return;
         };
-        if self.state.monitor.read(cx).processes_collapsed() {
+        if collapsed {
             self.state.send_command(HostCommand::SampleProcessCount {
                 tab_id,
                 connection_id,
@@ -121,13 +144,16 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 切换各板块展开/折叠状态。
-    pub(crate) fn toggle_section_collapse(&mut self, section: &str, cx: &mut Context<Self>) {
-        let expanded_processes = self
-            .state
-            .monitor
-            .update(cx, |view, _| view.toggle_collapse(section));
-        let collapse = self.state.monitor.read(cx).collapse_snapshot();
+    /// 折叠状态变更后的外壳侧收尾：落盘展开开关，必要时补一轮采样。
+    ///
+    /// 状态切换由面板自己完成（见 `MonitorView::toggle_collapse`）。这里刻意
+    /// 不读写面板实体：面板的点击回调执行期间实体正被租借，再访问会 panic。
+    pub(crate) fn after_monitor_collapse(
+        &mut self,
+        collapse: crate::monitor::MonitorSectionCollapse,
+        expanded_processes: bool,
+        cx: &mut Context<Self>,
+    ) {
         self.state.settings.monitor.cpu_expanded = !collapse.cpu;
         self.state.settings.monitor.memory_expanded = !collapse.memory;
         self.state.settings.monitor.disk_expanded = !collapse.disk;
@@ -137,7 +163,9 @@ impl AppShell {
         self.state.settings.monitor.processes_expanded = !collapse.processes;
         self.state.persist_settings_reported();
         if expanded_processes {
-            self.sample_processes(cx);
+            // 刚展开进程卡片，按“未折叠”采样全量明细；这里不能再读面板实体，
+            // 面板的点击回调执行期间它正被租借。
+            self.sample_processes(false, cx);
         }
         cx.notify();
     }
@@ -168,17 +196,6 @@ impl AppShell {
 
     /// 当前活动标签的进程采样目标；只有 SSH 与本地终端支持。
     /// 安全终止进程（对核心系统进程施加保护拦截）。
-    pub(crate) fn send_kill_process_safe(&mut self, pid: u32, force: bool, cx: &mut Context<Self>) {
-        if pid <= 1 {
-            self.state.monitor.update(cx, |view, _| {
-                view.set_error(Some(rust_i18n::t!("monitor.error_kill_pid1").to_string()));
-            });
-            cx.notify();
-            return;
-        }
-        self.send_kill_process(pid, force, cx);
-    }
-
     pub(crate) fn send_kill_process(&mut self, pid: u32, force: bool, cx: &mut Context<Self>) {
         let Some((tab_id, connection_id)) = self.state.active_monitor_target() else {
             return;
@@ -262,7 +279,7 @@ impl AppShell {
                     .monitor
                     .update(cx, |view, _| view.set_error(None));
                 self.state.status = Some(rust_i18n::t!("monitor.kill_sent", pid = pid).to_string());
-                self.sample_processes(cx);
+                self.sample_processes(false, cx);
             }
         }
         cx.notify();
@@ -311,20 +328,16 @@ impl AppShell {
         self.on_process_killed(tab_id, connection_id, pid, error, cx);
     }
 
-    /// 快速切换监控抽屉宽度（紧凑 420px / 宽屏 600px），同步通知 ResizableState 重新分配尺寸并持久化。
-    pub(crate) fn toggle_monitor_drawer_width(
+    /// 面板已改好宽度后，外壳侧同步持久化并让分栏重新分配尺寸。
+    ///
+    /// 宽度状态由面板写入（见 `MonitorView::set_drawer_width`）；面板点击回调
+    /// 执行期间实体被租借，这里只做设置落盘与 `ResizableState` 调整。
+    pub(crate) fn apply_monitor_drawer_width(
         &mut self,
+        new_width: f32,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let new_width = if self.state.monitor.read(cx).drawer_width() > 480.0 {
-            420.0
-        } else {
-            600.0
-        };
-        self.state
-            .monitor
-            .update(cx, |view, _| view.set_drawer_width(new_width));
         self.state.settings.monitor.drawer_width = new_width;
         self.persist_layout_settings(cx);
         let panels_state = if self.state.settings.window.sftp_panel_side.is_left() {
@@ -379,9 +392,6 @@ impl AppShell {
             }
         }) {
             let existing_id = existing.id;
-            self.state
-                .monitor
-                .update(cx, |view, _| view.set_open(false));
             self.activate_tab(existing_id, window, cx);
             cx.notify();
             return;
@@ -409,9 +419,6 @@ impl AppShell {
 
         self.state.create_group(monitor_tab_id, target_session_id);
         self.state.workspace.tabs.push(new_tab);
-        self.state
-            .monitor
-            .update(cx, |view, _| view.set_open(false));
         self.activate_tab(monitor_tab_id, window, cx);
         cx.notify();
     }
@@ -425,9 +432,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // 1. 打开抽屉
-        self.state.monitor.update(cx, |view, _| view.set_open(true));
-
+        // 抽屉的开合由面板在调用前写好；这里只做标签切换与关闭。
         // 2. 切回原会话标签页
         if self.state.workspace.tab(target_tab_id).is_some() {
             self.activate_tab(target_tab_id, window, cx);
