@@ -27,7 +27,7 @@ pub(crate) mod cloud_sync;
 pub(crate) mod command_palette;
 #[path = "../connection/mod.rs"]
 pub(crate) mod connection;
-#[path = "../dialog_host.rs"]
+#[path = "../dialog_host/mod.rs"]
 pub(crate) mod dialog_host;
 #[path = "../diff_viewer/mod.rs"]
 pub(crate) mod diff_viewer;
