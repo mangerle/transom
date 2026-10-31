@@ -1355,6 +1355,7 @@ impl AppShell {
                     key_filter: Some(key_filter),
                     audit_path: None,
                     shell_integration_enabled: false,
+                    clear_on_first_resize: true,
                 },
             )
         });

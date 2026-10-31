@@ -105,6 +105,13 @@ fn prepare_canvas(
             .entity
             .update(cx, |this, cx| this.schedule_resize_tick(cx));
     }
+    // 容器控制台：首帧尺寸下发会让 sh 把提示符重打到新行，紧接着发一次 Ctrl+L
+    // 清屏，避免一进去就是两三行 `#`。只做一次，后续用户主动 resize 不再清理。
+    if resized && state.clear_on_first_resize.swap(false, Ordering::AcqRel) {
+        inputs.entity.update(cx, |this, _cx| {
+            let _ = this.write_input(b"\x0c");
+        });
+    }
     let cols = size.cols;
     let rows = size.rows;
     // 刻度带行桶按像素高度折算，两种标记共用同一套分桶口径。
