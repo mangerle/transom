@@ -8,6 +8,7 @@
 //!   2. 匹配结果以结构化虚拟列表展示，行号与匹配内容分色高亮，点击结果项即时导航跳转并关闭弹窗；
 //! - 代价与局限：当前每次检索重走独立的 SSH Exec 通道，暂不维护远端常驻的倒排索引。
 
+use super::entity::{SftpPanelView, with_shell_parts};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::sftp::{SftpRemotePaneRef, parent_remote};
@@ -36,6 +37,44 @@ pub(crate) struct SftpSearchModalState {
     pub(crate) error: Option<String>,
 }
 
+impl SftpPanelView {
+    /// 打开目标远端列的检索模态对话框。
+    pub(crate) fn open_search_modal(
+        &mut self,
+        target: SftpRemotePaneRef,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(root_path) = self.state.remote_pane(target).map(|pane| pane.path.clone()) else {
+            return;
+        };
+        let side_connection = match target {
+            SftpRemotePaneRef::Main => None,
+            SftpRemotePaneRef::Side(connection_id) => Some(connection_id),
+        };
+        let tab_id = self.tab_id;
+        let placeholder = rust_i18n::t!("sftp.search.placeholder").to_string();
+        let app = self.app.clone();
+        with_shell_parts(&app, cx, |shell, shell_cx| {
+            let input =
+                shell_cx.new(|cx| InputState::new(window, cx).placeholder(placeholder.clone()));
+            input.update(shell_cx, |state, cx| state.focus(window, cx));
+            shell.state.sftp_modals.search = Some(SftpSearchModalState {
+                tab_id,
+                connection_id: side_connection,
+                root_path,
+                input,
+                is_content: false,
+                case_sensitive: false,
+                is_searching: false,
+                results: Vec::new(),
+                error: None,
+            });
+            shell_cx.notify();
+        });
+    }
+}
+
 impl AppShell {
     /// 打开目标远端列的检索模态对话框。
     pub(crate) fn sftp_open_search_modal_for(
@@ -45,30 +84,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((root_path, side_connection)) = self
-            .remote_pane_scope(tab_id, target, cx)
-            .map(|scope| (scope.pane.path.clone(), scope.side_connection))
-        else {
-            return;
-        };
-        let input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("sftp.search.placeholder").to_string())
-        });
-        input.update(cx, |state, cx| state.focus(window, cx));
-
-        self.state.sftp_modals.search = Some(SftpSearchModalState {
-            tab_id,
-            connection_id: side_connection,
-            root_path,
-            input,
-            is_content: false,
-            case_sensitive: false,
-            is_searching: false,
-            results: Vec::new(),
-            error: None,
-        });
-        cx.notify();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_search_modal(target, window, cx));
+        }
     }
 
     /// 触发执行远程搜索请求。

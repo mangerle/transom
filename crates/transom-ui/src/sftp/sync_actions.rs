@@ -1,64 +1,93 @@
 //! SFTP 目录对比与增量同步：打开对比弹窗、勾选差异项并创建同步任务。
 
 use super::SftpSyncModalState;
+use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
 use crate::app::AppShell;
 use crate::sftp::{SftpRemotePaneRef, TransferTask};
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::*;
 use transom_core::{SftpCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId};
 
-impl AppShell {
+impl SftpPanelView {
     /// 以当前双栏路径为根目录发起异步扫描对比。
-    pub(crate) fn sftp_open_sync_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.sftp_open_sync_modal_pane(tab_id, SftpRemotePaneRef::Main, cx);
+    pub(crate) fn open_sync_modal(&mut self, cx: &mut Context<Self>) {
+        self.open_sync_modal_pane(SftpRemotePaneRef::Main, cx);
     }
 
     /// 以目标远端列与本地当前目录为根发起目录对比。
-    ///
-    /// 并列远端列复用同一条对比与同步通道：扫描请求、弹窗状态与同步任务都
-    /// 携带目标连接，不会回落到标签页主远端。
+    pub(crate) fn open_sync_modal_pane(
+        &mut self,
+        target: SftpRemotePaneRef,
+        cx: &mut Context<Self>,
+    ) {
+        let app = self.app.clone();
+        let Some((main_connection, filter_text)) = read_shell_parts(&app, cx, |shell| {
+            (
+                shell
+                    .state
+                    .workspace
+                    .tab(self.tab_id)
+                    .and_then(|tab| tab.connection_id),
+                shell.state.settings.sftp.transfer_filter.clone(),
+            )
+        }) else {
+            return;
+        };
+        let Some(pane) = self.state.remote_pane(target) else {
+            return;
+        };
+        let Some(connection_id) = self.state.remote_connection(target, main_connection) else {
+            return;
+        };
+        let local_root = self.state.local.path.clone();
+        let remote_root = pane.path.clone();
+        let op_id = TransferId::new();
+        with_shell_parts(&app, cx, |shell, _| {
+            shell.state.send_command(SftpCommand::Sftp {
+                tab_id: self.tab_id,
+                connection_id,
+                op_id,
+                op: SftpOperation::CompareDirs {
+                    local_path: local_root.clone(),
+                    remote_path: remote_root.clone(),
+                    filter: TransferFilter::from_text(&filter_text),
+                },
+            });
+            shell.state.sftp_modals.sync = Some(SftpSyncModalState {
+                tab_id: self.tab_id,
+                connection_id,
+                op_id,
+                local_root,
+                remote_root,
+                scanning: true,
+                entries: Vec::new(),
+                selected: Vec::new(),
+                skipped: 0,
+                error: None,
+                scroll_handle: VirtualListScrollHandle::new(),
+            });
+        });
+        cx.notify();
+    }
+}
+
+impl AppShell {
+    pub(crate) fn sftp_open_sync_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_sync_modal(cx));
+        }
+    }
+
+    /// 以目标远端列与本地当前目录为根发起目录对比。
     pub(crate) fn sftp_open_sync_modal_pane(
         &mut self,
         tab_id: TabId,
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let filter_text = self.state.settings.sftp.transfer_filter.clone();
-        let Some((connection_id, local_root, remote_root)) =
-            self.state.workspace.tab(tab_id).and_then(|tab| {
-                let panel = self.sftp_state(tab_id, cx)?;
-                let pane = panel.remote_pane(target)?;
-                let connection_id = panel.remote_connection(target, tab.connection_id)?;
-                Some((connection_id, panel.local.path.clone(), pane.path.clone()))
-            })
-        else {
-            return;
-        };
-        let op_id = TransferId::new();
-        self.state.send_command(SftpCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id,
-            op: SftpOperation::CompareDirs {
-                local_path: local_root.clone(),
-                remote_path: remote_root.clone(),
-                filter: TransferFilter::from_text(&filter_text),
-            },
-        });
-        self.state.sftp_modals.sync = Some(SftpSyncModalState {
-            tab_id,
-            connection_id,
-            op_id,
-            local_root,
-            remote_root,
-            scanning: true,
-            entries: Vec::new(),
-            selected: Vec::new(),
-            skipped: 0,
-            error: None,
-            scroll_handle: VirtualListScrollHandle::new(),
-        });
-        cx.notify();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.open_sync_modal_pane(target, cx));
+        }
     }
 
     pub(crate) fn sftp_toggle_sync_entry(

@@ -21,6 +21,7 @@
 //! 再 `update`，比直接改字段多一次调度；实体构造时外壳已存在，因此
 //! `attach` 在创建后立即调用，不存在未绑定窗口期。
 
+mod chmod;
 mod clipboard;
 mod delete;
 mod file_ops;

@@ -308,16 +308,6 @@ impl AppShell {
         })
     }
 
-    pub(crate) fn remote_pane_connection(
-        &self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &App,
-    ) -> Option<ConnectionId> {
-        self.remote_pane_scope(tab_id, target, cx)
-            .map(|scope| scope.connection_id)
-    }
-
     pub(crate) fn send_sftp_op_for_connection(
         &mut self,
         tab_id: TabId,
