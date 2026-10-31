@@ -4,7 +4,7 @@
 
 mod folder_row;
 pub(crate) mod reorder;
-pub(crate) use reorder::{RowActionButtonProps, SidebarDragPreview, row_action_button};
+pub(crate) use reorder::SidebarDragPreview;
 mod rows;
 mod session_row;
 

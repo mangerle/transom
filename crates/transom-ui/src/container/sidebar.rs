@@ -12,8 +12,7 @@ use crate::container::types::{ContainerDiscovery, ContainerWorkspaceStatus, Engi
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sidebar::{
-    BAND_HEIGHT, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, RowActionButtonProps,
-    SidebarDragPreview, indent_padding, row_action_button,
+    BAND_HEIGHT, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SidebarDragPreview, indent_padding,
 };
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -83,7 +82,6 @@ impl AppShell {
         let active = self.active_engine_profile_id();
         let selected = self.containers.sidebar_selected;
         let discovery = self.containers.discovery.clone();
-        let discovering = self.containers.discovering;
 
         let mut list = v_flex().gap_0p5().p_2();
         if let Some(discovery) = discovery {
@@ -122,18 +120,6 @@ impl AppShell {
                                 rust_i18n::t!("container.sidebar.new_folder").to_string(),
                                 cx.listener(|this, _, window, cx| {
                                     this.open_engine_folder_form(None, None, window, cx);
-                                }),
-                            ))
-                            .child(engine_sidebar_button(
-                                "container-engine-discover",
-                                if discovering {
-                                    IconName::Loader
-                                } else {
-                                    IconName::Radar
-                                },
-                                rust_i18n::t!("container.sidebar.discover").to_string(),
-                                cx.listener(|this, _, _window, cx| {
-                                    this.discover_engines(cx);
                                 }),
                             ))
                             .child(engine_sidebar_button(
@@ -214,7 +200,6 @@ impl AppShell {
             | Some(ContainerWorkspaceStatus::Disconnected) => p.danger,
             None => p.border,
         };
-        let pending_delete = self.containers.pending_delete == Some(id);
         let app = cx.entity().clone();
         let menu_name = name.clone();
         let menu_endpoint = description.clone();
@@ -367,7 +352,7 @@ impl AppShell {
                             .icon(IconName::Trash)
                             .on_click(move |_, window, cx| {
                                 delete_app.update(cx, |this, cx| {
-                                    this.request_delete_profile(id, window, cx);
+                                    this.delete_container_profile(id, window, cx);
                                 });
                             }),
                     )
@@ -448,46 +433,6 @@ impl AppShell {
                     .rounded_full()
                     .bg(status_color),
             )
-            .child(row_action_button(
-                RowActionButtonProps {
-                    element_id: format!("container-engine-edit-{id}"),
-                    icon: IconName::Pen,
-                    tooltip: rust_i18n::t!("container.sidebar.edit").to_string(),
-                    idle_color: action_color,
-                    on_click: cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        let profile = this
-                            .catalog
-                            .engines
-                            .iter()
-                            .find(|profile| profile.id == id)
-                            .cloned();
-                        this.open_container_form(profile, window, cx);
-                    }),
-                },
-                p,
-            ))
-            .child(row_action_button(
-                RowActionButtonProps {
-                    element_id: format!("container-engine-delete-{id}"),
-                    icon: if pending_delete {
-                        IconName::CircleAlert
-                    } else {
-                        IconName::Trash
-                    },
-                    tooltip: if pending_delete {
-                        rust_i18n::t!("container.sidebar.confirm_delete").to_string()
-                    } else {
-                        rust_i18n::t!("container.sidebar.delete_hint").to_string()
-                    },
-                    idle_color: action_color,
-                    on_click: cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.request_delete_profile(id, window, cx);
-                    }),
-                },
-                p,
-            ))
             .child(engine_reorder_overlay(
                 &app,
                 ContainerSidebarDrag::Engine(id),
