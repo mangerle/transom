@@ -958,3 +958,124 @@ fn monitor_with_shell_targets_do_not_reenter_panel() {
         offenders.join("\n")
     );
 }
+
+/// 收集 `with_shell_parts` 回交外壳时调用的目标方法名。
+fn collect_with_shell_parts_targets(content: &str, out: &mut Vec<String>) {
+    for capture in content.split("with_shell_parts").skip(1) {
+        let tail: String = capture.chars().take(600).collect();
+        let Some(start) = tail.find("shell.") else {
+            continue;
+        };
+        let after = &tail[start + "shell.".len()..];
+        let name: String = after
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+            .collect();
+        if !name.is_empty() {
+            out.push(name);
+        }
+    }
+}
+
+/// SFTP 实体回调回交外壳时，被调用方法不得再读写同一实体。
+///
+/// 实体回调执行期间 `SftpPanelView` 已被 GPUI 租借；外壳方法里再
+/// `sftp_view`/`sftp_state`/`sftp_view_mut` 会触发
+/// “cannot update while it is already being updated”。这里扫描
+/// `with_shell_parts` 的目标方法体，确保它们只接收参数/快照。
+#[test]
+fn sftp_with_shell_targets_do_not_reenter_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut sources = Vec::new();
+    for base in ["sftp", "diff_viewer", "editor"] {
+        for entry in walkdir_like(&root.join(base)) {
+            if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            if let Ok(content) = std::fs::read_to_string(&entry) {
+                sources.push(content);
+            }
+        }
+    }
+
+    let mut targets = Vec::new();
+    for source in &sources {
+        collect_with_shell_parts_targets(source, &mut targets);
+    }
+    assert!(
+        !targets.is_empty(),
+        "未找到任何 with_shell_parts 调用，守卫失效"
+    );
+
+    let mut offenders = Vec::new();
+    let mut checked = 0usize;
+    for name in targets {
+        for source in &sources {
+            let Some(body) = function_body(source, &name) else {
+                continue;
+            };
+            checked += 1;
+            if [
+                "sftp_view(",
+                "sftp_state(",
+                "sftp_view_mut",
+                "sftp_state_for_connection",
+            ]
+            .iter()
+            .any(|needle| body.contains(needle))
+            {
+                offenders.push(name.clone());
+            }
+        }
+    }
+    assert!(
+        checked > 0,
+        "未能定位任何 with_shell_parts 目标函数体，守卫失效"
+    );
+    offenders.sort();
+    offenders.dedup();
+    assert!(
+        offenders.is_empty(),
+        "以下外壳方法在 SFTP 实体回调里被调用，却再次访问 SFTP 实体，会触发双重租借：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// SFTP 面板状态只有一份：窗格只保存实体句柄，不保留影子状态。
+#[test]
+fn sftp_panel_state_has_single_source_of_truth() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let types = std::fs::read_to_string(root.join("app/types.rs")).expect("读取 types.rs 失败");
+    assert!(
+        !types.contains("sftp: Option<SftpPanelState>"),
+        "窗格不得再保存第二份 SftpPanelState，状态必须只在实体里"
+    );
+    assert!(
+        types.contains("sftp_view: Option<Entity<SftpPanelView>>"),
+        "窗格必须保存 SFTP 实体句柄"
+    );
+}
+
+/// SFTP 模块生产代码单文件不超过 500 行（实体分组后的硬约束）。
+#[test]
+fn sftp_files_stay_within_line_limit() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/sftp");
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        let lines = content.lines().count();
+        if lines > 500 {
+            offenders.push(format!("{}: {lines} 行", entry.display()));
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "以下 SFTP 源码超过 500 行，请按关注点拆分：\n{}",
+        offenders.join("\n")
+    );
+}

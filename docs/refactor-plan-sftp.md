@@ -1,6 +1,6 @@
 # SFTP 面板实体化执行清单
 
-状态：基本完成（方案 A，每窗格一个实体）。第 1、2 步完成；第 3、4 步的主体已迁入实体，剩余为对话框/事件边界。
+状态：完成（方案 A，每窗格一个实体）。第 1-4 步主体全部落地，剩余外壳代码仅为事件回传、对话框提交/渲染与布局边界。
 
 ## 一、为什么是每窗格实体
 
@@ -114,3 +114,28 @@ SFTP 状态挂在窗格上（`SessionPane.sftp: Option<SftpPanelState>`），随
 - 随之删除约一百个外壳薄委托方法；保留的 `impl AppShell` 仅剩事件回传
   （`sftp_handlers`）、对话框提交/渲染（`modals/`、`commit`、`sync_modal`、
   `search`/`sync`/`filter` 的提交动作）、面板创建与切换、列宽布局等边界。
+
+## 八、收尾结论
+
+- 第 3 步：导航、文件操作入口、远端列动作、行选择/双击/右键、并列远端挂载
+  与折叠、列宽记忆均已在实体；`file_ops/commit.rs` 仅保留对话框提交与后台
+  本地文件 IO 的边界。
+- 第 4 步：队列调度/入队/控制、悬停预览、权限/属性/同步/搜索/过滤入口在实体；
+  模态弹窗本体与窗口级弹窗栈（含编辑器跳转行）仍由 `dialog_host` 统一管理，
+  实体只把参数/意图交给外壳打开弹窗。
+
+### 技术偏差说明
+
+`SftpModals` 仍保存在 `AppState` 而非实体：窗口级弹窗栈要求同一时刻只有
+一份模态，且 `goto_line` 属于编辑器域；若按窗格分散，`dialog_host` 的
+`is_open`/`is_dirty`/`cancel`/`submit` 需要在所有窗格实体间扫描与路由，
+与“单窗口单模态栈”相冲突。因此保留窗口级弹窗状态，实体回调只传参数，
+不违反“状态只有一份、回调不重入实体”的硬约束。
+
+### 守卫
+
+`theme/tests.rs` 新增：
+- `sftp_with_shell_targets_do_not_reenter_entity`：扫描 `with_shell_parts` 目标，
+  禁止其读写 SFTP 实体。
+- `sftp_panel_state_has_single_source_of_truth`：窗格只允许保存实体句柄。
+- `sftp_files_stay_within_line_limit`：SFTP 源码单文件不超过 500 行。
