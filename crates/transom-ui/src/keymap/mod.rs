@@ -68,6 +68,13 @@ pub const OVERLAY_CONTEXT: &str = "Overlay";
 pub const SFTP_CONTEXT: &str = "SftpPanel";
 /// 内置编辑器悬浮面板的按键上下文。
 pub const EDITOR_PANEL_CONTEXT: &str = "EditorPanel";
+/// 工作区专属上下文，且要求没有遮罩浮层。
+///
+/// `!Overlay` 如今只对仍走自绘遮罩的浮层有效（命令面板）：它的输入框焦点在
+/// `AppShell` 子树里，工作区上下文仍在按键路径上，靠这条排除才不会误触发。
+/// 已迁入组件库弹窗栈的模态不需要它——容器把焦点接进窗口根的弹窗层，
+/// 工作区上下文根本不在焦点路径上（实测见 `tests/dialog_key_probe.rs`
+/// 的 `弹窗打开时工作区上下文的快捷键不再命中`）。
 const WORKSPACE_ONLY: &str = "Workspace && !Overlay";
 /// SFTP 面板内需要独占按键的场景：排除文本输入框（`Input`），
 /// 保证在路径/过滤框中按 Delete 时正常编辑文本而不是触发删除文件。
@@ -451,9 +458,11 @@ pub(crate) fn spec_by_id(id: &str) -> Option<&'static ShortcutSpec> {
     SPECS.iter().find(|spec| spec.id == id)
 }
 
-/// 生成全部应用键位：用户可改键的动作（含面板专属上下文）+ 固定的 SFTP 键位。
+/// 生成全部应用键位：用户可改键的动作（含面板专属上下文）+ 固定的 SFTP 键位
+/// + 弹窗栈内多行输入框的提交键位。
 pub(crate) fn bindings(custom: &ShortcutSettings) -> Vec<KeyBinding> {
     let mut bindings = custom_bindings(custom);
+    bindings.extend(crate::dialog_host::dialog_bindings());
     bindings.extend([
         // 显示/隐藏隐藏项与删除键暂不进可改键表：`secondary-h` 用裸 Ctrl 而非
         // `$app`，后者在非 macOS 展开成 Ctrl+Shift，会与 `$app-s`（SFTP 面板开关）

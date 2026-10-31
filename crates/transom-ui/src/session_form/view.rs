@@ -18,10 +18,11 @@ use gpui_kit::*;
 use transom_core::BlockViewOverride;
 
 impl AppShell {
-    pub(crate) fn render_session_form(
-        &mut self,
+    pub(crate) fn render_session_form_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(form) = self.modals.form.as_ref() else {
@@ -33,8 +34,8 @@ impl AppShell {
             rust_i18n::t!("form.new_title").to_string()
         };
 
-        let basic_card = Self::render_session_basic_card(form, p, cx);
-        let connection_type_card = Self::render_session_connection_type_card(form, cx, p);
+        let basic_card = Self::render_session_basic_card(form, app, p, cx);
+        let connection_type_card = Self::render_session_connection_type_card(form, app, cx, p);
 
         let mut content = v_flex()
             .id(ElementId::Name("session-form-body".into()))
@@ -46,22 +47,24 @@ impl AppShell {
 
         match form.connection {
             ConnectionChoice::Ssh => {
-                content = content.child(render_ssh_fields(form, cx, p));
+                content = content.child(render_ssh_fields(form, app, cx, p));
             }
             ConnectionChoice::Mosh => {
                 content = content
-                    .child(render_ssh_fields(form, cx, p))
+                    .child(render_ssh_fields(form, app, cx, p))
                     .child(Self::render_mosh_specific_card(form, p));
             }
             ConnectionChoice::Serial => {
-                content = content.child(render_serial_fields(form, cx, p));
+                content = content.child(render_serial_fields(form, app, cx, p));
             }
             ConnectionChoice::Telnet => {
-                content = content.child(render_telnet_fields(form, cx, p));
+                content = content.child(render_telnet_fields(form, app, cx, p));
             }
         }
 
-        content = content.child(Self::render_session_terminal_attributes_card(form, p, cx));
+        content = content.child(Self::render_session_terminal_attributes_card(
+            form, app, p, cx,
+        ));
 
         let editing = form.base.is_some();
         let confirm_delete = form.confirm_delete;
@@ -74,7 +77,10 @@ impl AppShell {
                         .small()
                         .icon(IconName::Trash)
                         .label(rust_i18n::t!("common.confirm_delete").to_string())
-                        .on_click(cx.listener(|this, _, _, cx| this.delete_session_form(cx))),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, _, cx| this.delete_session_form(cx),
+                        )),
                 );
             } else {
                 footer = footer.child(
@@ -83,12 +89,15 @@ impl AppShell {
                         .small()
                         .icon(IconName::Trash)
                         .label(rust_i18n::t!("common.delete").to_string())
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(form) = this.modals.form.as_mut() {
-                                form.confirm_delete = true;
-                            }
-                            cx.notify();
-                        })),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, _, cx| {
+                                if let Some(form) = this.modals.form.as_mut() {
+                                    form.confirm_delete = true;
+                                }
+                                cx.notify();
+                            },
+                        )),
                 );
             }
         }
@@ -97,17 +106,23 @@ impl AppShell {
                 Button::new("cancel-session")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.modals.form = None;
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.modals.form = None;
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("save-session")
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.save_session_form(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.save_session_form(cx),
+                    )),
             );
 
         let mut footer_block = v_flex().gap_2().items_end();
@@ -117,16 +132,13 @@ impl AppShell {
         }
         footer_block = footer_block.child(footer);
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "session-form-modal",
             title,
             None,
             content,
             Some(footer_block),
-            px(620.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 
     /// 用系统文件选择器挑选私钥，起始目录 `~/.ssh`。
@@ -171,8 +183,9 @@ impl AppShell {
     /// 会话基本信息卡片（名称、所属文件夹、外观图标与颜色）。
     fn render_session_basic_card(
         form: &super::types::SessionForm,
+        app: &Entity<AppShell>,
         p: &Palette,
-        cx: &mut Context<Self>,
+        cx: &App,
     ) -> AnyElement {
         v_flex()
             .gap_3()
@@ -184,13 +197,18 @@ impl AppShell {
                         form.name.clone(),
                         p,
                     )))
-                    .child(div().flex_1().child(Self::render_folder_field(form, p, cx))),
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Self::render_folder_field(form, p, app, cx)),
+                    ),
             )
             .child(Self::render_session_appearance(
                 default_icon_for(form.connection),
                 form.icon,
                 form.color,
                 p,
+                app,
                 cx,
             ))
             .into_any_element()
@@ -206,11 +224,11 @@ impl AppShell {
     fn render_folder_field(
         form: &super::types::SessionForm,
         p: &Palette,
-        cx: &mut Context<Self>,
+        app: &Entity<AppShell>,
+        cx: &App,
     ) -> AnyElement {
         let options = form.folder_options.clone();
         let focus = form.folder_path.read(cx).focus_handle(cx);
-        let app = cx.entity().clone();
         let toggle_app = app.clone();
         let content_app = app.clone();
         let content_palette = p.clone();
@@ -347,7 +365,8 @@ impl AppShell {
     /// 会话连接类型切换卡片（SSH、串口、Telnet）。
     fn render_session_connection_type_card(
         form: &super::types::SessionForm,
-        cx: &mut Context<Self>,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         v_flex()
@@ -366,54 +385,67 @@ impl AppShell {
                             .small()
                             .label("SSH")
                             .selected(form.connection == ConnectionChoice::Ssh)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(form) = this.modals.form.as_mut() {
-                                    form.connection = ConnectionChoice::Ssh;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, _, cx| {
+                                    if let Some(form) = this.modals.form.as_mut() {
+                                        form.connection = ConnectionChoice::Ssh;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     )
                     .child(
                         Button::new("conn-serial")
                             .small()
                             .label(rust_i18n::t!("form.conn_serial").to_string())
                             .selected(form.connection == ConnectionChoice::Serial)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                let needs_ports = if let Some(form) = this.modals.form.as_mut() {
-                                    form.connection = ConnectionChoice::Serial;
-                                    form.serial_ports.is_empty()
-                                } else {
-                                    false
-                                };
-                                if needs_ports {
-                                    this.refresh_serial_ports(window, cx);
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, window, cx| {
+                                    let needs_ports = if let Some(form) = this.modals.form.as_mut()
+                                    {
+                                        form.connection = ConnectionChoice::Serial;
+                                        form.serial_ports.is_empty()
+                                    } else {
+                                        false
+                                    };
+                                    if needs_ports {
+                                        this.refresh_serial_ports(window, cx);
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     )
                     .child(
                         Button::new("conn-telnet")
                             .small()
                             .label("Telnet")
                             .selected(form.connection == ConnectionChoice::Telnet)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(form) = this.modals.form.as_mut() {
-                                    form.connection = ConnectionChoice::Telnet;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, _, cx| {
+                                    if let Some(form) = this.modals.form.as_mut() {
+                                        form.connection = ConnectionChoice::Telnet;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     )
                     .child(
                         Button::new("conn-mosh")
                             .small()
                             .label("Mosh")
                             .selected(form.connection == ConnectionChoice::Mosh)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(form) = this.modals.form.as_mut() {
-                                    form.connection = ConnectionChoice::Mosh;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, _, cx| {
+                                    if let Some(form) = this.modals.form.as_mut() {
+                                        form.connection = ConnectionChoice::Mosh;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     ),
             )
             .into_any_element()
@@ -422,8 +454,9 @@ impl AppShell {
     /// 终端通用属性卡片（启动命令、语义块模式）。
     fn render_session_terminal_attributes_card(
         form: &super::types::SessionForm,
+        app: &Entity<AppShell>,
         p: &Palette,
-        cx: &mut Context<Self>,
+        _cx: &App,
     ) -> AnyElement {
         let block_choice = form.block_view;
 
@@ -480,12 +513,15 @@ impl AppShell {
                                     .small()
                                     .label(rust_i18n::t!(key).to_string())
                                     .selected(block_choice == value)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        if let Some(form) = this.modals.form.as_mut() {
-                                            form.block_view = value;
-                                        }
-                                        cx.notify();
-                                    }))
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        move |this, _: &ClickEvent, _, cx| {
+                                            if let Some(form) = this.modals.form.as_mut() {
+                                                form.block_view = value;
+                                            }
+                                            cx.notify();
+                                        },
+                                    ))
                             }),
                         ),
                     )

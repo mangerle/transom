@@ -24,6 +24,7 @@ mod clipboard_prompt;
 mod cloud_sync;
 mod command_palette;
 mod connection;
+mod dialog_host;
 mod diff_viewer;
 mod divider;
 mod editor;

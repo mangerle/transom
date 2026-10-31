@@ -14,7 +14,8 @@ use gpui_kit::*;
 
 pub(crate) fn render_ssh_fields(
     form: &SessionForm,
-    cx: &mut Context<AppShell>,
+    app: &Entity<AppShell>,
+    cx: &App,
     p: &Palette,
 ) -> AnyElement {
     let auth_password = if form.auth == AuthChoice::Password {
@@ -27,12 +28,15 @@ pub(crate) fn render_ssh_fields(
             .small()
             .label(rust_i18n::t!("form.auth_password").to_string())
     }
-    .on_click(cx.listener(|this, _, _, cx| {
-        if let Some(form) = this.modals.form.as_mut() {
-            form.auth = AuthChoice::Password;
-        }
-        cx.notify();
-    }));
+    .on_click(crate::dialog_host::on_event(
+        app,
+        |this, _: &ClickEvent, _, cx| {
+            if let Some(form) = this.modals.form.as_mut() {
+                form.auth = AuthChoice::Password;
+            }
+            cx.notify();
+        },
+    ));
 
     let auth_key = if form.auth == AuthChoice::PrivateKey {
         Button::new("auth-key")
@@ -44,12 +48,15 @@ pub(crate) fn render_ssh_fields(
             .small()
             .label(rust_i18n::t!("form.auth_key").to_string())
     }
-    .on_click(cx.listener(|this, _, _, cx| {
-        if let Some(form) = this.modals.form.as_mut() {
-            form.auth = AuthChoice::PrivateKey;
-        }
-        cx.notify();
-    }));
+    .on_click(crate::dialog_host::on_event(
+        app,
+        |this, _: &ClickEvent, _, cx| {
+            if let Some(form) = this.modals.form.as_mut() {
+                form.auth = AuthChoice::PrivateKey;
+            }
+            cx.notify();
+        },
+    ));
 
     let auth_agent = if form.auth == AuthChoice::Agent {
         Button::new("auth-agent")
@@ -61,12 +68,15 @@ pub(crate) fn render_ssh_fields(
             .small()
             .label(rust_i18n::t!("form.auth_agent").to_string())
     }
-    .on_click(cx.listener(|this, _, _, cx| {
-        if let Some(form) = this.modals.form.as_mut() {
-            form.auth = AuthChoice::Agent;
-        }
-        cx.notify();
-    }));
+    .on_click(crate::dialog_host::on_event(
+        app,
+        |this, _: &ClickEvent, _, cx| {
+            if let Some(form) = this.modals.form.as_mut() {
+                form.auth = AuthChoice::Agent;
+            }
+            cx.notify();
+        },
+    ));
 
     let mut fields = v_flex().gap_3();
 
@@ -86,8 +96,8 @@ pub(crate) fn render_ssh_fields(
             ))),
     );
 
-    fields = fields.child(render_jump_section(form, cx, p));
-    fields = fields.child(render_proxy_section(form, cx, p));
+    fields = fields.child(render_jump_section(form, app, cx, p));
+    fields = fields.child(render_proxy_section(form, app, cx, p));
 
     if !form.identities.is_empty() {
         fields = fields.child(
@@ -107,12 +117,15 @@ pub(crate) fn render_ssh_fields(
                                 .small()
                                 .label(rust_i18n::t!("form.identity_none").to_string())
                                 .selected(form.identity_choice.is_none())
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(form) = this.modals.form.as_mut() {
-                                        form.identity_choice = None;
-                                    }
-                                    cx.notify();
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, _: &ClickEvent, _, cx| {
+                                        if let Some(form) = this.modals.form.as_mut() {
+                                            form.identity_choice = None;
+                                        }
+                                        cx.notify();
+                                    },
+                                )),
                         )
                         .children(form.identities.iter().enumerate().map(|(index, option)| {
                             let identity_id = option.id;
@@ -121,12 +134,15 @@ pub(crate) fn render_ssh_fields(
                                 .small()
                                 .label(option.name.clone())
                                 .selected(selected)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(form) = this.modals.form.as_mut() {
-                                        form.identity_choice = Some(identity_id);
-                                    }
-                                    cx.notify();
-                                }))
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    move |this, _: &ClickEvent, _, cx| {
+                                        if let Some(form) = this.modals.form.as_mut() {
+                                            form.identity_choice = Some(identity_id);
+                                        }
+                                        cx.notify();
+                                    },
+                                ))
                         })),
                 ),
         );
@@ -173,12 +189,15 @@ pub(crate) fn render_ssh_fields(
                     Switch::new("toggle-auto-reconnect")
                         .small()
                         .checked(form.auto_reconnect)
-                        .on_click(cx.listener(|this, &checked, _, cx| {
-                            if let Some(form) = this.modals.form.as_mut() {
-                                form.auto_reconnect = checked;
-                            }
-                            cx.notify();
-                        })),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, checked: &bool, _, cx| {
+                                if let Some(form) = this.modals.form.as_mut() {
+                                    form.auto_reconnect = *checked;
+                                }
+                                cx.notify();
+                            },
+                        )),
                 ),
         )
         .child(
@@ -195,12 +214,15 @@ pub(crate) fn render_ssh_fields(
                     Switch::new("toggle-agent-forward")
                         .small()
                         .checked(form.agent_forward)
-                        .on_click(cx.listener(|this, &checked, _, cx| {
-                            if let Some(form) = this.modals.form.as_mut() {
-                                form.agent_forward = checked;
-                            }
-                            cx.notify();
-                        })),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, checked: &bool, _, cx| {
+                                if let Some(form) = this.modals.form.as_mut() {
+                                    form.agent_forward = *checked;
+                                }
+                                cx.notify();
+                            },
+                        )),
                 ),
         );
 
@@ -221,13 +243,18 @@ pub(crate) fn render_ssh_fields(
             p,
         ));
 
-    fields = render_auth_credential_fields(fields, form, cx, p);
+    fields = render_auth_credential_fields(fields, form, app, cx, p);
 
     fields.into_any_element()
 }
 
 /// 渲染跳板机级联下拉选择与拓扑链展示。
-fn render_jump_section(form: &SessionForm, cx: &mut Context<AppShell>, p: &Palette) -> AnyElement {
+fn render_jump_section(
+    form: &SessionForm,
+    app: &Entity<AppShell>,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
     let jump_label = form
         .jump_choice
         .and_then(|id| {
@@ -265,9 +292,11 @@ fn render_jump_section(form: &SessionForm, cx: &mut Context<AppShell>, p: &Palet
                         .label(jump_label)
                         .dropdown_menu({
                             let options = form.jump_options.clone();
-                            let app_entity = cx.entity().clone();
+                            // 下拉的渲染闭包要求 'static：句柄要在构造时就克隆好，
+                            // 不能等到闭包体内再借用方法参数。
+                            let dropdown_app = app.clone();
                             move |menu, _window, _cx| {
-                                let app = app_entity.clone();
+                                let app = dropdown_app.clone();
                                 let mut menu = menu.item(
                                     PopupMenuItem::new(
                                         rust_i18n::t!("form.proxy_jump_none").to_string(),
@@ -332,7 +361,8 @@ fn render_jump_section(form: &SessionForm, cx: &mut Context<AppShell>, p: &Palet
 fn render_auth_credential_fields(
     mut fields: Div,
     form: &SessionForm,
-    cx: &mut Context<AppShell>,
+    app: &Entity<AppShell>,
+    _cx: &App,
     p: &Palette,
 ) -> Div {
     match form.auth {
@@ -351,12 +381,15 @@ fn render_auth_credential_fields(
                         Switch::new("toggle-save-password")
                             .small()
                             .checked(form.save_password)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                if let Some(form) = this.modals.form.as_mut() {
-                                    form.save_password = checked;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, checked: &bool, _, cx| {
+                                    if let Some(form) = this.modals.form.as_mut() {
+                                        form.save_password = *checked;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     ),
             );
             if form.save_password {
@@ -386,9 +419,12 @@ fn render_auth_credential_fields(
                                 .small()
                                 .icon(IconName::FolderOpen)
                                 .label(rust_i18n::t!("form.browse").to_string())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.pick_private_key_path(window, cx);
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, _: &ClickEvent, window, cx| {
+                                        this.pick_private_key_path(window, cx);
+                                    },
+                                )),
                         ),
                 )
                 .child(
@@ -406,9 +442,12 @@ fn render_auth_credential_fields(
                                 .small()
                                 .icon(IconName::FolderOpen)
                                 .label(rust_i18n::t!("form.browse").to_string())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.pick_certificate_path(window, cx);
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, _: &ClickEvent, window, cx| {
+                                        this.pick_certificate_path(window, cx);
+                                    },
+                                )),
                         ),
                 )
                 .child(
@@ -431,12 +470,15 @@ fn render_auth_credential_fields(
                             Switch::new("toggle-save-passphrase")
                                 .small()
                                 .checked(form.save_passphrase)
-                                .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(form) = this.modals.form.as_mut() {
-                                        form.save_passphrase = checked;
-                                    }
-                                    cx.notify();
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, checked: &bool, _, cx| {
+                                        if let Some(form) = this.modals.form.as_mut() {
+                                            form.save_passphrase = *checked;
+                                        }
+                                        cx.notify();
+                                    },
+                                )),
                         ),
                 );
             if form.save_passphrase {

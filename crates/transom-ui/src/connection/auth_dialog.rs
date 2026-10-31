@@ -7,7 +7,6 @@ use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::Enter;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{Connection, ConnectionId, ErrorCode, PromptKind, SecretKey, SessionId};
@@ -152,10 +151,14 @@ impl AppShell {
         }
     }
 
-    pub(crate) fn render_auth_prompt(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    /// SSH 鉴权问答的弹窗体。
+    ///
+    /// Enter 提交不再由这里单独接：`dialog_host` 对每个弹窗体统一接
+    /// 输入框的 Enter 与容器的 Confirm，两条落点同一条逻辑。
+    pub(crate) fn render_auth_prompt_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(prompt) = self.modals.auth_prompt.as_ref() else {
@@ -169,10 +172,7 @@ impl AppShell {
             .id(ElementId::Name("auth-prompt-body".into()))
             .max_h(px(360.0))
             .overflow_y_scroll()
-            .gap_3()
-            .on_action(cx.listener(|this, _: &Enter, _, cx| {
-                this.submit_auth_prompt(cx);
-            }));
+            .gap_3();
         if !prompt.name.is_empty() {
             content = content.child(div().text_sm().child(prompt.name.clone()));
         }
@@ -213,12 +213,15 @@ impl AppShell {
                         Switch::new("toggle-save-credential")
                             .small()
                             .checked(prompt.save)
-                            .on_click(cx.listener(|this, &checked, _, cx| {
-                                if let Some(state) = this.modals.auth_prompt.as_mut() {
-                                    state.save = checked;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, checked: &bool, _, cx| {
+                                    if let Some(state) = this.modals.auth_prompt.as_mut() {
+                                        state.save = *checked;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     ),
             );
         }
@@ -235,16 +238,22 @@ impl AppShell {
                     Button::new("cancel-auth")
                         .ghost()
                         .label(rust_i18n::t!("common.cancel").to_string())
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.cancel_auth_prompt();
-                            cx.notify();
-                        })),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, _, cx| {
+                                this.cancel_auth_prompt();
+                                cx.notify();
+                            },
+                        )),
                 )
                 .child(
                     Button::new("submit-auth")
                         .primary()
                         .label(rust_i18n::t!("prompt.submit").to_string())
-                        .on_click(cx.listener(|this, _, _, cx| this.submit_auth_prompt(cx))),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, _, cx| this.submit_auth_prompt(cx),
+                        )),
                 ),
         );
         let hint = if client_generated {
@@ -252,23 +261,24 @@ impl AppShell {
         } else {
             rust_i18n::t!("prompt.auth_hint").to_string()
         };
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "auth-prompt-modal",
             rust_i18n::t!("prompt.auth_title").to_string(),
             Some(hint),
             content,
             Some(footer),
-            px(440.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 
-    /// TOFU 首连主机指纹确认弹窗。
-    pub(crate) fn render_host_key_confirm(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    /// TOFU 首连主机指纹确认的弹窗体。
+    ///
+    /// 信任/拒绝与 Esc、右上角关闭件走同两条路：拒绝必须把 `false` 发回
+    /// responder，否则等待裁决的连接任务会永久挂住，因此取消语义在
+    /// `dialog_host::ModalKind::cancel` 里绑的是 `reject_host_key`。
+    pub(crate) fn render_host_key_confirm_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(state) = self.modals.host_key_confirm.as_ref() else {
@@ -312,23 +322,26 @@ impl AppShell {
                 Button::new("reject-host-key")
                     .ghost()
                     .label(rust_i18n::t!("prompt.host_key_reject").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.reject_host_key(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.reject_host_key(cx),
+                    )),
             )
             .child(
                 Button::new("accept-host-key")
                     .primary()
                     .label(rust_i18n::t!("prompt.host_key_trust").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.accept_host_key(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.accept_host_key(cx),
+                    )),
             );
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "host-key-modal",
             rust_i18n::t!("prompt.host_key_title").to_string(),
             Some(rust_i18n::t!("prompt.host_key_hint").to_string()),
             content,
             Some(footer),
-            px(440.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 }

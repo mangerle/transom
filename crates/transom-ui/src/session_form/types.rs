@@ -1,5 +1,6 @@
 //! 会话表单核心数据模型与选项类型。
 
+use gpui_kit::App;
 use gpui_kit::Entity;
 use gpui_kit::component::input::{InputState, TextareaState};
 use transom_core::{
@@ -121,6 +122,42 @@ pub(crate) struct SessionForm {
     pub color: SessionColor,
     pub confirm_delete: bool,
     pub error: Option<String>,
+}
+
+impl SessionForm {
+    /// 表单全部文本项的当前值，按固定顺序排列。
+    ///
+    /// 作为脏判定基线：弹窗打开时快照一次，取消时逐项比对。顺序与数量必须
+    /// 稳定，所以这里写死字段清单而不是遍历——新增输入框时漏加会让脏判定失真。
+    pub(crate) fn text_values(&self, cx: &App) -> Vec<String> {
+        let inputs = [
+            &self.name,
+            &self.folder_path,
+            &self.host,
+            &self.port,
+            &self.username,
+            &self.password,
+            &self.key_path,
+            &self.cert_path,
+            &self.passphrase,
+            &self.serial_port,
+            &self.serial_baud,
+            &self.connect_timeout,
+            &self.keepalive,
+            &self.mosh_server_path,
+            &self.mosh_server_port,
+            &self.wol_mac,
+            &self.proxy_host,
+            &self.proxy_port,
+            &self.proxy_username,
+        ];
+        let mut values: Vec<String> = inputs
+            .iter()
+            .map(|input| input.read(cx).value().to_string())
+            .collect();
+        values.push(self.startup_commands.read(cx).value().to_string());
+        values
+    }
 }
 
 /// 会话表单里的一个凭据模板选项。

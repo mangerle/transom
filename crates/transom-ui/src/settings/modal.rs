@@ -49,13 +49,20 @@ fn setting_group_with_window(
 }
 
 impl AppShell {
-    pub(crate) fn render_settings_modal(
-        &mut self,
+    /// 偏好设置弹窗的弹窗体。
+    ///
+    /// 外壳（表面、边框、阴影、宽度、超高滚动与右上角关闭件）交给 Dialog 容器，
+    /// 这里只保留"标题行 + 页面 + 页脚"三段结构；标题行原先自带一个 X，
+    /// 它只置 `open = false`、不还原外观预览，与"取消"行为不一致，
+    /// 因此删掉，统一走容器的关闭 → `cancel_settings`。
+    pub(crate) fn render_settings_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let app_entity = cx.entity().clone();
+        let app_entity = app.clone();
         // 跳页时换组件 id：`Settings` 的选中页存在 keyed state 里，只有首次创建
         // 才读取默认页；用带页号的 id 让"从命令面板指定页"与"从菜单回到上次
         // 位置"两条路径各自持有独立的组件状态。
@@ -78,18 +85,11 @@ impl AppShell {
 
         // 尺寸随密度档位缩放；max_w/max_h 以 overlay 全屏为上限，宽松档下小
         // 窗口弹窗贴边而不被裁切，内容区自身可滚动。
+        // 高度仍按档位固定：设置页内容很高，交给容器自适应会把页面压成滚动条。
         let panel = v_flex()
-            .w(rems(size::SETTINGS_DIALOG_WIDTH))
-            .max_w_full()
+            .w_full()
             .h(rems(size::SETTINGS_DIALOG_HEIGHT))
-            .max_h_full()
-            .bg(p.popover)
-            .border_1()
-            .border_color(p.border)
-            .rounded(p.radius.none)
-            .shadow_lg()
             .overflow_hidden()
-            .on_mouse_down(MouseButton::Left, |_, _, _| {})
             .child(
                 h_flex()
                     .w_full()
@@ -115,17 +115,6 @@ impl AppShell {
                                     .font_weight(FontWeight::BOLD)
                                     .child(rust_i18n::t!("settings.title").to_string()),
                             ),
-                    )
-                    .child(
-                        Button::new("close-settings")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::X)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.modals.settings.open = false;
-                                this.modals.settings.jump_page = None;
-                                cx.notify();
-                            })),
                     ),
             )
             .child(
@@ -167,23 +156,29 @@ impl AppShell {
                                     .ghost()
                                     .small()
                                     .label(rust_i18n::t!("common.cancel").to_string())
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.cancel_settings(window, cx);
-                                    })),
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        |this, _: &ClickEvent, window, cx| {
+                                            this.cancel_settings(window, cx);
+                                        },
+                                    )),
                             )
                             .child(
                                 Button::new("save-settings")
                                     .primary()
                                     .small()
                                     .label(rust_i18n::t!("common.save").to_string())
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_settings(window, cx);
-                                    })),
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        |this, _: &ClickEvent, window, cx| {
+                                            this.save_settings(window, cx);
+                                        },
+                                    )),
                             ),
                     ),
             );
 
-        Self::overlay(panel, p)
+        panel.into_any_element()
     }
 
     /// 构建偏好设置所有分类页面。

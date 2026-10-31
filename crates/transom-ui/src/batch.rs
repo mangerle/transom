@@ -28,6 +28,19 @@ pub(crate) struct BatchEditForm {
     pub(crate) error: Option<String>,
 }
 
+impl BatchEditForm {
+    /// 表单全部文本项的当前值，用作脏判定基线。
+    ///
+    /// 只比文本：勾选框（改端口/改用户名等）即便被用户改过也不拦取消——
+    /// 批量修改只有点保存才会落盘，误按 Esc 不产生任何数据损失。
+    pub(crate) fn text_values(&self, cx: &App) -> Vec<String> {
+        [&self.port, &self.username, &self.key_path]
+            .into_iter()
+            .map(|input| input.read(cx).value().to_string())
+            .collect()
+    }
+}
+
 /// 批量更新值；`None` 表示该属性保持不变。
 struct BatchUpdates {
     port: Option<u16>,
@@ -213,10 +226,11 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn render_batch_edit(
-        &mut self,
+    pub(crate) fn render_batch_edit_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(form) = self.modals.batch_edit.as_ref() else {
@@ -237,12 +251,15 @@ impl AppShell {
                 Checkbox::new("batch-change-port")
                     .small()
                     .checked(change_port)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        if let Some(form) = this.modals.batch_edit.as_mut() {
-                            form.change_port = checked;
-                        }
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, checked: &bool, _, cx| {
+                            if let Some(form) = this.modals.batch_edit.as_mut() {
+                                form.change_port = *checked;
+                            }
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 div()
@@ -259,12 +276,15 @@ impl AppShell {
                 Checkbox::new("batch-change-username")
                     .small()
                     .checked(change_username)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        if let Some(form) = this.modals.batch_edit.as_mut() {
-                            form.change_username = checked;
-                        }
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, checked: &bool, _, cx| {
+                            if let Some(form) = this.modals.batch_edit.as_mut() {
+                                form.change_username = *checked;
+                            }
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 div()
@@ -281,36 +301,45 @@ impl AppShell {
                     .small()
                     .label(rust_i18n::t!("form.auth_password").to_string())
                     .selected(auth == AuthChoice::Password)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.modals.batch_edit.as_mut() {
-                            form.auth = AuthChoice::Password;
-                        }
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.modals.batch_edit.as_mut() {
+                                form.auth = AuthChoice::Password;
+                            }
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("batch-auth-key")
                     .small()
                     .label(rust_i18n::t!("form.auth_key").to_string())
                     .selected(auth == AuthChoice::PrivateKey)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.modals.batch_edit.as_mut() {
-                            form.auth = AuthChoice::PrivateKey;
-                        }
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.modals.batch_edit.as_mut() {
+                                form.auth = AuthChoice::PrivateKey;
+                            }
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("batch-auth-agent")
                     .small()
                     .label(rust_i18n::t!("form.auth_agent").to_string())
                     .selected(auth == AuthChoice::Agent)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.modals.batch_edit.as_mut() {
-                            form.auth = AuthChoice::Agent;
-                        }
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.modals.batch_edit.as_mut() {
+                                form.auth = AuthChoice::Agent;
+                            }
+                            cx.notify();
+                        },
+                    )),
             );
 
         let mut auth_section = v_flex().gap_2().child(
@@ -321,12 +350,15 @@ impl AppShell {
                     Checkbox::new("batch-change-auth")
                         .small()
                         .checked(change_auth)
-                        .on_click(cx.listener(|this, &checked, _, cx| {
-                            if let Some(form) = this.modals.batch_edit.as_mut() {
-                                form.change_auth = checked;
-                            }
-                            cx.notify();
-                        })),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, checked: &bool, _, cx| {
+                                if let Some(form) = this.modals.batch_edit.as_mut() {
+                                    form.change_auth = *checked;
+                                }
+                                cx.notify();
+                            },
+                        )),
                 )
                 .child(
                     div()
@@ -360,12 +392,15 @@ impl AppShell {
                                 Switch::new("batch-save-passphrase")
                                     .small()
                                     .checked(save_passphrase)
-                                    .on_click(cx.listener(|this, &checked, _, cx| {
-                                        if let Some(form) = this.modals.batch_edit.as_mut() {
-                                            form.save_passphrase = checked;
-                                        }
-                                        cx.notify();
-                                    })),
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        |this, checked: &bool, _, cx| {
+                                            if let Some(form) = this.modals.batch_edit.as_mut() {
+                                                form.save_passphrase = *checked;
+                                            }
+                                            cx.notify();
+                                        },
+                                    )),
                             ),
                     );
                 }
@@ -394,28 +429,31 @@ impl AppShell {
                 Button::new("cancel-batch-edit")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.modals.batch_edit = None;
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.modals.batch_edit = None;
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("apply-batch-edit")
                     .primary()
                     .label(rust_i18n::t!("batch.apply").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.save_batch_edit(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.save_batch_edit(cx),
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "batch-edit-modal",
             rust_i18n::t!("batch.title").to_string(),
             Some(rust_i18n::t!("batch.apply_hint").to_string()),
             content,
             Some(footer),
-            px(560.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 }
 

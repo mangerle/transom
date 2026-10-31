@@ -15,6 +15,10 @@ use gpui_kit::*;
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
+        // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
+        // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的
+        // 开关动作被延到绘制之后执行，避免在渲染过程中移交焦点。
+        self.reconcile_dialogs(window, cx);
         // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
         // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
         let rem = window.rem_size();
@@ -243,6 +247,9 @@ impl Render for AppShell {
             root = root.child(status_bar);
         }
         root = root.children(editor_layers);
+        // 弹窗栈的压暗层铺在编辑面板之上：弹窗本体由组件库在窗口根上渲染，
+        // 层序天然更高，这里只需要把窗面压暗并阻断下层命中。
+        root = root.children(self.dialog_dim(&p));
         // 追踪器必须最后挂载：bubble 阶段按注册序的逆序派发，最后注册的
         // 监听最先执行，拖拽位移与收尾不会被其他监听的 stop_propagation 挡掉。
         root.child(EditorDragTracker::new(cx.entity()))

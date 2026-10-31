@@ -40,3 +40,11 @@ similar.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# 弹窗键位归属只能靠真实无头窗口跑出来：容器在 "Dialog" 上下文绑了
+# escape→Cancel、enter→Confirm，输入框却自己吃按键，先后顺序决定
+# "Input 用 Enter 提交、Textarea 用 Ctrl+Enter 提交" 能否成立。
+# 这里直接给底层 gpui/gpui-base 开 test-support，不走 gpui-kit 的同名特性：
+# 后者会把 gpui-fast-platform 拉进解析图，与锁内的 cocoa 版本硬 pin 冲突。
+gpui-pre = { version = "=0.3.9", features = ["test-support"] }
+gpui-base = { version = "=0.8.0", features = ["test-support"] }
+gpui-component = { version = "=0.8.0", features = ["test-support"] }

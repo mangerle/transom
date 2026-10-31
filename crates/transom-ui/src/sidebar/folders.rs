@@ -20,6 +20,21 @@ pub(crate) struct FolderForm {
     pub(crate) error: Option<String>,
 }
 
+impl FolderForm {
+    /// 表单全部文本项的当前值，用作脏判定基线（见 `SessionForm::text_values`）。
+    pub(crate) fn text_values(&self, cx: &App) -> Vec<String> {
+        [
+            &self.name,
+            &self.default_port,
+            &self.default_username,
+            &self.default_key_path,
+        ]
+        .into_iter()
+        .map(|input| input.read(cx).value().to_string())
+        .collect()
+    }
+}
+
 impl AppShell {
     pub(crate) fn open_new_folder(
         &mut self,
@@ -241,10 +256,11 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn render_folder_form(
-        &mut self,
+    pub(crate) fn render_folder_form_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(form) = self.modals.folder_form.as_ref() else {
@@ -270,9 +286,12 @@ impl AppShell {
                 Button::new("browse-folder-key")
                     .outline()
                     .label(rust_i18n::t!("form.browse").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.pick_folder_default_key_path(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.pick_folder_default_key_path(window, cx);
+                        },
+                    )),
             );
 
         let mut content = v_flex()
@@ -333,27 +352,30 @@ impl AppShell {
                 Button::new("cancel-folder")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.modals.folder_form = None;
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.modals.folder_form = None;
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("save-folder")
                     .primary()
                     .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.save_folder_form(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.save_folder_form(cx),
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "folder-form-modal",
             title,
             Some(description),
             content,
             Some(footer),
-            px(480.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 }

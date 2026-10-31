@@ -64,10 +64,14 @@ pub(crate) struct SftpModals {
 }
 
 impl AppShell {
-    pub(crate) fn render_sftp_confirm_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    /// SFTP 危险操作确认的弹窗体。
+    ///
+    /// 取消与提交由 `dialog_host` 统一接线（Esc、右上角关闭件、页脚按钮与
+    /// Enter 走同一条路），这里只渲染内容、页脚与按钮回调。
+    pub(crate) fn render_sftp_confirm_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.sftp_modals.confirm.as_ref() else {
@@ -86,38 +90,41 @@ impl AppShell {
                 Button::new("cancel-sftp-delete")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_modals.confirm = None;
-                        this.focus_active_sftp_panel(window, cx);
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.sftp_modals.confirm = None;
+                            this.focus_active_sftp_panel(window, cx);
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("confirm-sftp-delete")
                     .danger()
                     .label(rust_i18n::t!("common.confirm_delete").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_confirm_delete(cx);
-                        this.focus_active_sftp_panel(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.sftp_confirm_delete(cx);
+                            this.focus_active_sftp_panel(window, cx);
+                        },
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "sftp-confirm-modal",
             title,
             None::<String>,
             content,
             Some(footer),
-            px(460.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 
-    pub(crate) fn render_sftp_filter_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    pub(crate) fn render_sftp_filter_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.sftp_modals.filter.as_ref() else {
@@ -145,39 +152,41 @@ impl AppShell {
                 Button::new("cancel-sftp-filter")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_modals.filter = None;
-                        this.focus_active_sftp_panel(window, cx);
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.sftp_modals.filter = None;
+                            this.focus_active_sftp_panel(window, cx);
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("save-sftp-filter")
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("sftp.modals.filter_save").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.save_sftp_filter_modal(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.save_sftp_filter_modal(window, cx);
+                        },
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "sftp-filter-modal",
             rust_i18n::t!("sftp.filter_rules").to_string(),
             Some(rust_i18n::t!("sftp.modals.filter_scope_hint").to_string()),
             content,
             Some(footer),
-            px(560.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 
-    pub(crate) fn render_sftp_chmod_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    pub(crate) fn render_sftp_chmod_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.sftp_modals.chmod.as_ref() else {
@@ -237,25 +246,40 @@ impl AppShell {
                                 Checkbox::new(r_id)
                                     .label(rust_i18n::t!("sftp.chmod.read").to_string())
                                     .checked(perms & r_mask != 0)
-                                    .on_change(cx.listener(move |this, &checked, window, cx| {
-                                        this.sftp_toggle_chmod_bit(r_mask, checked, window, cx);
-                                    })),
+                                    .on_change(crate::dialog_host::on_event(
+                                        app,
+                                        move |this, checked: &bool, window, cx| {
+                                            this.sftp_toggle_chmod_bit(
+                                                r_mask, *checked, window, cx,
+                                            );
+                                        },
+                                    )),
                             )
                             .child(
                                 Checkbox::new(w_id)
                                     .label(rust_i18n::t!("sftp.chmod.write").to_string())
                                     .checked(perms & w_mask != 0)
-                                    .on_change(cx.listener(move |this, &checked, window, cx| {
-                                        this.sftp_toggle_chmod_bit(w_mask, checked, window, cx);
-                                    })),
+                                    .on_change(crate::dialog_host::on_event(
+                                        app,
+                                        move |this, checked: &bool, window, cx| {
+                                            this.sftp_toggle_chmod_bit(
+                                                w_mask, *checked, window, cx,
+                                            );
+                                        },
+                                    )),
                             )
                             .child(
                                 Checkbox::new(x_id)
                                     .label(rust_i18n::t!("sftp.chmod.execute").to_string())
                                     .checked(perms & x_mask != 0)
-                                    .on_change(cx.listener(move |this, &checked, window, cx| {
-                                        this.sftp_toggle_chmod_bit(x_mask, checked, window, cx);
-                                    })),
+                                    .on_change(crate::dialog_host::on_event(
+                                        app,
+                                        move |this, checked: &bool, window, cx| {
+                                            this.sftp_toggle_chmod_bit(
+                                                x_mask, *checked, window, cx,
+                                            );
+                                        },
+                                    )),
                             ),
                     )
                     .into_any_element(),
@@ -277,9 +301,12 @@ impl AppShell {
                     .xsmall()
                     .label(label_str)
                     .selected(perms == mode_val)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.sftp_set_chmod_preset(mode_val, window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, window, cx| {
+                            this.sftp_set_chmod_preset(mode_val, window, cx);
+                        },
+                    )),
             );
         }
 
@@ -326,39 +353,41 @@ impl AppShell {
                 Button::new("cancel-sftp-chmod")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_modals.chmod = None;
-                        this.focus_active_sftp_panel(window, cx);
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.sftp_modals.chmod = None;
+                            this.focus_active_sftp_panel(window, cx);
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("save-sftp-chmod")
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("sftp.chmod.apply").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.save_sftp_chmod_modal(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.save_sftp_chmod_modal(window, cx);
+                        },
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "sftp-chmod-modal",
             rust_i18n::t!("sftp.chmod.title", name = file_name.as_str()).to_string(),
             Some(rust_i18n::t!("sftp.chmod.remote_path", path = remote_path.as_str()).to_string()),
             content,
             Some(footer),
-            px(520.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 
-    pub(crate) fn render_sftp_input_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    pub(crate) fn render_sftp_input_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.sftp_modals.input.as_ref() else {
@@ -382,39 +411,41 @@ impl AppShell {
                 Button::new("cancel-sftp-input")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.sftp_modals.input = None;
-                        this.focus_active_sftp_panel(window, cx);
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.sftp_modals.input = None;
+                            this.focus_active_sftp_panel(window, cx);
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("confirm-sftp-input")
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("common.confirm").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.commit_sftp_input_modal(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.commit_sftp_input_modal(window, cx);
+                        },
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "sftp-input-modal",
             title,
             Some(prompt),
             content,
             Some(footer),
-            px(420.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 
-    pub(crate) fn render_sftp_properties_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    pub(crate) fn render_sftp_properties_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.sftp_modals.properties.as_ref() else {
@@ -502,11 +533,14 @@ impl AppShell {
                 .ghost()
                 .icon(IconName::Close)
                 .label(rust_i18n::t!("app.close").to_string())
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.sftp_modals.properties = None;
-                    this.focus_active_sftp_panel(window, cx);
-                    cx.notify();
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, window, cx| {
+                        this.sftp_modals.properties = None;
+                        this.focus_active_sftp_panel(window, cx);
+                        cx.notify();
+                    },
+                )),
         );
 
         let scope_label = if scope == "本地" {
@@ -515,7 +549,7 @@ impl AppShell {
             rust_i18n::t!("sftp.modals.scope_remote").to_string()
         };
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "sftp-properties-modal",
             rust_i18n::t!("sftp.properties.title", name = name.as_str()).to_string(),
             Some(
@@ -528,11 +562,7 @@ impl AppShell {
             ),
             content,
             Some(footer),
-            px(520.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 }
 

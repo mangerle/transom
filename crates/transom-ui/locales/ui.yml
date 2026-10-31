@@ -167,6 +167,11 @@ common:
   paste:
     en: Paste
     zh-CN: 粘贴
+dialog:
+  dirty_block_hint:
+    en: There are unsaved changes. Use Save or Cancel inside the form first.
+    zh-CN: 表单里有未提交的内容，请先在表单内保存或取消。
+
 tab:
   connecting:
     en: Connecting

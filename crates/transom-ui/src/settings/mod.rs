@@ -218,7 +218,32 @@ impl AppShell {
         on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let app = cx.entity().clone();
+        Self::build_setting_dropdown(id, current_value, options, on_change, cx.entity().clone())
+    }
+
+    /// 弹窗内的下拉选择：与 `setting_dropdown_with_window` 同构。
+    ///
+    /// 为什么要单独一条：弹窗体手上只有只读的 `App` 与外壳实体句柄，不再持有
+    /// `Context<AppShell>`；下拉的行为本来就只依赖实体句柄，这条把参数收成
+    /// 实际需要的最小集合，设置页那十个调用点不必跟着改。
+    pub(crate) fn setting_dropdown_in_modal<T: Clone + PartialEq + 'static>(
+        id: impl Into<ElementId>,
+        current_value: T,
+        options: Vec<(T, String)>,
+        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
+        app: &Entity<AppShell>,
+    ) -> AnyElement {
+        Self::build_setting_dropdown(id, current_value, options, on_change, app.clone())
+    }
+
+    /// 下拉的实际构建：外壳句柄由调用方给，回调在点击时取回可写上下文。
+    fn build_setting_dropdown<T: Clone + PartialEq + 'static>(
+        id: impl Into<ElementId>,
+        current_value: T,
+        options: Vec<(T, String)>,
+        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
+        app: Entity<Self>,
+    ) -> AnyElement {
         let current_label = options
             .iter()
             .find(|(val, _)| val == &current_value)

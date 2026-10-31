@@ -9,7 +9,8 @@ use gpui_kit::*;
 /// 渲染出站代理配置分栏（跟随全局、直连或会话专属 SOCKS5/HTTP）。
 pub(crate) fn render_proxy_section(
     form: &SessionForm,
-    cx: &mut Context<AppShell>,
+    app: &Entity<AppShell>,
+    _cx: &App,
     p: &Palette,
 ) -> AnyElement {
     let proxy_choice = form.proxy_choice;
@@ -26,7 +27,7 @@ pub(crate) fn render_proxy_section(
     );
     // 与设置页同一条下拉：四档选项长短不一，分段按钮在窄表单里会换行，
     // 下拉的触发宽度稳定，选中后下方的凭据字段按档位展开/收起。
-    proxy_section = proxy_section.child(AppShell::setting_dropdown(
+    proxy_section = proxy_section.child(AppShell::setting_dropdown_in_modal(
         "dropdown-session-proxy",
         proxy_choice,
         vec![
@@ -47,13 +48,13 @@ pub(crate) fn render_proxy_section(
                 rust_i18n::t!("form.proxy_http").to_string(),
             ),
         ],
-        |this, choice, cx| {
+        |this, choice, _window, cx| {
             if let Some(form) = this.modals.form.as_mut() {
                 form.proxy_choice = choice;
             }
             cx.notify();
         },
-        cx,
+        app,
     ));
     if proxy_choice == ProxyChoice::FollowGlobal {
         proxy_section = proxy_section.child(

@@ -13,10 +13,11 @@ use gpui_kit::*;
 
 impl AppShell {
     /// 渲染审计日志查看器模态弹窗。
-    pub(crate) fn render_audit_viewer(
-        &mut self,
+    pub(crate) fn render_audit_viewer_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(viewer) = self.modals.audit_viewer.as_ref() else {
@@ -42,9 +43,12 @@ impl AppShell {
                 Button::new("toggle-audit-scope")
                     .outline()
                     .label(scope_button_text)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.toggle_audit_viewer_scope(cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.toggle_audit_viewer_scope(cx);
+                        },
+                    )),
             );
         }
 
@@ -77,15 +81,18 @@ impl AppShell {
                 .disabled(!has_selected)
                 .icon(IconName::Trash)
                 .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    let idx = this
-                        .modals
-                        .audit_viewer
-                        .as_ref()
-                        .map(|v| v.selected_index)
-                        .unwrap_or(0);
-                    this.delete_audit_log(idx, cx);
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        let idx = this
+                            .modals
+                            .audit_viewer
+                            .as_ref()
+                            .map(|v| v.selected_index)
+                            .unwrap_or(0);
+                        this.delete_audit_log(idx, cx);
+                    },
+                )),
         );
 
         toolbar = toolbar.child(
@@ -94,9 +101,12 @@ impl AppShell {
                 .disabled(!has_selected || viewer.content.is_empty())
                 .icon(IconName::Copy)
                 .label(rust_i18n::t!("audit_viewer.copy_content").to_string())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.copy_audit_viewer_content(cx);
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, _, cx| {
+                        this.copy_audit_viewer_content(cx);
+                    },
+                )),
         );
 
         // 左侧文件列表
@@ -124,10 +134,13 @@ impl AppShell {
                         Button::new("open-settings-from-audit")
                             .outline()
                             .label(rust_i18n::t!("audit_viewer.open_settings").to_string())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.modals.audit_viewer = None;
-                                this.open_settings_modal(window, cx);
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, window, cx| {
+                                    this.modals.audit_viewer = None;
+                                    this.open_settings_modal(window, cx);
+                                },
+                            )),
                     ),
             );
         } else {
@@ -158,9 +171,12 @@ impl AppShell {
                         .items_center()
                         .justify_between()
                         .gap_2()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.select_audit_log(idx, cx);
-                        }))
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            move |this, _: &ClickEvent, _, cx| {
+                                this.select_audit_log(idx, cx);
+                            },
+                        ))
                         .child(
                             v_flex()
                                 .flex_1()
@@ -189,10 +205,13 @@ impl AppShell {
                                 .xsmall()
                                 .icon(IconName::Trash)
                                 .tooltip(rust_i18n::t!("common.delete").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.delete_audit_log(item_delete_idx, cx);
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    move |this, _: &ClickEvent, _, cx| {
+                                        cx.stop_propagation();
+                                        this.delete_audit_log(item_delete_idx, cx);
+                                    },
+                                )),
                         ),
                 );
             }
@@ -281,21 +300,21 @@ impl AppShell {
                 Button::new("close-audit-viewer")
                     .ghost()
                     .label(rust_i18n::t!("audit_viewer.close").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.modals.audit_viewer = None;
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.modals.audit_viewer = None;
+                            cx.notify();
+                        },
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "audit-viewer-modal",
             title,
             selected_file.map(|f| f.file_name.clone()),
             body,
             Some(footer),
-            px(900.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 }

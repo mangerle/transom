@@ -107,10 +107,10 @@ impl AppShell {
     }
 
     /// 渲染"跳转到行"输入模态：单行输入 + 取消/跳转，错误就地显示。
-    pub(crate) fn render_editor_goto_line_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    pub(crate) fn render_editor_goto_line_body(
+        &self,
+        app: &Entity<AppShell>,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.sftp_modals.goto_line.as_ref() else {
@@ -148,29 +148,32 @@ impl AppShell {
                 Button::new("editor-goto-cancel")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.cancel_editor_goto_line(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.cancel_editor_goto_line(window, cx);
+                        },
+                    )),
             )
             .child(
                 Button::new("editor-goto-confirm")
                     .primary()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("editor.goto_action").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.commit_editor_goto_line(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.commit_editor_goto_line(window, cx);
+                        },
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "editor-goto-line-modal",
             rust_i18n::t!("editor.goto_title").to_string(),
             None,
             content,
             Some(footer),
-            px(420.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 }

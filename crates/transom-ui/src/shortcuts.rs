@@ -101,9 +101,15 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn render_shortcut_capture(
-        &mut self,
-        cx: &mut Context<Self>,
+    /// 改键录入弹窗的弹窗体。
+    ///
+    /// 保留元素自己的 `on_key_down`：录键期间任意按键都要被它截下来当候选，
+    /// Escape 清捕获是这条链的一部分；容器再挂一层取消只是同一条动作的兜底。
+    pub(crate) fn render_shortcut_capture_body(
+        &self,
+        app: &Entity<AppShell>,
+        _window: &mut Window,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(capture) = self.shortcut_recording.capture.as_ref() else {
@@ -135,29 +141,28 @@ impl AppShell {
             Button::new("cancel-shortcut-capture")
                 .ghost()
                 .label(rust_i18n::t!("common.cancel").to_string())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.shortcut_recording.capture = None;
-                    cx.notify();
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, _, cx| {
+                        this.shortcut_recording.capture = None;
+                        cx.notify();
+                    },
+                )),
         );
 
         let panel = v_flex()
             .id("shortcut-capture-panel")
-            .w(px(440.0))
+            .w_full()
             .gap_3()
-            .p_6()
-            .rounded(p.radius.none)
-            .bg(p.popover)
-            .text_color(p.popover_foreground)
-            .border_1()
-            .border_color(p.border)
-            .shadow_2xl()
             .track_focus(&focus)
             .key_context(keymap::OVERLAY_CONTEXT)
-            .on_key_down(cx.listener(Self::on_shortcut_capture_key))
+            .on_key_down(crate::dialog_host::on_event(
+                app,
+                Self::on_shortcut_capture_key,
+            ))
             .child(header)
             .child(content)
             .child(footer);
-        Self::overlay(panel, p)
+        panel.into_any_element()
     }
 }

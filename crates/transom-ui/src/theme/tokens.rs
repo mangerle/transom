@@ -60,7 +60,6 @@ pub(crate) mod size {
     /// 通用弹窗最大宽度（标准档 760px）。
     pub const DIALOG_MAX_WIDTH: f32 = 47.5;
     /// 通用弹窗最大高度（标准档 640px）。
-    pub const DIALOG_MAX_HEIGHT: f32 = 40.0;
     /// 设置弹窗宽度（标准档 896px）。
     ///
     /// 收窄自 1088px：设置行是"左标题 + 右控件"的两列结构，面板越宽，两列之间

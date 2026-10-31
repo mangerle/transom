@@ -2,7 +2,6 @@
 
 use crate::app::AppShell;
 use crate::keymap;
-use crate::theme::tokens::size;
 use gpui_kit::base::{RadiusTokens, v_flex};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::dialog::{
@@ -148,36 +147,27 @@ impl Palette {
 }
 
 impl AppShell {
-    pub(crate) fn dialog_frame(
+    /// 迁移到组件库弹窗栈后的弹窗体。
+    ///
+    /// 与 `dialog_frame` 的差别只在"谁提供表面"：宽度、底色、边框、阴影、
+    /// 内边距与超高滚动都由 Dialog 容器负责，这里只保留标题、说明、内容
+    /// 与页脚的纵向结构，避免在容器表面里再套一层自绘外框。
+    pub(crate) fn dialog_body(
         id: impl Into<ElementId>,
         title: impl Into<String>,
         description: Option<String>,
         content: impl IntoElement,
         footer: Option<impl IntoElement>,
-        max_w: impl Into<Length>,
-        p: &Palette,
     ) -> AnyElement {
-        let title_str = title.into();
-        // 先固化为 Copy 的 Length，避免 impl Trait 参数在链式调用里要求 Clone。
-        let max_w = max_w.into();
-        let mut header = DialogHeader::new().child(DialogTitle::new().child(title_str));
+        let mut header = DialogHeader::new().child(DialogTitle::new().child(title.into()));
         if let Some(desc) = description {
             header = header.child(DialogDescription::new().child(desc));
         }
 
         let mut frame = v_flex()
             .id(id.into())
-            .w(max_w)
-            .max_w(max_w)
-            .max_h(rems(size::DIALOG_MAX_HEIGHT))
+            .w_full()
             .gap_4()
-            .p_6()
-            .rounded(p.radius.none)
-            .bg(p.popover)
-            .text_color(p.popover_foreground)
-            .border_1()
-            .border_color(p.border)
-            .shadow_2xl()
             .child(header)
             .child(DialogContent::new().child(content));
 
@@ -188,6 +178,12 @@ impl AppShell {
         frame.into_any_element()
     }
 
+    /// 自绘遮罩浮层：仅命令面板还在用。
+    ///
+    /// 其余模态已迁入组件库的弹窗栈（见 `dialog_host`），那里遮罩、焦点捕获、
+    /// 层序与关闭件都由容器负责。这条保留是因为命令面板不是模态弹窗语义：
+    /// 它要"Esc 先清查询再关闭"，且输入框焦点必须留在 `AppShell` 子树内，
+    /// 才能继续靠 `Workspace && !Overlay` 挡住工作区快捷键。
     pub(crate) fn overlay(content: impl IntoElement, p: &Palette) -> AnyElement {
         div()
             .absolute()

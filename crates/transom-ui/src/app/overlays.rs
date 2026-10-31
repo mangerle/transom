@@ -90,7 +90,11 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 渲染所有全局模态框与浮层。
+    /// 渲染仍走自绘遮罩的浮层。
+    ///
+    /// 已迁入组件库弹窗栈的模态不在此列：它们的开关与层序由
+    /// `dialog_host::reconcile_dialogs` 按期望栈对账，若这里再渲染一次，
+    /// 同一个弹窗就会同时出现在自绘遮罩与容器栈两层。
     pub(crate) fn render_overlays(
         &mut self,
         window: &mut Window,
@@ -101,80 +105,8 @@ impl AppShell {
         if let Some(preview) = self.render_sftp_hover_preview(window, &p) {
             overlays.push(preview);
         }
-        if self.modals.form.is_some() {
-            overlays.push(self.render_session_form(window, cx, &p));
-        }
-        if self.modals.audit_viewer.is_some() {
-            overlays.push(self.render_audit_viewer(window, cx, &p));
-        }
-        if self.modals.replay.is_some() {
-            overlays.push(self.render_replay_modal(window, cx, &p));
-        }
-        if self.modals.folder_form.is_some() {
-            overlays.push(self.render_folder_form(window, cx, &p));
-        }
-        if self.modals.auth_prompt.is_some() {
-            overlays.push(self.render_auth_prompt(window, cx, &p));
-        }
-        if self.modals.host_key_confirm.is_some() {
-            overlays.push(self.render_host_key_confirm(window, cx, &p));
-        }
-        if self.modals.clipboard_request.is_some() {
-            overlays.push(self.render_clipboard_prompt(window, cx, &p));
-        }
-        if self.modals.known_hosts.open {
-            overlays.push(self.render_known_hosts_modal(window, cx, &p));
-        }
-        if self.modals.confirm_forward_any.is_some() {
-            overlays.push(self.render_forward_confirm_modal(window, cx, &p));
-        }
         if self.modals.show_quick_open {
             overlays.push(self.render_command_palette_modal(window, cx, &p));
-        }
-        if self.modals.settings.open {
-            overlays.push(self.render_settings_modal(window, cx, &p));
-        }
-        if self.shortcut_recording.capture.is_some() {
-            overlays.push(self.render_shortcut_capture(cx, &p));
-        }
-        if self.modals.batch_edit.is_some() {
-            overlays.push(self.render_batch_edit(window, cx, &p));
-        }
-        if self.modals.backup_prompt.is_some() {
-            overlays.push(self.render_backup_prompt(window, cx, &p));
-        }
-        if self.modals.settings.key_wizard.is_some() {
-            overlays.push(self.render_key_wizard(window, cx, &p));
-        }
-        if self.sftp_modals.confirm.is_some() {
-            overlays.push(self.render_sftp_confirm_modal(window, cx, &p));
-        }
-        if self.sftp_modals.chmod.is_some() {
-            overlays.push(self.render_sftp_chmod_modal(window, cx, &p));
-        }
-        if self.sftp_modals.input.is_some() {
-            overlays.push(self.render_sftp_input_modal(window, cx, &p));
-        }
-        if self.sftp_modals.properties.is_some() {
-            overlays.push(self.render_sftp_properties_modal(window, cx, &p));
-        }
-        if self.sftp_modals.filter.is_some() {
-            overlays.push(self.render_sftp_filter_modal(window, cx, &p));
-        }
-        if self.sftp_modals.sync.is_some() {
-            overlays.push(self.render_sftp_sync_modal(window, cx, &p));
-        }
-        if self.sftp_modals.goto_line.is_some() {
-            overlays.push(self.render_editor_goto_line_modal(window, cx, &p));
-        }
-        if self.diff_viewer.is_some() {
-            overlays.push(self.render_diff_viewer(window, cx, &p));
-        }
-        if self.sftp_modals.search.is_some() {
-            overlays.push(self.render_sftp_search_modal(window, cx, &p));
-        }
-        if self.modals.snippet_panel.form.is_some() {
-            overlays.push(self.render_snippet_form(&p, cx));
         }
         overlays
     }

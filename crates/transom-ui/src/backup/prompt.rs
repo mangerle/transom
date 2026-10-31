@@ -94,10 +94,11 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn render_backup_prompt(
-        &mut self,
+    pub(crate) fn render_backup_prompt_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(prompt) = self.modals.backup_prompt.as_ref() else {
@@ -140,12 +141,15 @@ impl AppShell {
                             Checkbox::new("backup-encrypt")
                                 .small()
                                 .checked(prompt.encrypt)
-                                .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(prompt) = this.modals.backup_prompt.as_mut() {
-                                        prompt.encrypt = checked;
-                                    }
-                                    cx.notify();
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, checked: &bool, _, cx| {
+                                        if let Some(prompt) = this.modals.backup_prompt.as_mut() {
+                                            prompt.encrypt = *checked;
+                                        }
+                                        cx.notify();
+                                    },
+                                )),
                         )
                         .child(
                             div()
@@ -161,17 +165,20 @@ impl AppShell {
                             Checkbox::new("backup-include-secrets")
                                 .small()
                                 .checked(prompt.include_secrets)
-                                .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(prompt) = this.modals.backup_prompt.as_mut() {
-                                        prompt.include_secrets = checked;
-                                        // 口令必须加密落盘：勾选包含口令时同步打开加密，
-                                        // 用户仍可手动取消，但提交时会被明确拦下。
-                                        if checked {
-                                            prompt.encrypt = true;
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, checked: &bool, _, cx| {
+                                        if let Some(prompt) = this.modals.backup_prompt.as_mut() {
+                                            prompt.include_secrets = *checked;
+                                            // 口令必须加密落盘：勾选包含口令时同步打开加密，
+                                            // 用户仍可手动取消，但提交时会被明确拦下。
+                                            if *checked {
+                                                prompt.encrypt = true;
+                                            }
                                         }
-                                    }
-                                    cx.notify();
-                                })),
+                                        cx.notify();
+                                    },
+                                )),
                         )
                         .child(
                             div()
@@ -223,17 +230,21 @@ impl AppShell {
                         Checkbox::new("backup-file-encrypted")
                             .small()
                             .checked(prompt.encrypted_file)
-                            .on_click(cx.listener(|this, &checked, window, cx| {
-                                if let Some(prompt) = this.modals.backup_prompt.as_mut() {
-                                    prompt.encrypted_file = checked;
-                                }
-                                if checked && let Some(prompt) = this.modals.backup_prompt.as_ref()
-                                {
-                                    let passphrase = prompt.passphrase.clone();
-                                    passphrase.update(cx, |state, cx| state.focus(window, cx));
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, checked: &bool, window, cx| {
+                                    if let Some(prompt) = this.modals.backup_prompt.as_mut() {
+                                        prompt.encrypted_file = *checked;
+                                    }
+                                    if *checked
+                                        && let Some(prompt) = this.modals.backup_prompt.as_ref()
+                                    {
+                                        let passphrase = prompt.passphrase.clone();
+                                        passphrase.update(cx, |state, cx| state.focus(window, cx));
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     )
                     .child(
                         div()
@@ -269,10 +280,13 @@ impl AppShell {
                     .ghost()
                     .disabled(busy)
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.modals.backup_prompt = None;
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.modals.backup_prompt = None;
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 Button::new("submit-backup")
@@ -283,20 +297,20 @@ impl AppShell {
                     } else {
                         rust_i18n::t!("backup.import_action").to_string()
                     })
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.submit_backup(window, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.submit_backup(window, cx);
+                        },
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "backup-prompt-modal",
             title,
             Some(rust_i18n::t!("backup.dialog_hint").to_string()),
             content,
             Some(footer),
-            px(520.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 }

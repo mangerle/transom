@@ -43,7 +43,8 @@ impl AppShell {
         icon: SessionIcon,
         color: SessionColor,
         p: &Palette,
-        cx: &mut Context<Self>,
+        app: &Entity<AppShell>,
+        _cx: &App,
     ) -> AnyElement {
         let icon_row = h_flex()
             .gap_1()
@@ -53,12 +54,15 @@ impl AppShell {
                     .icon(default_icon)
                     .selected(icon == SessionIcon::Auto)
                     .tooltip(rust_i18n::t!("form.icon_auto").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
-                            form.icon = SessionIcon::Auto;
-                        }
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.modals.form.as_mut() {
+                                form.icon = SessionIcon::Auto;
+                            }
+                            cx.notify();
+                        },
+                    )),
             )
             .children(SESSION_ICON_CHOICES.into_iter().map(|choice| {
                 let Some(name) = session_icon(choice) else {
@@ -68,12 +72,15 @@ impl AppShell {
                     .small()
                     .icon(name)
                     .selected(icon == choice)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
-                            form.icon = choice;
-                        }
-                        cx.notify();
-                    }))
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.modals.form.as_mut() {
+                                form.icon = choice;
+                            }
+                            cx.notify();
+                        },
+                    ))
                     .into_any_element()
             }));
         let color_row = h_flex()
@@ -95,12 +102,15 @@ impl AppShell {
                         Tooltip::new(rust_i18n::t!("form.color_none").to_string())
                             .build(_window, cx)
                     })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
-                            form.color = SessionColor::None;
-                        }
-                        cx.notify();
-                    }))
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.modals.form.as_mut() {
+                                form.color = SessionColor::None;
+                            }
+                            cx.notify();
+                        },
+                    ))
                     .into_any_element(),
             )
             .children(SESSION_COLOR_CHOICES.into_iter().map(|choice| {
@@ -119,12 +129,15 @@ impl AppShell {
                         p.border
                     })
                     .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(form) = this.modals.form.as_mut() {
-                            form.color = choice;
-                        }
-                        cx.notify();
-                    }))
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.modals.form.as_mut() {
+                                form.color = choice;
+                            }
+                            cx.notify();
+                        },
+                    ))
                     .into_any_element()
             }));
         v_flex()

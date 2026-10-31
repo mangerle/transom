@@ -12,7 +12,8 @@ use transom_core::{SerialDataBits, SerialFlowControl, SerialParity, SerialStopBi
 
 pub(crate) fn render_serial_fields(
     form: &SessionForm,
-    cx: &mut Context<AppShell>,
+    app: &Entity<AppShell>,
+    cx: &App,
     p: &Palette,
 ) -> AnyElement {
     let mut fields = v_flex().gap_3();
@@ -30,15 +31,18 @@ pub(crate) fn render_serial_fields(
                 .xsmall()
                 .label(label)
                 .selected(current_port == port_name)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    if let Some(form) = this.modals.form.as_mut() {
-                        let port_name = port_name.clone();
-                        form.serial_port.update(cx, |state, cx| {
-                            state.set_value(&port_name, window, cx);
-                        });
-                    }
-                    cx.notify();
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, window, cx| {
+                        if let Some(form) = this.modals.form.as_mut() {
+                            let port_name = port_name.clone();
+                            form.serial_port.update(cx, |state, cx| {
+                                state.set_value(&port_name, window, cx);
+                            });
+                        }
+                        cx.notify();
+                    },
+                )),
         );
     }
     let ports_hint = form.serial_ports_error.clone().unwrap_or_else(|| {
@@ -57,12 +61,15 @@ pub(crate) fn render_serial_fields(
             .small()
             .label(bits.bits().to_string())
             .selected(form.serial_data_bits == bits)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(form) = this.modals.form.as_mut() {
-                    form.serial_data_bits = bits;
-                }
-                cx.notify();
-            }))
+            .on_click(crate::dialog_host::on_event(
+                app,
+                move |this, _: &ClickEvent, _, cx| {
+                    if let Some(form) = this.modals.form.as_mut() {
+                        form.serial_data_bits = bits;
+                    }
+                    cx.notify();
+                },
+            ))
         }));
     let parity_buttons = h_flex().gap_1().children(
         [
@@ -76,12 +83,15 @@ pub(crate) fn render_serial_fields(
                 .small()
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_parity == parity)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.modals.form.as_mut() {
-                        form.serial_parity = parity;
-                    }
-                    cx.notify();
-                }))
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        if let Some(form) = this.modals.form.as_mut() {
+                            form.serial_parity = parity;
+                        }
+                        cx.notify();
+                    },
+                ))
         }),
     );
     let stop_bits_buttons = h_flex().gap_1().children(
@@ -95,12 +105,15 @@ pub(crate) fn render_serial_fields(
                 .small()
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_stop_bits == stop_bits)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.modals.form.as_mut() {
-                        form.serial_stop_bits = stop_bits;
-                    }
-                    cx.notify();
-                }))
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        if let Some(form) = this.modals.form.as_mut() {
+                            form.serial_stop_bits = stop_bits;
+                        }
+                        cx.notify();
+                    },
+                ))
         }),
     );
     let flow_buttons = h_flex().gap_1().children(
@@ -115,12 +128,15 @@ pub(crate) fn render_serial_fields(
                 .small()
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_flow_control == flow)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.modals.form.as_mut() {
-                        form.serial_flow_control = flow;
-                    }
-                    cx.notify();
-                }))
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        if let Some(form) = this.modals.form.as_mut() {
+                            form.serial_flow_control = flow;
+                        }
+                        cx.notify();
+                    },
+                ))
         }),
     );
 
@@ -142,9 +158,12 @@ pub(crate) fn render_serial_fields(
                                 .small()
                                 .icon(IconName::RefreshCw)
                                 .label(rust_i18n::t!("form.serial_refresh").to_string())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.refresh_serial_ports(window, cx);
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, _: &ClickEvent, window, cx| {
+                                        this.refresh_serial_ports(window, cx);
+                                    },
+                                )),
                         ),
                 )
                 .child(

@@ -87,10 +87,14 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn render_clipboard_prompt(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    /// 剪贴板写入授权的弹窗体。
+    ///
+    /// 默认拒绝：Esc 与右上角关闭件都走 `deny_clipboard_write`，把拒绝回给
+    /// 等待中的 OSC 52 请求，绝不因为"没点按钮"就让任务挂起。
+    pub(crate) fn render_clipboard_prompt_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(pending) = self.modals.clipboard_request.as_ref() else {
@@ -150,25 +154,27 @@ impl AppShell {
                 Button::new("deny-clipboard-write")
                     .ghost()
                     .label(rust_i18n::t!("clipboard_consent.deny").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.deny_clipboard_write(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.deny_clipboard_write(cx),
+                    )),
             )
             .child(
                 Button::new("allow-clipboard-write")
                     .primary()
                     .label(rust_i18n::t!("clipboard_consent.allow").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.confirm_clipboard_write(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.confirm_clipboard_write(cx),
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "clipboard-consent-modal",
             rust_i18n::t!("clipboard_consent.title").to_string(),
             Some(rust_i18n::t!("clipboard_consent.subtitle").to_string()),
             content,
             Some(footer),
-            px(520.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 }

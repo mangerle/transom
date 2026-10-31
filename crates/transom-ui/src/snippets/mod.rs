@@ -32,6 +32,21 @@ pub(crate) struct SnippetFormState {
     error: Option<String>,
 }
 
+impl SnippetFormState {
+    /// 名称输入框句柄：字段对本模块私有，宿主只按它投递首帧焦点。
+    pub(crate) fn name_input(&self) -> Entity<InputState> {
+        self.name.clone()
+    }
+
+    /// 表单全部文本项的当前值，用作脏判定基线。
+    pub(crate) fn text_values(&self, cx: &App) -> Vec<String> {
+        vec![
+            self.name.read(cx).value().to_string(),
+            self.command.read(cx).value().to_string(),
+        ]
+    }
+}
+
 /// 底栏快捷命令卡片的显隐与编辑状态。
 pub(crate) struct SnippetPanelState {
     pub(crate) open: bool,
@@ -252,10 +267,12 @@ impl AppShell {
     }
 
     /// 渲染新增/编辑单条快捷命令的小弹窗。
-    pub(crate) fn render_snippet_form(
-        &mut self,
+    pub(crate) fn render_snippet_form_body(
+        &self,
+        app: &Entity<AppShell>,
+        _window: &mut Window,
+        _cx: &App,
         p: &Palette,
-        cx: &mut Context<Self>,
     ) -> AnyElement {
         let Some(form) = self.modals.snippet_panel.form.as_ref() else {
             return div().into_any_element();
@@ -288,27 +305,22 @@ impl AppShell {
                     .ghost()
                     .small()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.close_snippet_form(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.close_snippet_form(cx),
+                    )),
             )
             .child(
                 Button::new("snippet-form-save")
                     .primary()
                     .small()
                     .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.save_snippet_form(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.save_snippet_form(cx),
+                    )),
             );
-        Self::overlay(
-            Self::dialog_frame(
-                "snippet-form",
-                title,
-                None,
-                content,
-                Some(footer),
-                px(420.0),
-                p,
-            ),
-            p,
-        )
+        Self::dialog_body("snippet-form", title, None::<String>, content, Some(footer))
     }
 }
 

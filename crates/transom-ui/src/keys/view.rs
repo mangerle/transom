@@ -3,7 +3,6 @@
 use super::keygen::KeyAlgorithm;
 use crate::app::AppShell;
 use crate::palette::Palette;
-use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -12,18 +11,19 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 impl AppShell {
-    pub(crate) fn render_key_wizard(
-        &mut self,
+    pub(crate) fn render_key_wizard_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         if self.modals.settings.key_wizard.is_none() {
             return div().into_any_element();
         }
-        let generate = self.render_key_generate_section(p, cx);
-        let list = self.render_key_list_section(p, cx);
-        let deploy = self.render_key_deploy_section(p, cx);
+        let generate = self.render_key_generate_section(app, p, cx);
+        let list = self.render_key_list_section(app, p, cx);
+        let deploy = self.render_key_deploy_section(app, p, cx);
         let message = self
             .modals
             .settings
@@ -74,21 +74,25 @@ impl AppShell {
         let footer = Button::new("close-key-wizard")
             .ghost()
             .label(rust_i18n::t!("app.close").to_string())
-            .on_click(cx.listener(|this, _, _, cx| this.close_key_wizard(cx)));
+            .on_click(crate::dialog_host::on_event(
+                app,
+                |this, _: &ClickEvent, _, cx| this.close_key_wizard(cx),
+            ));
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "key-wizard-modal",
             rust_i18n::t!("keys.title").to_string(),
             Some(rust_i18n::t!("keys.hint").to_string()),
             content,
             Some(footer),
-            rems(size::DIALOG_MAX_WIDTH),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
-
-    fn render_key_generate_section(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn render_key_generate_section(
+        &self,
+        app: &Entity<AppShell>,
+        p: &Palette,
+        _cx: &App,
+    ) -> AnyElement {
         let Some(state) = self.modals.settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
@@ -127,9 +131,12 @@ impl AppShell {
                                 .small()
                                 .label(algorithm.label())
                                 .selected(current_algorithm == algorithm)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.select_key_algorithm(algorithm, window, cx);
-                                }))
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    move |this, _: &ClickEvent, window, cx| {
+                                        this.select_key_algorithm(algorithm, window, cx);
+                                    },
+                                ))
                         }),
                     ),
             )
@@ -170,15 +177,23 @@ impl AppShell {
                                 rust_i18n::t!("keys.generate").to_string()
                             })
                             .disabled(generating)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.generate_key(window, cx);
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, window, cx| {
+                                    this.generate_key(window, cx);
+                                },
+                            )),
                     ),
             )
             .into_any_element()
     }
 
-    fn render_key_list_section(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn render_key_list_section(
+        &self,
+        app: &Entity<AppShell>,
+        p: &Palette,
+        _cx: &App,
+    ) -> AnyElement {
         let Some(state) = self.modals.settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
@@ -222,9 +237,12 @@ impl AppShell {
                                     style.border_color(p.muted_foreground)
                                 }
                             })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.select_key(index, cx);
-                            }))
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
+                                    this.select_key(index, cx);
+                                },
+                            ))
                             .child(Icon::new(IconName::KeyRound).small().text_color(
                                 if is_selected {
                                     p.sidebar_accent_foreground
@@ -306,7 +324,12 @@ impl AppShell {
             .into_any_element()
     }
 
-    fn render_key_deploy_section(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn render_key_deploy_section(
+        &self,
+        app: &Entity<AppShell>,
+        p: &Palette,
+        _cx: &App,
+    ) -> AnyElement {
         let Some(state) = self.modals.settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
@@ -352,18 +375,24 @@ impl AppShell {
                                 .small()
                                 .icon(IconName::Copy)
                                 .label(rust_i18n::t!("common.copy").to_string())
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.copy_selected_key(cx);
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, _: &ClickEvent, _, cx| {
+                                        this.copy_selected_key(cx);
+                                    },
+                                )),
                         )
                         .child(
                             Button::new("export-selected-public-key")
                                 .small()
                                 .icon(IconName::Download)
                                 .label(rust_i18n::t!("keys.export").to_string())
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.export_selected_key(cx);
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, _: &ClickEvent, _, cx| {
+                                        this.export_selected_key(cx);
+                                    },
+                                )),
                         ),
                 )
         });
@@ -379,9 +408,12 @@ impl AppShell {
                 .small()
                 .icon(IconName::Server)
                 .label(label)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.deploy_selected_key(target.clone(), cx);
-                }))
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        this.deploy_selected_key(target.clone(), cx);
+                    },
+                ))
                 .into_any_element()
             })
             .collect();

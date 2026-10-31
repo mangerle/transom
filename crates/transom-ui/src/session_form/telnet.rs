@@ -16,7 +16,8 @@ use transom_core::TextEncoding;
 
 pub(crate) fn render_telnet_fields(
     form: &SessionForm,
-    cx: &mut Context<AppShell>,
+    app: &Entity<AppShell>,
+    _cx: &App,
     p: &Palette,
 ) -> AnyElement {
     let encoding_buttons = h_flex().gap_1().children(
@@ -31,12 +32,15 @@ pub(crate) fn render_telnet_fields(
                 .small()
                 .label(label)
                 .selected(form.telnet_encoding == encoding)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(form) = this.modals.form.as_mut() {
-                        form.telnet_encoding = encoding;
-                    }
-                    cx.notify();
-                }))
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        if let Some(form) = this.modals.form.as_mut() {
+                            form.telnet_encoding = encoding;
+                        }
+                        cx.notify();
+                    },
+                ))
         }),
     );
 
@@ -76,12 +80,15 @@ pub(crate) fn render_telnet_fields(
                     Switch::new("toggle-telnet-auto-reconnect")
                         .small()
                         .checked(form.auto_reconnect)
-                        .on_click(cx.listener(|this, &checked, _, cx| {
-                            if let Some(form) = this.modals.form.as_mut() {
-                                form.auto_reconnect = checked;
-                            }
-                            cx.notify();
-                        })),
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, checked: &bool, _, cx| {
+                                if let Some(form) = this.modals.form.as_mut() {
+                                    form.auto_reconnect = *checked;
+                                }
+                                cx.notify();
+                            },
+                        )),
                 ),
         )
         .child(

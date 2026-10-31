@@ -108,10 +108,11 @@ impl AppShell {
     }
 
     /// 渲染回放脚本选择弹窗。
-    pub(crate) fn render_replay_modal(
-        &mut self,
+    pub(crate) fn render_replay_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.modals.replay.as_ref() else {
@@ -175,20 +176,23 @@ impl AppShell {
                         .border_color(border)
                         .cursor_pointer()
                         .hover(|s| s.bg(p.muted.opacity(0.4)))
-                        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                            if event.click_count() >= 2 {
-                                this.modals.replay = None;
-                                this.open_cast_player(
-                                    entry_path.clone(),
-                                    Some(entry_title.clone()),
-                                    window,
-                                    cx,
-                                );
-                            } else if let Some(m) = this.modals.replay.as_mut() {
-                                m.selected_index = idx;
-                                cx.notify();
-                            }
-                        }))
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            move |this, event: &ClickEvent, window, cx| {
+                                if event.click_count() >= 2 {
+                                    this.modals.replay = None;
+                                    this.open_cast_player(
+                                        entry_path.clone(),
+                                        Some(entry_title.clone()),
+                                        window,
+                                        cx,
+                                    );
+                                } else if let Some(m) = this.modals.replay.as_mut() {
+                                    m.selected_index = idx;
+                                    cx.notify();
+                                }
+                            },
+                        ))
                         .child(
                             h_flex()
                                 .justify_between()
@@ -210,17 +214,20 @@ impl AppShell {
                                     .xsmall()
                                     .icon(IconName::Disc)
                                     .tooltip(rust_i18n::t!("recorder.open_player").to_string())
-                                    .on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            this.modals.replay = None;
-                                            this.open_cast_player(
-                                                item_play_path.clone(),
-                                                Some(item_play_title.clone()),
-                                                window,
-                                                cx,
-                                            );
-                                        },
-                                    )),
+                                    .on_click(
+                                        crate::dialog_host::on_event(
+                                            app,
+                                            move |this, _: &ClickEvent, window, cx| {
+                                                this.modals.replay = None;
+                                                this.open_cast_player(
+                                                    item_play_path.clone(),
+                                                    Some(item_play_title.clone()),
+                                                    window,
+                                                    cx,
+                                                );
+                                            },
+                                        ),
+                                    ),
                                 ),
                         )
                         .child(
@@ -265,10 +272,13 @@ impl AppShell {
                                     .small()
                                     .icon(IconName::Disc)
                                     .label(rust_i18n::t!("recorder.open_player").to_string())
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.modals.replay = None;
-                                        this.pick_and_play_external_cast(window, cx);
-                                    })),
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        move |this, _: &ClickEvent, window, cx| {
+                                            this.modals.replay = None;
+                                            this.pick_and_play_external_cast(window, cx);
+                                        },
+                                    )),
                             )
                             .child(
                                 Button::new("pick-external-cast-btn")
@@ -276,14 +286,17 @@ impl AppShell {
                                     .small()
                                     .icon(IconName::FolderOpen)
                                     .label(rust_i18n::t!("recorder.pick_external").to_string())
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.modals.replay = None;
-                                        this.pick_and_replay_external_cast(
-                                            target_tab_id,
-                                            window,
-                                            cx,
-                                        );
-                                    })),
+                                    .on_click(crate::dialog_host::on_event(
+                                        app,
+                                        move |this, _: &ClickEvent, window, cx| {
+                                            this.modals.replay = None;
+                                            this.pick_and_replay_external_cast(
+                                                target_tab_id,
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )),
                             ),
                     ),
             )
@@ -306,10 +319,13 @@ impl AppShell {
                 Button::new("cancel-replay-modal")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.modals.replay = None;
-                        cx.notify();
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.modals.replay = None;
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 h_flex()
@@ -321,13 +337,16 @@ impl AppShell {
                             .disabled(selected_entry.is_none())
                             .icon(IconName::Play)
                             .label(rust_i18n::t!("recorder.start_replay").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(entry) = selected_entry.as_ref() {
-                                    let path = entry.path.clone();
-                                    this.modals.replay = None;
-                                    this.execute_replay_file(target_tab_id, &path, cx);
-                                }
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
+                                    if let Some(entry) = selected_entry.as_ref() {
+                                        let path = entry.path.clone();
+                                        this.modals.replay = None;
+                                        this.execute_replay_file(target_tab_id, &path, cx);
+                                    }
+                                },
+                            )),
                     )
                     .child(
                         Button::new("open-in-player-btn")
@@ -335,26 +354,26 @@ impl AppShell {
                             .disabled(play_entry.is_none())
                             .icon(IconName::Disc)
                             .label(rust_i18n::t!("recorder.open_player").to_string())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                if let Some(entry) = play_entry.as_ref() {
-                                    let path = entry.path.clone();
-                                    let title = entry.title.clone();
-                                    this.modals.replay = None;
-                                    this.open_cast_player(path, Some(title), window, cx);
-                                }
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, window, cx| {
+                                    if let Some(entry) = play_entry.as_ref() {
+                                        let path = entry.path.clone();
+                                        let title = entry.title.clone();
+                                        this.modals.replay = None;
+                                        this.open_cast_player(path, Some(title), window, cx);
+                                    }
+                                },
+                            )),
                     ),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "replay-cast-modal",
             rust_i18n::t!("recorder.replay_title").to_string(),
             Some(rust_i18n::t!("recorder.format_notice").to_string()),
             body,
             Some(footer),
-            px(560.0),
-            p,
-        );
-        Self::overlay(dialog, p)
+        )
     }
 }

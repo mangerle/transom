@@ -368,10 +368,14 @@ impl AppShell {
         add_form.into_any_element()
     }
 
-    pub(crate) fn render_forward_confirm_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    /// 端口转发冲突确认的弹窗体。
+    ///
+    /// 取消与"确认启动"分别绑到 `cancel_forward_confirm` /
+    /// `confirm_forward_start`，Esc 走前者：把拒绝回给等待中的转发请求。
+    pub(crate) fn render_forward_confirm_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(pending) = self.modals.confirm_forward_any.as_ref() else {
@@ -396,25 +400,27 @@ impl AppShell {
                 Button::new("cancel-forward-confirm")
                     .ghost()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.cancel_forward_confirm(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.cancel_forward_confirm(cx),
+                    )),
             )
             .child(
                 Button::new("accept-forward-confirm")
                     .danger()
                     .label(rust_i18n::t!("forward.confirm_start").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| this.confirm_forward_start(cx))),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| this.confirm_forward_start(cx),
+                    )),
             );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "forward-confirm-modal",
             rust_i18n::t!("forward.confirm_any_title").to_string(),
             Some(rust_i18n::t!("forward.confirm_any_hint").to_string()),
             content,
             Some(footer),
-            px(460.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 }

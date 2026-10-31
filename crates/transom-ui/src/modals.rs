@@ -25,10 +25,11 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn render_known_hosts_modal(
-        &mut self,
+    pub(crate) fn render_known_hosts_body(
+        &self,
+        app: &Entity<AppShell>,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let records = self.modals.known_hosts.records.clone();
@@ -114,9 +115,12 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::Trash)
                             .label(rust_i18n::t!("common.delete").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.remove_known_host(&host, port, cx);
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
+                                    this.remove_known_host(&host, port, cx);
+                                },
+                            )),
                     )
                     .into_any_element();
                 rows.push(row);
@@ -137,21 +141,20 @@ impl AppShell {
         let footer = Button::new("close-kh-btn")
             .ghost()
             .label(rust_i18n::t!("app.close").to_string())
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.modals.known_hosts.open = false;
-                cx.notify();
-            }));
+            .on_click(crate::dialog_host::on_event(
+                app,
+                |this, _: &ClickEvent, _, cx| {
+                    this.modals.known_hosts.open = false;
+                    cx.notify();
+                },
+            ));
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "known-hosts-modal",
             rust_i18n::t!("known_hosts.title").to_string(),
             None,
             content,
             Some(footer),
-            px(580.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 }

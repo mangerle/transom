@@ -99,6 +99,10 @@ pub struct AppShell {
     pub(crate) sftp_panel_width_target: Option<f32>,
     /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
     pub(crate) shortcut_recording: ShortcutRecordingState,
+    /// 组件库弹窗栈的影子记录：与容器实际栈同序，逐帧对账的依据。
+    pub(crate) open_modals: crate::dialog_host::OpenModals,
+    /// 弹窗内的一次性提示：脏表单被拦下不关时，说明为什么按键没有反应。
+    pub(crate) dialog_hint: Option<String>,
 }
 
 impl AppShell {
@@ -333,6 +337,8 @@ impl AppShell {
                 applied_keys: applied_shortcut_keys,
                 capture: None,
             },
+            open_modals: crate::dialog_host::OpenModals::default(),
+            dialog_hint: None,
         };
 
         cx.subscribe_in(

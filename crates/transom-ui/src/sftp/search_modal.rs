@@ -121,10 +121,10 @@ impl AppShell {
     }
 
     /// 渲染远程搜索弹窗视图。
-    pub(crate) fn render_sftp_search_modal(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    pub(crate) fn render_sftp_search_body(
+        &self,
+        app: &Entity<AppShell>,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(modal) = self.sftp_modals.search.as_ref() else {
@@ -161,9 +161,12 @@ impl AppShell {
                                     rust_i18n::t!("sftp.search.search").to_string()
                                 })
                                 .disabled(is_searching)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.sftp_execute_search(window, cx);
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, _: &ClickEvent, window, cx| {
+                                        this.sftp_execute_search(window, cx);
+                                    },
+                                )),
                         ),
                 )
                 .child(
@@ -173,23 +176,29 @@ impl AppShell {
                             Checkbox::new("chk-is-content")
                                 .checked(is_content)
                                 .label(rust_i18n::t!("sftp.search.content_mode").to_string())
-                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
-                                    if let Some(ref mut m) = this.sftp_modals.search {
-                                        m.is_content = *checked;
-                                        cx.notify();
-                                    }
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, checked: &bool, _, cx| {
+                                        if let Some(ref mut m) = this.sftp_modals.search {
+                                            m.is_content = *checked;
+                                            cx.notify();
+                                        }
+                                    },
+                                )),
                         )
                         .child(
                             Checkbox::new("chk-case-sensitive")
                                 .checked(case_sensitive)
                                 .label(rust_i18n::t!("sftp.search.case_sensitive").to_string())
-                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
-                                    if let Some(ref mut m) = this.sftp_modals.search {
-                                        m.case_sensitive = *checked;
-                                        cx.notify();
-                                    }
-                                })),
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, checked: &bool, _, cx| {
+                                        if let Some(ref mut m) = this.sftp_modals.search {
+                                            m.case_sensitive = *checked;
+                                            cx.notify();
+                                        }
+                                    },
+                                )),
                         ),
                 )
                 .when_some(error, |this, err| {
@@ -265,19 +274,27 @@ impl AppShell {
                                 .child(format!(": {excerpt}")),
                         )
                     })
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        // 点击条目：关闭弹窗并导航到目标所在文件夹。
-                        // 并列远端的检索结果必须回到该列自己的连接，不能落到主远端。
-                        this.sftp_modals.search = None;
-                        let dir = parent_remote(&target_path);
-                        if let Some(connection_id) = target_connection {
-                            this.request_sftp_list_for_connection(tab_id, connection_id, dir, cx);
-                        } else {
-                            this.request_sftp_list(tab_id, dir, cx);
-                        }
-                        this.focus_active_sftp_panel(window, cx);
-                        cx.notify();
-                    }));
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, window, cx| {
+                            // 点击条目：关闭弹窗并导航到目标所在文件夹。
+                            // 并列远端的检索结果必须回到该列自己的连接，不能落到主远端。
+                            this.sftp_modals.search = None;
+                            let dir = parent_remote(&target_path);
+                            if let Some(connection_id) = target_connection {
+                                this.request_sftp_list_for_connection(
+                                    tab_id,
+                                    connection_id,
+                                    dir,
+                                    cx,
+                                );
+                            } else {
+                                this.request_sftp_list(tab_id, dir, cx);
+                            }
+                            this.focus_active_sftp_panel(window, cx);
+                            cx.notify();
+                        },
+                    ));
 
                 results_container = results_container.child(row);
             }
@@ -289,23 +306,22 @@ impl AppShell {
             Button::new("close-sftp-search")
                 .ghost()
                 .label(rust_i18n::t!("app.close").to_string())
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.sftp_modals.search = None;
-                    this.focus_active_sftp_panel(window, cx);
-                    cx.notify();
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, window, cx| {
+                        this.sftp_modals.search = None;
+                        this.focus_active_sftp_panel(window, cx);
+                        cx.notify();
+                    },
+                )),
         );
 
-        let dialog = Self::dialog_frame(
+        Self::dialog_body(
             "sftp-search-modal",
             rust_i18n::t!("sftp.search.title").to_string(),
             None::<String>,
             content,
             Some(footer),
-            px(560.0),
-            p,
-        );
-
-        Self::overlay(dialog, p)
+        )
     }
 }

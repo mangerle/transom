@@ -14,10 +14,16 @@ use transom_core::MergeDirection;
 
 impl AppShell {
     /// 渲染分栏对比对话框；没有面板时返回空元素。
-    pub(crate) fn render_diff_viewer(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
+    /// 分栏对比弹窗的弹窗体。
+    ///
+    /// 外壳交给 Dialog 容器：宽度按视口 94%、高度按 88% 折算成像素传入，
+    /// 与迁移前 `relative(0.94)/relative(0.88)` 的观感一致；标题行原先自带
+    /// 一个关闭 X，与容器右上角的关闭件重复，删掉统一走 `close_diff_viewer`。
+    pub(crate) fn render_diff_viewer_body(
+        &self,
+        app: &Entity<AppShell>,
+        window: &mut Window,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(viewer) = self.diff_viewer.as_ref() else {
@@ -30,49 +36,29 @@ impl AppShell {
         )
         .to_string();
         let body = render_body(viewer, p);
-        let toolbar = render_toolbar(viewer, p, cx);
-        let footer = render_footer(viewer, p, cx);
+        let toolbar = render_toolbar(viewer, app, p);
+        let footer = render_footer(viewer, app, p);
         let dialog = v_flex()
             .id("diff-viewer-dialog")
-            .w(relative(0.94))
-            .h(relative(0.88))
+            .w_full()
+            .h(window.viewport_size().height * 0.88)
             .gap_2()
-            .p_4()
-            .rounded(p.radius.none)
-            .bg(p.popover)
-            .text_color(p.popover_foreground)
-            .border_1()
-            .border_color(p.border)
-            .shadow_2xl()
             .overflow_hidden()
             .child(
-                h_flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(title),
-                    )
-                    .child(
-                        Button::new("diff-viewer-close")
-                            .ghost()
-                            .compact()
-                            .icon(IconName::Close)
-                            .tooltip(rust_i18n::t!("diff.close_tooltip").to_string())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.close_diff_viewer(cx);
-                            })),
-                    ),
+                h_flex().items_center().gap_2().child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(title),
+                ),
             )
             .child(toolbar)
             .child(body)
             .child(footer);
-        Self::overlay(dialog, p)
+        dialog.into_any_element()
     }
 }
 
@@ -124,7 +110,7 @@ fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
     }
 }
 
-fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) -> AnyElement {
     let (additions, deletions, count, index) = match viewer.diff.as_ref() {
         Some(diff) => (
             diff.additions,
@@ -163,9 +149,12 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
                     .compact()
                     .icon(IconName::ArrowUp)
                     .tooltip(rust_i18n::t!("diff.prev_hunk").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.step_diff_hunk(false, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.step_diff_hunk(false, cx);
+                        },
+                    )),
             )
             .child(
                 Button::new("diff-next-hunk")
@@ -173,9 +162,12 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
                     .compact()
                     .icon(IconName::ArrowDown)
                     .tooltip(rust_i18n::t!("diff.next_hunk").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.step_diff_hunk(true, cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.step_diff_hunk(true, cx);
+                        },
+                    )),
             );
     }
     toolbar
@@ -187,9 +179,12 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
                 .label(rust_i18n::t!("diff.apply_local").to_string())
                 .disabled(!ready || count == 0)
                 .tooltip(rust_i18n::t!("diff.apply_local_tooltip").to_string())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.request_diff_merge(MergeDirection::RightToLeft, cx);
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, _, cx| {
+                        this.request_diff_merge(MergeDirection::RightToLeft, cx);
+                    },
+                )),
         )
         .child(
             Button::new("diff-apply-remote")
@@ -203,14 +198,17 @@ fn render_toolbar(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShe
                 } else {
                     rust_i18n::t!("diff.apply_remote_tooltip").to_string()
                 })
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.request_diff_merge(MergeDirection::LeftToRight, cx);
-                })),
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, _, cx| {
+                        this.request_diff_merge(MergeDirection::LeftToRight, cx);
+                    },
+                )),
         )
         .into_any_element()
 }
 
-fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+fn render_footer(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) -> AnyElement {
     let mut footer = h_flex().items_center().gap_2().min_h(px(30.0));
     if let Some(confirm) = viewer.confirm {
         let (source, target) = match confirm.direction {
@@ -249,9 +247,12 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                     .ghost()
                     .compact()
                     .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.cancel_diff_merge(cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.cancel_diff_merge(cx);
+                        },
+                    )),
             )
             .child(
                 Button::new("diff-merge-confirm")
@@ -259,9 +260,12 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                     .compact()
                     .icon(IconName::Check)
                     .label(rust_i18n::t!("diff.confirm_action").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.confirm_diff_merge(cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.confirm_diff_merge(cx);
+                        },
+                    )),
             );
     } else if let Some(error) = viewer.error.as_deref() {
         footer = footer
@@ -277,9 +281,12 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                     .ghost()
                     .compact()
                     .label(rust_i18n::t!("diff.close").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.close_diff_viewer(cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.close_diff_viewer(cx);
+                        },
+                    )),
             );
     } else if viewer.phase == DiffPhase::Writing {
         footer = footer
@@ -316,9 +323,12 @@ fn render_footer(viewer: &DiffViewerState, p: &Palette, cx: &mut Context<AppShel
                     .ghost()
                     .compact()
                     .label(rust_i18n::t!("diff.close").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.close_diff_viewer(cx);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.close_diff_viewer(cx);
+                        },
+                    )),
             );
     }
     footer.into_any_element()
