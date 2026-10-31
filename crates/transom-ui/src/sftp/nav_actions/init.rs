@@ -4,7 +4,7 @@
 //! - 实现初衷：为 SSH 与本地会话创建并初始化 SFTP 双栏文件浏览器状态（输入框绑定、回车监听、列表分发）；
 //! - 核心优势：集中管理长生命周期 Input 实体与订阅，避免面板构造逻辑散落在各种触发动作中。
 
-use crate::app::{AppShell, TabStatus};
+use crate::app::{AppShell, AppState, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
 use crate::sftp::columns::ColumnWidthMemory;
@@ -19,7 +19,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::{Connection, ConnectionId, TabId};
 
-impl AppShell {
+impl AppState {
     pub(crate) fn sftp_panel_mut(
         &mut self,
         tab_id: TabId,
@@ -41,7 +41,9 @@ impl AppShell {
         }
         tab.sftp_mut()
     }
+}
 
+impl AppShell {
     /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
     pub(crate) fn focus_active_sftp_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(panel) = self

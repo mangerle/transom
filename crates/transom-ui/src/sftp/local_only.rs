@@ -158,7 +158,7 @@ impl AppShell {
             .value()
             .trim()
             .to_ascii_lowercase();
-        let local_entries = Self::filter_local_entries(
+        let local_entries = crate::app::AppState::filter_local_entries(
             panel,
             show_hidden,
             &local_filter_query,

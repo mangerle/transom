@@ -4,7 +4,7 @@ use super::{
     ForwardKindChoice, ForwardPanelState, PendingForwardConfirm, forward_bind_host,
     is_public_bind_address,
 };
-use crate::app::{AppShell, TabStatus};
+use crate::app::{AppShell, AppState, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
@@ -14,7 +14,7 @@ use transom_core::{
     TargetAddress,
 };
 
-impl AppShell {
+impl AppState {
     pub(crate) fn mark_forwards_stopped(&mut self, tab_id: TabId) {
         if let Some(pane) = self
             .workspace
@@ -53,6 +53,14 @@ impl AppShell {
         }
     }
 
+    pub(crate) fn forward_panel_mut(&mut self, tab_id: TabId) -> Option<&mut ForwardPanelState> {
+        self.workspace
+            .tab_mut(tab_id)
+            .and_then(|tab| tab.forwards_panel_mut())
+    }
+}
+
+impl AppShell {
     pub(crate) fn auto_start_forwards(
         &mut self,
         tab_id: TabId,
@@ -90,12 +98,6 @@ impl AppShell {
             });
         }
         cx.notify();
-    }
-
-    pub(crate) fn forward_panel_mut(&mut self, tab_id: TabId) -> Option<&mut ForwardPanelState> {
-        self.workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.forwards_panel_mut())
     }
 
     pub(crate) fn toggle_forward_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {

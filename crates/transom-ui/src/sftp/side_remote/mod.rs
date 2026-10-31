@@ -20,7 +20,7 @@ pub(crate) use self::types::{
     active_pane_after_removing,
 };
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::sftp::columns::SftpColumnId;
 use crate::sftp::{
     SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, SftpTransferRequest, TransferMode,
@@ -52,6 +52,17 @@ fn side_column_width_hint(panel: &SftpPanelState, cx: &App) -> f32 {
         hint.min((total - 100.0 * columns as f32).max(100.0))
     } else {
         hint
+    }
+}
+
+impl AppState {
+    pub(crate) fn sftp_panel_mut_tab(
+        &mut self,
+        tab_id: TabId,
+    ) -> Option<&mut super::SftpPanelState> {
+        self.workspace
+            .tab_mut(tab_id)
+            .and_then(|tab| tab.sftp_mut())
     }
 }
 
@@ -293,15 +304,6 @@ impl AppShell {
     }
 
     /// 辅助方法：直接按 tab_id 获取 sftp 面板可变借用。
-    pub(crate) fn sftp_panel_mut_tab(
-        &mut self,
-        tab_id: TabId,
-    ) -> Option<&mut super::SftpPanelState> {
-        self.workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.sftp_mut())
-    }
-
     /// 请求特定连接的远端目录列表（用于并列远端）。
     ///
     /// 连接归属主远端时按主列处理，否则按并列列处理；加载态与错误清理统一

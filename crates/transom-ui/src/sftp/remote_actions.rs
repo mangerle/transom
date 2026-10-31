@@ -11,7 +11,7 @@
 //!
 //! 导航与过滤动作在 `remote_nav`，文件操作实现分散在各自的业务文件中。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::sftp::side_remote::SftpRemoteCopyParams;
 use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState, parent_remote};
 use gpui_kit::*;
@@ -27,8 +27,7 @@ pub(crate) struct RemotePaneScope<'a> {
     pub(crate) side_connection: Option<ConnectionId>,
 }
 
-impl AppShell {
-    /// 解析目标远端列、实际连接与弹窗连接语义。
+impl AppState {
     pub(crate) fn remote_pane_scope(
         &self,
         tab_id: TabId,
@@ -48,6 +47,17 @@ impl AppShell {
             side_connection,
         })
     }
+    pub(crate) fn remote_pane_connection(
+        &self,
+        tab_id: TabId,
+        target: SftpRemotePaneRef,
+    ) -> Option<ConnectionId> {
+        self.remote_pane_scope(tab_id, target)
+            .map(|scope| scope.connection_id)
+    }
+}
+
+impl AppShell {
     /// 向指定连接下发 SFTP 非传输操作。
     ///
     /// 主远端与并列远端共用同一条投递路径：连接先反解为目标列，面板消息与
@@ -79,16 +89,6 @@ impl AppShell {
             op,
         });
         cx.notify();
-    }
-
-    /// 目标列对应的实际连接 ID。
-    pub(crate) fn remote_pane_connection(
-        &self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-    ) -> Option<ConnectionId> {
-        self.remote_pane_scope(tab_id, target)
-            .map(|scope| scope.connection_id)
     }
 
     /// 把目标远端列设为活动栏并重绘。

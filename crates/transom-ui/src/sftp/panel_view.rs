@@ -10,6 +10,7 @@ use super::remote_pane::RemotePaneProps;
 use super::state::SftpRemotePaneState;
 use super::{LocalFileEntry, SftpRemotePaneRef};
 use crate::app::AppShell;
+use crate::app::AppState;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
@@ -20,6 +21,44 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use transom_core::RemoteFile;
+
+impl AppState {
+    /// 过滤单个远端列的条目：隐藏开关、排除规则与列内过滤词共同生效。
+    fn filter_remote_entries(
+        pane: &SftpRemotePaneState,
+        show_hidden: bool,
+        filter_query: &str,
+        hidden_patterns: &str,
+    ) -> Vec<RemoteFile> {
+        let mut remote_entries = filter_named_entries(
+            &pane.entries,
+            |entry| entry.name.as_str(),
+            show_hidden,
+            filter_query,
+            hidden_patterns,
+        );
+        insert_parent_remote_entry(&mut remote_entries, &pane.path, filter_query);
+        remote_entries
+    }
+
+    /// 过滤本地列条目：共享面板与本地单栏面板共用同一套规则与父目录注入。
+    pub(crate) fn filter_local_entries(
+        panel: &super::SftpPanelState,
+        show_hidden: bool,
+        filter_query: &str,
+        hidden_patterns: &str,
+    ) -> Vec<LocalFileEntry> {
+        let mut local_entries = filter_named_entries(
+            &panel.local.entries,
+            |entry| entry.name.as_str(),
+            show_hidden,
+            filter_query,
+            hidden_patterns,
+        );
+        insert_parent_local_entry(&mut local_entries, &panel.local.path, filter_query);
+        local_entries
+    }
+}
 
 impl AppShell {
     pub(crate) fn render_sftp_panel(
@@ -54,7 +93,7 @@ impl AppShell {
             .trim()
             .to_ascii_lowercase();
 
-        let local_entries = Self::filter_local_entries(
+        let local_entries = AppState::filter_local_entries(
             panel,
             panel.local.show_hidden,
             &local_filter_query,
@@ -147,7 +186,7 @@ impl AppShell {
                     .value()
                     .trim()
                     .to_ascii_lowercase();
-                let entries = Self::filter_remote_entries(
+                let entries = AppState::filter_remote_entries(
                     &panel.remote,
                     panel.remote.show_hidden,
                     &filter_query,
@@ -196,7 +235,7 @@ impl AppShell {
                     .value()
                     .trim()
                     .to_ascii_lowercase();
-                let entries = Self::filter_remote_entries(
+                let entries = AppState::filter_remote_entries(
                     side,
                     side.show_hidden,
                     &filter_query,
@@ -349,42 +388,6 @@ impl AppShell {
         }
 
         panel_element.into_any_element()
-    }
-
-    /// 过滤单个远端列的条目：隐藏开关、排除规则与列内过滤词共同生效。
-    fn filter_remote_entries(
-        pane: &SftpRemotePaneState,
-        show_hidden: bool,
-        filter_query: &str,
-        hidden_patterns: &str,
-    ) -> Vec<RemoteFile> {
-        let mut remote_entries = filter_named_entries(
-            &pane.entries,
-            |entry| entry.name.as_str(),
-            show_hidden,
-            filter_query,
-            hidden_patterns,
-        );
-        insert_parent_remote_entry(&mut remote_entries, &pane.path, filter_query);
-        remote_entries
-    }
-
-    /// 过滤本地列条目：共享面板与本地单栏面板共用同一套规则与父目录注入。
-    pub(crate) fn filter_local_entries(
-        panel: &super::SftpPanelState,
-        show_hidden: bool,
-        filter_query: &str,
-        hidden_patterns: &str,
-    ) -> Vec<LocalFileEntry> {
-        let mut local_entries = filter_named_entries(
-            &panel.local.entries,
-            |entry| entry.name.as_str(),
-            show_hidden,
-            filter_query,
-            hidden_patterns,
-        );
-        insert_parent_local_entry(&mut local_entries, &panel.local.path, filter_query);
-        local_entries
     }
 
     /// 渲染 SFTP 顶栏标题与操作区。

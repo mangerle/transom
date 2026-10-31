@@ -10,7 +10,7 @@ use super::preview::{
     decode_preview_thumbnail, preview_kind, read_local_text_head, text_preview_lines,
 };
 use super::{SftpPanelState, format_size};
-use crate::app::{AppShell, command_send_error_text};
+use crate::app::{AppShell, AppState, command_send_error_text};
 use crate::palette::localized_error;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
@@ -30,6 +30,12 @@ struct PreviewImageJob {
     tab_id: TabId,
     op_id: TransferId,
     input: PreviewImageInput,
+}
+
+impl AppState {
+    fn sftp_panel_mut_by_tab(&mut self, tab_id: TabId) -> Option<&mut SftpPanelState> {
+        self.workspace.tab_mut(tab_id)?.sftp_mut()
+    }
 }
 
 impl AppShell {
@@ -124,10 +130,6 @@ impl AppShell {
         {
             cx.notify();
         }
-    }
-
-    fn sftp_panel_mut_by_tab(&mut self, tab_id: TabId) -> Option<&mut SftpPanelState> {
-        self.workspace.tab_mut(tab_id)?.sftp_mut()
     }
 
     fn schedule_preview_start(

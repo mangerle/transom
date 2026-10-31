@@ -3,7 +3,7 @@
 mod keygen;
 mod view;
 
-use crate::app::{AppShell, TabStatus};
+use crate::app::{AppShell, AppState, TabStatus};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -72,6 +72,31 @@ impl KeyWizardState {
             error: None,
             _task: None,
         }
+    }
+}
+
+impl AppState {
+    fn selected_key(&self) -> Option<&PublicKeyInfo> {
+        let state = self.modals.settings.key_wizard.as_ref()?;
+        state.selected.and_then(|index| state.keys.get(index))
+    }
+
+    pub(crate) fn key_targets(&self) -> Vec<KeyTarget> {
+        self.workspace
+            .tabs
+            .iter()
+            .filter(|tab| {
+                matches!(tab.status, TabStatus::Connected)
+                    && matches!(tab.session.connection, Connection::Ssh(_))
+            })
+            .filter_map(|tab| {
+                Some(KeyTarget {
+                    tab_id: tab.id,
+                    connection_id: tab.connection_id?,
+                    title: tab.display_name(),
+                })
+            })
+            .collect()
     }
 }
 
@@ -339,11 +364,6 @@ impl AppShell {
         cx.notify();
     }
 
-    fn selected_key(&self) -> Option<&PublicKeyInfo> {
-        let state = self.modals.settings.key_wizard.as_ref()?;
-        state.selected.and_then(|index| state.keys.get(index))
-    }
-
     fn set_key_notice(&mut self, message: &str, cx: &mut Context<Self>) {
         if let Some(state) = self.modals.settings.key_wizard.as_mut() {
             state.message = Some(message.to_string());
@@ -358,25 +378,6 @@ impl AppShell {
             state.message = None;
         }
         cx.notify();
-    }
-
-    /// 收集当前已连接、可部署公钥的 SSH 标签页。
-    pub(crate) fn key_targets(&self) -> Vec<KeyTarget> {
-        self.workspace
-            .tabs
-            .iter()
-            .filter(|tab| {
-                matches!(tab.status, TabStatus::Connected)
-                    && matches!(tab.session.connection, Connection::Ssh(_))
-            })
-            .filter_map(|tab| {
-                Some(KeyTarget {
-                    tab_id: tab.id,
-                    connection_id: tab.connection_id?,
-                    title: tab.display_name(),
-                })
-            })
-            .collect()
     }
 }
 
