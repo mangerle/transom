@@ -15,7 +15,7 @@ use transom_core::{ChecksumAlgorithm, ConnectionId, TransferDirection, VerifyMod
 /// 把本地路径列表转成上传任务；目录与文件走不同的构造分支。
 ///
 /// 目标连接必须显式传入：调度层不再回退主连接，避免上传落到另一台主机。
-pub(super) fn upload_tasks(
+pub(crate) fn upload_tasks(
     paths: &[PathBuf],
     remote_dir: &str,
     resume_enabled: bool,

@@ -22,13 +22,10 @@ pub(crate) use self::types::{
 
 use crate::app::AppShell;
 use crate::sftp::columns::SftpColumnId;
-use crate::sftp::{
-    SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, SftpTransferRequest, TransferMode,
-    TransferTask,
-};
+use crate::sftp::{SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, SftpTransferRequest};
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
-use transom_core::{ConnectionId, TabId, TransferDirection};
+use transom_core::{ConnectionId, TabId};
 
 /// 新挂载并列远端列的建议宽度。
 ///
@@ -205,106 +202,30 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 跨远端互传任务入队。
+    /// 跨远端互传任务入队；队列状态与调度在实体上完成。
     pub(crate) fn sftp_enqueue_remote_transfer(
         &mut self,
         tab_id: TabId,
         params: SftpRemoteCopyParams,
         cx: &mut Context<Self>,
     ) {
-        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
-            return;
-        };
-        let src_path = params.source_path.clone();
-        let tgt_path = params.target_path.clone();
-        let task = TransferTask::new_remote_copy(
-            params.source_connection_id,
-            params.source_path,
-            params.target_connection_id,
-            params.target_path,
-            None,
-            params.is_dir,
-        );
-        panel.queue.tasks.push(task);
-        panel.set_status(
-            rust_i18n::t!(
-                "sftp.sidebar.remote_copy_queued",
-                src = src_path.as_str(),
-                tgt = tgt_path.as_str()
-            )
-            .to_string(),
-        );
-        drop(panel);
-        self.process_sftp_queue(tab_id, cx);
-        cx.notify();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.enqueue_remote_transfer(tab_id, params, cx)
+            });
+        }
     }
 
     /// 把单条上传/下载请求加入队列并立即尝试调度。
-    ///
-    /// 连接由调用方显式给出：调度层不再回退主连接，跨列操作不会静默落到
-    /// 另一台主机；目录类型同样由请求携带，避免目录被当作单文件传输。
     pub(crate) fn sftp_enqueue_transfer(
         &mut self,
         request: SftpTransferRequest,
         cx: &mut Context<Self>,
     ) {
-        let verify = self.state.settings.sftp.verify_after_transfer;
-        let verify_mode = self.state.settings.sftp.verify_mode;
-        let checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
-        let Some(mut panel) = self.sftp_view_mut(request.tab_id, cx) else {
-            return;
-        };
-        let mode = if panel.queue.resume_enabled {
-            TransferMode::Resume
-        } else {
-            TransferMode::Overwrite
-        };
-        let mut task = if request.is_dir {
-            TransferTask::new_directory(
-                request.direction,
-                request.local_path.clone(),
-                request.remote_path.clone(),
-                None,
-                mode,
-            )
-        } else {
-            TransferTask::new(
-                request.direction,
-                request.local_path.clone(),
-                request.remote_path.clone(),
-                None,
-                mode,
-            )
-        };
-        match request.direction {
-            TransferDirection::Upload => task.target_connection_id = Some(request.connection_id),
-            TransferDirection::Download => task.source_connection_id = Some(request.connection_id),
-            _ => {}
+        let tab_id = request.tab_id;
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.enqueue_transfer(request, cx));
         }
-        task.verify = verify;
-        task.verify_mode = verify_mode;
-        task.checksum_algorithm = checksum_algorithm;
-        panel.queue.tasks.push(task);
-        panel.set_status(match request.direction {
-            TransferDirection::Upload => rust_i18n::t!(
-                "sftp.sidebar.upload_queued_path",
-                path = request.remote_path.as_str()
-            )
-            .to_string(),
-            TransferDirection::Download => rust_i18n::t!(
-                "sftp.sidebar.download_queued_path",
-                path = request.remote_path.as_str()
-            )
-            .to_string(),
-            _ => rust_i18n::t!(
-                "sftp.sidebar.transfer_queued_path",
-                path = request.remote_path.as_str()
-            )
-            .to_string(),
-        });
-        drop(panel);
-        self.process_sftp_queue(request.tab_id, cx);
-        cx.notify();
     }
 
     /// 辅助方法：直接按 tab_id 获取 sftp 面板可变借用。

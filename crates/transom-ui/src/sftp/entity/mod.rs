@@ -21,6 +21,8 @@
 //! 再 `update`，比直接改字段多一次调度；实体构造时外壳已存在，因此
 //! `attach` 在创建后立即调用，不存在未绑定窗口期。
 
+mod queue;
+
 use super::SftpPanelState;
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -50,6 +52,29 @@ impl SftpPanelView {
     pub(crate) fn state(&self) -> &SftpPanelState {
         &self.state
     }
+}
+
+/// 回到外壳执行一次跨域动作；外壳已释放时返回 `None`。
+///
+/// 供实体方法在 `&mut self.state` 借用仍然有效时使用：调用方先解构
+/// `SftpPanelView { state, app }`，把 `app` 传进来，状态留在本地。
+pub(super) fn with_shell_parts<R>(
+    app: &Option<WeakEntity<AppShell>>,
+    cx: &mut Context<SftpPanelView>,
+    action: impl FnOnce(&mut AppShell, &mut Context<AppShell>) -> R,
+) -> Option<R> {
+    let app = app.as_ref()?.upgrade()?;
+    Some(app.update(cx, action))
+}
+
+/// 只读外壳状态；用于取设置、连接与工作区快照。
+pub(super) fn read_shell_parts<R>(
+    app: &Option<WeakEntity<AppShell>>,
+    cx: &App,
+    read: impl FnOnce(&AppShell) -> R,
+) -> Option<R> {
+    let app = app.as_ref()?.upgrade()?;
+    Some(read(app.read(cx)))
 }
 
 /// 视图对面板状态的透明访问。

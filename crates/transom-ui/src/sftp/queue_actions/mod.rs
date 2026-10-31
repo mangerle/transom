@@ -7,10 +7,9 @@
 //!   2. 规范化整批操作日志与命令发送顺序。
 
 mod download;
-mod enqueue;
+pub(super) mod enqueue;
 mod task_control;
 
-use self::enqueue::upload_tasks;
 use crate::app::AppShell;
 use crate::palette::localized_error;
 use crate::sftp::{TransferKind, TransferMode, TransferStatus, TransferTask};
@@ -22,12 +21,8 @@ use transom_core::{
 
 impl AppShell {
     pub(crate) fn sftp_queue_upload(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let paths = self
-            .sftp_state(tab_id, cx)
-            .map(|panel| panel.selected_local_paths())
-            .unwrap_or_default();
-        if let Err(message) = self.enqueue_uploads(tab_id, &paths, cx) {
-            self.set_sftp_panel_error(tab_id, message, cx);
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.queue_upload(tab_id, cx));
         }
     }
 
@@ -38,22 +33,13 @@ impl AppShell {
         paths: &[PathBuf],
         cx: &mut Context<Self>,
     ) -> Result<usize, String> {
-        let Some((target_connection_id, remote_dir)) =
-            self.state.workspace.tab(tab_id).and_then(|tab| {
-                let connection_id = tab.connection_id?;
-                let remote_dir = self.sftp_state(tab_id, cx)?.remote.path.clone();
-                Some((connection_id, remote_dir))
-            })
-        else {
+        let Some(view) = self.sftp_view(tab_id) else {
             return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
         };
-        self.enqueue_uploads_to(tab_id, paths, &remote_dir, target_connection_id, cx)
+        view.update(cx, |view, cx| view.enqueue_uploads(tab_id, paths, cx))
     }
 
-    /// 把一组本地路径入队为上传任务并启动调度。
-    ///
-    /// 目标连接与远端目录显式传入：并列远端列的上传入口复用它，不能回退到
-    /// 标签页主连接，否则文件会被传到另一台主机。
+    /// 把一组本地路径入队为上传任务并启动调度；队列状态与调度都归实体。
     pub(crate) fn enqueue_uploads_to(
         &mut self,
         tab_id: TabId,
@@ -62,104 +48,19 @@ impl AppShell {
         target_connection_id: ConnectionId,
         cx: &mut Context<Self>,
     ) -> Result<usize, String> {
-        if paths.is_empty() {
-            return Err(rust_i18n::t!("sftp.upload_file").to_string());
-        }
-        let verify = self.state.settings.sftp.verify_after_transfer;
-        let verify_mode = self.state.settings.sftp.verify_mode;
-        let algorithm = self.state.settings.sftp.checksum_algorithm;
-        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
+        let Some(view) = self.sftp_view(tab_id) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         };
-        let tasks = upload_tasks(
-            paths,
-            remote_dir,
-            panel.queue.resume_enabled,
-            verify,
-            verify_mode,
-            algorithm,
-            target_connection_id,
-        )?;
-        let count = tasks.len();
-        log::info!(
-            "上传任务入队，窗格: {tab_id}，新增 {count} 项，目标目录: {remote_dir}，队列现有 {} 项，校验: {verify}",
-            panel.queue.tasks.len() + count
-        );
-        panel.queue.tasks.extend(tasks);
-        panel.set_status(rust_i18n::t!("sftp.upload_queued", count = count).to_string());
-        drop(panel);
-        cx.notify();
-        self.process_sftp_queue(tab_id, cx);
-        Ok(count)
+        view.update(cx, |view, cx| {
+            view.enqueue_uploads_to(tab_id, paths, remote_dir, target_connection_id, cx)
+        })
     }
 
-    fn set_sftp_panel_error(&mut self, tab_id: TabId, message: String, cx: &mut Context<Self>) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.set_queue_error(message);
-        }
-        cx.notify();
-    }
-
-    /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
+    /// 按并发上限启动待处理任务；调度本体在实体上，外壳只负责转发。
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let filter = TransferFilter::from_text(&self.state.settings.sftp.transfer_filter);
-        let max_concurrent = self
-            .state
-            .settings
-            .sftp
-            .max_concurrent_transfers
-            .clamp(1, 8);
-        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
-            return;
-        };
-
-        let mut commands = Vec::new();
-        while panel.queue.active_transfers.len() < max_concurrent {
-            let Some(index) = panel
-                .queue
-                .tasks
-                .iter()
-                .position(|task| task.status == TransferStatus::Pending)
-            else {
-                break;
-            };
-            let task = panel.queue.tasks[index].clone();
-            let Some(conn_id) = task_connection_id(&task) else {
-                panel.queue.tasks[index].status = TransferStatus::Failed(
-                    rust_i18n::t!("sftp.queue_actions.missing_connection").to_string(),
-                );
-                continue;
-            };
-
-            let Some(op) = sftp_operation_for_task(&task, &filter) else {
-                panel.queue.tasks[index].status = TransferStatus::Failed(
-                    rust_i18n::t!("sftp.queue_actions.unsupported_task").to_string(),
-                );
-                continue;
-            };
-            panel.queue.tasks[index].status = TransferStatus::Transferring;
-            panel.queue.active_transfers.insert(task.id);
-            commands.push((task.id, conn_id, op));
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.process_queue(tab_id, cx));
         }
-
-        if commands.is_empty() {
-            panel.recompute_progress();
-            drop(panel);
-            cx.notify();
-            return;
-        }
-        panel.clear_queue_error();
-        panel.recompute_progress();
-        drop(panel);
-        for (op_id, connection_id, op) in commands {
-            self.state.send_command(SftpCommand::Sftp {
-                tab_id,
-                connection_id,
-                op_id,
-                op,
-            });
-        }
-        cx.notify();
     }
 
     pub(crate) fn sftp_queue_clear_done(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
@@ -312,7 +213,7 @@ impl AppShell {
 /// 任务执行所需的远端连接；方向决定用哪一端，缺失即视为入队缺陷。
 ///
 /// 不再回退标签主连接或第一列：那会把跨列传输静默送到错误主机。
-fn task_connection_id(task: &TransferTask) -> Option<ConnectionId> {
+pub(super) fn task_connection_id(task: &TransferTask) -> Option<ConnectionId> {
     match task.direction {
         TransferDirection::Upload => task.target_connection_id,
         TransferDirection::Download => task.source_connection_id,
@@ -322,7 +223,10 @@ fn task_connection_id(task: &TransferTask) -> Option<ConnectionId> {
     }
 }
 
-fn sftp_operation_for_task(task: &TransferTask, filter: &TransferFilter) -> Option<SftpOperation> {
+pub(super) fn sftp_operation_for_task(
+    task: &TransferTask,
+    filter: &TransferFilter,
+) -> Option<SftpOperation> {
     let resume = task.mode != TransferMode::Overwrite;
     let op = match (task.kind, task.direction) {
         (TransferKind::Directory, TransferDirection::Upload) => SftpOperation::UploadDir {
