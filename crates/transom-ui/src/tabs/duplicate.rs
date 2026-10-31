@@ -1,10 +1,47 @@
 //! 会话删除与副本复制操作。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use crate::sftp::PendingEditorClose;
 use gpui_kit::*;
 use transom_core::{ErrorCode, SecretKey, SecretKind, SessionId, TabId, TerminalCommand};
+
+impl AppState {
+    /// 为副本挑一个目录里未被占用的名字：`X 副本`、`X 副本 #1`、`X 副本 #2`...
+    fn unique_duplicate_name(&self, original: &str) -> String {
+        let base = duplicate_base(original);
+        let first = rust_i18n::t!("common.duplicate_name", name = base).to_string();
+        let taken = |candidate: &str| self.catalog.sessions.iter().any(|s| s.name == candidate);
+        if !taken(&first) {
+            return first;
+        }
+        let limit = self.catalog.sessions.len() + 2;
+        (1..=limit)
+            .map(|index| format!("{first} #{index}"))
+            .find(|candidate| !taken(candidate))
+            .unwrap_or_else(|| format!("{first} #{}", limit + 1))
+    }
+
+    /// 把一个会话名下的钥匙串条目复制到另一个会话 ID。
+    fn copy_secrets(&mut self, from: SessionId, to: SessionId) {
+        for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
+            let source = SecretKey::new(from, kind);
+            let target = SecretKey::new(to, kind);
+            match self.services.secret_store.get(&source) {
+                Ok(Some(secret)) => {
+                    if let Err(error) = self.services.secret_store.set(&target, &secret)
+                        && error.code != ErrorCode::SecretStoreUnavailable
+                    {
+                        self.set_error(localized_error(&error));
+                    }
+                }
+                Ok(None) => {}
+                Err(error) if error.code == ErrorCode::SecretStoreUnavailable => {}
+                Err(error) => self.set_error(localized_error(&error)),
+            }
+        }
+    }
+}
 
 impl AppShell {
     pub(crate) fn delete_session_by_id(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
@@ -91,41 +128,6 @@ impl AppShell {
         self.copy_secrets(session_id, new_id);
         self.persist_catalog();
         cx.notify();
-    }
-
-    /// 为副本挑一个目录里未被占用的名字：`X 副本`、`X 副本 #1`、`X 副本 #2`...
-    fn unique_duplicate_name(&self, original: &str) -> String {
-        let base = duplicate_base(original);
-        let first = rust_i18n::t!("common.duplicate_name", name = base).to_string();
-        let taken = |candidate: &str| self.catalog.sessions.iter().any(|s| s.name == candidate);
-        if !taken(&first) {
-            return first;
-        }
-        let limit = self.catalog.sessions.len() + 2;
-        (1..=limit)
-            .map(|index| format!("{first} #{index}"))
-            .find(|candidate| !taken(candidate))
-            .unwrap_or_else(|| format!("{first} #{}", limit + 1))
-    }
-
-    /// 把一个会话名下的钥匙串条目复制到另一个会话 ID。
-    fn copy_secrets(&mut self, from: SessionId, to: SessionId) {
-        for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
-            let source = SecretKey::new(from, kind);
-            let target = SecretKey::new(to, kind);
-            match self.services.secret_store.get(&source) {
-                Ok(Some(secret)) => {
-                    if let Err(error) = self.services.secret_store.set(&target, &secret)
-                        && error.code != ErrorCode::SecretStoreUnavailable
-                    {
-                        self.set_error(localized_error(&error));
-                    }
-                }
-                Ok(None) => {}
-                Err(error) if error.code == ErrorCode::SecretStoreUnavailable => {}
-                Err(error) => self.set_error(localized_error(&error)),
-            }
-        }
     }
 }
 

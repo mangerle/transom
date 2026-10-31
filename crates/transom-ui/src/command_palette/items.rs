@@ -7,7 +7,7 @@
 //! - 代价与局限：每个新能力需要一个"能被枚举"的入口；面板不做模糊评分，只做
 //!   大小写无关的子串匹配，排序沿用来源顺序。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::keymap;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::ActiveTheme;
@@ -71,59 +71,7 @@ fn hit(needle: &str, label: &str, keywords: &[SharedString]) -> bool {
             .any(|keyword| keyword.to_lowercase().contains(needle))
 }
 
-impl AppShell {
-    /// 按当前模式与查询词构建条目模型。
-    ///
-    /// 普通模式先给会话（含本地终端与直连），再给命令类条目；动作模式只保留
-    /// 可执行条目——会话在动作模式里既不是动作也没有可派发的行为。
-    pub(super) fn build_palette_model(
-        &self,
-        action_mode: bool,
-        term: &str,
-        cx: &App,
-    ) -> PaletteModel {
-        let needle = term.to_lowercase();
-        let mut model = PaletteModel::with_capacity(6);
-
-        if action_mode {
-            // 动作模式把可执行项排在最前：用户敲 `>` 的目的就是执行。
-            model.push(
-                rust_i18n::t!("app.palette_actions").to_string(),
-                action_items(&needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle),
-            );
-        } else {
-            model.push(
-                rust_i18n::t!("app.sessions").to_string(),
-                self.session_items(term, &needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_actions").to_string(),
-                action_items(&needle),
-            );
-        }
-        model.push(
-            rust_i18n::t!("app.palette_settings_pages").to_string(),
-            settings_page_items(&needle),
-        );
-        model.push(
-            rust_i18n::t!("app.palette_ui_themes").to_string(),
-            ui_theme_items(&needle, cx),
-        );
-        model.push(
-            rust_i18n::t!("app.palette_terminal_themes").to_string(),
-            self.terminal_theme_items(&needle),
-        );
-        model
-    }
-
+impl AppState {
     fn session_items(&self, term: &str, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
         let mut items = Vec::with_capacity(self.catalog.sessions.len() + 2);
         let local_label = rust_i18n::t!("app.new_local").to_string();
@@ -256,6 +204,60 @@ impl AppShell {
                 )
             })
             .collect()
+    }
+}
+
+impl AppShell {
+    /// 按当前模式与查询词构建条目模型。
+    ///
+    /// 普通模式先给会话（含本地终端与直连），再给命令类条目；动作模式只保留
+    /// 可执行条目——会话在动作模式里既不是动作也没有可派发的行为。
+    pub(super) fn build_palette_model(
+        &self,
+        action_mode: bool,
+        term: &str,
+        cx: &App,
+    ) -> PaletteModel {
+        let needle = term.to_lowercase();
+        let mut model = PaletteModel::with_capacity(6);
+
+        if action_mode {
+            // 动作模式把可执行项排在最前：用户敲 `>` 的目的就是执行。
+            model.push(
+                rust_i18n::t!("app.palette_actions").to_string(),
+                action_items(&needle),
+            );
+            model.push(
+                rust_i18n::t!("app.palette_snippets").to_string(),
+                self.snippet_items(&needle),
+            );
+        } else {
+            model.push(
+                rust_i18n::t!("app.sessions").to_string(),
+                self.session_items(term, &needle),
+            );
+            model.push(
+                rust_i18n::t!("app.palette_snippets").to_string(),
+                self.snippet_items(&needle),
+            );
+            model.push(
+                rust_i18n::t!("app.palette_actions").to_string(),
+                action_items(&needle),
+            );
+        }
+        model.push(
+            rust_i18n::t!("app.palette_settings_pages").to_string(),
+            settings_page_items(&needle),
+        );
+        model.push(
+            rust_i18n::t!("app.palette_ui_themes").to_string(),
+            ui_theme_items(&needle, cx),
+        );
+        model.push(
+            rust_i18n::t!("app.palette_terminal_themes").to_string(),
+            self.terminal_theme_items(&needle),
+        );
+        model
     }
 }
 

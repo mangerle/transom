@@ -1,6 +1,6 @@
 //! 会话表单操作与钥匙串凭据读写。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use crate::session_form::SessionForm;
 use gpui_kit::component::input::InputEvent;
@@ -10,8 +10,7 @@ use transom_core::{
 };
 use zeroize::Zeroizing;
 
-impl AppShell {
-    /// 目录里的凭据模板快照，供会话表单渲染可选项。
+impl AppState {
     pub(crate) fn identity_options(&self) -> Vec<crate::session_form::IdentityOption> {
         self.catalog
             .identities
@@ -98,7 +97,10 @@ impl AppShell {
         paths.dedup();
         paths
     }
+}
 
+impl AppShell {
+    /// 目录里的凭据模板快照，供会话表单渲染可选项。
     /// 在会话表单中选择指定分组，并自动应用该分组及其祖先的默认继承属性。
     pub(crate) fn select_form_folder(
         &mut self,

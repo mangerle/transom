@@ -16,7 +16,7 @@ pub(crate) struct SidebarButtonProps<F> {
     pub(crate) on_click: F,
 }
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -30,13 +30,7 @@ use transom_core::SessionId;
 pub(crate) use tree::SidebarRow;
 use tree::{SidebarDrag, SidebarTarget, build_rows};
 
-impl AppShell {
-    /// 侧栏行快照：目录版本与搜索词都没变时复用上次构建结果。
-    ///
-    /// 设计原理（Why）：render 在流量/统计事件触发时整壳重建，行构建是
-    /// O(会话数) 的分配与遍历；缓存把"数据没变"的重绘成本降到一次 Rc
-    /// clone。失效键用 persist_catalog 推进的目录版本——目录的每次修改
-    /// 都以持久化为终点（见 AppShell 字段注释）。
+impl AppState {
     pub(crate) fn sidebar_rows(&mut self, query: &str) -> Rc<Vec<SidebarRow>> {
         if let Some(cache) = &self.sidebar.rows_cache
             && cache.revision == self.catalog_revision
@@ -58,7 +52,15 @@ impl AppShell {
             .active_tab
             .and_then(|tab_id| self.workspace.tab(tab_id).map(|tab| tab.session_id))
     }
+}
 
+impl AppShell {
+    /// 侧栏行快照：目录版本与搜索词都没变时复用上次构建结果。
+    ///
+    /// 设计原理（Why）：render 在流量/统计事件触发时整壳重建，行构建是
+    /// O(会话数) 的分配与遍历；缓存把"数据没变"的重绘成本降到一次 Rc
+    /// clone。失效键用 persist_catalog 推进的目录版本——目录的每次修改
+    /// 都以持久化为终点（见 AppShell 字段注释）。
     pub(crate) fn render_sidebar(
         &mut self,
         _window: &mut Window,
