@@ -254,138 +254,16 @@ const TEXT_FILE_NAMES: &[&str] = &[
     "vagrantfile",
 ];
 
-/// 从文件头部字节生成预览行；返回实际是否还有未展示内容。
-pub(crate) fn text_preview_lines(bytes: &[u8], truncated: bool) -> (Vec<String>, bool) {
-    let text = String::from_utf8_lossy(bytes);
-    let mut lines = Vec::with_capacity(PREVIEW_TEXT_LINES);
-    let mut more = truncated;
-    for line in text.lines() {
-        if lines.len() >= PREVIEW_TEXT_LINES {
-            more = true;
-            break;
-        }
-        lines.push(truncate_preview_line(line));
-    }
-    (lines, more)
-}
+mod text;
+mod thumbnail;
 
-fn truncate_preview_line(line: &str) -> String {
-    let line = line.trim_end_matches('\r');
-    let mut characters = line.chars();
-    let mut out = String::with_capacity(line.len().min(PREVIEW_LINE_MAX_CHARS * 4));
-    for _ in 0..PREVIEW_LINE_MAX_CHARS {
-        match characters.next() {
-            Some('\t') => out.push_str("    "),
-            Some(character) if character.is_control() => out.push(' '),
-            Some(character) => out.push(character),
-            None => return out,
-        }
-    }
-    if characters.next().is_some() {
-        out.push('…');
-    }
-    out
-}
-
-/// 读取本地文本文件的头部；多读 1 字节判断是否发生截断。
-pub(super) fn read_local_text_head(
-    path: &Path,
-    max_bytes: u64,
-) -> std::io::Result<(Vec<u8>, bool)> {
-    use std::io::Read;
-
-    let file = std::fs::File::open(path)?;
-    let capacity = usize::try_from(max_bytes).unwrap_or(0);
-    let mut buffer = Vec::with_capacity(capacity);
-    file.take(max_bytes.saturating_add(1))
-        .read_to_end(&mut buffer)?;
-    let truncated = u64::try_from(buffer.len()).unwrap_or(u64::MAX) > max_bytes;
-    if truncated {
-        buffer.truncate(capacity);
-    }
-    Ok((buffer, truncated))
-}
-
-/// 解码图片并生成适合卡片展示的缩略图。
-///
-/// 设计原理（Why）：
-/// - 实现初衷：SFTP 没有缩略图接口，远端只能传回完整文件；若把原图直接交给
-///   渲染器解码，一张高分辨率照片可能解出数百 MB 的像素缓冲；
-/// - 核心优势：先在解码前读取图片头校验像素数，再在后台线程解码并缩放到
-///   卡片所需的 2 倍尺寸，UI 线程只接收这张小图；EXIF 方向在缩放前应用，
-///   竖拍照片不会横着显示；
-/// - 代价与局限：解码阶段仍会短暂持有原图像素缓冲（峰值由像素上限约束）；
-///   动图只取首帧，缩略图不播放动画。
-pub(super) fn decode_preview_thumbnail(bytes: &[u8]) -> Result<Arc<RenderImage>, String> {
-    decode_thumbnail(
-        bytes,
-        PREVIEW_IMAGE_MAX_PIXELS,
-        PREVIEW_THUMBNAIL_MAX_WIDTH,
-        PREVIEW_THUMBNAIL_MAX_HEIGHT,
-    )
-}
-
-fn decode_thumbnail(
-    bytes: &[u8],
-    max_pixels: u64,
-    max_width: u32,
-    max_height: u32,
-) -> Result<Arc<RenderImage>, String> {
-    use image::ImageDecoder as _;
-
-    let dimensions = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .map_err(|error| {
-            rust_i18n::t!("sftp.preview.unrecognized_format", error = error).to_string()
-        })?
-        .into_dimensions()
-        .map_err(|error| {
-            rust_i18n::t!("sftp.preview.read_dimensions_failed", error = error).to_string()
-        })?;
-    let pixels = u64::from(dimensions.0).saturating_mul(u64::from(dimensions.1));
-    if pixels > max_pixels {
-        return Err(rust_i18n::t!(
-            "sftp.preview.too_many_pixels",
-            width = dimensions.0,
-            height = dimensions.1,
-            pixels = pixels,
-            max = max_pixels
-        )
-        .to_string());
-    }
-
-    let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .map_err(|error| {
-            rust_i18n::t!("sftp.preview.unrecognized_format", error = error).to_string()
-        })?;
-    let mut decoder = reader
-        .into_decoder()
-        .map_err(|error| rust_i18n::t!("sftp.preview.decoder_failed", error = error).to_string())?;
-    // 方向信息缺失时按不旋转处理，宁可保持原始方向也不要让预览失败。
-    let orientation = decoder
-        .orientation()
-        .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut image = image::DynamicImage::from_decoder(decoder)
-        .map_err(|error| rust_i18n::t!("sftp.preview.decode_failed", error = error).to_string())?;
-    image.apply_orientation(orientation);
-
-    let image = if image.width() <= max_width && image.height() <= max_height {
-        image
-    } else {
-        image.thumbnail(max_width, max_height)
-    };
-    let mut rgba = image.into_rgba8();
-    // gpui 的 RenderImage 约定 BGRA；与内置解码器保持一致的通道顺序。
-    for pixel in rgba.as_chunks_mut::<4>().0 {
-        pixel.swap(0, 2);
-    }
-    Ok(Arc::new(RenderImage::new([image::Frame::new(rgba)])))
-}
+pub(crate) use text::{read_local_text_head, text_preview_lines};
+pub(crate) use thumbnail::decode_preview_thumbnail;
 
 #[cfg(test)]
 mod tests {
-    use super::{PreviewKind, decode_thumbnail, preview_kind, text_preview_lines};
+    use super::thumbnail::decode_thumbnail;
+    use super::{PreviewKind, preview_kind, text_preview_lines};
 
     fn encode_png(width: u32, height: u32, color: [u8; 4]) -> Vec<u8> {
         let image = image::RgbaImage::from_pixel(width, height, image::Rgba(color));
