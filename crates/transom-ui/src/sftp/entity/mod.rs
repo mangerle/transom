@@ -40,7 +40,7 @@ pub(crate) struct SftpPanelView {
     /// 面板状态的唯一事实源。
     pub(crate) state: SftpPanelState,
     /// 所属窗格 id；命令投递与事件路由都按它寻址。
-    tab_id: TabId,
+    pub(super) tab_id: TabId,
     /// 回到外壳的弱引用；创建后立即绑定。
     pub(super) app: Option<WeakEntity<AppShell>>,
 }

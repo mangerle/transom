@@ -30,4 +30,5 @@ pub(crate) use code_open::RemoteCodeLocation;
 pub(crate) use diff::EditorDiffWriteSync;
 pub(crate) use entity::{EditorDiffSource, EditorPanels};
 pub(crate) use list::render_editor_list_popover;
+pub(crate) use open::RemoteEditorOpen;
 pub(crate) use panel::{caret_of, editor_language_token};

@@ -6,6 +6,15 @@
 use super::*;
 use crate::sftp::format_size;
 
+/// 已通过目录闸门的远端编辑面板打开参数。
+pub(crate) struct RemoteEditorOpen {
+    pub(crate) tab_id: TabId,
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) remote_path: String,
+    pub(crate) file_name: String,
+    pub(crate) permissions: Option<u32>,
+}
+
 impl AppShell {
     pub(crate) fn sftp_edit_remote_file_on(
         &mut self,
@@ -82,6 +91,35 @@ impl AppShell {
             } => (connection_id, name, permissions),
         };
 
+        self.open_remote_editor_panel(
+            RemoteEditorOpen {
+                tab_id,
+                connection_id,
+                remote_path,
+                file_name,
+                permissions,
+            },
+            window,
+            cx,
+        );
+    }
+
+    /// 已通过目录闸门的远端文件：抬高已存在的编辑器或新建读取面板。
+    ///
+    /// 不带实体读取：SFTP 实体在回调里已算好文件信息，回交外壳时只传结果。
+    pub(crate) fn open_remote_editor_panel(
+        &mut self,
+        params: RemoteEditorOpen,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let RemoteEditorOpen {
+            tab_id,
+            connection_id,
+            remote_path,
+            file_name,
+            permissions,
+        } = params;
         // 同一文件已在编辑中就不再重复取文件：抬到最前并聚焦编辑器。
         if let Some(editor) = self.state.editors.update(cx, |panels, _| {
             panels.raise_existing(tab_id, connection_id, &remote_path)

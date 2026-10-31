@@ -30,6 +30,8 @@ use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, Tab
 
 mod panel;
 
+pub(crate) use self::panel::RemoteEditorOpen;
+
 /// 编辑入口的准入判定结果。
 ///
 /// 把"能不能开"与"怎么报错"分开：判定只读一次目录项，报错统一落到该栏错误位，

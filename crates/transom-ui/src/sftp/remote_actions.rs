@@ -11,9 +11,10 @@
 //!
 //! 导航与过滤动作在 `remote_nav`，文件操作实现分散在各自的业务文件中。
 
+use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
 use crate::app::AppShell;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
-use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState, parent_remote};
+use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState, format_size, parent_remote};
 use gpui_kit::*;
 use transom_core::{ConnectionId, SftpCommand, SftpOperation, TabId, TransferId};
 
@@ -25,6 +26,264 @@ pub(crate) struct RemotePaneScope<'a> {
     pub(crate) pane: &'a SftpRemotePaneState,
     pub(crate) connection_id: ConnectionId,
     pub(crate) side_connection: Option<ConnectionId>,
+}
+
+impl SftpPanelView {
+    /// 向指定连接下发 SFTP 非传输操作。
+    pub(crate) fn send_op_for_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        op: SftpOperation,
+        cx: &mut Context<Self>,
+    ) {
+        let app = self.app.clone();
+        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
+            shell
+                .state
+                .workspace
+                .tab(self.tab_id)
+                .and_then(|tab| tab.connection_id)
+        })
+        .flatten() else {
+            return;
+        };
+        let Some(target) = self
+            .state
+            .remote_pane_of_connection(connection_id, Some(main_connection))
+        else {
+            return;
+        };
+        self.state.clear_status();
+        if let Some(pane) = self.state.remote_pane_mut(target) {
+            pane.error = None;
+        }
+        let tab_id = self.tab_id;
+        with_shell_parts(&app, cx, |shell, _| {
+            shell.state.send_command(SftpCommand::Sftp {
+                tab_id,
+                connection_id,
+                op_id: TransferId::new(),
+                op,
+            });
+        });
+        cx.notify();
+    }
+
+    /// 把目标远端列设为活动栏并重绘。
+    pub(crate) fn activate_pane(&mut self, target: SftpRemotePaneRef, cx: &mut Context<Self>) {
+        self.state.active_pane = target.into();
+        cx.notify();
+    }
+
+    /// 右键菜单定位条目：已多选时只改主项，否则清空旧选择只选当前项。
+    pub(crate) fn select_entry_for_menu(
+        &mut self,
+        target: SftpRemotePaneRef,
+        path: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(pane) = self.state.remote_pane_mut(target) {
+            if pane.selection.contains(&path) {
+                pane.set_primary(path);
+            } else {
+                pane.select(path);
+            }
+            self.state.active_pane = target.into();
+        }
+        cx.notify();
+    }
+
+    /// 在目标列当前目录直接解压（不弹命名框）。
+    pub(crate) fn extract_here(
+        &mut self,
+        target: SftpRemotePaneRef,
+        archive_path: String,
+        cx: &mut Context<Self>,
+    ) {
+        let app = self.app.clone();
+        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
+            shell
+                .state
+                .workspace
+                .tab(self.tab_id)
+                .and_then(|tab| tab.connection_id)
+        })
+        .flatten() else {
+            return;
+        };
+        let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
+        else {
+            return;
+        };
+        let dest_dir = parent_remote(&archive_path);
+        self.send_op_for_connection(
+            connection_id,
+            SftpOperation::Extract {
+                archive_path,
+                dest_dir,
+            },
+            cx,
+        );
+    }
+
+    /// 目标列的编辑器入口。
+    pub(crate) fn edit_remote_file(
+        &mut self,
+        target: SftpRemotePaneRef,
+        path: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let app = self.app.clone();
+        let Some((main_connection, max_bytes)) = read_shell_parts(&app, cx, |shell| {
+            (
+                shell
+                    .state
+                    .workspace
+                    .tab(self.tab_id)
+                    .and_then(|tab| tab.connection_id),
+                shell.state.settings.sftp.edit_max_bytes,
+            )
+        }) else {
+            return;
+        };
+        let Some(connection_id) = self.state.remote_connection(target, main_connection) else {
+            return;
+        };
+        let Some(entry) = self.state.remote_pane(target).and_then(|pane| {
+            pane.entries
+                .iter()
+                .find(|entry| entry.path == path)
+                .cloned()
+        }) else {
+            if let Some(pane) = self.state.remote_pane_mut(target) {
+                pane.error = Some(rust_i18n::t!("sftp.select_file").to_string());
+            }
+            cx.notify();
+            return;
+        };
+        if entry.is_dir {
+            return;
+        }
+        if entry.size > max_bytes {
+            if let Some(pane) = self.state.remote_pane_mut(target) {
+                pane.error = Some(
+                    rust_i18n::t!(
+                        "editor.error_too_large",
+                        name = entry.name,
+                        size = format_size(entry.size),
+                        max = format_size(max_bytes)
+                    )
+                    .to_string(),
+                );
+            }
+            cx.notify();
+            return;
+        }
+        let tab_id = self.tab_id;
+        with_shell_parts(&app, cx, |shell, cx| {
+            shell.open_remote_editor_panel(
+                crate::editor::RemoteEditorOpen {
+                    tab_id,
+                    connection_id,
+                    remote_path: path,
+                    file_name: entry.name,
+                    permissions: entry.permissions,
+                },
+                window,
+                cx,
+            );
+        });
+    }
+
+    /// 目标列的上传入口：把本地列选中项上传到该列当前目录。
+    pub(crate) fn upload_local_selection(
+        &mut self,
+        target: SftpRemotePaneRef,
+        cx: &mut Context<Self>,
+    ) {
+        let app = self.app.clone();
+        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
+            shell
+                .state
+                .workspace
+                .tab(self.tab_id)
+                .and_then(|tab| tab.connection_id)
+        })
+        .flatten() else {
+            return;
+        };
+        let paths = self.state.selected_local_paths();
+        let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
+        else {
+            return;
+        };
+        let Some(target_dir) = self.state.remote_pane(target).map(|pane| pane.path.clone()) else {
+            return;
+        };
+        if paths.is_empty() {
+            self.set_pane_error(target, rust_i18n::t!("sftp.select_file").to_string(), cx);
+            return;
+        }
+        if let Err(message) =
+            self.enqueue_uploads_to(self.tab_id, &paths, &target_dir, connection_id, cx)
+        {
+            self.set_pane_error(target, message, cx);
+        }
+    }
+
+    /// 目标列的"复制到主远端"入口（并列列专属菜单项）。
+    pub(crate) fn copy_entry_to_main(
+        &mut self,
+        source: SftpRemotePaneRef,
+        path: String,
+        is_dir: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let app = self.app.clone();
+        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
+            shell
+                .state
+                .workspace
+                .tab(self.tab_id)
+                .and_then(|tab| tab.connection_id)
+        })
+        .flatten() else {
+            return;
+        };
+        let Some(source_connection_id) =
+            self.state.remote_connection(source, Some(main_connection))
+        else {
+            return;
+        };
+        let target_dir = self.state.remote.path.clone();
+        let fname = path.rsplit('/').next().unwrap_or(&path);
+        let target_path = format!("{}/{}", target_dir.trim_end_matches('/'), fname);
+        self.enqueue_remote_transfer(
+            self.tab_id,
+            SftpRemoteCopyParams {
+                source_connection_id,
+                source_path: path,
+                target_connection_id: main_connection,
+                target_path,
+                is_dir,
+            },
+            cx,
+        );
+    }
+
+    /// 把错误落到目标列的内容区。
+    pub(crate) fn set_pane_error(
+        &mut self,
+        target: SftpRemotePaneRef,
+        message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(pane) = self.state.remote_pane_mut(target) {
+            pane.error = Some(message);
+        }
+        cx.notify();
+    }
 }
 
 impl AppShell {
@@ -58,10 +317,7 @@ impl AppShell {
         self.remote_pane_scope(tab_id, target, cx)
             .map(|scope| scope.connection_id)
     }
-    /// 向指定连接下发 SFTP 非传输操作。
-    ///
-    /// 主远端与并列远端共用同一条投递路径：连接先反解为目标列，面板消息与
-    /// 目标列错误都在这里统一清理，完成事件再按连接刷新对应列。
+
     pub(crate) fn send_sftp_op_for_connection(
         &mut self,
         tab_id: TabId,
@@ -69,42 +325,24 @@ impl AppShell {
         op: SftpOperation,
         cx: &mut Context<Self>,
     ) {
-        let target = self.state.workspace.tab(tab_id).and_then(|tab| {
-            self.sftp_state(tab_id, cx)
-                .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
-        });
-        let Some(target) = target else {
-            return;
-        };
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.clear_status();
-            if let Some(pane) = panel.remote_pane_mut(target) {
-                pane.error = None;
-            }
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.send_op_for_connection(connection_id, op, cx)
+            });
         }
-        self.state.send_command(SftpCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id: TransferId::new(),
-            op,
-        });
-        cx.notify();
     }
 
-    /// 把目标远端列设为活动栏并重绘。
     pub(crate) fn activate_remote_pane(
         &mut self,
         tab_id: TabId,
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.active_pane = target.into();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.activate_pane(target, cx));
         }
-        cx.notify();
     }
 
-    /// 右键菜单定位条目：已多选时只改主项，否则清空旧选择只选当前项。
     pub(crate) fn select_remote_entry_for_menu(
         &mut self,
         tab_id: TabId,
@@ -112,20 +350,11 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && let Some(pane) = panel.remote_pane_mut(target)
-        {
-            if pane.selection.contains(&path) {
-                pane.set_primary(path);
-            } else {
-                pane.select(path);
-            }
-            panel.active_pane = target.into();
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.select_entry_for_menu(target, path, cx));
         }
-        cx.notify();
     }
 
-    /// 在目标列当前目录直接解压（不弹命名框）。
     pub(crate) fn sftp_extract_here_pane(
         &mut self,
         tab_id: TabId,
@@ -133,22 +362,11 @@ impl AppShell {
         archive_path: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(connection_id) = self.remote_pane_connection(tab_id, target, cx) else {
-            return;
-        };
-        let dest_dir = parent_remote(&archive_path);
-        self.send_sftp_op_for_connection(
-            tab_id,
-            connection_id,
-            SftpOperation::Extract {
-                archive_path,
-                dest_dir,
-            },
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.extract_here(target, archive_path, cx));
+        }
     }
 
-    /// 目标列的编辑器入口。
     pub(crate) fn sftp_edit_remote_file_pane(
         &mut self,
         tab_id: TabId,
@@ -157,50 +375,24 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(connection_id) = self.remote_pane_connection(tab_id, target, cx) else {
-            return;
-        };
-        self.sftp_edit_remote_file_on(tab_id, connection_id, path, window, cx);
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.edit_remote_file(target, path, window, cx)
+            });
+        }
     }
 
-    /// 目标列的上传入口：把本地列选中项上传到该列当前目录。
     pub(crate) fn sftp_upload_local_selection_pane(
         &mut self,
         tab_id: TabId,
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let Some((paths, target_dir, connection_id)) =
-            self.state.workspace.tab(tab_id).and_then(|tab| {
-                let panel = self.sftp_state(tab_id, cx)?;
-                let pane = panel.remote_pane(target)?;
-                let connection_id = panel.remote_connection(target, tab.connection_id)?;
-                Some((
-                    panel.selected_local_paths(),
-                    pane.path.clone(),
-                    connection_id,
-                ))
-            })
-        else {
-            return;
-        };
-        if paths.is_empty() {
-            self.set_sftp_pane_error(
-                tab_id,
-                target,
-                rust_i18n::t!("sftp.select_file").to_string(),
-                cx,
-            );
-            return;
-        }
-        if let Err(message) =
-            self.enqueue_uploads_to(tab_id, &paths, &target_dir, connection_id, cx)
-        {
-            self.set_sftp_pane_error(tab_id, target, message, cx);
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.upload_local_selection(target, cx));
         }
     }
 
-    /// 目标列的"复制到主远端"入口（并列列专属菜单项）。
     pub(crate) fn sftp_copy_remote_entry_to_main(
         &mut self,
         tab_id: TabId,
@@ -209,34 +401,13 @@ impl AppShell {
         is_dir: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(source_connection_id) = self.remote_pane_connection(tab_id, source, cx) else {
-            return;
-        };
-        let Some((target_connection_id, target_dir)) =
-            self.state.workspace.tab(tab_id).and_then(|tab| {
-                let connection_id = tab.connection_id?;
-                let target_dir = self.sftp_state(tab_id, cx)?.remote.path.clone();
-                Some((connection_id, target_dir))
-            })
-        else {
-            return;
-        };
-        let fname = path.rsplit('/').next().unwrap_or(&path);
-        let target_path = format!("{}/{}", target_dir.trim_end_matches('/'), fname);
-        self.sftp_enqueue_remote_transfer(
-            tab_id,
-            SftpRemoteCopyParams {
-                source_connection_id,
-                source_path: path,
-                target_connection_id,
-                target_path,
-                is_dir,
-            },
-            cx,
-        );
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.copy_entry_to_main(source, path, is_dir, cx)
+            });
+        }
     }
 
-    /// 把错误落到目标列的内容区。
     pub(crate) fn set_sftp_pane_error(
         &mut self,
         tab_id: TabId,
@@ -244,11 +415,8 @@ impl AppShell {
         message: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && let Some(pane) = panel.remote_pane_mut(target)
-        {
-            pane.error = Some(message);
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.set_pane_error(target, message, cx));
         }
-        cx.notify();
     }
 }
