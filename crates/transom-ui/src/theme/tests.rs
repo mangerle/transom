@@ -704,3 +704,27 @@ fn menu_items_use_widget_constructor() {
         offenders.join("\n")
     );
 }
+
+/// 外壳只能持有状态容器一个字段：`AppShell` 再平铺回字段就意味着功能模块又能
+/// 通过兄弟路径直接读写全局状态，封装会重新退化。
+#[test]
+fn app_shell_keeps_single_state_field() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app/mod.rs");
+    let content = std::fs::read_to_string(&path).expect("读取 app/mod.rs 失败");
+    let start = content
+        .find("pub(crate) struct AppShell {")
+        .expect("未找到 AppShell 定义");
+    let end = content[start..].find("\n}\n").expect("AppShell 定义未闭合") + start;
+    let body = &content[start..end];
+    let fields: Vec<&str> = body
+        .lines()
+        .skip(1)
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//") && line.ends_with(','))
+        .collect();
+    assert_eq!(
+        fields,
+        vec!["state: AppState,"],
+        "AppShell 只允许持有 state 一个字段，新增状态请放进 AppState 或 feature 结构体"
+    );
+}
