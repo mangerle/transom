@@ -11,7 +11,7 @@ use transom_core::{SftpCommand, TransferFilter, TransferId};
 impl SftpPanelView {
     /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
     pub(crate) fn process_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let SftpPanelView { state, app } = self;
+        let SftpPanelView { state, app, .. } = self;
         let Some((filter_text, max_concurrent)) = read_shell_parts(app, cx, |shell| {
             (
                 shell.state.settings.sftp.transfer_filter.clone(),

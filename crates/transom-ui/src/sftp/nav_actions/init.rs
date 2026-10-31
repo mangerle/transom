@@ -215,7 +215,7 @@ impl AppShell {
         };
         let app = cx.entity().downgrade();
         let view = cx.new(|_| {
-            let mut view = SftpPanelView::new(state);
+            let mut view = SftpPanelView::new(state, tab_id);
             view.attach(app);
             view
         });

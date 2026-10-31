@@ -12,7 +12,6 @@ use super::{LocalFileEntry, SftpRemotePaneRef};
 use crate::app::AppShell;
 use crate::app::AppState;
 use crate::divider::{DividerEdge, DividerStyled};
-use crate::keymap;
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
@@ -98,7 +97,7 @@ impl AppShell {
         let is_local_only = panel.local.only;
         let sync_navigation = panel.sync_navigation;
         let queue_height = panel.queue.height;
-        let focus_handle = panel.focus_handle.clone();
+        let _focus_handle = panel.focus_handle.clone();
         let local_scroll_handle = panel.local.scroll_handle.clone();
         let local_filter_input = panel.local.filter_input.clone();
         let local_filter_query = local_filter_input
@@ -370,31 +369,10 @@ impl AppShell {
         );
         let columns_container = self.render_sftp_columns(tab_id, columns, panel, cx);
 
+        // 外层容器与键盘/鼠标监听归实体（见 `impl Render for SftpPanelView`）；
+        // 这里只构建内容，避免同一元素上重复挂两套监听。
         let mut panel_element = v_flex()
-            .id(ElementId::Name("sftp-panel-container".into()))
-            .track_focus(&focus_handle)
-            .key_context(keymap::SFTP_CONTEXT)
-            .on_action(cx.listener(Self::on_focus_sftp_filter_pane))
-            .on_action(cx.listener(Self::on_toggle_sftp_hidden_pane))
-            .on_action(cx.listener(Self::on_delete_sftp_selection))
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
-                if event.keystroke.modifiers.control || event.keystroke.modifiers.platform {
-                    if event.keystroke.key == "c" {
-                        this.sftp_copy_selection(tab_id, cx);
-                    } else if event.keystroke.key == "v" {
-                        this.sftp_paste_clipboard(tab_id, window, cx);
-                    }
-                }
-            }))
-            .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
-                this.sftp_update_resize_queue(tab_id, event.position.y.into(), cx);
-            }))
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(move |this, _, _, cx| {
-                    this.sftp_stop_resize_queue(tab_id, cx);
-                }),
-            )
+            .id(ElementId::Name("sftp-panel-content".into()))
             .size_full()
             .overflow_hidden()
             .bg(p.sidebar)

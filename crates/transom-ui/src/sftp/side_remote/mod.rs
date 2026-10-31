@@ -16,8 +16,8 @@ mod clipboard;
 mod types;
 
 pub(crate) use self::types::{
-    SftpActivePane, SftpClipboardData, SftpDragItem, SftpDragPreview, SftpRemoteCopyParams,
-    active_pane_after_removing,
+    SftpActivePane, SftpClipboardData, SftpClipboardEntry, SftpClipboardSource, SftpDragItem,
+    SftpDragPreview, SftpRemoteCopyParams, active_pane_after_removing,
 };
 
 use crate::app::AppShell;

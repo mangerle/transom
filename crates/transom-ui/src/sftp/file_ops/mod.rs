@@ -7,8 +7,8 @@ mod validate;
 use crate::app::AppShell;
 use crate::keymap;
 use crate::sftp::{
-    SftpActivePane, SftpConfirmModalState, SftpInputModalParams, SftpInputTarget,
-    SftpPendingDelete, SftpRemotePaneRef,
+    SftpConfirmModalState, SftpInputModalParams, SftpInputTarget, SftpPendingDelete,
+    SftpRemotePaneRef,
 };
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpOperation, TabId};
@@ -124,17 +124,8 @@ impl AppShell {
     /// 不会出现删错栏位的失配。删除不可恢复，确认步骤由
     /// `sftp_delete_selection` 与 `sftp_local_delete_selection` 统一弹出。
     pub(crate) fn sftp_delete_selected(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(active_pane) = self.sftp_state(tab_id, cx).map(|panel| panel.active_pane) else {
-            return;
-        };
-        match active_pane {
-            SftpActivePane::Remote => {
-                self.sftp_delete_selection_for(tab_id, SftpRemotePaneRef::Main, cx)
-            }
-            SftpActivePane::Local => self.sftp_local_delete_selection(tab_id, cx),
-            SftpActivePane::SideRemote(connection_id) => {
-                self.sftp_delete_selection_for(tab_id, SftpRemotePaneRef::Side(connection_id), cx)
-            }
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.delete_selected(cx));
         }
     }
 

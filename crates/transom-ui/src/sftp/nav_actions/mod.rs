@@ -175,21 +175,4 @@ impl AppShell {
             view.update(cx, |view, cx| view.start_resize_queue(start_y, cx));
         }
     }
-
-    pub(crate) fn sftp_update_resize_queue(
-        &mut self,
-        tab_id: TabId,
-        current_y: f32,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.update_resize_queue(current_y, cx));
-        }
-    }
-
-    pub(crate) fn sftp_stop_resize_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.stop_resize_queue(cx));
-        }
-    }
 }

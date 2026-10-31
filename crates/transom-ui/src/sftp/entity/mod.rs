@@ -21,12 +21,16 @@
 //! 再 `update`，比直接改字段多一次调度；实体构造时外壳已存在，因此
 //! `attach` 在创建后立即调用，不存在未绑定窗口期。
 
+mod clipboard;
+mod delete;
 mod queue;
 mod status;
 
 use super::SftpPanelState;
 use crate::app::AppShell;
+use crate::keymap;
 use crate::palette::Palette;
+use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId};
 
@@ -34,14 +38,20 @@ use transom_core::{ConnectionId, TabId};
 pub(crate) struct SftpPanelView {
     /// 面板状态的唯一事实源。
     pub(crate) state: SftpPanelState,
+    /// 所属窗格 id；命令投递与事件路由都按它寻址。
+    tab_id: TabId,
     /// 回到外壳的弱引用；创建后立即绑定。
     pub(super) app: Option<WeakEntity<AppShell>>,
 }
 
 impl SftpPanelView {
     /// 用已构造好的面板状态创建实体；`attach` 负责绑定外壳。
-    pub(crate) fn new(state: SftpPanelState) -> Self {
-        Self { state, app: None }
+    pub(crate) fn new(state: SftpPanelState, tab_id: TabId) -> Self {
+        Self {
+            state,
+            tab_id,
+            app: None,
+        }
     }
 
     /// 绑定外壳弱引用；必须在实体创建后立即调用一次。
@@ -102,14 +112,28 @@ impl std::ops::DerefMut for SftpPanelView {
 /// 不允许再按句柄回读本实体；状态与交互仍只有一份。
 impl Render for SftpPanelView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let SftpPanelView { state, app } = self;
-        let element = app.as_ref().and_then(|app| app.upgrade()).map(|shell| {
-            shell.update(cx, |shell, shell_cx| {
-                let p = Palette::from(&*shell_cx);
-                shell.render_sftp_panel_with_state(state, window, shell_cx, &p)
-            })
-        });
-        element.unwrap_or_else(|| div().into_any_element())
+        let p = Palette::from(&*cx);
+        let SftpPanelView { state, app, .. } = self;
+        let content = with_shell_parts(app, cx, |shell, shell_cx| {
+            shell.render_sftp_panel_with_state(state, window, shell_cx, &p)
+        })
+        .unwrap_or_else(|| div().into_any_element());
+
+        // 面板级键盘与鼠标监听挂在实体上：回调执行时实体由 GPUI 正常租借，
+        // 状态变更直接落在本实体，跨域动作再经 with_shell_parts 回交外壳。
+        v_flex()
+            .id(ElementId::Name("sftp-panel-container".into()))
+            .track_focus(&self.state.focus_handle)
+            .key_context(keymap::SFTP_CONTEXT)
+            .on_action(cx.listener(Self::on_focus_filter))
+            .on_action(cx.listener(Self::on_toggle_hidden))
+            .on_action(cx.listener(Self::on_delete_selection))
+            .on_key_down(cx.listener(Self::on_panel_key_down))
+            .on_mouse_move(cx.listener(Self::on_panel_mouse_move))
+            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_panel_mouse_up))
+            .size_full()
+            .overflow_hidden()
+            .child(content)
     }
 }
 
@@ -206,5 +230,68 @@ impl AppShell {
             return false;
         };
         pane.sftp_view.take().is_some()
+    }
+}
+
+impl SftpPanelView {
+    fn on_focus_filter(
+        &mut self,
+        _: &keymap::FocusSftpFilter,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.on_focus_filter_action(window, cx);
+    }
+
+    fn on_toggle_hidden(
+        &mut self,
+        _: &keymap::ToggleSftpHidden,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.on_toggle_hidden_action(cx);
+    }
+
+    fn on_delete_selection(
+        &mut self,
+        _: &keymap::DeleteSftpSelection,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.delete_selected(cx);
+    }
+
+    /// 面板级快捷键：Ctrl/Cmd+C 复制选中项，Ctrl/Cmd+V 粘贴。
+    fn on_panel_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if event.keystroke.modifiers.control || event.keystroke.modifiers.platform {
+            if event.keystroke.key == "c" {
+                self.copy_selection(cx);
+            } else if event.keystroke.key == "v" {
+                self.paste_clipboard(cx);
+            }
+        }
+    }
+
+    fn on_panel_mouse_move(
+        &mut self,
+        event: &MouseMoveEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.update_resize_queue(event.position.y.into(), cx);
+    }
+
+    fn on_panel_mouse_up(
+        &mut self,
+        _: &MouseUpEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.stop_resize_queue(cx);
     }
 }
