@@ -180,7 +180,7 @@ impl AppShell {
                         .justify_between()
                         .items_center()
                         .child(div().text_sm().child(rule.name.clone()))
-                        .child(div().text_xs().text_color(status_color).child(status_text)),
+                        .child(crate::widgets::status_badge(status_text, status_color, p)),
                 )
                 .child(
                     div()

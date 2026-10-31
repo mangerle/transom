@@ -6,7 +6,6 @@ use crate::editor::render_editor_list_popover;
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::separator::Separator;
 use gpui_kit::component::{Selectable, Sizable};
@@ -188,9 +187,7 @@ impl AppShell {
 
         // 主远端与并列列使用同一组按钮：列宽度不足时由横向裁切吸收，
         // 不再为某类列偷偷删减入口。
-        h_flex()
-            .gap_1()
-            .items_center()
+        crate::widgets::toolbar()
             .child(home_btn)
             .child(
                 Separator::vertical()

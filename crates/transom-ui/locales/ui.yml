@@ -3156,6 +3156,12 @@ settings:
   shortcut_reset:
     en: Reset
     zh-CN: 重置
+  shortcut_action:
+    en: Action
+    zh-CN: 动作
+  shortcut_keys:
+    en: Shortcut
+    zh-CN: 快捷键
   shortcut_reset_all:
     en: Reset All
     zh-CN: 全部重置

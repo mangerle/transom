@@ -13,8 +13,6 @@
 
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
-use gpui_kit::component::badge::Badge;
-use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -224,14 +222,12 @@ impl AppShell {
         badge: &ProbeBadge,
         p: &Palette,
     ) -> AnyElement {
-        let tooltip = badge.tooltip();
         // 悬浮样式必须落在带 id 的元素上，否则 GPUI 不分配悬浮状态、悬停不重绘。
-        div()
-            .id(ElementId::Name(format!("probe-badge-{session_id}").into()))
-            .flex_none()
-            .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
-            .child(Badge::new().dot().color(badge.color(p)))
-            .into_any_element()
+        crate::widgets::status_dot(
+            ElementId::Name(format!("probe-badge-{session_id}").into()),
+            badge.color(p),
+            badge.tooltip(),
+        )
     }
 }
 

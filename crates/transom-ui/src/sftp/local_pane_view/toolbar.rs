@@ -55,9 +55,7 @@ pub(super) fn render_local_toolbar(
         .border_color(p.divider(p.sidebar_border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
         .child(
-            h_flex()
-                .gap_1()
-                .items_center()
+            crate::widgets::toolbar()
                 .child(
                     div()
                         .text_xs()

@@ -19,7 +19,10 @@ mod button;
 mod dialog;
 mod empty;
 mod form;
+mod list_row;
 mod menu;
+mod status;
+mod toolbar;
 
 pub(crate) use button::{
     DialogConfirmKind, IconButton, IconButtonSize, dialog_cancel_button, dialog_confirm_button,
@@ -29,4 +32,7 @@ pub(crate) use empty::empty_state;
 pub(crate) use form::{
     form_field, secret_field, setting_field_row, setting_frame, setting_row, setting_text_row,
 };
+pub(crate) use list_row::{list_row, table_header};
 pub(crate) use menu::menu_item;
+pub(crate) use status::{status_badge, status_dot};
+pub(crate) use toolbar::toolbar;

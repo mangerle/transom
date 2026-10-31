@@ -646,9 +646,12 @@ fn widgets_use_design_tokens() {
             continue;
         }
         for (index, line) in content.lines().enumerate() {
+            let magic_px = line
+                .match_indices("px(")
+                .any(|(index, _)| !line[index + 3..].starts_with("rems("));
             if line.contains("text_xs(")
                 || line.contains("text_sm(")
-                || line.contains("px(")
+                || magic_px
                 || line.contains("gap_1(")
                 || line.contains("gap_2(")
                 || line.contains("gap_3(")

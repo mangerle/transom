@@ -1,7 +1,6 @@
 //! 偏好设置中的快捷键自定义页。
 
 use crate::app::AppShell;
-use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
@@ -44,50 +43,45 @@ impl AppShell {
                                     .into_any_element()
                             }
                         }));
-                h_flex()
-                    .w_full()
-                    .justify_between()
-                    .items_center()
-                    .py_2()
-                    .border_color(p.divider(p.border))
-                    .divider_edge(DividerEdge::Bottom, p.divider_width)
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!(spec.label_key).to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(key_elements)
-                            .child(
-                                Button::new(ElementId::Name(format!("shortcut-edit-{id}").into()))
-                                    .ghost()
-                                    .xsmall()
-                                    .label(rust_i18n::t!("settings.shortcut_edit").to_string())
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.open_shortcut_capture(id, window, cx);
-                                    })),
-                            )
-                            .when(customized, |row| {
-                                row.child(
-                                    Button::new(ElementId::Name(
-                                        format!("shortcut-reset-{id}").into(),
-                                    ))
+                crate::widgets::list_row(
+                    ElementId::Name(format!("shortcut-row-{id}").into()),
+                    false,
+                    p,
+                )
+                .justify_between()
+                .child(
+                    div()
+                        .text_size(rems(crate::theme::tokens::typography::BODY))
+                        .child(rust_i18n::t!(spec.label_key).to_string()),
+                )
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(key_elements)
+                        .child(
+                            Button::new(ElementId::Name(format!("shortcut-edit-{id}").into()))
+                                .ghost()
+                                .xsmall()
+                                .label(rust_i18n::t!("settings.shortcut_edit").to_string())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.open_shortcut_capture(id, window, cx);
+                                })),
+                        )
+                        .when(customized, |row| {
+                            row.child(
+                                Button::new(ElementId::Name(format!("shortcut-reset-{id}").into()))
                                     .ghost()
                                     .xsmall()
                                     .label(rust_i18n::t!("settings.shortcut_reset").to_string())
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.settings.shortcuts.bindings.remove(id);
-                                            cx.notify();
-                                        },
-                                    )),
-                                )
-                            }),
-                    )
-                    .into_any_element()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.settings.shortcuts.bindings.remove(id);
+                                        cx.notify();
+                                    })),
+                            )
+                        }),
+                )
+                .into_any_element()
             })
             .collect();
 
@@ -143,6 +137,18 @@ impl AppShell {
                     .child(rust_i18n::t!("settings.shortcut_hint").to_string()),
             )
             .when_some(conflict_warning, |panel, warning| panel.child(warning))
+            .child(crate::widgets::table_header(
+                vec![
+                    div()
+                        .flex_1()
+                        .child(rust_i18n::t!("settings.shortcut_action").to_string())
+                        .into_any_element(),
+                    div()
+                        .child(rust_i18n::t!("settings.shortcut_keys").to_string())
+                        .into_any_element(),
+                ],
+                p,
+            ))
             .child(v_flex().gap_1().children(rows))
             .into_any_element()
     }
