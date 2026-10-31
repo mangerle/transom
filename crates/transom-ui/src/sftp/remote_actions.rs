@@ -236,23 +236,6 @@ impl AppShell {
         );
     }
 
-    /// 目标列进入加载态：主远端与并列列都清掉本列旧错误并置加载中。
-    ///
-    /// 错误与加载态自本列统一后，不再区分面板状态栏与列内两套存储。
-    pub(crate) fn begin_sftp_pane_load(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && let Some(pane) = panel.remote_pane_mut(target)
-        {
-            pane.loading = true;
-            pane.error = None;
-        }
-    }
-
     /// 把错误落到目标列的内容区。
     pub(crate) fn set_sftp_pane_error(
         &mut self,

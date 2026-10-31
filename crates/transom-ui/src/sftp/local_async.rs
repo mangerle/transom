@@ -10,6 +10,7 @@
 //! - 代价与局限：刷新从"同步可见"变为"异步落地"，期间面板短暂显示旧内容
 //!   （导航场景先清空条目给出即时反馈）；同一目录的并发刷新以后完成者胜出。
 
+use super::entity::{SftpPanelView, with_shell_parts};
 use super::{SftpConfirmModalState, SftpPendingDelete, list_local_dir};
 use crate::app::AppShell;
 use gpui_kit::*;
@@ -17,34 +18,25 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use transom_core::TabId;
 
-impl AppShell {
+impl SftpPanelView {
     /// 后台读取面板当前本地目录并回填条目。
     ///
-    /// `select_after` 提供路径时，回填成功后单选该条目（用于重命名、新建软链接
-    /// 后立刻定位新条目）；否则按新条目集合校正既有选中，剔除已消失的路径。
+    /// `select_after` 提供路径时，回填成功后单选该条目；否则按新条目集合
+    /// 校正既有选中，剔除已消失的路径。
     pub(crate) fn spawn_local_dir_refresh(
         &mut self,
-        tab_id: TabId,
         select_after: Option<PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        let Some(dir) = self
-            .sftp_state(tab_id, cx)
-            .map(|panel| panel.local.path.clone())
-        else {
-            return;
-        };
+        let dir = self.state.local.path.clone();
         cx.spawn(async move |this, cx| {
             let scan_dir = dir.clone();
             let Some(result) = spawn_blocking_local(move || list_local_dir(&scan_dir)).await else {
                 log::error!("本地目录读取线程启动失败，跳过本次刷新");
                 return;
             };
-            let _ = this.update(cx, |this, cx| {
-                let Some(mut panel) = this.sftp_view_mut(tab_id, cx) else {
-                    return;
-                };
-                if panel.local.path != dir {
+            let _ = this.update(cx, |view, cx| {
+                if view.state.local.path != dir {
                     // 面板已导航到其他目录，丢弃过期结果
                     return;
                 }
@@ -52,22 +44,21 @@ impl AppShell {
                     Ok(entries) => {
                         let valid_paths: BTreeSet<PathBuf> =
                             entries.iter().map(|entry| entry.path.clone()).collect();
-                        panel.local.entries = entries;
+                        view.state.local.entries = entries;
                         if let Some(path) = select_after {
-                            panel.select_local(path);
+                            view.state.select_local(path);
                         } else {
-                            panel.sync_local_selection(&valid_paths);
+                            view.state.sync_local_selection(&valid_paths);
                         }
-                        panel.clear_local_error();
+                        view.state.clear_local_error();
                     }
                     Err(error) => {
-                        panel.set_local_error(
+                        view.state.set_local_error(
                             rust_i18n::t!("sftp.local_async.read_dir_failed", error = error)
                                 .to_string(),
                         );
                     }
                 }
-                drop(panel);
                 cx.notify();
             });
         })
@@ -75,24 +66,24 @@ impl AppShell {
     }
 
     /// 批量删除本地选中项：先弹确认，确认后再执行。
-    pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
-            return;
-        };
-        let paths = panel.selected_local_paths();
+    pub(crate) fn local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        self.dismiss_hover_preview(cx);
+        let paths = self.state.selected_local_paths();
         if paths.is_empty() {
-            panel.set_local_error(rust_i18n::t!("sftp.local_async.select_first").to_string());
-            drop(panel);
+            self.state
+                .set_local_error(rust_i18n::t!("sftp.local_async.select_first").to_string());
             cx.notify();
             return;
         }
-        drop(panel);
+        let app = self.app.clone();
         let count = paths.len();
-        self.state.sftp_modals.confirm = Some(SftpConfirmModalState {
-            action: SftpPendingDelete::Local { tab_id, paths },
-            title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
-            description: rust_i18n::t!("sftp.local_async.delete_body", count = count).to_string(),
+        with_shell_parts(&app, cx, |shell, _| {
+            shell.state.sftp_modals.confirm = Some(SftpConfirmModalState {
+                action: SftpPendingDelete::Local { tab_id, paths },
+                title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
+                description: rust_i18n::t!("sftp.local_async.delete_body", count = count)
+                    .to_string(),
+            });
         });
         cx.notify();
     }
@@ -101,22 +92,13 @@ impl AppShell {
     ///
     /// 删除与随后的目录刷新都是阻塞 IO，整体放后台执行；期间状态栏先提示
     /// "正在删除"，完成后回填成功/失败统计并刷新列表。
-    pub(crate) fn perform_sftp_local_delete(
-        &mut self,
-        tab_id: TabId,
-        paths: Vec<PathBuf>,
-        cx: &mut Context<Self>,
-    ) {
-        self.dismiss_sftp_hover_preview(tab_id, cx);
-        let Some(dir) = self.sftp_view_mut(tab_id, cx).map(|mut panel| {
-            panel.clear_local_error();
-            panel.set_status(
-                rust_i18n::t!("sftp.local_async.deleting", count = paths.len()).to_string(),
-            );
-            panel.local.path.clone()
-        }) else {
-            return;
-        };
+    pub(crate) fn perform_local_delete(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        self.dismiss_hover_preview(cx);
+        self.state.clear_local_error();
+        self.state.set_status(
+            rust_i18n::t!("sftp.local_async.deleting", count = paths.len()).to_string(),
+        );
+        let dir = self.state.local.path.clone();
         cx.notify();
         cx.spawn(async move |this, cx| {
             let Some(outcome) = spawn_blocking_local(move || delete_local_paths(&paths)).await
@@ -126,12 +108,9 @@ impl AppShell {
             };
             let scan_dir = dir.clone();
             let entries = spawn_blocking_local(move || list_local_dir(&scan_dir)).await;
-            let _ = this.update(cx, |this, cx| {
-                let Some(mut panel) = this.sftp_view_mut(tab_id, cx) else {
-                    return;
-                };
+            let _ = this.update(cx, |view, cx| {
                 if outcome.failures.is_empty() {
-                    panel.set_status(
+                    view.state.set_status(
                         rust_i18n::t!("sftp.local_async.deleted", count = outcome.deleted)
                             .to_string(),
                     );
@@ -148,7 +127,7 @@ impl AppShell {
                         outcome.deleted,
                         outcome.failures.len()
                     );
-                    panel.set_local_error(
+                    view.state.set_local_error(
                         rust_i18n::t!(
                             "sftp.local_async.delete_partial",
                             deleted = outcome.deleted,
@@ -159,15 +138,14 @@ impl AppShell {
                     );
                 }
                 // 删除期间用户可能已导航到其他目录：只在目录未变时回填刷新
-                if panel.local.path == dir
+                if view.state.local.path == dir
                     && let Some(Ok(entries)) = entries
                 {
                     let valid_paths: BTreeSet<PathBuf> =
                         entries.iter().map(|entry| entry.path.clone()).collect();
-                    panel.local.entries = entries;
-                    panel.sync_local_selection(&valid_paths);
+                    view.state.local.entries = entries;
+                    view.state.sync_local_selection(&valid_paths);
                 }
-                drop(panel);
                 cx.notify();
             });
         })
@@ -175,6 +153,40 @@ impl AppShell {
     }
 }
 
+impl AppShell {
+    /// 后台刷新本地目录。
+    pub(crate) fn spawn_local_dir_refresh(
+        &mut self,
+        tab_id: TabId,
+        select_after: Option<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.spawn_local_dir_refresh(select_after, cx)
+            });
+        }
+    }
+
+    /// 批量删除本地选中项。
+    pub(crate) fn sftp_local_delete_selection(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.local_delete_selection(tab_id, cx));
+        }
+    }
+
+    /// 执行已确认的本地删除。
+    pub(crate) fn perform_sftp_local_delete(
+        &mut self,
+        tab_id: TabId,
+        paths: Vec<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(view) = self.sftp_view(tab_id) {
+            view.update(cx, |view, cx| view.perform_local_delete(paths, cx));
+        }
+    }
+}
 /// 本地批量删除的结果：成功数与逐项失败原因。
 struct LocalDeleteOutcome {
     deleted: usize,
