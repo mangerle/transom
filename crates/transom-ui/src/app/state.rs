@@ -147,6 +147,26 @@ impl AppState {
         if self.persistence.enqueue_settings(self.settings.clone()) {
             return Ok(());
         }
-        self.persist_settings()
+        self.services.settings_store.save(&self.settings)
+    }
+
+    /// 统一的“保存并上报”入口：失败时记录日志并写入应用级错误队列。
+    ///
+    /// 高频开关不应各自决定“失败要不要提示”；统一走这里，避免再次出现
+    /// `let _ = save(...)` 这类静默降级。
+    pub(crate) fn persist_settings_reported(&mut self) -> bool {
+        match self.persist_settings() {
+            Ok(()) => true,
+            Err(error) => {
+                log::error!("保存设置失败，界面仍是新值但下次启动会回退，原因: {error}");
+                self.set_error(localized_error(&error));
+                false
+            }
+        }
+    }
+
+    /// 取走后台写盘线程上报的错误。
+    pub(crate) fn take_persistence_error(&self) -> Option<transom_core::AppError> {
+        self.persistence.take_error()
     }
 }

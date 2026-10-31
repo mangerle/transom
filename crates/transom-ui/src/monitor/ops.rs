@@ -141,7 +141,7 @@ impl AppShell {
         self.settings.monitor.ports_expanded = !self.monitor.collapse.ports;
         self.settings.monitor.services_expanded = !self.monitor.collapse.services;
         self.settings.monitor.processes_expanded = !self.monitor.collapse.processes;
-        let _ = self.persist_settings();
+        self.persist_settings_reported();
         cx.notify();
     }
 

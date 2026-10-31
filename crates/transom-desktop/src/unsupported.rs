@@ -8,10 +8,7 @@ use std::path::Path;
 use transom_core::{AppError, ErrorCode};
 
 fn unsupported() -> AppError {
-    AppError::with_detail(
-        ErrorCode::Configuration,
-        "当前平台暂不支持默认终端注册",
-    )
+    AppError::with_detail(ErrorCode::Configuration, "当前平台暂不支持默认终端注册")
 }
 
 /// 应用默认终端开关；非 Linux 平台返回不支持。

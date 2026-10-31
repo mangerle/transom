@@ -56,14 +56,19 @@ impl AppShell {
         }
         self.prune_tab_selection();
         self.sync_broadcast_targets();
-        let _ = self
-            .services
-            .secret_store
-            .delete(&SecretKey::new(session_id, SecretKind::Password));
-        let _ = self
-            .services
-            .secret_store
-            .delete(&SecretKey::new(session_id, SecretKind::KeyPassphrase));
+        for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
+            if let Err(error) = self
+                .services
+                .secret_store
+                .delete(&SecretKey::new(session_id, kind))
+            {
+                // 删除会话已经成功，钥匙串清理失败只留下孤儿凭据，不应阻断
+                // 主流程；但必须留痕，便于后续手动清理。
+                log::warn!(
+                    "删除会话后清理钥匙串条目失败，会话: {session_id}，类型: {kind:?}，原因: {error}"
+                );
+            }
+        }
         self.persist_catalog();
         cx.notify();
     }

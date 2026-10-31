@@ -3,7 +3,7 @@
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled, h_resizable};
 use crate::keymap;
-use crate::palette::Palette;
+use crate::palette::{Palette, localized_error};
 use crate::sftp::{EditorDragTracker, SftpPanelState};
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
@@ -14,6 +14,9 @@ use gpui_kit::*;
 
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(error) = self.take_persistence_error() {
+            self.set_error(localized_error(&error));
+        }
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
         // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的

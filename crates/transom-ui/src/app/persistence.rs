@@ -126,6 +126,8 @@ fn run_writer<T: Send + 'static>(worker: Arc<WorkerState<T>>) {
 pub(crate) struct Persistence {
     catalog: Option<SnapshotWriter<SessionCatalog>>,
     settings: Option<SnapshotWriter<AppSettings>>,
+    /// 后台写盘失败的单槽通知：由渲染帧取走并转成应用内提示。
+    error: Arc<Mutex<Option<AppError>>>,
 }
 
 impl Persistence {
@@ -135,17 +137,26 @@ impl Persistence {
         session_store: Arc<dyn transom_core::SessionStore>,
         settings_store: Arc<dyn transom_core::SettingsStore>,
     ) -> Self {
+        let error = Arc::new(Mutex::new(None));
+        let catalog_error = Arc::clone(&error);
         let catalog = SnapshotWriter::spawn("catalog", move |catalog| {
             if let Err(error) = session_store.save(catalog) {
                 log::error!("会话目录异步落盘失败，原因: {error}");
+                *catalog_error.lock() = Some(error);
             }
         });
+        let settings_error = Arc::clone(&error);
         let settings = SnapshotWriter::spawn("settings", move |settings| {
             if let Err(error) = settings_store.save(settings) {
                 log::error!("设置异步落盘失败，原因: {error}");
+                *settings_error.lock() = Some(error);
             }
         });
-        Self { catalog, settings }
+        Self {
+            catalog,
+            settings,
+            error,
+        }
     }
 
     /// 入队会话目录；通道不可用时返回 false，由调用方同步兜底。
@@ -160,6 +171,11 @@ impl Persistence {
         self.settings
             .as_ref()
             .is_some_and(|writer| writer.enqueue(settings).is_ok())
+    }
+
+    /// 取走最近一次后台写盘失败；渲染帧统一转成用户可见通知。
+    pub(crate) fn take_error(&self) -> Option<AppError> {
+        self.error.lock().take()
     }
 }
 

@@ -4,7 +4,6 @@ use super::font_select::{
     CJK_DEFAULT_KEY, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select, selected_font,
 };
 use crate::app::AppShell;
-use crate::palette::localized_error;
 use crate::settings::{ProxyProtocol, WindowAppearanceSnapshot};
 use gpui_kit::*;
 use transom_terminal::TerminalView;
@@ -15,10 +14,7 @@ impl AppShell {
     /// 拖拽或显隐发生在设置弹窗之外，不能等待弹窗的保存按钮；这里只做保存与
     /// 错误上报，不重复解析字体等输入框状态，也不改变弹窗的取消语义。
     pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
-        if let Err(error) = self.persist_settings() {
-            log::error!("保存布局设置失败，界面仍是新值但下次启动会回退，原因: {error}");
-            self.set_error(localized_error(&error));
-        }
+        self.persist_settings_reported();
         cx.notify();
     }
 
@@ -255,31 +251,31 @@ impl AppShell {
         }
         // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
         self.modals.settings.window_appearance_snapshot = None;
-        if let Err(error) = self.persist_settings() {
-            log::error!("保存偏好设置失败，界面仍是新值但下次启动会回退，原因: {error}");
-            self.set_error(localized_error(&error));
-        } else {
-            log::info!(
-                "偏好设置已保存，语言: {}，日志级别: {}",
-                self.settings.language,
-                self.settings.logs.level.as_str()
-            );
-            self.apply_appearance_to_live_panes(cx);
-            self.apply_shortcut_settings(cx);
-            self.apply_block_view_settings(cx);
-            // 实时下发最新触发器规则给所有运行中的终端窗格
-            let triggers = self.settings.triggers.clone();
-            let terminals: Vec<Entity<TerminalView>> = self
-                .workspace
-                .tabs
-                .iter()
-                .filter_map(|tab| tab.terminal())
-                .collect();
-            for terminal in terminals {
-                terminal.update(cx, |view, _| view.reload_triggers(&triggers));
-            }
-            self.status = Some(rust_i18n::t!("status.ready").to_string());
+        if !self.persist_settings_reported() {
+            // 保存失败时保持弹窗打开，让用户看到错误并重试，而不是误以为已保存。
+            cx.notify();
+            return;
         }
+        log::info!(
+            "偏好设置已保存，语言: {}，日志级别: {}",
+            self.settings.language,
+            self.settings.logs.level.as_str()
+        );
+        self.apply_appearance_to_live_panes(cx);
+        self.apply_shortcut_settings(cx);
+        self.apply_block_view_settings(cx);
+        // 实时下发最新触发器规则给所有运行中的终端窗格
+        let triggers = self.settings.triggers.clone();
+        let terminals: Vec<Entity<TerminalView>> = self
+            .workspace
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.terminal())
+            .collect();
+        for terminal in terminals {
+            terminal.update(cx, |view, _| view.reload_triggers(&triggers));
+        }
+        self.status = Some(rust_i18n::t!("status.ready").to_string());
         self.modals.settings.open = false;
         self.modals.settings.jump_page = None;
         cx.notify();

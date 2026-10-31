@@ -84,7 +84,11 @@ impl AppShell {
     pub(crate) fn toggle_folder_collapsed(&mut self, id: FolderId, cx: &mut Context<Self>) {
         let collapsed = self.catalog.folder(id).map(|folder| !folder.collapsed);
         if let Some(collapsed) = collapsed {
-            let _ = self.catalog.set_folder_collapsed(id, collapsed);
+            if let Err(error) = self.catalog.set_folder_collapsed(id, collapsed) {
+                self.set_error(error.to_string());
+                cx.notify();
+                return;
+            }
             self.persist_catalog();
         }
         cx.notify();
