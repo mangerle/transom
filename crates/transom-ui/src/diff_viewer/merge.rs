@@ -2,7 +2,7 @@
 
 use super::local_io::write_local_text;
 use super::{DiffConfirm, DiffPhase};
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::editor::EditorPhase;
 use gpui_kit::*;
 use transom_core::{
@@ -25,6 +25,35 @@ struct DiffWriteSync<'a> {
     remote_path: &'a str,
     text: &'a str,
     meta: RemoteTextMeta,
+}
+
+impl AppState {
+    fn build_merge_plan(&mut self) -> Option<MergePlan> {
+        let viewer = self.diff_viewer.as_mut()?;
+        let confirm = viewer.confirm.take()?;
+        let diff = viewer.diff.as_ref()?;
+        let local = viewer.local_text.as_deref()?;
+        let remote = viewer.remote_text.as_deref()?;
+        let merged = diff.apply_hunk(local, remote, confirm.hunk, confirm.direction);
+        let Some(merged) = merged else {
+            viewer.error = Some(rust_i18n::t!("diff.error_stale_hunk").to_string());
+            return None;
+        };
+        if confirm.direction == MergeDirection::LeftToRight
+            && let Err(reason) = viewer.remote_write_blocker()
+        {
+            viewer.error = Some(reason.to_string());
+            return None;
+        }
+        Some(MergePlan {
+            tab_id: viewer.tab_id,
+            connection_id: viewer.connection_id,
+            remote_path: viewer.remote_path.clone(),
+            expected: viewer.remote_meta,
+            direction: confirm.direction,
+            merged,
+        })
+    }
 }
 
 impl AppShell {
@@ -66,33 +95,6 @@ impl AppShell {
             MergeDirection::LeftToRight => self.submit_diff_remote_write(plan, cx),
             MergeDirection::RightToLeft => self.submit_diff_local_write(plan.merged, cx),
         }
-    }
-
-    fn build_merge_plan(&mut self) -> Option<MergePlan> {
-        let viewer = self.diff_viewer.as_mut()?;
-        let confirm = viewer.confirm.take()?;
-        let diff = viewer.diff.as_ref()?;
-        let local = viewer.local_text.as_deref()?;
-        let remote = viewer.remote_text.as_deref()?;
-        let merged = diff.apply_hunk(local, remote, confirm.hunk, confirm.direction);
-        let Some(merged) = merged else {
-            viewer.error = Some(rust_i18n::t!("diff.error_stale_hunk").to_string());
-            return None;
-        };
-        if confirm.direction == MergeDirection::LeftToRight
-            && let Err(reason) = viewer.remote_write_blocker()
-        {
-            viewer.error = Some(reason.to_string());
-            return None;
-        }
-        Some(MergePlan {
-            tab_id: viewer.tab_id,
-            connection_id: viewer.connection_id,
-            remote_path: viewer.remote_path.clone(),
-            expected: viewer.remote_meta,
-            direction: confirm.direction,
-            merged,
-        })
     }
 
     fn submit_diff_remote_write(&mut self, plan: MergePlan, cx: &mut Context<Self>) {

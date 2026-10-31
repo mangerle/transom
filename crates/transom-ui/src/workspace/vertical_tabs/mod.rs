@@ -17,7 +17,7 @@
 mod drag;
 mod item;
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::session_icon;
@@ -32,17 +32,104 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{GroupId, SessionId, TabPosition};
 
-impl AppShell {
-    /// 左侧槽位当前是否显示纵向标签面板。
-    ///
-    /// 标签面板与会话树共用同一个槽位，面板可见时主区顶部不再绘制横向标签条；
-    /// 顶部模式下该入口整体不可用，活动栏也不渲染对应图标。
+impl AppState {
     pub(crate) fn show_vertical_tabs_panel(&self) -> bool {
         self.settings.window.tab_position == TabPosition::Left
             && self.sidebar.visible
             && self.vertical_tabs_open
     }
 
+    fn group_matches(&self, group_id: GroupId, query_lower: &str) -> bool {
+        if query_lower.is_empty() {
+            return true;
+        }
+        let Some(group) = self.workspace.group(group_id) else {
+            return false;
+        };
+        let Some(tab) = self.workspace.tab(group.active_pane) else {
+            return false;
+        };
+        let mut text = tab.display_name();
+        if group.serial > 0 {
+            text.push_str(&format!(" #{}", group.serial));
+        }
+        if let Some(host) = session_host(&tab.session) {
+            text.push(' ');
+            text.push_str(host);
+        }
+        text_matches_query(query_lower, &text)
+    }
+
+    fn new_session_menu_data(&self) -> NewSessionMenuData {
+        let mut folders: Vec<NewSessionFolder> = self
+            .catalog
+            .folders
+            .iter()
+            .map(|folder| NewSessionFolder {
+                folder_id: folder.id,
+                label: self.folder_menu_label(folder),
+                entries: Vec::new(),
+            })
+            .collect();
+        let mut root = Vec::new();
+        for session in &self.catalog.sessions {
+            let entry = NewSessionEntry {
+                session_id: session.id,
+                label: if session.name.trim().is_empty() {
+                    session_host(session)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| session.name.clone())
+                } else {
+                    session.name.clone()
+                },
+                icon: session_icon(session.icon)
+                    .unwrap_or_else(|| item::connection_icon(&session.connection)),
+            };
+            let Some(folder_id) = session.folder_id else {
+                root.push(entry);
+                continue;
+            };
+            if let Some(folder) = folders
+                .iter_mut()
+                .find(|folder| folder.folder_id == folder_id)
+            {
+                folder.entries.push(entry);
+            } else {
+                root.push(entry);
+            }
+        }
+        NewSessionMenuData { root, folders }
+    }
+    fn folder_menu_label(&self, folder: &transom_core::SessionFolder) -> String {
+        let mut names = vec![folder.name.clone()];
+        let mut seen = HashSet::with_capacity(4);
+        seen.insert(folder.id);
+        let mut current = folder.parent;
+        while let Some(parent_id) = current {
+            if !seen.insert(parent_id) {
+                break;
+            }
+            let Some(parent) = self
+                .catalog
+                .folders
+                .iter()
+                .find(|item| item.id == parent_id)
+            else {
+                break;
+            };
+            names.push(parent.name.clone());
+            current = parent.parent;
+        }
+        names.reverse();
+        names.join(" / ")
+    }
+}
+
+impl AppShell {
+    /// 左侧槽位当前是否显示纵向标签面板。
+    ///
+    /// 标签面板与会话树共用同一个槽位，面板可见时主区顶部不再绘制横向标签条；
+    /// 顶部模式下该入口整体不可用，活动栏也不渲染对应图标。
     /// 切到左侧槽位的标签面板；顶部模式或面板已可见时为空操作。
     ///
     /// 会话树里的连接动作完成后调用：连接入口在会话树，连接完成后用户要看
@@ -169,101 +256,6 @@ impl AppShell {
             .child(div().text_sm().text_color(p.muted_foreground).child(title))
             .child(div().text_xs().text_color(p.muted_foreground).child(hint))
             .into_any_element()
-    }
-
-    /// 组是否命中搜索词：按活动窗格的标题、序号与主机地址匹配。
-    ///
-    /// 只匹配组代表行（活动窗格）而不是全部窗格，与"每组一行"的展示粒度
-    /// 保持一致；用户切换窗格后该组会以新标题重新参与过滤。
-    fn group_matches(&self, group_id: GroupId, query_lower: &str) -> bool {
-        if query_lower.is_empty() {
-            return true;
-        }
-        let Some(group) = self.workspace.group(group_id) else {
-            return false;
-        };
-        let Some(tab) = self.workspace.tab(group.active_pane) else {
-            return false;
-        };
-        let mut text = tab.display_name();
-        if group.serial > 0 {
-            text.push_str(&format!(" #{}", group.serial));
-        }
-        if let Some(host) = session_host(&tab.session) {
-            text.push(' ');
-            text.push_str(host);
-        }
-        text_matches_query(query_lower, &text)
-    }
-
-    /// 收集"新增会话"菜单所需的会话快照：根级会话平铺，文件夹各成一个子菜单。
-    ///
-    /// 菜单只持有展示所需的标题与图标，不借用目录；会话或文件夹在菜单打开前
-    /// 被删除时，点击只会落到已失效的 id，连接入口自身会再校验一次。
-    fn new_session_menu_data(&self) -> NewSessionMenuData {
-        let mut folders: Vec<NewSessionFolder> = self
-            .catalog
-            .folders
-            .iter()
-            .map(|folder| NewSessionFolder {
-                folder_id: folder.id,
-                label: self.folder_menu_label(folder),
-                entries: Vec::new(),
-            })
-            .collect();
-        let mut root = Vec::new();
-        for session in &self.catalog.sessions {
-            let entry = NewSessionEntry {
-                session_id: session.id,
-                label: if session.name.trim().is_empty() {
-                    session_host(session)
-                        .map(str::to_string)
-                        .unwrap_or_else(|| session.name.clone())
-                } else {
-                    session.name.clone()
-                },
-                icon: session_icon(session.icon)
-                    .unwrap_or_else(|| item::connection_icon(&session.connection)),
-            };
-            let Some(folder_id) = session.folder_id else {
-                root.push(entry);
-                continue;
-            };
-            if let Some(folder) = folders
-                .iter_mut()
-                .find(|folder| folder.folder_id == folder_id)
-            {
-                folder.entries.push(entry);
-            } else {
-                root.push(entry);
-            }
-        }
-        NewSessionMenuData { root, folders }
-    }
-
-    /// 文件夹在菜单里的显示名：带上级路径，避免不同层级的同名文件夹混淆。
-    fn folder_menu_label(&self, folder: &transom_core::SessionFolder) -> String {
-        let mut names = vec![folder.name.clone()];
-        let mut seen = HashSet::with_capacity(4);
-        seen.insert(folder.id);
-        let mut current = folder.parent;
-        while let Some(parent_id) = current {
-            if !seen.insert(parent_id) {
-                break;
-            }
-            let Some(parent) = self
-                .catalog
-                .folders
-                .iter()
-                .find(|item| item.id == parent_id)
-            else {
-                break;
-            };
-            names.push(parent.name.clone());
-            current = parent.parent;
-        }
-        names.reverse();
-        names.join(" / ")
     }
 }
 

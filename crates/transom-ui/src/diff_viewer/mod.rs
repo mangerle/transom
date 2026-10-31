@@ -25,7 +25,7 @@ mod view;
 #[cfg(test)]
 mod tests;
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::format::format_size;
 use gpui_kit::component::diff::DiffState;
 use gpui_kit::component::input::EditorState;
@@ -150,8 +150,7 @@ impl DiffViewerState {
     }
 }
 
-impl AppShell {
-    /// 本地栏对比入口是否可用：恰好选中一个本地文件，且远端当前目录有同名普通文件。
+impl AppState {
     pub(crate) fn diff_entry_ready(&self, tab_id: TabId) -> bool {
         matches!(self.local_diff_check(tab_id), LocalDiffCheck::Ready(_))
     }
@@ -212,7 +211,10 @@ impl AppShell {
             remote_path,
         })
     }
+}
 
+impl AppShell {
+    /// 本地栏对比入口是否可用：恰好选中一个本地文件，且远端当前目录有同名普通文件。
     /// 从 SFTP 本地栏打开：选中本地文件，与远端当前目录的同名文件比对。
     pub(crate) fn sftp_open_local_diff(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let LocalDiffTarget {
