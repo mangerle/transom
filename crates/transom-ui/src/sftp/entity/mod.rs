@@ -35,7 +35,7 @@ pub(crate) struct SftpPanelView {
     /// 面板状态的唯一事实源。
     pub(crate) state: SftpPanelState,
     /// 回到外壳的弱引用；创建后立即绑定。
-    app: Option<WeakEntity<AppShell>>,
+    pub(super) app: Option<WeakEntity<AppShell>>,
 }
 
 impl SftpPanelView {
