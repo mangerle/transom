@@ -4,6 +4,7 @@
 
 mod appearance;
 mod builder;
+mod defaults;
 mod init;
 mod proxy;
 mod serial;
