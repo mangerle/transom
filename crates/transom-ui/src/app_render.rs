@@ -8,8 +8,8 @@ use crate::keymap;
 use crate::palette::{Palette, localized_error};
 use crate::sftp::SftpPanelState;
 use crate::theme::tokens::{rem_px, size};
-use gpui_kit::base::ResizablePanel;
 use gpui_kit::base::h_flex;
+use gpui_kit::base::{ResizablePanel, ResizablePanelGroup};
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
@@ -304,72 +304,20 @@ impl AppShell {
             self.state.workspace_panels.clone()
         };
 
-        let side_left = plan.side_left;
         let show_sftp = plan.show_sftp;
         let show_forwards = plan.show_forwards;
-        let mut resizable_group = if self.state.immersive {
-            // 沉浸模式只保留主面板，使用独立分组与临时状态；
-            // 严禁复用 panels_state，否则主面板在全屏下会覆盖索引 0（侧栏）的尺寸记录，
-            // 导致退出沉浸模式后侧边栏继承全屏宽度并撑满窗口。
-            h_resizable(resizable_id)
-        } else {
-            h_resizable(resizable_id).with_state(&panels_state)
-        };
-        if !self.state.immersive {
-            resizable_group = resizable_group.child(sidebar_panel);
-        }
-        if !self.state.immersive && side_left {
-            // 停靠左：SFTP 与转发整体挪到主面板之前，贴着侧栏。
-            if show_sftp {
-                resizable_group = resizable_group.child(
-                    resizable_panel()
-                        .size(px(plan.sftp_width.min(plan.sftp_max_width)))
-                        .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
-                        .fixed()
-                        .child(self.render_sftp_panel_element()),
-                );
-            }
-            if show_forwards {
-                resizable_group = resizable_group.child(
-                    resizable_panel()
-                        .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
-                        .fixed()
-                        .child(self.forward_view_element(cx)),
-                );
-            }
-        }
-        resizable_group =
-            resizable_group.child(resizable_panel().child(self.render_main(window, cx, p)));
-        if !self.state.immersive && !side_left {
-            if show_sftp {
-                resizable_group = resizable_group.child(
-                    resizable_panel()
-                        .size(px(plan.sftp_width.min(plan.sftp_max_width)))
-                        .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
-                        .fixed()
-                        .child(self.render_sftp_panel_element()),
-                );
-            }
-            if show_forwards {
-                resizable_group = resizable_group.child(
-                    resizable_panel()
-                        .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
-                        .fixed()
-                        .child(self.forward_view_element(cx)),
-                );
-            }
-        }
-
-        if let Some(monitor_width) = self.monitor_drawer_width(window, cx, &panels_state) {
-            resizable_group = resizable_group.child(
-                resizable_panel()
-                    .size(px(monitor_width))
-                    .size_range(
-                        px(360.0)..px((window.viewport_size().width.as_f32() * 0.75).max(520.0)),
-                    )
-                    .child(self.state.monitor.clone()),
-            );
-        }
+        let resizable_group = self.build_resizable_group(
+            WorkspaceGroupInput {
+                resizable_id,
+                plan: &plan,
+                sidebar_panel,
+                panels_state: &panels_state,
+                p,
+                rem,
+            },
+            window,
+            cx,
+        );
 
         let mut main_row = h_flex().flex_1().overflow_hidden();
         if !self.state.immersive {
@@ -697,6 +645,91 @@ impl AppShell {
         sidebar_panel
     }
 
+    /// 工作区可拖拽分组：侧栏、主面板、SFTP/转发与监控抽屉。
+    fn build_resizable_group(
+        &mut self,
+        input: WorkspaceGroupInput<'_>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> ResizablePanelGroup {
+        let WorkspaceGroupInput {
+            resizable_id,
+            plan,
+            sidebar_panel,
+            panels_state,
+            p,
+            rem,
+        } = input;
+        let side_left = plan.side_left;
+        let show_sftp = plan.show_sftp;
+        let show_forwards = plan.show_forwards;
+        let mut resizable_group = if self.state.immersive {
+            // 沉浸模式只保留主面板，使用独立分组与临时状态；
+            // 严禁复用 panels_state，否则主面板在全屏下会覆盖索引 0（侧栏）的尺寸记录，
+            // 导致退出沉浸模式后侧边栏继承全屏宽度并撑满窗口。
+            h_resizable(resizable_id)
+        } else {
+            h_resizable(resizable_id).with_state(panels_state)
+        };
+        if !self.state.immersive {
+            resizable_group = resizable_group.child(sidebar_panel);
+        }
+        if !self.state.immersive && side_left {
+            // 停靠左：SFTP 与转发整体挪到主面板之前，贴着侧栏。
+            if show_sftp {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(px(plan.sftp_width.min(plan.sftp_max_width)))
+                        .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
+                        .fixed()
+                        .child(self.render_sftp_panel_element()),
+                );
+            }
+            if show_forwards {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
+                        .fixed()
+                        .child(self.forward_view_element(cx)),
+                );
+            }
+        }
+        resizable_group =
+            resizable_group.child(resizable_panel().child(self.render_main(window, cx, p)));
+        if !self.state.immersive && !side_left {
+            if show_sftp {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(px(plan.sftp_width.min(plan.sftp_max_width)))
+                        .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
+                        .fixed()
+                        .child(self.render_sftp_panel_element()),
+                );
+            }
+            if show_forwards {
+                resizable_group = resizable_group.child(
+                    resizable_panel()
+                        .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
+                        .fixed()
+                        .child(self.forward_view_element(cx)),
+                );
+            }
+        }
+
+        if let Some(monitor_width) = self.monitor_drawer_width(window, cx, panels_state) {
+            resizable_group = resizable_group.child(
+                resizable_panel()
+                    .size(px(monitor_width))
+                    .size_range(
+                        px(360.0)..px((window.viewport_size().width.as_f32() * 0.75).max(520.0)),
+                    )
+                    .child(self.state.monitor.clone()),
+            );
+        }
+
+        resizable_group
+    }
+
     /// 监控抽屉宽度：同步实测宽度到状态与设置，返回到布局使用的宽度。
     fn monitor_drawer_width(
         &mut self,
@@ -760,6 +793,16 @@ impl AppShell {
         };
         Some(self.render_status_bar(p, cx, divider_x))
     }
+}
+
+/// 工作区分组构建输入：布局计划、侧栏面板与尺寸状态。
+struct WorkspaceGroupInput<'a> {
+    resizable_id: &'static str,
+    plan: &'a WorkspaceChromeLayout,
+    sidebar_panel: ResizablePanel,
+    panels_state: &'a Entity<ResizableState>,
+    p: &'a Palette,
+    rem: Pixels,
 }
 
 /// 工作区状态栏布局输入：宽度切分所需的调色板、密度与分栏状态。
