@@ -38,13 +38,11 @@ impl AppShell {
     ///
     /// 刻意做成不借用 `self` 的关联函数：表单视图此刻正持有 `self.state.modals.session.form` 的
     /// 不可变借用，再借 `&mut self` 会与它冲突。
-    pub(crate) fn render_session_appearance(
+    /// 会话图标选择行：自动图标加八个预设图标。
+    fn render_session_icon_row(
         default_icon: IconName,
         icon: SessionIcon,
-        color: SessionColor,
-        p: &Palette,
         app: &Entity<AppShell>,
-        _cx: &App,
     ) -> AnyElement {
         let icon_row = h_flex()
             .gap_1()
@@ -83,6 +81,15 @@ impl AppShell {
                     ))
                     .into_any_element()
             }));
+        icon_row.into_any_element()
+    }
+
+    /// 会话环境色选择行：无色加预设色板。
+    fn render_session_color_row(
+        color: SessionColor,
+        p: &Palette,
+        app: &Entity<AppShell>,
+    ) -> AnyElement {
         let color_row = h_flex()
             .gap_2()
             .child(
@@ -140,6 +147,20 @@ impl AppShell {
                     ))
                     .into_any_element()
             }));
+        color_row.into_any_element()
+    }
+
+    pub(crate) fn render_session_appearance(
+        default_icon: IconName,
+        icon: SessionIcon,
+        color: SessionColor,
+        p: &Palette,
+        app: &Entity<AppShell>,
+        _cx: &App,
+    ) -> AnyElement {
+        let icon_row = Self::render_session_icon_row(default_icon, icon, app);
+        let color_row = Self::render_session_color_row(color, p, app);
+
         v_flex()
             .gap_2()
             .child(
