@@ -167,6 +167,11 @@ async fn handle_host_command(
     command: HostCommand,
 ) {
     match command {
+        HostCommand::SetStatsSampling { enabled } => {
+            state
+                .stats_sampling
+                .store(enabled, std::sync::atomic::Ordering::Relaxed);
+        }
         HostCommand::DeployPublicKey {
             tab_id,
             connection_id,

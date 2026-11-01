@@ -199,6 +199,7 @@ impl AppShell {
             pending_monitor_requests: Vec::new(),
             pending_editor_requests: Vec::new(),
             pending_settings_requests: Vec::new(),
+            stats_sampling: true,
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
                 applied_keys: applied_shortcut_keys,

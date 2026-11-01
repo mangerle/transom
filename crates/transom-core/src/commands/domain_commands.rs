@@ -74,6 +74,10 @@ pub enum ForwardCommand {
 
 /// 主机监控与运维命令。
 pub enum HostCommand {
+    /// 开关系统统计采样：界面不再消费 CPU/内存/磁盘等指标时停止远端轮询。
+    SetStatsSampling {
+        enabled: bool,
+    },
     DeployPublicKey {
         tab_id: TabId,
         connection_id: ConnectionId,

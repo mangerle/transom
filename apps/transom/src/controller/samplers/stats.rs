@@ -53,6 +53,7 @@ pub(crate) fn spawn_remote_stats_sampler(
     tab_id: TabId,
     connection_id: ConnectionId,
     event_tx: flume::Sender<AppEvent>,
+    sampling: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut state = StatsSamplerState::default();
@@ -67,6 +68,10 @@ pub(crate) fn spawn_remote_stats_sampler(
         let mut timeout_warned = false;
         let mut round: u64 = 0;
         loop {
+            if !sampling.load(std::sync::atomic::Ordering::Relaxed) {
+                interval.tick().await;
+                continue;
+            }
             let include_df = round.is_multiple_of(DF_EVERY_N_ROUNDS);
             let include_diag = round.is_multiple_of(DIAG_EVERY_N_ROUNDS);
             round = round.wrapping_add(1);
@@ -147,6 +152,7 @@ pub(crate) fn spawn_remote_stats_sampler(
 pub(crate) async fn run_local_stats_sampler(
     event_tx: flume::Sender<AppEvent>,
     local_tabs: Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>,
+    sampling: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
     let mut state = StatsSamplerState::default();
     let mut cached_os: Option<String> = None;
@@ -162,6 +168,10 @@ pub(crate) async fn run_local_stats_sampler(
     // 跳过首个瞬时 tick，保证首个采样窗口是完整的 3 秒。
     interval.tick().await;
     loop {
+        if !sampling.load(std::sync::atomic::Ordering::Relaxed) {
+            interval.tick().await;
+            continue;
+        }
         // 持锁只做纯内存克隆，不跨 await；订阅清空即退出，
         // 下一个本地连接会重新拉起本采样器。
         let tabs = match local_tabs.lock() {

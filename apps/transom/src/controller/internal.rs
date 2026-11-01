@@ -180,8 +180,13 @@ async fn adopt_ssh_connection(
     if let Some(session) = state.sessions.get_mut(&tab_id) {
         session.set_traffic_task(traffic_task);
     }
-    let stats_task =
-        spawn_remote_stats_sampler(remote_clone, tab_id, connection_id, ctx.event_tx.clone());
+    let stats_task = spawn_remote_stats_sampler(
+        remote_clone,
+        tab_id,
+        connection_id,
+        ctx.event_tx.clone(),
+        state.stats_sampling.clone(),
+    );
     if let Some(session) = state.sessions.get_mut(&tab_id) {
         session.set_stats_task(stats_task);
     }
@@ -375,6 +380,7 @@ fn register_local_shared_samplers(
         state.local_stats_task = Some(tokio::spawn(run_local_stats_sampler(
             ctx.event_tx.clone(),
             state.local_stats_tabs.clone(),
+            state.stats_sampling.clone(),
         )));
     }
     if let Ok(mut tabs) = state.local_traffic_tabs.lock() {

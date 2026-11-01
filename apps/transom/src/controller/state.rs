@@ -40,6 +40,8 @@ pub(super) struct ControllerState {
     /// 本地网络流量同样是机器级属性：共享采样按机器计一份读取，逐标签广播。
     pub(super) local_traffic_tabs: LocalTrafficTabs,
     pub(super) local_traffic_task: Option<tokio::task::JoinHandle<()>>,
+    /// 系统统计采样开关：由 UI 按“是否有可见消费方”下发，默认开启。
+    pub(super) stats_sampling: Arc<std::sync::atomic::AtomicBool>,
     /// 主机动作（拨测/唤醒）批次任务：停机时统一等待。
     pub(super) host_action_tasks: JoinSet<()>,
     /// 进程面板的一次性采样/终止任务：与主机动作同样纳入 JoinSet，
@@ -60,6 +62,7 @@ impl ControllerState {
             local_stats_task: None,
             local_traffic_tabs: Arc::new(std::sync::Mutex::new(Vec::new())),
             local_traffic_task: None,
+            stats_sampling: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             host_action_tasks: JoinSet::new(),
             monitor_set: JoinSet::new(),
         }

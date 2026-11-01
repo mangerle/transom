@@ -477,8 +477,35 @@ impl AppShell {
     }
 }
 
+/// 按“是否有可见消费方”开关系统统计采样。
+///
+/// 消费方是监控抽屉、全屏监控标签与状态栏指标条目；三者都不存在时，
+/// 每 5 秒一次的远端 `cat /proc/*` + `df` 纯属浪费。只在需求翻转时下发
+/// 命令，避免渲染帧反复占用命令通道。
+fn sync_stats_sampling(state: &mut crate::app::AppState, cx: &mut Context<AppShell>) {
+    let demand = state.monitor.read(cx).is_open()
+        || state.workspace.tabs.iter().any(|tab| tab.is_monitor())
+        || app_settings(cx).status_bar.visible_items().any(|id| {
+            matches!(
+                id,
+                transom_core::StatusItemId::Network
+                    | transom_core::StatusItemId::Cpu
+                    | transom_core::StatusItemId::Memory
+                    | transom_core::StatusItemId::Disk
+                    | transom_core::StatusItemId::Os
+                    | transom_core::StatusItemId::Uptime
+            )
+        });
+    if demand == state.stats_sampling {
+        return;
+    }
+    state.stats_sampling = demand;
+    state.send_command(transom_core::HostCommand::SetStatsSampling { enabled: demand });
+}
+
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_stats_sampling(&mut self.state, cx);
         if let Some(error) = self.state.take_persistence_error() {
             self.state.set_error(localized_error(&error));
         }
