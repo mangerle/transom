@@ -1,6 +1,6 @@
 //! 已知主机指纹管理模态框渲染模块。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
@@ -11,18 +11,13 @@ use gpui_kit::component::input::Input;
 use gpui_kit::*;
 
 impl AppShell {
-    pub(crate) fn refresh_known_hosts(&mut self) {
-        self.state.modals.connection.known_hosts.records =
-            self.state.services.known_hosts.list().unwrap_or_default();
-    }
-
     pub(crate) fn remove_known_host(&mut self, host: &str, port: u16, cx: &mut Context<Self>) {
         if let Err(error) = self.state.services.known_hosts.remove(host, port) {
             self.state.set_error(localized_error(&error));
         } else {
             self.state.status = Some(rust_i18n::t!("known_hosts.deleted").to_string());
         }
-        self.refresh_known_hosts();
+        self.state.refresh_known_hosts();
         cx.notify();
     }
 
@@ -159,5 +154,12 @@ impl AppShell {
             content,
             Some(footer),
         )
+    }
+}
+impl AppState {
+    /// 重新读取已知主机记录到弹窗状态。
+    pub(crate) fn refresh_known_hosts(&mut self) {
+        self.modals.connection.known_hosts.records =
+            self.services.known_hosts.list().unwrap_or_default();
     }
 }

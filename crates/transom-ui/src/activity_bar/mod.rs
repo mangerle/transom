@@ -249,7 +249,7 @@ impl AppShell {
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
             ActivityItemId::KnownHosts => {
                 self.state.modals.connection.known_hosts.open = true;
-                self.refresh_known_hosts();
+                self.state.refresh_known_hosts();
                 cx.notify();
             }
             ActivityItemId::Keys => self.open_key_wizard(window, cx),

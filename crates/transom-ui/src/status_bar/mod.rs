@@ -36,18 +36,6 @@ use transom_core::{Connection, NetworkTraffic, StatusItemId, SystemStats};
 pub(crate) const BADGE_HEIGHT: f32 = 1.25;
 
 impl AppShell {
-    /// 工作区里是否存在带终端窗格的标签。
-    ///
-    /// 底栏的会话作用域入口用它判定"有没有可操作对象"。刻意不看活动标签：
-    /// 广播目标跨标签，录制也常在非活动标签上进行。
-    pub(crate) fn has_any_terminal(&self) -> bool {
-        self.state
-            .workspace
-            .tabs
-            .iter()
-            .any(|tab| tab.terminal().is_some())
-    }
-
     /// 是否有标签正在录制：录制中必须保住停止入口。
     pub(crate) fn is_any_tab_recording(&self, cx: &App) -> bool {
         self.state
@@ -156,7 +144,7 @@ impl AppShell {
         // 有终端"：广播的目标本来就跨标签多选，且图标不该随切换标签跳动。
         // 三条兜底：已打开的卡片与输入条、以及正在录制的标签，都不允许因为
         // 图标消失而失去关闭/停止的入口。
-        let session_scoped = self.has_any_terminal();
+        let session_scoped = self.state.workspace.has_any_terminal();
         let snippets_entry = (session_scoped || self.state.modals.tools.snippet_panel.open)
             .then(|| self.render_snippets_popover(p, cx));
         let broadcast_entry = (session_scoped || self.state.broadcast.open)

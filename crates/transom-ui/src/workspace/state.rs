@@ -201,6 +201,29 @@ fn alive_split_ids(groups: &[TabGroup], tiled_sets: &[TiledTabs]) -> HashSet<Spl
         .collect()
 }
 
+impl WorkspaceState {
+    /// 当前活动标签的终端视图；活动标签不是终端时返回 `None`。
+    pub(crate) fn active_pane_terminal(&self) -> Option<Entity<transom_terminal::TerminalView>> {
+        let tab_id = self.active_tab?;
+        self.tab(tab_id).and_then(|tab| tab.terminal())
+    }
+
+    /// 是否存在任何终端视图；状态栏据此决定是否显示会话域指标。
+    pub(crate) fn has_any_terminal(&self) -> bool {
+        self.tabs.iter().any(|tab| tab.terminal().is_some())
+    }
+
+    /// 关闭活动窗格的端口转发面板；面板句柄由窗格持有。
+    pub(crate) fn close_forward_panel(&mut self) {
+        if let Some(tab_id) = self.active_tab
+            && let Some(tab) = self.tab_mut(tab_id)
+            && let Some(pane) = tab.session_pane_mut()
+        {
+            pane.forwards_view = None;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

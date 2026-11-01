@@ -6,7 +6,6 @@
 use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::*;
-use transom_terminal::TerminalView;
 
 impl AppShell {
     pub(crate) fn on_search_buffer(
@@ -15,7 +14,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(terminal) = self.active_pane_terminal() else {
+        let Some(terminal) = self.state.workspace.active_pane_terminal() else {
             // 窗格还在连接/重连时没有终端视图，给出可见反馈而不是静默无响应。
             self.state.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
             cx.notify();
@@ -48,7 +47,7 @@ impl AppShell {
     ///
     /// 静默不动是这个动作最容易误判的失败方式——用户只会以为键位没生效。
     fn step_prompt(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let Some(terminal) = self.active_pane_terminal() else {
+        let Some(terminal) = self.state.workspace.active_pane_terminal() else {
             self.state.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
             cx.notify();
             return;
@@ -78,7 +77,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(terminal) = self.active_pane_terminal() else {
+        let Some(terminal) = self.state.workspace.active_pane_terminal() else {
             self.state.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
             cx.notify();
             return;
@@ -91,14 +90,5 @@ impl AppShell {
         };
         self.state.status = Some(rust_i18n::t!(key).to_string());
         cx.notify();
-    }
-
-    /// 当前窗格已建好的终端实体；未连接或连接已断开的窗格返回 `None`。
-    pub(crate) fn active_pane_terminal(&self) -> Option<Entity<TerminalView>> {
-        let tab_id = self.state.workspace.active_tab?;
-        self.state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.terminal())
     }
 }

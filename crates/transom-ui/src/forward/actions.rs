@@ -77,7 +77,7 @@ impl AppShell {
                 self.delete_forward_rule(*tab_id, *rule_id, cx);
             }
             ForwardPanelEvent::ClosePanel => {
-                self.close_forward_panel();
+                self.state.workspace.close_forward_panel();
                 cx.notify();
             }
         }
@@ -210,16 +210,6 @@ impl AppShell {
             pane.forwards_view = Some(view);
         }
         cx.notify();
-    }
-
-    /// 关闭当前活动窗格的转发面板：句柄由窗格持有，只有外壳能回收。
-    pub(crate) fn close_forward_panel(&mut self) {
-        if let Some(tab_id) = self.state.workspace.active_tab
-            && let Some(tab) = self.state.workspace.tab_mut(tab_id)
-            && let Some(pane) = tab.session_pane_mut()
-        {
-            pane.forwards_view = None;
-        }
     }
 
     /// 面板校验通过后提交规则：落库、必要时要求公网确认，否则直接下发启动命令。

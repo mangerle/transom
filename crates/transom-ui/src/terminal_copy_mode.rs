@@ -16,7 +16,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(terminal) = self.active_pane_terminal() else {
+        let Some(terminal) = self.state.workspace.active_pane_terminal() else {
             return;
         };
         // 先把焦点交给终端：从侧栏/面板触发时焦点还在输入框里，模式虽然

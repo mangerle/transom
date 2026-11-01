@@ -86,7 +86,7 @@ impl AppShell {
         execute: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(terminal) = self.active_pane_terminal() else {
+        let Some(terminal) = self.state.workspace.active_pane_terminal() else {
             // 徽标在场时状态文字没有显示位置，这里改用错误通知，避免点了没反应。
             self.state
                 .set_error(rust_i18n::t!("snippets.no_terminal").to_string());
