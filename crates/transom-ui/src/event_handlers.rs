@@ -368,10 +368,7 @@ impl AppShell {
             applied = true;
         }
         // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
-        if applied
-            && self.state.workspace.active_tab == Some(tab_id)
-            && (!self.state.immersive || self.state.monitor.read(cx).is_open())
-        {
+        if applied && self.state.workspace.active_tab == Some(tab_id) && stats_visible(cx) {
             cx.notify();
         }
         false
@@ -406,9 +403,34 @@ impl AppShell {
             pane.network_traffic = Some(traffic);
             applied = true;
         }
-        if applied && self.state.workspace.active_tab == Some(tab_id) && !self.state.immersive {
+        if applied
+            && self.state.workspace.active_tab == Some(tab_id)
+            && (traffic_visible(cx) || self.state.monitor.read(cx).is_open())
+        {
             cx.notify();
         }
         false
     }
+}
+
+/// 状态栏是否仍有消费系统统计的条目；监控抽屉打开时也视为需要重绘。
+fn stats_visible(cx: &App) -> bool {
+    app_settings(cx).status_bar.visible_items().any(|id| {
+        matches!(
+            id,
+            transom_core::StatusItemId::Cpu
+                | transom_core::StatusItemId::Memory
+                | transom_core::StatusItemId::Disk
+                | transom_core::StatusItemId::Os
+                | transom_core::StatusItemId::Uptime
+        )
+    })
+}
+
+/// 状态栏是否显示网络速率徽标。
+fn traffic_visible(cx: &App) -> bool {
+    app_settings(cx)
+        .status_bar
+        .visible_items()
+        .any(|id| id == transom_core::StatusItemId::Network)
 }
