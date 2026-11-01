@@ -5,11 +5,12 @@ use crate::editor::render_editor_list_popover;
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
 use crate::sftp::entity::SftpPanelView;
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::separator::Separator;
-use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
@@ -34,14 +35,16 @@ impl SftpPanelView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let RemoteToolbarProps { tab_id, target, .. } = *props;
-        let home_btn = Button::new(format!("remote-home-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::House)
-            .tooltip(rust_i18n::t!("sftp.home").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.go_home_pane(tab_id, target, window, cx);
-            }));
+        let home_btn = IconButton::new(
+            format!("remote-home-{key}"),
+            IconName::House,
+            rust_i18n::t!("sftp.home").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.go_home_pane(tab_id, target, window, cx);
+        }));
 
         let file_ops = self.render_file_op_buttons(props, key, p, cx);
         let view_ops = self.render_view_op_buttons(props, key, cx);
@@ -76,32 +79,38 @@ impl SftpPanelView {
                 this.download_pane(target, cx);
             }));
 
-        let mkdir_btn = Button::new(format!("remote-mkdir-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::FolderPlus)
-            .tooltip(rust_i18n::t!("sftp.new_folder").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_mkdir_modal_for(target, window, cx);
-            }));
+        let mkdir_btn = IconButton::new(
+            format!("remote-mkdir-{key}"),
+            IconName::FolderPlus,
+            rust_i18n::t!("sftp.new_folder").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.open_mkdir_modal_for(target, window, cx);
+        }));
 
-        let new_file_btn = Button::new(format!("remote-new-file-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::FilePlus)
-            .tooltip(rust_i18n::t!("sftp.remote.new_file_edit").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_editor_new_file_modal_for(target, window, cx);
-            }));
+        let new_file_btn = IconButton::new(
+            format!("remote-new-file-{key}"),
+            IconName::FilePlus,
+            rust_i18n::t!("sftp.remote.new_file_edit").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.open_editor_new_file_modal_for(target, window, cx);
+        }));
 
-        let search_btn = Button::new(format!("remote-search-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Search)
-            .tooltip(rust_i18n::t!("sftp.remote.search").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_search_modal(target, window, cx);
-            }));
+        let search_btn = IconButton::new(
+            format!("remote-search-{key}"),
+            IconName::Search,
+            rust_i18n::t!("sftp.remote.search").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.open_search_modal(target, window, cx);
+        }));
 
         h_flex()
             .gap_1()
@@ -128,55 +137,65 @@ impl SftpPanelView {
             show_editor_list,
             ..
         } = *props;
-        let rename_btn = Button::new(format!("remote-rename-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Pencil)
-            .tooltip(rust_i18n::t!("sftp.rename").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_rename_modal_for(target, window, cx);
-            }));
+        let rename_btn = IconButton::new(
+            format!("remote-rename-{key}"),
+            IconName::Pencil,
+            rust_i18n::t!("sftp.rename").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.open_rename_modal_for(target, window, cx);
+        }));
 
         let selected = pane.selected.clone();
-        let edit_btn = Button::new(format!("remote-edit-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::FilePen)
-            .tooltip(rust_i18n::t!("common.edit").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                let Some(path) = selected.clone() else {
-                    this.set_pane_error(target, rust_i18n::t!("sftp.select_file").to_string(), cx);
-                    return;
-                };
-                this.edit_remote_file(target, path, window, cx);
-            }));
+        let edit_btn = IconButton::new(
+            format!("remote-edit-{key}"),
+            IconName::FilePen,
+            rust_i18n::t!("common.edit").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            let Some(path) = selected.clone() else {
+                this.set_pane_error(target, rust_i18n::t!("sftp.select_file").to_string(), cx);
+                return;
+            };
+            this.edit_remote_file(target, path, window, cx);
+        }));
 
-        let chmod_btn = Button::new(format!("remote-chmod-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Settings)
-            .tooltip(rust_i18n::t!("sftp.remote.chmod").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_chmod_modal(target, window, cx);
-            }));
+        let chmod_btn = IconButton::new(
+            format!("remote-chmod-{key}"),
+            IconName::Settings,
+            rust_i18n::t!("sftp.remote.chmod").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.open_chmod_modal(target, window, cx);
+        }));
 
-        let delete_btn = Button::new(format!("remote-delete-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Trash)
-            .tooltip(rust_i18n::t!("sftp.delete").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.confirm_remote_delete(target, cx);
-            }));
+        let delete_btn = IconButton::new(
+            format!("remote-delete-{key}"),
+            IconName::Trash,
+            rust_i18n::t!("sftp.delete").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.confirm_remote_delete(target, cx);
+        }));
 
-        let upload_btn = Button::new(format!("remote-upload-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Upload)
-            .tooltip(rust_i18n::t!("sftp.upload").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.upload_local_selection(target, cx);
-            }));
+        let upload_btn = IconButton::new(
+            format!("remote-upload-{key}"),
+            IconName::Upload,
+            rust_i18n::t!("sftp.upload").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.upload_local_selection(target, cx);
+        }));
 
         let editor_list = show_editor_list.then(|| {
             let Some(editors) = self.state.editors.clone() else {
@@ -228,58 +247,66 @@ impl SftpPanelView {
             sync_navigation,
             ..
         } = *props;
-        let hidden_btn = Button::new(format!("remote-toggle-hidden-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(if show_hidden {
+        let hidden_btn = IconButton::new(
+            format!("remote-toggle-hidden-{key}"),
+            if show_hidden {
                 IconName::Eye
             } else {
                 IconName::EyeOff
-            })
-            .selected(show_hidden)
-            .tooltip(if show_hidden {
+            },
+            if show_hidden {
                 rust_i18n::t!("sftp.remote.hide_dotfiles").to_string()
             } else {
                 rust_i18n::t!("sftp.remote.show_dotfiles").to_string()
-            })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_hidden_pane(target, cx);
-            }));
+            },
+        )
+        .selected(show_hidden)
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.toggle_hidden_pane(target, cx);
+        }));
 
-        let sync_btn = Button::new(format!("remote-sync-nav-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::ArrowLeftRight)
-            .selected(sync_navigation)
-            .tooltip(if sync_navigation {
+        let sync_btn = IconButton::new(
+            format!("remote-sync-nav-{key}"),
+            IconName::ArrowLeftRight,
+            if sync_navigation {
                 rust_i18n::t!("sftp.remote.sync_nav_on").to_string()
             } else {
                 rust_i18n::t!("sftp.remote.sync_nav_off").to_string()
-            })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_sync_navigation(cx);
-            }));
+            },
+        )
+        .selected(sync_navigation)
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.toggle_sync_navigation(cx);
+        }));
         // 同步导航属于"主远端 ↔ 本地"这一对列的关系；并列列不显示该按钮，
         // 避免一列切换时所有列的按钮同时变亮。
 
-        let compare_btn = Button::new(format!("remote-compare-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::GitCompareArrows)
-            .tooltip(rust_i18n::t!("sftp.sync.title").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.open_sync_modal_pane(target, cx);
-            }));
+        let compare_btn = IconButton::new(
+            format!("remote-compare-{key}"),
+            IconName::GitCompareArrows,
+            rust_i18n::t!("sftp.sync.title").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.open_sync_modal_pane(target, cx);
+        }));
 
-        let filter_btn = Button::new(format!("remote-filter-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Search)
-            .selected(show_filter)
-            .tooltip(rust_i18n::t!("sftp.remote.filter").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.toggle_filter_pane(target, window, cx);
-            }));
+        let filter_btn = IconButton::new(
+            format!("remote-filter-{key}"),
+            IconName::Search,
+            rust_i18n::t!("sftp.remote.filter").to_string(),
+        )
+        .selected(show_filter)
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.toggle_filter_pane(target, window, cx);
+        }));
 
         // 编辑列表浮层归面板实体渲染，这里只提供实体句柄与当前标签。
         h_flex()
