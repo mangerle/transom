@@ -144,108 +144,7 @@ impl AppShell {
             );
         } else {
             for (idx, entry) in modal.entries.iter().enumerate() {
-                let is_sel = idx == selected_idx;
-                let bg = if is_sel {
-                    p.muted
-                } else {
-                    gpui::transparent_black()
-                };
-                let border = if is_sel {
-                    p.primary
-                } else {
-                    gpui::transparent_black()
-                };
-                let title = if entry.title.is_empty() {
-                    entry.file_name.clone()
-                } else {
-                    format!("{} ({})", entry.title, entry.file_name)
-                };
-
-                let entry_path = entry.path.clone();
-                let entry_title = entry.title.clone();
-                let item_play_path = entry.path.clone();
-                let item_play_title = entry.title.clone();
-
-                list = list.child(
-                    v_flex()
-                        .id(ElementId::Name(format!("replay-item-{idx}").into()))
-                        .p_2()
-                        .rounded(p.radius.sm)
-                        .bg(bg)
-                        .border_1()
-                        .border_color(border)
-                        .cursor_pointer()
-                        .hover(|s| s.bg(p.muted.opacity(0.4)))
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            move |this, event: &ClickEvent, window, cx| {
-                                if event.click_count() >= 2 {
-                                    this.state.modals.tools.replay = None;
-                                    this.open_cast_player(
-                                        entry_path.clone(),
-                                        Some(entry_title.clone()),
-                                        window,
-                                        cx,
-                                    );
-                                } else if let Some(m) = this.state.modals.tools.replay.as_mut() {
-                                    m.selected_index = idx;
-                                    cx.notify();
-                                }
-                            },
-                        ))
-                        .child(
-                            h_flex()
-                                .justify_between()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .text_xs()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.foreground)
-                                        .truncate()
-                                        .child(title),
-                                )
-                                .child(
-                                    Button::new(ElementId::Name(
-                                        format!("play-entry-btn-{idx}").into(),
-                                    ))
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(IconName::Disc)
-                                    .tooltip(rust_i18n::t!("recorder.open_player").to_string())
-                                    .on_click(
-                                        crate::dialog_host::on_event(
-                                            app,
-                                            move |this, _: &ClickEvent, window, cx| {
-                                                this.state.modals.tools.replay = None;
-                                                this.open_cast_player(
-                                                    item_play_path.clone(),
-                                                    Some(item_play_title.clone()),
-                                                    window,
-                                                    cx,
-                                                );
-                                            },
-                                        ),
-                                    ),
-                                ),
-                        )
-                        .child(
-                            h_flex()
-                                .justify_between()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(
-                                    rust_i18n::t!(
-                                        "recorder.duration_steps",
-                                        seconds = format!("{:.1}", entry.duration_secs),
-                                        steps = entry.step_count
-                                    )
-                                    .to_string(),
-                                )
-                                .child(entry.modified_display.clone()),
-                        ),
-                );
+                list = list.child(replay_row(idx, entry, idx == selected_idx, app, p));
             }
         }
 
@@ -384,4 +283,108 @@ impl AppShell {
             );
         footer.into_any_element()
     }
+}
+
+/// 单条回放脚本行：双击直接播放，单击选中；右侧独立播放按钮。
+fn replay_row(
+    idx: usize,
+    entry: &super::types::RecordingEntry,
+    is_sel: bool,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let bg = if is_sel {
+        p.muted
+    } else {
+        gpui::transparent_black()
+    };
+    let border = if is_sel {
+        p.primary
+    } else {
+        gpui::transparent_black()
+    };
+    let title = if entry.title.is_empty() {
+        entry.file_name.clone()
+    } else {
+        format!("{} ({})", entry.title, entry.file_name)
+    };
+    let entry_path = entry.path.clone();
+    let entry_title = entry.title.clone();
+    let item_play_path = entry.path.clone();
+    let item_play_title = entry.title.clone();
+    let row = v_flex()
+        .id(ElementId::Name(format!("replay-item-{idx}").into()))
+        .p_2()
+        .rounded(p.radius.sm)
+        .bg(bg)
+        .border_1()
+        .border_color(border)
+        .cursor_pointer()
+        .hover(|s| s.bg(p.muted.opacity(0.4)))
+        .on_click(crate::dialog_host::on_event(
+            app,
+            move |this, event: &ClickEvent, window, cx| {
+                if event.click_count() >= 2 {
+                    this.state.modals.tools.replay = None;
+                    this.open_cast_player(
+                        entry_path.clone(),
+                        Some(entry_title.clone()),
+                        window,
+                        cx,
+                    );
+                } else if let Some(m) = this.state.modals.tools.replay.as_mut() {
+                    m.selected_index = idx;
+                    cx.notify();
+                }
+            },
+        ))
+        .child(
+            h_flex()
+                .justify_between()
+                .items_center()
+                .child(
+                    div()
+                        .flex_1()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.foreground)
+                        .truncate()
+                        .child(title),
+                )
+                .child(
+                    Button::new(ElementId::Name(format!("play-entry-btn-{idx}").into()))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Disc)
+                        .tooltip(rust_i18n::t!("recorder.open_player").to_string())
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            move |this, _: &ClickEvent, window, cx| {
+                                this.state.modals.tools.replay = None;
+                                this.open_cast_player(
+                                    item_play_path.clone(),
+                                    Some(item_play_title.clone()),
+                                    window,
+                                    cx,
+                                );
+                            },
+                        )),
+                ),
+        )
+        .child(
+            h_flex()
+                .justify_between()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(
+                    rust_i18n::t!(
+                        "recorder.duration_steps",
+                        seconds = format!("{:.1}", entry.duration_secs),
+                        steps = entry.step_count
+                    )
+                    .to_string(),
+                )
+                .child(entry.modified_display.clone()),
+        );
+    row.into_any_element()
 }
