@@ -151,7 +151,7 @@ impl AppShell {
         select_after: Option<PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| {
                 view.spawn_local_dir_refresh(select_after, cx)
             });
@@ -165,7 +165,7 @@ impl AppShell {
         paths: Vec<PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.perform_local_delete(paths, cx));
         }
     }

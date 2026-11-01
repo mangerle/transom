@@ -25,7 +25,7 @@ impl AppShell {
         let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
-        let Some(view) = self.sftp_view(tab_id) else {
+        let Some(view) = self.state.sftp_view(tab_id) else {
             return;
         };
         let current_conn = self

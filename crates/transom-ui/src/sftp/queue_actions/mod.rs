@@ -24,7 +24,7 @@ impl AppShell {
         paths: &[PathBuf],
         cx: &mut Context<Self>,
     ) -> Result<usize, String> {
-        let Some(view) = self.sftp_view(tab_id) else {
+        let Some(view) = self.state.sftp_view(tab_id) else {
             return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
         };
         view.update(cx, |view, cx| view.enqueue_uploads(tab_id, paths, cx))
@@ -32,21 +32,21 @@ impl AppShell {
 
     /// 按并发上限启动待处理任务；调度本体在实体上，外壳只负责转发。
     pub(crate) fn process_sftp_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.process_queue(tab_id, cx));
         }
     }
 
     /// 暂停全部活动与排队任务；队列收起时由状态栏调用。
     pub(crate) fn sftp_pause_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.pause_all(tab_id, cx));
         }
     }
 
     /// 取消全部活动、排队与暂停任务。
     pub(crate) fn sftp_cancel_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.cancel_all(tab_id, cx));
         }
     }

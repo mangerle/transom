@@ -72,7 +72,7 @@ impl AppShell {
                 cx.notify();
             }
             SftpPanelEvent::ClosePanel { tab_id } => {
-                self.close_sftp_panel(*tab_id);
+                self.state.close_sftp_panel(*tab_id);
                 cx.notify();
             }
             SftpPanelEvent::OpenLocalDiff { tab_id, target } => {
@@ -157,7 +157,7 @@ impl AppShell {
         // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
         match self.sftp_state(tab_id, cx).map(|panel| panel.open) {
             Some(true) => {
-                self.close_sftp_panel(tab_id);
+                self.state.close_sftp_panel(tab_id);
                 cx.notify();
                 return;
             }

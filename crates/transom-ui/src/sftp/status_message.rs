@@ -15,7 +15,7 @@ impl AppShell {
         message: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.set_transient_status(message, cx));
         }
     }

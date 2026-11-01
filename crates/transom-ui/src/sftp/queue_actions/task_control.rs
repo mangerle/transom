@@ -15,7 +15,7 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.pause_task(tab_id, op_id, cx));
         }
     }
@@ -26,7 +26,7 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.resume_task(tab_id, op_id, cx));
         }
     }
@@ -37,7 +37,7 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.cancel_task(tab_id, op_id, cx));
         }
     }
@@ -48,7 +48,7 @@ impl AppShell {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.remove_task(op_id, cx));
         }
     }

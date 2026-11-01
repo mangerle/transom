@@ -381,7 +381,7 @@ impl SftpPanelView {
 
 impl AppShell {
     pub(crate) fn dismiss_sftp_hover_preview(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
         }
     }
@@ -399,7 +399,7 @@ impl AppShell {
         {
             return;
         }
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.handle_preview(response, cx));
         }
     }

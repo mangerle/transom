@@ -263,7 +263,7 @@ impl AppShell {
         op: SftpOperation,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| {
                 view.send_op_for_connection(connection_id, op, cx)
             });

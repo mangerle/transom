@@ -68,7 +68,7 @@ impl SftpPanelView {
 
 impl AppShell {
     pub(crate) fn sftp_open_sync_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.open_sync_modal(cx));
         }
     }

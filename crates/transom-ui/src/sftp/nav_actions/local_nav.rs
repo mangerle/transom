@@ -160,7 +160,7 @@ impl SftpPanelView {
 
 impl AppShell {
     pub(crate) fn sftp_local_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.local_refresh(cx));
         }
     }
@@ -171,7 +171,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.local_enter_path(tab_id, window, cx));
         }
     }

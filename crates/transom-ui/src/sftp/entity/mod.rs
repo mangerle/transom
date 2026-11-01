@@ -32,7 +32,7 @@ mod status;
 mod task_control;
 
 use super::SftpPanelState;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::keymap;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
@@ -97,17 +97,12 @@ impl Render for SftpPanelView {
 }
 
 impl AppShell {
-    /// 按窗格查找 SFTP 实体句柄；未建立面板或窗格已关闭时返回 `None`。
-    pub(crate) fn sftp_view(&self, tab_id: TabId) -> Option<Entity<SftpPanelView>> {
-        self.state.workspace.tab(tab_id)?.sftp_view()
-    }
-
     /// 按窗格只读面板状态。
     ///
     /// 与旧 `tab.sftp()` 的差别：状态存放在实体里，读取需要 `cx`；
     /// 返回值借用 `cx`，调用方必须在借用结束后再修改外壳。
     pub(crate) fn sftp_state<'a>(&self, tab_id: TabId, cx: &'a App) -> Option<&'a SftpPanelState> {
-        let view = self.sftp_view(tab_id)?;
+        let view = self.state.sftp_view(tab_id)?;
         Some(view.read(cx).state())
     }
 
@@ -120,28 +115,8 @@ impl AppShell {
         tab_id: TabId,
         cx: &'a mut Context<Self>,
     ) -> Option<GpuiBorrow<'a, SftpPanelView>> {
-        let view = self.sftp_view(tab_id)?;
+        let view = self.state.sftp_view(tab_id)?;
         Some(view.as_mut(cx))
-    }
-
-    /// 该窗格是否持有指定连接的远端列（主连接或并列列）。
-    fn sftp_connection_matches(
-        &self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-        view: &SftpPanelView,
-    ) -> bool {
-        let main_connection = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.connection_id);
-        main_connection == Some(connection_id)
-            || view
-                .state
-                .side_remotes
-                .iter()
-                .any(|side| side.connection_id == Some(connection_id))
     }
 
     /// 按窗格与连接只读面板状态；连接不属于该窗格时返回 `None`。
@@ -151,9 +126,12 @@ impl AppShell {
         connection_id: ConnectionId,
         cx: &'a App,
     ) -> Option<&'a SftpPanelState> {
-        let view = self.sftp_view(tab_id)?;
+        let view = self.state.sftp_view(tab_id)?;
         let view_ref = view.read(cx);
-        if !self.sftp_connection_matches(tab_id, connection_id, view_ref) {
+        if !self
+            .state
+            .sftp_connection_matches(tab_id, connection_id, view_ref)
+        {
             return None;
         }
         Some(&view_ref.state)
@@ -169,26 +147,14 @@ impl AppShell {
         connection_id: ConnectionId,
         cx: &'a mut Context<Self>,
     ) -> Option<GpuiBorrow<'a, SftpPanelView>> {
-        let view = self.sftp_view(tab_id)?;
-        if !self.sftp_connection_matches(tab_id, connection_id, view.read(cx)) {
+        let view = self.state.sftp_view(tab_id)?;
+        if !self
+            .state
+            .sftp_connection_matches(tab_id, connection_id, view.read(cx))
+        {
             return None;
         }
         Some(view.as_mut(cx))
-    }
-
-    /// 销毁窗格上的 SFTP 实体；返回此前是否存在。
-    ///
-    /// 只更新窗格上的句柄，不读写实体本身，因此可在实体回调回交外壳时调用。
-    pub(crate) fn close_sftp_panel(&mut self, tab_id: TabId) -> bool {
-        let Some(pane) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.session_pane_mut())
-        else {
-            return false;
-        };
-        pane.sftp_view.take().is_some()
     }
 }
 
@@ -252,5 +218,41 @@ impl SftpPanelView {
         cx: &mut Context<Self>,
     ) {
         self.stop_resize_queue(cx);
+    }
+}
+impl AppState {
+    /// 按窗格查找 SFTP 实体句柄；未建立面板或窗格已关闭时返回 `None`。
+    pub(crate) fn sftp_view(&self, tab_id: TabId) -> Option<Entity<SftpPanelView>> {
+        self.workspace.tab(tab_id)?.sftp_view()
+    }
+
+    /// 该窗格是否持有指定连接的远端列（主连接或并列列）。
+    pub(crate) fn sftp_connection_matches(
+        &self,
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        view: &SftpPanelView,
+    ) -> bool {
+        let main_connection = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id);
+        main_connection == Some(connection_id)
+            || view
+                .state
+                .side_remotes
+                .iter()
+                .any(|side| side.connection_id == Some(connection_id))
+    }
+
+    /// 销毁窗格上的 SFTP 实体；返回此前是否存在。
+    ///
+    /// 只更新窗格上的句柄，不读写实体本身，因此可在实体回调回交外壳时调用。
+    pub(crate) fn close_sftp_panel(&mut self, tab_id: TabId) -> bool {
+        let Some(pane) = self
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|tab| tab.session_pane_mut())
+        else {
+            return false;
+        };
+        pane.sftp_view.take().is_some()
     }
 }

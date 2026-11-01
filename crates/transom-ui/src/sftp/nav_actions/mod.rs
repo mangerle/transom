@@ -163,7 +163,7 @@ impl AppShell {
         else {
             return;
         };
-        let Some(view) = self.sftp_view(tab_id) else {
+        let Some(view) = self.state.sftp_view(tab_id) else {
             return;
         };
         let Some(connection_id) = view.update(cx, |view, _| {
@@ -196,7 +196,7 @@ impl AppShell {
         else {
             return;
         };
-        let Some(view) = self.sftp_view(tab_id) else {
+        let Some(view) = self.state.sftp_view(tab_id) else {
             return;
         };
         let Some(connection_id) = view.update(cx, |view, _| {
@@ -221,7 +221,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(view) = self.sftp_view(tab_id) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
             view.update(cx, |view, cx| {
                 view.sync_with_terminal_cwd(tab_id, cwd, window, cx)
             });

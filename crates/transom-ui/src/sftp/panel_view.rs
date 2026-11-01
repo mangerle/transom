@@ -67,7 +67,7 @@ impl AppShell {
         self.state
             .workspace
             .active_tab
-            .and_then(|tab_id| self.sftp_view(tab_id))
+            .and_then(|tab_id| self.state.sftp_view(tab_id))
             .map(IntoElement::into_any_element)
             .unwrap_or_else(|| div().into_any_element())
     }
