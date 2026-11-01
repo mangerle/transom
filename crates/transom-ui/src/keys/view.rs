@@ -186,110 +186,11 @@ impl AppShell {
         };
         let keys = state.keys.clone();
         let selected = state.selected;
-        let rows: Vec<AnyElement> =
-            keys.into_iter()
-                .enumerate()
-                .map(|(index, key)| {
-                    let is_selected = selected == Some(index);
-                    let file_name = key
-                        .path
-                        .file_name()
-                        .map(|name| name.to_string_lossy().to_string())
-                        .unwrap_or_else(|| key.path.display().to_string());
-                    let mut row =
-                        h_flex()
-                            .id(ElementId::Name(format!("key-row-{index}").into()))
-                            .w_full()
-                            .px_3()
-                            .py_2()
-                            .gap_3()
-                            .items_center()
-                            .rounded(p.radius.md)
-                            .border_1()
-                            .cursor_pointer()
-                            .border_color(if is_selected {
-                                p.sidebar_accent_foreground
-                            } else {
-                                p.border
-                            })
-                            .bg(if is_selected {
-                                p.sidebar_accent
-                            } else {
-                                p.muted.opacity(0.35)
-                            })
-                            .hover(|style| {
-                                if is_selected {
-                                    style
-                                } else {
-                                    style.border_color(p.muted_foreground)
-                                }
-                            })
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                move |this, _: &ClickEvent, _, cx| {
-                                    this.select_key(index, cx);
-                                },
-                            ))
-                            .child(Icon::new(IconName::KeyRound).small().text_color(
-                                if is_selected {
-                                    p.sidebar_accent_foreground
-                                } else {
-                                    p.muted_foreground
-                                },
-                            ))
-                            .child(
-                                v_flex()
-                                    .flex_1()
-                                    .gap_1()
-                                    .overflow_hidden()
-                                    .child(
-                                        h_flex()
-                                            .gap_2()
-                                            .items_center()
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child(file_name),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .px_1p5()
-                                                    .py_0p5()
-                                                    .rounded(p.radius.sm)
-                                                    .bg(p.background)
-                                                    .text_color(p.muted_foreground)
-                                                    .child(key.algorithm),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(p.muted_foreground)
-                                            .truncate()
-                                            .child(key.fingerprint),
-                                    )
-                                    .when(!key.comment.is_empty(), |this| {
-                                        this.child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(p.muted_foreground)
-                                                .truncate()
-                                                .child(key.comment),
-                                        )
-                                    }),
-                            );
-                    if is_selected {
-                        row = row.child(
-                            Icon::new(IconName::Check)
-                                .small()
-                                .text_color(p.sidebar_accent_foreground),
-                        );
-                    }
-                    row.into_any_element()
-                })
-                .collect();
+        let rows: Vec<AnyElement> = keys
+            .into_iter()
+            .enumerate()
+            .map(|(index, key)| key_row(index, &key, selected == Some(index), app, p))
+            .collect();
 
         v_flex()
             .gap_2()
@@ -439,4 +340,113 @@ impl AppShell {
             .children(deploy_buttons)
             .into_any_element()
     }
+}
+
+/// 单个公钥行：文件名、指纹/路径、选择态与当前标记。
+fn key_row(
+    index: usize,
+    key: &crate::keys::PublicKeyInfo,
+    is_selected: bool,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let file_name = key
+        .path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| key.path.display().to_string());
+
+    let mut row = h_flex()
+        .id(ElementId::Name(format!("key-row-{index}").into()))
+        .w_full()
+        .px_3()
+        .py_2()
+        .gap_3()
+        .items_center()
+        .rounded(p.radius.md)
+        .border_1()
+        .cursor_pointer()
+        .border_color(if is_selected {
+            p.sidebar_accent_foreground
+        } else {
+            p.border
+        })
+        .bg(if is_selected {
+            p.sidebar_accent
+        } else {
+            p.muted.opacity(0.35)
+        })
+        .hover(|style| {
+            if is_selected {
+                style
+            } else {
+                style.border_color(p.muted_foreground)
+            }
+        })
+        .on_click(crate::dialog_host::on_event(
+            app,
+            move |this, _: &ClickEvent, _, cx| {
+                this.select_key(index, cx);
+            },
+        ))
+        .child(
+            Icon::new(IconName::KeyRound)
+                .small()
+                .text_color(if is_selected {
+                    p.sidebar_accent_foreground
+                } else {
+                    p.muted_foreground
+                }),
+        )
+        .child(
+            v_flex()
+                .flex_1()
+                .gap_1()
+                .overflow_hidden()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(file_name),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .px_1p5()
+                                .py_0p5()
+                                .rounded(p.radius.sm)
+                                .bg(p.background)
+                                .text_color(p.muted_foreground)
+                                .child(key.algorithm.clone()),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .truncate()
+                        .child(key.fingerprint.clone()),
+                )
+                .when(!key.comment.is_empty(), |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .truncate()
+                            .child(key.comment.clone()),
+                    )
+                }),
+        );
+    if is_selected {
+        row = row.child(
+            Icon::new(IconName::Check)
+                .small()
+                .text_color(p.sidebar_accent_foreground),
+        );
+    }
+    row.into_any_element()
 }
