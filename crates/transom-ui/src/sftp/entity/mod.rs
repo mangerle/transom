@@ -10,15 +10,15 @@
 //!   `SessionPaneState` 只保存实体句柄，不保留任何影子副本。
 //!
 //! # 调用约束
-//! 实体回调执行期间本实体已被 GPUI 租借。回调里回交外壳（`with_shell`）时，
-//! 外壳方法**不得**再 `read`/`update` 本实体，否则触发
-//! “cannot update while it is already being updated” 崩溃。正确切分是：
-//! 状态变更留在实体内完成，外壳只接收结果（快照、布尔值、参数）。
+//! 实体回调执行期间本实体已被 GPUI 租借。面板向外壳上报
+//! [`super::SftpPanelEvent`] 时，外壳处理函数**不得**再 `read`/`update` 本实体，
+//! 否则触发 “cannot update while it is already being updated” 崩溃。正确切分是：
+//! 状态变更留在实体内完成，需要窗口的动作排进 `pending_sftp_requests`，由外壳
+//! 在渲染期统一执行。
 //!
 //! # 代价与局限
 //! 外部事件处理（控制器回传的目录列表、进度、完成）需要先按标签找到实体
-//! 再 `update`，比直接改字段多一次调度；实体构造时外壳已存在，因此
-//! `attach` 在创建后立即调用，不存在未绑定窗口期。
+//! 再 `update`，比直接改字段多一次调度。
 
 mod chmod;
 mod clipboard;
@@ -54,7 +54,7 @@ impl SftpPanelView {
         self.state.mount_candidates = candidates;
     }
 
-    /// 用给定状态创建面板实体；`attach` 之后才具备回交外壳的能力。
+    /// 用给定状态创建面板实体；创建后即可通过事件向外壳上报意图。
     pub(crate) fn new(state: SftpPanelState, tab_id: TabId) -> Self {
         Self { state, tab_id }
     }

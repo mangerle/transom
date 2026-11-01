@@ -63,7 +63,6 @@ pub(crate) enum TabContent {
     /// 录像回放播放器。
     Player(Entity<crate::cast_player::CastPlayerView>),
     /// 全屏独立主机监控看板（携带关联的主机会话 TabId）。
-    #[allow(dead_code)]
     Monitor(TabId),
 }
 
@@ -108,7 +107,6 @@ impl TerminalTab {
     }
 
     /// 是否为全屏主机监控看板标签。
-    #[allow(dead_code)]
     pub(crate) fn is_monitor(&self) -> bool {
         matches!(self.content, TabContent::Monitor(_))
     }

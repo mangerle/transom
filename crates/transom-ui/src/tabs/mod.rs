@@ -15,7 +15,8 @@ use transom_core::{Connection, GroupId, SavedTabGroup, Session, SessionId, TabId
 impl AppState {
     /// 标签所属分组的索引；标签不属于任何分组时返回 `None`。
     ///
-    /// 纯状态查询，不依赖 GPUI 上下文；外壳通过 `Deref` 直接复用。
+    /// 纯状态查询，不依赖 GPUI 上下文；归属于 [`AppState`]，外壳显式经
+    /// `self.state.group_index_for_tab` 调用。
     pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
         self.workspace.group_index_of(tab_id)
     }
@@ -25,8 +26,8 @@ impl AppState {
     pub(crate) fn refresh_tab_sessions(&mut self) {
         for index in 0..self.workspace.tabs.len() {
             let session_id = self.workspace.tabs[index].session_id;
-            // 先结束对 catalog 的只读借用，再写回标签，避免通过 Deref
-            // 访问两个字段时被当成对 `*self` 的整体借用。
+            // 先结束对 catalog 的只读借用，再写回标签：两个字段同属
+            // `self.state`，同时读写会被当成对整体的借用冲突。
             let resolved = self
                 .catalog
                 .sessions

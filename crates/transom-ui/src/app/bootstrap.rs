@@ -228,8 +228,8 @@ impl AppShell {
             },
         );
         this.state.tasks.monitor_panel_subscription = Some(monitor_subscription);
-        // 编辑器面板仍在用同步回交，暂保留弱引用绑定。
-        let _app_weak = cx.entity().downgrade();
+        // 编辑器面板的意图事件由外壳订阅处理；命令通道在创建时注入，
+        // 面板自己投递 SFTP 命令，不需要回指外壳。
         let editor_command_tx = this.state.services.command_tx.clone();
         let editor_subscription = cx.subscribe(
             &this.state.editors,

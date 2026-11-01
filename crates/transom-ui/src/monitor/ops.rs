@@ -468,7 +468,6 @@ impl AppShell {
     }
 
     /// 将全屏监控独立标签页收回并停靠为右侧抽屉。
-    #[allow(dead_code)]
     pub(crate) fn dock_monitor_to_drawer(
         &mut self,
         tab_id: TabId,
