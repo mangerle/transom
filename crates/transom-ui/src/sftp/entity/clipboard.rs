@@ -110,44 +110,53 @@ impl SftpPanelView {
     }
 
     /// 触发剪贴板粘贴（Ctrl+V 或右键粘贴）。
+    /// 把远端剪贴板内容下载到当前本地目录。
+    fn paste_remote_to_local(
+        &mut self,
+        clip: crate::sftp::side_remote::SftpClipboardData,
+        cx: &mut Context<Self>,
+    ) {
+        let SftpClipboardSource::Remote(source_conn) = clip.source else {
+            return;
+        };
+        let local_dir = self.state.local.path.clone();
+        for entry in clip.entries {
+            let file_name = entry
+                .path
+                .rsplit('/')
+                .next()
+                .unwrap_or(&entry.path)
+                .to_owned();
+            let target_path = match transom_core::safe_local_join(&local_dir, &file_name) {
+                Ok(path) => path,
+                Err(_) => {
+                    self.state
+                        .set_local_error(rust_i18n::t!("sftp.invalid_name").to_string());
+                    continue;
+                }
+            };
+            self.enqueue_transfer(
+                SftpTransferRequest {
+                    tab_id: self.tab_id,
+                    connection_id: source_conn,
+                    direction: TransferDirection::Download,
+                    is_dir: entry.is_dir,
+                    local_path: target_path,
+                    remote_path: entry.path,
+                },
+                cx,
+            );
+        }
+        cx.notify();
+    }
+
     pub(crate) fn paste_clipboard(&mut self, cx: &mut Context<Self>) {
         let Some(clip) = self.state.clipboard.clone() else {
             return;
         };
         let active_pane = self.state.active_pane;
         if active_pane == SftpActivePane::Local {
-            let SftpClipboardSource::Remote(source_conn) = clip.source else {
-                return;
-            };
-            let local_dir = self.state.local.path.clone();
-            for entry in clip.entries {
-                let file_name = entry
-                    .path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&entry.path)
-                    .to_owned();
-                let target_path = match transom_core::safe_local_join(&local_dir, &file_name) {
-                    Ok(path) => path,
-                    Err(_) => {
-                        self.state
-                            .set_local_error(rust_i18n::t!("sftp.invalid_name").to_string());
-                        continue;
-                    }
-                };
-                self.enqueue_transfer(
-                    SftpTransferRequest {
-                        tab_id: self.tab_id,
-                        connection_id: source_conn,
-                        direction: TransferDirection::Download,
-                        is_dir: entry.is_dir,
-                        local_path: target_path,
-                        remote_path: entry.path,
-                    },
-                    cx,
-                );
-            }
-            cx.notify();
+            self.paste_remote_to_local(clip, cx);
             return;
         }
 
