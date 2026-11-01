@@ -163,125 +163,38 @@ impl AppShell {
         app: &Entity<AppShell>,
         p: &Palette,
     ) -> AnyElement {
-        let is_export = prompt.action.is_export();
-        let mut content = v_flex().gap_3();
-        if is_export {
-            content = content
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .child(
-                            Checkbox::new("backup-encrypt")
-                                .small()
-                                .checked(prompt.encrypt)
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, checked: &bool, _, cx| {
-                                        if let Some(prompt) =
-                                            this.state.modals.tools.backup_prompt.as_mut()
-                                        {
-                                            prompt.encrypt = *checked;
-                                        }
-                                        cx.notify();
-                                    },
-                                )),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .child(rust_i18n::t!("backup.encrypt").to_string()),
-                        ),
-                )
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .child(
-                            Checkbox::new("backup-include-secrets")
-                                .small()
-                                .checked(prompt.include_secrets)
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, checked: &bool, _, cx| {
-                                        if let Some(prompt) =
-                                            this.state.modals.tools.backup_prompt.as_mut()
-                                        {
-                                            prompt.include_secrets = *checked;
-                                            // 口令必须加密落盘：勾选包含口令时同步打开加密，
-                                            // 用户仍可手动取消，但提交时会被明确拦下。
-                                            if *checked {
-                                                prompt.encrypt = true;
-                                            }
-                                        }
-                                        cx.notify();
-                                    },
-                                )),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .child(rust_i18n::t!("backup.include_secrets").to_string()),
-                        ),
-                );
-            if prompt.encrypt {
-                content = content.child(crate::widgets::form_field(
-                    rust_i18n::t!("backup.passphrase").to_string(),
-                    prompt.passphrase.clone(),
-                    p,
-                ));
-                if let Some(confirm) = &prompt.confirm {
-                    content = content.child(crate::widgets::form_field(
-                        rust_i18n::t!("backup.confirm").to_string(),
-                        confirm.clone(),
-                        p,
-                    ));
-                }
-                content = content.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("backup.passphrase_hint").to_string()),
-                );
-            } else {
-                content = content.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("backup.plain_hint").to_string()),
-                );
-            }
-            if prompt.include_secrets {
-                content = content.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("backup.include_secrets_hint").to_string()),
-                );
-            }
+        if prompt.action.is_export() {
+            self.render_export_options(prompt, app, p)
         } else {
-            content = content.child(
+            self.render_import_options(prompt, app, p)
+        }
+    }
+
+    /// 导出选项：加密、包含口令与口令输入。
+    fn render_export_options(
+        &self,
+        prompt: &crate::backup::BackupPromptState,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let mut content = v_flex().gap_3();
+
+        content = content
+            .child(
                 h_flex()
                     .gap_2()
                     .items_center()
                     .child(
-                        Checkbox::new("backup-file-encrypted")
+                        Checkbox::new("backup-encrypt")
                             .small()
-                            .checked(prompt.encrypted_file)
+                            .checked(prompt.encrypt)
                             .on_click(crate::dialog_host::on_event(
                                 app,
-                                |this, checked: &bool, window, cx| {
+                                |this, checked: &bool, _, cx| {
                                     if let Some(prompt) =
                                         this.state.modals.tools.backup_prompt.as_mut()
                                     {
-                                        prompt.encrypted_file = *checked;
-                                    }
-                                    if *checked
-                                        && let Some(prompt) =
-                                            this.state.modals.tools.backup_prompt.as_ref()
-                                    {
-                                        let passphrase = prompt.passphrase.clone();
-                                        passphrase.update(cx, |state, cx| state.focus(window, cx));
+                                        prompt.encrypt = *checked;
                                     }
                                     cx.notify();
                                 },
@@ -290,18 +203,126 @@ impl AppShell {
                     .child(
                         div()
                             .text_sm()
-                            .child(rust_i18n::t!("backup.file_encrypted").to_string()),
+                            .child(rust_i18n::t!("backup.encrypt").to_string()),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        Checkbox::new("backup-include-secrets")
+                            .small()
+                            .checked(prompt.include_secrets)
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, checked: &bool, _, cx| {
+                                    if let Some(prompt) =
+                                        this.state.modals.tools.backup_prompt.as_mut()
+                                    {
+                                        prompt.include_secrets = *checked;
+                                        // 口令必须加密落盘：勾选包含口令时同步打开加密，
+                                        // 用户仍可手动取消，但提交时会被明确拦下。
+                                        if *checked {
+                                            prompt.encrypt = true;
+                                        }
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("backup.include_secrets").to_string()),
                     ),
             );
-            if prompt.encrypted_file {
+        if prompt.encrypt {
+            content = content.child(crate::widgets::form_field(
+                rust_i18n::t!("backup.passphrase").to_string(),
+                prompt.passphrase.clone(),
+                p,
+            ));
+            if let Some(confirm) = &prompt.confirm {
                 content = content.child(crate::widgets::form_field(
-                    rust_i18n::t!("backup.passphrase").to_string(),
-                    prompt.passphrase.clone(),
+                    rust_i18n::t!("backup.confirm").to_string(),
+                    confirm.clone(),
                     p,
                 ));
             }
+            content = content.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("backup.passphrase_hint").to_string()),
+            );
+        } else {
+            content = content.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("backup.plain_hint").to_string()),
+            );
         }
+        if prompt.include_secrets {
+            content = content.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("backup.include_secrets_hint").to_string()),
+            );
+        }
+        content.into_any_element()
+    }
 
+    /// 导入选项：文件是否加密与解密口令。
+    fn render_import_options(
+        &self,
+        prompt: &crate::backup::BackupPromptState,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let mut content = v_flex().gap_3();
+
+        content = content.child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    Checkbox::new("backup-file-encrypted")
+                        .small()
+                        .checked(prompt.encrypted_file)
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, checked: &bool, window, cx| {
+                                if let Some(prompt) = this.state.modals.tools.backup_prompt.as_mut()
+                                {
+                                    prompt.encrypted_file = *checked;
+                                }
+                                if *checked
+                                    && let Some(prompt) =
+                                        this.state.modals.tools.backup_prompt.as_ref()
+                                {
+                                    let passphrase = prompt.passphrase.clone();
+                                    passphrase.update(cx, |state, cx| state.focus(window, cx));
+                                }
+                                cx.notify();
+                            },
+                        )),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .child(rust_i18n::t!("backup.file_encrypted").to_string()),
+                ),
+        );
+        if prompt.encrypted_file {
+            content = content.child(crate::widgets::form_field(
+                rust_i18n::t!("backup.passphrase").to_string(),
+                prompt.passphrase.clone(),
+                p,
+            ));
+        }
         content.into_any_element()
     }
 
