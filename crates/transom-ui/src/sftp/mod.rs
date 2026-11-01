@@ -17,6 +17,7 @@ mod modals;
 mod panel_event;
 
 pub(crate) use panel_event::SftpPanelEvent;
+mod filters;
 mod nav_actions;
 mod overlay;
 mod panel_view;

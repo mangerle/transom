@@ -1,14 +1,11 @@
 //! SFTP 双栏文件管理器主面板视图渲染。
 
+use super::SftpRemotePaneRef;
 use super::TransferStatus;
 use super::columns::{SftpColumn, SftpColumnId};
-use super::file_row::{insert_parent_local_entry, insert_parent_remote_entry};
-use super::filter::filter_named_entries;
 use super::local_pane_view::SftpLocalPaneProps;
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
 use super::remote_pane::RemotePaneProps;
-use super::state::SftpRemotePaneState;
-use super::{LocalFileEntry, SftpRemotePaneRef};
 use crate::app::AppShell;
 use crate::app::AppState;
 use crate::app::app_settings;
@@ -21,45 +18,6 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
-use transom_core::RemoteFile;
-
-impl AppState {
-    /// 过滤单个远端列的条目：隐藏开关、排除规则与列内过滤词共同生效。
-    fn filter_remote_entries(
-        pane: &SftpRemotePaneState,
-        show_hidden: bool,
-        filter_query: &str,
-        hidden_patterns: &str,
-    ) -> Vec<RemoteFile> {
-        let mut remote_entries = filter_named_entries(
-            &pane.entries,
-            |entry| entry.name.as_str(),
-            show_hidden,
-            filter_query,
-            hidden_patterns,
-        );
-        insert_parent_remote_entry(&mut remote_entries, &pane.path, filter_query);
-        remote_entries
-    }
-
-    /// 过滤本地列条目：共享面板与本地单栏面板共用同一套规则与父目录注入。
-    pub(crate) fn filter_local_entries(
-        panel: &super::SftpPanelState,
-        show_hidden: bool,
-        filter_query: &str,
-        hidden_patterns: &str,
-    ) -> Vec<LocalFileEntry> {
-        let mut local_entries = filter_named_entries(
-            &panel.local.entries,
-            |entry| entry.name.as_str(),
-            show_hidden,
-            filter_query,
-            hidden_patterns,
-        );
-        insert_parent_local_entry(&mut local_entries, &panel.local.path, filter_query);
-        local_entries
-    }
-}
 
 impl AppShell {
     /// 当前活动窗格的 SFTP 面板元素：实体实现 `Render`，外壳只负责挂载。
