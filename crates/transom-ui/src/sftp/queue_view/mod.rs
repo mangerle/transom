@@ -17,7 +17,7 @@ use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use crate::sftp::entity::{SftpPanelView, with_shell_parts};
+use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -147,45 +147,27 @@ impl SftpPanelView {
                                         Switch::new("toggle-verify-after-transfer")
                                             .small()
                                             .checked(verify_after_transfer)
-                                            .on_click(cx.listener(move |this, &checked, _, cx| {
-                                                let app = this.app.clone();
-                                                with_shell_parts(&app, cx, |shell, cx| {
-                                                    update_app_settings(cx, |s| {
-                                                        s.sftp.verify_after_transfer = checked;
-                                                    });
-                                                    match shell
-                                                        .state
-                                                        .services
-                                                        .settings_store
-                                                        .save(app_settings(cx))
-                                                    {
-                                                        Ok(()) => {
-                                                            let algo = app_settings(cx)
-                                                                .sftp
-                                                                .checksum_algorithm
-                                                                .label();
-                                                            shell.state.status = Some(if checked {
-                                                                rust_i18n::t!(
-                                                                    "sftp.queue.verify_on",
-                                                                    algo = algo
-                                                                )
-                                                                .to_string()
-                                                            } else {
-                                                                rust_i18n::t!(
-                                                                    "sftp.queue.verify_off",
-                                                                    algo = algo
-                                                                )
-                                                                .to_string()
-                                                            });
-                                                        }
-                                                        Err(error) => {
-                                                            shell.state.set_error(
-                                                                crate::palette::localized_error(
-                                                                    &error,
-                                                                ),
-                                                            );
-                                                        }
-                                                    }
+                                            .on_click(cx.listener(move |_this, &checked, _, cx| {
+                                                update_app_settings(cx, |s| {
+                                                    s.sftp.verify_after_transfer = checked;
+                                                });
+                                                let algo =
+                                                    app_settings(cx).sftp.checksum_algorithm.label();
+                                                let status = if checked {
+                                                    rust_i18n::t!(
+                                                        "sftp.queue.verify_on",
+                                                        algo = algo
+                                                    )
+                                                    .to_string()
+                                                } else {
+                                                    rust_i18n::t!(
+                                                        "sftp.queue.verify_off",
+                                                        algo = algo
+                                                    )
+                                                    .to_string()
+                                                };
+                                                cx.emit(crate::sftp::SftpPanelEvent::PersistSettings {
+                                                    status,
                                                 });
                                                 cx.notify();
                                             })),

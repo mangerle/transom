@@ -7,7 +7,7 @@
 mod init;
 mod local_nav;
 
-use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
+use super::entity::SftpPanelView;
 use super::{SftpRemotePaneRef, normalize_local_cwd, normalize_remote_cwd};
 use crate::app::AppShell;
 use gpui_kit::*;
@@ -24,15 +24,7 @@ impl SftpPanelView {
         cx: &mut Context<Self>,
     ) {
         self.dismiss_hover_preview(cx);
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             log::warn!("远端目录请求找不到目标列，窗格: {tab_id}，目标: {target:?}，路径: {path}");
             return;
         };
@@ -58,15 +50,14 @@ impl SftpPanelView {
         log::debug!(
             "请求远端目录列表，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}"
         );
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, _| {
-            shell.state.send_command(SftpCommand::Sftp {
+        cx.emit(crate::sftp::SftpPanelEvent::SendCommand(
+            SftpCommand::Sftp {
                 tab_id,
                 connection_id,
                 op_id: TransferId::new(),
                 op: SftpOperation::List { path },
-            });
-        });
+            },
+        ));
         cx.notify();
     }
 
