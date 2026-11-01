@@ -84,57 +84,7 @@ impl SftpPanelView {
         let loading = pane.loading;
         let scroll_handle = pane.scroll_handle.clone();
 
-        let up_btn = Button::new(format!("remote-up-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::ArrowUp)
-            .tooltip(rust_i18n::t!("sftp.remote.go_up").to_string())
-            .on_click(
-                cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
-            );
-
-        let refresh_btn = Button::new(format!("remote-refresh-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::RefreshCw)
-            .tooltip(rust_i18n::t!("sftp.remote.refresh").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
-
-        let enter_btn = Button::new(format!("remote-enter-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::ArrowRight)
-            .tooltip(rust_i18n::t!("sftp.remote.enter_path").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
-
-        let collapse_btn = Button::new(format!("remote-collapse-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(if side_index.is_some() {
-                IconName::PanelRightClose
-            } else {
-                IconName::PanelLeftClose
-            })
-            .tooltip(if side_index.is_some() {
-                rust_i18n::t!("sftp.sidebar.collapse_side").to_string()
-            } else {
-                rust_i18n::t!("sftp.remote.collapse").to_string()
-            })
-            .on_click(cx.listener(move |this, _, _, cx| match side_index {
-                Some(index) => this.toggle_side_remote_collapse(index, cx),
-                None => this.toggle_remote_collapse(cx),
-            }));
-
-        let close_btn = side_index.map(|index| {
-            Button::new(format!("remote-close-{key}"))
-                .ghost()
-                .xsmall()
-                .icon(IconName::X)
-                .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.close_side_remote(index, cx);
-                }))
-        });
+        let nav_buttons = self.render_remote_nav_buttons(tab_id, target, side_index, &key, cx);
 
         let header = v_flex()
             .border_color(p.divider(p.sidebar_border))
@@ -168,11 +118,7 @@ impl SftpPanelView {
                             .min_w(px(0.0))
                             .child(Input::new(&path_input).w_full()),
                     )
-                    .child(up_btn)
-                    .child(refresh_btn)
-                    .child(enter_btn)
-                    .child(collapse_btn)
-                    .when_some(close_btn, |this, button| this.child(button)),
+                    .child(nav_buttons),
             )
             .child(self.render_remote_toolbar(
                 RemoteToolbarProps {
@@ -304,6 +250,80 @@ impl SftpPanelView {
 }
 
 /// 工具栏渲染输入：目标列与列级开关状态。
+impl SftpPanelView {
+    /// 远端列导航按钮：上一级、刷新、进入路径、折叠与关闭并列列。
+    fn render_remote_nav_buttons(
+        &self,
+        tab_id: transom_core::TabId,
+        target: SftpRemotePaneRef,
+        side_index: Option<usize>,
+        key: &str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let up_btn = Button::new(format!("remote-up-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::ArrowUp)
+            .tooltip(rust_i18n::t!("sftp.remote.go_up").to_string())
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
+            );
+
+        let refresh_btn = Button::new(format!("remote-refresh-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::RefreshCw)
+            .tooltip(rust_i18n::t!("sftp.remote.refresh").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
+
+        let enter_btn = Button::new(format!("remote-enter-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::ArrowRight)
+            .tooltip(rust_i18n::t!("sftp.remote.enter_path").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
+
+        let collapse_btn = Button::new(format!("remote-collapse-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(if side_index.is_some() {
+                IconName::PanelRightClose
+            } else {
+                IconName::PanelLeftClose
+            })
+            .tooltip(if side_index.is_some() {
+                rust_i18n::t!("sftp.sidebar.collapse_side").to_string()
+            } else {
+                rust_i18n::t!("sftp.remote.collapse").to_string()
+            })
+            .on_click(cx.listener(move |this, _, _, cx| match side_index {
+                Some(index) => this.toggle_side_remote_collapse(index, cx),
+                None => this.toggle_remote_collapse(cx),
+            }));
+
+        let close_btn = side_index.map(|index| {
+            Button::new(format!("remote-close-{key}"))
+                .ghost()
+                .xsmall()
+                .icon(IconName::X)
+                .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.close_side_remote(index, cx);
+                }))
+        });
+
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(up_btn)
+            .child(refresh_btn)
+            .child(enter_btn)
+            .child(collapse_btn)
+            .when_some(close_btn, |this, button| this.child(button))
+            .into_any_element()
+    }
+}
+
 pub(super) struct RemoteToolbarProps<'a> {
     pub(super) tab_id: TabId,
     pub(super) target: SftpRemotePaneRef,
