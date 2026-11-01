@@ -13,6 +13,26 @@ use crate::sftp::{
 use gpui_kit::*;
 use transom_core::{SftpAppEvent, TransferDirection};
 
+/// SFTP 完成事件中与队列落定相关的输入。
+struct SftpFinishInput {
+    tab_id: transom_core::TabId,
+    connection_id: transom_core::ConnectionId,
+    op_id: transom_core::TransferId,
+    transferred: Option<u64>,
+    skipped: u64,
+    verified: bool,
+}
+
+/// SFTP 完成后的刷新与提示计划。
+#[derive(Default)]
+struct SftpFinishOutcome {
+    refresh: Option<String>,
+    refresh_side: Option<(transom_core::ConnectionId, String)>,
+    refresh_local: bool,
+    notify_info: Option<(TransferDirection, String, u64)>,
+    status_message: Option<String>,
+}
+
 impl AppShell {
     /// SFTP 目录列表回填：主面板或并排远端列按连接归属分别落位。
     pub(crate) fn on_sftp_listing(
@@ -159,6 +179,70 @@ impl AppShell {
         else {
             return true;
         };
+        let outcome = self.apply_sftp_finish(
+            SftpFinishInput {
+                tab_id,
+                connection_id,
+                op_id,
+                transferred,
+                skipped,
+                verified,
+            },
+            cx,
+        );
+        let SftpFinishOutcome {
+            refresh,
+            refresh_side,
+            refresh_local,
+            notify_info,
+            status_message,
+        } = outcome;
+        if let Some(message) = status_message {
+            self.set_sftp_transient_status(tab_id, message, cx);
+        }
+        // 任务落定，浮层据此决定继续常驻还是进入 5 秒停留窗口。
+        self.sync_drop_overlay(tab_id, cx);
+        if let Some((dir, file_name, bytes)) = notify_info {
+            let action = match dir {
+                TransferDirection::Upload => rust_i18n::t!("sftp.handlers.notify_upload_done"),
+                TransferDirection::Download => rust_i18n::t!("sftp.handlers.notify_download_done"),
+                TransferDirection::Sync => rust_i18n::t!("sftp.handlers.notify_sync_done"),
+                TransferDirection::RemoteCopy => {
+                    rust_i18n::t!("sftp.handlers.notify_remote_copy_done")
+                }
+            };
+            send_desktop_notification(
+                &format!("Transom SFTP {action}"),
+                &format!("{file_name} ({})", format_size(bytes)),
+            );
+        }
+        if refresh_local {
+            self.sftp_local_refresh(tab_id, cx);
+        }
+        if let Some(path) = refresh {
+            self.request_sftp_list(tab_id, path, cx);
+        }
+        if let Some((target_conn, target_dir)) = refresh_side {
+            self.request_sftp_list_for_connection(tab_id, target_conn, target_dir, cx);
+        }
+        self.process_sftp_queue(tab_id, cx);
+        true
+    }
+
+    /// 应用 SFTP 完成：落定队列任务、计算需要刷新的列与状态文案。
+    fn apply_sftp_finish(
+        &mut self,
+        finish: SftpFinishInput,
+        cx: &mut Context<Self>,
+    ) -> SftpFinishOutcome {
+        let SftpFinishInput {
+            tab_id,
+            connection_id,
+            op_id,
+            transferred,
+            skipped,
+            verified,
+        } = finish;
         let mut refresh = None;
         let mut refresh_side = None;
         let mut refresh_local = false;
@@ -261,36 +345,13 @@ impl AppShell {
                 status_message = Some(rust_i18n::t!("sftp.operation_done").to_string());
             }
         }
-        if let Some(message) = status_message {
-            self.set_sftp_transient_status(tab_id, message, cx);
+        SftpFinishOutcome {
+            refresh,
+            refresh_side,
+            refresh_local,
+            notify_info,
+            status_message,
         }
-        // 任务落定，浮层据此决定继续常驻还是进入 5 秒停留窗口。
-        self.sync_drop_overlay(tab_id, cx);
-        if let Some((dir, file_name, bytes)) = notify_info {
-            let action = match dir {
-                TransferDirection::Upload => rust_i18n::t!("sftp.handlers.notify_upload_done"),
-                TransferDirection::Download => rust_i18n::t!("sftp.handlers.notify_download_done"),
-                TransferDirection::Sync => rust_i18n::t!("sftp.handlers.notify_sync_done"),
-                TransferDirection::RemoteCopy => {
-                    rust_i18n::t!("sftp.handlers.notify_remote_copy_done")
-                }
-            };
-            send_desktop_notification(
-                &format!("Transom SFTP {action}"),
-                &format!("{file_name} ({})", format_size(bytes)),
-            );
-        }
-        if refresh_local {
-            self.sftp_local_refresh(tab_id, cx);
-        }
-        if let Some(path) = refresh {
-            self.request_sftp_list(tab_id, path, cx);
-        }
-        if let Some((target_conn, target_dir)) = refresh_side {
-            self.request_sftp_list_for_connection(tab_id, target_conn, target_dir, cx);
-        }
-        self.process_sftp_queue(tab_id, cx);
-        true
     }
 
     /// SFTP 属性响应：迟到的响应（标签已关闭）直接忽略且不重绘。
