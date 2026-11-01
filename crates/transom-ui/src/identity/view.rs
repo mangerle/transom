@@ -93,13 +93,12 @@ impl SettingsView {
         }
     }
 
-    fn render_identity_editor(
-        &mut self,
-        edit: IdentityEditState,
-        p: &Palette,
+    /// 认证方式三选一：密码、私钥、Agent。
+    fn render_identity_auth_selector(
+        &self,
+        auth: AuthChoice,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let auth = edit.auth;
         let chip = |label: String, choice: AuthChoice, key: &'static str| {
             Button::new(ElementId::Name(key.into()))
                 .small()
@@ -112,45 +111,38 @@ impl SettingsView {
                     cx.notify();
                 }))
         };
-        let mut content = v_flex()
+        h_flex()
             .gap_2()
-            .p_3()
-            .rounded(p.radius.md)
-            .border_1()
-            .border_color(p.border)
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("identity.name").to_string(),
-                edit.name.clone(),
-                p,
+            .child(chip(
+                rust_i18n::t!("identity.auth_password").to_string(),
+                AuthChoice::Password,
+                "identity-auth-password",
             ))
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("identity.username").to_string(),
-                edit.username.clone(),
-                p,
+            .child(chip(
+                rust_i18n::t!("identity.auth_key").to_string(),
+                AuthChoice::PrivateKey,
+                "identity-auth-key",
             ))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(chip(
-                        rust_i18n::t!("identity.auth_password").to_string(),
-                        AuthChoice::Password,
-                        "identity-auth-password",
-                    ))
-                    .child(chip(
-                        rust_i18n::t!("identity.auth_key").to_string(),
-                        AuthChoice::PrivateKey,
-                        "identity-auth-key",
-                    ))
-                    .child(chip(
-                        rust_i18n::t!("identity.auth_agent").to_string(),
-                        AuthChoice::Agent,
-                        "identity-auth-agent",
-                    )),
-            );
+            .child(chip(
+                rust_i18n::t!("identity.auth_agent").to_string(),
+                AuthChoice::Agent,
+                "identity-auth-agent",
+            ))
+            .into_any_element()
+    }
 
+    /// 认证方式对应的补充字段：密码/保存开关，或私钥/口令。
+    fn render_identity_auth_fields(
+        &self,
+        auth: AuthChoice,
+        edit: &IdentityEditState,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mut fields = v_flex().gap_2();
         match auth {
             AuthChoice::Password => {
-                content = content
+                fields = fields
                     .child(crate::widgets::secret_field(
                         rust_i18n::t!("identity.password").to_string(),
                         edit.password.clone(),
@@ -179,7 +171,7 @@ impl SettingsView {
                     );
             }
             AuthChoice::PrivateKey => {
-                content = content
+                fields = fields
                     .child(crate::widgets::form_field(
                         rust_i18n::t!("identity.key_path").to_string(),
                         edit.key_path.clone(),
@@ -214,6 +206,37 @@ impl SettingsView {
             }
             AuthChoice::Agent => {}
         }
+
+        fields.into_any_element()
+    }
+
+    fn render_identity_editor(
+        &mut self,
+        edit: IdentityEditState,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let auth = edit.auth;
+        let auth_selector = self.render_identity_auth_selector(auth, cx);
+        let mut content = v_flex()
+            .gap_2()
+            .p_3()
+            .rounded(p.radius.md)
+            .border_1()
+            .border_color(p.border)
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("identity.name").to_string(),
+                edit.name.clone(),
+                p,
+            ))
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("identity.username").to_string(),
+                edit.username.clone(),
+                p,
+            ))
+            .child(auth_selector);
+
+        content = content.child(self.render_identity_auth_fields(auth, &edit, p, cx));
 
         if let Some(error) = edit.error.clone() {
             content = content.child(div().text_sm().text_color(p.danger).child(error));
