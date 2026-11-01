@@ -36,18 +36,11 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::Button;
-use gpui_kit::component::input::{InputState, NumberInput};
-use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::input::InputState;
 use gpui_kit::component::slider::SliderValue;
-use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, Sizable};
 use gpui_kit::*;
 use transom_terminal::TerminalView;
-
-/// 路径型设置值的显示上限（rem，标准档 16px 基准）：够看清目录层级，又不会把
-/// 右侧控件挤出面板；全文由 tooltip 给出。
-const PATH_VALUE_MAX_WIDTH: f32 = 12.0;
 
 /// 设置页目录：顺序必须与 [`SettingsView::build_settings_pages`] 的装配顺序一致。
 ///
@@ -79,59 +72,48 @@ pub(super) fn slider_percent(value: &SliderValue) -> u8 {
     }
 }
 
-/// 下拉选择器的通用构建：实体类型由调用方给出，回调在点击时取回可写上下文。
-///
-/// 为什么抽成自由函数：设置实体与外壳（会话表单）都需要同一套 Zed 风格下拉，
-/// 但回调的 `Self` 不同。泛型化后两边共用一份菜单/对勾/焦点行为，不再各自
-/// 复制一份 `build_setting_dropdown`。
-fn build_setting_dropdown<E, V, F>(
-    id: impl Into<ElementId>,
-    current_value: V,
-    options: Vec<(V, String)>,
-    on_change: F,
-    entity: Entity<E>,
-) -> AnyElement
-where
-    E: 'static,
-    V: Clone + PartialEq + 'static,
-    F: Fn(&mut E, V, &mut Window, &mut Context<E>) + 'static + Clone,
-{
-    let current_label = options
-        .iter()
-        .find(|(val, _)| val == &current_value)
-        .map(|(_, label)| label.clone())
-        .unwrap_or_default();
+impl SettingsView {
+    /// 数字步进器控件（直接复用 gpui-kit 内置的 NumberInput 组件）。
+    pub(crate) fn setting_stepper(input: &Entity<InputState>, width: Pixels) -> AnyElement {
+        crate::widgets::number_stepper(input, width)
+    }
 
-    Button::new(id)
-        .small()
-        .outline()
-        .dropdown_caret(true)
-        .label(current_label)
-        .dropdown_menu_with_anchor(Anchor::TopRight, {
-            let options = options.clone();
-            let current_value = current_value.clone();
-            move |mut menu, _window, _cx| {
-                for (val, label) in &options {
-                    let is_selected = val == &current_value;
-                    let val = val.clone();
-                    let entity = entity.clone();
-                    let on_change = on_change.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(label.clone())
-                            .checked(is_selected)
-                            .on_click(move |_, window, cx| {
-                                let val = val.clone();
-                                let on_change = on_change.clone();
-                                entity.update(cx, |this, cx| {
-                                    on_change(this, val, window, cx);
-                                });
-                            }),
-                    );
-                }
-                menu
-            }
-        })
-        .into_any_element()
+    /// 通用设置项下拉选择器（Zed 风格）。
+    pub(crate) fn setting_dropdown<T: Clone + PartialEq + 'static>(
+        id: impl Into<ElementId>,
+        current_value: T,
+        options: Vec<(T, String)>,
+        on_change: impl Fn(&mut Self, T, &mut Context<Self>) + 'static + Clone,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        Self::setting_dropdown_with_window(
+            id,
+            current_value,
+            options,
+            move |this, value, _window, cx| on_change(this, value, cx),
+            cx,
+        )
+    }
+
+    /// 需要窗口句柄的下拉：切项时要回填其它输入框的调用方用这条。
+    pub(crate) fn setting_dropdown_with_window<T: Clone + PartialEq + 'static>(
+        id: impl Into<ElementId>,
+        current_value: T,
+        options: Vec<(T, String)>,
+        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        crate::widgets::dropdown(id, current_value, options, on_change, cx.entity().clone())
+    }
+
+    /// 路径型设置值：定宽截断，完整路径挂在悬停 tooltip 上。
+    pub(crate) fn setting_path_value(
+        element_key: &'static str,
+        label: String,
+        p: &Palette,
+    ) -> AnyElement {
+        crate::widgets::path_value(element_key, label, p)
+    }
 }
 
 /// 把一次外观变更写到全局设置并立即应用到主题。
@@ -165,77 +147,6 @@ pub(crate) fn sync_terminal_palette(cx: &mut gpui_kit::App) -> bool {
     true
 }
 
-impl SettingsView {
-    /// 数字步进器控件（直接复用 gpui-kit 内置的 NumberInput 组件）：
-    /// 原生集成减加微调按钮与居中文本输入框，内置键盘上下键微调与 min/max/step 约束。
-    pub(crate) fn setting_stepper(input: &Entity<InputState>, width: Pixels) -> AnyElement {
-        div()
-            .w(width)
-            .child(NumberInput::new(input).small())
-            .into_any_element()
-    }
-
-    /// 通用设置项下拉选择器（Zed 风格）：
-    /// 触发按钮展示当前选中项文本与双向展开图标（dropdown_caret），
-    /// 点击弹出菜单，菜单项通过 `.checked(is_selected)` 原生展示右侧对勾标记。
-    pub(crate) fn setting_dropdown<T: Clone + PartialEq + 'static>(
-        id: impl Into<ElementId>,
-        current_value: T,
-        options: Vec<(T, String)>,
-        on_change: impl Fn(&mut Self, T, &mut Context<Self>) + 'static + Clone,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        Self::setting_dropdown_with_window(
-            id,
-            current_value,
-            options,
-            move |this, value, _window, cx| on_change(this, value, cx),
-            cx,
-        )
-    }
-
-    /// 需要窗口句柄的下拉：切项时要回填其它输入框的调用方用这条。
-    ///
-    /// 输入框回填（`InputState::set_value`）必须拿窗口句柄，而菜单项的点击
-    /// 回调本身就带 `&mut Window`；有这条变体，调用方不必为拿窗口把切换动作
-    /// 绕成事件或推迟到下一帧。
-    pub(crate) fn setting_dropdown_with_window<T: Clone + PartialEq + 'static>(
-        id: impl Into<ElementId>,
-        current_value: T,
-        options: Vec<(T, String)>,
-        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        build_setting_dropdown(id, current_value, options, on_change, cx.entity().clone())
-    }
-
-    /// 路径型设置值：定宽截断，完整路径挂在悬停 tooltip 上。
-    ///
-    /// 也用于项目主页这类"长而必须看全"的只读值（URL 同样按内容排版会撑爆整行）。
-    /// 为什么定宽：配置目录、下载目录、审计目录都可能是任意长路径，按内容排版
-    /// 会把整行撑爆（与上面 `setting_row` 的约束配合，这里再给一个明确上限）。
-    /// 为什么要 tooltip：截断后用户看不出"到底写到哪个目录"，而这条信息恰恰是
-    /// 排查落盘问题时最需要的，所以把全文挂在悬停上；悬浮状态依赖带 `id` 的元素。
-    pub(crate) fn setting_path_value(
-        element_key: &'static str,
-        label: String,
-        p: &Palette,
-    ) -> AnyElement {
-        let tip = label.clone();
-        div()
-            .id(ElementId::Name(
-                format!("setting-path-{element_key}").into(),
-            ))
-            .max_w(rems(PATH_VALUE_MAX_WIDTH))
-            .truncate()
-            .text_xs()
-            .text_color(p.muted_foreground)
-            .tooltip(move |_window, cx| Tooltip::new(tip.clone()).build(_window, cx))
-            .child(label)
-            .into_any_element()
-    }
-}
-
 impl AppShell {
     /// 弹窗内的下拉选择：供会话表单等非设置实体复用。
     ///
@@ -248,7 +159,7 @@ impl AppShell {
         on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
         app: &Entity<AppShell>,
     ) -> AnyElement {
-        build_setting_dropdown(id, current_value, options, on_change, app.clone())
+        crate::widgets::dropdown(id, current_value, options, on_change, app.clone())
     }
 
     /// 把外观偏好下发到所有已打开的窗格。
