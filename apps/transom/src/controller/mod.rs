@@ -46,6 +46,18 @@ pub struct Controller {
     shutdown_rx: mpsc::Receiver<()>,
 }
 
+/// 控制面 worker 线程数。
+///
+/// 设计原理（Why）：SSH 握手、对称加解密与多路 SFTP 传输都是 CPU 侧工作，
+/// 固定 2 个 worker 在“多标签 + 并发传输 + 遥测”同时进行时会排队。按核心数
+/// 取一半并夹在 2..=8：低配机器保持最小可用，高核心数避免线程过多反而让
+/// 桌面端上下文切换变重。
+fn control_worker_threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|parallelism| (parallelism.get() / 2).clamp(2, 8))
+        .unwrap_or(2)
+}
+
 impl Controller {
     pub fn start(
         known_hosts: Arc<dyn KnownHostsStore>,
@@ -62,7 +74,7 @@ impl Controller {
         let (internal_tx, internal_rx) = flume::bounded::<Internal>(64);
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
         let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+            .worker_threads(control_worker_threads())
             .enable_all()
             .build()
             .map_err(|error| AppError::with_detail(ErrorCode::Io, error.to_string()))?;
