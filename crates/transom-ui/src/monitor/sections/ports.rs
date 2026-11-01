@@ -30,6 +30,14 @@ struct PortRow {
 
 use crate::monitor::MonitorView;
 
+/// 端口内容渲染输入：统计、命中集合与筛选词。
+struct PortsContent<'a> {
+    stats: &'a SystemStats,
+    matched: &'a [&'a PortListeningInfo],
+    query: &'a str,
+    scope: &'a str,
+}
+
 impl MonitorView {
     /// 渲染监听端口监控卡片。
     ///
@@ -67,6 +75,55 @@ impl MonitorView {
             .text_color(p.muted_foreground)
             .child(format!("{} / {total}", matched.len()));
 
+        let content = self.render_ports_content(
+            PortsContent {
+                stats,
+                matched: &matched,
+                query: &query,
+                scope,
+            },
+            p,
+            cx,
+        );
+
+        CollapsibleCard::new(
+            "card-ports",
+            IconName::Plug,
+            rust_i18n::t!("monitor.ports.title").to_string(),
+        )
+        .collapsed(collapsed)
+        .summary(summary)
+        .summary_always(true)
+        .content(content)
+        .render(
+            p,
+            cx.listener(|this, _, _, cx| {
+                let expanded = this.toggle_collapse("ports");
+                let collapse = this.collapse_snapshot();
+                cx.notify();
+                cx.emit(crate::monitor::MonitorPanelEvent::CollapseChanged {
+                    collapse,
+                    expanded_processes: expanded,
+                });
+                cx.notify();
+            }),
+        )
+    }
+
+    /// 端口内容：筛选框、表头、空态或命中列表。
+    fn render_ports_content(
+        &self,
+        content_input: PortsContent<'_>,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let PortsContent {
+            stats,
+            matched,
+            query,
+            scope,
+        } = content_input;
+        let total = stats.ports.len();
         let mut content = v_flex().gap_1();
 
         // 输入框常驻在数据有无之前：没采到数据时也留着，免得用户以为是筛选功能坏了。
@@ -137,28 +194,7 @@ impl MonitorView {
             content = content.child(self.render_ports_list(cx, rows, p, scope));
         }
 
-        CollapsibleCard::new(
-            "card-ports",
-            IconName::Plug,
-            rust_i18n::t!("monitor.ports.title").to_string(),
-        )
-        .collapsed(collapsed)
-        .summary(summary)
-        .summary_always(true)
-        .content(content)
-        .render(
-            p,
-            cx.listener(|this, _, _, cx| {
-                let expanded = this.toggle_collapse("ports");
-                let collapse = this.collapse_snapshot();
-                cx.notify();
-                cx.emit(crate::monitor::MonitorPanelEvent::CollapseChanged {
-                    collapse,
-                    expanded_processes: expanded,
-                });
-                cx.notify();
-            }),
-        )
+        content.into_any_element()
     }
 
     /// 虚拟滚动端口列表：固定视口，只渲染可视行。
