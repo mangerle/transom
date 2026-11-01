@@ -209,14 +209,9 @@ impl AppShell {
     }
 
     /// 为已连接且已就绪的 SSH 标签建立 SFTP 面板状态（输入框、回车订阅与列表）。
-    pub(crate) fn build_sftp_panel(
-        &mut self,
-        tab_id: TabId,
-        index: usize,
-        open: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    /// 面板初始路径：本地快捷目录与远端 OSC 7 cwd（回落到 `.`）。
+    fn sftp_initial_paths(&self, index: usize) -> (LocalQuickPaths, PathBuf, String) {
+        let tab_id = self.state.workspace.tabs[index].id;
         let quick_paths = LocalQuickPaths::resolve();
         let local_path = quick_paths
             .downloads
@@ -233,20 +228,21 @@ impl AppShell {
             "打开远端文件面板，窗格: {tab_id}，初始目录: {initial_remote_path}，终端 cwd: {:?}",
             self.state.workspace.tabs[index].cwd
         );
-        let path_input = sftp_text_input(
-            window,
-            cx,
-            &initial_remote_path,
-            rust_i18n::t!("sftp.path").as_ref(),
-        );
-        let local_path_input = sftp_text_input(
-            window,
-            cx,
-            &local_path.display().to_string(),
-            rust_i18n::t!("sftp.local_folder").as_ref(),
-        );
+        (quick_paths, local_path, initial_remote_path)
+    }
+
+    pub(crate) fn build_sftp_panel(
+        &mut self,
+        tab_id: TabId,
+        index: usize,
+        open: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (quick_paths, local_path, initial_remote_path) = self.sftp_initial_paths(index);
+        let inputs = SftpPanelInputs::new(window, cx, &initial_remote_path, &local_path);
         let remote_enter_sub = cx.subscribe_in(
-            &path_input,
+            &inputs.path_input,
             window,
             move |this, _, event: &InputEvent, _window, cx| {
                 if matches!(event, InputEvent::PressEnter { .. }) {
@@ -255,7 +251,7 @@ impl AppShell {
             },
         );
         let local_enter_sub = cx.subscribe_in(
-            &local_path_input,
+            &inputs.local_path_input,
             window,
             move |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { .. }) {
@@ -263,20 +259,6 @@ impl AppShell {
                 }
             },
         );
-        let name_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref());
-        let remote_filter_input = sftp_text_input(
-            window,
-            cx,
-            "",
-            rust_i18n::t!("sftp.sidebar.filter_remote_placeholder").as_ref(),
-        );
-        let local_filter_input = sftp_text_input(
-            window,
-            cx,
-            "",
-            rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
-        );
-
         // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
         let main_connection = self.state.workspace.tabs[index].connection_id;
         let command_tx = Some(self.state.services.command_tx.clone());
@@ -291,15 +273,15 @@ impl AppShell {
             open,
             remote: SftpRemotePaneState::new_main(
                 initial_remote_path.clone(),
-                path_input,
-                name_input,
-                remote_filter_input,
+                inputs.path_input,
+                inputs.name_input,
+                inputs.remote_filter_input,
                 true,
             ),
             local: SftpLocalPaneState::new(SftpLocalPaneInit {
                 path: local_path,
-                path_input: local_path_input,
-                filter_input: local_filter_input,
+                path_input: inputs.local_path_input,
+                filter_input: inputs.local_filter_input,
                 quick_paths,
                 only: false,
                 error: None,
@@ -359,5 +341,51 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.toggle_sftp(window, cx);
+    }
+}
+
+/// SFTP 面板创建时用到的输入框集合。
+struct SftpPanelInputs {
+    path_input: Entity<gpui_kit::component::input::InputState>,
+    name_input: Entity<gpui_kit::component::input::InputState>,
+    remote_filter_input: Entity<gpui_kit::component::input::InputState>,
+    local_path_input: Entity<gpui_kit::component::input::InputState>,
+    local_filter_input: Entity<gpui_kit::component::input::InputState>,
+}
+
+impl SftpPanelInputs {
+    fn new(
+        window: &mut Window,
+        cx: &mut Context<crate::app::AppShell>,
+        remote_path: &str,
+        local_path: &std::path::Path,
+    ) -> Self {
+        Self {
+            path_input: sftp_text_input(
+                window,
+                cx,
+                remote_path,
+                rust_i18n::t!("sftp.path").as_ref(),
+            ),
+            name_input: sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref()),
+            remote_filter_input: sftp_text_input(
+                window,
+                cx,
+                "",
+                rust_i18n::t!("sftp.sidebar.filter_remote_placeholder").as_ref(),
+            ),
+            local_path_input: sftp_text_input(
+                window,
+                cx,
+                &local_path.display().to_string(),
+                rust_i18n::t!("sftp.local_folder").as_ref(),
+            ),
+            local_filter_input: sftp_text_input(
+                window,
+                cx,
+                "",
+                rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
+            ),
+        }
     }
 }
