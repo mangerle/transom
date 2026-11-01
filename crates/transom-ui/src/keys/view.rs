@@ -227,63 +227,9 @@ impl AppShell {
             .cloned();
         let targets = self.state.key_targets();
 
-        let selected_summary = selected_key.as_ref().map(|key| {
-            let file_name = key
-                .path
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string())
-                .unwrap_or_else(|| key.path.display().to_string());
-            h_flex()
-                .justify_between()
-                .items_center()
-                .gap_3()
-                .child(
-                    v_flex()
-                        .gap_1()
-                        .overflow_hidden()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(file_name),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .truncate()
-                                .child(key.fingerprint.clone()),
-                        ),
-                )
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Button::new("copy-selected-public-key")
-                                .small()
-                                .icon(IconName::Copy)
-                                .label(rust_i18n::t!("common.copy").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, _: &ClickEvent, _, cx| {
-                                        this.copy_selected_key(cx);
-                                    },
-                                )),
-                        )
-                        .child(
-                            Button::new("export-selected-public-key")
-                                .small()
-                                .icon(IconName::Download)
-                                .label(rust_i18n::t!("keys.export").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, _: &ClickEvent, _, cx| {
-                                        this.export_selected_key(cx);
-                                    },
-                                )),
-                        ),
-                )
-        });
+        let selected_summary = selected_key
+            .as_ref()
+            .map(|key| selected_key_summary(app, p, key));
 
         let deploy_buttons: Vec<AnyElement> = targets
             .into_iter()
@@ -340,6 +286,70 @@ impl AppShell {
             .children(deploy_buttons)
             .into_any_element()
     }
+}
+
+/// 已选公钥摘要：文件名、指纹与复制/导出动作。
+fn selected_key_summary(
+    app: &Entity<AppShell>,
+    p: &Palette,
+    key: &crate::keys::PublicKeyInfo,
+) -> AnyElement {
+    let file_name = key
+        .path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| key.path.display().to_string());
+    h_flex()
+        .justify_between()
+        .items_center()
+        .gap_3()
+        .child(
+            v_flex()
+                .gap_1()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(file_name),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .truncate()
+                        .child(key.fingerprint.clone()),
+                ),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .child(
+                    Button::new("copy-selected-public-key")
+                        .small()
+                        .icon(IconName::Copy)
+                        .label(rust_i18n::t!("common.copy").to_string())
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, _, cx| {
+                                this.copy_selected_key(cx);
+                            },
+                        )),
+                )
+                .child(
+                    Button::new("export-selected-public-key")
+                        .small()
+                        .icon(IconName::Download)
+                        .label(rust_i18n::t!("keys.export").to_string())
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, _, cx| {
+                                this.export_selected_key(cx);
+                            },
+                        )),
+                ),
+        )
+        .into_any_element()
 }
 
 /// 单个公钥行：文件名、指纹/路径、选择态与当前标记。
