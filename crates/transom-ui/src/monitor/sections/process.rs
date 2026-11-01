@@ -7,7 +7,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::list::ListItem;
-use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::component::menu::{ContextMenuExt, PopupMenu};
 use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -412,72 +412,69 @@ impl MonitorView {
             .child(list_item)
             .context_menu({
                 let command = command.clone();
-                move |menu, _window, _cx| {
-                    let term = menu_app.clone();
-                    let safe_kill = menu_app.clone();
-                    let force_kill = menu_app.clone();
-                    let cmd_for_clipboard = command.clone();
-                    menu.item(crate::widgets::menu_item(
-                        rust_i18n::t!("monitor.process_section.trace").to_string(),
-                        IconName::Terminal,
-                        move |_, _, cx| {
-                            term.update(cx, |_this, cx| {
-                                cx.emit(crate::monitor::MonitorPanelEvent::TraceProcess(pid));
-                            });
-                        },
-                    ))
-                    .item(crate::widgets::menu_item(
-                        rust_i18n::t!("monitor.kill_term").to_string(),
-                        IconName::CircleX,
-                        move |_, _, cx| {
-                            safe_kill.update(cx, |this, cx| {
-                                if pid <= 1 {
-                                    this.set_error(Some(
-                                        rust_i18n::t!("monitor.error_kill_pid1").to_string(),
-                                    ));
-                                    cx.notify();
-                                    return;
-                                }
-                                cx.emit(crate::monitor::MonitorPanelEvent::KillProcess {
-                                    pid,
-                                    force: false,
-                                });
-                                cx.notify();
-                            });
-                        },
-                    ))
-                    .item(crate::widgets::menu_item(
-                        rust_i18n::t!("monitor.kill_kill").to_string(),
-                        IconName::Ban,
-                        move |_, _, cx| {
-                            force_kill.update(cx, |this, cx| {
-                                if pid <= 1 {
-                                    this.set_error(Some(
-                                        rust_i18n::t!("monitor.error_kill_pid1").to_string(),
-                                    ));
-                                    cx.notify();
-                                    return;
-                                }
-                                cx.emit(crate::monitor::MonitorPanelEvent::KillProcess {
-                                    pid,
-                                    force: true,
-                                });
-                                cx.notify();
-                            });
-                        },
-                    ))
-                    .item(crate::widgets::menu_item(
-                        rust_i18n::t!("monitor.copy_command").to_string(),
-                        IconName::Copy,
-                        move |_, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                cmd_for_clipboard.clone(),
-                            ));
-                        },
-                    ))
-                }
+                let menu_app = menu_app.clone();
+                move |menu, _window, _cx| Self::process_context_menu(menu, &menu_app, pid, &command)
             })
             .into_any_element()
+    }
+
+    /// 进程行右键菜单：终端追踪、普通/强制终止与复制完整命令行。
+    fn process_context_menu(
+        menu: PopupMenu,
+        app: &Entity<MonitorView>,
+        pid: u32,
+        command: &str,
+    ) -> PopupMenu {
+        let command = command.to_string();
+        let term = app.clone();
+        let safe_kill = app.clone();
+        let force_kill = app.clone();
+        menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("monitor.process_section.trace").to_string(),
+            IconName::Terminal,
+            move |_, _, cx| {
+                term.update(cx, |_this, cx| {
+                    cx.emit(crate::monitor::MonitorPanelEvent::TraceProcess(pid));
+                });
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("monitor.kill_term").to_string(),
+            IconName::CircleX,
+            move |_, _, cx| {
+                safe_kill.update(cx, |this, cx| {
+                    if pid <= 1 {
+                        this.set_error(Some(rust_i18n::t!("monitor.error_kill_pid1").to_string()));
+                        cx.notify();
+                        return;
+                    }
+                    cx.emit(crate::monitor::MonitorPanelEvent::KillProcess { pid, force: false });
+                    cx.notify();
+                });
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("monitor.kill_kill").to_string(),
+            IconName::Ban,
+            move |_, _, cx| {
+                force_kill.update(cx, |this, cx| {
+                    if pid <= 1 {
+                        this.set_error(Some(rust_i18n::t!("monitor.error_kill_pid1").to_string()));
+                        cx.notify();
+                        return;
+                    }
+                    cx.emit(crate::monitor::MonitorPanelEvent::KillProcess { pid, force: true });
+                    cx.notify();
+                });
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("monitor.copy_command").to_string(),
+            IconName::Copy,
+            move |_, _, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(command.clone()));
+            },
+        ))
     }
 
     /// 底部详情条：展示选中进程的完整命令行。
