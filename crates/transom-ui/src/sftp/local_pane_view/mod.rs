@@ -161,6 +161,27 @@ impl SftpPanelView {
             cx,
         );
 
+        let drop_container =
+            self.render_local_drop_area(local_content, &local_scroll_handle, tab_id, p, cx);
+
+        v_flex()
+            .size_full()
+            .overflow_hidden()
+            .child(toolbar)
+            .child(drop_container)
+            .into_any_element()
+    }
+
+    /// 本地列表拖放区：跨端下载拖入与目录级右键菜单。
+    fn render_local_drop_area(
+        &self,
+        local_content: AnyElement,
+        scroll_handle: &gpui_kit::component::VirtualListScrollHandle,
+        tab_id: transom_core::TabId,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let menu_app = cx.entity().clone();
         let app_local_drop = cx.entity().clone();
         let app_blank_menu = menu_app.clone();
         let drop_bg = p.sidebar_accent.opacity(0.3);
@@ -208,17 +229,11 @@ impl SftpPanelView {
                 });
             })
             .child(local_content)
-            .vertical_scrollbar(&local_scroll_handle)
+            .vertical_scrollbar(scroll_handle)
             // 空白区右键给目录级动作：行元素上的菜单命中时优先并停止冒泡，不会互抢。
             .context_menu(move |menu, _window, _cx| {
                 build_local_blank_context_menu(menu, app_blank_menu.clone(), tab_id)
             });
-
-        v_flex()
-            .size_full()
-            .overflow_hidden()
-            .child(toolbar)
-            .child(drop_container)
-            .into_any_element()
+        drop_container.into_any_element()
     }
 }
