@@ -123,11 +123,23 @@ fn run_writer<T: Send + 'static>(worker: Arc<WorkerState<T>>) {
 ///
 /// 分开两个写盘器而不是共用一个线程：会话目录通常远大于设置文件，二者
 /// 互不阻塞；两个线程各自只有一格，资源开销固定。
+///
+/// 外层用 `Arc` 包装后可按句柄克隆：设置实体与外壳共享同一组写盘线程，
+/// 不需要为了“谁能落盘”再引入外壳引用。最后一个句柄析构时才停机 join，
+/// 因此退出路径仍能落定最后一份快照。
+#[derive(Clone)]
 pub(crate) struct Persistence {
+    inner: Arc<PersistenceInner>,
+}
+
+struct PersistenceInner {
     catalog: Option<SnapshotWriter<SessionCatalog>>,
     settings: Option<SnapshotWriter<AppSettings>>,
     /// 后台写盘失败的单槽通知：由渲染帧取走并转成应用内提示。
     error: Arc<Mutex<Option<AppError>>>,
+    /// 后台线程不可用时的同步兜底存储。
+    session_store: Arc<dyn transom_core::SessionStore>,
+    settings_store: Arc<dyn transom_core::SettingsStore>,
 }
 
 impl Persistence {
@@ -139,43 +151,70 @@ impl Persistence {
     ) -> Self {
         let error = Arc::new(Mutex::new(None));
         let catalog_error = Arc::clone(&error);
+        let catalog_store = Arc::clone(&session_store);
         let catalog = SnapshotWriter::spawn("catalog", move |catalog| {
-            if let Err(error) = session_store.save(catalog) {
+            if let Err(error) = catalog_store.save(catalog) {
                 log::error!("会话目录异步落盘失败，原因: {error}");
                 *catalog_error.lock() = Some(error);
             }
         });
         let settings_error = Arc::clone(&error);
+        let settings_store_writer = Arc::clone(&settings_store);
         let settings = SnapshotWriter::spawn("settings", move |settings| {
-            if let Err(error) = settings_store.save(settings) {
+            if let Err(error) = settings_store_writer.save(settings) {
                 log::error!("设置异步落盘失败，原因: {error}");
                 *settings_error.lock() = Some(error);
             }
         });
         Self {
-            catalog,
-            settings,
-            error,
+            inner: Arc::new(PersistenceInner {
+                catalog,
+                settings,
+                error,
+                session_store,
+                settings_store,
+            }),
         }
     }
 
     /// 入队会话目录；通道不可用时返回 false，由调用方同步兜底。
     pub(crate) fn enqueue_catalog(&self, catalog: SessionCatalog) -> bool {
-        self.catalog
+        self.inner
+            .catalog
             .as_ref()
             .is_some_and(|writer| writer.enqueue(catalog).is_ok())
     }
 
     /// 入队设置；通道不可用时返回 false，由调用方同步兜底。
     pub(crate) fn enqueue_settings(&self, settings: AppSettings) -> bool {
-        self.settings
+        self.inner
+            .settings
             .as_ref()
             .is_some_and(|writer| writer.enqueue(settings).is_ok())
     }
 
+    /// 保存设置：优先异步入队，写盘线程不可用时退回同步写。
+    ///
+    /// 返回 `Ok` 只表示“已进入内存与待写槽”；后台线程的写盘失败仍经
+    /// [`Self::take_error`] 在渲染帧统一上报。
+    pub(crate) fn save_settings(&self, settings: &AppSettings) -> Result<(), AppError> {
+        if self.enqueue_settings(settings.clone()) {
+            return Ok(());
+        }
+        self.inner.settings_store.save(settings)
+    }
+
+    /// 保存会话目录：行为与 [`Self::save_settings`] 对齐。
+    pub(crate) fn save_catalog(&self, catalog: &SessionCatalog) -> Result<(), AppError> {
+        if self.enqueue_catalog(catalog.clone()) {
+            return Ok(());
+        }
+        self.inner.session_store.save(catalog)
+    }
+
     /// 取走最近一次后台写盘失败；渲染帧统一转成用户可见通知。
     pub(crate) fn take_error(&self) -> Option<AppError> {
-        self.error.lock().take()
+        self.inner.error.lock().take()
     }
 }
 

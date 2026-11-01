@@ -128,12 +128,7 @@ impl AppState {
     pub(crate) fn persist_catalog(&mut self) -> bool {
         // 内存态先推进版本：侧栏缓存需要在本次修改后立即失效，不能等磁盘。
         let catalog = self.catalog.clone();
-        if self.persistence.enqueue_catalog(catalog) {
-            self.catalog_revision = self.catalog_revision.wrapping_add(1);
-            return true;
-        }
-        // 写盘线程不可用（启动失败或已停机）时退回同步写，避免静默丢数据。
-        match self.services.session_store.save(&self.catalog) {
+        match self.persistence.save_catalog(&catalog) {
             Ok(()) => {
                 self.catalog_revision = self.catalog_revision.wrapping_add(1);
                 true
@@ -153,10 +148,7 @@ impl AppState {
         &self,
         settings: &AppSettings,
     ) -> Result<(), transom_core::AppError> {
-        if self.persistence.enqueue_settings(settings.clone()) {
-            return Ok(());
-        }
-        self.services.settings_store.save(settings)
+        self.persistence.save_settings(settings)
     }
 
     /// 统一的“保存并上报”入口：失败时记录日志并写入应用级错误队列。
