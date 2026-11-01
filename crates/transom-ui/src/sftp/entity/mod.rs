@@ -72,19 +72,6 @@ impl SftpPanelView {
     }
 }
 
-/// 回到外壳执行一次跨域动作；外壳已释放时返回 `None`。
-///
-/// 供实体方法在 `&mut self.state` 借用仍然有效时使用：调用方先解构
-/// `SftpPanelView { state, app }`，把 `app` 传进来，状态留在本地。
-pub(super) fn with_shell_parts<R>(
-    app: &Option<WeakEntity<AppShell>>,
-    cx: &mut Context<SftpPanelView>,
-    action: impl FnOnce(&mut AppShell, &mut Context<AppShell>) -> R,
-) -> Option<R> {
-    let app = app.as_ref()?.upgrade()?;
-    Some(app.update(cx, action))
-}
-
 /// 只读外壳状态；用于取设置、连接与工作区快照。
 pub(super) fn read_shell_parts<R>(
     app: &Option<WeakEntity<AppShell>>,

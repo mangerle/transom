@@ -68,10 +68,7 @@ impl SftpPanelView {
         self.state.mount_menu_open = false;
         self.reset_column_state(cx);
         if extra_width > 0.5 {
-            let app = self.app.clone();
-            with_shell_parts(&app, cx, |shell, cx| {
-                shell.grow_sftp_panel_width(extra_width, window, cx)
-            });
+            cx.emit(crate::sftp::SftpPanelEvent::GrowPanelWidth(extra_width));
         }
         log::info!(
             "挂载并列远端列，窗格: {tab_id}，连接: {connection_id}，初始目录: {initial_path}，建议列宽: {width_hint:.0}，面板加宽: {extra_width:.0}"

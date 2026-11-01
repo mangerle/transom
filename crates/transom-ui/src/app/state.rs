@@ -84,6 +84,8 @@ pub(crate) struct AppState {
     pub(in crate::app) immersive: bool,
     /// SFTP 面板上次同步到的目标宽度；目标变了才调整面板宽度。
     pub(in crate::app) sftp_panel_width_target: Option<f32>,
+    /// 面板发出但需要窗口才能执行的请求；渲染期统一消费。
+    pub(in crate::app) pending_sftp_requests: Vec<crate::sftp::SftpPanelEvent>,
     /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
     pub(in crate::app) shortcut_recording: ShortcutRecordingState,
     /// 组件库弹窗栈的影子记录：与容器实际栈同序，逐帧对账的依据。

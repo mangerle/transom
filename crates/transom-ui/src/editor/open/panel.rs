@@ -9,6 +9,7 @@ use crate::sftp::format_size;
 use transom_core::AppSettings;
 
 /// 已通过目录闸门的远端编辑面板打开参数。
+#[derive(Clone)]
 pub(crate) struct RemoteEditorOpen {
     pub(crate) tab_id: TabId,
     pub(crate) connection_id: ConnectionId,

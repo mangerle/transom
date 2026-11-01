@@ -54,6 +54,12 @@ impl AppShell {
                 self.state.sftp_modals.search = Some((**state).clone());
                 cx.notify();
             }
+            SftpPanelEvent::OpenEditor(_)
+            | SftpPanelEvent::OpenInputModal(_)
+            | SftpPanelEvent::GrowPanelWidth(_) => {
+                // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
+                self.state.pending_sftp_requests.push(event.clone());
+            }
             SftpPanelEvent::OpenSyncModal(state) => {
                 self.state.sftp_modals.sync = Some((**state).clone());
                 cx.notify();

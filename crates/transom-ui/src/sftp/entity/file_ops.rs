@@ -10,13 +10,11 @@ impl SftpPanelView {
     fn open_input_modal(
         &self,
         params: SftpInputModalParams,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, cx| {
-            shell.open_sftp_input_modal(params, window, cx)
-        });
+        cx.emit(crate::sftp::SftpPanelEvent::OpenInputModal(params));
+        cx.notify();
     }
 
     fn side_connection(target: SftpRemotePaneRef) -> Option<transom_core::ConnectionId> {

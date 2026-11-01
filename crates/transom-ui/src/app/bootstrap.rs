@@ -208,6 +208,7 @@ impl AppShell {
             pending_notices,
             immersive: false,
             sftp_panel_width_target: None,
+            pending_sftp_requests: Vec::new(),
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
                 applied_keys: applied_shortcut_keys,

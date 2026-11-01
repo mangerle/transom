@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpCommand, TabId};
 
 /// SFTP 面板向外壳发出的意图。
+#[derive(Clone)]
 pub(crate) enum SftpPanelEvent {
     /// 请求向后台投递一条 SFTP 命令；命令已构造完整，外壳直接转发。
     SendCommand(SftpCommand),
@@ -28,6 +29,12 @@ pub(crate) enum SftpPanelEvent {
     OpenSyncModal(Box<crate::sftp::SftpSyncModalState>),
     /// 请求打开传输排除规则弹窗；文本框已由面板建好并聚焦。
     OpenFilterModal { textarea: Entity<TextareaState> },
+    /// 请求打开远端编辑面板；需要窗口，由外壳在渲染期统一执行。
+    OpenEditor(crate::editor::RemoteEditorOpen),
+    /// 请求打开输入弹窗；需要窗口，由外壳在渲染期统一执行。
+    OpenInputModal(crate::sftp::SftpInputModalParams),
+    /// 请求把面板加宽；需要窗口，由外壳在渲染期统一执行。
+    GrowPanelWidth(f32),
     /// 请求关闭指定窗格的面板；句柄由外壳回收。
     ClosePanel { tab_id: TabId },
     /// 请求打开本地对比面板；目标已由面板校验完成。

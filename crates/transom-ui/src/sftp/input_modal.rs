@@ -11,6 +11,7 @@ use gpui_kit::*;
 use transom_core::{ConnectionId, TabId};
 
 /// 输入弹窗的装配参数。
+#[derive(Clone)]
 pub(crate) struct SftpInputModalParams {
     pub(crate) tab_id: TabId,
     /// `None` 表示主远端；`Some` 表示并列远端列。本地目标也使用 `None`。

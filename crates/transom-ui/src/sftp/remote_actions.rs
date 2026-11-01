@@ -11,7 +11,7 @@
 //!
 //! 导航与过滤动作在 `remote_nav`，文件操作实现分散在各自的业务文件中。
 
-use super::entity::{SftpPanelView, with_shell_parts};
+use super::entity::SftpPanelView;
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
@@ -112,7 +112,7 @@ impl SftpPanelView {
         &mut self,
         target: SftpRemotePaneRef,
         path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(main_connection) = self.state.main_connection else {
@@ -153,21 +153,16 @@ impl SftpPanelView {
             cx.notify();
             return;
         }
-        let tab_id = self.tab_id;
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, cx| {
-            shell.open_remote_editor_panel(
-                crate::editor::RemoteEditorOpen {
-                    tab_id,
-                    connection_id,
-                    remote_path: path,
-                    file_name: entry.name,
-                    permissions: entry.permissions,
-                },
-                window,
-                cx,
-            );
-        });
+        cx.emit(crate::sftp::SftpPanelEvent::OpenEditor(
+            crate::editor::RemoteEditorOpen {
+                tab_id: self.tab_id,
+                connection_id,
+                remote_path: path,
+                file_name: entry.name,
+                permissions: entry.permissions,
+            },
+        ));
+        cx.notify();
     }
 
     /// 目标列的上传入口：把本地列选中项上传到该列当前目录。

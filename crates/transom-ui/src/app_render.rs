@@ -15,6 +15,29 @@ use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 
 impl AppShell {
+    /// 执行面板在事件里排队的窗口动作。
+    fn flush_pending_sftp_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::sftp::SftpPanelEvent;
+        if self.state.pending_sftp_requests.is_empty() {
+            return;
+        }
+        let requests = std::mem::take(&mut self.state.pending_sftp_requests);
+        for request in requests {
+            match request {
+                SftpPanelEvent::OpenEditor(params) => {
+                    self.open_remote_editor_panel(params, window, cx);
+                }
+                SftpPanelEvent::OpenInputModal(params) => {
+                    self.open_sftp_input_modal(params, window, cx);
+                }
+                SftpPanelEvent::GrowPanelWidth(extra) => {
+                    self.grow_sftp_panel_width(extra, window, cx);
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// 转发面板以实体元素形式挂载；没有活动面板时返回占位空元素。
     fn forward_view_element(&self, _cx: &mut Context<Self>) -> AnyElement {
         match self
@@ -35,6 +58,8 @@ impl Render for AppShell {
         if let Some(error) = self.state.take_persistence_error() {
             self.state.set_error(localized_error(&error));
         }
+        // 面板请求的"需要窗口"的动作在渲染期统一执行：事件派发阶段没有 Window。
+        self.flush_pending_sftp_requests(window, cx);
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
         // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的
