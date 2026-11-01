@@ -66,6 +66,30 @@
 判据：实体方法体内出现 `read_shell_parts` / `with_shell_parts` 的，一律不能被
 外壳在持有借用时直接调用。
 
+## 四之三、协议修正（2026-11-01 决定）
+
+跨实体调用只允许单向：
+
+- **父 → 子**：父把数据算好传下去（连接号、快照、参数），子只改自身状态并返回结果，
+  跨域动作（发命令、开弹窗、切标签）由父在 `update` 返回之后完成。
+- **子 → 父**：只在实体自己的回调上下文里调用；或 `cx.emit` 事件 + 父 `cx.subscribe`。
+
+反模式：子实体方法体内出现 `with_shell_parts` / `read_shell_parts`，而该方法会被
+父在持有借用时 `view.update` 调用——必然 panic。
+
+待清理（`with_shell_parts` 21 处、`read_shell_parts` 28 处，集中在 SFTP）：
+
+1. `SftpPanelView::send_op_for_connection`（父：`send_sftp_op_for_connection`）
+2. `SftpPanelView::enqueue_uploads`、`process_queue`（父：队列与拖拽入口）
+3. `sftp/entity/{chmod,delete,queue,task_control,local_diff}.rs` 内其余回交点
+4. `sftp/remote_actions.rs`（7 处）
+
+修法二选一：把父需要的数据作为参数传入（首选，无时序变化）；或把回交改成
+`cx.defer` + 捕获 owned 数据（注意闭包需 `'static`，不能带 `&mut Window`）。
+
+已按新协议改好的样板：`request_sftp_list` / `request_sftp_list_pane` →
+`repo: prepare_remote_list` 返回连接号，父负责 `send_command`。
+
 ## 五、硬约束（违反会 panic 或回归）
 
 1. 实体回调回交外壳后，外壳方法不得再 `read`/`update` 同一实体（双重租借 panic）。
