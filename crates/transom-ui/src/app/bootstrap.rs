@@ -38,28 +38,10 @@ impl AppShell {
                 )
             })
         };
-        let search = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
-        });
-        let quick_open_state = cx.new(|cx| CommandState::new(window, cx));
-        let broadcast_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("broadcast.single_placeholder").to_string())
-        });
-        let broadcast_textarea = cx.new(|cx| {
-            TextareaState::new(window, cx)
-                .submit_on_enter(true)
-                .placeholder(rust_i18n::t!("broadcast.multi_placeholder").to_string())
-        });
-        let vertical_tabs_search = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("tab.vertical_search").to_string())
-        });
-        let workspace_panels = cx.new(|_| ResizableState::default());
-        let workspace_panels_left = cx.new(|_| ResizableState::default());
-        cx.observe(&workspace_panels, |_, _, cx| cx.notify())
+        let inputs = BootstrapInputs::new(window, cx);
+        cx.observe(&inputs.workspace_panels, |_, _, cx| cx.notify())
             .detach();
-        cx.observe(&workspace_panels_left, |_, _, cx| cx.notify())
+        cx.observe(&inputs.workspace_panels_left, |_, _, cx| cx.notify())
             .detach();
         let (catalog, catalog_error) = match services.session_store.load() {
             Ok(catalog) => (catalog, None),
@@ -109,9 +91,6 @@ impl AppShell {
             }
         });
 
-        let known_hosts_search = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
-        });
         let known_hosts_records = services.known_hosts.list().unwrap_or_default();
 
         let persistence = Persistence::new(
@@ -143,20 +122,20 @@ impl AppShell {
             services,
             catalog,
             catalog_revision: 0,
-            sidebar: SidebarState::new(sidebar_visible, search),
+            sidebar: SidebarState::new(sidebar_visible, inputs.search.clone()),
             workspace: WorkspaceState::new(),
-            workspace_panels,
-            workspace_panels_left,
-            vertical_tabs_search,
+            workspace_panels: inputs.workspace_panels.clone(),
+            workspace_panels_left: inputs.workspace_panels_left.clone(),
+            vertical_tabs_search: inputs.vertical_tabs_search.clone(),
             vertical_tabs_open,
             modals: ModalHub::new(
                 KnownHostsModalState {
                     open: false,
                     records: known_hosts_records,
-                    search: known_hosts_search,
+                    search: inputs.known_hosts_search.clone(),
                 },
                 settings_view,
-                quick_open_state,
+                inputs.quick_open_state.clone(),
                 SnippetPanelState {
                     open: false,
                     form: None,
@@ -184,8 +163,8 @@ impl AppShell {
                 open: false,
                 multiline: false,
                 targets_open: false,
-                input: broadcast_input,
-                textarea: broadcast_textarea,
+                input: inputs.broadcast_input.clone(),
+                textarea: inputs.broadcast_textarea.clone(),
                 targets: HashSet::new(),
                 targets_scope: Vec::new(),
             },
@@ -293,5 +272,53 @@ impl AppShell {
                 }
             }
         }));
+    }
+}
+/// 构造期一次性创建的输入框/面板句柄，避免 `new` 内平铺二十个同名变量。
+struct BootstrapInputs {
+    search: Entity<InputState>,
+    quick_open_state: Entity<CommandState>,
+    broadcast_input: Entity<InputState>,
+    broadcast_textarea: Entity<TextareaState>,
+    vertical_tabs_search: Entity<InputState>,
+    workspace_panels: Entity<ResizableState>,
+    workspace_panels_left: Entity<ResizableState>,
+    known_hosts_search: Entity<InputState>,
+}
+
+impl BootstrapInputs {
+    fn new(window: &mut Window, cx: &mut Context<AppShell>) -> Self {
+        let search = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
+        });
+        let quick_open_state = cx.new(|cx| CommandState::new(window, cx));
+        let broadcast_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("broadcast.single_placeholder").to_string())
+        });
+        let broadcast_textarea = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .submit_on_enter(true)
+                .placeholder(rust_i18n::t!("broadcast.multi_placeholder").to_string())
+        });
+        let vertical_tabs_search = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("tab.vertical_search").to_string())
+        });
+        let workspace_panels = cx.new(|_| ResizableState::default());
+        let workspace_panels_left = cx.new(|_| ResizableState::default());
+        let known_hosts_search = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(rust_i18n::t!("app.search").to_string())
+        });
+        Self {
+            search,
+            quick_open_state,
+            broadcast_input,
+            broadcast_textarea,
+            vertical_tabs_search,
+            workspace_panels,
+            workspace_panels_left,
+            known_hosts_search,
+        }
     }
 }
