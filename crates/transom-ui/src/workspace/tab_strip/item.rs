@@ -247,7 +247,7 @@ pub(super) fn render_tab_entry(
     }
 
     element = element
-        .child(div().size(px(8.0)).rounded_full().flex_none().bg(dot_color))
+        .child(crate::widgets::status_dot_bare(dot_color))
         .child(Icon::new(tab_icon).flex_none().text_color(if active {
             p.tab_active_foreground
         } else {

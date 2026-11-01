@@ -140,7 +140,7 @@ pub(super) fn build_tiled_group_badge(
                             let mut row = h_flex()
                                 .gap_2()
                                 .items_center()
-                                .child(div().size(px(7.0)).rounded_full().flex_none().bg(dot_color))
+                                .child(crate::widgets::status_dot_bare(dot_color))
                                 .child(Icon::new(icon).xsmall().text_color(muted))
                                 .child(
                                     div()

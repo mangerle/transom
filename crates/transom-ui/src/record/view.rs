@@ -45,7 +45,7 @@ impl AppShell {
                 .h(rems(BADGE_HEIGHT))
                 .rounded(p.radius.md)
                 .gap_1p5()
-                .child(div().size(px(7.0)).rounded_full().bg(p.danger))
+                .child(crate::widgets::status_dot_bare(p.danger))
                 .child(rust_i18n::t!("recorder.recording").to_string());
             div()
                 .id("recording-indicator")

@@ -18,6 +18,18 @@ pub(crate) fn status_badge(label: impl Into<SharedString>, color: Hsla, p: &Pale
         .into_any_element()
 }
 
+/// 无 tooltip 的状态圆点：列表行、标签与徽标内的纯装饰点。
+///
+/// 尺寸走 `space::SM` 令牌；此前各页面分别写 6/7/8px，密度切换与并排对齐
+/// 都会漂移。
+pub(crate) fn status_dot_bare(color: Hsla) -> Div {
+    div()
+        .size(rems(space::SM))
+        .rounded_full()
+        .flex_none()
+        .bg(color)
+}
+
 /// 状态圆点：用于会话行尾的拨测状态。
 pub(crate) fn status_dot(
     id: impl Into<ElementId>,
@@ -29,6 +41,6 @@ pub(crate) fn status_dot(
         .id(id.into())
         .flex_none()
         .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-        .child(div().size(rems(space::SM)).rounded_full().bg(color))
+        .child(status_dot_bare(color))
         .into_any_element()
 }

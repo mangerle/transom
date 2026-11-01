@@ -159,7 +159,7 @@ pub(super) fn render_vertical_tab_row(
     }
 
     band = band
-        .child(div().size(px(8.0)).rounded_full().flex_none().bg(dot_color))
+        .child(crate::widgets::status_dot_bare(dot_color))
         .child(
             Icon::new(icon)
                 .with_size(ROW_ICON_SIZE)
