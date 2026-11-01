@@ -50,7 +50,10 @@ pub(super) fn render_vertical_tab_row(
         .workspace
         .active_tab
         .is_some_and(|tab_id| group.contains(tab_id));
-    let title = tab.display_name();
+    // 与横向标签栏同一口径：优先运行期 OSC 标题，空标题回落到会话名。
+    // 纵向面板是“切换正在运行的东西”，与顶部标签显示同一名字才不会让人
+    // 以为两处指向不同会话；会话身份由副标题的连接目标承担。
+    let title = tab.tab_label();
     let labeled = if serial > 0 {
         format!("{title} #{serial}")
     } else {

@@ -54,6 +54,7 @@ pub(super) fn render_tab_entry(
     let group_id = group.id;
     let active_pane = group.active_pane;
     let session_id = tab.session_id;
+    // 横向与纵向标签栏共用同一标题口径：运行期标题优先，空标题回落会话名。
     let title = tab.tab_label();
     let pane_count = group.pane_count();
     let root_axis = group.root.root_axis();
