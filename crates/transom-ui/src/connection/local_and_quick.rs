@@ -88,6 +88,7 @@ impl AppShell {
             }),
         );
         self.state
+            .workspace
             .create_local_group(tab_id, session.id, &session.name);
         self.state
             .workspace
@@ -109,7 +110,7 @@ impl AppShell {
             }
         };
         let tab_id = TabId::new();
-        self.state.create_group(tab_id, session.id);
+        self.state.workspace.create_group(tab_id, session.id);
         self.state
             .workspace
             .tabs

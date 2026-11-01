@@ -16,13 +16,13 @@ impl AppState {
     pub(crate) fn active_group_index(&self) -> Option<usize> {
         self.workspace
             .active_tab
-            .and_then(|tab_id| self.group_index_for_tab(tab_id))
+            .and_then(|tab_id| self.workspace.group_index_for_tab(tab_id))
     }
 }
 
 impl AppState {
     pub(crate) fn is_rendered_pane(&self, tab_id: TabId) -> bool {
-        let Some(group_index) = self.group_index_for_tab(tab_id) else {
+        let Some(group_index) = self.workspace.group_index_for_tab(tab_id) else {
             return false;
         };
         let group = &self.workspace.groups[group_index];
@@ -41,7 +41,7 @@ impl AppState {
 
     /// 从所属标签组的分割树里摘除一个窗格，返回应接管的焦点窗格。
     pub(super) fn detach_pane_from_group(&mut self, tab_id: TabId) -> Option<TabId> {
-        let group_index = self.group_index_for_tab(tab_id)?;
+        let group_index = self.workspace.group_index_for_tab(tab_id)?;
         let was_active = self.workspace.active_tab == Some(tab_id);
         let replacement = match self.workspace.groups[group_index].root.remove_leaf(tab_id) {
             RemoveOutcome::Empty => {
@@ -74,6 +74,7 @@ impl AppState {
     pub(crate) fn remove_tab(&mut self, tab_id: TabId) {
         let was_active = self.workspace.active_tab == Some(tab_id);
         let group_id = self
+            .workspace
             .group_index_for_tab(tab_id)
             .map(|index| self.workspace.groups[index].id);
         let tiled_focus = group_id
@@ -98,7 +99,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(target_group) = self.state.group_index_for_tab(tab_id) else {
+        let Some(target_group) = self.state.workspace.group_index_for_tab(tab_id) else {
             return;
         };
         let target_group_id = self.state.workspace.groups[target_group].id;
@@ -123,6 +124,7 @@ impl AppShell {
     pub(crate) fn close_tab(&mut self, tab_id: TabId, window: &mut Window, cx: &mut Context<Self>) {
         let Some(group_id) = self
             .state
+            .workspace
             .group_index_for_tab(tab_id)
             .map(|index| self.state.workspace.groups[index].id)
         else {
@@ -204,7 +206,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(group_index) = self.state.group_index_for_tab(tab_id) else {
+        let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) else {
             return;
         };
         if self.state.workspace.groups[group_index].pane_count() == 1 {

@@ -1,4 +1,9 @@
-//! 会话与标签页管理模块入口。
+//! 标签页生命周期：关闭、复制、会话回填与分组查询。
+//!
+//! 设计原理（Why）：标签是工作区的组成单位，纯分组查询与建组逻辑放在
+//! [`WorkspaceState`] 上；关闭/复制需要命令通道或窗口的动作留在外壳，
+//! 通过本模块的方法组织。文件放在 `workspace/tabs/` 下，模块归属与状态
+//! 归属一致，不再出现“标签状态在工作区、行为在另一个顶层模块”的分裂。
 
 mod close_ops;
 mod duplicate;
@@ -7,18 +12,59 @@ mod session_ops;
 #[cfg(test)]
 mod tests;
 
+use crate::app::workspace::WorkspaceState;
 use crate::app::{AppShell, AppState, TabContent, TabGroup, TabStatus, TerminalTab};
 use crate::pane_tree::LayoutNode;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SavedTabGroup, Session, SessionId, TabId};
 
-impl AppState {
+impl WorkspaceState {
     /// 标签所属分组的索引；标签不属于任何分组时返回 `None`。
     ///
-    /// 纯状态查询，不依赖 GPUI 上下文；归属于 [`AppState`]，外壳显式经
-    /// `self.state.group_index_for_tab` 调用。
+    /// 纯工作区查询，不依赖 GPUI 上下文，也不读取会话目录。
     pub(crate) fn group_index_for_tab(&self, tab_id: TabId) -> Option<usize> {
-        self.workspace.group_index_of(tab_id)
+        self.group_index_of(tab_id)
+    }
+
+    /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
+    pub(crate) fn create_group(&mut self, tab_id: TabId, session_id: SessionId) -> GroupId {
+        let serial = self
+            .groups
+            .iter()
+            .filter(|group| group.session_id == session_id)
+            .map(|group| group.serial)
+            .max()
+            .map_or(0, |max| max + 1);
+        let group = TabGroup::new(tab_id, session_id, serial);
+        let id = group.id;
+        self.groups.push(group);
+        id
+    }
+
+    /// 新建本地终端标签组，序号按"本地终端的基础标题"分配。
+    pub(crate) fn create_local_group(
+        &mut self,
+        tab_id: TabId,
+        session_id: SessionId,
+        base_title: &str,
+    ) -> GroupId {
+        let serial = self
+            .groups
+            .iter()
+            .filter_map(|group| {
+                let tab = self.tabs.iter().find(|tab| tab.id == group.active_pane)?;
+                if !matches!(tab.session.connection, Connection::Local(_)) {
+                    return None;
+                }
+                (tab.session.name == base_title).then_some(group.serial)
+            })
+            .max()
+            .map_or(0, |max| max + 1);
+        let id = self.create_group(tab_id, session_id);
+        if let Some(group) = self.groups.iter_mut().find(|group| group.id == id) {
+            group.serial = serial;
+        }
+        id
     }
 }
 
@@ -42,57 +88,6 @@ impl AppState {
 }
 
 impl AppState {
-    pub(crate) fn create_group(&mut self, tab_id: TabId, session_id: SessionId) -> GroupId {
-        let serial = self
-            .workspace
-            .groups
-            .iter()
-            .filter(|group| group.session_id == session_id)
-            .map(|group| group.serial)
-            .max()
-            .map_or(0, |max| max + 1);
-        let group = TabGroup::new(tab_id, session_id, serial);
-        let id = group.id;
-        self.workspace.groups.push(group);
-        id
-    }
-
-    /// 新建本地终端标签组，序号按"本地终端的基础标题"分配。
-    pub(crate) fn create_local_group(
-        &mut self,
-        tab_id: TabId,
-        session_id: SessionId,
-        base_title: &str,
-    ) -> GroupId {
-        let serial = self
-            .workspace
-            .groups
-            .iter()
-            .filter_map(|group| {
-                let tab = self
-                    .workspace
-                    .tabs
-                    .iter()
-                    .find(|tab| tab.id == group.active_pane)?;
-                if !matches!(tab.session.connection, Connection::Local(_)) {
-                    return None;
-                }
-                (tab.session.name == base_title).then_some(group.serial)
-            })
-            .max()
-            .map_or(0, |max| max + 1);
-        let id = self.create_group(tab_id, session_id);
-        if let Some(group) = self
-            .workspace
-            .groups
-            .iter_mut()
-            .find(|group| group.id == id)
-        {
-            group.serial = serial;
-        }
-        id
-    }
-
     pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
         let index = self.workspace.tab_index(tab_id)?;
         let session_id = self.workspace.tabs[index].session_id;
@@ -207,7 +202,7 @@ impl AppShell {
         tab.title.clear();
         tab.cwd = None;
         self.state.workspace.active_tab = Some(tab_id);
-        if let Some(group_index) = self.state.group_index_for_tab(tab_id) {
+        if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }
         self.state.present_active_group();
@@ -227,6 +222,7 @@ impl AppShell {
         }
         let group_id = self
             .state
+            .workspace
             .group_index_for_tab(tab_id)
             .map(|index| self.state.workspace.groups[index].id);
         if let Some(group_id) = group_id
@@ -241,7 +237,7 @@ impl AppShell {
             tiled.focused = slot;
         }
         self.state.workspace.active_tab = Some(tab_id);
-        if let Some(group_index) = self.state.group_index_for_tab(tab_id) {
+        if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }
         if let Some(terminal) = self

@@ -15,7 +15,7 @@ impl AppState {
     pub(crate) fn active_group_id(&self) -> Option<GroupId> {
         self.workspace
             .active_tab
-            .and_then(|tab| self.group_index_for_tab(tab))
+            .and_then(|tab| self.workspace.group_index_for_tab(tab))
             .map(|index| self.workspace.groups[index].id)
     }
 

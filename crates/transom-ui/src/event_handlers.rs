@@ -153,7 +153,8 @@ impl AppShell {
         // 会并发建连，晚完成者若无条件激活，会把焦点从后创建的深链标签
         // 抢回启动标签。只有该窗格仍是当前选中项时才切换组内焦点并聚焦。
         let still_active = self.state.workspace.active_tab == Some(tab_id);
-        if still_active && let Some(group_index) = self.state.group_index_for_tab(tab_id) {
+        if still_active && let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id)
+        {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }
         // 认证已确定通过，此刻才允许把用户勾选保存的凭据写入钥匙串。

@@ -96,7 +96,7 @@ impl AppShell {
         self.record_recent_session(session_id, cx);
 
         let tab_id = TabId::new();
-        self.state.create_group(tab_id, session_id);
+        self.state.workspace.create_group(tab_id, session_id);
         self.state
             .workspace
             .tabs

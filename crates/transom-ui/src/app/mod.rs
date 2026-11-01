@@ -79,8 +79,6 @@ pub(crate) mod split;
 pub(crate) mod startup;
 #[path = "../status_bar/mod.rs"]
 pub(crate) mod status_bar;
-#[path = "../tabs/mod.rs"]
-pub(crate) mod tabs;
 #[path = "../terminal_copy_mode.rs"]
 pub(crate) mod terminal_copy_mode;
 #[path = "../terminal_search.rs"]

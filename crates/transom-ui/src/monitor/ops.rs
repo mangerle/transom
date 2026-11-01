@@ -461,7 +461,9 @@ impl AppShell {
             target_connection_id,
         );
 
-        self.state.create_group(monitor_tab_id, target_session_id);
+        self.state
+            .workspace
+            .create_group(monitor_tab_id, target_session_id);
         self.state.workspace.tabs.push(new_tab);
         self.activate_tab(monitor_tab_id, window, cx);
         cx.notify();

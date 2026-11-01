@@ -20,7 +20,7 @@ impl AppShell {
         let Some(active_id) = self.state.workspace.active_tab else {
             return;
         };
-        let Some(group_index) = self.state.group_index_for_tab(active_id) else {
+        let Some(group_index) = self.state.workspace.group_index_for_tab(active_id) else {
             return;
         };
         let Some(session) = self.state.session_for_tab(active_id) else {
@@ -82,7 +82,7 @@ impl AppShell {
     /// 目标窗格由调用方显式传入，而不是回读"当前活动标签组"：标签栏徽标可以在
     /// 未激活的标签上点开，依赖激活顺序会让操作落到错误的组上。
     pub(crate) fn toggle_zoom_pane(&mut self, pane: TabId, cx: &mut Context<Self>) {
-        let Some(group_index) = self.state.group_index_for_tab(pane) else {
+        let Some(group_index) = self.state.workspace.group_index_for_tab(pane) else {
             return;
         };
         if self.state.workspace.groups[group_index].pane_count() < 2 {
@@ -104,7 +104,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(group_index) = self.state.group_index_for_tab(tab_id) else {
+        let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) else {
             return;
         };
         if self.state.workspace.groups[group_index].pane_count() < 2 {
@@ -138,9 +138,10 @@ impl AppShell {
         };
         if is_local {
             self.state
+                .workspace
                 .create_local_group(tab_id, session_id, &base_title);
         } else {
-            self.state.create_group(tab_id, session_id);
+            self.state.workspace.create_group(tab_id, session_id);
         }
         self.state.prune_pane_split_states();
         // 摘出的窗格是一个新标签：单屏显示，原并排对保留；点回配对标签即恢复。
@@ -158,7 +159,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(group_index) = self.state.group_index_for_tab(tab_id)
+        if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id)
             && self.state.workspace.groups[group_index].zoomed.is_some()
         {
             self.state.workspace.groups[group_index].zoomed = Some(tab_id);

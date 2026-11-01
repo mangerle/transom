@@ -201,7 +201,7 @@ impl AppShell {
 
         let tab = TerminalTab::player_tab(tab_id, dummy_session, tab_title, player);
 
-        self.state.create_group(tab_id, session_id);
+        self.state.workspace.create_group(tab_id, session_id);
         self.state.workspace.tabs.push(tab);
         self.activate_tab(tab_id, window, cx);
         cx.notify();
