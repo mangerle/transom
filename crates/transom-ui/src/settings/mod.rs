@@ -2,6 +2,8 @@
 
 mod about_page;
 mod actions;
+mod actions_collect;
+mod actions_sync;
 mod entity;
 mod event;
 mod handler;
