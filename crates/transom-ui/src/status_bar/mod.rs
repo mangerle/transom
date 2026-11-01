@@ -12,12 +12,12 @@
 mod drag;
 mod format;
 mod items;
+pub(crate) mod metrics;
 
 pub(crate) use format::{format_compact_size, format_rate};
 
-use self::items::StatusData;
-use crate::app::app_settings;
-use crate::app::{AppShell, TabStatus, TerminalTab};
+pub(crate) use self::metrics::{StatusBarMetricsView, StatusMetricsSnapshot};
+use crate::app::{AppShell, TabStatus};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -28,7 +28,7 @@ use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{Connection, NetworkTraffic, StatusItemId, SystemStats};
+use transom_core::{NetworkTraffic, StatusItemId, SystemStats};
 
 // 数值槽与徽标度量以 rem 表达（标准档 16px 基准），密度切换时随字号等比放大，
 // 大字号下数字不会挤爆固定槽；底栏高度在 theme::tokens::size 集中定义。
@@ -79,31 +79,9 @@ impl AppShell {
             )
         };
 
-        let data = StatusData::from_tab(active_tab_info);
-        let items: Vec<StatusItemId> = app_settings(cx).status_bar.visible_items().collect();
         let app = cx.entity().clone();
-        let mut right_elements = Vec::with_capacity(items.len());
-        for id in items {
-            if let Some(badge) = Self::render_status_item(id, &data, &app, p) {
-                right_elements.push(badge);
-            }
-        }
-
-        if right_elements.is_empty() {
-            let text = self
-                .state
-                .status
-                .clone()
-                .unwrap_or_else(|| format!("{} v{}", crate::APP_NAME, crate::APP_VERSION));
-            right_elements.push(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.muted_foreground)
-                    .child(text)
-                    .into_any_element(),
-            );
-        }
+        self.refresh_status_metrics(cx);
+        let metrics = self.state.status_metrics.clone();
 
         let pill_tooltip = status_text.clone();
         let connection_pill = h_flex()
@@ -151,7 +129,7 @@ impl AppShell {
             .then(|| self.render_broadcast_trigger(cx));
         let recording_badge = (session_scoped || self.is_any_tab_recording(cx))
             .then(|| self.render_recording_badge(p, cx));
-        let front_zone = drag::status_front_drop_zone(&app, p);
+        let front_zone = metrics::front_drop_zone(&self.state.status_metrics, p);
         let menu_app = app.clone();
         // ZMODEM 传输徽章优先于常规状态项：传输进行中用户最关心进度与取消。
         let zmodem_badge = self
@@ -164,7 +142,7 @@ impl AppShell {
             .gap_2()
             .items_center()
             .children(zmodem_badge)
-            .children(right_elements);
+            .child(metrics);
 
         let mut bar = h_flex()
             .id("status-bar")
@@ -226,6 +204,32 @@ impl AppShell {
         }
 
         bar.into_any_element()
+    }
+}
+
+impl AppShell {
+    /// 把活动标签的指标快照推进状态栏指标实体；无可见数据时给出版本兜底。
+    pub(crate) fn refresh_status_metrics(&mut self, cx: &mut Context<Self>) {
+        let tab = self
+            .state
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.state.workspace.tab(tab_id));
+        let snapshot = crate::status_bar::StatusMetricsSnapshot {
+            traffic: tab.and_then(|tab| tab.network_traffic()).cloned(),
+            stats: tab.and_then(|tab| tab.system_stats()).cloned(),
+            is_ssh: tab.is_some_and(|tab| {
+                matches!(tab.session.connection, transom_core::Connection::Ssh(_))
+            }),
+        };
+        let fallback = self
+            .state
+            .status
+            .clone()
+            .unwrap_or_else(|| format!("{} v{}", crate::APP_NAME, crate::APP_VERSION));
+        self.state.status_metrics.update(cx, |view, cx| {
+            view.set_snapshot(snapshot, fallback, cx);
+        });
     }
 }
 

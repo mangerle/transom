@@ -87,6 +87,8 @@ pub(crate) struct AppState {
     pub(in crate::app) sftp_panel_width_target: Option<f32>,
     /// 各面板/实体上报的窗口动作；渲染期一次取空并执行。
     pub(in crate::app) window_requests: super::WindowRequests,
+    /// 状态栏右侧指标簇实体：统计/流量事件只重绘它，不重建整窗。
+    pub(in crate::app) status_metrics: Entity<crate::status_bar::StatusBarMetricsView>,
     /// 密钥生成/部署向导状态：独立于设置草稿，随弹窗开关生死。
     pub(in crate::app) key_wizard: Option<crate::keys::KeyWizardState>,
     /// 当前是否要求控制面采样系统统计；界面完全没有消费方时置假。

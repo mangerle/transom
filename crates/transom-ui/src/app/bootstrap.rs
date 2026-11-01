@@ -127,6 +127,7 @@ impl AppShell {
             immersive: false,
             sftp_panel_width_target: None,
             window_requests: Default::default(),
+            status_metrics: cx.new(|_| crate::status_bar::StatusBarMetricsView::new()),
             key_wizard: None,
             stats_sampling: true,
             shortcut_recording: ShortcutRecordingState {
@@ -161,6 +162,18 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.settings = Some(settings_subscription);
+        let metrics_subscription = cx.subscribe(
+            &self.state.status_metrics,
+            |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
+                if matches!(
+                    event,
+                    crate::status_bar::metrics::StatusMetricsEvent::LayoutChanged
+                ) {
+                    shell.persist_layout_settings(cx);
+                }
+            },
+        );
+        self.state.tasks.subscriptions._status_metrics = Some(metrics_subscription);
         // 编辑器面板的意图事件由外壳订阅处理；命令通道在创建时注入，
         // 面板自己投递 SFTP 命令，不需要回指外壳。
         let editor_command_tx = self.state.services.command_tx.clone();

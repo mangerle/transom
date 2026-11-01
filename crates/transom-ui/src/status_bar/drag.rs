@@ -3,6 +3,7 @@
 //! 状态栏是单行布局：徽标左右半区决定插到锚点之前/之后，没有上下分组。
 //! 左侧连接状态固定，不参与拖拽；空白处与徽标菜单共用"恢复默认布局"。
 
+use super::metrics::StatusBarMetricsView;
 use super::status_item_icon;
 use crate::app::AppShell;
 use crate::app::app_settings_mut;
@@ -51,37 +52,52 @@ impl Render for StatusDragPreview {
     }
 }
 
-/// 给徽标挂上拖拽源、左右落点与右键菜单。
-pub(super) fn attach_status_drag(
+/// 空白区兜底菜单：状态栏没有可隐藏的具体条目，只保留整条栏共有的动作。
+pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu {
+    let app_restore = app.clone();
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("activity.restore_default").to_string(),
+        IconName::RotateCcw,
+        move |_, _, cx| {
+            app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
+        },
+    ))
+}
+
+/// 给指标徽标挂拖拽与菜单；排序与显隐就地改全局设置，落盘交给外壳。
+pub(super) fn attach_status_drag_metrics(
     badge: Stateful<Div>,
     item: StatusItemId,
-    app: &Entity<AppShell>,
+    view: &Entity<StatusBarMetricsView>,
     p: &Palette,
 ) -> AnyElement {
     let icon = status_item_icon(item);
-    let overlay_app = app.clone();
-    let menu_app = app.clone();
+    let overlay_view = view.clone();
+    let menu_view = view.clone();
     badge
         .on_drag(StatusDrag(item), move |_, _, _, cx| {
             cx.new(|_| StatusDragPreview::new(icon))
         })
-        .child(status_reorder_overlay(&overlay_app, item, p))
-        .context_menu(move |menu, _window, _cx| status_item_context_menu(menu, item, &menu_app))
+        .child(metrics_reorder_overlay(&overlay_view, item, p))
+        .context_menu(move |menu, _window, _cx| metrics_item_context_menu(menu, item, &menu_view))
         .into_any_element()
 }
 
-fn status_reorder_overlay(app: &Entity<AppShell>, anchor: StatusItemId, p: &Palette) -> AnyElement {
+fn metrics_reorder_overlay(
+    view: &Entity<StatusBarMetricsView>,
+    anchor: StatusItemId,
+    p: &Palette,
+) -> AnyElement {
     h_flex()
         .absolute()
         .inset_0()
-        .child(status_reorder_half(app, anchor, true, p))
-        .child(status_reorder_half(app, anchor, false, p))
+        .child(metrics_reorder_half(view, anchor, true, p))
+        .child(metrics_reorder_half(view, anchor, false, p))
         .into_any_element()
 }
 
-/// 徽标左右半区：左半插到锚点之前，右半插到锚点之后。
-fn status_reorder_half(
-    app: &Entity<AppShell>,
+fn metrics_reorder_half(
+    view: &Entity<StatusBarMetricsView>,
     anchor: StatusItemId,
     before: bool,
     p: &Palette,
@@ -98,15 +114,14 @@ fn status_reorder_half(
             style.border_r_2().border_color(line_color).bg(tint)
         })
     };
-    let app = app.clone();
+    let view = view.clone();
     zone.on_drop(move |drag: &StatusDrag, window, cx| {
-        let dragged = drag.0;
-        app.update(cx, |this, cx| {
+        view.update(cx, |view, cx| {
             if app_settings_mut(cx)
                 .status_bar
-                .move_relative_to(dragged, anchor, !before)
+                .move_relative_to(drag.0, anchor, !before)
             {
-                this.persist_layout_settings(cx);
+                view.layout_changed(cx);
             } else {
                 cx.notify();
             }
@@ -116,11 +131,14 @@ fn status_reorder_half(
     .into_any_element()
 }
 
-/// 右侧徽标簇左侧的空白落点：拖到这里直接移到最前。
-pub(super) fn status_front_drop_zone(app: &Entity<AppShell>, p: &Palette) -> AnyElement {
+/// 指标簇左侧空白落点：拖到这里直接移到最前。
+pub(super) fn metrics_front_drop_zone(
+    view: &Entity<StatusBarMetricsView>,
+    p: &Palette,
+) -> AnyElement {
     let line_color = p.sidebar_accent_foreground;
     let tint = p.foreground.opacity(0.04);
-    let app = app.clone();
+    let view = view.clone();
     div()
         .flex_1()
         .h_full()
@@ -129,10 +147,9 @@ pub(super) fn status_front_drop_zone(app: &Entity<AppShell>, p: &Palette) -> Any
             style.border_r_2().border_color(line_color).bg(tint)
         })
         .on_drop(move |drag: &StatusDrag, window, cx| {
-            let dragged = drag.0;
-            app.update(cx, |this, cx| {
-                if app_settings_mut(cx).status_bar.move_to_front(dragged) {
-                    this.persist_layout_settings(cx);
+            view.update(cx, |view, cx| {
+                if app_settings_mut(cx).status_bar.move_to_front(drag.0) {
+                    view.layout_changed(cx);
                 } else {
                     cx.notify();
                 }
@@ -142,18 +159,24 @@ pub(super) fn status_front_drop_zone(app: &Entity<AppShell>, p: &Palette) -> Any
         .into_any_element()
 }
 
-fn status_item_context_menu(
+fn metrics_item_context_menu(
     menu: PopupMenu,
     id: StatusItemId,
-    app: &Entity<AppShell>,
+    view: &Entity<StatusBarMetricsView>,
 ) -> PopupMenu {
-    let app_hide = app.clone();
-    let app_restore = app.clone();
+    let hide_view = view.clone();
+    let restore_view = view.clone();
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!("status.hide_item").to_string(),
         IconName::EyeOff,
         move |_, _, cx| {
-            app_hide.update(cx, |this, cx| this.hide_status_item(id, cx));
+            hide_view.update(cx, |view, cx| {
+                if app_settings_mut(cx).status_bar.set_visible(id, false) {
+                    view.layout_changed(cx);
+                } else {
+                    cx.notify();
+                }
+            });
         },
     ))
     .item(PopupMenuItem::separator())
@@ -161,32 +184,18 @@ fn status_item_context_menu(
         rust_i18n::t!("activity.restore_default").to_string(),
         IconName::RotateCcw,
         move |_, _, cx| {
-            app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
-        },
-    ))
-}
-
-/// 空白区兜底菜单：状态栏没有可隐藏的具体条目，只保留整条栏共有的动作。
-pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu {
-    let app_restore = app.clone();
-    menu.item(crate::widgets::menu_item(
-        rust_i18n::t!("activity.restore_default").to_string(),
-        IconName::RotateCcw,
-        move |_, _, cx| {
-            app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
+            restore_view.update(cx, |view, cx| {
+                if app_settings_mut(cx).status_bar.restore_defaults() {
+                    view.layout_changed(cx);
+                } else {
+                    cx.notify();
+                }
+            });
         },
     ))
 }
 
 impl AppShell {
-    fn hide_status_item(&mut self, id: StatusItemId, cx: &mut Context<Self>) {
-        if app_settings_mut(cx).status_bar.set_visible(id, false) {
-            self.persist_layout_settings(cx);
-        } else {
-            cx.notify();
-        }
-    }
-
     pub(crate) fn restore_status_bar(&mut self, cx: &mut Context<Self>) {
         if app_settings_mut(cx).status_bar.restore_defaults() {
             self.persist_layout_settings(cx);

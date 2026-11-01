@@ -47,6 +47,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
     pub(crate) settings: Option<Subscription>,
     pub(crate) diff_viewer: Option<Subscription>,
+    /// 订阅本身即生命周期守卫，无需读取。
+    pub(crate) _status_metrics: Option<Subscription>,
 }
 
 impl PanelSubscriptions {
@@ -58,6 +60,7 @@ impl PanelSubscriptions {
             forward: HashMap::new(),
             settings: None,
             diff_viewer: None,
+            _status_metrics: None,
         }
     }
 }
