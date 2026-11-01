@@ -5,6 +5,7 @@ mod pane_header;
 mod panes;
 pub(crate) mod state;
 mod tab_drag;
+pub(crate) mod tab_selection;
 mod tab_strip;
 pub(crate) mod tabs;
 mod tiled;

@@ -4,7 +4,7 @@ use crate::app::{AppShell, TabGroup};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
-use crate::tiling::{MAX_TILING_SLOTS, StripEntry, TiledTabs};
+use crate::tiling::{StripEntry, TiledTabs};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -68,49 +68,19 @@ pub(super) fn render_tab_entry(
     let divider_px = p.divider_width.pixels();
     let accent_px = divider_px.max(2.0);
 
-    let selection_groups = match &tiled_set {
-        Some(tiled) => tiled.occupied_groups(),
-        None => vec![group_id],
-    };
-    let entry_selected = !selection_groups.is_empty()
-        && selection_groups
-            .iter()
-            .all(|group| shell.state.workspace.tab_selection.contains(group));
-
-    let selected_singles: Vec<GroupId> = shell
-        .state
-        .workspace
-        .groups
-        .iter()
-        .filter(|group| {
-            shell.state.workspace.tab_selection.contains(&group.id)
-                && shell.state.tiling_of_group(group.id).is_none()
-        })
-        .map(|group| group.id)
-        .collect();
-
-    let touched_sets: Vec<crate::tiling::TilingId> = shell
-        .state
-        .workspace
-        .tiled_sets
-        .iter()
-        .filter(|tiled| {
-            tiled
-                .occupied_groups()
-                .iter()
-                .any(|group| shell.state.workspace.tab_selection.contains(group))
-        })
-        .map(|tiled| tiled.id)
-        .collect();
-
+    let crate::workspace::tab_selection::TabSelectionModel {
+        selection_groups,
+        entry_selected,
+        selected_singles,
+        touched_sets,
+        show_add_to_tiling,
+        show_multi_tile,
+    } = crate::workspace::tab_selection::selection_model(
+        &shell.state.workspace,
+        group_id,
+        tiled_set.as_ref(),
+    );
     let this_set_id = tiled_set.as_ref().map(|tiled| tiled.id);
-    let show_add_to_tiling = match (this_set_id, touched_sets.as_slice()) {
-        (Some(id), [only]) if *only == id => !selected_singles.is_empty(),
-        _ => false,
-    };
-    let show_multi_tile = entry_selected
-        && touched_sets.is_empty()
-        && (2..=MAX_TILING_SLOTS).contains(&selected_singles.len());
 
     let dot_color = calculate_dot_color(tab, p);
     let base_tab_icon = if tab.is_player() {

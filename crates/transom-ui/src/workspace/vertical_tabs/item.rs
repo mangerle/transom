@@ -9,7 +9,7 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::connection::session_host;
 use crate::palette::Palette;
-use crate::tiling::{MAX_TILING_SLOTS, TilingId};
+
 use crate::workspace::pane_status_indicator;
 use crate::workspace::tab_strip::menu::{TabContextMenuParams, build_tab_context_menu};
 use gpui_kit::assets::IconName;
@@ -79,45 +79,14 @@ pub(super) fn render_vertical_tab_row(
 
     // 右键菜单与横向标签栏共用同一套参数：并排、多选、复制主机等动作的
     // 可用性判断必须与标签栏完全一致，避免两个入口给出不同结果。
-    let selection_groups = match tiled {
-        Some(tiled) => tiled.occupied_groups(),
-        None => vec![group_id],
-    };
-    let entry_selected = !selection_groups.is_empty()
-        && selection_groups
-            .iter()
-            .all(|group| shell.state.workspace.tab_selection.contains(group));
-    let selected_singles: Vec<GroupId> = shell
-        .state
-        .workspace
-        .groups
-        .iter()
-        .filter(|group| {
-            shell.state.workspace.tab_selection.contains(&group.id)
-                && shell.state.tiling_of_group(group.id).is_none()
-        })
-        .map(|group| group.id)
-        .collect();
-    let touched_sets: Vec<TilingId> = shell
-        .state
-        .workspace
-        .tiled_sets
-        .iter()
-        .filter(|tiled| {
-            tiled
-                .occupied_groups()
-                .iter()
-                .any(|group| shell.state.workspace.tab_selection.contains(group))
-        })
-        .map(|tiled| tiled.id)
-        .collect();
-    let show_add_to_tiling = match (this_set_id, touched_sets.as_slice()) {
-        (Some(id), [only]) if *only == id => !selected_singles.is_empty(),
-        _ => false,
-    };
-    let show_multi_tile = entry_selected
-        && touched_sets.is_empty()
-        && (2..=MAX_TILING_SLOTS).contains(&selected_singles.len());
+    let crate::workspace::tab_selection::TabSelectionModel {
+        selection_groups,
+        entry_selected,
+        selected_singles,
+        touched_sets,
+        show_add_to_tiling,
+        show_multi_tile,
+    } = crate::workspace::tab_selection::selection_model(&shell.state.workspace, group_id, tiled);
     let tile_enabled = this_set_id.is_none() && can_tile;
 
     let mut band = h_flex()
