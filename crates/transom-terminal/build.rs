@@ -5,5 +5,5 @@
 //! 终端 crate，界面会出现"主界面已换文案、终端菜单还是旧文案"的半更新。
 
 fn main() {
-    println!("cargo:rerun-if-changed=../transom-ui/locales");
+    println!("cargo:rerun-if-changed=../../locales");
 }

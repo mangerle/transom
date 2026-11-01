@@ -2,9 +2,9 @@
 
 // 终端 crate 自己渲染右键菜单、搜索栏与块横幅，文案必须与应用主界面共用同一份
 // 资源。rust-i18n 的 backend 由 i18n! 宏按 crate 编译内嵌，无法直接复用
-// transom-ui 的初始化，因此这里以相对路径加载同一套 locales；语言切换是全局
-// locale，两个 backend 会同步生效。
-rust_i18n::i18n!("../transom-ui/locales", fallback = "en");
+// transom-ui 的初始化，因此这里加载 workspace 根下的共享 locales；语言切换是
+// 全局 locale，两个 backend 会同步生效。
+rust_i18n::i18n!("../../locales", fallback = "en");
 
 mod audit;
 pub mod block;
