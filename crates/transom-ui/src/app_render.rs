@@ -11,7 +11,7 @@ use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::resizable::resizable_panel;
+use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
 
 impl AppShell {
@@ -371,31 +371,13 @@ impl AppShell {
             }
         }
 
-        if !self.state.immersive && self.state.monitor.read(cx).is_open() {
-            // 监控抽屉停靠在主面板右侧，支持拖拽调整宽度（360px 至屏幕宽度的 75%）。
-            let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(520.0);
-            if let Some(actual_w) = panels_state.read(cx).sizes().last().copied() {
-                let actual_f32 = actual_w.as_f32();
-                if actual_f32 >= 360.0
-                    && actual_f32 <= max_drawer_width
-                    && (self.state.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
-                {
-                    self.state
-                        .monitor
-                        .update(cx, |view, _| view.set_drawer_width(actual_f32));
-                    update_app_settings(cx, |s| s.monitor.drawer_width = actual_f32);
-                }
-            }
-            let monitor_width = self
-                .state
-                .monitor
-                .read(cx)
-                .drawer_width()
-                .clamp(360.0, max_drawer_width);
+        if let Some(monitor_width) = self.monitor_drawer_width(window, cx, &panels_state) {
             resizable_group = resizable_group.child(
                 resizable_panel()
                     .size(px(monitor_width))
-                    .size_range(px(360.0)..px(max_drawer_width))
+                    .size_range(
+                        px(360.0)..px((window.viewport_size().width.as_f32() * 0.75).max(520.0)),
+                    )
                     .child(self.state.monitor.clone()),
             );
         }
@@ -424,26 +406,17 @@ impl AppShell {
                 .overflow_hidden()
                 .child(resizable_group),
         );
-        // 状态栏按活动栏加侧栏的实测宽度切分。尺寸取自工作区分组的上一帧布局，
-        // 拖动侧栏时由 ResizableState 的通知驱动整帧重绘，分界线落后一帧。
-        let status_bar = (!self.state.immersive).then(|| {
-            let divider_x = if self.state.sidebar.visible {
-                // 侧栏折叠期间仍以空面板参与分组，拖动其他分隔线可能把它的记录
-                // 宽度同步成 0；小于最小宽度或大于最大宽度的值一律视为无效，回退到默认宽度。
-                let sidebar_width = panels_state
-                    .read(cx)
-                    .sizes()
-                    .first()
-                    .copied()
-                    .filter(|width| *width >= sidebar_min_width && *width <= sidebar_max_width)
-                    .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
-                    .as_f32();
-                rem_px(size::ACTIVITY_BAR_WIDTH, rem) + px(sidebar_width)
-            } else {
-                px(0.0)
-            };
-            self.render_status_bar(p, cx, divider_x)
-        });
+        let status_bar = self.render_workspace_status_bar(
+            StatusBarLayoutInput {
+                p,
+                rem,
+                panels_state: &panels_state,
+                sidebar_min_width,
+                sidebar_max_width,
+            },
+            cx,
+        );
+
         WorkspaceBody {
             main_row: main_row.into_any_element(),
             status_bar,
@@ -707,4 +680,77 @@ impl AppShell {
             side_left: app_settings(cx).window.sftp_panel_side.is_left(),
         }
     }
+
+    /// 监控抽屉宽度：同步实测宽度到状态与设置，返回到布局使用的宽度。
+    fn monitor_drawer_width(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        panels_state: &Entity<ResizableState>,
+    ) -> Option<f32> {
+        if self.state.immersive || !self.state.monitor.read(cx).is_open() {
+            return None;
+        }
+        let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(520.0);
+        if let Some(actual_w) = panels_state.read(cx).sizes().last().copied() {
+            let actual_f32 = actual_w.as_f32();
+            if actual_f32 >= 360.0
+                && actual_f32 <= max_drawer_width
+                && (self.state.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
+            {
+                self.state
+                    .monitor
+                    .update(cx, |view, _| view.set_drawer_width(actual_f32));
+                update_app_settings(cx, |s| s.monitor.drawer_width = actual_f32);
+            }
+        }
+        Some(
+            self.state
+                .monitor
+                .read(cx)
+                .drawer_width()
+                .clamp(360.0, max_drawer_width),
+        )
+    }
+
+    /// 工作区状态栏：按活动栏加侧栏实测宽度切分，沉浸模式隐藏。
+    fn render_workspace_status_bar(
+        &mut self,
+        input: StatusBarLayoutInput<'_>,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if self.state.immersive {
+            return None;
+        }
+        let StatusBarLayoutInput {
+            p,
+            rem,
+            panels_state,
+            sidebar_min_width,
+            sidebar_max_width,
+        } = input;
+        let divider_x = if self.state.sidebar.visible {
+            let sidebar_width = panels_state
+                .read(cx)
+                .sizes()
+                .first()
+                .copied()
+                .filter(|width| *width >= sidebar_min_width && *width <= sidebar_max_width)
+                .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
+                .as_f32();
+            rem_px(size::ACTIVITY_BAR_WIDTH, rem) + px(sidebar_width)
+        } else {
+            px(0.0)
+        };
+        Some(self.render_status_bar(p, cx, divider_x))
+    }
+}
+
+/// 工作区状态栏布局输入：宽度切分所需的调色板、密度与分栏状态。
+struct StatusBarLayoutInput<'a> {
+    p: &'a Palette,
+    rem: Pixels,
+    panels_state: &'a Entity<ResizableState>,
+    sidebar_min_width: Pixels,
+    sidebar_max_width: Pixels,
 }
