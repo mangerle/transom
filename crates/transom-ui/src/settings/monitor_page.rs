@@ -1,16 +1,16 @@
 //! 偏好设置中的主机监控页：各板块默认展开/收起开关与采样偏好。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::monitor::SampleIntervalMode;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 
-impl AppShell {
+impl SettingsView {
     /// 监控板块默认展开/收起设置分组。
     pub(crate) fn render_settings_monitor_sections(
         &mut self,
@@ -27,11 +27,13 @@ impl AppShell {
                     .checked(app_settings(cx).monitor.cpu_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         update_app_settings(cx, |s| s.monitor.cpu_expanded = checked);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.state.collapse.cpu = !checked);
+                        let sections =
+                            crate::monitor::MonitorSectionCollapse::from(&app_settings(cx).monitor);
+                        cx.emit(crate::settings::SettingsEvent::MonitorSectionsChanged(
+                            sections,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -45,11 +47,13 @@ impl AppShell {
                     .checked(app_settings(cx).monitor.memory_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         update_app_settings(cx, |s| s.monitor.memory_expanded = checked);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.state.collapse.memory = !checked);
+                        let sections =
+                            crate::monitor::MonitorSectionCollapse::from(&app_settings(cx).monitor);
+                        cx.emit(crate::settings::SettingsEvent::MonitorSectionsChanged(
+                            sections,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -63,11 +67,13 @@ impl AppShell {
                     .checked(app_settings(cx).monitor.disk_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         update_app_settings(cx, |s| s.monitor.disk_expanded = checked);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.state.collapse.disk = !checked);
+                        let sections =
+                            crate::monitor::MonitorSectionCollapse::from(&app_settings(cx).monitor);
+                        cx.emit(crate::settings::SettingsEvent::MonitorSectionsChanged(
+                            sections,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -81,11 +87,13 @@ impl AppShell {
                     .checked(app_settings(cx).monitor.network_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         update_app_settings(cx, |s| s.monitor.network_expanded = checked);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.state.collapse.network = !checked);
+                        let sections =
+                            crate::monitor::MonitorSectionCollapse::from(&app_settings(cx).monitor);
+                        cx.emit(crate::settings::SettingsEvent::MonitorSectionsChanged(
+                            sections,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -99,11 +107,13 @@ impl AppShell {
                     .checked(app_settings(cx).monitor.ports_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         update_app_settings(cx, |s| s.monitor.ports_expanded = checked);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.state.collapse.ports = !checked);
+                        let sections =
+                            crate::monitor::MonitorSectionCollapse::from(&app_settings(cx).monitor);
+                        cx.emit(crate::settings::SettingsEvent::MonitorSectionsChanged(
+                            sections,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -117,11 +127,13 @@ impl AppShell {
                     .checked(app_settings(cx).monitor.services_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         update_app_settings(cx, |s| s.monitor.services_expanded = checked);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.state.collapse.services = !checked);
+                        let sections =
+                            crate::monitor::MonitorSectionCollapse::from(&app_settings(cx).monitor);
+                        cx.emit(crate::settings::SettingsEvent::MonitorSectionsChanged(
+                            sections,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -135,11 +147,13 @@ impl AppShell {
                     .checked(app_settings(cx).monitor.processes_expanded)
                     .on_click(cx.listener(|this, &checked, _, cx| {
                         update_app_settings(cx, |s| s.monitor.processes_expanded = checked);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.state.collapse.processes = !checked);
+                        let sections =
+                            crate::monitor::MonitorSectionCollapse::from(&app_settings(cx).monitor);
+                        cx.emit(crate::settings::SettingsEvent::MonitorSectionsChanged(
+                            sections,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -156,7 +170,7 @@ impl AppShell {
     ) -> AnyElement {
         let current_width = app_settings(cx).monitor.drawer_width;
         let is_wide = current_width > 480.0;
-        let current_interval = self.state.monitor.read(cx).interval_mode();
+        let current_interval = self.state.monitor_interval;
 
         v_flex()
             .gap_2()
@@ -178,11 +192,11 @@ impl AppShell {
                     ],
                     |this, width, cx| {
                         update_app_settings(cx, |s| s.monitor.drawer_width = width);
-                        this.state
-                            .monitor
-                            .update(cx, |view, _| view.set_drawer_width(width));
+                        cx.emit(crate::settings::SettingsEvent::MonitorDrawerWidthChanged(
+                            width,
+                        ));
                         let settings_snapshot = app_settings(cx).clone();
-                        this.state.persist_settings_reported(&settings_snapshot);
+                        this.persist_settings_reported(&settings_snapshot, cx);
                         cx.notify();
                     },
                     cx,
@@ -209,8 +223,8 @@ impl AppShell {
                             rust_i18n::t!("monitor.settings.interval_eco").to_string(),
                         ),
                     ],
-                    |this, mode, cx| {
-                        this.set_monitor_interval_mode(mode, cx);
+                    |_this, mode, cx| {
+                        cx.emit(crate::settings::SettingsEvent::MonitorIntervalChanged(mode));
                     },
                     cx,
                 ),

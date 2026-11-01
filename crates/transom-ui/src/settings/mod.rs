@@ -1,10 +1,14 @@
-//! 偏好设置中心的通用布局行组件与运行时外观下发逻辑。
+//! 偏好设置中心的页目录、通用控件与运行时外观下发。
 
 mod about_page;
 mod actions;
 mod entity;
+mod event;
+mod handler;
+mod search_keywords;
 
-pub(crate) use entity::SettingsView;
+pub(crate) use entity::{SettingsServices, SettingsView};
+pub(crate) use event::{SettingsEvent, SettingsRequest};
 mod appearance_page;
 mod files_page;
 mod font_field;
@@ -16,10 +20,10 @@ mod logs_page;
 mod modal;
 mod modal_state;
 mod monitor_page;
-mod search_keywords;
 mod security_page;
 mod shortcuts_page;
 mod startup_page;
+pub(crate) mod sync_form;
 mod sync_page;
 mod terminal_page;
 mod terminal_themes;
@@ -30,7 +34,6 @@ pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearance
 
 use crate::app::AppShell;
 use crate::app::app_settings;
-use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
@@ -40,14 +43,13 @@ use gpui_kit::component::slider::SliderValue;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable};
 use gpui_kit::*;
-use transom_core::{AppearanceSettings, FOLLOW_UI_THEME};
 use transom_terminal::TerminalView;
 
 /// 路径型设置值的显示上限（rem，标准档 16px 基准）：够看清目录层级，又不会把
 /// 右侧控件挤出面板；全文由 tooltip 给出。
 const PATH_VALUE_MAX_WIDTH: f32 = 12.0;
 
-/// 设置页目录：顺序必须与 `AppShell::build_settings_pages` 的装配顺序一致。
+/// 设置页目录：顺序必须与 [`SettingsView::build_settings_pages`] 的装配顺序一致。
 ///
 /// 命令面板据此列出可跳转的设置页；标题与图标复用页面自身的定义，避免两处
 /// 各写一份文案。`build_settings_pages` 里用 debug 断言守住顺序，出现漏改时
@@ -77,7 +79,93 @@ pub(super) fn slider_percent(value: &SliderValue) -> u8 {
     }
 }
 
-impl AppShell {
+/// 下拉选择器的通用构建：实体类型由调用方给出，回调在点击时取回可写上下文。
+///
+/// 为什么抽成自由函数：设置实体与外壳（会话表单）都需要同一套 Zed 风格下拉，
+/// 但回调的 `Self` 不同。泛型化后两边共用一份菜单/对勾/焦点行为，不再各自
+/// 复制一份 `build_setting_dropdown`。
+fn build_setting_dropdown<E, V, F>(
+    id: impl Into<ElementId>,
+    current_value: V,
+    options: Vec<(V, String)>,
+    on_change: F,
+    entity: Entity<E>,
+) -> AnyElement
+where
+    E: 'static,
+    V: Clone + PartialEq + 'static,
+    F: Fn(&mut E, V, &mut Window, &mut Context<E>) + 'static + Clone,
+{
+    let current_label = options
+        .iter()
+        .find(|(val, _)| val == &current_value)
+        .map(|(_, label)| label.clone())
+        .unwrap_or_default();
+
+    Button::new(id)
+        .small()
+        .outline()
+        .dropdown_caret(true)
+        .label(current_label)
+        .dropdown_menu_with_anchor(Anchor::TopRight, {
+            let options = options.clone();
+            let current_value = current_value.clone();
+            move |mut menu, _window, _cx| {
+                for (val, label) in &options {
+                    let is_selected = val == &current_value;
+                    let val = val.clone();
+                    let entity = entity.clone();
+                    let on_change = on_change.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(label.clone())
+                            .checked(is_selected)
+                            .on_click(move |_, window, cx| {
+                                let val = val.clone();
+                                let on_change = on_change.clone();
+                                entity.update(cx, |this, cx| {
+                                    on_change(this, val, window, cx);
+                                });
+                            }),
+                    );
+                }
+                menu
+            }
+        })
+        .into_any_element()
+}
+
+/// 把一次外观变更写到全局设置并立即应用到主题。
+///
+/// 设置实体与命令面板共用这一条预览路径：写入、主题换装与终端配色计算都在
+/// 这里完成，调用方只决定要不要把结果下发到活窗格。
+pub(crate) fn preview_appearance(
+    change: impl FnOnce(&mut transom_core::AppearanceSettings),
+    cx: &mut gpui_kit::App,
+) {
+    let mut appearance = app_settings(cx).appearance.clone();
+    change(&mut appearance);
+    crate::app::update_app_settings(cx, |s| s.appearance = appearance.clone());
+    crate::theme::apply_appearance(&appearance, cx);
+}
+
+/// 终端配色跟随界面主题：写回当前 UI 主题的伴生调色板，返回是否发生变化。
+///
+/// 只改全局设置，不碰任何窗格；调用方拿到 `true` 后自行决定下发范围。
+pub(crate) fn sync_terminal_palette(cx: &mut gpui_kit::App) -> bool {
+    if app_settings(cx).terminal_profile.theme_name != transom_core::FOLLOW_UI_THEME {
+        return false;
+    }
+    let active = cx.theme().theme_name().to_string();
+    let Some(palette) =
+        crate::theme::resolve_terminal_palette(transom_core::FOLLOW_UI_THEME, &active, cx)
+    else {
+        return false;
+    };
+    crate::app::update_app_settings(cx, |s| s.terminal_profile.palette = palette);
+    true
+}
+
+impl SettingsView {
     /// 数字步进器控件（直接复用 gpui-kit 内置的 NumberInput 组件）：
     /// 原生集成减加微调按钮与居中文本输入框，内置键盘上下键微调与 min/max/step 约束。
     pub(crate) fn setting_stepper(input: &Entity<InputState>, width: Pixels) -> AnyElement {
@@ -118,68 +206,7 @@ impl AppShell {
         on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        Self::build_setting_dropdown(id, current_value, options, on_change, cx.entity().clone())
-    }
-
-    /// 弹窗内的下拉选择：与 `setting_dropdown_with_window` 同构。
-    ///
-    /// 为什么要单独一条：弹窗体手上只有只读的 `App` 与外壳实体句柄，不再持有
-    /// `Context<AppShell>`；下拉的行为本来就只依赖实体句柄，这条把参数收成
-    /// 实际需要的最小集合，设置页那十个调用点不必跟着改。
-    pub(crate) fn setting_dropdown_in_modal<T: Clone + PartialEq + 'static>(
-        id: impl Into<ElementId>,
-        current_value: T,
-        options: Vec<(T, String)>,
-        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
-        app: &Entity<AppShell>,
-    ) -> AnyElement {
-        Self::build_setting_dropdown(id, current_value, options, on_change, app.clone())
-    }
-
-    /// 下拉的实际构建：外壳句柄由调用方给，回调在点击时取回可写上下文。
-    fn build_setting_dropdown<T: Clone + PartialEq + 'static>(
-        id: impl Into<ElementId>,
-        current_value: T,
-        options: Vec<(T, String)>,
-        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
-        app: Entity<Self>,
-    ) -> AnyElement {
-        let current_label = options
-            .iter()
-            .find(|(val, _)| val == &current_value)
-            .map(|(_, label)| label.clone())
-            .unwrap_or_default();
-
-        Button::new(id)
-            .small()
-            .outline()
-            .dropdown_caret(true)
-            .label(current_label)
-            .dropdown_menu_with_anchor(Anchor::TopRight, {
-                let options = options.clone();
-                let current_value = current_value.clone();
-                move |mut menu, _window, _cx| {
-                    for (val, label) in &options {
-                        let is_selected = val == &current_value;
-                        let val = val.clone();
-                        let app = app.clone();
-                        let on_change = on_change.clone();
-                        menu = menu.item(
-                            PopupMenuItem::new(label.clone())
-                                .checked(is_selected)
-                                .on_click(move |_, window, cx| {
-                                    let val = val.clone();
-                                    let on_change = on_change.clone();
-                                    app.update(cx, |this, cx| {
-                                        on_change(this, val, window, cx);
-                                    });
-                                }),
-                        );
-                    }
-                    menu
-                }
-            })
-            .into_any_element()
+        build_setting_dropdown(id, current_value, options, on_change, cx.entity().clone())
     }
 
     /// 路径型设置值：定宽截断，完整路径挂在悬停 tooltip 上。
@@ -207,38 +234,21 @@ impl AppShell {
             .child(label)
             .into_any_element()
     }
+}
 
-    /// 更新界面外观偏好并即时应用：弹窗内改一档立刻全局预览。
+impl AppShell {
+    /// 弹窗内的下拉选择：供会话表单等非设置实体复用。
     ///
-    /// 落盘仍由 `save_settings` 单点负责；取消走 `cancel_settings` 凭快照回滚。
-    /// 预览与回滚共用 [`crate::theme::apply_appearance`] 这一条写路径，保证
-    /// "看到的效果"与"保存后的效果"出自同一逻辑。
-    pub(crate) fn update_appearance(
-        &mut self,
-        change: impl FnOnce(&mut AppearanceSettings),
-        cx: &mut Context<Self>,
-    ) {
-        let mut appearance = app_settings(cx).appearance.clone();
-        change(&mut appearance);
-        update_app_settings(cx, |s| s.appearance = appearance.clone());
-        crate::theme::apply_appearance(&appearance, cx);
-        self.sync_terminal_palette(cx);
-        cx.notify();
-    }
-
-    /// 终端配色跟随界面主题：`theme_name` 为哨兵值时，把当前生效 UI 主题的
-    /// 伴生终端调色板写入终端 profile 并热应用到活窗格。显式选了预设的用户
-    /// 不受影响。设置页外观变化、保存落盘、系统明暗切换三个触发点共用。
-    pub(crate) fn sync_terminal_palette(&mut self, cx: &mut Context<Self>) {
-        if app_settings(cx).terminal_profile.theme_name != FOLLOW_UI_THEME {
-            return;
-        }
-        let active = cx.theme().theme_name().to_string();
-        if let Some(palette) = crate::theme::resolve_terminal_palette(FOLLOW_UI_THEME, &active, cx)
-        {
-            update_app_settings(cx, |s| s.terminal_profile.palette = palette);
-            self.apply_appearance_to_live_panes(cx);
-        }
+    /// 与 [`SettingsView::setting_dropdown_with_window`] 共用同一份通用构建，
+    /// 只把实体类型换成本类型。
+    pub(crate) fn setting_dropdown_in_modal<T: Clone + PartialEq + 'static>(
+        id: impl Into<ElementId>,
+        current_value: T,
+        options: Vec<(T, String)>,
+        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
+        app: &Entity<AppShell>,
+    ) -> AnyElement {
+        build_setting_dropdown(id, current_value, options, on_change, app.clone())
     }
 
     /// 把外观偏好下发到所有已打开的窗格。
@@ -290,5 +300,21 @@ impl AppShell {
         for (terminal, settings) in terminals {
             terminal.update(cx, |view, cx| view.set_block_view(Some(settings), cx));
         }
+    }
+}
+
+impl AppShell {
+    /// 命令面板等非设置入口的外观切换：预览与终端配色共用的写路径不变，
+    /// 变化后把终端外观下发到活窗格。
+    pub(crate) fn update_appearance(
+        &mut self,
+        change: impl FnOnce(&mut transom_core::AppearanceSettings),
+        cx: &mut Context<Self>,
+    ) {
+        preview_appearance(change, cx);
+        if sync_terminal_palette(cx) {
+            self.apply_appearance_to_live_panes(cx);
+        }
+        cx.notify();
     }
 }

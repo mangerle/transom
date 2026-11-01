@@ -4,6 +4,7 @@
 //! 窗口本身按模式切换背景处理。两者共用同一份全局值，各处渲染不必各自去读
 //! 设置，也就不会出现"侧栏半透明、标签栏不透明"的分裂。
 
+use crate::app::app_settings;
 use gpui_kit::*;
 use transom_core::{WindowBackgroundMode, WindowSettings};
 
@@ -34,6 +35,18 @@ impl WindowAppearance {
 /// 把当前窗口外观写入全局；主题与窗口据此渲染。
 pub(crate) fn apply_window_appearance(settings: &WindowSettings, cx: &mut App) {
     cx.set_global(WindowAppearance::from_settings(settings));
+}
+
+/// 把当前设置重新落到窗口与主题：全局外观值、主题表面色与窗口背景处理。
+///
+/// 设置实体与外壳共用这一条写路径。放在这里而不是某个 `impl AppShell`
+/// 方法上，是因为它只依赖 `Window` 与全局设置，不需要外壳状态。
+pub(crate) fn refresh_window(window: &mut Window, cx: &mut App) {
+    let window_settings = app_settings(cx).window.clone();
+    apply_window_appearance(&window_settings, cx);
+    let appearance = app_settings(cx).appearance.clone();
+    crate::theme::apply_appearance(&appearance, cx);
+    window.set_background_appearance(background_appearance(&window_settings));
 }
 
 /// 当前的窗口外观；未设置过时按完全不透明处理。

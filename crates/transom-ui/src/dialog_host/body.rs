@@ -49,7 +49,7 @@ impl Render for ModalBody {
                 ModalFocus::None => {}
             }
         }
-        let body = kind.render_body(app.read(cx), &app, window, cx, &p);
+        let body = kind.render_body(&app, window, cx, &p);
         let hint = app.read(cx).state.dialog_hint.clone();
         div()
             .id(ElementId::Name(
@@ -113,21 +113,25 @@ impl Render for ModalBody {
 
 /// 弹窗体内的事件回调适配器。
 ///
-/// 为什么需要：弹窗体渲染时手上只有 `Entity<AppShell>` 与 `&mut App`，
-/// 拿不到 `Context<AppShell>`，原先的 `cx.listener` 写法无处可用。事件回调
-/// 发生在渲染之外，用实体 `update` 取回同样的借用对，即可原样复用各领域
-/// 已有的状态变更方法，不必为弹窗另写一套逻辑。
-pub(crate) fn on_event<A, F>(
-    app: &Entity<AppShell>,
+/// 为什么需要：弹窗体渲染时手上只有实体句柄与 `&mut App`，拿不到
+/// `Context<实体>`，原先的 `cx.listener` 写法无处可用。事件回调发生在渲染
+/// 之外，用实体 `update` 取回同样的借用对，即可原样复用各领域已有的状态
+/// 变更方法，不必为弹窗另写一套逻辑。
+///
+/// 泛型化后设置、SFTP 等弹窗都能复用同一条适配路径，不再各自维护
+/// `Entity<AppShell>` 专用版本。
+pub(crate) fn on_event<T, A, F>(
+    entity: &Entity<T>,
     handler: F,
 ) -> impl Fn(&A, &mut Window, &mut App) + 'static
 where
+    T: 'static,
     A: 'static,
-    F: Fn(&mut AppShell, &A, &mut Window, &mut Context<AppShell>) + 'static,
+    F: Fn(&mut T, &A, &mut Window, &mut Context<T>) + 'static,
 {
-    let app = app.clone();
+    let entity = entity.clone();
     move |event, window, cx| {
-        app.update(cx, |shell, cx| handler(shell, event, window, cx));
+        entity.update(cx, |this, cx| handler(this, event, window, cx));
     }
 }
 

@@ -758,6 +758,37 @@ fn monitor_rendering_belongs_to_entity() {
     );
 }
 
+/// 设置弹窗的页面渲染、保存与取消必须归 `SettingsView`：`settings/` 下只允许
+/// `handler.rs`（跨域事件消费）与 `mod.rs`（通用控件与外观下发）保留
+/// `impl AppShell`。页面一旦重新挂回外壳，设置实体化就被回退了。
+#[test]
+fn settings_rendering_belongs_to_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/settings");
+    let mut offenders = Vec::new();
+    for (path, content) in walkdir_like(&root)
+        .into_iter()
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
+        .filter_map(|path| {
+            let content = std::fs::read_to_string(&path).ok()?;
+            Some((path.display().to_string(), content))
+        })
+    {
+        if path.ends_with("handler.rs") || path.ends_with("settings/mod.rs") {
+            continue;
+        }
+        for pattern in ["impl AppShell", "settings_modal(", "settings_modal_mut("] {
+            if content.contains(pattern) {
+                offenders.push(format!("{path}: {pattern}"));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "设置页面必须挂在 SettingsView 上，跨域动作走 SettingsEvent：\n{}",
+        offenders.join("\n")
+    );
+}
+
 /// 编辑面板也不得再有 `with_shell` / `read_shell` 同步回交通道。
 #[test]
 fn editor_panel_has_no_sync_callback_channel() {

@@ -8,11 +8,11 @@
 //!   3. 支持自动应答与通知文本动态捕获参数展开（`$0`, `$1` 等）；
 //!   4. 保存时不仅持久化到配置文件，更实时下发至当前全部活跃终端窗格。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -40,11 +40,11 @@ fn action_summary(action: &TriggerAction) -> String {
     }
 }
 
-impl AppShell {
+impl SettingsView {
     /// 打开新建触发器规则弹窗。
     pub(crate) fn open_new_trigger(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let edit = TriggerEditState::new(None, window, cx);
-        self.settings_modal_mut(cx, |s| s.trigger_edit = Some(edit));
+        self.state.trigger_edit = Some(edit);
         cx.notify();
     }
 
@@ -58,15 +58,14 @@ impl AppShell {
         let rule = app_settings(cx).triggers.find_rule(id).cloned();
         if let Some(rule) = rule {
             let edit = TriggerEditState::new(Some(&rule), window, cx);
-            self.settings_modal_mut(cx, |s| s.trigger_edit = Some(edit));
+            self.state.trigger_edit = Some(edit);
             cx.notify();
         }
     }
 
     /// 提交保存触发器规则。
     pub(crate) fn save_trigger_edit(&mut self, cx: &mut Context<Self>) {
-        let settings = self.settings_modal(cx);
-        let Some(edit) = settings.trigger_edit.as_ref() else {
+        let Some(edit) = self.state.trigger_edit.as_ref() else {
             return;
         };
 
@@ -125,7 +124,7 @@ impl AppShell {
             app_settings_mut(cx).triggers.rules.push(rule);
         }
 
-        self.settings_modal_mut(cx, |s| s.trigger_edit = None);
+        self.state.trigger_edit = None;
 
         self.sync_triggers_to_live_panes(cx);
         cx.notify();
@@ -133,7 +132,7 @@ impl AppShell {
 
     /// 切换编辑表单中的动作类型。
     fn set_trigger_action_kind(&mut self, kind: ActionKindChoice, cx: &mut Context<Self>) {
-        if let Some(e) = self.settings_modal(cx).trigger_edit.as_mut() {
+        if let Some(e) = self.state.trigger_edit.as_mut() {
             e.action_kind = kind;
         }
         cx.notify();
@@ -141,7 +140,7 @@ impl AppShell {
 
     /// 设置编辑表单错误提示。
     fn set_trigger_edit_error(&mut self, err: String, cx: &mut Context<Self>) {
-        if let Some(edit) = self.settings_modal(cx).trigger_edit.as_mut() {
+        if let Some(edit) = self.state.trigger_edit.as_mut() {
             edit.error = Some(err);
         }
         cx.notify();
@@ -149,18 +148,18 @@ impl AppShell {
 
     /// 取消编辑触发器表单。
     fn cancel_trigger_edit(&mut self, cx: &mut Context<Self>) {
-        self.settings_modal_mut(cx, |s| s.trigger_edit = None);
+        self.state.trigger_edit = None;
         cx.notify();
     }
 
     /// 将触发器规则同步下发至当前所有活跃终端窗格。
-    pub(crate) fn sync_triggers_to_live_panes(&self, cx: &mut Context<Self>) {
-        let triggers = app_settings(cx).triggers.clone();
-        for tab in &self.state.workspace.tabs {
-            if let Some(term) = tab.terminal() {
-                term.update(cx, |view, _| view.reload_triggers(&triggers));
-            }
-        }
+    ///
+    /// 终端实体归外壳工作区，弹窗只发意图；事件自带完整规则快照，
+    /// 外壳处理时不需要回读设置实体。
+    pub(crate) fn sync_triggers_to_live_panes(&mut self, cx: &mut Context<Self>) {
+        cx.emit(SettingsEvent::ApplyTriggers(Box::new(
+            app_settings(cx).triggers.clone(),
+        )));
     }
 
     /// 切换单条规则启用状态。
@@ -181,12 +180,12 @@ impl AppShell {
     pub(crate) fn delete_trigger_rule(&mut self, id: TriggerId, cx: &mut Context<Self>) {
         app_settings_mut(cx).triggers.remove_rule(id);
         if self
-            .settings_modal(cx)
+            .state
             .trigger_edit
             .as_ref()
             .is_some_and(|edit| edit.base_id == Some(id))
         {
-            self.settings_modal_mut(cx, |s| s.trigger_edit = None);
+            self.state.trigger_edit = None;
         }
         self.sync_triggers_to_live_panes(cx);
         cx.notify();
@@ -200,7 +199,7 @@ impl AppShell {
     ) -> AnyElement {
         let enabled = app_settings(cx).triggers.enabled;
         let rules = app_settings(cx).triggers.rules.clone();
-        let edit = self.settings_modal(cx).trigger_edit.clone();
+        let edit = self.state.trigger_edit.clone();
 
         let mut list = v_flex().gap_1();
         if rules.is_empty() {
@@ -367,7 +366,7 @@ impl AppShell {
                             Switch::new("trigger-case-sensitive-switch")
                                 .checked(edit_state.case_sensitive)
                                 .on_click(cx.listener(|this, &checked, _, cx| {
-                                    if let Some(e) = this.settings_modal(cx).trigger_edit.as_mut() {
+                                    if let Some(e) = this.state.trigger_edit.as_mut() {
                                         e.case_sensitive = checked;
                                     }
                                     cx.notify();

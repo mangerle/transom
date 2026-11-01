@@ -32,7 +32,7 @@ impl ModalKind {
             ModalKind::BackupPrompt => shell.state.modals.backup_prompt.is_some(),
             ModalKind::AuditViewer => shell.state.modals.audit_viewer.is_some(),
             ModalKind::Replay => shell.state.modals.replay.is_some(),
-            ModalKind::Settings => shell.settings_modal(cx).open,
+            ModalKind::Settings => shell.state.modals.settings.read(cx).is_open(),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture.is_some(),
             ModalKind::DiffViewer => shell.state.diff_viewer.is_some(),
         }
@@ -250,7 +250,7 @@ impl ModalKind {
             ModalKind::KeyWizard => shell.settings_modal_mut(cx, |s| s.key_wizard = None),
             ModalKind::AuditViewer => shell.state.modals.audit_viewer = None,
             ModalKind::Replay => shell.state.modals.replay = None,
-            ModalKind::Settings => shell.cancel_settings(window, cx),
+            ModalKind::Settings => shell.save_settings(window, cx),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
             ModalKind::DiffViewer => shell.close_diff_viewer(cx),
         }

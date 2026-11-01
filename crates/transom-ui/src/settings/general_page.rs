@@ -1,10 +1,10 @@
 //! 偏好设置中的通用页：语言、通知与声音、桌面集成、数据备份。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::{Palette, localized_error};
 use crate::settings::ProxyProtocol;
+use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -13,7 +13,7 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{BellStyle, BlockViewStyle};
 
-impl AppShell {
+impl SettingsView {
     /// 语言组：跟随系统、中文、英文三档。
     ///
     /// 空字符串表示跟随系统（新建配置的默认值）；两个语言名按自身语言书写，
@@ -55,7 +55,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let current_bell = app_settings(cx).window.bell_style;
-        let stepper = Self::setting_stepper(&self.settings_modal(cx).notify_threshold, px(110.0));
+        let stepper = Self::setting_stepper(&self.state.notify_threshold, px(110.0));
         let bell_options = vec![
             (
                 "bell-none",
@@ -125,11 +125,11 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let kind = self.settings_modal(cx).proxy.kind;
-        let host = self.settings_modal(cx).proxy.host.clone();
-        let port = self.settings_modal(cx).proxy.port.clone();
-        let username = self.settings_modal(cx).proxy.username.clone();
-        let password = self.settings_modal(cx).proxy.password.clone();
+        let kind = self.state.proxy.kind;
+        let host = self.state.proxy.host.clone();
+        let port = self.state.proxy.port.clone();
+        let username = self.state.proxy.username.clone();
+        let password = self.state.proxy.password.clone();
         // 代理模式与全页其它枚举项统一走下拉：三档选项长度不一，分段按钮
         // 长短参差且窄面板下会把整行占满，下拉的控件宽度稳定、靠右对齐。
         let mode_control = Self::setting_dropdown(
@@ -150,7 +150,7 @@ impl AppShell {
                 ),
             ],
             |this, protocol, cx| {
-                this.settings_modal_mut(cx, |s| s.proxy.kind = protocol);
+                this.state.proxy.kind = protocol;
                 cx.notify();
             },
             cx,
@@ -212,7 +212,7 @@ impl AppShell {
         let enabled = app_settings(cx).block_view.enabled;
         let integrate = app_settings(cx).block_view.shell_integration;
         let style = app_settings(cx).block_view.style;
-        let rows_input = self.settings_modal(cx).block_collapse_rows.clone();
+        let rows_input = self.state.block_collapse_rows.clone();
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -307,7 +307,7 @@ impl AppShell {
                         match transom_desktop::apply_default_terminal(checked) {
                             Ok(()) => {
                                 let settings_snapshot = app_settings(cx).clone();
-                                this.state.persist_settings_reported(&settings_snapshot);
+                                this.persist_settings_reported(&settings_snapshot, cx);
                             }
                             Err(error) => {
                                 log::error!(
@@ -315,7 +315,7 @@ impl AppShell {
                                     if checked { "注册" } else { "撤销" }
                                 );
                                 update_app_settings(cx, |s| s.window.default_terminal = previous);
-                                this.state.set_error(localized_error(&error));
+                                this.report_error(localized_error(&error), cx);
                             }
                         }
                         cx.notify();
@@ -350,8 +350,8 @@ impl AppShell {
                                 .small()
                                 .icon(IconName::Download)
                                 .label(rust_i18n::t!("backup.export_action").to_string())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.open_backup_export(window, cx);
+                                .on_click(cx.listener(|_this, _, _window, cx| {
+                                    cx.emit(SettingsEvent::OpenBackupExport);
                                 })),
                         )
                         .child(
@@ -359,8 +359,8 @@ impl AppShell {
                                 .small()
                                 .icon(IconName::Upload)
                                 .label(rust_i18n::t!("backup.import_action").to_string())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.open_backup_import(window, cx);
+                                .on_click(cx.listener(|_this, _, _window, cx| {
+                                    cx.emit(SettingsEvent::OpenBackupImport);
                                 })),
                         ),
                 )

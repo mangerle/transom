@@ -120,7 +120,6 @@ use self::broadcast::BroadcastBarState;
 use self::cloud_sync::GitSyncScheduler;
 use self::editor::EditorPanels;
 use self::keys::KnownHostsModalState;
-use self::settings::SettingsModalState;
 use self::sftp::SftpModals;
 use self::sidebar::SidebarState;
 use self::snippets::SnippetPanelState;
@@ -132,7 +131,6 @@ use crate::palette::localized_error;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
-use gpui_kit::component::slider::{SliderEvent, SliderValue};
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -158,6 +156,39 @@ pub(crate) struct AppShell {
 }
 
 impl AppShell {
+    /// 打开偏好设置弹窗；`page` 为 `Some` 时直接定位到指定页。
+    ///
+    /// 回填与预览快照都归设置实体，外壳只负责把目录快照推进去并请求打开；
+    /// 页号越界时由实体退化为普通打开。
+    pub(crate) fn open_settings_modal(
+        &mut self,
+        page: Option<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let view = self.state.modals.settings.clone();
+        let catalog = self.state.catalog.clone();
+        let interval = self.state.monitor.read(cx).interval_mode();
+        view.update(cx, |view, cx| {
+            view.set_catalog(catalog);
+            view.set_monitor_interval(interval);
+            view.prepare_open(window, page, cx);
+        });
+        cx.notify();
+    }
+
+    /// 让设置实体执行保存；弹窗容器与快捷键提交共用这一入口。
+    pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = self.state.modals.settings.clone();
+        view.update(cx, |view, cx| view.save_settings(window, cx));
+    }
+
+    /// 让设置实体执行取消（外观回滚 + 关闭）。
+    pub(crate) fn cancel_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = self.state.modals.settings.clone();
+        view.update(cx, |view, cx| view.cancel_settings(window, cx));
+    }
+
     /// 设置弹窗状态只读访问。
     /// 设置弹窗状态快照。
     ///
@@ -179,6 +210,16 @@ impl AppShell {
             .update(cx, |view, _| action(view.state_mut()))
     }
 
+    /// 直接操作型设置（活动栏/状态栏拖拽、显隐）的即时落盘。
+    ///
+    /// 这些动作发生在设置弹窗之外，不需要经过实体；与实体保存共用
+    /// `AppState::persist_settings_reported` 这一条上报路径。
+    pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
+        let snapshot = app_settings(cx).clone();
+        self.state.persist_settings_reported(&snapshot);
+        cx.notify();
+    }
+
     /// 设置工具面板（SFTP/转发）停靠方向。
     pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<Self>) {
         if app_settings(cx).window.sftp_panel_side == side {
@@ -190,7 +231,9 @@ impl AppShell {
             &mut state.workspace_panels,
             &mut state.workspace_panels_left,
         );
-        self.persist_layout_settings(cx);
+        let snapshot = app_settings(cx).clone();
+        self.state.persist_settings_reported(&snapshot);
+        cx.notify();
     }
 
     /// 按启动档位恢复工作台。

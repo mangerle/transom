@@ -1,6 +1,5 @@
 //! 终端触发器设置面板数据契约与表单状态模型。
 
-use crate::app::AppShell;
 use crate::session_form::text_input;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -30,7 +29,7 @@ impl TriggerEditState {
     pub(crate) fn new(
         rule: Option<&TriggerRule>,
         window: &mut Window,
-        cx: &mut Context<AppShell>,
+        cx: &mut Context<crate::settings::SettingsView>,
     ) -> Self {
         if let Some(rule) = rule {
             let (action_kind, text) = match &rule.action {

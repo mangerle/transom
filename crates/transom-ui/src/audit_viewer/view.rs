@@ -139,7 +139,7 @@ impl AppShell {
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
                                     this.state.modals.audit_viewer = None;
-                                    this.open_settings_modal(window, cx);
+                                    this.open_settings_modal(None, window, cx);
                                 },
                             )),
                     ),

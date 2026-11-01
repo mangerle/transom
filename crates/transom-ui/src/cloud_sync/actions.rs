@@ -6,11 +6,18 @@ use crate::app::update_app_settings;
 
 impl AppShell {
     pub(crate) fn start_git_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.persist_sync_credentials(window, cx) {
+        let draft = self.state.modals.settings.read(cx).state().clone();
+        if let Err(error) = crate::settings::sync_form::persist_sync_credentials(
+            &draft,
+            self.state.services.secret_store.as_ref(),
+            window,
+            cx,
+        ) {
+            self.state.set_error(localized_error(&error));
             cx.notify();
             return;
         }
-        let settings = self.collect_sync_settings(cx);
+        let settings = crate::settings::sync_form::collect_sync_settings(&draft, cx);
         if settings.git.is_none() {
             self.state
                 .set_error(rust_i18n::t!("sync.git_no_config").to_string());
@@ -75,11 +82,18 @@ impl AppShell {
 
     /// 立即上传：先落凭据，再以输入框现状发起云端推送。
     pub(crate) fn start_cloud_sync_push(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.persist_sync_credentials(window, cx) {
+        let draft = self.state.modals.settings.read(cx).state().clone();
+        if let Err(error) = crate::settings::sync_form::persist_sync_credentials(
+            &draft,
+            self.state.services.secret_store.as_ref(),
+            window,
+            cx,
+        ) {
+            self.state.set_error(localized_error(&error));
             cx.notify();
             return;
         }
-        let settings = self.collect_sync_settings(cx);
+        let settings = crate::settings::sync_form::collect_sync_settings(&draft, cx);
         if settings.endpoint.is_none() {
             self.state
                 .set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
@@ -99,11 +113,18 @@ impl AppShell {
 
     /// 立即下载：流程同上传，远端文档由事件回流的合并动作接手。
     pub(crate) fn start_cloud_sync_pull(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.persist_sync_credentials(window, cx) {
+        let draft = self.state.modals.settings.read(cx).state().clone();
+        if let Err(error) = crate::settings::sync_form::persist_sync_credentials(
+            &draft,
+            self.state.services.secret_store.as_ref(),
+            window,
+            cx,
+        ) {
+            self.state.set_error(localized_error(&error));
             cx.notify();
             return;
         }
-        let settings = self.collect_sync_settings(cx);
+        let settings = crate::settings::sync_form::collect_sync_settings(&draft, cx);
         if settings.endpoint.is_none() {
             self.state
                 .set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());

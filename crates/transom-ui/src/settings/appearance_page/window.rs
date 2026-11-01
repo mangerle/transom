@@ -4,7 +4,7 @@ use super::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 
-impl AppShell {
+impl SettingsView {
     pub(crate) fn render_settings_divider(
         &mut self,
         p: &Palette,
@@ -45,8 +45,7 @@ impl AppShell {
             .into_any_element();
         // 粗细是 1/2/3 的连续小数值：步进器比下拉少一次点击，和字号/行高一致；
         // 量纲写在说明文案里，输入框内只留数字，避免控件被单位挤窄。
-        let width_control =
-            Self::setting_stepper(&self.settings_modal(cx).divider_width, px(110.0));
+        let width_control = Self::setting_stepper(&self.state.divider_width, px(110.0));
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -70,12 +69,7 @@ impl AppShell {
     /// 落盘与回滚语义因此完全一致；输到一半的非法数字（空值、越界）不落地，
     /// 避免界面闪一帧错误线宽。
     pub(crate) fn apply_divider_width_from_input(&mut self, cx: &mut Context<Self>) {
-        let value = self
-            .settings_modal(cx)
-            .divider_width
-            .read(cx)
-            .value()
-            .to_string();
+        let value = self.state.divider_width.read(cx).value().to_string();
         let Some(width) = divider_width_from_value(&value) else {
             return;
         };
@@ -92,8 +86,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let mode = app_settings(cx).window.window_background;
-        let transparency =
-            slider_percent(&self.settings_modal(cx).window_transparency.read(cx).value());
+        let transparency = slider_percent(&self.state.window_transparency.read(cx).value());
         let mode_buttons = h_flex()
             .gap_1()
             .children(
@@ -133,11 +126,7 @@ impl AppShell {
             .child(crate::widgets::setting_row(
                 "settings.window_transparency",
                 Some("settings.window_transparency_desc"),
-                Self::percent_slider(
-                    &self.settings_modal(cx).window_transparency,
-                    transparency,
-                    p,
-                ),
+                Self::percent_slider(&self.state.window_transparency, transparency, p),
                 p,
             ))
             .into_any_element()
@@ -187,18 +176,18 @@ impl AppShell {
                 s.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY
             });
             let value = f32::from(DEFAULT_WINDOW_TRANSPARENCY);
-            self.settings_modal(cx)
-                .window_transparency
-                .update(cx, |state, cx| {
-                    state.set_value(value, window, cx);
-                });
+            self.state.window_transparency.update(cx, |state, cx| {
+                state.set_value(value, window, cx);
+            });
         }
         self.refresh_window_appearance(window, cx);
     }
 
     /// 把窗口外观下发到已打开的窗格：终端背景随窗口整体透明。
-    pub(crate) fn push_window_appearance(&self, cx: &mut Context<Self>) {
-        self.apply_appearance_to_live_panes(cx);
+    ///
+    /// 终端实体归外壳的工作区，弹窗只发意图；外壳收到后遍历活窗格。
+    pub(crate) fn push_window_appearance(&mut self, cx: &mut Context<Self>) {
+        cx.emit(crate::settings::SettingsEvent::ProfilePreview);
     }
 
     /// 窗口外观变化后的统一落地：全局外观值、主题重算与窗口背景处理。
@@ -212,8 +201,9 @@ impl AppShell {
         let appearance = app_settings(cx).appearance.clone();
         crate::theme::apply_appearance(&appearance, cx);
         window.set_background_appearance(crate::window_appearance::background_appearance(
-            &app_settings(cx).window,
+            &window_settings,
         ));
+        cx.emit(crate::settings::SettingsEvent::ProfilePreview);
         cx.notify();
     }
 }

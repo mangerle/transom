@@ -96,12 +96,16 @@ impl AppShell {
             }
         });
 
-        let _app_entity = cx.entity();
+        let app_entity = cx.entity();
+        let appearance_app = app_entity.clone();
         let appearance_subscription = window.observe_window_appearance(move |window, cx| {
             let follows_system =
                 update_app_settings(cx, |s| s.appearance.mode == UiThemeMode::System);
             if follows_system {
                 crate::theme::sync_with_system(window, cx);
+                if crate::settings::sync_terminal_palette(cx) {
+                    appearance_app.update(cx, |shell, cx| shell.apply_appearance_to_live_panes(cx));
+                }
             }
         });
 
@@ -110,45 +114,32 @@ impl AppShell {
         });
         let known_hosts_records = services.known_hosts.list().unwrap_or_default();
 
-        let settings_modal = SettingsModalState::new(window, cx, &settings);
-        let settings_window_transparency = settings_modal.window_transparency.clone();
-        let window_transparency_sub = cx.subscribe_in(
-            &settings_window_transparency,
-            window,
-            |this, _, event: &SliderEvent, window, cx| match event {
-                SliderEvent::Change(SliderValue::Single(value)) => {
-                    this.set_window_transparency(value.round() as u8, window, cx);
-                }
-                SliderEvent::Release(SliderValue::Single(value)) => {
-                    this.set_window_transparency(value.round() as u8, window, cx);
-                    this.push_window_appearance(cx);
-                }
-                _ => {}
-            },
+        let persistence = Persistence::new(
+            services.session_store.clone(),
+            services.settings_store.clone(),
         );
-        // 分割线粗细步进器：手输与加减按钮都发 Change，统一走即时预览；
-        // 弹窗打开时的回填同样会触发一次，值相同时不产生任何副作用。
-        let settings_divider_width = settings_modal.divider_width.clone();
-        let divider_width_sub = cx.subscribe_in(
-            &settings_divider_width,
-            window,
-            |this, _, event: &InputEvent, _, cx| {
-                if matches!(event, InputEvent::Change) {
-                    this.apply_divider_width_from_input(cx);
-                }
-            },
-        );
-        let terminal_appearance_subscriptions = vec![window_transparency_sub, divider_width_sub];
+        let settings_view = cx.new(|cx| {
+            crate::settings::SettingsView::new(
+                window,
+                cx,
+                &settings,
+                crate::settings::SettingsServices {
+                    secret_store: services.secret_store.clone(),
+                    persistence: persistence.clone(),
+                    history: history.clone(),
+                    history_store: services.history.clone(),
+                },
+                catalog.clone(),
+            )
+        });
+        // 弹窗内部的滑块/步进器订阅由设置实体自己持有，外壳不再感知这些控件。
         let sidebar_visible = settings.window.sidebar_visible_at_startup();
         // 左侧标签模式启动即以标签面板作为槽位主视图；顶部模式该标志无效。
         let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;
         let monitor = cx.new(|cx| crate::monitor::MonitorView::new(window, &settings.monitor, cx));
         let editors = cx.new(|_| EditorPanels::new());
 
-        let persistence = Persistence::new(
-            services.session_store.clone(),
-            services.settings_store.clone(),
-        );
+        let settings_subscription_handle = settings_view.clone();
         let state = AppState {
             services,
             catalog,
@@ -165,18 +156,14 @@ impl AppShell {
                     records: known_hosts_records,
                     search: known_hosts_search,
                 },
-                cx.new(|_| crate::settings::SettingsView::new(settings_modal)),
+                settings_view,
                 quick_open_state,
                 SnippetPanelState {
                     open: false,
                     form: None,
                 },
             ),
-            tasks: TaskHub::new(
-                appearance_subscription,
-                terminal_appearance_subscriptions,
-                event_task,
-            ),
+            tasks: TaskHub::new(appearance_subscription, event_task),
             git_sync_schedule: GitSyncScheduler::default(),
             history,
             history_provider,
@@ -211,6 +198,7 @@ impl AppShell {
             pending_sftp_requests: Vec::new(),
             pending_monitor_requests: Vec::new(),
             pending_editor_requests: Vec::new(),
+            pending_settings_requests: Vec::new(),
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
                 applied_keys: applied_shortcut_keys,
@@ -228,6 +216,13 @@ impl AppShell {
             },
         );
         this.state.tasks.monitor_panel_subscription = Some(monitor_subscription);
+        let settings_subscription = cx.subscribe(
+            &settings_subscription_handle,
+            |shell, _view, event: &crate::settings::SettingsEvent, cx| {
+                shell.on_settings_event(event, cx);
+            },
+        );
+        this.state.tasks.settings_subscription = Some(settings_subscription);
         // 编辑器面板的意图事件由外壳订阅处理；命令通道在创建时注入，
         // 面板自己投递 SFTP 命令，不需要回指外壳。
         let editor_command_tx = this.state.services.command_tx.clone();
@@ -276,7 +271,7 @@ impl AppShell {
         if app_settings(cx).appearance.mode == UiThemeMode::System {
             crate::theme::sync_with_system(window, cx);
         }
-        this.sync_terminal_palette(cx);
+        crate::settings::sync_terminal_palette(cx);
         this.restore_startup_tabs(window, cx);
 
         this.state.tasks.git_sync = Some(cx.spawn(async move |this, cx| {

@@ -1,10 +1,10 @@
 //! 偏好设置中的快捷键自定义页。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
 use crate::keymap;
 use crate::palette::Palette;
+use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -12,7 +12,7 @@ use gpui_kit::component::kbd::Kbd;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
-impl AppShell {
+impl SettingsView {
     pub(crate) fn render_settings_shortcuts(
         &mut self,
         p: &Palette,
@@ -66,8 +66,8 @@ impl AppShell {
                                 .ghost()
                                 .xsmall()
                                 .label(rust_i18n::t!("settings.shortcut_edit").to_string())
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_shortcut_capture(id, window, cx);
+                                .on_click(cx.listener(move |_this, _, _window, cx| {
+                                    cx.emit(SettingsEvent::OpenShortcutCapture(id));
                                 })),
                         )
                         .when(customized, |row| {

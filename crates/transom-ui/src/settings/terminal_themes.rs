@@ -3,17 +3,17 @@
 //! 从 `terminal_page.rs` 拆出：配色卡片连同主题预览示例占了该页近一半篇幅，
 //! 与字体、光标等设置行没有共享状态，单独成文件更便于对照 `preset_themes`。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Icon;
 use gpui_kit::*;
 use transom_core::{FOLLOW_UI_THEME, preset_themes};
 
-impl AppShell {
+impl SettingsView {
     /// 终端预设调色板网格：内置配色卡片与跟随界面主题联动开关。
     pub(crate) fn render_settings_themes(
         &mut self,

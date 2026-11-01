@@ -1,7 +1,7 @@
 //! 偏好设置中心弹窗的骨架与页签装配。
 
+use super::SettingsView;
 use super::search_keywords::GroupSearch;
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -14,15 +14,15 @@ use gpui_kit::component::setting::{SelectIndex, SettingGroup, SettingItem, Setti
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 
-/// 组装配 helper：把 AppShell 的组渲染函数包装成带标题的 `SettingGroup`。
+/// 组装配 helper：把设置实体的组渲染函数包装成带标题的 `SettingGroup`。
 ///
 /// 分组内容整体是一个自绘元素，上游搜索只按元素项声明的关键词过滤，因此这里
 /// 必须同时挂上 [`GroupSearch::keywords`]；漏挂就会表现为"搜索什么都搜不到"。
 fn setting_group(
-    app: &Entity<AppShell>,
+    app: &Entity<SettingsView>,
     p: &Palette,
     group: GroupSearch,
-    render: fn(&mut AppShell, &Palette, &mut Context<AppShell>) -> AnyElement,
+    render: fn(&mut SettingsView, &Palette, &mut Context<SettingsView>) -> AnyElement,
 ) -> SettingGroup {
     let app = app.clone();
     let p = p.clone();
@@ -42,10 +42,10 @@ fn setting_group(
 /// 按 `window.scale_factor()` 光栅化，否则会得到一张 512px 位图再被 GPU 缩小采样。
 /// 没有把通用 `setting_group` 一并改掉，是为了不让七个页的签名跟着一起动。
 fn setting_group_with_window(
-    app: &Entity<AppShell>,
+    app: &Entity<SettingsView>,
     p: &Palette,
     group: GroupSearch,
-    render: fn(&mut AppShell, &mut Window, &Palette, &mut Context<AppShell>) -> AnyElement,
+    render: fn(&mut SettingsView, &mut Window, &Palette, &mut Context<SettingsView>) -> AnyElement,
 ) -> SettingGroup {
     let app = app.clone();
     let p = p.clone();
@@ -59,16 +59,16 @@ fn setting_group_with_window(
         )
 }
 
-impl AppShell {
+impl SettingsView {
     /// 偏好设置弹窗的弹窗体。
     ///
     /// 外壳（表面、边框、阴影、宽度、超高滚动与右上角关闭件）交给 Dialog 容器，
     /// 这里只保留"标题行 + 页面 + 页脚"三段结构；标题行原先自带一个 X，
     /// 它只置 `open = false`、不还原外观预览，与"取消"行为不一致，
     /// 因此删掉，统一走容器的关闭 → `cancel_settings`。
-    pub(crate) fn render_settings_body(
+    pub(crate) fn render_body(
         &self,
-        app: &Entity<AppShell>,
+        app: &Entity<SettingsView>,
         _window: &mut Window,
         cx: &App,
         p: &Palette,
@@ -77,7 +77,7 @@ impl AppShell {
         // 跳页时换组件 id：`Settings` 的选中页存在 keyed state 里，只有首次创建
         // 才读取默认页；用带页号的 id 让"从命令面板指定页"与"从菜单回到上次
         // 位置"两条路径各自持有独立的组件状态。
-        let (settings_id, jump_index) = match self.settings_modal(cx).jump_page {
+        let (settings_id, jump_index) = match self.state.jump_page {
             Some(page) => (
                 format!("app-settings-page-{page}"),
                 Some(SelectIndex {
@@ -193,7 +193,7 @@ impl AppShell {
     }
 
     /// 构建偏好设置所有分类页面。
-    fn build_settings_pages(app: &Entity<AppShell>, p: &Palette) -> Vec<SettingPage> {
+    fn build_settings_pages(app: &Entity<SettingsView>, p: &Palette) -> Vec<SettingPage> {
         // 命令面板的设置页目录与本函数的装配顺序必须一致（共 9 页）：
         // 顺序不一致会让跳转落到错误页面，因此开发期直接断言。
         debug_assert_eq!(super::page_entries().len(), 9);
@@ -204,25 +204,25 @@ impl AppShell {
                     app,
                     p,
                     GroupSearch::UiTheme,
-                    AppShell::render_settings_ui_theme,
+                    SettingsView::render_settings_ui_theme,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::UiFont,
-                    AppShell::render_settings_ui_font,
+                    SettingsView::render_settings_ui_font,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::WindowAppearance,
-                    AppShell::render_settings_window_appearance,
+                    SettingsView::render_settings_window_appearance,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::Divider,
-                    AppShell::render_settings_divider,
+                    SettingsView::render_settings_divider,
                 ));
 
         let page_terminal = SettingPage::new(rust_i18n::t!("settings.tab_terminal").to_string())
@@ -231,43 +231,43 @@ impl AppShell {
                 app,
                 p,
                 GroupSearch::TerminalFont,
-                AppShell::render_settings_terminal_font,
+                SettingsView::render_settings_terminal_font,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Cursor,
-                AppShell::render_settings_cursor,
+                SettingsView::render_settings_cursor,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::TerminalTheme,
-                AppShell::render_settings_themes,
+                SettingsView::render_settings_themes,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Highlight,
-                AppShell::render_settings_highlight,
+                SettingsView::render_settings_highlight,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Trigger,
-                AppShell::render_settings_triggers,
+                SettingsView::render_settings_triggers,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::BlockView,
-                AppShell::render_settings_block_view,
+                SettingsView::render_settings_block_view,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::KeyBindings,
-                AppShell::render_settings_key_bindings,
+                SettingsView::render_settings_key_bindings,
             ));
 
         let page_files = SettingPage::new(rust_i18n::t!("settings.tab_files").to_string())
@@ -276,43 +276,43 @@ impl AppShell {
                 app,
                 p,
                 GroupSearch::Editor,
-                AppShell::render_settings_editor,
+                SettingsView::render_settings_editor,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::FilePanel,
-                AppShell::render_settings_file_panel,
+                SettingsView::render_settings_file_panel,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Transfer,
-                AppShell::render_settings_transfer,
+                SettingsView::render_settings_transfer,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Zmodem,
-                AppShell::render_settings_zmodem,
+                SettingsView::render_settings_zmodem,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Audit,
-                AppShell::render_settings_audit,
+                SettingsView::render_settings_audit,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Identities,
-                AppShell::render_settings_identities,
+                SettingsView::render_settings_identities,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::History,
-                AppShell::render_settings_history,
+                SettingsView::render_settings_history,
             ));
 
         let page_mouse =
@@ -322,19 +322,19 @@ impl AppShell {
                     app,
                     p,
                     GroupSearch::Mouse,
-                    AppShell::render_settings_mouse,
+                    SettingsView::render_settings_mouse,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::Selection,
-                    AppShell::render_settings_selection,
+                    SettingsView::render_settings_selection,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::Clipboard,
-                    AppShell::render_settings_clipboard,
+                    SettingsView::render_settings_clipboard,
                 ));
 
         let page_shortcuts = SettingPage::new(rust_i18n::t!("settings.tab_shortcuts").to_string())
@@ -359,31 +359,31 @@ impl AppShell {
                     app,
                     p,
                     GroupSearch::Tabs,
-                    AppShell::render_settings_tabs,
+                    SettingsView::render_settings_tabs,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::Window,
-                    AppShell::render_settings_window,
+                    SettingsView::render_settings_window,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::ActivityBar,
-                    AppShell::render_settings_activity_bar,
+                    SettingsView::render_settings_activity_bar,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::StatusBar,
-                    AppShell::render_settings_status_bar,
+                    SettingsView::render_settings_status_bar,
                 ))
                 .group(setting_group(
                     app,
                     p,
                     GroupSearch::Startup,
-                    AppShell::render_settings_startup,
+                    SettingsView::render_settings_startup,
                 ));
 
         let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
@@ -392,19 +392,19 @@ impl AppShell {
                 app,
                 p,
                 GroupSearch::Language,
-                AppShell::render_settings_language,
+                SettingsView::render_settings_language,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Notify,
-                AppShell::render_settings_notify,
+                SettingsView::render_settings_notify,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Proxy,
-                AppShell::render_settings_proxy,
+                SettingsView::render_settings_proxy,
             ));
 
         #[cfg(target_os = "linux")]
@@ -412,26 +412,26 @@ impl AppShell {
             app,
             p,
             GroupSearch::DesktopIntegration,
-            AppShell::render_settings_desktop_integration,
+            SettingsView::render_settings_desktop_integration,
         ));
         let page_general = page_general
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Backup,
-                AppShell::render_settings_backup,
+                SettingsView::render_settings_backup,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Sync,
-                AppShell::render_settings_cloud_sync,
+                SettingsView::render_settings_cloud_sync,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::Logs,
-                AppShell::render_settings_logs,
+                SettingsView::render_settings_logs,
             ));
 
         let page_monitor = SettingPage::new(rust_i18n::t!("settings.tab_monitor").to_string())
@@ -440,13 +440,13 @@ impl AppShell {
                 app,
                 p,
                 GroupSearch::MonitorSections,
-                AppShell::render_settings_monitor_sections,
+                SettingsView::render_settings_monitor_sections,
             ))
             .group(setting_group(
                 app,
                 p,
                 GroupSearch::MonitorBehavior,
-                AppShell::render_settings_monitor_behavior,
+                SettingsView::render_settings_monitor_behavior,
             ));
 
         let page_about = SettingPage::new(rust_i18n::t!("settings.tab_about").to_string())
@@ -455,7 +455,7 @@ impl AppShell {
                 app,
                 p,
                 GroupSearch::About,
-                AppShell::render_settings_about,
+                SettingsView::render_settings_about,
             ));
 
         // 页头横线由组件内部写死 1px，这里用页面样式覆盖成当前档位。

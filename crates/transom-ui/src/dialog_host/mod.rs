@@ -208,7 +208,27 @@ pub(crate) use stack::OpenModals;
 
 impl ModalKind {
     /// 弹窗体：内容与页脚仍由各领域自己渲染。
+    /// 设置弹窗需要先拿实体句柄再进入 `update`，其它弹窗直接读外壳。
+    ///
+    /// 分开两条路径是为了避免“`app.read(cx)` 的只读借用一直活到设置实体的
+    /// 可变 `update`”这类借用冲突：设置分支先克隆句柄、立即结束外壳借用。
     fn render_body(
+        self,
+        app: &Entity<AppShell>,
+        window: &mut Window,
+        cx: &mut App,
+        p: &Palette,
+    ) -> AnyElement {
+        if self == ModalKind::Settings {
+            let settings = app.read(cx).state.modals.settings.clone();
+            return settings.update(cx, |view, cx| view.render_body(&settings, window, cx, p));
+        }
+        let shell = app.read(cx);
+        self.render_shell_body(shell, app, window, cx, p)
+    }
+
+    /// 非设置弹窗的渲染分发：只读外壳状态。
+    fn render_shell_body(
         self,
         shell: &AppShell,
         app: &Entity<AppShell>,
@@ -238,7 +258,10 @@ impl ModalKind {
             ModalKind::BackupPrompt => shell.render_backup_prompt_body(app, window, cx, p),
             ModalKind::AuditViewer => shell.render_audit_viewer_body(app, window, cx, p),
             ModalKind::Replay => shell.render_replay_body(app, window, cx, p),
-            ModalKind::Settings => shell.render_settings_body(app, window, cx, p),
+            ModalKind::Settings => {
+                // 由 [`Self::render_body`] 的专用分支处理，这里不会走到。
+                div().into_any_element()
+            }
             ModalKind::ShortcutCapture => shell.render_shortcut_capture_body(app, window, cx, p),
             ModalKind::DiffViewer => shell.render_diff_viewer_body(app, window, cx, p),
         }

@@ -242,6 +242,7 @@ impl Render for AppShell {
         self.refresh_monitor_stats(cx);
         self.flush_pending_editor_requests(window, cx);
         self.flush_pending_monitor_requests(window, cx);
+        self.flush_pending_settings_requests(window, cx);
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
         // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的

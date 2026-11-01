@@ -1,9 +1,9 @@
 //! 凭据模板列表与编辑表单视图渲染。
 
 use super::types::{IdentityEditState, describe_auth};
-use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::session_form::AuthChoice;
+use crate::settings::SettingsView;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -11,15 +11,15 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 
-impl AppShell {
+impl SettingsView {
     /// 凭据模板设置组渲染。
     pub(crate) fn render_settings_identities(
         &mut self,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let identities = self.state.catalog.identities.clone();
-        let edit = self.settings_modal(cx).identity_edit.clone();
+        let identities = self.catalog.identities.clone();
+        let edit = self.state.identity_edit.clone();
 
         let mut list = v_flex().gap_1();
         if identities.is_empty() {
@@ -32,7 +32,7 @@ impl AppShell {
         }
         for identity in identities {
             let id = identity.id;
-            let users = self.state.catalog.identity_users(id);
+            let users = self.catalog.identity_users(id);
             let row = h_flex()
                 .id(ElementId::Name(format!("identity-row-{id}").into()))
                 .px_2()
@@ -106,11 +106,9 @@ impl AppShell {
                 .label(label)
                 .selected(auth == choice)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.settings_modal_mut(cx, |settings| {
-                        if let Some(edit) = settings.identity_edit.as_mut() {
-                            edit.auth = choice;
-                        }
-                    });
+                    if let Some(edit) = this.state.identity_edit.as_mut() {
+                        edit.auth = choice;
+                    }
                     cx.notify();
                 }))
         };
@@ -172,11 +170,9 @@ impl AppShell {
                                     .small()
                                     .checked(edit.save_password)
                                     .on_click(cx.listener(|this, &checked, _, cx| {
-                                        this.settings_modal_mut(cx, |settings| {
-                                            if let Some(edit) = settings.identity_edit.as_mut() {
-                                                edit.save_password = checked;
-                                            }
-                                        });
+                                        if let Some(edit) = this.state.identity_edit.as_mut() {
+                                            edit.save_password = checked;
+                                        }
                                         cx.notify();
                                     })),
                             ),
@@ -208,11 +204,9 @@ impl AppShell {
                                     .small()
                                     .checked(edit.save_passphrase)
                                     .on_click(cx.listener(|this, &checked, _, cx| {
-                                        this.settings_modal_mut(cx, |settings| {
-                                            if let Some(edit) = settings.identity_edit.as_mut() {
-                                                edit.save_passphrase = checked;
-                                            }
-                                        });
+                                        if let Some(edit) = this.state.identity_edit.as_mut() {
+                                            edit.save_passphrase = checked;
+                                        }
                                         cx.notify();
                                     })),
                             ),

@@ -1,10 +1,10 @@
 //! 偏好设置中心之界面主题、明暗模式与密度档位配置页渲染。
 
 use super::{FontFieldSpec, slider_percent};
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use crate::window_appearance::DEFAULT_WINDOW_TRANSPARENCY;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -23,7 +23,7 @@ use transom_core::{
 
 mod window;
 
-impl AppShell {
+impl SettingsView {
     /// 界面主题组：明暗模式、密度档位与全局主题卡片。
     ///
     /// 选择即预览：每次改动经 [`AppShell::update_appearance`] 立即应用到全局
@@ -232,7 +232,7 @@ impl AppShell {
                 FontFieldSpec {
                     id: "ui-font-family",
                     label: rust_i18n::t!("settings.ui_font_family").to_string(),
-                    select: self.settings_modal(cx).ui_font_family.clone(),
+                    select: self.state.ui_font_family.clone(),
                     note_key: Some("settings.ui_font_note"),
                 },
                 p,

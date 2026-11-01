@@ -253,7 +253,7 @@ impl AppShell {
                 cx.notify();
             }
             ActivityItemId::Keys => self.open_key_wizard(window, cx),
-            ActivityItemId::Settings => self.open_settings_modal(window, cx),
+            ActivityItemId::Settings => self.open_settings_modal(None, window, cx),
             ActivityItemId::Unknown => {}
         }
     }

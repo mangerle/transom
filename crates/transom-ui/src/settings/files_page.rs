@@ -1,10 +1,10 @@
 //! 偏好设置中心之文件与传输配置页（内置编辑器、文件面板排除、传输队列与 ZMODEM 接收）。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
@@ -12,7 +12,7 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{ChecksumAlgorithm, VerifyMode};
 
-impl AppShell {
+impl SettingsView {
     /// 编辑器组：软换行与行号显示开关。
     pub(crate) fn render_settings_editor(
         &mut self,
@@ -54,14 +54,14 @@ impl AppShell {
     pub(crate) fn render_settings_file_panel(
         &mut self,
         p: &Palette,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.panel_hidden").to_string(),
-                    self.settings_modal(cx).panel_hidden_patterns.clone(),
+                    self.state.panel_hidden_patterns.clone(),
                     p,
                 ),
                 Some(rust_i18n::t!("settings.panel_hidden_note").to_string()),
@@ -78,8 +78,7 @@ impl AppShell {
     ) -> AnyElement {
         let current_algo = app_settings(cx).sftp.checksum_algorithm;
         let current_mode = app_settings(cx).sftp.verify_mode;
-        let stepper =
-            Self::setting_stepper(&self.settings_modal(cx).max_concurrent_transfers, px(110.0));
+        let stepper = Self::setting_stepper(&self.state.max_concurrent_transfers, px(110.0));
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(

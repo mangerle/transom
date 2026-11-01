@@ -7,7 +7,6 @@ pub(super) use gpui_kit::component::input::InputState;
 pub(super) use gpui_kit::*;
 pub(super) use std::path::PathBuf;
 pub(super) use transom_core::{
-    AppError, BackupDocument, BackupExportOptions, GitSyncResult, GitSyncSettings, MergePreference,
-    SecretKey, SecretRestoreReport, SessionCatalog, SyncCommand, SyncEndpoint, SyncPushReport,
-    SyncSettings, merge_catalogs,
+    AppError, BackupDocument, BackupExportOptions, GitSyncResult, MergePreference,
+    SecretRestoreReport, SessionCatalog, SyncCommand, SyncPushReport, SyncSettings, merge_catalogs,
 };

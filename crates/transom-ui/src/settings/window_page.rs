@@ -1,17 +1,17 @@
 //! 偏好设置中心之标签页、面板停靠与窗口记忆配置页渲染。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{PanelSide, TabPosition};
 
-impl AppShell {
+impl SettingsView {
     /// 标签页组：关闭按钮与最后标签退出行为（两张开关卡上下排列）。
     ///
     /// 两张卡不并排：说明文案是长句，半宽时右卡会被挤断成两行，两张卡的
@@ -118,10 +118,7 @@ impl AppShell {
                     // 切到左侧时把左侧槽位直接切到标签面板并展开，否则用户看到
                     // 仍是顶部条或会话树，像是切换没有生效；切回顶部时清掉
                     // 面板标志，下次切回左侧从干净状态开始。
-                    this.state.vertical_tabs_open = position == TabPosition::Left;
-                    if position == TabPosition::Left {
-                        this.state.sidebar.visible = true;
-                    }
+                    cx.emit(SettingsEvent::TabPositionChanged(position));
                     this.persist_layout_settings(cx);
                 },
                 cx,
@@ -171,8 +168,8 @@ impl AppShell {
                             rust_i18n::t!("settings.panel_side_right").to_string(),
                         ),
                     ],
-                    |this, new_side, cx| {
-                        this.set_sftp_panel_side(new_side, cx);
+                    |_this, new_side, cx| {
+                        cx.emit(SettingsEvent::SetSftpPanelSide(new_side));
                     },
                     cx,
                 ),

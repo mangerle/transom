@@ -1,11 +1,9 @@
 //! 偏好设置中的云同步页组：端点配置、凭据入口与手动上传下载。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
-use crate::app::app_settings_mut;
 use crate::app::update_app_settings;
-use crate::cloud_sync::DEFAULT_SYNC_DIRECTORY;
 use crate::palette::Palette;
+use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -28,7 +26,23 @@ fn sync_form_row(label_key: &'static str, input: Entity<InputState>, p: &Palette
     )
 }
 
-impl AppShell {
+/// 当前生效的云同步端点类型键。
+///
+/// 判定顺序固定为 Git 优先：Git 同步没有 `endpoint`，二者不会同时生效；
+/// 写在 `impl` 外供设置实体与页面渲染共用。
+pub(crate) fn sync_endpoint_kind(settings: &AppSettings) -> &'static str {
+    if settings.sync.git.is_some() {
+        "git"
+    } else {
+        match settings.sync.endpoint {
+            Some(SyncEndpoint::Webdav { .. }) => "webdav",
+            Some(SyncEndpoint::S3 { .. }) => "s3",
+            None => "off",
+        }
+    }
+}
+
+impl SettingsView {
     /// 云同步组：端点选择、拓扑配置、同步口令与上传下载动作。
     ///
     /// 端点类型选中即改设置内存态（保存时落盘），字段值始终从输入框现读，
@@ -38,7 +52,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_kind = self.sync_endpoint_kind(app_settings(cx));
+        let current_kind = sync_endpoint_kind(app_settings(cx));
 
         // 四种端点类型走下拉：与全页其它枚举项一致，长标签（WebDAV、Git 仓库）
         // 不会把整行占满；切换要回填表单输入框，所以用带窗口句柄的变体。
@@ -55,7 +69,7 @@ impl AppShell {
             cx,
         );
 
-        let form = &self.settings_modal(cx).sync_form;
+        let form = &self.state.sync_form;
         let mut content = v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -199,8 +213,8 @@ impl AppShell {
                                 .small()
                                 .icon(IconName::Upload)
                                 .label(rust_i18n::t!("sync.push").to_string())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.start_cloud_sync_push(window, cx);
+                                .on_click(cx.listener(|_this, _, _window, cx| {
+                                    cx.emit(SettingsEvent::CloudSyncPush);
                                 })),
                         )
                         .child(
@@ -208,8 +222,8 @@ impl AppShell {
                                 .small()
                                 .icon(IconName::Download)
                                 .label(rust_i18n::t!("sync.pull").to_string())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.start_cloud_sync_pull(window, cx);
+                                .on_click(cx.listener(|_this, _, _window, cx| {
+                                    cx.emit(SettingsEvent::CloudSyncPull);
                                 })),
                         )
                         .into_any_element(),
@@ -221,8 +235,8 @@ impl AppShell {
                     .small()
                     .icon(IconName::GitBranch)
                     .label(rust_i18n::t!("sync.git_sync_now").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.start_git_sync(window, cx);
+                    .on_click(cx.listener(|_this, _, _window, cx| {
+                        cx.emit(SettingsEvent::GitSyncNow);
                     }))
                     .into_any_element(),
                 p,
@@ -258,99 +272,5 @@ impl AppShell {
                 format(settings.sync.last_pull_at)
             ))
             .into_any_element()
-    }
-
-    /// 当前生效的同步端点类型：Git 优先（`git` 有值时端点字段恒为空）。
-    fn sync_endpoint_kind(&self, settings: &AppSettings) -> &'static str {
-        if settings.sync.git.is_some() {
-            "git"
-        } else {
-            match settings.sync.endpoint {
-                Some(SyncEndpoint::Webdav { .. }) => "webdav",
-                Some(SyncEndpoint::S3 { .. }) => "s3",
-                None => "off",
-            }
-        }
-    }
-
-    /// 切换端点类型：切到未配置的类型时置默认拓扑并回填输入框。
-    ///
-    /// 选中当前类型直接返回：末尾的 `fill_sync_form` 会用设置值覆盖全部输入框，
-    /// 不拦这一下就会把用户尚未保存的编辑冲掉；下拉里重新点当前项是常见操作，
-    /// 必须幂等。
-    fn switch_sync_endpoint(
-        &mut self,
-        kind: &'static str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if kind == self.sync_endpoint_kind(app_settings(cx)) {
-            return;
-        }
-        match kind {
-            "off" => {
-                update_app_settings(cx, |s| s.sync.endpoint = None);
-                update_app_settings(cx, |s| s.sync.git = None);
-                self.settings_modal(cx)
-                    .sync_form
-                    .git_remote
-                    .update(cx, |input, cx| {
-                        input.set_value(String::new(), window, cx);
-                    });
-            }
-            "webdav" => {
-                update_app_settings(cx, |s| s.sync.git = None);
-                self.settings_modal(cx)
-                    .sync_form
-                    .git_remote
-                    .update(cx, |input, cx| {
-                        input.set_value(String::new(), window, cx);
-                    });
-                if !matches!(
-                    app_settings(cx).sync.endpoint,
-                    Some(SyncEndpoint::Webdav { .. })
-                ) {
-                    app_settings_mut(cx).sync.endpoint = Some(SyncEndpoint::Webdav {
-                        url: String::new(),
-                        username: String::new(),
-                        directory: DEFAULT_SYNC_DIRECTORY.to_string(),
-                    });
-                }
-            }
-            "s3" => {
-                update_app_settings(cx, |s| s.sync.git = None);
-                self.settings_modal(cx)
-                    .sync_form
-                    .git_remote
-                    .update(cx, |input, cx| {
-                        input.set_value(String::new(), window, cx);
-                    });
-                if !matches!(
-                    app_settings(cx).sync.endpoint,
-                    Some(SyncEndpoint::S3 { .. })
-                ) {
-                    app_settings_mut(cx).sync.endpoint = Some(SyncEndpoint::S3 {
-                        endpoint: String::new(),
-                        region: String::new(),
-                        bucket: String::new(),
-                        access_key: String::new(),
-                        directory: DEFAULT_SYNC_DIRECTORY.to_string(),
-                    });
-                }
-            }
-            "git" => {
-                update_app_settings(cx, |s| s.sync.endpoint = None);
-                if app_settings(cx).sync.git.is_none() {
-                    app_settings_mut(cx).sync.git = Some(transom_core::GitSyncSettings {
-                        remote: String::new(),
-                        branch: "transom-sync".to_string(),
-                        interval_minutes: 0,
-                    });
-                }
-            }
-            _ => return,
-        }
-        self.fill_sync_form(window, cx);
-        cx.notify();
     }
 }

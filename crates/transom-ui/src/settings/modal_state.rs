@@ -1,11 +1,11 @@
 //! 设置弹窗状态的构造：全部输入框在此一次性建立。
 //!
-//! 设计原理（Why）：AppShell::new 曾内联约一百八十行的输入框构造样板
-//! （回填值、占位符、掩码），与"装配应用"的其余步骤混在同一函数里，
-//! 新增一个设置项要穿过整个 new 找位置。把构造收进状态类型自己的构造
-//! 函数后，设置项只改本文件，AppShell::new 保持可读。
+//! 设计原理（Why）：外壳构造曾内联约一百八十行的输入框样板（回填值、占位符、
+//! 掩码），与"装配应用"的其余步骤混在同一函数里，新增一个设置项要穿过整个
+//! new 找位置。把构造收进状态类型自己的构造函数后，设置项只改本文件，
+//! 外壳构造保持可读。
 
-use crate::app::AppShell;
+use super::SettingsView;
 use crate::cloud_sync::SyncFormInputs;
 use crate::identity::IdentityEditState;
 use crate::keys::KeyWizardState;
@@ -82,13 +82,15 @@ pub(crate) struct SettingsModalState {
     pub(crate) proxy: ProxyFormInputs,
     pub(crate) identity_edit: Option<IdentityEditState>,
     pub(crate) trigger_edit: Option<TriggerEditState>,
+    /// 打开弹窗时从监控面板取来的采样档位快照：设置页只读它，变更以事件上报。
+    pub(crate) monitor_interval: crate::monitor::SampleIntervalMode,
 }
 
 impl SettingsModalState {
     /// 按当前设置回填构造全部输入框与滑块。
     pub(crate) fn new(
         window: &mut Window,
-        cx: &mut Context<AppShell>,
+        cx: &mut Context<SettingsView>,
         settings: &AppSettings,
     ) -> Self {
         let mono_default = rust_i18n::t!(MONO_DEFAULT_KEY).to_string();
@@ -280,6 +282,7 @@ impl SettingsModalState {
             identity_edit: None,
             trigger_edit: None,
             sync_form,
+            monitor_interval: crate::monitor::SampleIntervalMode::default(),
         }
     }
 }

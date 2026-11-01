@@ -111,7 +111,7 @@ impl AppShell {
                                 this.connect_quick_host(&host, cx);
                             }
                             Some(PaletteTarget::SettingsPage(page)) => {
-                                this.open_settings_page(page, window, cx);
+                                this.open_settings_modal(Some(page), window, cx);
                             }
                             Some(PaletteTarget::UiTheme(name)) => {
                                 this.apply_ui_theme_choice(&name, cx);

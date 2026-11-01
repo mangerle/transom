@@ -1,10 +1,10 @@
 //! 偏好设置中的布局页：活动栏与状态栏的条目显隐与恢复默认。
 
 use crate::activity_bar::{activity_item_icon, activity_item_label};
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use crate::status_bar::{status_item_icon, status_item_label};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -24,7 +24,7 @@ struct VisibilityRowOptions {
     pinned: bool,
 }
 
-impl AppShell {
+impl SettingsView {
     pub(crate) fn render_settings_activity_bar(
         &mut self,
         p: &Palette,

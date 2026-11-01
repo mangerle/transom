@@ -1,16 +1,16 @@
 //! 偏好设置中心之鼠标、选区与剪贴板配置页渲染。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 
-impl AppShell {
+impl SettingsView {
     /// 鼠标组：右键行为与中键粘贴开关。
     pub(crate) fn render_settings_mouse(
         &mut self,
@@ -75,14 +75,14 @@ impl AppShell {
     pub(crate) fn render_settings_selection(
         &mut self,
         p: &Palette,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.word_separators").to_string(),
-                    self.settings_modal(cx).word_separators.clone(),
+                    self.state.word_separators.clone(),
                     p,
                 ),
                 Some(rust_i18n::t!("settings.word_separators_note").to_string()),

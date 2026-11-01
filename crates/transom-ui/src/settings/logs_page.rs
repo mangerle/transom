@@ -11,10 +11,10 @@
 //!   清理只动已轮转的备份，正在写入的主文件不删——否则会留下一个指向已 unlink
 //!   文件的句柄，之后的写入全部进不了磁盘还看不出原因。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use crate::sftp::spawn_blocking_local;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -43,7 +43,7 @@ fn level_label_key(level: LogLevel) -> &'static str {
     }
 }
 
-impl AppShell {
+impl SettingsView {
     /// 日志组：级别选择、目录展示与打开、历史备份清理。
     pub(crate) fn render_settings_logs(
         &mut self,
@@ -55,7 +55,7 @@ impl AppShell {
         let dir_label = log_dir.display().to_string();
         let open_dir = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(log_dir.clone());
-            this.state.status = Some(rust_i18n::t!("settings.log_revealed").to_string());
+            this.report_status(rust_i18n::t!("settings.log_revealed").to_string(), cx);
             cx.notify();
         });
         let cleanup = cx.listener(|_this, _, _, cx| {
@@ -65,8 +65,9 @@ impl AppShell {
                     return;
                 };
                 let _ = this.update(cx, |this, cx| {
-                    this.state.status = Some(
+                    this.report_status(
                         rust_i18n::t!("settings.log_cleanup_done", count = removed).to_string(),
+                        cx,
                     );
                     cx.notify();
                 });

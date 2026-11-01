@@ -1,16 +1,16 @@
 //! 偏好设置中心之历史记录与安全审计配置页渲染。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 
-impl AppShell {
+impl SettingsView {
     /// 历史组：命令采集与建议开关。
     pub(crate) fn render_settings_history(
         &mut self,
@@ -30,10 +30,10 @@ impl AppShell {
                         // 关掉时把内存里的建议一起收起：下次开回来仍从文件恢复，
                         // 不做删除，避免"关一下就把历史清空"的误伤。
                         if !checked {
-                            this.state.history.write().clear();
-                        } else if this.state.history.read().is_empty() {
-                            let loaded = this.state.services.history.load();
-                            *this.state.history.write() = loaded;
+                            this.services.history.write().clear();
+                        } else if this.services.history.read().is_empty() {
+                            let loaded = this.services.history_store.load();
+                            *this.services.history.write() = loaded;
                         }
                         cx.notify();
                     }))
@@ -53,7 +53,7 @@ impl AppShell {
         let reveal_dir = dir.clone();
         let reveal = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(reveal_dir.clone());
-            this.state.status = Some(rust_i18n::t!("settings.audit_revealed").to_string());
+            this.report_status(rust_i18n::t!("settings.audit_revealed").to_string(), cx);
             cx.notify();
         });
         v_flex()
@@ -87,8 +87,8 @@ impl AppShell {
                             .small()
                             .outline()
                             .label(rust_i18n::t!("audit_viewer.title").to_string())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_audit_viewer(None, window, cx);
+                            .on_click(cx.listener(|_this, _, _window, cx| {
+                                cx.emit(SettingsEvent::OpenAuditViewer);
                             })),
                     )
                     .child(

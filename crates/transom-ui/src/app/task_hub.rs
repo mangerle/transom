@@ -22,13 +22,14 @@ pub(crate) struct TaskHub {
     pub(crate) backup: Option<Task<()>>,
     pub(crate) sync_pull: Option<Task<()>>,
     pub(crate) _appearance_subscription: Subscription,
-    pub(crate) _terminal_appearance_subscriptions: Vec<Subscription>,
     /// 面板事件订阅：面板发意图、外壳在此持有订阅并处理。
     pub(crate) sftp_panel_subscriptions: HashMap<transom_core::TabId, Subscription>,
     /// 编辑面板事件订阅。
     pub(crate) editor_panel_subscription: Option<Subscription>,
     /// 监控面板事件订阅。
     pub(crate) monitor_panel_subscription: Option<Subscription>,
+    /// 设置实体事件订阅。
+    pub(crate) settings_subscription: Option<Subscription>,
     /// 转发面板事件订阅。
     pub(crate) forward_panel_subscriptions: HashMap<transom_core::TabId, Subscription>,
     pub(crate) _event: Task<()>,
@@ -36,11 +37,7 @@ pub(crate) struct TaskHub {
 
 impl TaskHub {
     /// 构造新的任务聚合容器。
-    pub(crate) fn new(
-        appearance_subscription: Subscription,
-        terminal_appearance_subscriptions: Vec<Subscription>,
-        event: Task<()>,
-    ) -> Self {
+    pub(crate) fn new(appearance_subscription: Subscription, event: Task<()>) -> Self {
         Self {
             probe_expiry: HashMap::new(),
             monitor: None,
@@ -49,10 +46,10 @@ impl TaskHub {
             backup: None,
             sync_pull: None,
             _appearance_subscription: appearance_subscription,
-            _terminal_appearance_subscriptions: terminal_appearance_subscriptions,
             sftp_panel_subscriptions: HashMap::new(),
             forward_panel_subscriptions: HashMap::new(),
             monitor_panel_subscription: None,
+            settings_subscription: None,
             editor_panel_subscription: None,
             _event: event,
         }

@@ -9,10 +9,10 @@
 //! - 侧栏的"记住上次"为什么不额外加开关：见 `transom_core::SidebarStartup` 的文档——
 //!   记住与被自己上次行为绑架是同一个开关的两面，合成三档才是两个显式选择。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_core::{SidebarStartup, StartupTabs};
@@ -38,7 +38,7 @@ fn sidebar_startup_label(startup: SidebarStartup) -> &'static str {
     }
 }
 
-impl AppShell {
+impl SettingsView {
     /// 启动组：标签区内容与会话列表展开状态两行分段选择。
     pub(crate) fn render_settings_startup(
         &mut self,

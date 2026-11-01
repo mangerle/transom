@@ -10,9 +10,9 @@
 //!   `std::env::consts::OS`；rustc 版本与 git 提交号无法显示，因为工程刻意没有
 //!   build.rs 注入构建元数据，避免每次改动都触发全量重编。
 
-use crate::app::AppShell;
 use crate::brand;
 use crate::palette::Palette;
+use crate::settings::SettingsView;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
@@ -83,7 +83,7 @@ fn openable_row(
         h_flex()
             .gap_2()
             .items_center()
-            .child(AppShell::setting_path_value(button_id, value, p))
+            .child(SettingsView::setting_path_value(button_id, value, p))
             .child(
                 Button::new(button_id)
                     .small()
@@ -95,7 +95,7 @@ fn openable_row(
     )
 }
 
-impl AppShell {
+impl SettingsView {
     /// 渲染"关于"分组：标志与名称头部，外加版本、构建、许可、作者、主页、
     /// 配置目录与运行环境各行。
     ///
@@ -115,7 +115,7 @@ impl AppShell {
         let config_path_label = config_dir.display().to_string();
         let open_config_dir = cx.listener(move |this, _, _, cx| {
             crate::audit::reveal_in_file_manager(config_dir.clone());
-            this.state.status = Some(rust_i18n::t!("settings.about_dir_revealed").to_string());
+            this.report_status(rust_i18n::t!("settings.about_dir_revealed").to_string(), cx);
             cx.notify();
         });
         let build_label = if cfg!(debug_assertions) {
