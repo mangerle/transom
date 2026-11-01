@@ -204,6 +204,8 @@ pub(crate) struct SftpPanelState {
     pub(crate) main_connection: Option<ConnectionId>,
     /// 命令通道：面板自己就能投递命令，不必回读外壳服务。
     pub(crate) command_tx: Option<flume::Sender<transom_core::AppCommand>>,
+    /// 编辑面板实体句柄：远端工具栏要渲染"已打开编辑器"浮层，需要读取它。
+    pub(crate) editors: Option<Entity<crate::editor::EditorPanels>>,
     /// 面板列是否展开显示。
     ///
     /// 设计原理（Why）：`tab.sftp` 是 `Some` 只代表传输队列与目录状态存在，

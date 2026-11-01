@@ -182,9 +182,7 @@ impl SftpPanelView {
 
         // 编辑列表浮层归面板实体渲染，这里只提供实体句柄与当前标签。
         let editor_list = show_editor_list.then(|| {
-            let Some(editors) = crate::sftp::entity::read_shell_parts(&self.app, cx, |shell| {
-                shell.state.editors.clone()
-            }) else {
+            let Some(editors) = self.state.editors.clone() else {
                 return div().into_any_element();
             };
             render_editor_list_popover(editors.read(cx), &editors, tab_id, p)

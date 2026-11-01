@@ -280,6 +280,7 @@ impl AppShell {
         let state = SftpPanelState {
             main_connection,
             command_tx,
+            editors: Some(self.state.editors.clone()),
             open,
             remote: SftpRemotePaneState::new_main(
                 initial_remote_path.clone(),
