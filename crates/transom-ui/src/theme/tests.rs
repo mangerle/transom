@@ -815,3 +815,65 @@ fn panel_entities_have_no_parent_entity_handle() {
         offenders.join("\n")
     );
 }
+
+/// 外壳处理面板事件时不得回读该面板。
+///
+/// 事件派发阶段面板仍被租借，处理函数里再 `read`/`update` 会触发
+/// `cannot read/update ... while it is already being updated`。各面板的处理函数
+/// 统一命名为 `on_*_panel_event`，这里扫描它们的函数体。
+#[test]
+fn panel_event_handlers_do_not_read_back() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut offenders = Vec::new();
+    for base in ["monitor", "editor", "forward", "sftp"] {
+        for entry in walkdir_like(&root.join(base)) {
+            if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&entry) else {
+                continue;
+            };
+            let Some(start) = content.find("fn on_") else {
+                continue;
+            };
+            let name_start = start + "fn ".len();
+            let Some(name_end) = content[name_start..].find('(') else {
+                continue;
+            };
+            let name = &content[name_start..name_start + name_end];
+            if !name.ends_with("panel_event") {
+                continue;
+            }
+            let Some(body_start) = content[name_start..].find('{') else {
+                continue;
+            };
+            let body = &content[name_start + body_start..];
+            let mut depth = 0usize;
+            let mut end = 0usize;
+            for (offset, ch) in body.char_indices() {
+                match ch {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = offset;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let body = &body[..end];
+            for pattern in ["sftp_view(", "sftp_state(", "settings_view(", ".read(cx)"] {
+                if body.contains(pattern) {
+                    offenders.push(format!("{name}: {pattern} @ {}", entry.display()));
+                }
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "面板事件处理函数不得回读面板：\n{}",
+        offenders.join("\n")
+    );
+}
