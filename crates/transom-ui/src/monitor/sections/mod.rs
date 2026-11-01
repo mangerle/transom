@@ -6,4 +6,5 @@ pub(crate) mod memory;
 pub(crate) mod network;
 pub(crate) mod ports;
 pub(crate) mod process;
+mod process_table;
 pub(crate) mod services;
