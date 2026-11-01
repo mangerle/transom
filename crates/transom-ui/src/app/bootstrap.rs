@@ -11,59 +11,12 @@ impl AppShell {
         services: UiServices,
         mut settings: AppSettings,
     ) -> Self {
-        settings.activity_bar.normalize();
-        settings.status_bar.normalize();
-        settings.appearance.normalize();
-        settings.window.normalize();
-        // 设置与进程同生命周期，装进 Global；外壳不再持字段。
-        install_app_settings(cx, settings.clone());
-        cx.bind_keys(keymap::bindings(&settings.shortcuts));
-        let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
-            &settings.shortcuts,
-        )));
-        let applied_shortcut_keys = keymap::effective_key_strings(&settings.shortcuts);
-        let history: Arc<parking_lot::RwLock<Vec<String>>> =
-            Arc::new(parking_lot::RwLock::new(if settings.history.enabled {
-                services.history.load()
-            } else {
-                Vec::new()
-            }));
-        let history_provider: transom_terminal::HistoryProvider = {
-            let snapshot = Arc::clone(&history);
-            Arc::new(move |prefix: &str| {
-                transom_core::command_suggestions(
-                    &snapshot.read(),
-                    prefix,
-                    transom_core::SUGGESTION_LIMIT,
-                )
-            })
-        };
+        let prepared = prepare_bootstrap(cx, &services, &mut settings);
         let inputs = BootstrapInputs::new(window, cx);
         cx.observe(&inputs.workspace_panels, |_, _, cx| cx.notify())
             .detach();
         cx.observe(&inputs.workspace_panels_left, |_, _, cx| cx.notify())
             .detach();
-        let (catalog, catalog_error) = match services.session_store.load() {
-            Ok(catalog) => (catalog, None),
-            Err(error) => {
-                log::error!(
-                    "读取会话目录失败，界面按空目录启动，原因: {}",
-                    localized_error(&error)
-                );
-                (SessionCatalog::default(), Some(localized_error(&error)))
-            }
-        };
-        let mut pending_notices = PendingNotices::new();
-        if let Some(error) = catalog_error {
-            pending_notices.push(error);
-        }
-        log::info!(
-            "会话目录就绪，会话数: {}，分组数: {}，凭据模板数: {}",
-            catalog.sessions.len(),
-            catalog.folders.len(),
-            catalog.identities.len()
-        );
-
         let event_rx = services.event_rx.clone();
         let event_task = cx.spawn_in(window, async move |this, cx| {
             while let Ok(event) = event_rx.recv_async().await {
@@ -105,10 +58,10 @@ impl AppShell {
                 crate::settings::SettingsServices {
                     secret_store: services.secret_store.clone(),
                     persistence: persistence.clone(),
-                    history: history.clone(),
+                    history: prepared.history.clone(),
                     history_store: services.history.clone(),
                 },
-                catalog.clone(),
+                prepared.catalog.clone(),
             )
         });
         // 弹窗内部的滑块/步进器订阅由设置实体自己持有，外壳不再感知这些控件。
@@ -120,7 +73,7 @@ impl AppShell {
 
         let state = AppState {
             services,
-            catalog,
+            catalog: prepared.catalog,
             catalog_revision: 0,
             sidebar: SidebarState::new(sidebar_visible, inputs.search.clone()),
             workspace: WorkspaceState::new(),
@@ -143,8 +96,8 @@ impl AppShell {
             ),
             tasks: TaskHub::new(appearance_subscription, event_task),
             git_sync_schedule: GitSyncScheduler::default(),
-            history,
-            history_provider,
+            history: prepared.history,
+            history_provider: prepared.history_provider,
             probe_badges: HashMap::new(),
             monitor,
             editors,
@@ -170,15 +123,15 @@ impl AppShell {
             },
             status: None,
             persistence,
-            pending_notices,
+            pending_notices: prepared.pending_notices,
             immersive: false,
             sftp_panel_width_target: None,
             window_requests: Default::default(),
             key_wizard: None,
             stats_sampling: true,
             shortcut_recording: ShortcutRecordingState {
-                filter: shortcut_filter,
-                applied_keys: applied_shortcut_keys,
+                filter: prepared.shortcut_filter,
+                applied_keys: prepared.applied_shortcut_keys,
                 capture: None,
             },
             open_modals: crate::dialog_host::OpenModals::default(),
@@ -274,6 +227,79 @@ impl AppShell {
         }));
     }
 }
+/// 构造期一次性准备的服务与设置快照。
+struct BootstrapPrepared {
+    history: Arc<parking_lot::RwLock<Vec<String>>>,
+    history_provider: transom_terminal::HistoryProvider,
+    shortcut_filter: Arc<parking_lot::RwLock<Vec<gpui_kit::KeybindingKeystroke>>>,
+    applied_shortcut_keys: Vec<(String, &'static str)>,
+    catalog: SessionCatalog,
+    pending_notices: PendingNotices,
+}
+
+/// 归一设置、装载 Global/键位、加载历史与会话目录。
+fn prepare_bootstrap(
+    cx: &mut Context<AppShell>,
+    services: &UiServices,
+    settings: &mut AppSettings,
+) -> BootstrapPrepared {
+    settings.activity_bar.normalize();
+    settings.status_bar.normalize();
+    settings.appearance.normalize();
+    settings.window.normalize();
+    // 设置与进程同生命周期，装进 Global；外壳不再持字段。
+    install_app_settings(cx, settings.clone());
+    cx.bind_keys(keymap::bindings(&settings.shortcuts));
+    let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
+        &settings.shortcuts,
+    )));
+    let applied_shortcut_keys = keymap::effective_key_strings(&settings.shortcuts);
+    let history: Arc<parking_lot::RwLock<Vec<String>>> =
+        Arc::new(parking_lot::RwLock::new(if settings.history.enabled {
+            services.history.load()
+        } else {
+            Vec::new()
+        }));
+    let history_provider: transom_terminal::HistoryProvider = {
+        let snapshot = Arc::clone(&history);
+        Arc::new(move |prefix: &str| {
+            transom_core::command_suggestions(
+                &snapshot.read(),
+                prefix,
+                transom_core::SUGGESTION_LIMIT,
+            )
+        })
+    };
+    let (catalog, catalog_error) = match services.session_store.load() {
+        Ok(catalog) => (catalog, None),
+        Err(error) => {
+            log::error!(
+                "读取会话目录失败，界面按空目录启动，原因: {}",
+                localized_error(&error)
+            );
+            (SessionCatalog::default(), Some(localized_error(&error)))
+        }
+    };
+    let mut pending_notices = PendingNotices::new();
+    if let Some(error) = catalog_error {
+        pending_notices.push(error);
+    }
+    log::info!(
+        "会话目录就绪，会话数: {}，分组数: {}，凭据模板数: {}",
+        catalog.sessions.len(),
+        catalog.folders.len(),
+        catalog.identities.len()
+    );
+    BootstrapPrepared {
+        history,
+        history_provider,
+        shortcut_filter,
+        applied_shortcut_keys,
+        catalog,
+        pending_notices,
+    }
+}
+
 /// 构造期一次性创建的输入框/面板句柄，避免 `new` 内平铺二十个同名变量。
 struct BootstrapInputs {
     search: Entity<InputState>,
