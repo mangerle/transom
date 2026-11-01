@@ -222,8 +222,43 @@ impl SftpPanelView {
             cx,
         );
 
+        self.assemble_panel(
+            SftpPanelAssembly {
+                local_pane,
+                local_collapsed,
+                remote_columns,
+                side_titles,
+                tab_id,
+                is_local_only,
+                queue_pane,
+                status_bar_element,
+                queue_expanded,
+            },
+            &p,
+            cx,
+        )
+    }
+
+    /// 面板主体装配：本地列、远端列、顶栏、队列与状态栏。
+    fn assemble_panel(
+        &mut self,
+        assembly: SftpPanelAssembly,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let SftpPanelAssembly {
+            local_pane,
+            local_collapsed,
+            remote_columns,
+            side_titles,
+            tab_id,
+            is_local_only,
+            queue_pane,
+            status_bar_element,
+            queue_expanded,
+        } = assembly;
         let local_content = if local_collapsed {
-            self.render_sftp_collapsed_bar(SftpColumnId::Local, &side_titles, &p, cx)
+            self.render_sftp_collapsed_bar(SftpColumnId::Local, &side_titles, p, cx)
         } else {
             local_pane
         };
@@ -237,7 +272,7 @@ impl SftpPanelView {
 
         let is_all_collapsed = columns.iter().all(|column| column.collapsed);
         let header =
-            self.render_sftp_panel_top_header(tab_id, is_all_collapsed, is_local_only, &p, cx);
+            self.render_sftp_panel_top_header(tab_id, is_all_collapsed, is_local_only, p, cx);
         let columns_container = self.render_sftp_columns(tab_id, columns, cx);
 
         // 外层容器与键盘/鼠标监听归实体（见 `impl Render for SftpPanelView`）；
@@ -455,4 +490,17 @@ fn side_remote_titles(state: &super::state::SftpPanelState) -> Vec<(usize, Strin
         .enumerate()
         .map(|(index, side)| (index, side.title.clone().unwrap_or_default()))
         .collect()
+}
+
+/// 面板主体装配输入：各列内容与折叠/队列状态。
+struct SftpPanelAssembly {
+    local_pane: AnyElement,
+    local_collapsed: bool,
+    remote_columns: Vec<super::columns::SftpColumn>,
+    side_titles: Vec<(usize, String)>,
+    tab_id: transom_core::TabId,
+    is_local_only: bool,
+    queue_pane: AnyElement,
+    status_bar_element: Option<AnyElement>,
+    queue_expanded: bool,
 }
