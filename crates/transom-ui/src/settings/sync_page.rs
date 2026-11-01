@@ -1,6 +1,9 @@
 //! 偏好设置中的云同步页组：端点配置、凭据入口与手动上传下载。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
+use crate::app::update_app_settings;
 use crate::cloud_sync::DEFAULT_SYNC_DIRECTORY;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -35,7 +38,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_kind = self.sync_endpoint_kind(&self.state.settings);
+        let current_kind = self.sync_endpoint_kind(app_settings(cx));
 
         // 四种端点类型走下拉：与全页其它枚举项一致，长标签（WebDAV、Git 仓库）
         // 不会把整行占满；切换要回填表单输入框，所以用带窗口句柄的变体。
@@ -175,16 +178,16 @@ impl AppShell {
                     Some("sync.include_secrets_desc"),
                     Switch::new("toggle-sync-include-secrets")
                         .small()
-                        .checked(self.state.settings.sync.include_secrets)
-                        .on_click(cx.listener(|this, &checked, _, cx| {
-                            this.state.settings.sync.include_secrets = checked;
+                        .checked(app_settings(cx).sync.include_secrets)
+                        .on_click(cx.listener(|_this, &checked, _, cx| {
+                            update_app_settings(cx, |s| s.sync.include_secrets = checked);
                             cx.notify();
                         }))
                         .into_any_element(),
                     p,
                 ))
                 .child(crate::widgets::setting_frame(
-                    self.sync_status_row(p, &self.state.settings),
+                    self.sync_status_row(p, app_settings(cx)),
                     p,
                 ))
                 .child(crate::widgets::setting_frame(
@@ -281,13 +284,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if kind == self.sync_endpoint_kind(&self.state.settings) {
+        if kind == self.sync_endpoint_kind(app_settings(cx)) {
             return;
         }
         match kind {
             "off" => {
-                self.state.settings.sync.endpoint = None;
-                self.state.settings.sync.git = None;
+                update_app_settings(cx, |s| s.sync.endpoint = None);
+                update_app_settings(cx, |s| s.sync.git = None);
                 self.state
                     .modals
                     .settings
@@ -298,7 +301,7 @@ impl AppShell {
                     });
             }
             "webdav" => {
-                self.state.settings.sync.git = None;
+                update_app_settings(cx, |s| s.sync.git = None);
                 self.state
                     .modals
                     .settings
@@ -308,10 +311,10 @@ impl AppShell {
                         input.set_value(String::new(), window, cx);
                     });
                 if !matches!(
-                    self.state.settings.sync.endpoint,
+                    app_settings(cx).sync.endpoint,
                     Some(SyncEndpoint::Webdav { .. })
                 ) {
-                    self.state.settings.sync.endpoint = Some(SyncEndpoint::Webdav {
+                    app_settings_mut(cx).sync.endpoint = Some(SyncEndpoint::Webdav {
                         url: String::new(),
                         username: String::new(),
                         directory: DEFAULT_SYNC_DIRECTORY.to_string(),
@@ -319,7 +322,7 @@ impl AppShell {
                 }
             }
             "s3" => {
-                self.state.settings.sync.git = None;
+                update_app_settings(cx, |s| s.sync.git = None);
                 self.state
                     .modals
                     .settings
@@ -329,10 +332,10 @@ impl AppShell {
                         input.set_value(String::new(), window, cx);
                     });
                 if !matches!(
-                    self.state.settings.sync.endpoint,
+                    app_settings(cx).sync.endpoint,
                     Some(SyncEndpoint::S3 { .. })
                 ) {
-                    self.state.settings.sync.endpoint = Some(SyncEndpoint::S3 {
+                    app_settings_mut(cx).sync.endpoint = Some(SyncEndpoint::S3 {
                         endpoint: String::new(),
                         region: String::new(),
                         bucket: String::new(),
@@ -342,9 +345,9 @@ impl AppShell {
                 }
             }
             "git" => {
-                self.state.settings.sync.endpoint = None;
-                if self.state.settings.sync.git.is_none() {
-                    self.state.settings.sync.git = Some(transom_core::GitSyncSettings {
+                update_app_settings(cx, |s| s.sync.endpoint = None);
+                if app_settings(cx).sync.git.is_none() {
+                    app_settings_mut(cx).sync.git = Some(transom_core::GitSyncSettings {
                         remote: String::new(),
                         branch: "transom-sync".to_string(),
                         interval_minutes: 0,

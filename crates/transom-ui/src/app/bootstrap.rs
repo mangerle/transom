@@ -1,6 +1,8 @@
 //! AppShell 构造：存储加载、实体创建、订阅与启动恢复。
 
 use super::*;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 
 impl AppShell {
     pub fn new(
@@ -13,6 +15,8 @@ impl AppShell {
         settings.status_bar.normalize();
         settings.appearance.normalize();
         settings.window.normalize();
+        // 设置与进程同生命周期，装进 Global；外壳不再持字段。
+        install_app_settings(cx, settings.clone());
         cx.bind_keys(keymap::bindings(&settings.shortcuts));
         let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
             &settings.shortcuts,
@@ -92,10 +96,10 @@ impl AppShell {
             }
         });
 
-        let app_entity = cx.entity();
+        let _app_entity = cx.entity();
         let appearance_subscription = window.observe_window_appearance(move |window, cx| {
             let follows_system =
-                app_entity.read(cx).state.settings.appearance.mode == UiThemeMode::System;
+                update_app_settings(cx, |s| s.appearance.mode == UiThemeMode::System);
             if follows_system {
                 crate::theme::sync_with_system(window, cx);
             }
@@ -147,7 +151,6 @@ impl AppShell {
         );
         let state = AppState {
             services,
-            settings,
             catalog,
             catalog_revision: 0,
             sidebar: SidebarState::new(sidebar_visible, search),
@@ -254,7 +257,7 @@ impl AppShell {
         )
         .detach();
 
-        if this.state.settings.appearance.mode == UiThemeMode::System {
+        if app_settings(cx).appearance.mode == UiThemeMode::System {
             crate::theme::sync_with_system(window, cx);
         }
         this.sync_terminal_palette(cx);

@@ -2,6 +2,7 @@
 
 use super::local_io::write_local_text;
 use super::{DiffConfirm, DiffPhase};
+use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use transom_core::{
@@ -100,7 +101,7 @@ impl AppShell {
         let Some(connection_id) = plan.connection_id else {
             return;
         };
-        let backup = self.state.settings.sftp.editor_write_backup;
+        let backup = app_settings(cx).sftp.editor_write_backup;
         let op_id = TransferId::new();
         let merged = plan.merged;
         let sent = self.state.send_command(SftpCommand::Sftp {

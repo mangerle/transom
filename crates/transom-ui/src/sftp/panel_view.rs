@@ -11,6 +11,7 @@ use super::state::SftpRemotePaneState;
 use super::{LocalFileEntry, SftpRemotePaneRef};
 use crate::app::AppShell;
 use crate::app::AppState;
+use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
@@ -88,7 +89,7 @@ impl SftpPanelView {
                     .workspace
                     .tab(tab_id)
                     .and_then(|tab| tab.connection_id),
-                shell.state.settings.sftp.clone(),
+                app_settings(cx).sftp.clone(),
             )
         }) else {
             return div().into_any_element();

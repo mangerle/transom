@@ -5,6 +5,7 @@
 //! 的具名方法后，顶层只剩"分发 + 是否重绘"的骨架；方法返回 `false` 表示
 //! 事件已过期/内部自管重绘，调用方不再统一 `notify`。
 
+use crate::app::app_settings;
 use crate::app::{AppShell, TabStatus};
 use crate::connection::{AuthPromptState, HostKeyConfirmState};
 use crate::palette::localized_error;
@@ -50,28 +51,28 @@ impl AppShell {
         // 光标外观与外观偏好（字体族、中文字体、字号、行高、关键词高亮）属于全局设置，
         // 覆盖会话里可能残留的旧默认值：界面上没有任何会话级字体入口，
         // 若这里不覆盖，用户在设置里改的字体只会作用于已打开的窗格。
-        profile.cursor_shape = self.state.settings.terminal_profile.cursor_shape;
-        profile.cursor_blink = self.state.settings.terminal_profile.cursor_blink;
-        profile.font_family = self.state.settings.terminal_profile.font_family.clone();
-        profile.cjk_font_family = self.state.settings.terminal_profile.cjk_font_family.clone();
-        profile.font_size = self.state.settings.terminal_profile.font_size;
-        profile.line_height = self.state.settings.terminal_profile.line_height;
+        profile.cursor_shape = app_settings(cx).terminal_profile.cursor_shape;
+        profile.cursor_blink = app_settings(cx).terminal_profile.cursor_blink;
+        profile.font_family = app_settings(cx).terminal_profile.font_family.clone();
+        profile.cjk_font_family = app_settings(cx).terminal_profile.cjk_font_family.clone();
+        profile.font_size = app_settings(cx).terminal_profile.font_size;
+        profile.line_height = app_settings(cx).terminal_profile.line_height;
         // 分隔符同样没有会话级入口，且老会话文件里存的是内核默认值；
         // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
-        profile.word_separators = self.state.settings.terminal_profile.word_separators.clone();
+        profile.word_separators = app_settings(cx).terminal_profile.word_separators.clone();
         // 自定义按键映射属于全局终端偏好：会话文件里的旧副本不参与生效。
-        profile.key_bindings = self.state.settings.terminal_profile.key_bindings.clone();
-        profile.highlight = self.state.settings.terminal_profile.highlight.clone();
-        profile.alternate_scroll = self.state.settings.terminal_profile.alternate_scroll;
+        profile.key_bindings = app_settings(cx).terminal_profile.key_bindings.clone();
+        profile.highlight = app_settings(cx).terminal_profile.highlight.clone();
+        profile.alternate_scroll = app_settings(cx).terminal_profile.alternate_scroll;
         // 终端配色同理：会话文件里残留的旧调色板会压掉全局选择，
         // 表现为"改了终端配色但重开会话不生效"。运行期程序仍可通过
         // OSC 4/10/11 动态改色，不受此静态基线影响。
-        profile.theme_name = self.state.settings.terminal_profile.theme_name.clone();
-        profile.palette = self.state.settings.terminal_profile.palette.clone();
+        profile.theme_name = app_settings(cx).terminal_profile.theme_name.clone();
+        profile.palette = app_settings(cx).terminal_profile.palette.clone();
         // 终端背景透明度跟随窗口整体透明：窗口半透明时终端区也要透出
         // 桌面，否则只有界面变透明、终端仍是一块实色。
-        profile.background_transparency = self.state.settings.window.window_transparency;
-        let interaction = self.state.settings.terminal_interaction;
+        profile.background_transparency = app_settings(cx).window.window_transparency;
+        let interaction = app_settings(cx).terminal_interaction;
         let reserved = self.state.shortcut_recording.filter.clone();
         let key_filter: KeyFilter = Arc::new(move |keystroke| {
             reserved
@@ -82,7 +83,7 @@ impl AppShell {
         // 审计落盘按连接粒度开启：路径在派发前算好，读线程内才创建文件。
         let audit_path = crate::audit::audit_path_for(
             &self.state.workspace.tabs[index],
-            self.state.settings.audit.enabled,
+            app_settings(cx).audit.enabled,
         );
         // 开关在闭包外取值：`cx.new` 的闭包里再读 `self` 会与外层借用冲突。
         // 命令执行标签（X-TerminalArgExec）不是交互式 Shell：集成探针会直接写进
@@ -92,7 +93,7 @@ impl AppShell {
             transom_core::Connection::Local(local) if local.command.is_some()
         );
         let shell_integration_enabled =
-            self.state.settings.block_view.shell_integration && !exec_local;
+            app_settings(cx).block_view.shell_integration && !exec_local;
         let terminal = cx.new(|cx| {
             TerminalView::new(
                 window,
@@ -109,7 +110,7 @@ impl AppShell {
         });
         // 建议能力挂到视图：查询回调是全应用共享的一份内存快照。
         let provider = self.state.history_provider.clone();
-        let triggers = self.state.settings.triggers.clone();
+        let triggers = app_settings(cx).triggers.clone();
         let block_override = self
             .state
             .catalog
@@ -119,7 +120,7 @@ impl AppShell {
             .map_or(transom_core::BlockViewOverride::FollowGlobal, |session| {
                 session.block_view
             });
-        let block_view = self.state.settings.block_view.resolved(block_override);
+        let block_view = app_settings(cx).block_view.resolved(block_override);
         terminal.update(cx, |view, cx| {
             view.attach_history(provider);
             view.reload_triggers(&triggers);

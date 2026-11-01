@@ -165,7 +165,7 @@
 - **菜单与按钮构造器**：右键菜单项统一用 `widgets::menu_item` / `widgets::MenuItem`（后者支持 `.disabled(...)`），弹窗取消与确认按钮分别用 `widgets::dialog_cancel_button` / `dialog_confirm_button`。`menu_items_use_widget_constructor` 守卫禁止 `PopupMenuItem::new(...)` 紧接 `.icon(...)` 的手写链；真实 `Action` 绑定与 `.checked(...)` 下拉选中项属例外，保留组件库原写法。
 - **文件拆分准则**：单文件超过 500 行按“状态 / 视图 / 动作 / 测试”拆分，不按行数机械切割；子模块共用导入收敛到 `common.rs` 之类的私有模块，禁止复制一长串 import。拆分后外部路径通过父模块重导出保持稳定。声明式键位表（如 `keymap/mod.rs`）属于规范例外，不为行数强行拆分。
 - **拆分落地清单**：菜单/按钮/空状态/列表行/表头/状态徽标/工具栏/表单行/弹窗骨架已全部收敛到 `widgets`；新增页面直接复用，不再在页面内重写这些结构。
-- **读设置的纯查询方法不留在 `AppState`**：`AppSettings` 提为 `Global` 之后，读取设置需要 `cx`；凡是在 `impl AppState` 里直接 `self.settings` 的查询/拼装方法，必须上移到 `impl AppShell` 或改为接收设置快照参数，禁止为了免传 `cx` 而保留旁路读取。
+- **设置是 `Global`，不是外壳字段**：`AppSettings` 存在 `app::settings_global` 的 `SettingsGlobal` 里（守卫：`AppState` 不得再有 `settings` 字段）。读取写 `app_settings(cx)`，就地修改写 `app_settings_mut(cx)`，需要返回值或只改一处时用 `update_app_settings(cx, |s| ...)`；不持有 `cx` 的纯函数接收 `&AppSettings` 快照参数。落盘一律显式传快照给 `persist_settings`，禁止为了免传 `cx` 保留旁路读取。
 - **实体回调禁止重入自身**：面板实体的点击/输入回调执行期间，该实体已被 GPUI 租借。回调里回交外壳（`with_shell`）时，被调用的外壳方法不得再 `read`/`update` 同一实体，否则触发 “cannot update while it is already being updated” 崩溃。正确切分是：状态变更留在面板内完成，外壳只接收结果（快照、布尔值、宽度）做持久化、采样或跨面板协调。
 - **提交与验证**：一次提交只解决一个问题，提交信息使用 Conventional Commits 中文描述；每次提交前执行 `cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo check --all-targets`，涉及行为变更时执行 `cargo test`。重构提交必须说明取舍与门禁结果。
 

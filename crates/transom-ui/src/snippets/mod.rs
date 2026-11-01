@@ -118,7 +118,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         existing: Option<Snippet>,
     ) {
-        if existing.is_none() && self.state.settings.snippets.items.len() >= SNIPPET_MAX_ITEMS {
+        if existing.is_none() && app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
             self.state
                 .set_error(rust_i18n::t!("snippets.too_many").to_string());
             cx.notify();
@@ -175,16 +175,14 @@ impl AppShell {
             cx.notify();
             return;
         }
-        if id.is_none() && self.state.settings.snippets.items.len() >= SNIPPET_MAX_ITEMS {
+        if id.is_none() && app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
             if let Some(form) = self.state.modals.snippet_panel.form.as_mut() {
                 form.error = Some(rust_i18n::t!("snippets.too_many").to_string());
             }
             cx.notify();
             return;
         }
-        if let Some(existing) = self
-            .state
-            .settings
+        if let Some(existing) = app_settings_mut(cx)
             .snippets
             .items
             .iter_mut()
@@ -192,9 +190,9 @@ impl AppShell {
         {
             *existing = candidate;
         } else {
-            self.state.settings.snippets.items.push(candidate);
+            app_settings_mut(cx).snippets.items.push(candidate);
         }
-        let settings_snapshot = self.state.settings.clone();
+        let settings_snapshot = app_settings(cx).clone();
         if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             if let Some(form) = self.state.modals.snippet_panel.form.as_mut() {
                 form.error = Some(localized_error(&error));
@@ -209,13 +207,12 @@ impl AppShell {
 
     /// 从卡片里删除一条命令并立即落盘；卡片保持打开，便于连续清理。
     fn delete_snippet(&mut self, id: SnippetId, cx: &mut Context<Self>) {
-        let before = self.state.settings.snippets.items.len();
-        self.state
-            .settings
+        let before = app_settings(cx).snippets.items.len();
+        app_settings_mut(cx)
             .snippets
             .items
             .retain(|item| item.id != id);
-        if self.state.settings.snippets.items.len() != before {
+        if app_settings(cx).snippets.items.len() != before {
             self.persist_layout_settings(cx);
         }
     }
@@ -230,8 +227,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let open = self.state.modals.snippet_panel.open;
-        let items = self.state.settings.snippets.items.clone();
-        let execute_directly = self.state.settings.snippets.execute_directly;
+        let items = app_settings(cx).snippets.items.clone();
+        let execute_directly = app_settings(cx).snippets.execute_directly;
         let app = cx.entity().clone();
         let trigger = Button::new("snippets-trigger")
             .ghost()
@@ -337,6 +334,8 @@ mod card;
 #[cfg(test)]
 mod tests;
 
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
 use card::render_snippets_card;
 #[cfg(test)]
 use card::snippet_preview;

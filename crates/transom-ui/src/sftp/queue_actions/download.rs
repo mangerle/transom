@@ -1,5 +1,6 @@
 //! 远端列下载：把目标列选中条目加入本地下载队列。
 
+use crate::app::app_settings;
 use crate::palette::localized_error;
 use crate::sftp::entity::{SftpPanelView, read_shell_parts};
 use crate::sftp::{SftpRemotePaneRef, TransferMode, TransferTask};
@@ -18,9 +19,9 @@ impl SftpPanelView {
                         .workspace
                         .tab(self.tab_id)
                         .and_then(|tab| tab.connection_id),
-                    shell.state.settings.sftp.verify_after_transfer,
-                    shell.state.settings.sftp.verify_mode,
-                    shell.state.settings.sftp.checksum_algorithm,
+                    app_settings(cx).sftp.verify_after_transfer,
+                    app_settings(cx).sftp.verify_mode,
+                    app_settings(cx).sftp.checksum_algorithm,
                 )
             })
         else {

@@ -2,6 +2,7 @@
 
 use super::{FontFieldSpec, slider_percent};
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::window_appearance::DEFAULT_WINDOW_TRANSPARENCY;
@@ -55,7 +56,7 @@ impl AppShell {
             )
             .child(Self::setting_dropdown(
                 "dropdown-ui-mode",
-                self.state.settings.appearance.mode,
+                app_settings(cx).appearance.mode,
                 vec![
                     (
                         UiThemeMode::System,
@@ -90,7 +91,7 @@ impl AppShell {
             )
             .child(Self::setting_dropdown(
                 "dropdown-ui-density",
-                self.state.settings.appearance.density,
+                app_settings(cx).appearance.density,
                 UiDensity::ALL
                     .into_iter()
                     .map(|d| (d, rust_i18n::t!(d.label_key()).to_string()))
@@ -171,7 +172,7 @@ impl AppShell {
         // 明暗反差提示：界面主题与终端配色一个深一个浅时给出文案，不改用户选择。
         let terminal_mode = preset_themes()
             .into_iter()
-            .find(|theme| theme.name == self.state.settings.terminal_profile.theme_name)
+            .find(|theme| theme.name == app_settings(cx).terminal_profile.theme_name)
             .map(|theme| theme.mode);
         let contrast_hint = matches!(
             (cx.theme().is_dark(), terminal_mode),

@@ -1,6 +1,9 @@
 //! 偏好设置中心之鼠标、选区与剪贴板配置页渲染。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
@@ -14,11 +17,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let behavior = self
-            .state
-            .settings
-            .terminal_interaction
-            .right_click_behavior();
+        let behavior = app_settings(cx).terminal_interaction.right_click_behavior();
         let behavior_options = vec![
             (
                 transom_core::RightClickBehavior::Paste,
@@ -37,9 +36,8 @@ impl AppShell {
             "dropdown-right-click-action",
             behavior,
             behavior_options,
-            |this, new_behavior, cx| {
-                this.state
-                    .settings
+            |_this, new_behavior, cx| {
+                app_settings_mut(cx)
                     .terminal_interaction
                     .set_right_click_behavior(new_behavior);
                 cx.notify();
@@ -60,9 +58,11 @@ impl AppShell {
                 Some("settings.middle_click_paste_desc"),
                 Switch::new("toggle-middle-click-paste")
                     .small()
-                    .checked(self.state.settings.terminal_interaction.middle_click_paste)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_interaction.middle_click_paste = checked;
+                    .checked(app_settings(cx).terminal_interaction.middle_click_paste)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| {
+                            s.terminal_interaction.middle_click_paste = checked
+                        });
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -104,9 +104,11 @@ impl AppShell {
                 Some("settings.copy_on_select_desc"),
                 Switch::new("toggle-copy-on-select")
                     .small()
-                    .checked(self.state.settings.terminal_interaction.copy_on_select)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_interaction.copy_on_select = checked;
+                    .checked(app_settings(cx).terminal_interaction.copy_on_select)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| {
+                            s.terminal_interaction.copy_on_select = checked
+                        });
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -118,14 +120,12 @@ impl AppShell {
                 Switch::new("toggle-multiline-paste")
                     .small()
                     .checked(
-                        self.state
-                            .settings
+                        app_settings(cx)
                             .terminal_interaction
                             .multiline_paste_confirm,
                     )
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state
-                            .settings
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        app_settings_mut(cx)
                             .terminal_interaction
                             .multiline_paste_confirm = checked;
                         cx.notify();
@@ -139,14 +139,12 @@ impl AppShell {
                 Switch::new("toggle-trim-whitespace")
                     .small()
                     .checked(
-                        self.state
-                            .settings
+                        app_settings(cx)
                             .terminal_interaction
                             .trim_trailing_whitespace,
                     )
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state
-                            .settings
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        app_settings_mut(cx)
                             .terminal_interaction
                             .trim_trailing_whitespace = checked;
                         cx.notify();
@@ -159,9 +157,11 @@ impl AppShell {
                 Some("settings.suppress_ctrl_v_desc"),
                 Switch::new("toggle-suppress-ctrl-v")
                     .small()
-                    .checked(self.state.settings.terminal_interaction.suppress_ctrl_v)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_interaction.suppress_ctrl_v = checked;
+                    .checked(app_settings(cx).terminal_interaction.suppress_ctrl_v)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| {
+                            s.terminal_interaction.suppress_ctrl_v = checked
+                        });
                         cx.notify();
                     }))
                     .into_any_element(),

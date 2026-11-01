@@ -2,6 +2,8 @@
 
 use crate::activity_bar::{activity_item_icon, activity_item_label};
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
 use crate::palette::Palette;
 use crate::status_bar::{status_item_icon, status_item_label};
 use gpui_kit::assets::IconName;
@@ -28,7 +30,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let items: Vec<ActivityItemId> = self.state.settings.activity_bar.order().to_vec();
+        let items: Vec<ActivityItemId> = app_settings(cx).activity_bar.order().to_vec();
         let mut cards = Vec::with_capacity(items.len());
         for id in items {
             cards.push(Self::layout_visibility_card(
@@ -36,11 +38,11 @@ impl AppShell {
                     key: format!("activity-{}", id.key()),
                     label: activity_item_label(id),
                     icon: activity_item_icon(id),
-                    visible: !self.state.settings.activity_bar.is_hidden(id),
+                    visible: !app_settings(cx).activity_bar.is_hidden(id),
                     pinned: id.is_pinned(),
                 },
                 move |this, checked, cx| {
-                    if this.state.settings.activity_bar.set_visible(id, checked) {
+                    if app_settings_mut(cx).activity_bar.set_visible(id, checked) {
                         this.persist_layout_settings(cx);
                     } else {
                         cx.notify();
@@ -99,7 +101,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let items: Vec<StatusItemId> = self.state.settings.status_bar.order().to_vec();
+        let items: Vec<StatusItemId> = app_settings(cx).status_bar.order().to_vec();
         let mut cards = Vec::with_capacity(items.len());
         for id in items {
             cards.push(Self::layout_visibility_card(
@@ -107,11 +109,11 @@ impl AppShell {
                     key: format!("status-{}", id.key()),
                     label: status_item_label(id),
                     icon: status_item_icon(id),
-                    visible: !self.state.settings.status_bar.is_hidden(id),
+                    visible: !app_settings(cx).status_bar.is_hidden(id),
                     pinned: false,
                 },
                 move |this, checked, cx| {
-                    if this.state.settings.status_bar.set_visible(id, checked) {
+                    if app_settings_mut(cx).status_bar.set_visible(id, checked) {
                         this.persist_layout_settings(cx);
                     } else {
                         cx.notify();

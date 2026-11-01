@@ -1,6 +1,8 @@
 //! 偏好设置中心之历史记录与安全审计配置页渲染。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -22,9 +24,9 @@ impl AppShell {
                 Some("settings.history_enabled_desc"),
                 Switch::new("toggle-history-enabled")
                     .small()
-                    .checked(self.state.settings.history.enabled)
+                    .checked(app_settings(cx).history.enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.history.enabled = checked;
+                        update_app_settings(cx, |s| s.history.enabled = checked);
                         // 关掉时把内存里的建议一起收起：下次开回来仍从文件恢复，
                         // 不做删除，避免"关一下就把历史清空"的误伤。
                         if !checked {
@@ -61,9 +63,9 @@ impl AppShell {
                 Some("settings.audit_enabled_desc"),
                 Switch::new("toggle-audit-enabled")
                     .small()
-                    .checked(self.state.settings.audit.enabled)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.audit.enabled = checked;
+                    .checked(app_settings(cx).audit.enabled)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.audit.enabled = checked);
                         cx.notify();
                     }))
                     .into_any_element(),

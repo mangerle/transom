@@ -6,6 +6,7 @@
 
 use super::drag::attach_vertical_tab_drag;
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::tiling::{MAX_TILING_SLOTS, TilingId};
@@ -215,7 +216,7 @@ pub(super) fn render_vertical_tab_row(
         }));
     }
 
-    if shell.state.settings.window.show_tab_close_button {
+    if app_settings(cx).window.show_tab_close_button {
         let close = div()
             .id(ElementId::Name(
                 format!("vertical-tab-close-{group_id}").into(),

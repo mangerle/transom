@@ -1,6 +1,8 @@
 //! 云同步拉取后的合并、安全副本与缺失处理。
 
 use super::common::*;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 
 impl AppShell {
     pub(crate) fn finish_cloud_sync_pull(
@@ -70,8 +72,10 @@ impl AppShell {
         self.state.catalog = merged;
         let saved = self.state.persist_catalog();
         self.state.refresh_tab_sessions();
-        self.state.settings.sync.last_pull_at = Some(chrono::Utc::now().timestamp());
-        let settings_snapshot = self.state.settings.clone();
+        update_app_settings(cx, |s| {
+            s.sync.last_pull_at = Some(chrono::Utc::now().timestamp())
+        });
+        let settings_snapshot = app_settings(cx).clone();
         if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             self.state.set_error(localized_error(&error));
         }

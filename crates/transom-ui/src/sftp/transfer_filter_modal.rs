@@ -3,6 +3,8 @@
 use super::SftpFilterModalState;
 use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::localized_error;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::*;
@@ -12,8 +14,8 @@ impl SftpPanelView {
     /// 打开传输排除规则编辑弹窗：文本取自外壳设置，装配在外壳完成。
     pub(crate) fn open_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let app = self.app.clone();
-        let Some(text) = read_shell_parts(&app, cx, |shell| {
-            shell.state.settings.sftp.transfer_filter.clone()
+        let Some(text) = read_shell_parts(&app, cx, |_shell| {
+            app_settings(cx).sftp.transfer_filter.clone()
         }) else {
             return;
         };
@@ -48,8 +50,8 @@ impl AppShell {
             cx.notify();
             return;
         }
-        self.state.settings.sftp.transfer_filter = text;
-        let settings_snapshot = self.state.settings.clone();
+        update_app_settings(cx, |s| s.sftp.transfer_filter = text);
+        let settings_snapshot = app_settings(cx).clone();
         match self.state.persist_settings(&settings_snapshot) {
             Ok(()) => {
                 self.state.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());

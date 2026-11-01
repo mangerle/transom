@@ -1,6 +1,8 @@
 //! AppShell 顶层布局渲染。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::divider::{DividerEdge, DividerStyled, h_resizable};
 use crate::keymap;
 use crate::palette::{Palette, localized_error};
@@ -49,7 +51,7 @@ impl Render for AppShell {
             .visible(self.state.sidebar.visible);
         if self.state.sidebar.visible {
             // 左侧槽位一次只承载一种内容：纵向标签面板或会话树。
-            let content = if self.show_vertical_tabs_panel(&self.state.settings) {
+            let content = if self.show_vertical_tabs_panel(app_settings(cx)) {
                 self.render_vertical_tabs_panel(&p, cx)
             } else {
                 self.render_sidebar(window, cx, &p)
@@ -134,7 +136,7 @@ impl Render for AppShell {
                     self.state
                         .monitor
                         .update(cx, |view, _| view.set_drawer_width(actual_f32));
-                    self.state.settings.monitor.drawer_width = actual_f32;
+                    update_app_settings(cx, |s| s.monitor.drawer_width = actual_f32);
                 }
             }
             let monitor_width = self
@@ -159,7 +161,7 @@ impl Render for AppShell {
             // 左边一律交给手柄，不再补左轮廓。
             let has_right_panel =
                 show_sftp || show_forwards || self.state.monitor.read(cx).is_open();
-            if !self.state.settings.window.sftp_panel_side.is_left() && !has_right_panel {
+            if !app_settings(cx).window.sftp_panel_side.is_left() && !has_right_panel {
                 main_row = main_row
                     .border_color(p.divider(p.border))
                     .divider_edge(DividerEdge::Right, p.divider_width);
@@ -330,7 +332,7 @@ impl AppShell {
         let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
         let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
         let sidebar_width = if self.state.sidebar.visible {
-            let panels_state = if self.state.settings.window.sftp_panel_side.is_left() {
+            let panels_state = if app_settings(cx).window.sftp_panel_side.is_left() {
                 &self.state.workspace_panels_left
             } else {
                 &self.state.workspace_panels
@@ -368,7 +370,7 @@ impl AppShell {
             sftp_width,
             sftp_min_width,
             sftp_max_width,
-            side_left: self.state.settings.window.sftp_panel_side.is_left(),
+            side_left: app_settings(cx).window.sftp_panel_side.is_left(),
         }
     }
 }

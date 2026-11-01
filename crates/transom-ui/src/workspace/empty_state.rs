@@ -11,6 +11,7 @@
 //! - 代价与局限：最近会话按使用时间降序截断展示（最多 8 个），更多历史仍需从左侧栏或全局搜索触达。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::brand;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
@@ -73,9 +74,7 @@ impl AppShell {
             );
 
         // 筛选存在于当前目录中的有效最近会话
-        let valid_recent: Vec<&Session> = self
-            .state
-            .settings
+        let valid_recent: Vec<&Session> = app_settings(cx)
             .window
             .recent_sessions
             .iter()
@@ -132,7 +131,7 @@ impl AppShell {
 
     /// 渲染本地终端快捷卡片。
     fn render_empty_local_terminal_card(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let shell_desc = match self.state.settings.local_shell.as_deref() {
+        let shell_desc = match app_settings(cx).local_shell.as_deref() {
             Some(shell) => shell.to_string(),
             None => rust_i18n::t!("app.empty_local_shell").to_string(),
         };

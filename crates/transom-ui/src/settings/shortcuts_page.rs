@@ -1,6 +1,8 @@
 //! 偏好设置中的快捷键自定义页。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
 use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
@@ -19,8 +21,8 @@ impl AppShell {
         let rows: Vec<AnyElement> = keymap::specs()
             .iter()
             .map(|spec| {
-                let effective = keymap::effective_keys(spec, &self.state.settings.shortcuts);
-                let customized = self.state.settings.shortcuts.bindings.contains_key(spec.id);
+                let effective = keymap::effective_keys(spec, &app_settings(cx).shortcuts);
+                let customized = app_settings(cx).shortcuts.bindings.contains_key(spec.id);
                 let id = spec.id;
                 let key_elements =
                     h_flex()
@@ -74,8 +76,8 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .label(rust_i18n::t!("settings.shortcut_reset").to_string())
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.state.settings.shortcuts.bindings.remove(id);
+                                    .on_click(cx.listener(move |_this, _, _, cx| {
+                                        app_settings_mut(cx).shortcuts.bindings.remove(id);
                                         cx.notify();
                                     })),
                             )
@@ -85,7 +87,7 @@ impl AppShell {
             })
             .collect();
 
-        let conflicts = keymap::conflict_pairs(&self.state.settings.shortcuts);
+        let conflicts = keymap::conflict_pairs(&app_settings(cx).shortcuts);
         let conflict_warning = (!conflicts.is_empty()).then(|| {
             let detail = conflicts
                 .iter()
@@ -104,7 +106,7 @@ impl AppShell {
                 .child(rust_i18n::t!("settings.shortcut_conflicts", list = detail).to_string())
         });
 
-        let has_custom = !self.state.settings.shortcuts.bindings.is_empty();
+        let has_custom = !app_settings(cx).shortcuts.bindings.is_empty();
         v_flex()
             .gap_3()
             .child(
@@ -123,8 +125,8 @@ impl AppShell {
                                 .ghost()
                                 .xsmall()
                                 .label(rust_i18n::t!("settings.shortcut_reset_all").to_string())
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.state.settings.shortcuts.bindings.clear();
+                                .on_click(cx.listener(|_this, _, _, cx| {
+                                    app_settings_mut(cx).shortcuts.bindings.clear();
                                     cx.notify();
                                 })),
                         )

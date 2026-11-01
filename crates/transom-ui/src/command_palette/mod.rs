@@ -11,6 +11,8 @@
 mod items;
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::command::Command;
@@ -118,16 +120,14 @@ impl AppShell {
                                 this.apply_terminal_theme_choice(&name, cx);
                             }
                             Some(PaletteTarget::Snippet(id)) => {
-                                let snippet = this
-                                    .state
-                                    .settings
+                                let snippet = app_settings(cx)
                                     .snippets
                                     .items
                                     .iter()
                                     .find(|snippet| snippet.id == id)
                                     .cloned();
                                 if let Some(snippet) = snippet {
-                                    let execute = this.state.settings.snippets.execute_directly;
+                                    let execute = app_settings(cx).snippets.execute_directly;
                                     this.apply_snippet(&snippet, execute, cx);
                                 }
                             }
@@ -202,14 +202,14 @@ impl AppShell {
             log::warn!("命令面板选择终端配色失败，配色不在预设中: {name}");
             return;
         };
-        self.state.settings.terminal_profile.theme_name = theme.name;
-        self.state.settings.terminal_profile.palette = theme.palette;
+        update_app_settings(cx, |s| s.terminal_profile.theme_name = theme.name);
+        update_app_settings(cx, |s| s.terminal_profile.palette = theme.palette);
         self.apply_appearance_to_live_panes(cx);
         self.persist_theme_choice(cx);
     }
 
     fn persist_theme_choice(&mut self, cx: &mut Context<Self>) {
-        let settings_snapshot = self.state.settings.clone();
+        let settings_snapshot = app_settings(cx).clone();
         if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             log::error!("保存主题选择失败，界面仍是新主题但下次启动会回退，原因: {error}");
             self.state.set_error(localized_error(&error));

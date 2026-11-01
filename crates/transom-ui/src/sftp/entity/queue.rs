@@ -12,15 +12,10 @@ impl SftpPanelView {
     /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
     pub(crate) fn process_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let SftpPanelView { state, app, .. } = self;
-        let Some((filter_text, max_concurrent)) = read_shell_parts(app, cx, |shell| {
+        let Some((filter_text, max_concurrent)) = read_shell_parts(app, cx, |_shell| {
             (
-                shell.state.settings.sftp.transfer_filter.clone(),
-                shell
-                    .state
-                    .settings
-                    .sftp
-                    .max_concurrent_transfers
-                    .clamp(1, 8),
+                app_settings(cx).sftp.transfer_filter.clone(),
+                app_settings(cx).sftp.max_concurrent_transfers.clamp(1, 8),
             )
         }) else {
             return;
@@ -75,6 +70,7 @@ impl SftpPanelView {
     }
 }
 
+use crate::app::app_settings;
 use crate::sftp::queue_actions::enqueue::upload_tasks;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
 use crate::sftp::{SftpTransferRequest, TransferMode};
@@ -128,11 +124,11 @@ impl SftpPanelView {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         }
         let app = self.app.clone();
-        let Some((verify, verify_mode, algorithm)) = read_shell_parts(&app, cx, |shell| {
+        let Some((verify, verify_mode, algorithm)) = read_shell_parts(&app, cx, |_shell| {
             (
-                shell.state.settings.sftp.verify_after_transfer,
-                shell.state.settings.sftp.verify_mode,
-                shell.state.settings.sftp.checksum_algorithm,
+                app_settings(cx).sftp.verify_after_transfer,
+                app_settings(cx).sftp.verify_mode,
+                app_settings(cx).sftp.checksum_algorithm,
             )
         }) else {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
@@ -170,13 +166,15 @@ impl SftpPanelView {
         cx: &mut Context<Self>,
     ) {
         let app = self.app.clone();
-        let Some((verify, verify_mode, checksum_algorithm)) = read_shell_parts(&app, cx, |shell| {
-            (
-                shell.state.settings.sftp.verify_after_transfer,
-                shell.state.settings.sftp.verify_mode,
-                shell.state.settings.sftp.checksum_algorithm,
-            )
-        }) else {
+        let Some((verify, verify_mode, checksum_algorithm)) =
+            read_shell_parts(&app, cx, |_shell| {
+                (
+                    app_settings(cx).sftp.verify_after_transfer,
+                    app_settings(cx).sftp.verify_mode,
+                    app_settings(cx).sftp.checksum_algorithm,
+                )
+            })
+        else {
             return;
         };
         let mode = if self.state.queue.resume_enabled {

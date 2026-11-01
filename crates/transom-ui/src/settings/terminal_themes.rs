@@ -4,6 +4,8 @@
 //! 与字体、光标等设置行没有共享状态，单独成文件更便于对照 `preset_themes`。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -19,7 +21,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let themes = preset_themes();
-        let current_theme_name = self.state.settings.terminal_profile.theme_name.clone();
+        let current_theme_name = app_settings(cx).terminal_profile.theme_name.clone();
 
         // "跟随界面主题"卡：终端配色默认随 UI 主题明暗联动（Islands Dark 配
         // Islands 终端色），显式选预设即覆盖。置于列表首位。
@@ -50,7 +52,9 @@ impl AppShell {
                 }
             })
             .on_click(cx.listener(|this, _, _, cx| {
-                this.state.settings.terminal_profile.theme_name = FOLLOW_UI_THEME.to_string();
+                update_app_settings(cx, |s| {
+                    s.terminal_profile.theme_name = FOLLOW_UI_THEME.to_string()
+                });
                 this.sync_terminal_palette(cx);
                 cx.notify();
             }))
@@ -116,9 +120,13 @@ impl AppShell {
                             s.border_color(p.muted_foreground)
                         }
                     })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.state.settings.terminal_profile.theme_name = theme_clone.name.clone();
-                        this.state.settings.terminal_profile.palette = theme_clone.palette.clone();
+                    .on_click(cx.listener(move |_this, _, _, cx| {
+                        update_app_settings(cx, |s| {
+                            s.terminal_profile.theme_name = theme_clone.name.clone()
+                        });
+                        update_app_settings(cx, |s| {
+                            s.terminal_profile.palette = theme_clone.palette.clone()
+                        });
                         cx.notify();
                     }))
                     .child(

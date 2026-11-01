@@ -1,6 +1,7 @@
 //! 活动栏右键上下文菜单与条目可见性控制。
 
 use crate::app::AppShell;
+use crate::app::app_settings_mut;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
@@ -57,7 +58,7 @@ impl AppShell {
     }
 
     fn hide_activity_item(&mut self, id: ActivityItemId, cx: &mut Context<Self>) {
-        if self.state.settings.activity_bar.set_visible(id, false) {
+        if app_settings_mut(cx).activity_bar.set_visible(id, false) {
             self.persist_layout_settings(cx);
         } else {
             cx.notify();
@@ -65,7 +66,7 @@ impl AppShell {
     }
 
     pub(crate) fn restore_activity_bar(&mut self, cx: &mut Context<Self>) {
-        if self.state.settings.activity_bar.restore_defaults() {
+        if app_settings_mut(cx).activity_bar.restore_defaults() {
             self.persist_layout_settings(cx);
         } else {
             cx.notify();

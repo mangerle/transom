@@ -5,6 +5,7 @@
 //! 重新读写本实体，避免双重租借崩溃。
 
 use super::*;
+use crate::app::app_settings;
 
 /// 编辑回传通道：普通写回或经 sudo 提权写回。
 ///
@@ -269,7 +270,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
-        let backup = self.state.settings.sftp.editor_write_backup;
+        let backup = app_settings(cx).sftp.editor_write_backup;
         // expected 始终携带已知指纹：它同时承载并发比对基准与 BOM/CRLF 形态还原
         // 标记（强制覆盖也必须还原形态，否则保存一次就改掉文件行尾）；跳过比对
         // 由 force 表达。新文件面板指纹为 None，net 层据此不做比对与还原。

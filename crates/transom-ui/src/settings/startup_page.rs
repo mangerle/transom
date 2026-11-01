@@ -10,6 +10,8 @@
 //!   记住与被自己上次行为绑架是同一个开关的两面，合成三档才是两个显式选择。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
@@ -43,8 +45,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let tabs = self.state.settings.window.startup_tabs;
-        let sidebar = self.state.settings.window.sidebar_startup;
+        let tabs = app_settings(cx).window.startup_tabs;
+        let sidebar = app_settings(cx).window.sidebar_startup;
 
         v_flex()
             .gap_2()
@@ -58,8 +60,8 @@ impl AppShell {
                         .into_iter()
                         .map(|tab| (tab, rust_i18n::t!(startup_tabs_label(tab)).to_string()))
                         .collect(),
-                    |this, tab, cx| {
-                        this.state.settings.window.startup_tabs = tab;
+                    |_this, tab, cx| {
+                        update_app_settings(cx, |s| s.window.startup_tabs = tab);
                         cx.notify();
                     },
                     cx,
@@ -81,8 +83,8 @@ impl AppShell {
                             )
                         })
                         .collect(),
-                    |this, startup, cx| {
-                        this.state.settings.window.sidebar_startup = startup;
+                    |_this, startup, cx| {
+                        update_app_settings(cx, |s| s.window.sidebar_startup = startup);
                         cx.notify();
                     },
                     cx,

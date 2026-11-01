@@ -13,6 +13,8 @@ mod status_bar;
 use self::row::render_queue_task_row;
 pub(crate) use self::status_bar::SftpStatusBarProps;
 
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::{SftpPanelView, with_shell_parts};
@@ -147,22 +149,18 @@ impl SftpPanelView {
                                             .checked(verify_after_transfer)
                                             .on_click(cx.listener(move |this, &checked, _, cx| {
                                                 let app = this.app.clone();
-                                                with_shell_parts(&app, cx, |shell, _| {
-                                                    shell
-                                                        .state
-                                                        .settings
-                                                        .sftp
-                                                        .verify_after_transfer = checked;
+                                                with_shell_parts(&app, cx, |shell, cx| {
+                                                    update_app_settings(cx, |s| {
+                                                        s.sftp.verify_after_transfer = checked;
+                                                    });
                                                     match shell
                                                         .state
                                                         .services
                                                         .settings_store
-                                                        .save(&shell.state.settings)
+                                                        .save(app_settings(cx))
                                                     {
                                                         Ok(()) => {
-                                                            let algo = shell
-                                                                .state
-                                                                .settings
+                                                            let algo = app_settings(cx)
                                                                 .sftp
                                                                 .checksum_algorithm
                                                                 .label();

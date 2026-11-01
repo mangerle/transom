@@ -2,6 +2,7 @@
 
 use super::width::{COLLAPSED_COLUMN_WIDTH, sftp_columns_content_width};
 use super::*;
+use crate::app::app_settings;
 use crate::sftp::entity::SftpPanelView;
 use transom_core::AppSettings;
 
@@ -30,10 +31,10 @@ impl AppShell {
             self.state.sftp_panel_width_target = None;
             return;
         };
-        let Some(index) = self.sftp_resizable_index(&self.state.settings) else {
+        let Some(index) = self.sftp_resizable_index(app_settings(cx)) else {
             return;
         };
-        let panels = if self.state.settings.window.sftp_panel_side.is_left() {
+        let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
             self.state.workspace_panels_left.clone()
         } else {
             self.state.workspace_panels.clone()
@@ -85,10 +86,10 @@ impl AppShell {
         if delta <= 0.5 {
             return;
         }
-        let Some(index) = self.sftp_resizable_index(&self.state.settings) else {
+        let Some(index) = self.sftp_resizable_index(app_settings(cx)) else {
             return;
         };
-        let panels = if self.state.settings.window.sftp_panel_side.is_left() {
+        let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
             self.state.workspace_panels_left.clone()
         } else {
             self.state.workspace_panels.clone()

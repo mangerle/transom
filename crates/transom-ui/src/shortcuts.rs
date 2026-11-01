@@ -1,6 +1,8 @@
 //! 快捷键录制弹窗与运行时改键应用。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
 use crate::keymap;
 use crate::keymap::ShortcutCapture;
 use crate::palette::Palette;
@@ -36,10 +38,10 @@ impl AppShell {
     pub(crate) fn apply_shortcut_settings(&mut self, cx: &mut Context<Self>) {
         let previous = std::mem::take(&mut self.state.shortcut_recording.applied_keys);
         let suppression = keymap::suppression_bindings(&previous);
-        let bindings = keymap::bindings(&self.state.settings.shortcuts);
-        let reserved = keymap::reserved_keystrokes(&self.state.settings.shortcuts);
+        let bindings = keymap::bindings(&app_settings(cx).shortcuts);
+        let reserved = keymap::reserved_keystrokes(&app_settings(cx).shortcuts);
         self.state.shortcut_recording.applied_keys =
-            keymap::effective_key_strings(&self.state.settings.shortcuts);
+            keymap::effective_key_strings(&app_settings(cx).shortcuts);
         cx.bind_keys(suppression);
         cx.bind_keys(bindings);
         *self.state.shortcut_recording.filter.write() = reserved;
@@ -66,7 +68,7 @@ impl AppShell {
         match keymap::format_captured(keystroke) {
             Ok(candidate) => {
                 if let Some(conflict) =
-                    keymap::conflict_with(id, &candidate, &self.state.settings.shortcuts)
+                    keymap::conflict_with(id, &candidate, &app_settings(cx).shortcuts)
                 {
                     let name = rust_i18n::t!(conflict.label_key).to_string();
                     if let Some(capture) = self.state.shortcut_recording.capture.as_mut() {
@@ -75,8 +77,7 @@ impl AppShell {
                         );
                     }
                 } else {
-                    self.state
-                        .settings
+                    app_settings_mut(cx)
                         .shortcuts
                         .bindings
                         .insert(id.to_string(), vec![candidate]);

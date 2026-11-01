@@ -16,6 +16,7 @@ mod items;
 pub(crate) use format::{format_compact_size, format_rate};
 
 use self::items::StatusData;
+use crate::app::app_settings;
 use crate::app::{AppShell, TabStatus, TerminalTab};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -91,7 +92,7 @@ impl AppShell {
         };
 
         let data = StatusData::from_tab(active_tab_info);
-        let items: Vec<StatusItemId> = self.state.settings.status_bar.visible_items().collect();
+        let items: Vec<StatusItemId> = app_settings(cx).status_bar.visible_items().collect();
         let app = cx.entity().clone();
         let mut right_elements = Vec::with_capacity(items.len());
         for id in items {

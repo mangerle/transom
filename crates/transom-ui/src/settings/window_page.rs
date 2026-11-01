@@ -1,6 +1,8 @@
 //! 偏好设置中心之标签页、面板停靠与窗口记忆配置页渲染。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
@@ -49,9 +51,9 @@ impl AppShell {
                 .child(
                     Switch::new("toggle-tab-close-btn")
                         .small()
-                        .checked(self.state.settings.window.show_tab_close_button)
-                        .on_click(cx.listener(|this, &checked, _, cx| {
-                            this.state.settings.window.show_tab_close_button = checked;
+                        .checked(app_settings(cx).window.show_tab_close_button)
+                        .on_click(cx.listener(|_this, &checked, _, cx| {
+                            update_app_settings(cx, |s| s.window.show_tab_close_button = checked);
                             cx.notify();
                         })),
                 );
@@ -83,9 +85,11 @@ impl AppShell {
             .child(
                 Switch::new("toggle-close-on-last-tab")
                     .small()
-                    .checked(self.state.settings.window.close_window_on_all_tabs_closed)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.window.close_window_on_all_tabs_closed = checked;
+                    .checked(app_settings(cx).window.close_window_on_all_tabs_closed)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| {
+                            s.window.close_window_on_all_tabs_closed = checked
+                        });
                         cx.notify();
                     })),
             );
@@ -95,7 +99,7 @@ impl AppShell {
             Some("settings.tab_position_desc"),
             Self::setting_dropdown(
                 "dropdown-tab-position",
-                self.state.settings.window.tab_position,
+                app_settings(cx).window.tab_position,
                 vec![
                     (
                         TabPosition::Top,
@@ -107,10 +111,10 @@ impl AppShell {
                     ),
                 ],
                 |this, position, cx| {
-                    if this.state.settings.window.tab_position == position {
+                    if app_settings(cx).window.tab_position == position {
                         return;
                     }
-                    this.state.settings.window.tab_position = position;
+                    update_app_settings(cx, |s| s.window.tab_position = position);
                     // 切到左侧时把左侧槽位直接切到标签面板并展开，否则用户看到
                     // 仍是顶部条或会话树，像是切换没有生效；切回顶部时清掉
                     // 面板标志，下次切回左侧从干净状态开始。
@@ -148,7 +152,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let side = self.state.settings.window.sftp_panel_side;
+        let side = app_settings(cx).window.sftp_panel_side;
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -179,9 +183,9 @@ impl AppShell {
                 Some("settings.remember_window_bounds_desc"),
                 Switch::new("toggle-remember-bounds")
                     .small()
-                    .checked(self.state.settings.window.remember_window_bounds)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.window.remember_window_bounds = checked;
+                    .checked(app_settings(cx).window.remember_window_bounds)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.window.remember_window_bounds = checked);
                         cx.notify();
                     }))
                     .into_any_element(),

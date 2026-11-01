@@ -6,6 +6,8 @@ mod secrets;
 
 pub(crate) use secrets::{describe_target, session_host};
 
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
 use crate::app::{AppShell, AppState, TabStatus, TerminalTab};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
@@ -58,14 +60,13 @@ impl AppShell {
     /// 记录最近打开的会话 ID，并异步落盘保存。
     /// 从最近打开会话记录中移除指定会话，并异步落盘保存。
     pub(crate) fn remove_recent_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        let before_len = self.state.settings.window.recent_sessions.len();
-        self.state
-            .settings
+        let before_len = app_settings(cx).window.recent_sessions.len();
+        app_settings_mut(cx)
             .window
             .recent_sessions
             .retain(|id| *id != session_id);
-        if self.state.settings.window.recent_sessions.len() != before_len {
-            let settings_snapshot = self.state.settings.clone();
+        if app_settings(cx).window.recent_sessions.len() != before_len {
+            let settings_snapshot = app_settings(cx).clone();
             if let Err(error) = self.state.persist_settings(&settings_snapshot) {
                 log::warn!("保存最近打开会话设置失败，原因: {error}");
             }
@@ -90,7 +91,7 @@ impl AppShell {
             return;
         };
         let session = self.state.catalog.resolved_session(found);
-        self.record_recent_session(session_id);
+        self.record_recent_session(session_id, cx);
 
         let tab_id = TabId::new();
         self.state.create_group(tab_id, session_id);
@@ -224,7 +225,7 @@ impl AppShell {
             }
         };
 
-        let proxy = session.effective_proxy(&self.state.settings.proxy);
+        let proxy = session.effective_proxy(&app_settings(cx).proxy);
         if let Err(reason) = proxy.validate() {
             log::warn!(
                 "出站代理配置非法，窗格: {tab_id}，会话: {}，原因: {reason}",
@@ -291,9 +292,9 @@ impl AppShell {
             proxy: payload.proxy,
             secrets: payload.secrets,
             size,
-            zmodem: self.state.settings.zmodem.clone(),
-            allow_sha1_publickey_auth: self.state.settings.allow_sha1_publickey_auth,
-            shell_integration: self.state.settings.block_view.shell_integration,
+            zmodem: app_settings(cx).zmodem.clone(),
+            allow_sha1_publickey_auth: app_settings(cx).allow_sha1_publickey_auth,
+            shell_integration: app_settings(cx).block_view.shell_integration,
         }));
         if !self.state.send_command(command) {
             self.state.remove_tab(tab_id);
@@ -302,19 +303,17 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn record_recent_session(&mut self, session_id: SessionId) {
-        self.state
-            .settings
+    pub(crate) fn record_recent_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
+        app_settings_mut(cx)
             .window
             .recent_sessions
             .retain(|id| *id != session_id);
-        self.state
-            .settings
+        app_settings_mut(cx)
             .window
             .recent_sessions
             .insert(0, session_id);
-        self.state.settings.window.recent_sessions.truncate(20);
-        let settings_snapshot = self.state.settings.clone();
+        app_settings_mut(cx).window.recent_sessions.truncate(20);
+        let settings_snapshot = app_settings_mut(cx).clone();
         if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             log::warn!("保存最近打开会话失败，原因: {error}");
         }

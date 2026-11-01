@@ -1,6 +1,8 @@
 //! 监控看板的采样生命周期、轮询调度与进程信号发送。
 
 use super::types::SampleIntervalMode;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::app::{AppShell, AppState, TabContent, TerminalTab};
 use gpui_kit::{Context, Window};
 use transom_core::{AppError, ConnectionId, HostCommand, ProcessInfo, TabId};
@@ -154,14 +156,14 @@ impl AppShell {
         expanded_processes: bool,
         cx: &mut Context<Self>,
     ) {
-        self.state.settings.monitor.cpu_expanded = !collapse.cpu;
-        self.state.settings.monitor.memory_expanded = !collapse.memory;
-        self.state.settings.monitor.disk_expanded = !collapse.disk;
-        self.state.settings.monitor.network_expanded = !collapse.network;
-        self.state.settings.monitor.ports_expanded = !collapse.ports;
-        self.state.settings.monitor.services_expanded = !collapse.services;
-        self.state.settings.monitor.processes_expanded = !collapse.processes;
-        let settings_snapshot = self.state.settings.clone();
+        update_app_settings(cx, |s| s.monitor.cpu_expanded = !collapse.cpu);
+        update_app_settings(cx, |s| s.monitor.memory_expanded = !collapse.memory);
+        update_app_settings(cx, |s| s.monitor.disk_expanded = !collapse.disk);
+        update_app_settings(cx, |s| s.monitor.network_expanded = !collapse.network);
+        update_app_settings(cx, |s| s.monitor.ports_expanded = !collapse.ports);
+        update_app_settings(cx, |s| s.monitor.services_expanded = !collapse.services);
+        update_app_settings(cx, |s| s.monitor.processes_expanded = !collapse.processes);
+        let settings_snapshot = app_settings(cx).clone();
         self.state.persist_settings_reported(&settings_snapshot);
         if expanded_processes {
             // 刚展开进程卡片，按“未折叠”采样全量明细；这里不能再读面板实体，
@@ -339,9 +341,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.state.settings.monitor.drawer_width = new_width;
+        update_app_settings(cx, |s| s.monitor.drawer_width = new_width);
         self.persist_layout_settings(cx);
-        let panels_state = if self.state.settings.window.sftp_panel_side.is_left() {
+        let panels_state = if app_settings(cx).window.sftp_panel_side.is_left() {
             &self.state.workspace_panels_left
         } else {
             &self.state.workspace_panels

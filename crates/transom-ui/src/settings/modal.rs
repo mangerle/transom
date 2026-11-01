@@ -1,6 +1,7 @@
 //! 偏好设置中心弹窗的骨架与页签装配。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -144,7 +145,7 @@ impl AppShell {
                                     rust_i18n::t!("settings.current_ui_theme"),
                                     cx.theme().theme_name(),
                                     rust_i18n::t!("settings.current_theme"),
-                                    self.state.settings.terminal_profile.theme_name
+                                    app_settings(cx).terminal_profile.theme_name
                                 )),
                         ),
                     )

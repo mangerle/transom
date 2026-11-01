@@ -2,6 +2,8 @@
 
 use super::FontFieldSpec;
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
@@ -84,7 +86,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let cursor_shape = self.state.settings.terminal_profile.cursor_shape;
+        let cursor_shape = app_settings(cx).terminal_profile.cursor_shape;
         let cursor_options = vec![
             (
                 TerminalCursorShape::Block,
@@ -103,8 +105,8 @@ impl AppShell {
             "dropdown-cursor-shape",
             cursor_shape,
             cursor_options,
-            |this, shape, cx| {
-                this.state.settings.terminal_profile.cursor_shape = shape;
+            |_this, shape, cx| {
+                update_app_settings(cx, |s| s.terminal_profile.cursor_shape = shape);
                 cx.notify();
             },
             cx,
@@ -123,9 +125,9 @@ impl AppShell {
                 Some("settings.cursor_blink_desc"),
                 Switch::new("toggle-cursor-blink")
                     .small()
-                    .checked(self.state.settings.terminal_profile.cursor_blink)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_profile.cursor_blink = checked;
+                    .checked(app_settings(cx).terminal_profile.cursor_blink)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.terminal_profile.cursor_blink = checked);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -136,9 +138,9 @@ impl AppShell {
                 Some("settings.bold_is_bright_desc"),
                 Switch::new("toggle-bold-is-bright")
                     .small()
-                    .checked(self.state.settings.terminal_profile.bold_is_bright)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_profile.bold_is_bright = checked;
+                    .checked(app_settings(cx).terminal_profile.bold_is_bright)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.terminal_profile.bold_is_bright = checked);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -149,9 +151,9 @@ impl AppShell {
                 Some("settings.alternate_scroll_desc"),
                 Switch::new("toggle-alternate-scroll")
                     .small()
-                    .checked(self.state.settings.terminal_profile.alternate_scroll)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_profile.alternate_scroll = checked;
+                    .checked(app_settings(cx).terminal_profile.alternate_scroll)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.terminal_profile.alternate_scroll = checked);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -162,9 +164,9 @@ impl AppShell {
                 Some("settings.scroll_on_input_desc"),
                 Switch::new("toggle-scroll-on-input")
                     .small()
-                    .checked(self.state.settings.terminal_profile.scroll_on_input)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_profile.scroll_on_input = checked;
+                    .checked(app_settings(cx).terminal_profile.scroll_on_input)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.terminal_profile.scroll_on_input = checked);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -194,9 +196,9 @@ impl AppShell {
                 "settings.keyword_highlight",
                 Some("settings.keyword_highlight_desc"),
                 Switch::new("toggle-keyword-highlight")
-                    .checked(self.state.settings.terminal_profile.highlight.enabled)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.terminal_profile.highlight.enabled = checked;
+                    .checked(app_settings(cx).terminal_profile.highlight.enabled)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.terminal_profile.highlight.enabled = checked);
                         cx.notify();
                     }))
                     .into_any_element(),

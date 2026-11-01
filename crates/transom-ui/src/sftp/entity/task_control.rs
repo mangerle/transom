@@ -3,6 +3,8 @@
 //! 状态流转在实体完成，远端取消命令经 with_shell_parts 投递。
 
 use super::*;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::localized_error;
 use crate::sftp::queue_actions::is_verify_failure;
 use crate::sftp::{TransferMode, TransferStatus};
@@ -20,20 +22,15 @@ impl SftpPanelView {
     /// 循环切换并发传输数；增加时立即补位启动待处理任务。
     pub(crate) fn cycle_concurrency(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let app = self.app.clone();
-        let Some(current) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .settings
-                .sftp
-                .max_concurrent_transfers
-                .clamp(1, 4)
+        let Some(current) = read_shell_parts(&app, cx, |_shell| {
+            app_settings(cx).sftp.max_concurrent_transfers.clamp(1, 4)
         }) else {
             return;
         };
         let next = if current >= 4 { 1 } else { current + 1 };
         with_shell_parts(&app, cx, |shell, cx| {
-            shell.state.settings.sftp.max_concurrent_transfers = next;
-            let settings_snapshot = shell.state.settings.clone();
+            update_app_settings(cx, |s| s.sftp.max_concurrent_transfers = next);
+            let settings_snapshot = app_settings(cx).clone();
             if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
                 shell.state.set_error(localized_error(&error));
             }

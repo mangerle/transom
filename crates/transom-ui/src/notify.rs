@@ -4,6 +4,7 @@
 //! 只有真正发通知的那一步才依赖 gpui 与 notify-rust。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::sftp::send_desktop_notification;
 use gpui_kit::*;
 use transom_core::TabId;
@@ -21,7 +22,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let settings = &self.state.settings.window;
+        let settings = &app_settings(cx).window;
         let pane_active = self.state.workspace.active_tab == Some(tab_id);
         if !should_notify(
             settings.desktop_notifications,
@@ -67,7 +68,7 @@ impl AppShell {
         body: &str,
         cx: &mut Context<Self>,
     ) {
-        if !self.state.settings.window.desktop_notifications {
+        if !app_settings(cx).window.desktop_notifications {
             return;
         }
         let summary = if title.is_empty() {

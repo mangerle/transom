@@ -1,5 +1,6 @@
 //! 会话删除与副本复制操作。
 
+use crate::app::app_settings_mut;
 use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use crate::sftp::PendingEditorClose;
@@ -67,8 +68,7 @@ impl AppShell {
             .sessions
             .retain(|session| session.id != session_id);
         self.state.sidebar.selected_sessions.remove(&session_id);
-        self.state
-            .settings
+        app_settings_mut(cx)
             .window
             .recent_sessions
             .retain(|id| *id != session_id);

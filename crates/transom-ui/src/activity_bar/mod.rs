@@ -13,6 +13,7 @@ mod drag;
 mod menu;
 mod metrics;
 
+use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -80,19 +81,15 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let top: Vec<ActivityItemId> = self
-            .state
-            .settings
+        let top: Vec<ActivityItemId> = app_settings(cx)
             .activity_bar
             .top_items()
-            .filter(|id| self.activity_item_available(*id, &self.state.settings))
+            .filter(|id| self.activity_item_available(*id, app_settings(cx)))
             .collect();
-        let bottom: Vec<ActivityItemId> = self
-            .state
-            .settings
+        let bottom: Vec<ActivityItemId> = app_settings(cx)
             .activity_bar
             .bottom_items()
-            .filter(|id| self.activity_item_available(*id, &self.state.settings))
+            .filter(|id| self.activity_item_available(*id, app_settings(cx)))
             .collect();
         let mut top_children = Vec::with_capacity(top.len());
         for id in top {
@@ -147,7 +144,7 @@ impl AppShell {
     ) -> AnyElement {
         let label = activity_item_label(id);
         let icon = activity_item_icon(id);
-        let tooltip = self.activity_item_tooltip(id, &label, &self.state.settings);
+        let tooltip = self.activity_item_tooltip(id, &label, app_settings(cx));
         let selected =
             self.state
                 .activity_item_selected(id, self.state.monitor.read(cx).is_open(), cx);
@@ -223,7 +220,7 @@ impl AppShell {
                 cx.notify();
             }
             ActivityItemId::Tabs => {
-                if self.state.settings.window.tab_position != TabPosition::Left {
+                if app_settings(cx).window.tab_position != TabPosition::Left {
                     return;
                 }
                 if self.state.sidebar.visible && self.state.vertical_tabs_open {

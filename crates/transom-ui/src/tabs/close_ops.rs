@@ -1,5 +1,7 @@
 //! 标签关闭、窗格摘除与应用语言切换操作。
 
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use crate::pane_tree::RemoveOutcome;
@@ -187,7 +189,7 @@ impl AppShell {
         self.state.prune_tab_selection();
         self.state.sync_broadcast_targets();
         if self.state.workspace.groups.is_empty()
-            && self.state.settings.window.close_window_on_all_tabs_closed
+            && app_settings(cx).window.close_window_on_all_tabs_closed
         {
             self.close_app(window, cx);
             return;
@@ -265,14 +267,12 @@ impl AppShell {
 
     /// 设置界面语言并立即落盘；空串表示跟随系统。
     pub(crate) fn set_language(&mut self, language: String, cx: &mut Context<Self>) {
-        if self.state.settings.language == language {
+        if app_settings(cx).language == language {
             return;
         }
-        self.state.settings.language = language;
-        set_locale(&crate::i18n::resolve_language(
-            &self.state.settings.language,
-        ));
-        let settings_snapshot = self.state.settings.clone();
+        update_app_settings(cx, |s| s.language = language);
+        set_locale(&crate::i18n::resolve_language(&app_settings(cx).language));
+        let settings_snapshot = app_settings(cx).clone();
         if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             self.state.set_error(localized_error(&error));
         }
@@ -281,7 +281,7 @@ impl AppShell {
 
     /// 活动栏的语言按钮：在中文与英文之间切换（跟随系统时以当前生效语言为起点）。
     pub(crate) fn toggle_language(&mut self, cx: &mut Context<Self>) {
-        let next = if crate::i18n::resolve_language(&self.state.settings.language) == "zh-CN" {
+        let next = if crate::i18n::resolve_language(&app_settings(cx).language) == "zh-CN" {
             "en"
         } else {
             "zh-CN"

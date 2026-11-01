@@ -1,5 +1,6 @@
 //! 本地终端启动、快捷连接、桌面深链与命令历史记录。
 
+use crate::app::app_settings;
 use crate::app::{AppShell, TerminalTab};
 use crate::keymap;
 use gpui_kit::*;
@@ -81,7 +82,7 @@ impl AppShell {
         let session = Session::new(
             title,
             transom_core::Connection::Local(LocalConnection {
-                shell: self.state.settings.local_shell.clone(),
+                shell: app_settings(cx).local_shell.clone(),
                 working_dir,
                 command,
             }),
@@ -139,7 +140,7 @@ impl AppShell {
 
     /// 记录一条采集到的命令：更新内存快照并后台落盘。
     pub(crate) fn record_history_command(&mut self, command: &str, cx: &mut Context<Self>) {
-        if !self.state.settings.history.enabled {
+        if !app_settings(cx).history.enabled {
             return;
         }
         let recorded = {

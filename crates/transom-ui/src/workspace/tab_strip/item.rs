@@ -22,6 +22,7 @@ use super::badges::{
     PaneRow, build_tab_tooltip, build_tiled_group_badge, calculate_dot_color, connection_icon,
 };
 use super::menu::{TabContextMenuParams, build_tab_context_menu};
+use crate::app::app_settings;
 use crate::connection::session_host;
 use crate::workspace::tab_drag::attach_tab_drag;
 
@@ -282,7 +283,7 @@ pub(super) fn render_tab_entry(
         element = element.child(build_tiled_group_badge(shell, tiled, app_entity, p));
     }
 
-    if shell.state.settings.window.show_tab_close_button {
+    if app_settings(cx).window.show_tab_close_button {
         let close_btn =
             render_tab_close_button(group_id, active, tiled_set.as_ref(), app_entity, p, cx);
         element = element.child(close_btn);

@@ -12,6 +12,7 @@ mod vertical_tabs;
 
 pub use self::state::WorkspaceState;
 
+use crate::app::app_settings;
 use crate::app::{AppShell, TabStatus};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
@@ -45,7 +46,7 @@ impl AppShell {
             .h_full()
             .overflow_hidden()
             .bg(p.background);
-        if !self.state.immersive && self.state.settings.window.tab_position != TabPosition::Left {
+        if !self.state.immersive && app_settings(cx).window.tab_position != TabPosition::Left {
             main = main.child(self.render_tab_strip(p, cx));
         }
         if let Some(tab_id) = disconnected_tab {

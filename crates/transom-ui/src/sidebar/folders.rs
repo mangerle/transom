@@ -1,6 +1,7 @@
 //! 文件夹的新建、重命名、删除与模态表单渲染。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::palette::Palette;
 use crate::session_form::SessionForm;
 use gpui_kit::base::{h_flex, v_flex};
@@ -136,7 +137,7 @@ impl AppShell {
                 identities: self.state.identity_options(),
                 jump_options: self.state.jump_options(None),
                 folder_options: self.state.folder_paths(),
-                global_proxy: self.state.settings.proxy.clone(),
+                global_proxy: app_settings(cx).proxy.clone(),
                 block_view: transom_core::BlockViewOverride::FollowGlobal,
             },
         );

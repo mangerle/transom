@@ -1,6 +1,8 @@
 //! 窗口外观、透明度与分割线设置页。
 
 use super::*;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 
 impl AppShell {
     pub(crate) fn render_settings_divider(
@@ -8,7 +10,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let divider = self.state.settings.appearance.divider;
+        let divider = app_settings(cx).appearance.divider;
         // 预览色点与真实渲染走同一条解析：跟随主题时显示当前主题边框色。
         let preview = p.divider(p.border);
         let color_control = h_flex()
@@ -79,7 +81,7 @@ impl AppShell {
         let Some(width) = divider_width_from_value(&value) else {
             return;
         };
-        if self.state.settings.appearance.divider.width == width {
+        if app_settings(cx).appearance.divider.width == width {
             return;
         }
         self.update_appearance(|appearance| appearance.divider.width = width, cx);
@@ -91,7 +93,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let mode = self.state.settings.window.window_background;
+        let mode = app_settings(cx).window.window_background;
         let transparency = slider_percent(
             &self
                 .state
@@ -169,10 +171,10 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let percent = percent.min(100);
-        if self.state.settings.window.window_transparency == percent {
+        if app_settings(cx).window.window_transparency == percent {
             return;
         }
-        self.state.settings.window.window_transparency = percent;
+        update_app_settings(cx, |s| s.window.window_transparency = percent);
         self.refresh_window_appearance(window, cx);
     }
 
@@ -184,14 +186,15 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.state.settings.window.window_background == mode {
+        if app_settings(cx).window.window_background == mode {
             return;
         }
-        self.state.settings.window.window_background = mode;
-        if mode != WindowBackgroundMode::Opaque
-            && self.state.settings.window.window_transparency == 0
+        update_app_settings(cx, |s| s.window.window_background = mode);
+        if mode != WindowBackgroundMode::Opaque && app_settings(cx).window.window_transparency == 0
         {
-            self.state.settings.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY;
+            update_app_settings(cx, |s| {
+                s.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY
+            });
             let value = f32::from(DEFAULT_WINDOW_TRANSPARENCY);
             self.state
                 .modals
@@ -215,10 +218,12 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        crate::window_appearance::apply_window_appearance(&self.state.settings.window, cx);
-        crate::theme::apply_appearance(&self.state.settings.appearance, cx);
+        let window_settings = app_settings(cx).window.clone();
+        crate::window_appearance::apply_window_appearance(&window_settings, cx);
+        let appearance = app_settings(cx).appearance.clone();
+        crate::theme::apply_appearance(&appearance, cx);
         window.set_background_appearance(crate::window_appearance::background_appearance(
-            &self.state.settings.window,
+            &app_settings(cx).window,
         ));
         cx.notify();
     }

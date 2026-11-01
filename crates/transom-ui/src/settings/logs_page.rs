@@ -12,6 +12,8 @@
 //!   文件的句柄，之后的写入全部进不了磁盘还看不出原因。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use crate::sftp::spawn_blocking_local;
 use gpui_kit::base::{h_flex, v_flex};
@@ -48,7 +50,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current = self.state.settings.logs.level;
+        let current = app_settings(cx).logs.level;
         let log_dir = paths::log_dir();
         let dir_label = log_dir.display().to_string();
         let open_dir = cx.listener(move |this, _, _, cx| {
@@ -84,8 +86,8 @@ impl AppShell {
                         .into_iter()
                         .map(|level| (level, rust_i18n::t!(level_label_key(level)).to_string()))
                         .collect(),
-                    |this, level, cx| {
-                        this.state.settings.logs.level = level;
+                    |_this, level, cx| {
+                        update_app_settings(cx, |s| s.logs.level = level);
                         log::set_max_level(level.to_filter());
                         cx.notify();
                     },

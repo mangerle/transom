@@ -1,6 +1,9 @@
 //! 偏好设置中心之文件与传输配置页（内置编辑器、文件面板排除、传输队列与 ZMODEM 接收）。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -23,9 +26,9 @@ impl AppShell {
                 Some("settings.editor_soft_wrap_desc"),
                 Switch::new("toggle-editor-soft-wrap")
                     .small()
-                    .checked(self.state.settings.sftp.editor_soft_wrap)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.sftp.editor_soft_wrap = checked;
+                    .checked(app_settings(cx).sftp.editor_soft_wrap)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.sftp.editor_soft_wrap = checked);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -36,9 +39,9 @@ impl AppShell {
                 Some("settings.editor_line_numbers_desc"),
                 Switch::new("toggle-editor-line-numbers")
                     .small()
-                    .checked(self.state.settings.sftp.editor_line_numbers)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.sftp.editor_line_numbers = checked;
+                    .checked(app_settings(cx).sftp.editor_line_numbers)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.sftp.editor_line_numbers = checked);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -73,8 +76,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_algo = self.state.settings.sftp.checksum_algorithm;
-        let current_mode = self.state.settings.sftp.verify_mode;
+        let current_algo = app_settings(cx).sftp.checksum_algorithm;
+        let current_mode = app_settings(cx).sftp.verify_mode;
         let stepper = Self::setting_stepper(
             &self.state.modals.settings.max_concurrent_transfers,
             px(110.0),
@@ -92,9 +95,9 @@ impl AppShell {
                 Some("settings.verify_after_transfer_desc"),
                 Switch::new("toggle-verify-after-transfer")
                     .small()
-                    .checked(self.state.settings.sftp.verify_after_transfer)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.sftp.verify_after_transfer = checked;
+                    .checked(app_settings(cx).sftp.verify_after_transfer)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.sftp.verify_after_transfer = checked);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -116,8 +119,8 @@ impl AppShell {
                             rust_i18n::t!("settings.checksum_md5").to_string(),
                         ),
                     ],
-                    |this, algo, cx| {
-                        this.state.settings.sftp.checksum_algorithm = algo;
+                    |_this, algo, cx| {
+                        update_app_settings(cx, |s| s.sftp.checksum_algorithm = algo);
                         cx.notify();
                     },
                     cx,
@@ -140,8 +143,8 @@ impl AppShell {
                             rust_i18n::t!("settings.verify_mode_quick").to_string(),
                         ),
                     ],
-                    |this, mode, cx| {
-                        this.state.settings.sftp.verify_mode = mode;
+                    |_this, mode, cx| {
+                        update_app_settings(cx, |s| s.sftp.verify_mode = mode);
                         cx.notify();
                     },
                     cx,
@@ -160,8 +163,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let resolved = self.state.settings.zmodem.resolved_download_dir();
-        let dir_label = match self.state.settings.zmodem.download_dir.clone() {
+        let resolved = app_settings(cx).zmodem.resolved_download_dir();
+        let dir_label = match app_settings(cx).zmodem.download_dir.clone() {
             Some(dir) => dir.display().to_string(),
             None => format!(
                 "{}（{}）",
@@ -169,9 +172,9 @@ impl AppShell {
                 resolved.display()
             ),
         };
-        let browse = cx.listener(|this, _, _, _cx| {
+        let browse = cx.listener(|_this, _, _, cx| {
             if let Some(dir) = rfd::FileDialog::new().pick_folder() {
-                this.state.settings.zmodem.download_dir = Some(dir);
+                update_app_settings(cx, |s| s.zmodem.download_dir = Some(dir));
             }
         });
         v_flex()
@@ -197,9 +200,9 @@ impl AppShell {
                 Some("settings.zmodem_auto_receive_desc"),
                 Switch::new("toggle-zmodem-auto-receive")
                     .small()
-                    .checked(self.state.settings.zmodem.auto_receive)
-                    .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.zmodem.auto_receive = checked;
+                    .checked(app_settings_mut(cx).zmodem.auto_receive)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| s.zmodem.auto_receive = checked);
                         cx.notify();
                     }))
                     .into_any_element(),

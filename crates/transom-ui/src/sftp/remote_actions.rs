@@ -13,6 +13,7 @@
 
 use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
 use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState, format_size, parent_remote};
 use gpui_kit::*;
@@ -141,7 +142,7 @@ impl SftpPanelView {
                     .workspace
                     .tab(self.tab_id)
                     .and_then(|tab| tab.connection_id),
-                shell.state.settings.sftp.edit_max_bytes,
+                app_settings(cx).sftp.edit_max_bytes,
             )
         }) else {
             return;

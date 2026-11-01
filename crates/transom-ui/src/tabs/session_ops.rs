@@ -1,5 +1,6 @@
 //! 会话表单操作与钥匙串凭据读写。
 
+use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use crate::session_form::SessionForm;
@@ -142,7 +143,7 @@ impl AppShell {
                 identities: self.state.identity_options(),
                 jump_options: self.state.jump_options(None),
                 folder_options: self.state.folder_paths(),
-                global_proxy: self.state.settings.proxy.clone(),
+                global_proxy: app_settings(cx).proxy.clone(),
                 block_view: transom_core::BlockViewOverride::FollowGlobal,
             },
         );
@@ -202,7 +203,7 @@ impl AppShell {
                 identities: self.state.identity_options(),
                 jump_options: self.state.jump_options(Some(session_id)),
                 folder_options: self.state.folder_paths(),
-                global_proxy: self.state.settings.proxy.clone(),
+                global_proxy: app_settings(cx).proxy.clone(),
                 block_view: block_override,
             },
         );

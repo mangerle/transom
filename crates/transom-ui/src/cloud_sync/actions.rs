@@ -1,6 +1,8 @@
 //! Git/WebDAV/S3 同步触发与完成回调。
 
 use super::common::*;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 
 impl AppShell {
     pub(crate) fn start_git_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -20,7 +22,7 @@ impl AppShell {
 
     /// 定时同步入口：秘密已经在钥匙串里，不再触碰设置表单。
     pub(crate) fn start_git_sync_scheduled(&mut self, cx: &mut Context<Self>) {
-        let settings = self.state.settings.sync.clone();
+        let settings = app_settings(cx).sync.clone();
         if settings.git.is_none() {
             return;
         }
@@ -53,7 +55,7 @@ impl AppShell {
                 self.state.catalog.normalize();
                 self.state.persist_catalog();
                 self.state.refresh_tab_sessions();
-                self.state.settings.sync.last_pull_at = Some(result.at);
+                update_app_settings(cx, |s| s.sync.last_pull_at = Some(result.at));
                 self.state.status = Some(
                     rust_i18n::t!(
                         "sync.git_done",
@@ -126,8 +128,8 @@ impl AppShell {
     ) {
         match result {
             Ok(report) => {
-                self.state.settings.sync.last_push_at = Some(report.at);
-                let settings_snapshot = self.state.settings.clone();
+                update_app_settings(cx, |s| s.sync.last_push_at = Some(report.at));
+                let settings_snapshot = app_settings(cx).clone();
                 if let Err(error) = self.state.persist_settings(&settings_snapshot) {
                     self.state.set_error(localized_error(&error));
                 }

@@ -3,6 +3,7 @@
 use super::SftpSyncModalState;
 use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::sftp::{SftpRemotePaneRef, TransferTask};
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::*;
@@ -28,7 +29,7 @@ impl SftpPanelView {
                     .workspace
                     .tab(self.tab_id)
                     .and_then(|tab| tab.connection_id),
-                shell.state.settings.sftp.transfer_filter.clone(),
+                app_settings(cx).sftp.transfer_filter.clone(),
             )
         }) else {
             return;
@@ -114,7 +115,7 @@ impl AppShell {
 
     /// 将勾选的差异项打包成一个同步任务入队并启动队列。
     pub(crate) fn start_sftp_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let verify = self.state.settings.sftp.verify_after_transfer;
+        let verify = app_settings(cx).sftp.verify_after_transfer;
         let Some(mut modal) = self.state.sftp_modals.sync.take() else {
             return;
         };
@@ -160,8 +161,8 @@ impl AppShell {
             Some(total_size),
         );
         task.verify = verify;
-        task.verify_mode = self.state.settings.sftp.verify_mode;
-        task.checksum_algorithm = self.state.settings.sftp.checksum_algorithm;
+        task.verify_mode = app_settings(cx).sftp.verify_mode;
+        task.checksum_algorithm = app_settings(cx).sftp.checksum_algorithm;
         task.target_connection_id = Some(modal.connection_id);
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.queue.tasks.push(task);

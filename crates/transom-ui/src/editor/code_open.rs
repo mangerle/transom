@@ -6,6 +6,7 @@
 
 use super::open::{EditorPanelSettings, PanelSeed, SpawnEditorPanelParams};
 use crate::app::AppShell;
+use crate::app::app_settings;
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId, TransferId};
 
@@ -54,8 +55,8 @@ impl AppShell {
             );
         let op_id = TransferId::new();
         let settings = EditorPanelSettings {
-            line_numbers: self.state.settings.sftp.editor_line_numbers,
-            soft_wrap: self.state.settings.sftp.editor_soft_wrap,
+            line_numbers: app_settings(cx).sftp.editor_line_numbers,
+            soft_wrap: app_settings(cx).sftp.editor_soft_wrap,
         };
         let request = self.state.editors.update(cx, |panels, cx| {
             panels.spawn_editor_panel(

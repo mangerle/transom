@@ -2,6 +2,7 @@
 
 use super::metrics::METRICS;
 use crate::app::AppShell;
+use crate::app::app_settings_mut;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
@@ -87,9 +88,7 @@ fn render_activity_reorder_half(
     zone.on_drop(move |drag: &ActivityDrag, window, cx| {
         let dragged = drag.0;
         app.update(cx, |this, cx| {
-            if this
-                .state
-                .settings
+            if app_settings_mut(cx)
                 .activity_bar
                 .move_relative_to(dragged, anchor, !before)
             {
@@ -131,10 +130,9 @@ pub(super) fn render_activity_blank_zone(
         let dragged = drag.0;
         app.update(cx, |this, cx| {
             let changed = if top_end {
-                this.state.settings.activity_bar.move_to_top_end(dragged)
+                app_settings_mut(cx).activity_bar.move_to_top_end(dragged)
             } else {
-                this.state
-                    .settings
+                app_settings_mut(cx)
                     .activity_bar
                     .move_to_bottom_start(dragged)
             };

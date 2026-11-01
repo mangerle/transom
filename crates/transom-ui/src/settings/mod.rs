@@ -25,6 +25,8 @@ pub(crate) use font_field::FontFieldSpec;
 pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearanceSnapshot};
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
@@ -212,8 +214,10 @@ impl AppShell {
         change: impl FnOnce(&mut AppearanceSettings),
         cx: &mut Context<Self>,
     ) {
-        change(&mut self.state.settings.appearance);
-        crate::theme::apply_appearance(&self.state.settings.appearance, cx);
+        let mut appearance = app_settings(cx).appearance.clone();
+        change(&mut appearance);
+        update_app_settings(cx, |s| s.appearance = appearance.clone());
+        crate::theme::apply_appearance(&appearance, cx);
         self.sync_terminal_palette(cx);
         cx.notify();
     }
@@ -222,13 +226,13 @@ impl AppShell {
     /// 伴生终端调色板写入终端 profile 并热应用到活窗格。显式选了预设的用户
     /// 不受影响。设置页外观变化、保存落盘、系统明暗切换三个触发点共用。
     pub(crate) fn sync_terminal_palette(&mut self, cx: &mut Context<Self>) {
-        if self.state.settings.terminal_profile.theme_name != FOLLOW_UI_THEME {
+        if app_settings(cx).terminal_profile.theme_name != FOLLOW_UI_THEME {
             return;
         }
         let active = cx.theme().theme_name().to_string();
         if let Some(palette) = crate::theme::resolve_terminal_palette(FOLLOW_UI_THEME, &active, cx)
         {
-            self.state.settings.terminal_profile.palette = palette;
+            update_app_settings(cx, |s| s.terminal_profile.palette = palette);
             self.apply_appearance_to_live_panes(cx);
         }
     }
@@ -239,10 +243,10 @@ impl AppShell {
     /// 会话本身也带 profile，但当前没有任何界面在会话级别改字体，因此以全局偏好为准；
     /// 将来开放会话级字体时，这里必须改成只补空白、不覆盖会话选择。
     pub(crate) fn apply_appearance_to_live_panes(&self, cx: &mut Context<Self>) {
-        let mut profile = self.state.settings.terminal_profile.clone();
+        let mut profile = app_settings(cx).terminal_profile.clone();
         // 终端背景随窗口整体透明：窗口半透明时，终端区要透出桌面，
         // 否则只有侧栏与标签栏变透明，终端仍是一块实色。
-        profile.background_transparency = self.state.settings.window.window_transparency;
+        profile.background_transparency = app_settings(cx).window.window_transparency;
         // 先收集实体再逐个更新：遍历 self.state.workspace.tabs 与逐条 update 会同时借用 self。
         let terminals: Vec<Entity<TerminalView>> = self
             .state
@@ -261,7 +265,7 @@ impl AppShell {
     /// 每个窗格按自己会话的覆盖档位解析，不能统一吃全局值：生产构建机可能
     /// 强制开启，而同一窗口里的交换机 Console 强制关闭。
     pub(crate) fn apply_block_view_settings(&self, cx: &mut Context<Self>) {
-        let global = self.state.settings.block_view;
+        let global = app_settings(cx).block_view;
         let terminals: Vec<(Entity<TerminalView>, transom_core::BlockViewSettings)> = self
             .state
             .workspace

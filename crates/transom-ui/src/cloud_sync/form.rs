@@ -1,6 +1,7 @@
 //! 云同步表单装配与凭据落盘。
 
 use super::common::*;
+use crate::app::app_settings;
 
 /// 设置弹窗里云同步组的全部输入框。
 ///
@@ -70,7 +71,7 @@ impl SyncFormInputs {
 impl AppShell {
     /// 打开设置弹窗时回填云同步表单；秘密一律留空。
     pub(crate) fn fill_sync_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let sync = self.state.settings.sync.clone();
+        let sync = app_settings(cx).sync.clone();
         let form = &self.state.modals.settings.sync_form;
         let mut set = |input: &Entity<InputState>, value: &str| {
             input.update(cx, |state, cx| state.set_value(value, window, cx));
@@ -125,7 +126,7 @@ impl AppShell {
     pub(crate) fn collect_sync_settings(&self, cx: &App) -> SyncSettings {
         let form = &self.state.modals.settings.sync_form;
         let read = |input: &Entity<InputState>| input.read(cx).value().trim().to_string();
-        let endpoint = match self.state.settings.sync.endpoint.clone() {
+        let endpoint = match app_settings(cx).sync.endpoint.clone() {
             Some(SyncEndpoint::Webdav { .. }) => Some(SyncEndpoint::Webdav {
                 url: read(&form.webdav_url),
                 username: read(&form.webdav_username),
@@ -140,7 +141,7 @@ impl AppShell {
             }),
             None => None,
         };
-        let mut sync = self.state.settings.sync.clone();
+        let mut sync = app_settings(cx).sync.clone();
         sync.endpoint = endpoint.and_then(SyncEndpoint::sanitized);
         let git_remote = read(&form.git_remote);
         sync.git = if git_remote.is_empty() {
@@ -172,7 +173,7 @@ impl AppShell {
     ) -> bool {
         let form = &self.state.modals.settings.sync_form;
         let is_webdav = matches!(
-            self.state.settings.sync.endpoint,
+            app_settings(cx).sync.endpoint,
             Some(SyncEndpoint::Webdav { .. })
         );
         let credential = if is_webdav {

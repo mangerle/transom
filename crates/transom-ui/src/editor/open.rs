@@ -24,6 +24,7 @@ use super::panel::{
     cascade_origin, editor_language_token,
 };
 use crate::app::AppShell;
+use crate::app::app_settings;
 use gpui_kit::component::input::{EditorState, InputEvent};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
@@ -422,7 +423,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let op_id = params.op_id;
-        let max_bytes = self.state.settings.sftp.edit_max_bytes;
+        let max_bytes = app_settings(cx).sftp.edit_max_bytes;
         if self.send_editor_read(params, max_bytes).is_err() {
             self.fail_editor_panel_by_op(
                 op_id,

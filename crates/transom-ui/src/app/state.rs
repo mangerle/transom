@@ -36,7 +36,6 @@ use transom_core::{AppCommand, AppSettings, SessionCatalog, SessionId};
 /// 应用运行期状态。
 pub(crate) struct AppState {
     pub(in crate::app) services: UiServices,
-    pub(in crate::app) settings: AppSettings,
     /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
     pub(in crate::app) catalog: SessionCatalog,
     /// 会话目录版本：每次持久化（= 目录被修改）递增，侧栏行缓存以此为失效键。

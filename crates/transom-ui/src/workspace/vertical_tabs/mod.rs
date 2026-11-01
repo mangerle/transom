@@ -17,6 +17,7 @@
 mod drag;
 mod item;
 
+use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::connection::session_host;
 use crate::palette::Palette;
@@ -130,7 +131,7 @@ impl AppShell {
     /// 会话树里的连接动作完成后调用：连接入口在会话树，连接完成后用户要看
     /// 的是终端列表，因此自动把槽位切到标签面板。
     pub(crate) fn reveal_vertical_tabs_panel(&mut self, cx: &mut Context<Self>) {
-        if self.state.settings.window.tab_position != TabPosition::Left {
+        if app_settings(cx).window.tab_position != TabPosition::Left {
             return;
         }
         if self.state.sidebar.visible && self.state.vertical_tabs_open {

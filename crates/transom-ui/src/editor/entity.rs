@@ -22,6 +22,7 @@ use super::close::PendingEditorClose;
 use super::manager::EditorManager;
 use super::panel::{EditorPanelState, EditorPhase};
 use crate::app::AppShell;
+use crate::app::app_settings;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
 use transom_core::{RemoteTextMeta, TabId};
@@ -221,14 +222,14 @@ impl EditorPanels {
 
     /// 代码字号独立于界面密度；越界值按边界处理，避免极端值撑坏布局。
     pub(super) fn editor_font_size(&self, cx: &App) -> f32 {
-        self.read_shell(cx, |shell| shell.state.settings.sftp.editor_font_size)
+        self.read_shell(cx, |_shell| app_settings(cx).sftp.editor_font_size)
             .unwrap_or(FALLBACK_EDITOR_FONT_SIZE)
             .clamp(9.0, 40.0)
     }
 
     /// 当前配置的编辑读取上限，实体在投递读取命令前读取。
     pub(super) fn edit_max_bytes(&self, cx: &App) -> u64 {
-        self.read_shell(cx, |shell| shell.state.settings.sftp.edit_max_bytes)
+        self.read_shell(cx, |_shell| app_settings(cx).sftp.edit_max_bytes)
             .unwrap_or(FALLBACK_EDIT_MAX_BYTES)
     }
 

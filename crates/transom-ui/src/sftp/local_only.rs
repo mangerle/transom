@@ -11,6 +11,7 @@ use super::{
     SftpPanelState, SftpPanelView, SftpQueueState, SftpRemotePaneState, normalize_local_cwd,
 };
 use crate::app::AppShell;
+use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, sftp_text_input};
 use crate::sftp::entity::read_shell_parts;
@@ -162,8 +163,8 @@ impl SftpPanelView {
             .value()
             .trim()
             .to_ascii_lowercase();
-        let hidden_patterns = read_shell_parts(&self.app, cx, |shell| {
-            shell.state.settings.sftp.panel_hidden_patterns.clone()
+        let hidden_patterns = read_shell_parts(&self.app, cx, |_shell| {
+            app_settings(cx).sftp.panel_hidden_patterns.clone()
         })
         .unwrap_or_default();
         let local_entries = crate::app::AppState::filter_local_entries(

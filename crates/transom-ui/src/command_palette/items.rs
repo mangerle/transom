@@ -7,6 +7,7 @@
 //! - 代价与局限：每个新能力需要一个"能被枚举"的入口；面板不做模糊评分，只做
 //!   大小写无关的子串匹配，排序沿用来源顺序。
 
+use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::keymap;
 use gpui_kit::assets::IconName;
@@ -173,7 +174,7 @@ impl AppShell {
             );
             model.push(
                 rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle),
+                self.snippet_items(&needle, cx),
             );
         } else {
             model.push(
@@ -182,7 +183,7 @@ impl AppShell {
             );
             model.push(
                 rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle),
+                self.snippet_items(&needle, cx),
             );
             model.push(
                 rust_i18n::t!("app.palette_actions").to_string(),
@@ -199,14 +200,13 @@ impl AppShell {
         );
         model.push(
             rust_i18n::t!("app.palette_terminal_themes").to_string(),
-            self.terminal_theme_items(&needle, &self.state.settings),
+            self.terminal_theme_items(&needle, app_settings(cx)),
         );
         model
     }
 
-    fn snippet_items(&self, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
-        self.state
-            .settings
+    fn snippet_items(&self, needle: &str, cx: &App) -> Vec<(CommandItem, PaletteTarget)> {
+        app_settings(cx)
             .snippets
             .items
             .iter()

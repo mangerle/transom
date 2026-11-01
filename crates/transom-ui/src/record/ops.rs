@@ -1,6 +1,7 @@
 //! 终端录制启停、回放触发与独立播放器打开逻辑。
 
 use super::types::{ReplayModalState, scan_recordings};
+use crate::app::app_settings;
 use crate::app::{AppShell, TerminalTab};
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use crate::sftp::spawn_blocking_local;
@@ -168,9 +169,9 @@ impl AppShell {
         let tab_title =
             rust_i18n::t!("recorder.player_tab_title", name = display_title).to_string();
 
-        let mut profile = self.state.settings.terminal_profile.clone();
-        profile.palette = self.state.settings.terminal_profile.palette.clone();
-        profile.background_transparency = self.state.settings.window.window_transparency;
+        let mut profile = app_settings(cx).terminal_profile.clone();
+        profile.palette = app_settings(cx).terminal_profile.palette.clone();
+        profile.background_transparency = app_settings(cx).window.window_transparency;
 
         let player = cx.new(|cx| {
             CastPlayerView::new(
@@ -196,7 +197,7 @@ impl AppShell {
             }),
         );
         let session_id = dummy_session.id;
-        dummy_session.terminal = self.state.settings.terminal_profile.clone();
+        dummy_session.terminal = app_settings(cx).terminal_profile.clone();
 
         let tab = TerminalTab::player_tab(tab_id, dummy_session, tab_title, player);
 

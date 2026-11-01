@@ -9,6 +9,9 @@
 //!   4. 保存时不仅持久化到配置文件，更实时下发至当前全部活跃终端窗格。
 
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::app_settings_mut;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -51,9 +54,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(rule) = self.state.settings.triggers.find_rule(id) {
+        let rule = app_settings(cx).triggers.find_rule(id).cloned();
+        if let Some(rule) = rule {
             self.state.modals.settings.trigger_edit =
-                Some(TriggerEditState::new(Some(rule), window, cx));
+                Some(TriggerEditState::new(Some(&rule), window, cx));
             cx.notify();
         }
     }
@@ -113,10 +117,10 @@ impl AppShell {
             case_sensitive,
         };
 
-        if let Some(existing) = self.state.settings.triggers.find_rule_mut(rule_id) {
+        if let Some(existing) = app_settings_mut(cx).triggers.find_rule_mut(rule_id) {
             *existing = rule;
         } else {
-            self.state.settings.triggers.rules.push(rule);
+            app_settings_mut(cx).triggers.rules.push(rule);
         }
 
         self.state.modals.settings.trigger_edit = None;
@@ -149,7 +153,7 @@ impl AppShell {
 
     /// 将触发器规则同步下发至当前所有活跃终端窗格。
     pub(crate) fn sync_triggers_to_live_panes(&self, cx: &mut Context<Self>) {
-        let triggers = self.state.settings.triggers.clone();
+        let triggers = app_settings(cx).triggers.clone();
         for tab in &self.state.workspace.tabs {
             if let Some(term) = tab.terminal() {
                 term.update(cx, |view, _| view.reload_triggers(&triggers));
@@ -164,7 +168,7 @@ impl AppShell {
         enabled: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(rule) = self.state.settings.triggers.find_rule_mut(id) {
+        if let Some(rule) = app_settings_mut(cx).triggers.find_rule_mut(id) {
             rule.enabled = enabled;
             self.sync_triggers_to_live_panes(cx);
             cx.notify();
@@ -173,7 +177,7 @@ impl AppShell {
 
     /// 删除指定触发器规则。
     pub(crate) fn delete_trigger_rule(&mut self, id: TriggerId, cx: &mut Context<Self>) {
-        self.state.settings.triggers.remove_rule(id);
+        app_settings_mut(cx).triggers.remove_rule(id);
         if self
             .state
             .modals
@@ -194,8 +198,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let enabled = self.state.settings.triggers.enabled;
-        let rules = self.state.settings.triggers.rules.clone();
+        let enabled = app_settings(cx).triggers.enabled;
+        let rules = app_settings(cx).triggers.rules.clone();
         let edit = self.state.modals.settings.trigger_edit.clone();
 
         let mut list = v_flex().gap_1();
@@ -288,7 +292,7 @@ impl AppShell {
                 Switch::new("toggle-triggers-master")
                     .checked(enabled)
                     .on_click(cx.listener(|this, &checked, _, cx| {
-                        this.state.settings.triggers.enabled = checked;
+                        update_app_settings(cx, |s| s.triggers.enabled = checked);
                         this.sync_triggers_to_live_panes(cx);
                         cx.notify();
                     }))

@@ -2,6 +2,8 @@
 
 use super::SNIPPET_PREVIEW_MAX_CHARS;
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::app::update_app_settings;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -63,7 +65,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
         .on_click(move |_, _, cx| {
             let item = row_item.clone();
             row_app.update(cx, |this, cx| {
-                let execute = this.state.settings.snippets.execute_directly;
+                let execute = app_settings(cx).snippets.execute_directly;
                 this.apply_snippet(&item, execute, cx);
                 this.state.modals.snippet_panel.open = false;
                 cx.notify();
@@ -182,7 +184,7 @@ pub(super) fn render_snippets_card(
             move |checked, _, cx| {
                 let checked = *checked;
                 app.update(cx, |this, cx| {
-                    this.state.settings.snippets.execute_directly = checked;
+                    update_app_settings(cx, |s| s.snippets.execute_directly = checked);
                     this.persist_layout_settings(cx);
                 });
             }

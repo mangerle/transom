@@ -4,6 +4,7 @@
 //! `EditorPanels` 完成，外壳只负责投递读取命令。
 
 use super::*;
+use crate::app::app_settings;
 use crate::sftp::format_size;
 use transom_core::AppSettings;
 
@@ -25,7 +26,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let max_bytes = self.state.settings.sftp.edit_max_bytes;
+        let max_bytes = app_settings(cx).sftp.edit_max_bytes;
         let gate = self
             .state
             .workspace
@@ -133,7 +134,7 @@ impl AppShell {
         // 这里的尺寸闸门只是第一道：目录列表的尺寸可能过期，net 层还会在读取循环内
         // 按同一上限二次设限，两道一起才挡得住"列出之后文件变大"的情况。
         let op_id = TransferId::new();
-        let settings = self.editor_panel_settings(&self.state.settings);
+        let settings = self.editor_panel_settings(app_settings(cx));
         let request = self.state.editors.update(cx, |panels, cx| {
             panels.spawn_editor_panel(
                 SpawnEditorPanelParams {
@@ -167,7 +168,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let settings = self.editor_panel_settings(&self.state.settings);
+        let settings = self.editor_panel_settings(app_settings(cx));
         self.state.editors.update(cx, |panels, cx| {
             panels.spawn_editor_panel(
                 SpawnEditorPanelParams {

@@ -100,6 +100,11 @@ mod bootstrap;
 mod modal_hub;
 mod overlays;
 mod persistence;
+mod settings_global;
+
+pub(crate) use settings_global::{
+    app_settings, app_settings_mut, install_app_settings, update_app_settings,
+};
 mod secret_prefill;
 mod state;
 mod task_hub;
@@ -155,10 +160,10 @@ pub(crate) struct AppShell {
 impl AppShell {
     /// 设置工具面板（SFTP/转发）停靠方向。
     pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<Self>) {
-        if self.state.settings.window.sftp_panel_side == side {
+        if app_settings(cx).window.sftp_panel_side == side {
             return;
         }
-        self.state.settings.window.sftp_panel_side = side;
+        update_app_settings(cx, |s| s.window.sftp_panel_side = side);
         let state = &mut self.state;
         std::mem::swap(
             &mut state.workspace_panels,
@@ -169,10 +174,10 @@ impl AppShell {
 
     /// 按启动档位恢复工作台。
     fn restore_startup_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.state.settings.window.startup_tabs {
+        match app_settings(cx).window.startup_tabs {
             StartupTabs::RestoreLast => {
-                let saved_groups = self.state.settings.window.previous_tab_groups.clone();
-                let saved_tilings = self.state.settings.window.tab_tilings.clone();
+                let saved_groups = app_settings(cx).window.previous_tab_groups.clone();
+                let saved_tilings = app_settings(cx).window.tab_tilings.clone();
                 if !saved_groups.is_empty() {
                     let mut restored = Vec::with_capacity(saved_groups.len());
                     for group in &saved_groups {
@@ -190,8 +195,8 @@ impl AppShell {
                         let pane = self.state.workspace.groups[index].active_pane;
                         self.activate_tab(pane, window, cx);
                     }
-                } else if !self.state.settings.window.previous_tab_sessions.is_empty() {
-                    let session_keys = self.state.settings.window.previous_tab_sessions.clone();
+                } else if !app_settings(cx).window.previous_tab_sessions.is_empty() {
+                    let session_keys = app_settings(cx).window.previous_tab_sessions.clone();
                     for key in session_keys {
                         if key == "local" {
                             self.open_local_terminal(window, cx);
@@ -215,9 +220,7 @@ impl AppShell {
 
     /// 每分钟节拍：达到配置间隔时触发一次后台 Git 同步。
     fn tick_git_sync(&mut self, cx: &mut Context<Self>) {
-        let interval = self
-            .state
-            .settings
+        let interval = app_settings(cx)
             .sync
             .git
             .as_ref()
