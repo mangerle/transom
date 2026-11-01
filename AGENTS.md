@@ -167,10 +167,13 @@
 - **拆分落地清单**：菜单/按钮/空状态/列表行/表头/状态徽标/工具栏/表单行/弹窗骨架已全部收敛到 `widgets`；新增页面直接复用，不再在页面内重写这些结构。
 - **设置是 `Global`，不是外壳字段**：`AppSettings` 存在 `app::settings_global` 的 `SettingsGlobal` 里（守卫：`AppState` 不得再有 `settings` 字段）。读取写 `app_settings(cx)`，就地修改写 `app_settings_mut(cx)`，需要返回值或只改一处时用 `update_app_settings(cx, |s| ...)`；不持有 `cx` 的纯函数接收 `&AppSettings` 快照参数。落盘一律显式传快照给 `persist_settings`，禁止为了免传 `cx` 保留旁路读取。
 - **跨实体调用必须单向（数据向下、意图向上）**：
-  - 面板实体**禁止持有** `WeakEntity<AppShell>` 等父实体句柄；需要外壳数据时由外壳在变更点 `view.update(|v, cx| v.set_*(...))` 注入。
-  - 面板要外壳做事时 `cx.emit(PanelEvent)`，外壳在创建时 `cx.subscribe` 一次；**事件必须自带全部数据**，外壳的处理函数禁止回读该面板（`view.update(` / `sftp_view(` 等）。
+  - 面板实体**禁止持有** `WeakEntity<AppShell>` 等父实体句柄（守卫：`panel_entities_have_no_parent_entity_handle`）；需要外壳数据时由外壳在变更点 `view.update(|v, cx| v.set_*(...))` 注入。
+  - 面板要外壳做事时 `cx.emit(PanelEvent)`，外壳在创建时 `cx.subscribe` 一次并持有订阅；**事件必须自带全部数据**，外壳处理函数禁止回读该面板。
   - 面板渲染只读自身状态与 `Global`；禁止在 `Render` 里反查外壳。
-  - 违反时的表现是 `cannot read/update ... while it is already being updated`；具体错误（如某面板的回交通道）不得用 `cx.defer` 兜底，必须按上述方向改结构。
+  - 需要 `Window` 的动作（开弹窗、聚焦、调整分栏、开编辑面板）不得在事件派发阶段执行，统一排进 `pending_*_requests`，由外壳在渲染期消费。
+  - 面板自己就能完成的事不经过外壳：读设置用 `app_settings(cx)`，投递命令用注入的 `command_tx`。
+  - 违反时的表现是 `cannot read/update ... while it is already being updated`；不得用 `cx.defer` 兜底，必须按上述方向改结构。
+  - 守卫测试：`panel_entities_have_no_parent_entity_handle`、`panel_entities_have_no_sync_callback_channel`、`monitor_panel_has_no_sync_callback_channel`、`editor_panel_has_no_sync_callback_channel`。
 - **实体回调禁止重入自身**：面板实体的点击/输入回调执行期间，该实体已被 GPUI 租借。回调里回交外壳（`with_shell`）时，被调用的外壳方法不得再 `read`/`update` 同一实体，否则触发 “cannot update while it is already being updated” 崩溃。正确切分是：状态变更留在面板内完成，外壳只接收结果（快照、布尔值、宽度）做持久化、采样或跨面板协调。
 - **提交与验证**：一次提交只解决一个问题，提交信息使用 Conventional Commits 中文描述；每次提交前执行 `cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo check --all-targets`，涉及行为变更时执行 `cargo test`。重构提交必须说明取舍与门禁结果。
 
