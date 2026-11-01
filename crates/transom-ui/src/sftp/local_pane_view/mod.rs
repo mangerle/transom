@@ -49,28 +49,36 @@ pub(crate) struct SftpLocalPaneProps {
     pub(crate) diff_ready: bool,
 }
 
+/// 本地内容渲染输入：条目、选中集与滚动句柄的只读借用。
+struct LocalContentInput<'a> {
+    tab_id: TabId,
+    entries: &'a [LocalFileEntry],
+    selection: &'a std::collections::BTreeSet<std::path::PathBuf>,
+    primary: Option<&'a std::path::Path>,
+    scroll: &'a VirtualListScrollHandle,
+    remote_available: bool,
+}
+
 impl SftpPanelView {
-    pub(crate) fn render_sftp_local_pane(
+    /// 本地内容：空态或虚拟列表；行菜单与选择态在闭包内构造。
+    fn render_local_content(
         &self,
-        props: SftpLocalPaneProps,
+        input: LocalContentInput<'_>,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let tab_id = props.tab_id;
-        let show_filter = props.show_filter;
-        let show_hidden = props.show_hidden;
-        let local_path_input = props.local_path_input;
-        let local_filter_input = props.local_filter_input;
-        let local_entries = props.local_entries;
-        let local_scroll_handle = props.local_scroll_handle;
-        let quick_paths = props.quick_paths;
-        let remote_available = props.remote_available;
-        let local_selection = std::rc::Rc::new(props.local_selection);
-        let local_primary = std::rc::Rc::new(props.local_primary);
-        let diff_ready = props.diff_ready;
-
-        let menu_app = cx.entity().clone();
-        let local_content = if local_entries.is_empty() {
+        let LocalContentInput {
+            tab_id,
+            entries,
+            selection,
+            primary,
+            scroll,
+            remote_available,
+        } = input;
+        let local_selection = std::rc::Rc::new(selection.clone());
+        let local_primary = std::rc::Rc::new(primary.map(|path| path.to_path_buf()));
+        let local_entries = entries.to_vec();
+        if local_entries.is_empty() {
             crate::widgets::empty_state(
                 IconName::FolderOpen,
                 rust_i18n::t!("sftp.empty").to_string(),
@@ -87,7 +95,7 @@ impl SftpPanelView {
             );
             let local_entries_rc = std::rc::Rc::new(local_entries);
             let p = p.clone();
-            let app_entity = menu_app.clone();
+            let app_entity = cx.entity().clone();
             v_virtual_list(
                 cx.entity().clone(),
                 format!("sftp-local-virtual-list-{tab_id}"),
@@ -140,9 +148,42 @@ impl SftpPanelView {
                         .collect()
                 },
             )
-            .track_scroll(&local_scroll_handle)
+            .track_scroll(scroll)
             .into_any_element()
-        };
+        }
+    }
+
+    pub(crate) fn render_sftp_local_pane(
+        &self,
+        props: SftpLocalPaneProps,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let tab_id = props.tab_id;
+        let show_filter = props.show_filter;
+        let show_hidden = props.show_hidden;
+        let local_path_input = props.local_path_input;
+        let local_filter_input = props.local_filter_input;
+        let local_entries = props.local_entries;
+        let local_scroll_handle = props.local_scroll_handle;
+        let quick_paths = props.quick_paths;
+        let remote_available = props.remote_available;
+        let local_selection = props.local_selection;
+        let local_primary = props.local_primary;
+        let diff_ready = props.diff_ready;
+
+        let local_content = self.render_local_content(
+            LocalContentInput {
+                tab_id,
+                entries: &local_entries,
+                selection: &local_selection,
+                primary: local_primary.as_deref(),
+                scroll: &local_scroll_handle,
+                remote_available,
+            },
+            p,
+            cx,
+        );
 
         // 对比入口只在"选中单个本地文件且远端有同名文件"时可用；
         // 目录、多选与远端缺失都置灰，避免点击后才发现没有对手方。
