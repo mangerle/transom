@@ -115,7 +115,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.state.modals.replay.as_ref() else {
+        let Some(modal) = self.state.modals.tools.replay.as_ref() else {
             return div().into_any_element();
         };
 
@@ -180,14 +180,14 @@ impl AppShell {
                             app,
                             move |this, event: &ClickEvent, window, cx| {
                                 if event.click_count() >= 2 {
-                                    this.state.modals.replay = None;
+                                    this.state.modals.tools.replay = None;
                                     this.open_cast_player(
                                         entry_path.clone(),
                                         Some(entry_title.clone()),
                                         window,
                                         cx,
                                     );
-                                } else if let Some(m) = this.state.modals.replay.as_mut() {
+                                } else if let Some(m) = this.state.modals.tools.replay.as_mut() {
                                     m.selected_index = idx;
                                     cx.notify();
                                 }
@@ -218,7 +218,7 @@ impl AppShell {
                                         crate::dialog_host::on_event(
                                             app,
                                             move |this, _: &ClickEvent, window, cx| {
-                                                this.state.modals.replay = None;
+                                                this.state.modals.tools.replay = None;
                                                 this.open_cast_player(
                                                     item_play_path.clone(),
                                                     Some(item_play_title.clone()),
@@ -275,7 +275,7 @@ impl AppShell {
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, window, cx| {
-                                            this.state.modals.replay = None;
+                                            this.state.modals.tools.replay = None;
                                             this.pick_and_play_external_cast(window, cx);
                                         },
                                     )),
@@ -289,7 +289,7 @@ impl AppShell {
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, window, cx| {
-                                            this.state.modals.replay = None;
+                                            this.state.modals.tools.replay = None;
                                             this.pick_and_replay_external_cast(
                                                 target_tab_id,
                                                 window,
@@ -319,7 +319,7 @@ impl AppShell {
                 "cancel-replay-modal",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.replay = None;
+                    this.state.modals.tools.replay = None;
                     cx.notify();
                 }),
             ))
@@ -338,7 +338,7 @@ impl AppShell {
                                 move |this, _: &ClickEvent, _, cx| {
                                     if let Some(entry) = selected_entry.as_ref() {
                                         let path = entry.path.clone();
-                                        this.state.modals.replay = None;
+                                        this.state.modals.tools.replay = None;
                                         this.execute_replay_file(target_tab_id, &path, cx);
                                     }
                                 },
@@ -356,7 +356,7 @@ impl AppShell {
                                     if let Some(entry) = play_entry.as_ref() {
                                         let path = entry.path.clone();
                                         let title = entry.title.clone();
-                                        this.state.modals.replay = None;
+                                        this.state.modals.tools.replay = None;
                                         this.open_cast_player(path, Some(title), window, cx);
                                     }
                                 },

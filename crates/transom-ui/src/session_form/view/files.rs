@@ -4,7 +4,7 @@ use super::*;
 
 impl AppShell {
     pub(crate) fn pick_private_key_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(form) = self.state.modals.form.as_mut() else {
+        let Some(form) = self.state.modals.session.form.as_mut() else {
             return;
         };
         let title = rust_i18n::t!("form.pick_key").to_string();
@@ -23,7 +23,7 @@ impl AppShell {
 
     /// 选择 CA 签发的用户证书文件（OpenSSH 惯例是 `私钥名-cert.pub`）。
     pub(crate) fn pick_certificate_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(form) = self.state.modals.form.as_mut() else {
+        let Some(form) = self.state.modals.session.form.as_mut() else {
             return;
         };
         let title = rust_i18n::t!("form.pick_cert").to_string();

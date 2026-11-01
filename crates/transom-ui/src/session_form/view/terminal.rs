@@ -67,7 +67,9 @@ impl AppShell {
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, _, cx| {
-                                            if let Some(form) = this.state.modals.form.as_mut() {
+                                            if let Some(form) =
+                                                this.state.modals.session.form.as_mut()
+                                            {
                                                 form.block_view = value;
                                             }
                                             cx.notify();

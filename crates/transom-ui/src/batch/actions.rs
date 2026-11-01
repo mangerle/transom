@@ -54,7 +54,7 @@ impl AppShell {
             cx.notify();
             return;
         }
-        self.state.modals.batch_edit = Some(BatchEditForm {
+        self.state.modals.session.batch_edit = Some(BatchEditForm {
             selected_count,
             change_port: false,
             port: sftp_text_input(window, cx, "22", rust_i18n::t!("form.port").as_ref()),
@@ -70,11 +70,11 @@ impl AppShell {
     }
 
     pub(crate) fn save_batch_edit(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.state.modals.batch_edit.as_ref() else {
+        let Some(form) = self.state.modals.session.batch_edit.as_ref() else {
             return;
         };
         if !form.change_port && !form.change_username && !form.change_auth {
-            if let Some(form) = self.state.modals.batch_edit.as_mut() {
+            if let Some(form) = self.state.modals.session.batch_edit.as_mut() {
                 form.error = Some(rust_i18n::t!("batch.error_no_change").to_string());
             }
             cx.notify();
@@ -86,7 +86,7 @@ impl AppShell {
             match form.port.read(cx).value().trim().parse::<u16>() {
                 Ok(value) if value > 0 => port = Some(value),
                 _ => {
-                    if let Some(form) = self.state.modals.batch_edit.as_mut() {
+                    if let Some(form) = self.state.modals.session.batch_edit.as_mut() {
                         form.error = Some(rust_i18n::t!("batch.error_port").to_string());
                     }
                     cx.notify();
@@ -98,7 +98,7 @@ impl AppShell {
         if form.change_username {
             let value = form.username.read(cx).value().trim().to_string();
             if value.is_empty() {
-                if let Some(form) = self.state.modals.batch_edit.as_mut() {
+                if let Some(form) = self.state.modals.session.batch_edit.as_mut() {
                     form.error = Some(rust_i18n::t!("batch.error_username").to_string());
                 }
                 cx.notify();
@@ -112,7 +112,7 @@ impl AppShell {
                 AuthChoice::PrivateKey => {
                     let path = form.key_path.read(cx).value().trim().to_string();
                     if path.is_empty() {
-                        if let Some(form) = self.state.modals.batch_edit.as_mut() {
+                        if let Some(form) = self.state.modals.session.batch_edit.as_mut() {
                             form.error = Some(rust_i18n::t!("batch.error_key").to_string());
                         }
                         cx.notify();
@@ -139,7 +139,7 @@ impl AppShell {
         };
         let selected = self.state.sidebar.selected_sessions.clone();
         let (updated, skipped) = apply_batch_updates(&mut self.state.catalog, &selected, &updates);
-        self.state.modals.batch_edit = None;
+        self.state.modals.session.batch_edit = None;
         let saved = self.state.persist_catalog();
         self.state.refresh_tab_sessions();
         self.state.sidebar.selection_mode = false;

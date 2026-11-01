@@ -157,7 +157,7 @@ impl AppShell {
         // 三条兜底：已打开的卡片与输入条、以及正在录制的标签，都不允许因为
         // 图标消失而失去关闭/停止的入口。
         let session_scoped = self.has_any_terminal();
-        let snippets_entry = (session_scoped || self.state.modals.snippet_panel.open)
+        let snippets_entry = (session_scoped || self.state.modals.tools.snippet_panel.open)
             .then(|| self.render_snippets_popover(p, cx));
         let broadcast_entry = (session_scoped || self.state.broadcast.open)
             .then(|| self.render_broadcast_trigger(cx));

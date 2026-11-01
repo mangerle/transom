@@ -42,7 +42,7 @@ impl AppShell {
     /// Argon2 使用 64 MiB 内存，属于明显的阻塞计算；放到后台执行器避免
     /// 冻结窗口。任务句柄保存在 `_backup_task`，窗口关闭时自动取消。
     pub(crate) fn submit_backup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(prompt) = self.state.modals.backup_prompt.as_ref() else {
+        let Some(prompt) = self.state.modals.tools.backup_prompt.as_ref() else {
             return;
         };
         if prompt.busy {
@@ -102,7 +102,7 @@ impl AppShell {
         };
 
         let backup = self.state.services.backup.clone();
-        if let Some(prompt) = self.state.modals.backup_prompt.as_mut() {
+        if let Some(prompt) = self.state.modals.tools.backup_prompt.as_mut() {
             prompt.busy = true;
             prompt.error = None;
         }
@@ -157,7 +157,7 @@ impl AppShell {
 
     /// 在弹窗上显示一条错误，不关闭弹窗以便用户就地改正。
     fn set_backup_error(&mut self, message: String, cx: &mut Context<Self>) {
-        if let Some(prompt) = self.state.modals.backup_prompt.as_mut() {
+        if let Some(prompt) = self.state.modals.tools.backup_prompt.as_mut() {
             prompt.error = Some(message);
         }
         cx.notify();
@@ -169,13 +169,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(_prompt) = self.state.modals.backup_prompt.as_ref() else {
+        let Some(_prompt) = self.state.modals.tools.backup_prompt.as_ref() else {
             return;
         };
         match result {
             Ok(BackupOutcome::Exported { path, report }) => {
                 let path = path.display().to_string();
-                self.state.modals.backup_prompt = None;
+                self.state.modals.tools.backup_prompt = None;
                 let mut message = rust_i18n::t!("backup.exported", path = path).to_string();
                 if report.secrets > 0 {
                     message.push(' ');
@@ -191,7 +191,7 @@ impl AppShell {
                 self.state.catalog = merged;
                 let saved = self.state.persist_catalog();
                 self.state.refresh_tab_sessions();
-                self.state.modals.backup_prompt = None;
+                self.state.modals.tools.backup_prompt = None;
                 let mut message = rust_i18n::t!(
                     "backup.imported",
                     added = report.sessions_added,
@@ -212,7 +212,7 @@ impl AppShell {
             }
             Err(error) => {
                 let code = error.code;
-                if let Some(prompt) = self.state.modals.backup_prompt.as_mut() {
+                if let Some(prompt) = self.state.modals.tools.backup_prompt.as_mut() {
                     prompt.busy = false;
                     prompt.error = Some(localized_error(&error));
                     // 文件类型与勾选不符时自动纠正勾选，省得用户在同一错误上反复试。
@@ -223,7 +223,7 @@ impl AppShell {
                     }
                 }
                 if code == ErrorCode::BackupEncrypted
-                    && let Some(prompt) = self.state.modals.backup_prompt.as_ref()
+                    && let Some(prompt) = self.state.modals.tools.backup_prompt.as_ref()
                 {
                     let passphrase = prompt.passphrase.clone();
                     passphrase.update(cx, |state, cx| state.focus(window, cx));

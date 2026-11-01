@@ -78,7 +78,7 @@ impl AppShell {
                     .placeholder(rust_i18n::t!("backup.confirm").to_string())
             })
         });
-        self.state.modals.backup_prompt = Some(BackupPromptState {
+        self.state.modals.tools.backup_prompt = Some(BackupPromptState {
             action,
             passphrase: passphrase.clone(),
             confirm,
@@ -101,7 +101,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(prompt) = self.state.modals.backup_prompt.as_ref() else {
+        let Some(prompt) = self.state.modals.tools.backup_prompt.as_ref() else {
             return div().into_any_element();
         };
         let is_export = prompt.action.is_export();
@@ -145,7 +145,7 @@ impl AppShell {
                                     app,
                                     |this, checked: &bool, _, cx| {
                                         if let Some(prompt) =
-                                            this.state.modals.backup_prompt.as_mut()
+                                            this.state.modals.tools.backup_prompt.as_mut()
                                         {
                                             prompt.encrypt = *checked;
                                         }
@@ -171,7 +171,7 @@ impl AppShell {
                                     app,
                                     |this, checked: &bool, _, cx| {
                                         if let Some(prompt) =
-                                            this.state.modals.backup_prompt.as_mut()
+                                            this.state.modals.tools.backup_prompt.as_mut()
                                         {
                                             prompt.include_secrets = *checked;
                                             // 口令必须加密落盘：勾选包含口令时同步打开加密，
@@ -237,12 +237,14 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, checked: &bool, window, cx| {
-                                    if let Some(prompt) = this.state.modals.backup_prompt.as_mut() {
+                                    if let Some(prompt) =
+                                        this.state.modals.tools.backup_prompt.as_mut()
+                                    {
                                         prompt.encrypted_file = *checked;
                                     }
                                     if *checked
                                         && let Some(prompt) =
-                                            this.state.modals.backup_prompt.as_ref()
+                                            this.state.modals.tools.backup_prompt.as_ref()
                                     {
                                         let passphrase = prompt.passphrase.clone();
                                         passphrase.update(cx, |state, cx| state.focus(window, cx));
@@ -288,7 +290,7 @@ impl AppShell {
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.state.modals.backup_prompt = None;
+                            this.state.modals.tools.backup_prompt = None;
                             cx.notify();
                         },
                     )),

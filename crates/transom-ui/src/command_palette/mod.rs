@@ -38,6 +38,7 @@ impl AppShell {
         let query = self
             .state
             .modals
+            .tools
             .quick_open_state
             .read(cx)
             .query(cx)
@@ -61,7 +62,7 @@ impl AppShell {
         };
 
         let muted = p.muted_foreground;
-        let mut command = Command::new(&self.state.modals.quick_open_state)
+        let mut command = Command::new(&self.state.modals.tools.quick_open_state)
             .placeholder(placeholder)
             // 外框由宿主面板提供：组件自带的圆角边框会在直角浮层里套出一层内圆角。
             .bordered(false)
@@ -90,7 +91,7 @@ impl AppShell {
                         .and_then(|group| group.get(index_path.row))
                         .cloned();
                     app.update(cx, |this, cx| {
-                        this.state.modals.show_quick_open = false;
+                        this.state.modals.tools.show_quick_open = false;
                         match target {
                             Some(PaletteTarget::Local) => {
                                 this.open_local_terminal(window, cx);
@@ -103,6 +104,7 @@ impl AppShell {
                                 let host = this
                                     .state
                                     .modals
+                                    .tools
                                     .quick_open_state
                                     .read(cx)
                                     .query(cx)
@@ -142,7 +144,7 @@ impl AppShell {
                 let app = app_entity.clone();
                 move |_window, cx| {
                     app.update(cx, |this, cx| {
-                        this.state.modals.show_quick_open = false;
+                        this.state.modals.tools.show_quick_open = false;
                         cx.notify();
                     });
                 }

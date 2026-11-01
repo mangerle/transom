@@ -348,7 +348,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(pending) = self.state.modals.confirm_forward_any.as_ref() else {
+        let Some(pending) = self.state.modals.tools.confirm_forward_any.as_ref() else {
             return div().into_any_element();
         };
         let rule_name = pending.rule.name.clone();

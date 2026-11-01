@@ -55,7 +55,7 @@ impl AppShell {
         });
         let default_key_path =
             cx.new(|cx| InputState::new(window, cx).placeholder("~/.ssh/id_ed25519".to_string()));
-        self.state.modals.folder_form = Some(FolderForm {
+        self.state.modals.session.folder_form = Some(FolderForm {
             base: None,
             parent,
             name,
@@ -108,7 +108,7 @@ impl AppShell {
                 .default_value(key_text)
                 .placeholder("~/.ssh/id_ed25519".to_string())
         });
-        self.state.modals.folder_form = Some(FolderForm {
+        self.state.modals.session.folder_form = Some(FolderForm {
             base: Some(folder_id),
             parent: None,
             name: input,
@@ -154,7 +154,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(form) = self.state.modals.folder_form.as_mut() else {
+        let Some(form) = self.state.modals.session.folder_form.as_mut() else {
             return;
         };
         let title = rust_i18n::t!("form.pick_key").to_string();
@@ -172,7 +172,7 @@ impl AppShell {
     }
 
     pub(crate) fn save_folder_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.state.modals.folder_form.as_ref() else {
+        let Some(form) = self.state.modals.session.folder_form.as_ref() else {
             return;
         };
         let name = form.name.read(cx).value().trim().to_string();
@@ -230,7 +230,7 @@ impl AppShell {
         };
         match result {
             Ok(()) => {
-                self.state.modals.folder_form = None;
+                self.state.modals.session.folder_form = None;
                 self.state.persist_catalog();
                 self.state.status = Some(if base.is_some() {
                     rust_i18n::t!("folder.renamed").to_string()
@@ -239,7 +239,7 @@ impl AppShell {
                 });
             }
             Err(error) => {
-                if let Some(form) = self.state.modals.folder_form.as_mut() {
+                if let Some(form) = self.state.modals.session.folder_form.as_mut() {
                     form.error = Some(error.to_string());
                 }
             }
@@ -266,7 +266,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.state.modals.folder_form.as_ref() else {
+        let Some(form) = self.state.modals.session.folder_form.as_ref() else {
             return div().into_any_element();
         };
         let editing = form.base.is_some();
@@ -355,7 +355,7 @@ impl AppShell {
                 "cancel-folder",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.folder_form = None;
+                    this.state.modals.session.folder_form = None;
                     cx.notify();
                 }),
             ))

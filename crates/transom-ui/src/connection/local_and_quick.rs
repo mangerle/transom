@@ -26,12 +26,16 @@ impl AppShell {
     }
 
     pub(crate) fn toggle_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state.modals.show_quick_open = !self.state.modals.show_quick_open;
-        if self.state.modals.show_quick_open {
-            self.state.modals.quick_open_state.update(cx, |state, cx| {
-                state.set_query("", window, cx);
-                state.focus(window, cx);
-            });
+        self.state.modals.tools.show_quick_open = !self.state.modals.tools.show_quick_open;
+        if self.state.modals.tools.show_quick_open {
+            self.state
+                .modals
+                .tools
+                .quick_open_state
+                .update(cx, |state, cx| {
+                    state.set_query("", window, cx);
+                    state.focus(window, cx);
+                });
         }
         cx.notify();
     }

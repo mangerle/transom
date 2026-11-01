@@ -106,7 +106,7 @@ impl AppShell {
         if let Some(preview) = self.render_sftp_hover_preview(window, &p, cx) {
             overlays.push(preview);
         }
-        if self.state.modals.show_quick_open {
+        if self.state.modals.tools.show_quick_open {
             overlays.push(self.render_command_palette_modal(window, cx, &p));
         }
         overlays

@@ -11,7 +11,7 @@ impl AppShell {
     /// 提示；若设备路径为空则自动选中第一个可用端口，减少新建会话的操作步骤。
     pub(crate) fn refresh_serial_ports(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let result = self.state.services.serial_ports.list();
-        let Some(form) = self.state.modals.form.as_mut() else {
+        let Some(form) = self.state.modals.session.form.as_mut() else {
             return;
         };
         match result {

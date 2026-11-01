@@ -40,7 +40,7 @@ impl AppShell {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(pending) = self.state.modals.clipboard_request.as_ref() {
+        if let Some(pending) = self.state.modals.connection.clipboard_request.as_ref() {
             log::debug!(
                 "已有待裁决的远端剪贴板请求，本次请求被忽略，窗格: {tab_id}，待裁决窗格: {}",
                 pending.tab_id
@@ -51,7 +51,7 @@ impl AppShell {
             return;
         };
         let session_name = tab.session.name.clone();
-        self.state.modals.clipboard_request = Some(ClipboardWritePrompt {
+        self.state.modals.connection.clipboard_request = Some(ClipboardWritePrompt {
             tab_id,
             session_name,
             text,
@@ -64,7 +64,7 @@ impl AppShell {
     /// 授权位落在终端视图上（连接级），本次内容在这里直接写入：视图的授权方法
     /// 只改变后续请求的走向，不重复写剪贴板。
     pub(crate) fn confirm_clipboard_write(&mut self, cx: &mut Context<Self>) {
-        let Some(pending) = self.state.modals.clipboard_request.take() else {
+        let Some(pending) = self.state.modals.connection.clipboard_request.take() else {
             return;
         };
         let terminal = self
@@ -83,7 +83,7 @@ impl AppShell {
 
     /// 拒绝本次写入；不改变会话授权状态，下次请求仍会询问。
     pub(crate) fn deny_clipboard_write(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.clipboard_request = None;
+        self.state.modals.connection.clipboard_request = None;
         self.state.status = Some(rust_i18n::t!("clipboard_consent.denied").to_string());
         cx.notify();
     }
@@ -98,7 +98,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(pending) = self.state.modals.clipboard_request.as_ref() else {
+        let Some(pending) = self.state.modals.connection.clipboard_request.as_ref() else {
             return div().into_any_element();
         };
         let session_name = pending.session_name.clone();

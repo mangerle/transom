@@ -249,7 +249,7 @@ impl AppShell {
 
         // 公网监听必须二次确认：不能因为点了一次「添加」就把端口开到公网。
         if is_public_bind_address(forward_bind_host(&rule)) {
-            self.state.modals.confirm_forward_any = Some(PendingForwardConfirm {
+            self.state.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
                 tab_id,
                 connection_id,
                 rule,
@@ -296,7 +296,7 @@ impl AppShell {
         let bind_host = forward_bind_host(&rule);
 
         if is_public_bind_address(bind_host) {
-            self.state.modals.confirm_forward_any = Some(PendingForwardConfirm {
+            self.state.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
                 tab_id,
                 connection_id,
                 rule,
@@ -327,7 +327,7 @@ impl AppShell {
     }
 
     pub(crate) fn confirm_forward_start(&mut self, cx: &mut Context<Self>) {
-        let Some(pending) = self.state.modals.confirm_forward_any.take() else {
+        let Some(pending) = self.state.modals.tools.confirm_forward_any.take() else {
             return;
         };
         let PendingForwardConfirm {
@@ -360,7 +360,7 @@ impl AppShell {
     }
 
     pub(crate) fn cancel_forward_confirm(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.confirm_forward_any = None;
+        self.state.modals.tools.confirm_forward_any = None;
         cx.notify();
     }
 

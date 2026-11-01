@@ -285,7 +285,7 @@ impl AppShell {
             Some(PromptKind::Passphrase) => Some(SecretKind::KeyPassphrase),
             _ => None,
         };
-        self.state.modals.auth_prompt = Some(AuthPromptState {
+        self.state.modals.connection.auth_prompt = Some(AuthPromptState {
             connection_id,
             name,
             instructions,
@@ -322,7 +322,7 @@ impl AppShell {
         if tab.connection_id != Some(connection_id) {
             return false;
         }
-        self.state.modals.host_key_confirm = Some(HostKeyConfirmState {
+        self.state.modals.connection.host_key_confirm = Some(HostKeyConfirmState {
             host,
             port,
             key_type,

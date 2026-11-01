@@ -28,7 +28,7 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, _, cx| {
-                                    if let Some(form) = this.state.modals.form.as_mut() {
+                                    if let Some(form) = this.state.modals.session.form.as_mut() {
                                         form.connection = ConnectionChoice::Ssh;
                                     }
                                     cx.notify();
@@ -43,13 +43,14 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
-                                    let needs_ports =
-                                        if let Some(form) = this.state.modals.form.as_mut() {
-                                            form.connection = ConnectionChoice::Serial;
-                                            form.serial_ports.is_empty()
-                                        } else {
-                                            false
-                                        };
+                                    let needs_ports = if let Some(form) =
+                                        this.state.modals.session.form.as_mut()
+                                    {
+                                        form.connection = ConnectionChoice::Serial;
+                                        form.serial_ports.is_empty()
+                                    } else {
+                                        false
+                                    };
                                     if needs_ports {
                                         this.refresh_serial_ports(window, cx);
                                     }
@@ -65,7 +66,7 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, _, cx| {
-                                    if let Some(form) = this.state.modals.form.as_mut() {
+                                    if let Some(form) = this.state.modals.session.form.as_mut() {
                                         form.connection = ConnectionChoice::Telnet;
                                     }
                                     cx.notify();
@@ -80,7 +81,7 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, _, cx| {
-                                    if let Some(form) = this.state.modals.form.as_mut() {
+                                    if let Some(form) = this.state.modals.session.form.as_mut() {
                                         form.connection = ConnectionChoice::Mosh;
                                     }
                                     cx.notify();

@@ -16,11 +16,12 @@ impl AppState {
     pub(crate) fn discard_pending_credential(&mut self, connection_id: ConnectionId) {
         let matched = self
             .modals
+            .connection
             .pending_credential
             .as_ref()
             .is_some_and(|pending| pending.connection_id == connection_id);
         if matched {
-            self.modals.pending_credential = None;
+            self.modals.connection.pending_credential = None;
         }
     }
 
@@ -63,13 +64,13 @@ impl AppState {
     }
 
     pub(crate) fn cancel_auth_prompt(&mut self) {
-        self.modals.auth_prompt = None;
+        self.modals.connection.auth_prompt = None;
     }
 }
 
 impl AppShell {
     pub(crate) fn submit_auth_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.state.modals.auth_prompt.take() else {
+        let Some(state) = self.state.modals.connection.auth_prompt.take() else {
             return;
         };
         let answers: Vec<String> = state
@@ -81,7 +82,7 @@ impl AppShell {
             && state.save
             && let Some(value) = answers.first().filter(|value| !value.is_empty())
         {
-            self.state.modals.pending_credential = Some(PendingCredential {
+            self.state.modals.connection.pending_credential = Some(PendingCredential {
                 session_id: state.session_id,
                 owner: self.state.secret_owner_for(state.session_id),
                 connection_id: state.connection_id,
@@ -103,6 +104,7 @@ impl AppShell {
         let matched = self
             .state
             .modals
+            .connection
             .pending_credential
             .as_ref()
             .is_some_and(|pending| {
@@ -111,7 +113,7 @@ impl AppShell {
         if !matched {
             return;
         }
-        let Some(pending) = self.state.modals.pending_credential.take() else {
+        let Some(pending) = self.state.modals.connection.pending_credential.take() else {
             return;
         };
         let key = SecretKey::new(pending.owner, pending.kind);
@@ -140,7 +142,7 @@ impl AppShell {
     /// 连接失败时丢弃待保存凭据。
     /// 用户信任首连主机指纹。
     pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.state.modals.host_key_confirm.take() {
+        if let Some(state) = self.state.modals.connection.host_key_confirm.take() {
             let _ = state.responder.try_send(true);
             cx.notify();
         }
@@ -148,7 +150,7 @@ impl AppShell {
 
     /// 用户拒绝首连主机指纹。
     pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.state.modals.host_key_confirm.take() {
+        if let Some(state) = self.state.modals.connection.host_key_confirm.take() {
             let _ = state.responder.try_send(false);
             cx.notify();
         }
@@ -164,7 +166,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(prompt) = self.state.modals.auth_prompt.as_ref() else {
+        let Some(prompt) = self.state.modals.connection.auth_prompt.as_ref() else {
             return div().into_any_element();
         };
         let client_generated = prompt
@@ -219,7 +221,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, checked: &bool, _, cx| {
-                                    if let Some(state) = this.state.modals.auth_prompt.as_mut() {
+                                    if let Some(state) =
+                                        this.state.modals.connection.auth_prompt.as_mut()
+                                    {
                                         state.save = *checked;
                                     }
                                     cx.notify();
@@ -280,7 +284,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(state) = self.state.modals.host_key_confirm.as_ref() else {
+        let Some(state) = self.state.modals.connection.host_key_confirm.as_ref() else {
             return div().into_any_element();
         };
         let body = rust_i18n::t!(

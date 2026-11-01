@@ -40,7 +40,7 @@ impl AppShell {
                 .placeholder(rust_i18n::t!("audit_viewer.search_placeholder").to_string())
         });
         let show_all = session.is_none();
-        self.state.modals.audit_viewer = Some(AuditViewer {
+        self.state.modals.tools.audit_viewer = Some(AuditViewer {
             target_title,
             session_name: session_name.clone(),
             host: host.clone(),
@@ -73,7 +73,7 @@ impl AppShell {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                if let Some(viewer) = this.state.modals.audit_viewer.as_mut() {
+                if let Some(viewer) = this.state.modals.tools.audit_viewer.as_mut() {
                     viewer.entries = entries;
                     viewer.selected_index = 0;
                     viewer.content = content;
@@ -128,7 +128,7 @@ impl AppShell {
 
     /// 切换查看的审计日志文件。
     pub(crate) fn select_audit_log(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.modals.audit_viewer.as_mut() else {
+        let Some(viewer) = self.state.modals.tools.audit_viewer.as_mut() else {
             return;
         };
         if index >= viewer.entries.len() {
@@ -144,7 +144,7 @@ impl AppShell {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                if let Some(viewer) = this.state.modals.audit_viewer.as_mut()
+                if let Some(viewer) = this.state.modals.tools.audit_viewer.as_mut()
                     && viewer.selected_index == index
                 {
                     viewer.content = content;
@@ -159,7 +159,7 @@ impl AppShell {
 
     /// 切换“仅当前会话”与“全部会话”范围。
     pub(crate) fn toggle_audit_viewer_scope(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.modals.audit_viewer.as_mut() else {
+        let Some(viewer) = self.state.modals.tools.audit_viewer.as_mut() else {
             return;
         };
         viewer.show_all = !viewer.show_all;
@@ -191,7 +191,7 @@ impl AppShell {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                if let Some(viewer) = this.state.modals.audit_viewer.as_mut()
+                if let Some(viewer) = this.state.modals.tools.audit_viewer.as_mut()
                     && viewer.show_all == show_all
                 {
                     viewer.entries = entries;
@@ -208,7 +208,7 @@ impl AppShell {
 
     /// 复制当前审计日志内容到剪贴板。
     pub(crate) fn copy_audit_viewer_content(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.modals.audit_viewer.as_ref() else {
+        let Some(viewer) = self.state.modals.tools.audit_viewer.as_ref() else {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(viewer.content.clone()));
@@ -218,7 +218,7 @@ impl AppShell {
 
     /// 删除指定的审计日志文件。
     pub(crate) fn delete_audit_log(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.modals.audit_viewer.as_mut() else {
+        let Some(viewer) = self.state.modals.tools.audit_viewer.as_mut() else {
             return;
         };
         if index >= viewer.entries.len() {
@@ -262,7 +262,7 @@ impl AppShell {
                 None
             };
             let _ = this.update(cx, |this, cx| {
-                if let Some(viewer) = this.state.modals.audit_viewer.as_mut()
+                if let Some(viewer) = this.state.modals.tools.audit_viewer.as_mut()
                     && let Some((path, content, is_truncated)) = read
                     && viewer
                         .entries

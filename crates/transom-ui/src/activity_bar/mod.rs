@@ -248,7 +248,7 @@ impl AppShell {
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
             ActivityItemId::KnownHosts => {
-                self.state.modals.known_hosts.open = true;
+                self.state.modals.connection.known_hosts.open = true;
                 self.refresh_known_hosts();
                 cx.notify();
             }

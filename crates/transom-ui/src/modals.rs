@@ -12,7 +12,7 @@ use gpui_kit::*;
 
 impl AppShell {
     pub(crate) fn refresh_known_hosts(&mut self) {
-        self.state.modals.known_hosts.records =
+        self.state.modals.connection.known_hosts.records =
             self.state.services.known_hosts.list().unwrap_or_default();
     }
 
@@ -33,10 +33,11 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let records = self.state.modals.known_hosts.records.clone();
+        let records = self.state.modals.connection.known_hosts.records.clone();
         let search_query = self
             .state
             .modals
+            .connection
             .known_hosts
             .search
             .read(cx)
@@ -131,7 +132,7 @@ impl AppShell {
 
         let content = v_flex()
             .gap_3()
-            .child(Input::new(&self.state.modals.known_hosts.search).w_full())
+            .child(Input::new(&self.state.modals.connection.known_hosts.search).w_full())
             .child(
                 v_flex()
                     .id(ElementId::Name("known-hosts-list".into()))
@@ -146,7 +147,7 @@ impl AppShell {
             .on_click(crate::dialog_host::on_event(
                 app,
                 |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.known_hosts.open = false;
+                    this.state.modals.connection.known_hosts.open = false;
                     cx.notify();
                 },
             ));

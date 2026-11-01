@@ -72,7 +72,7 @@ impl AppShell {
         if self.state.immersive {
             return;
         }
-        self.state.modals.snippet_panel.open = !self.state.modals.snippet_panel.open;
+        self.state.modals.tools.snippet_panel.open = !self.state.modals.tools.snippet_panel.open;
         cx.notify();
     }
 
@@ -138,26 +138,26 @@ impl AppShell {
         });
         command_input.update(cx, |state, cx| state.set_value(command, window, cx));
         let focus = name_input.read(cx).focus_handle(cx);
-        self.state.modals.snippet_panel.form = Some(SnippetFormState {
+        self.state.modals.tools.snippet_panel.form = Some(SnippetFormState {
             id,
             name: name_input,
             command: command_input,
             error: None,
         });
         // 卡片先收起：编辑弹窗是独立浮层，不应该和卡片叠在一起。
-        self.state.modals.snippet_panel.open = false;
+        self.state.modals.tools.snippet_panel.open = false;
         window.focus(&focus, cx);
         cx.notify();
     }
 
     pub(crate) fn close_snippet_form(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.snippet_panel.form = None;
+        self.state.modals.tools.snippet_panel.form = None;
         cx.notify();
     }
 
     /// 校验并保存单条命令。名称或命令不合法时保留弹窗并就地提示。
     pub(crate) fn save_snippet_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.state.modals.snippet_panel.form.as_ref() else {
+        let Some(form) = self.state.modals.tools.snippet_panel.form.as_ref() else {
             return;
         };
         let id = form.id;
@@ -169,14 +169,14 @@ impl AppShell {
             command,
         };
         if !candidate.is_valid() {
-            if let Some(form) = self.state.modals.snippet_panel.form.as_mut() {
+            if let Some(form) = self.state.modals.tools.snippet_panel.form.as_mut() {
                 form.error = Some(rust_i18n::t!("snippets.form_invalid").to_string());
             }
             cx.notify();
             return;
         }
         if id.is_none() && app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
-            if let Some(form) = self.state.modals.snippet_panel.form.as_mut() {
+            if let Some(form) = self.state.modals.tools.snippet_panel.form.as_mut() {
                 form.error = Some(rust_i18n::t!("snippets.too_many").to_string());
             }
             cx.notify();
@@ -194,13 +194,13 @@ impl AppShell {
         }
         let settings_snapshot = app_settings(cx).clone();
         if let Err(error) = self.state.persist_settings(&settings_snapshot) {
-            if let Some(form) = self.state.modals.snippet_panel.form.as_mut() {
+            if let Some(form) = self.state.modals.tools.snippet_panel.form.as_mut() {
                 form.error = Some(localized_error(&error));
             }
             cx.notify();
             return;
         }
-        self.state.modals.snippet_panel.form = None;
+        self.state.modals.tools.snippet_panel.form = None;
         self.state.status = Some(rust_i18n::t!("snippets.saved").to_string());
         cx.notify();
     }
@@ -226,7 +226,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let open = self.state.modals.snippet_panel.open;
+        let open = self.state.modals.tools.snippet_panel.open;
         let items = app_settings(cx).snippets.items.clone();
         let execute_directly = app_settings(cx).snippets.execute_directly;
         let app = cx.entity().clone();
@@ -259,8 +259,8 @@ impl AppShell {
             .on_open_change(move |open, _window, cx| {
                 let open = *open;
                 app_open.update(cx, |this, cx| {
-                    if this.state.modals.snippet_panel.open != open {
-                        this.state.modals.snippet_panel.open = open;
+                    if this.state.modals.tools.snippet_panel.open != open {
+                        this.state.modals.tools.snippet_panel.open = open;
                         cx.notify();
                     }
                 });
@@ -280,7 +280,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.state.modals.snippet_panel.form.as_ref() else {
+        let Some(form) = self.state.modals.tools.snippet_panel.form.as_ref() else {
             return div().into_any_element();
         };
         let title = if form.id.is_some() {

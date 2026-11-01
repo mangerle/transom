@@ -84,7 +84,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let dir = paths::recordings_dir();
-        self.state.modals.replay = Some(ReplayModalState {
+        self.state.modals.tools.replay = Some(ReplayModalState {
             target_tab_id: tab_id,
             entries: Vec::new(),
             selected_index: 0,
@@ -95,7 +95,7 @@ impl AppShell {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                if let Some(modal) = this.state.modals.replay.as_mut() {
+                if let Some(modal) = this.state.modals.tools.replay.as_mut() {
                     modal.entries = entries;
                     modal.selected_index = 0;
                 }
