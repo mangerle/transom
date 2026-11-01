@@ -53,68 +53,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         divider_x: Pixels,
     ) -> AnyElement {
-        let active_tab_info = self
-            .state
-            .workspace
-            .active_tab
-            .and_then(|tab_id| self.state.workspace.tab(tab_id));
-
-        let (status_dot_color, status_text) = if let Some(tab) = active_tab_info {
-            let (color, text) = match &tab.status {
-                TabStatus::Connecting => (
-                    p.muted_foreground,
-                    rust_i18n::t!("status.connecting").to_string(),
-                ),
-                TabStatus::Connected => (p.success, rust_i18n::t!("status.connected").to_string()),
-                TabStatus::Disconnected => {
-                    (p.danger, rust_i18n::t!("status.disconnected").to_string())
-                }
-                TabStatus::Failed(_) => (p.danger, rust_i18n::t!("status.failed").to_string()),
-            };
-            (color, format!("{}: {}", tab.display_name(), text))
-        } else {
-            (
-                p.muted_foreground,
-                rust_i18n::t!("status.ready").to_string(),
-            )
-        };
-
+        let connection_pill = self.render_connection_pill(p);
         let app = cx.entity().clone();
         self.refresh_status_metrics(cx);
         let metrics = self.state.status_metrics.clone();
-
-        let pill_tooltip = status_text.clone();
-        let connection_pill = h_flex()
-            .id("status-connection")
-            .min_w_0()
-            .gap_2()
-            .items_center()
-            .h(rems(BADGE_HEIGHT))
-            .px_2()
-            .rounded(p.radius.md)
-            .bg(p.secondary)
-            .border_1()
-            .border_color(p.border)
-            .cursor_default()
-            .hover(|style| style.bg(p.secondary_hover))
-            .tooltip(move |_window, cx| Tooltip::new(pill_tooltip.clone()).build(_window, cx))
-            .child(
-                div()
-                    .flex_none()
-                    .size(px(8.0))
-                    .rounded_full()
-                    .bg(status_dot_color),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_xs()
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.secondary_foreground)
-                    .child(status_text),
-            );
 
         // 三个会话作用域入口（快捷命令、广播、录制）只在存在终端标签时出现：
         // 没有终端时它们点了要么静默返回、要么打开一个没有目标的输入条、要么
@@ -230,6 +172,71 @@ impl AppShell {
         self.state.status_metrics.update(cx, |view, cx| {
             view.set_snapshot(snapshot, fallback, cx);
         });
+    }
+}
+
+impl AppShell {
+    /// 左侧连接状态胶囊：活动标签名、连接状态点与状态文案。
+    fn render_connection_pill(&self, p: &Palette) -> AnyElement {
+        let active_tab_info = self
+            .state
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.state.workspace.tab(tab_id));
+
+        let (status_dot_color, status_text) = if let Some(tab) = active_tab_info {
+            let (color, text) = match &tab.status {
+                TabStatus::Connecting => (
+                    p.muted_foreground,
+                    rust_i18n::t!("status.connecting").to_string(),
+                ),
+                TabStatus::Connected => (p.success, rust_i18n::t!("status.connected").to_string()),
+                TabStatus::Disconnected => {
+                    (p.danger, rust_i18n::t!("status.disconnected").to_string())
+                }
+                TabStatus::Failed(_) => (p.danger, rust_i18n::t!("status.failed").to_string()),
+            };
+            (color, format!("{}: {}", tab.display_name(), text))
+        } else {
+            (
+                p.muted_foreground,
+                rust_i18n::t!("status.ready").to_string(),
+            )
+        };
+
+        let pill_tooltip = status_text.clone();
+        let connection_pill = h_flex()
+            .id("status-connection")
+            .min_w_0()
+            .gap_2()
+            .items_center()
+            .h(rems(BADGE_HEIGHT))
+            .px_2()
+            .rounded(p.radius.md)
+            .bg(p.secondary)
+            .border_1()
+            .border_color(p.border)
+            .cursor_default()
+            .hover(|style| style.bg(p.secondary_hover))
+            .tooltip(move |_window, cx| Tooltip::new(pill_tooltip.clone()).build(_window, cx))
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(8.0))
+                    .rounded_full()
+                    .bg(status_dot_color),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.secondary_foreground)
+                    .child(status_text),
+            );
+        connection_pill.into_any_element()
     }
 }
 
