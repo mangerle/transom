@@ -50,6 +50,17 @@ impl AppShell {
                 });
                 cx.notify();
             }
+            SftpPanelEvent::OpenSearchModal(state) => {
+                self.state.sftp_modals.search = Some((**state).clone());
+                cx.notify();
+            }
+            SftpPanelEvent::OpenFilterModal { textarea } => {
+                self.state.sftp_modals.filter = Some(crate::sftp::SftpFilterModalState {
+                    textarea: textarea.clone(),
+                    error: None,
+                });
+                cx.notify();
+            }
             SftpPanelEvent::ClosePanel { tab_id } => {
                 self.close_sftp_panel(*tab_id);
                 cx.notify();

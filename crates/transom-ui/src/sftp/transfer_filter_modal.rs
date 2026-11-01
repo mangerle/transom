@@ -1,7 +1,6 @@
 //! SFTP 目录传输排除规则的编辑弹窗操作。
 
-use super::SftpFilterModalState;
-use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
+use super::entity::SftpPanelView;
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
@@ -13,21 +12,11 @@ use transom_core::validate_transfer_filter;
 impl SftpPanelView {
     /// 打开传输排除规则编辑弹窗：文本取自外壳设置，装配在外壳完成。
     pub(crate) fn open_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let app = self.app.clone();
-        let Some(text) = read_shell_parts(&app, cx, |_shell| {
-            app_settings(cx).sftp.transfer_filter.clone()
-        }) else {
-            return;
-        };
-        with_shell_parts(&app, cx, |shell, shell_cx| {
-            let textarea = shell_cx.new(|cx| TextareaState::new(window, cx).default_value(text));
-            textarea.update(shell_cx, |state, cx| state.focus(window, cx));
-            shell.state.sftp_modals.filter = Some(SftpFilterModalState {
-                textarea,
-                error: None,
-            });
-            shell_cx.notify();
-        });
+        let text = app_settings(cx).sftp.transfer_filter.clone();
+        let textarea = cx.new(|cx| TextareaState::new(window, cx).default_value(text));
+        textarea.update(cx, |state, cx| state.focus(window, cx));
+        cx.emit(crate::sftp::SftpPanelEvent::OpenFilterModal { textarea });
+        cx.notify();
     }
 }
 

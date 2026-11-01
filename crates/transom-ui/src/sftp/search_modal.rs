@@ -8,7 +8,7 @@
 //!   2. 匹配结果以结构化虚拟列表展示，行号与匹配内容分色高亮，点击结果项即时导航跳转并关闭弹窗；
 //! - 代价与局限：当前每次检索重走独立的 SSH Exec 通道，暂不维护远端常驻的倒排索引。
 
-use super::entity::{SftpPanelView, with_shell_parts};
+use super::entity::SftpPanelView;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::sftp::{SftpRemotePaneRef, parent_remote};
@@ -24,6 +24,7 @@ use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteSearchQuery, RemoteSearchResultItem, SftpOperation, TabId};
 
 /// SFTP 远程检索模态弹窗状态。
+#[derive(Clone)]
 pub(crate) struct SftpSearchModalState {
     pub(crate) tab_id: TabId,
     /// 检索目标连接；`None` 表示标签页主远端，`Some` 表示并列远端列。
@@ -52,15 +53,12 @@ impl SftpPanelView {
             SftpRemotePaneRef::Main => None,
             SftpRemotePaneRef::Side(connection_id) => Some(connection_id),
         };
-        let tab_id = self.tab_id;
         let placeholder = rust_i18n::t!("sftp.search.placeholder").to_string();
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, shell_cx| {
-            let input =
-                shell_cx.new(|cx| InputState::new(window, cx).placeholder(placeholder.clone()));
-            input.update(shell_cx, |state, cx| state.focus(window, cx));
-            shell.state.sftp_modals.search = Some(SftpSearchModalState {
-                tab_id,
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        input.update(cx, |state, cx| state.focus(window, cx));
+        cx.emit(crate::sftp::SftpPanelEvent::OpenSearchModal(Box::new(
+            SftpSearchModalState {
+                tab_id: self.tab_id,
                 connection_id: side_connection,
                 root_path,
                 input,
@@ -69,9 +67,9 @@ impl SftpPanelView {
                 is_searching: false,
                 results: Vec::new(),
                 error: None,
-            });
-            shell_cx.notify();
-        });
+            },
+        )));
+        cx.notify();
     }
 }
 

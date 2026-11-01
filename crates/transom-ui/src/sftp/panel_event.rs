@@ -5,7 +5,7 @@
 //! 否则会与正在派发事件的实体形成双重租借。
 
 use gpui_kit::Entity;
-use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::{InputState, TextareaState};
 use std::path::PathBuf;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpCommand, TabId};
 
@@ -22,6 +22,10 @@ pub(crate) enum SftpPanelEvent {
         permissions: u32,
         octal_input: Entity<InputState>,
     },
+    /// 请求打开远端检索弹窗；输入框已由面板建好并聚焦。
+    OpenSearchModal(Box<crate::sftp::SftpSearchModalState>),
+    /// 请求打开传输排除规则弹窗；文本框已由面板建好并聚焦。
+    OpenFilterModal { textarea: Entity<TextareaState> },
     /// 请求关闭指定窗格的面板；句柄由外壳回收。
     ClosePanel { tab_id: TabId },
     /// 请求打开本地对比面板；目标已由面板校验完成。
