@@ -252,6 +252,21 @@ fn session_context_menu(
     }
 }
 
+/// 会话行的展示快照：由目录会话与侧栏选中态推导。
+struct SessionRowVisuals {
+    menu_host: Option<String>,
+    icon_name: IconName,
+    detail_text: String,
+    icon_color: Option<Hsla>,
+    is_active: bool,
+    selection_mode: bool,
+    is_selected: bool,
+    drag_label: String,
+    drag_icon: IconName,
+    is_selected_row: bool,
+    fill: Hsla,
+}
+
 /// 会话行尾的拨测展示部件。
 struct SessionProbeParts {
     badge: Option<AnyElement>,
@@ -303,6 +318,49 @@ impl AppShell {
         }
     }
 
+    /// 会话行的展示快照：图标/颜色、详情、选中态与拖拽标签。
+    fn session_row_visuals(
+        &self,
+        row: &SessionRow,
+        active_session: Option<SessionId>,
+        p: &Palette,
+    ) -> SessionRowVisuals {
+        let session = &row.session;
+        let session_id = session.id;
+        // 右键菜单在渲染期就把地址算好带走：菜单闭包运行时会话行早已渲染完，
+        // 届时再回查 row 的借用不成立。
+        let menu_host = session_host(session).map(str::to_string);
+        let icon_name = crate::connection::icon(&session.connection);
+        let detail_text = crate::connection::display_compact(&session.connection);
+        // 会话专属图标覆盖连接类型图标；环境色直接染在图标上。
+        let icon_color = session_color(session.color);
+        let icon_name = session_icon(session.icon).unwrap_or(icon_name);
+        let is_active = active_session == Some(session_id);
+        let selection_mode = self.state.sidebar.selection_mode;
+        let is_selected = self.state.sidebar.selected_sessions.contains(&session_id);
+        let is_marked = self.state.sidebar.tree_selection == Some(session_id);
+        // 行底取主题的列表令牌：常态是列表背景，选中与当前用列表激活色。
+        let is_selected_row = is_marked || (selection_mode && is_selected);
+        let fill = if is_active || is_selected_row {
+            p.list_active
+        } else {
+            p.list_background
+        };
+        SessionRowVisuals {
+            menu_host,
+            icon_name,
+            detail_text,
+            icon_color,
+            is_active,
+            selection_mode,
+            is_selected,
+            drag_label: session.name.clone(),
+            drag_icon: icon_name,
+            is_selected_row,
+            fill,
+        }
+    }
+
     pub(crate) fn render_session_row(
         &mut self,
         row: &SessionRow,
@@ -314,22 +372,19 @@ impl AppShell {
         let session_id = session.id;
         let folder_id = session.folder_id;
         let app_entity = cx.entity().clone();
-        // 右键菜单在渲染期就把地址算好带走：菜单闭包运行时会话行早已渲染完，
-        // 届时再回查 row 的借用不成立。
-        let menu_host = session_host(session).map(str::to_string);
-        let icon_name = crate::connection::icon(&session.connection);
-        let detail_text = crate::connection::display_compact(&session.connection);
-
-        // 会话专属图标覆盖连接类型图标；环境色直接染在图标上：侧栏行里没有
-        // 放竖杠的位置，图标着色既能标出环境，又不挤占名称与详情的宽度。
-        let session_color = session_color(session.color);
-        let icon_name = session_icon(session.icon).unwrap_or(icon_name);
-        let is_active = active_session == Some(session_id);
-        let selection_mode = self.state.sidebar.selection_mode;
-        let is_selected = self.state.sidebar.selected_sessions.contains(&session_id);
-        let is_marked = self.state.sidebar.tree_selection == Some(session_id);
-        let drag_label = session.name.clone();
-        let drag_icon = icon_name;
+        let SessionRowVisuals {
+            menu_host,
+            icon_name,
+            detail_text,
+            icon_color: session_color,
+            is_active,
+            selection_mode,
+            is_selected,
+            drag_label,
+            drag_icon,
+            is_selected_row,
+            fill,
+        } = self.session_row_visuals(row, active_session, p);
         let element = div()
             .id(ElementId::Name(format!("session-{session_id}").into()))
             .w_full()
@@ -379,14 +434,6 @@ impl AppShell {
                 menu_host,
                 app_entity.clone(),
             ));
-        // 行底取主题的列表令牌：常态是列表背景，选中与当前用列表激活色。
-        // 浅色与深色主题各自给值，不再对强调色叠低透明度。
-        let is_selected_row = is_marked || (selection_mode && is_selected);
-        let fill = if is_active || is_selected_row {
-            p.list_active
-        } else {
-            p.list_background
-        };
         // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配
         // global_id 与悬浮状态，缺少 id 时鼠标移入不会触发重绘，高亮只能等
         // 别的事件顺带重绘才补上，看上去就是"悬停不跟手"。
