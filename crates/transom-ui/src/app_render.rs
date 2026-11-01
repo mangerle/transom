@@ -8,6 +8,7 @@ use crate::keymap;
 use crate::palette::{Palette, localized_error};
 use crate::sftp::SftpPanelState;
 use crate::theme::tokens::{rem_px, size};
+use gpui_kit::base::ResizablePanel;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
@@ -291,20 +292,8 @@ impl AppShell {
         // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
         let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
         let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
-        let mut sidebar_panel = resizable_panel()
-            .size(rem_px(size::SIDEBAR_WIDTH, rem))
-            .size_range(sidebar_min_width..sidebar_max_width)
-            .fixed()
-            .visible(self.state.sidebar.visible);
-        if self.state.sidebar.visible {
-            // 左侧槽位一次只承载一种内容：纵向标签面板或会话树。
-            let content = if self.show_vertical_tabs_panel(app_settings(cx)) {
-                self.render_vertical_tabs_panel(p, cx)
-            } else {
-                self.render_sidebar(window, cx, p)
-            };
-            sidebar_panel = sidebar_panel.child(content);
-        }
+        let sidebar_panel = self.build_sidebar_panel(window, cx, p, rem);
+
         let plan = self.plan_workspace_layout(window, cx);
         // 折叠状态变化时把 SFTP 面板同步到内容宽度：必须赶在分组构建之前，
         // 本帧的面板尺寸才能反映新的宽度。
@@ -679,6 +668,33 @@ impl AppShell {
             sftp_max_width,
             side_left: app_settings(cx).window.sftp_panel_side.is_left(),
         }
+    }
+
+    /// 左侧槽位面板：纵向标签或会话树，折叠时仅隐藏不退出分组。
+    fn build_sidebar_panel(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+        rem: Pixels,
+    ) -> ResizablePanel {
+        let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
+        let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
+        let mut sidebar_panel = resizable_panel()
+            .size(rem_px(size::SIDEBAR_WIDTH, rem))
+            .size_range(sidebar_min_width..sidebar_max_width)
+            .fixed()
+            .visible(self.state.sidebar.visible);
+        if self.state.sidebar.visible {
+            // 左侧槽位一次只承载一种内容：纵向标签面板或会话树。
+            let content = if self.show_vertical_tabs_panel(app_settings(cx)) {
+                self.render_vertical_tabs_panel(p, cx)
+            } else {
+                self.render_sidebar(window, cx, p)
+            };
+            sidebar_panel = sidebar_panel.child(content);
+        }
+        sidebar_panel
     }
 
     /// 监控抽屉宽度：同步实测宽度到状态与设置，返回到布局使用的宽度。
