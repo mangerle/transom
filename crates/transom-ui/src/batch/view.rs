@@ -16,9 +16,6 @@ impl AppShell {
         let selected_count = form.selected_count;
         let change_port = form.change_port;
         let change_username = form.change_username;
-        let change_auth = form.change_auth;
-        let auth = form.auth;
-        let save_passphrase = form.save_passphrase;
         let error = form.error.clone();
 
         let port_row = crate::widgets::checkbox_field_row(
@@ -49,6 +46,62 @@ impl AppShell {
             p,
         );
 
+        let auth_section = self.render_batch_auth_section(form, app, p);
+
+        let mut content = v_flex()
+            .gap_3()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("batch.hint", count = selected_count).to_string()),
+            )
+            .child(port_row)
+            .child(username_row)
+            .child(auth_section);
+        if let Some(error) = error {
+            content = content.child(div().text_sm().text_color(p.danger).child(error));
+        }
+
+        let footer = h_flex()
+            .gap_2()
+            .child(crate::widgets::dialog_cancel_button(
+                "cancel-batch-edit",
+                rust_i18n::t!("common.cancel").to_string(),
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.state.modals.session.batch_edit = None;
+                    cx.notify();
+                }),
+            ))
+            .child(crate::widgets::dialog_confirm_button(
+                "apply-batch-edit",
+                rust_i18n::t!("batch.apply").to_string(),
+                None,
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.save_batch_edit(cx);
+                }),
+            ));
+
+        crate::widgets::dialog_body(
+            "batch-edit-modal",
+            rust_i18n::t!("batch.title").to_string(),
+            Some(rust_i18n::t!("batch.apply_hint").to_string()),
+            content,
+            Some(footer),
+        )
+    }
+
+    /// 认证切换区：密码/私钥/Agent 选择与对应补充字段。
+    fn render_batch_auth_section(
+        &self,
+        form: &super::state::BatchEditForm,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let change_auth = form.change_auth;
+        let auth = form.auth;
+        let save_passphrase = form.save_passphrase;
         let auth_buttons = h_flex()
             .gap_2()
             .child(
@@ -152,47 +205,6 @@ impl AppShell {
             }
         }
 
-        let mut content = v_flex()
-            .gap_3()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("batch.hint", count = selected_count).to_string()),
-            )
-            .child(port_row)
-            .child(username_row)
-            .child(auth_section);
-        if let Some(error) = error {
-            content = content.child(div().text_sm().text_color(p.danger).child(error));
-        }
-
-        let footer = h_flex()
-            .gap_2()
-            .child(crate::widgets::dialog_cancel_button(
-                "cancel-batch-edit",
-                rust_i18n::t!("common.cancel").to_string(),
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.session.batch_edit = None;
-                    cx.notify();
-                }),
-            ))
-            .child(crate::widgets::dialog_confirm_button(
-                "apply-batch-edit",
-                rust_i18n::t!("batch.apply").to_string(),
-                None,
-                crate::widgets::DialogConfirmKind::Primary,
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.save_batch_edit(cx);
-                }),
-            ));
-
-        crate::widgets::dialog_body(
-            "batch-edit-modal",
-            rust_i18n::t!("batch.title").to_string(),
-            Some(rust_i18n::t!("batch.apply_hint").to_string()),
-            content,
-            Some(footer),
-        )
+        auth_section.into_any_element()
     }
 }
