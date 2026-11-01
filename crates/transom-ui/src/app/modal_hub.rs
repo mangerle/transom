@@ -57,6 +57,8 @@ pub(crate) struct ToolModals {
     pub(crate) quick_open_state: Entity<CommandState>,
     pub(crate) snippet_panel: SnippetPanelState,
     pub(crate) confirm_forward_any: Option<crate::forward::PendingForwardConfirm>,
+    /// 密钥生成与管理向导；未打开时为空。
+    pub(crate) key_wizard: Option<crate::keys::KeyWizardState>,
 }
 
 /// 聚合应用内全部顶层交互弹窗与表单状态。
@@ -103,6 +105,7 @@ impl ModalHub {
                 quick_open_state,
                 snippet_panel,
                 confirm_forward_any: None,
+                key_wizard: None,
             },
             settings,
         }

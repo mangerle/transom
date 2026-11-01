@@ -302,7 +302,6 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         sftp_panel_width_target: None,
         window_requests: Default::default(),
         status_metrics: cx.new(|_| crate::status_bar::StatusBarMetricsView::new()),
-        key_wizard: None,
         stats_sampling: true,
         shortcut_recording: ShortcutRecordingState {
             filter: prepared.shortcut_filter,

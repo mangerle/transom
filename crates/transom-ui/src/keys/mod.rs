@@ -77,7 +77,7 @@ impl KeyWizardState {
 impl AppShell {
     /// 当前向导里选中的公钥副本；从设置实体读取。
     fn selected_key(&self, _cx: &App) -> Option<PublicKeyInfo> {
-        let wizard = self.state.key_wizard.as_ref()?;
+        let wizard = self.state.modals.tools.key_wizard.as_ref()?;
         wizard
             .selected
             .and_then(|index| wizard.keys.get(index))
@@ -116,12 +116,12 @@ impl AppShell {
             }
             Err(error) => state.error = Some(localized_error(&error)),
         }
-        self.state.key_wizard = Some(state);
+        self.state.modals.tools.key_wizard = Some(state);
         cx.notify();
     }
 
     pub(crate) fn close_key_wizard(&mut self, cx: &mut Context<Self>) {
-        self.state.key_wizard = None;
+        self.state.modals.tools.key_wizard = None;
         cx.notify();
     }
 
@@ -132,7 +132,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(wizard) = self.state.key_wizard.clone() else {
+        let Some(wizard) = self.state.modals.tools.key_wizard.clone() else {
             return;
         };
         if wizard.algorithm == algorithm {
@@ -150,7 +150,7 @@ impl AppShell {
             .display()
             .to_string();
         let path_input = wizard.path;
-        if let Some(state) = self.state.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
             state.algorithm = algorithm;
             state.error = None;
         }
@@ -161,7 +161,7 @@ impl AppShell {
     }
 
     pub(crate) fn generate_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(wizard) = self.state.key_wizard.clone() else {
+        let Some(wizard) = self.state.modals.tools.key_wizard.clone() else {
             return;
         };
         if wizard.generating {
@@ -169,7 +169,7 @@ impl AppShell {
         }
         let path_text = wizard.path.read(cx).value().trim().to_string();
         if path_text.is_empty() {
-            if let Some(state) = self.state.key_wizard.as_mut() {
+            if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
                 state.error = Some(rust_i18n::t!("keys.error_path_empty").to_string());
             }
             cx.notify();
@@ -180,7 +180,7 @@ impl AppShell {
         let passphrase = Zeroizing::new(wizard.passphrase.read(cx).value().to_string());
         let private_path = expand_home(&path_text);
         let ssh_dir = wizard.ssh_dir.clone();
-        if let Some(state) = self.state.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
             state.generating = true;
             state.error = None;
             state.message = None;
@@ -212,7 +212,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(wizard) = self.state.key_wizard.clone() else {
+        let Some(wizard) = self.state.modals.tools.key_wizard.clone() else {
             return;
         };
         self.state.tasks.background.keygen = None;
@@ -227,7 +227,7 @@ impl AppShell {
                     fingerprint = generated.public_key.fingerprint.as_str()
                 )
                 .to_string();
-                if let Some(state) = self.state.key_wizard.as_mut() {
+                if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
                     state.generating = false;
                     match &scanned {
                         Ok(keys) => {
@@ -244,7 +244,7 @@ impl AppShell {
                 passphrase_input.update(cx, |input, cx| input.set_value("", window, cx));
             }
             Err(error) => {
-                if let Some(state) = self.state.key_wizard.as_mut() {
+                if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
                     state.generating = false;
                     state.error = Some(localized_error(&error));
                     state.message = None;
@@ -257,6 +257,8 @@ impl AppShell {
     pub(crate) fn select_key(&mut self, index: usize, cx: &mut Context<Self>) {
         let len = self
             .state
+            .modals
+            .tools
             .key_wizard
             .as_ref()
             .map(|wizard| wizard.keys.len());
@@ -264,7 +266,7 @@ impl AppShell {
             return;
         };
         if index < len {
-            if let Some(state) = self.state.key_wizard.as_mut() {
+            if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
                 state.selected = Some(index);
                 state.error = None;
             }
@@ -337,7 +339,7 @@ impl AppShell {
             host = target.title.as_str()
         )
         .to_string();
-        if let Some(state) = self.state.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
             if sent {
                 state.message = Some(message);
                 state.error = None;
@@ -355,7 +357,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let key = key_name.clone();
-        if let Some(state) = self.state.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
             match &error {
                 Some(error) => {
                     state.error = Some(localized_error(error));
@@ -380,7 +382,7 @@ impl AppShell {
     }
 
     fn set_key_notice(&mut self, message: &str, cx: &mut Context<Self>) {
-        if let Some(state) = self.state.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
             state.message = Some(message.to_string());
             state.error = None;
         }
@@ -388,7 +390,7 @@ impl AppShell {
     }
 
     fn set_key_error(&mut self, message: &str, cx: &mut Context<Self>) {
-        if let Some(state) = self.state.key_wizard.as_mut() {
+        if let Some(state) = self.state.modals.tools.key_wizard.as_mut() {
             state.error = Some(message.to_string());
             state.message = None;
         }
