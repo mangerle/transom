@@ -215,14 +215,14 @@ impl AppShell {
                 shell.on_monitor_panel_event(event, cx);
             },
         );
-        this.state.tasks.monitor_panel_subscription = Some(monitor_subscription);
+        this.state.tasks.subscriptions.monitor = Some(monitor_subscription);
         let settings_subscription = cx.subscribe(
             &settings_subscription_handle,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {
                 shell.on_settings_event(event, cx);
             },
         );
-        this.state.tasks.settings_subscription = Some(settings_subscription);
+        this.state.tasks.subscriptions.settings = Some(settings_subscription);
         // 编辑器面板的意图事件由外壳订阅处理；命令通道在创建时注入，
         // 面板自己投递 SFTP 命令，不需要回指外壳。
         let editor_command_tx = this.state.services.command_tx.clone();
@@ -232,7 +232,7 @@ impl AppShell {
                 shell.on_editor_panel_event(event, cx);
             },
         );
-        this.state.tasks.editor_panel_subscription = Some(editor_subscription);
+        this.state.tasks.subscriptions.editor = Some(editor_subscription);
         this.state
             .editors
             .update(cx, |panels, _| panels.set_command_tx(editor_command_tx));
@@ -274,7 +274,7 @@ impl AppShell {
         crate::settings::sync_terminal_palette(cx);
         this.restore_startup_tabs(window, cx);
 
-        this.state.tasks.git_sync = Some(cx.spawn(async move |this, cx| {
+        this.state.tasks.background.git_sync = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_secs(60))

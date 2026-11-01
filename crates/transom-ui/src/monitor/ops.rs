@@ -108,10 +108,10 @@ impl AppShell {
         interval: std::time::Duration,
         cx: &mut Context<Self>,
     ) {
-        if self.state.tasks.monitor.is_some() {
+        if self.state.tasks.background.monitor.is_some() {
             return;
         }
-        self.state.tasks.monitor = Some(cx.spawn(async move |this, cx| {
+        self.state.tasks.background.monitor = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(interval).await;
                 if this
@@ -133,7 +133,7 @@ impl AppShell {
         interval: std::time::Duration,
         cx: &mut Context<Self>,
     ) {
-        self.state.tasks.monitor = None;
+        self.state.tasks.background.monitor = None;
         self.ensure_monitor_task(interval, cx);
         cx.notify();
     }
@@ -152,7 +152,7 @@ impl AppShell {
             .monitor
             .update(cx, |view, _| view.set_interval_mode(mode))
         {
-            self.state.tasks.monitor = None;
+            self.state.tasks.background.monitor = None;
             self.ensure_monitor_task(self.state.monitor.read(cx).interval_mode().interval(), cx);
             cx.notify();
         }

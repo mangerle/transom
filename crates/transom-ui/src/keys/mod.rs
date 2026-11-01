@@ -208,7 +208,7 @@ impl AppShell {
                 this.finish_key_generation(result, ssh_dir, window, cx);
             });
         });
-        self.state.tasks.keygen = Some(task);
+        self.state.tasks.background.keygen = Some(task);
         cx.notify();
     }
 
@@ -222,7 +222,7 @@ impl AppShell {
         let Some(wizard) = self.settings_modal(cx).key_wizard else {
             return;
         };
-        self.state.tasks.keygen = None;
+        self.state.tasks.background.keygen = None;
         let passphrase_input = wizard.passphrase;
         match result {
             Ok(generated) => {

@@ -32,7 +32,7 @@ impl AppShell {
                 this.apply_cloud_sync_pull(catalog, secrets, safety_path, cx);
             });
         });
-        self.state.tasks.sync_pull = Some(task);
+        self.state.tasks.background.sync_pull = Some(task);
     }
 
     /// 把合并前的本机目录导出为明文安全副本；失败不阻断合并，只记日志。
@@ -104,7 +104,7 @@ impl AppShell {
         if saved {
             self.state.status = Some(message);
         }
-        self.state.tasks.sync_pull = None;
+        self.state.tasks.background.sync_pull = None;
         cx.notify();
     }
 

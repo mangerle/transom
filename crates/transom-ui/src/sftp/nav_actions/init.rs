@@ -341,7 +341,8 @@ impl AppShell {
         );
         self.state
             .tasks
-            .sftp_panel_subscriptions
+            .subscriptions
+            .sftp
             .insert(tab_id, subscription);
         pane.sftp_view = Some(view);
         if open {

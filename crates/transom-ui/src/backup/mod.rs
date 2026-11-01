@@ -151,7 +151,7 @@ impl AppShell {
                 });
             })
         };
-        self.state.tasks.backup = Some(task);
+        self.state.tasks.background.backup = Some(task);
         cx.notify();
     }
 

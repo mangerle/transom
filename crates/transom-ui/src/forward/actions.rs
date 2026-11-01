@@ -203,7 +203,8 @@ impl AppShell {
         );
         self.state
             .tasks
-            .forward_panel_subscriptions
+            .subscriptions
+            .forward
             .insert(tab_id, subscription);
         if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
             pane.forwards_view = Some(view);
