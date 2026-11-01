@@ -10,7 +10,7 @@ impl MonitorView {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let stats = self.active_stats(cx);
+        let stats = self.stats().cloned();
 
         let mut body = v_flex().gap_2p5().p_2p5();
 
@@ -129,9 +129,11 @@ impl MonitorView {
                                         if this.set_interval_mode(SampleIntervalMode::Fast) {
                                             cx.notify();
                                             let interval = this.interval_mode().interval();
-                                            this.with_shell(cx, |shell, cx| {
-                                                shell.restart_monitor_task(interval, cx)
-                                            });
+                                            cx.emit(
+                                                crate::monitor::MonitorPanelEvent::RestartSampling(
+                                                    interval,
+                                                ),
+                                            );
                                         }
                                     })),
                             )
@@ -144,9 +146,11 @@ impl MonitorView {
                                         if this.set_interval_mode(SampleIntervalMode::Normal) {
                                             cx.notify();
                                             let interval = this.interval_mode().interval();
-                                            this.with_shell(cx, |shell, cx| {
-                                                shell.restart_monitor_task(interval, cx)
-                                            });
+                                            cx.emit(
+                                                crate::monitor::MonitorPanelEvent::RestartSampling(
+                                                    interval,
+                                                ),
+                                            );
                                         }
                                     })),
                             )
@@ -159,9 +163,11 @@ impl MonitorView {
                                         if this.set_interval_mode(SampleIntervalMode::Eco) {
                                             cx.notify();
                                             let interval = this.interval_mode().interval();
-                                            this.with_shell(cx, |shell, cx| {
-                                                shell.restart_monitor_task(interval, cx)
-                                            });
+                                            cx.emit(
+                                                crate::monitor::MonitorPanelEvent::RestartSampling(
+                                                    interval,
+                                                ),
+                                            );
                                         }
                                     })),
                             ),
@@ -199,8 +205,8 @@ impl MonitorView {
                             .icon(IconName::RefreshCw)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 let collapsed = this.state.collapse.processes;
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.sample_processes(collapsed, cx)
+                                cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses {
+                                    collapsed,
                                 });
                             })),
                     )
@@ -219,7 +225,7 @@ impl MonitorView {
                             } else {
                                 rust_i18n::t!("monitor.view.width_wide_tooltip").to_string()
                             })
-                            .on_click(cx.listener(|this, _, window, cx| {
+                            .on_click(cx.listener(|this, _, _window, cx| {
                                 let new_width = if this.drawer_width() > 480.0 {
                                     420.0
                                 } else {
@@ -227,9 +233,9 @@ impl MonitorView {
                                 };
                                 this.set_drawer_width(new_width);
                                 cx.notify();
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.apply_monitor_drawer_width(new_width, window, cx)
-                                });
+                                cx.emit(crate::monitor::MonitorPanelEvent::DrawerWidthChanged(
+                                    new_width,
+                                ));
                             })),
                     )
                     // 脱离为独立标签页按钮
@@ -239,13 +245,11 @@ impl MonitorView {
                             .xsmall()
                             .icon(IconName::ArrowUpRight)
                             .tooltip(rust_i18n::t!("monitor.view.detach_tooltip").to_string())
-                            .on_click(cx.listener(|this, _, window, cx| {
+                            .on_click(cx.listener(|this, _, _window, cx| {
                                 // 抽屉开合属于面板状态，先自己落定再回交外壳切标签。
                                 this.set_open(false);
                                 cx.notify();
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.maximize_monitor_to_tab(window, cx)
-                                });
+                                cx.emit(crate::monitor::MonitorPanelEvent::MaximizeToTab);
                             })),
                     )
                     // 关闭抽屉按钮

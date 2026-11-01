@@ -87,10 +87,12 @@ impl MonitorView {
                                         .label(
                                             rust_i18n::t!("monitor.services.restart").to_string(),
                                         )
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.with_shell(cx, |shell, cx| {
-                                                shell.restart_systemd_service(&unit, cx)
-                                            });
+                                        .on_click(cx.listener(move |_this, _, _, cx| {
+                                            cx.emit(
+                                                crate::monitor::MonitorPanelEvent::RestartService(
+                                                    unit.clone(),
+                                                ),
+                                            );
                                         })),
                                 ),
                         ),
@@ -112,9 +114,11 @@ impl MonitorView {
                 let expanded = this.toggle_collapse("services");
                 let collapse = this.collapse_snapshot();
                 cx.notify();
-                this.with_shell(cx, |shell, cx| {
-                    shell.after_monitor_collapse(collapse, expanded, cx)
+                cx.emit(crate::monitor::MonitorPanelEvent::CollapseChanged {
+                    collapse,
+                    expanded_processes: expanded,
                 });
+                cx.notify();
             }),
         )
     }

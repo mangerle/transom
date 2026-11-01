@@ -13,7 +13,6 @@
 //! 两段式绑定（`new` 之后立即 `attach`），绑定前跨域动作静默跳过。
 
 use super::types::MonitorState;
-use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::*;
 use transom_core::{MonitorSettings, TabId};
@@ -22,9 +21,11 @@ use transom_core::{MonitorSettings, TabId};
 pub(crate) struct MonitorView {
     /// 面板自身状态：折叠、采样档位、进程快照与筛选框。
     pub(crate) state: MonitorState,
-    /// 回到外壳的弱引用；构造完成后由 `attach` 绑定。
-    app: Option<WeakEntity<AppShell>>,
+    /// 活动标签的统计快照：外壳在采样事件到达时注入。
+    stats: Option<transom_core::SystemStats>,
 }
+
+impl EventEmitter<super::MonitorPanelEvent> for MonitorView {}
 
 impl MonitorView {
     /// 创建面板实体；筛选输入框等子实体在这里一并建立。
@@ -35,13 +36,13 @@ impl MonitorView {
     ) -> Self {
         Self {
             state: MonitorState::new(window, settings, cx),
-            app: None,
+            stats: None,
         }
     }
 
-    /// 绑定外壳弱引用；必须在外壳构造完成后立即调用一次。
-    pub(crate) fn attach(&mut self, app: WeakEntity<AppShell>) {
-        self.app = Some(app);
+    /// 接收外壳推送的统计快照；采样事件到达时调用。
+    pub(crate) fn set_stats(&mut self, stats: Option<transom_core::SystemStats>) {
+        self.stats = stats;
     }
 
     /// 面板是否展开。
@@ -159,34 +160,9 @@ impl MonitorView {
         self.state.error = None;
     }
 
-    /// 回到外壳执行一次跨域动作。
-    ///
-    /// 返回 `None` 表示外壳已释放（窗口关闭中），调用方直接跳过即可。
-    ///
-    /// # 调用约束
-    /// 本方法通常在面板自己的点击回调里执行，此时 `MonitorView` 正被 GPUI 租借。
-    /// 因此被调用的外壳方法**绝对不得**再读写本实体（`state.monitor.read/update`），
-    /// 否则会触发 “cannot update while it is already being updated” 的 panic。
-    /// 需要改面板状态时先在本实体上改完，再只把结果（快照/布尔/宽度）交给外壳。
-    pub(super) fn with_shell<R>(
-        &self,
-        cx: &mut Context<Self>,
-        action: impl FnOnce(&mut AppShell, &mut Context<AppShell>) -> R,
-    ) -> Option<R> {
-        let app = self.app.as_ref()?.upgrade()?;
-        Some(app.update(cx, action))
-    }
-
-    /// 读取活动标签的统计快照；没有活动标签或外壳未绑定时为空。
-    pub(super) fn active_stats(&self, cx: &Context<Self>) -> Option<transom_core::SystemStats> {
-        let app = self.app.as_ref()?.upgrade()?;
-        let shell = app.read(cx);
-        shell
-            .state
-            .workspace
-            .active_tab
-            .and_then(|tab_id| shell.state.workspace.tab(tab_id))
-            .and_then(|tab| tab.system_stats().cloned())
+    /// 当前统计快照。
+    pub(super) fn stats(&self) -> Option<&transom_core::SystemStats> {
+        self.stats.as_ref()
     }
 }
 

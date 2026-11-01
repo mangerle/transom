@@ -22,6 +22,47 @@ impl AppState {
 }
 
 impl AppShell {
+    /// 处理监控面板发来的意图。
+    ///
+    /// 只用事件数据，不回读面板：事件派发阶段面板仍被租借。需要窗口的动作
+    /// （脱离为标签页、收回抽屉、调整宽度）排到渲染期执行。
+    pub(crate) fn on_monitor_panel_event(
+        &mut self,
+        event: &crate::monitor::MonitorPanelEvent,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::monitor::MonitorPanelEvent;
+        match event {
+            MonitorPanelEvent::CollapseChanged {
+                collapse,
+                expanded_processes,
+            } => {
+                self.after_monitor_collapse(*collapse, *expanded_processes, cx);
+            }
+            MonitorPanelEvent::RestartSampling(interval) => {
+                self.restart_monitor_task(*interval, cx);
+            }
+            MonitorPanelEvent::SampleProcesses { collapsed } => {
+                self.sample_processes(*collapsed, cx);
+            }
+            MonitorPanelEvent::TraceProcess(pid) => {
+                self.trace_process_in_terminal(*pid, cx);
+            }
+            MonitorPanelEvent::KillProcess { pid, force } => {
+                self.send_kill_process(*pid, *force, cx);
+            }
+            MonitorPanelEvent::RestartService(unit) => {
+                self.restart_systemd_service(unit, cx);
+            }
+            MonitorPanelEvent::DrawerWidthChanged(_)
+            | MonitorPanelEvent::MaximizeToTab
+            | MonitorPanelEvent::DockToDrawer { .. }
+            | MonitorPanelEvent::ClosePane { .. } => {
+                self.state.pending_monitor_requests.push(event.clone());
+            }
+        }
+    }
+
     /// 活动栏入口：打开/关闭监控抽屉，打开时立即拉取一轮进程快照。
     pub(crate) fn toggle_monitor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let open = !self.state.monitor.read(cx).is_open();

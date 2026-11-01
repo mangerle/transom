@@ -100,9 +100,9 @@ impl MonitorView {
                                 if this.set_interval_mode(SampleIntervalMode::Fast) {
                                     cx.notify();
                                     let interval = this.interval_mode().interval();
-                                    this.with_shell(cx, |shell, cx| {
-                                        shell.restart_monitor_task(interval, cx)
-                                    });
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
                                 }
                             })),
                     )
@@ -115,9 +115,9 @@ impl MonitorView {
                                 if this.set_interval_mode(SampleIntervalMode::Normal) {
                                     cx.notify();
                                     let interval = this.interval_mode().interval();
-                                    this.with_shell(cx, |shell, cx| {
-                                        shell.restart_monitor_task(interval, cx)
-                                    });
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
                                 }
                             })),
                     )
@@ -130,9 +130,9 @@ impl MonitorView {
                                 if this.set_interval_mode(SampleIntervalMode::Eco) {
                                     cx.notify();
                                     let interval = this.interval_mode().interval();
-                                    this.with_shell(cx, |shell, cx| {
-                                        shell.restart_monitor_task(interval, cx)
-                                    });
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
                                 }
                             })),
                     ),
@@ -145,7 +145,7 @@ impl MonitorView {
                     .tooltip(rust_i18n::t!("monitor.view.refresh_tooltip").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         let collapsed = this.state.collapse.processes;
-                        this.with_shell(cx, |shell, cx| shell.sample_processes(collapsed, cx));
+                        cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
                     })),
             )
             .child(
@@ -155,12 +155,13 @@ impl MonitorView {
                     .icon(IconName::PanelRightOpen)
                     .label(rust_i18n::t!("monitor.view.dock_label").to_string())
                     .tooltip(rust_i18n::t!("monitor.view.dock_tooltip").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
+                    .on_click(cx.listener(move |this, _, _window, cx| {
                         // 抽屉开合属于面板状态，先自己落定再回交外壳切标签与关标签。
                         this.set_open(true);
                         cx.notify();
-                        this.with_shell(cx, |shell, cx| {
-                            shell.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx)
+                        cx.emit(crate::monitor::MonitorPanelEvent::DockToDrawer {
+                            tab_id,
+                            target_tab_id,
                         });
                     })),
             )
@@ -170,8 +171,8 @@ impl MonitorView {
                     .xsmall()
                     .icon(IconName::Close)
                     .tooltip(rust_i18n::t!("monitor.view.close_tab_tooltip").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.with_shell(cx, |shell, cx| shell.close_pane(tab_id, window, cx));
+                    .on_click(cx.listener(move |_this, _, _window, cx| {
+                        cx.emit(crate::monitor::MonitorPanelEvent::ClosePane { tab_id });
                     })),
             );
 

@@ -107,9 +107,11 @@ impl MonitorView {
                 let expanded = this.toggle_collapse("disk");
                 let collapse = this.collapse_snapshot();
                 cx.notify();
-                this.with_shell(cx, |shell, cx| {
-                    shell.after_monitor_collapse(collapse, expanded, cx)
+                cx.emit(crate::monitor::MonitorPanelEvent::CollapseChanged {
+                    collapse,
+                    expanded_processes: expanded,
                 });
+                cx.notify();
             }),
         )
     }

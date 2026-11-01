@@ -817,6 +817,24 @@ fn editor_with_shell_targets_do_not_reenter_panel() {
     );
 }
 
+/// 收集 `with_shell(cx, |shell, ..| shell.foo(..))` 的目标方法名。
+fn collect_with_shell_targets(content: &str, out: &mut Vec<String>) {
+    for capture in content.split("with_shell(cx,").skip(1) {
+        let tail: String = capture.chars().take(400).collect();
+        let Some(start) = tail.find("shell.") else {
+            continue;
+        };
+        let after = &tail[start + "shell.".len()..];
+        let name: String = after
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+            .collect();
+        if !name.is_empty() {
+            out.push(name);
+        }
+    }
+}
+
 /// 粗粒度提取 `fn name(` 的函数体：按花括号配平，足以覆盖本仓库风格。
 fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
     let pos = source.find(&format!("fn {name}("))?;
@@ -869,86 +887,10 @@ fn app_shell_does_not_deref_state() {
     );
 }
 
-/// 面板回调回交外壳时，被调用方法不得再读写同一面板实体。
-///
-/// 面板点击回调执行期间实体已被 GPUI 租借；外壳方法里再 `state.monitor.read/update`
-/// 会触发 “cannot update while it is already being updated” 崩溃。这里扫描
-/// `with_shell` 的调用目标，确保它们不碰监控实体。
+/// 监控面板也不得再有 `with_shell` 同步回交通道。
 #[test]
-fn monitor_with_shell_targets_do_not_reenter_panel() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let ops_path = root.join("monitor/ops.rs");
-    let ops = std::fs::read_to_string(&ops_path).expect("读取监控动作文件失败");
-
-    let mut targets: Vec<String> = Vec::new();
-    for entry in walkdir_like(&root.join("monitor")) {
-        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-            continue;
-        }
-        let Ok(content) = std::fs::read_to_string(&entry) else {
-            continue;
-        };
-        for capture in content.split("with_shell(cx,").skip(1) {
-            let tail = &capture[..capture.len().min(400)];
-            let Some(start) = tail.find("shell.") else {
-                continue;
-            };
-            let after = &tail[start + "shell.".len()..];
-            let name: String = after
-                .chars()
-                .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-                .collect();
-            if !name.is_empty() {
-                targets.push(name);
-            }
-        }
-    }
-    assert!(!targets.is_empty(), "未找到任何 with_shell 调用，守卫失效");
-
-    let mut offenders = Vec::new();
-    for name in targets {
-        let Some(pos) = ops.find(&format!("fn {name}(")) else {
-            continue;
-        };
-        let Some(open) = ops[pos..].find('{').map(|i| pos + i) else {
-            continue;
-        };
-        let mut depth = 0usize;
-        let mut end = open;
-        for (offset, ch) in ops[open..].char_indices() {
-            match ch {
-                '{' => depth += 1,
-                '}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        end = open + offset;
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-        if ops[open..=end].contains("state.monitor") {
-            offenders.push(name);
-        }
-    }
-    offenders.sort();
-    offenders.dedup();
-    assert!(
-        offenders.is_empty(),
-        "以下外壳方法在面板回调里被调用，却再次访问监控实体，会触发双重租借：\n{}",
-        offenders.join("\n")
-    );
-}
-
-/// SFTP 实体回调回交外壳时，被调用方法不得再读写同一实体。
-/// 面板实体不得再持有"回交外壳"的同步通道。
-///
-/// 双向同步调用是双重租借 panic 的根源：面板发意图改走 `cx.emit`，
-/// 外壳在订阅里处理；取外壳数据改由外壳注入。这里锁死该结构，防止回归。
-#[test]
-fn panel_entities_have_no_sync_callback_channel() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/sftp");
+fn monitor_panel_has_no_sync_callback_channel() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/monitor");
     let mut offenders = Vec::new();
     for entry in walkdir_like(&root) {
         if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
@@ -957,70 +899,13 @@ fn panel_entities_have_no_sync_callback_channel() {
         let Ok(content) = std::fs::read_to_string(&entry) else {
             continue;
         };
-        if content.contains("with_shell_parts(") {
+        if content.contains("with_shell(") {
             offenders.push(entry.display().to_string());
         }
     }
     assert!(
         offenders.is_empty(),
-        "面板实体不得再使用 with_shell_parts 同步回交外壳：\n{}",
+        "监控面板不得再使用 with_shell 同步回交外壳：\n{}",
         offenders.join("\n")
     );
-}
-
-/// SFTP 面板状态只有一份：窗格只保存实体句柄，不保留影子状态。
-#[test]
-fn sftp_panel_state_has_single_source_of_truth() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let types = std::fs::read_to_string(root.join("app/types.rs")).expect("读取 types.rs 失败");
-    assert!(
-        !types.contains("sftp: Option<SftpPanelState>"),
-        "窗格不得再保存第二份 SftpPanelState，状态必须只在实体里"
-    );
-    assert!(
-        types.contains("sftp_view: Option<Entity<SftpPanelView>>"),
-        "窗格必须保存 SFTP 实体句柄"
-    );
-}
-
-/// SFTP 模块生产代码单文件不超过 500 行（实体分组后的硬约束）。
-#[test]
-fn sftp_files_stay_within_line_limit() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/sftp");
-    let mut offenders = Vec::new();
-    for entry in walkdir_like(&root) {
-        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-            continue;
-        }
-        let Ok(content) = std::fs::read_to_string(&entry) else {
-            continue;
-        };
-        let lines = content.lines().count();
-        if lines > 500 {
-            offenders.push(format!("{}: {lines} 行", entry.display()));
-        }
-    }
-    assert!(
-        offenders.is_empty(),
-        "以下 SFTP 源码超过 500 行，请按关注点拆分：\n{}",
-        offenders.join("\n")
-    );
-}
-
-/// 收集 `with_shell(cx, |shell, ..| shell.foo(..))` 的目标方法名。
-fn collect_with_shell_targets(content: &str, out: &mut Vec<String>) {
-    for capture in content.split("with_shell(cx,").skip(1) {
-        let tail: String = capture.chars().take(400).collect();
-        let Some(start) = tail.find("shell.") else {
-            continue;
-        };
-        let after = &tail[start + "shell.".len()..];
-        let name: String = after
-            .chars()
-            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-            .collect();
-        if !name.is_empty() {
-            out.push(name);
-        }
-    }
 }

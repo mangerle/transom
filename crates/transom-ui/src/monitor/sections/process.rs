@@ -142,9 +142,11 @@ impl MonitorView {
                 let expanded = this.toggle_collapse("processes");
                 let collapse = this.collapse_snapshot();
                 cx.notify();
-                this.with_shell(cx, |shell, cx| {
-                    shell.after_monitor_collapse(collapse, expanded, cx)
+                cx.emit(crate::monitor::MonitorPanelEvent::CollapseChanged {
+                    collapse,
+                    expanded_processes: expanded,
                 });
+                cx.notify();
             }),
         )
     }
@@ -402,10 +404,8 @@ impl MonitorView {
                         rust_i18n::t!("monitor.process_section.trace").to_string(),
                         IconName::Terminal,
                         move |_, _, cx| {
-                            term.update(cx, |this, cx| {
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.trace_process_in_terminal(pid, cx)
-                                });
+                            term.update(cx, |_this, cx| {
+                                cx.emit(crate::monitor::MonitorPanelEvent::TraceProcess(pid));
                             });
                         },
                     ))
@@ -421,9 +421,11 @@ impl MonitorView {
                                     cx.notify();
                                     return;
                                 }
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.send_kill_process(pid, false, cx)
+                                cx.emit(crate::monitor::MonitorPanelEvent::KillProcess {
+                                    pid,
+                                    force: false,
                                 });
+                                cx.notify();
                             });
                         },
                     ))
@@ -439,9 +441,11 @@ impl MonitorView {
                                     cx.notify();
                                     return;
                                 }
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.send_kill_process(pid, true, cx)
+                                cx.emit(crate::monitor::MonitorPanelEvent::KillProcess {
+                                    pid,
+                                    force: true,
                                 });
+                                cx.notify();
                             });
                         },
                     ))

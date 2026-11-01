@@ -69,6 +69,48 @@ impl AppShell {
         view.update(cx, |view, _| view.set_mount_candidates(candidates));
     }
 
+    /// 把活动标签的统计快照推给监控面板。
+    fn refresh_monitor_stats(&mut self, cx: &mut Context<Self>) {
+        let stats = self
+            .state
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.state.workspace.tab(tab_id))
+            .and_then(|tab| tab.system_stats().cloned());
+        self.state
+            .monitor
+            .update(cx, |view, _| view.set_stats(stats));
+    }
+
+    /// 执行监控面板排队的窗口动作。
+    fn flush_pending_monitor_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::monitor::MonitorPanelEvent;
+        if self.state.pending_monitor_requests.is_empty() {
+            return;
+        }
+        let requests = std::mem::take(&mut self.state.pending_monitor_requests);
+        for request in requests {
+            match request {
+                MonitorPanelEvent::DrawerWidthChanged(width) => {
+                    self.apply_monitor_drawer_width(width, window, cx);
+                }
+                MonitorPanelEvent::MaximizeToTab => {
+                    self.maximize_monitor_to_tab(window, cx);
+                }
+                MonitorPanelEvent::DockToDrawer {
+                    tab_id,
+                    target_tab_id,
+                } => {
+                    self.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx);
+                }
+                MonitorPanelEvent::ClosePane { tab_id } => {
+                    self.close_pane(tab_id, window, cx);
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// 把会话规则与转发状态推给当前转发面板。
     fn refresh_forward_panel_data(&mut self, cx: &mut Context<Self>) {
         let Some(tab_id) = self.state.workspace.active_tab else {
@@ -146,6 +188,8 @@ impl Render for AppShell {
         self.flush_pending_sftp_requests(window, cx);
         self.refresh_sftp_mount_candidates(cx);
         self.refresh_forward_panel_data(cx);
+        self.refresh_monitor_stats(cx);
+        self.flush_pending_monitor_requests(window, cx);
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
         // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的

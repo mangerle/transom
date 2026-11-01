@@ -209,6 +209,7 @@ impl AppShell {
             immersive: false,
             sftp_panel_width_target: None,
             pending_sftp_requests: Vec::new(),
+            pending_monitor_requests: Vec::new(),
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
                 applied_keys: applied_shortcut_keys,
@@ -218,11 +219,16 @@ impl AppShell {
             dialog_hint: None,
         };
         let mut this = Self { state };
-        // 面板需要回到外壳执行跨域动作；外壳此时才构造完成，因此两段式绑定。
+        // 监控面板的意图事件由外壳订阅处理。
+        let monitor_subscription = cx.subscribe(
+            &this.state.monitor,
+            |shell, _view, event: &crate::monitor::MonitorPanelEvent, cx| {
+                shell.on_monitor_panel_event(event, cx);
+            },
+        );
+        this.state.tasks.monitor_panel_subscription = Some(monitor_subscription);
+        // 编辑器面板仍在用同步回交，暂保留弱引用绑定。
         let app_weak = cx.entity().downgrade();
-        this.state
-            .monitor
-            .update(cx, |view, _| view.attach(app_weak.clone()));
         this.state
             .editors
             .update(cx, |panels, _| panels.attach(app_weak));
