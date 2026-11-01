@@ -230,31 +230,37 @@ impl AppShell {
     }
 }
 
-impl Render for AppShell {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(error) = self.state.take_persistence_error() {
-            self.state.set_error(localized_error(&error));
-        }
-        // 面板请求的"需要窗口"的动作在渲染期统一执行：事件派发阶段没有 Window。
-        self.flush_pending_sftp_requests(window, cx);
-        self.refresh_sftp_mount_candidates(cx);
-        self.refresh_forward_panel_data(cx);
-        self.refresh_monitor_stats(cx);
-        self.flush_pending_editor_requests(window, cx);
-        self.flush_pending_monitor_requests(window, cx);
-        self.flush_pending_settings_requests(window, cx);
-        let p = Palette::from(cx);
-        // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
-        // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的
-        // 开关动作被延到绘制之后执行，避免在渲染过程中移交焦点。
-        self.reconcile_dialogs(window, cx);
-        // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
-        // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
-        let rem = window.rem_size();
-        let top_bar = (!self.state.immersive).then(|| self.render_top_bar(window, cx, &p));
-        let activity_bar =
-            (!self.state.immersive).then(|| self.render_activity_bar(window, cx, &p));
+/// 工作区外层布局的渲染输入。
+struct WorkspaceBodyInput<'a> {
+    window: &'a mut Window,
+    palette: &'a Palette,
+    rem: Pixels,
+    activity_bar: Option<AnyElement>,
+}
 
+/// 工作区外层布局的渲染结果：主内容行与可选状态栏。
+struct WorkspaceBody {
+    main_row: AnyElement,
+    status_bar: Option<AnyElement>,
+}
+
+impl AppShell {
+    /// 渲染侧栏、可拖拽分组、SFTP/转发面板、监控抽屉与状态栏。
+    ///
+    /// 设计原理（Why）：整壳 `Render::render` 负责生命周期与事件路由，具体的
+    /// 面板拼装细节放到这里，避免单个函数超过两百行后无法定位布局规则；
+    /// 返回主行与状态栏两个元素，调用方只决定层序。
+    fn render_workspace_body(
+        &mut self,
+        cx: &mut Context<Self>,
+        input: WorkspaceBodyInput<'_>,
+    ) -> WorkspaceBody {
+        let WorkspaceBodyInput {
+            window,
+            palette: p,
+            rem,
+            activity_bar,
+        } = input;
         // 沉浸模式使用独立分组：侧边栏完全不参与布局，主面板成为首面板，
         // 避免其左侧残留一条用于拖动侧边栏的 1px 分隔线；
         // 独立 key 也保证退出沉浸后原分组的全部尺寸状态原样恢复。
@@ -276,9 +282,9 @@ impl Render for AppShell {
         if self.state.sidebar.visible {
             // 左侧槽位一次只承载一种内容：纵向标签面板或会话树。
             let content = if self.show_vertical_tabs_panel(app_settings(cx)) {
-                self.render_vertical_tabs_panel(&p, cx)
+                self.render_vertical_tabs_panel(p, cx)
             } else {
-                self.render_sidebar(window, cx, &p)
+                self.render_sidebar(window, cx, p)
             };
             sidebar_panel = sidebar_panel.child(content);
         }
@@ -327,7 +333,7 @@ impl Render for AppShell {
             }
         }
         resizable_group =
-            resizable_group.child(resizable_panel().child(self.render_main(window, cx, &p)));
+            resizable_group.child(resizable_panel().child(self.render_main(window, cx, p)));
         if !self.state.immersive && !side_left {
             if show_sftp {
                 resizable_group = resizable_group.child(
@@ -419,24 +425,22 @@ impl Render for AppShell {
             } else {
                 px(0.0)
             };
-            self.render_status_bar(&p, cx, divider_x)
+            self.render_status_bar(p, cx, divider_x)
         });
-        // 错误在写入时入队（见 AppShell::set_error），这里统一转成应用内通知。
-        // 延迟到绘制结束后推送，避免在渲染期间修改通知层。
-        let pending_errors = self.state.pending_notices.drain();
-        if !pending_errors.is_empty() {
-            cx.defer_in(window, move |_, window, cx| {
-                for message in pending_errors {
-                    window.push_notification(Notification::error(message).autohide(false), cx);
-                }
-            });
+        WorkspaceBody {
+            main_row: main_row.into_any_element(),
+            status_bar,
         }
-        // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现
-        // 弹窗在面板下面、用户点不到确认按钮的层序错误。
-        let overlays = self.render_overlays(window, cx);
+    }
+}
 
-        let mut root = div()
-            .key_context(keymap::WORKSPACE_CONTEXT)
+impl AppShell {
+    /// 把工作区级快捷键动作挂到根元素上。
+    ///
+    /// 动作链是声明式映射，单独成方法后 `render` 只保留布局与层序；
+    /// 新增快捷键时只改这里，不会把整壳渲染再撑长。
+    fn attach_workspace_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
+        root.key_context(keymap::WORKSPACE_CONTEXT)
             .on_action(cx.listener(Self::on_new_session))
             .on_action(cx.listener(Self::on_new_local_terminal))
             .on_action(cx.listener(Self::on_quick_open))
@@ -466,10 +470,64 @@ impl Render for AppShell {
             // Esc 的传输取消监听：键盘事件沿焦点路径回溯，终端（焦点方）
             // 先收到并向远端写一次转义序列，再由根节点截获成取消命令。
             .on_key_down(cx.listener(Self::on_zmodem_cancel_key))
-            // 拖拽悬浮面板的位移与收尾由 EditorDragTracker 的窗口级监听接管：
-            // 普通元素监听带"指针命中"门槛，拖拽中指针会移出面板乃至窗口，
-            // 元素级监听收不到这些事件。追踪器随编辑面板实体渲染挂载，
-            // paint 阶段注册的窗口级监听对所有鼠标事件可见。
+        // 拖拽悬浮面板的位移与收尾由 EditorDragTracker 的窗口级监听接管：
+        // 普通元素监听带"指针命中"门槛，拖拽中指针会移出面板乃至窗口，
+        // 元素级监听收不到这些事件。追踪器随编辑面板实体渲染挂载，
+        // paint 阶段注册的窗口级监听对所有鼠标事件可见。
+    }
+}
+
+impl Render for AppShell {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(error) = self.state.take_persistence_error() {
+            self.state.set_error(localized_error(&error));
+        }
+        // 面板请求的"需要窗口"的动作在渲染期统一执行：事件派发阶段没有 Window。
+        self.flush_pending_sftp_requests(window, cx);
+        self.refresh_sftp_mount_candidates(cx);
+        self.refresh_forward_panel_data(cx);
+        self.refresh_monitor_stats(cx);
+        self.flush_pending_editor_requests(window, cx);
+        self.flush_pending_monitor_requests(window, cx);
+        self.flush_pending_settings_requests(window, cx);
+        let p = Palette::from(cx);
+        // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
+        // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的
+        // 开关动作被延到绘制之后执行，避免在渲染过程中移交焦点。
+        self.reconcile_dialogs(window, cx);
+        // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
+        // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
+        let rem = window.rem_size();
+        let top_bar = (!self.state.immersive).then(|| self.render_top_bar(window, cx, &p));
+        let activity_bar =
+            (!self.state.immersive).then(|| self.render_activity_bar(window, cx, &p));
+
+        let workspace = self.render_workspace_body(
+            cx,
+            WorkspaceBodyInput {
+                window,
+                palette: &p,
+                rem,
+                activity_bar,
+            },
+        );
+
+        // 错误在写入时入队（见 AppShell::set_error），这里统一转成应用内通知。
+        // 延迟到绘制结束后推送，避免在渲染期间修改通知层。
+        let pending_errors = self.state.pending_notices.drain();
+        if !pending_errors.is_empty() {
+            cx.defer_in(window, move |_, window, cx| {
+                for message in pending_errors {
+                    window.push_notification(Notification::error(message).autohide(false), cx);
+                }
+            });
+        }
+        // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现
+        // 弹窗在面板下面、用户点不到确认按钮的层序错误。
+        let overlays = self.render_overlays(window, cx);
+
+        let mut root = self
+            .attach_workspace_actions(div(), cx)
             .relative()
             .size_full()
             .flex()
@@ -479,8 +537,8 @@ impl Render for AppShell {
         if let Some(top_bar) = top_bar {
             root = root.child(top_bar);
         }
-        root = root.child(main_row);
-        if let Some(status_bar) = status_bar {
+        root = root.child(workspace.main_row);
+        if let Some(status_bar) = workspace.status_bar {
             root = root.child(status_bar);
         }
         root = root.child(self.state.editors.clone());
