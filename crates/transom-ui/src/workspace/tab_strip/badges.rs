@@ -1,6 +1,6 @@
 //! 标签栏辅助徽标组件与辅助结构体。
 
-use crate::app::{AppShell, TabStatus};
+use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::tiling::TiledTabs;
 use gpui_kit::assets::IconName;
@@ -212,20 +212,6 @@ pub(super) fn build_tiled_group_badge(
             }
         })
         .into_any_element()
-}
-
-/// 计算标签状态圆点颜色。
-pub(super) fn calculate_dot_color(tab: &crate::app::TerminalTab, p: &Palette) -> Hsla {
-    let dot_color = match &tab.status {
-        TabStatus::Connecting => p.muted_foreground,
-        TabStatus::Connected => p.success,
-        TabStatus::Failed(_) | TabStatus::Disconnected => p.danger,
-    };
-    if tab.zmodem().is_some() {
-        p.primary
-    } else {
-        dot_color
-    }
 }
 
 /// 构建悬浮提示内容。

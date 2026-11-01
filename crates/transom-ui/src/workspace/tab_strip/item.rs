@@ -18,7 +18,7 @@ use transom_core::{Connection, GroupId, SplitAxis, TabId};
 mod item_parts;
 
 use self::item_parts::{render_pane_badge, render_tab_close_button};
-use super::badges::{PaneRow, build_tab_tooltip, build_tiled_group_badge, calculate_dot_color};
+use super::badges::{PaneRow, build_tab_tooltip, build_tiled_group_badge};
 use super::menu::{TabContextMenuParams, build_tab_context_menu};
 use crate::app::app_settings;
 use crate::connection::session_host;
@@ -82,25 +82,9 @@ pub(super) fn render_tab_entry(
     );
     let this_set_id = tiled_set.as_ref().map(|tiled| tiled.id);
 
-    let dot_color = calculate_dot_color(tab, p);
-    let base_tab_icon = if tab.is_player() {
-        IconName::Disc
-    } else if tab.is_monitor() {
-        IconName::Gauge
-    } else {
-        crate::connection::icon(&tab.session.connection)
-    };
-
-    let appearance = shell.state.session_appearance(tab);
-    let tab_icon = if tab.is_player() {
-        IconName::Disc
-    } else if tab.is_monitor() {
-        IconName::Gauge
-    } else {
-        appearance.icon.unwrap_or(base_tab_icon)
-    };
-    let session_color = appearance.color;
-
+    let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
+    let tab_icon = crate::workspace::tab_presentation::tab_icon(shell, tab, active, p).0;
+    let session_color = crate::workspace::tab_presentation::tab_accent(shell, tab);
     let mut tab_element = h_flex()
         .id(ElementId::Name(format!("tab-{group_id}").into()))
         .relative()

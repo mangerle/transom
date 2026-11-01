@@ -10,7 +10,6 @@ use crate::app::app_settings;
 use crate::connection::session_host;
 use crate::palette::Palette;
 
-use crate::workspace::pane_status_indicator;
 use crate::workspace::tab_strip::menu::{TabContextMenuParams, build_tab_context_menu};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -61,16 +60,8 @@ pub(super) fn render_vertical_tab_row(
     };
     let subtitle = crate::connection::display_compact(&tab.session.connection);
     let is_local = matches!(tab.session.connection, Connection::Local(_));
-    let (dot_color, _) = pane_status_indicator(&tab.status, p);
-    let appearance = shell.state.session_appearance(tab);
-    let icon = appearance
-        .icon
-        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection));
-    let icon_color = appearance.color.unwrap_or(if active {
-        p.sidebar_accent_foreground
-    } else {
-        p.muted_foreground
-    });
+    let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
+    let (icon, icon_color) = crate::workspace::tab_presentation::tab_icon(shell, tab, active, p);
     let tiled = shell.state.tiling_of_group(group_id);
     let tiled_badge = tiled.is_some();
     let this_set_id = tiled.map(|tiled| tiled.id);
