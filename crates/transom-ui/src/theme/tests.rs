@@ -817,24 +817,6 @@ fn editor_with_shell_targets_do_not_reenter_panel() {
     );
 }
 
-/// 收集 `with_shell(cx, |shell, ..| shell.foo(..))` 的目标方法名。
-fn collect_with_shell_targets(content: &str, out: &mut Vec<String>) {
-    for capture in content.split("with_shell(cx,").skip(1) {
-        let tail: String = capture.chars().take(400).collect();
-        let Some(start) = tail.find("shell.") else {
-            continue;
-        };
-        let after = &tail[start + "shell.".len()..];
-        let name: String = after
-            .chars()
-            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-            .collect();
-        if !name.is_empty() {
-            out.push(name);
-        }
-    }
-}
-
 /// 粗粒度提取 `fn name(` 的函数体：按花括号配平，足以覆盖本仓库风格。
 fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
     let pos = source.find(&format!("fn {name}("))?;
@@ -959,24 +941,7 @@ fn monitor_with_shell_targets_do_not_reenter_panel() {
     );
 }
 
-/// 收集 `with_shell_parts` 回交外壳时调用的目标方法名。
-fn collect_with_shell_parts_targets(content: &str, out: &mut Vec<String>) {
-    for capture in content.split("with_shell_parts").skip(1) {
-        let tail: String = capture.chars().take(600).collect();
-        let Some(start) = tail.find("shell.") else {
-            continue;
-        };
-        let after = &tail[start + "shell.".len()..];
-        let name: String = after
-            .chars()
-            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-            .collect();
-        if !name.is_empty() {
-            out.push(name);
-        }
-    }
-}
-
+/// SFTP 实体回调回交外壳时，被调用方法不得再读写同一实体。
 /// 面板实体不得再持有"回交外壳"的同步通道。
 ///
 /// 双向同步调用是双重租借 panic 的根源：面板发意图改走 `cx.emit`，
@@ -1040,4 +1005,22 @@ fn sftp_files_stay_within_line_limit() {
         "以下 SFTP 源码超过 500 行，请按关注点拆分：\n{}",
         offenders.join("\n")
     );
+}
+
+/// 收集 `with_shell(cx, |shell, ..| shell.foo(..))` 的目标方法名。
+fn collect_with_shell_targets(content: &str, out: &mut Vec<String>) {
+    for capture in content.split("with_shell(cx,").skip(1) {
+        let tail: String = capture.chars().take(400).collect();
+        let Some(start) = tail.find("shell.") else {
+            continue;
+        };
+        let after = &tail[start + "shell.".len()..];
+        let name: String = after
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+            .collect();
+        if !name.is_empty() {
+            out.push(name);
+        }
+    }
 }
