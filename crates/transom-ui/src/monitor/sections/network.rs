@@ -92,6 +92,84 @@ impl MonitorView {
     }
 
     /// 双向流量走势：峰值、图例与双线波形；无历史数据时不渲染。
+    /// 趋势头部：标题、上下行图例与峰值/当前速率。
+    fn render_network_trend_header(
+        &self,
+        total_rx: u64,
+        total_tx: u64,
+        rx_peak: u64,
+        tx_peak: u64,
+        p: &Palette,
+    ) -> AnyElement {
+        h_flex()
+            .justify_between()
+            .text_xs()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div().text_color(p.muted_foreground).child(
+                            rust_i18n::t!("monitor.network_section.trend_title").to_string(),
+                        ),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(p.primary))
+                            .child(div().text_xs().text_color(p.primary).child(
+                                rust_i18n::t!("monitor.network_section.downlink").to_string(),
+                            )),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .child(
+                                div()
+                                    .w(px(6.0))
+                                    .h(px(6.0))
+                                    .rounded_full()
+                                    .bg(p.sidebar_accent_foreground),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.sidebar_accent_foreground)
+                                    .child(
+                                        rust_i18n::t!("monitor.network_section.uplink").to_string(),
+                                    ),
+                            ),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div().text_color(p.primary).child(
+                            rust_i18n::t!(
+                                "monitor.network_section.rx_peak",
+                                rate = format_size(total_rx),
+                                peak = format_size(rx_peak)
+                            )
+                            .to_string(),
+                        ),
+                    )
+                    .child(
+                        div().text_color(p.sidebar_accent_foreground).child(
+                            rust_i18n::t!(
+                                "monitor.network_section.tx_peak",
+                                rate = format_size(total_tx),
+                                peak = format_size(tx_peak)
+                            )
+                            .to_string(),
+                        ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn render_network_trend(
         &self,
         total_rx: u64,
@@ -108,85 +186,7 @@ impl MonitorView {
         Some(
             v_flex()
                 .gap_1p5()
-                .child(
-                    h_flex()
-                        .justify_between()
-                        .text_xs()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .items_center()
-                                .child(
-                                    div().text_color(p.muted_foreground).child(
-                                        rust_i18n::t!("monitor.network_section.trend_title")
-                                            .to_string(),
-                                    ),
-                                )
-                                .child(
-                                    h_flex()
-                                        .gap_1()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .w(px(6.0))
-                                                .h(px(6.0))
-                                                .rounded_full()
-                                                .bg(p.primary),
-                                        )
-                                        .child(
-                                            div().text_xs().text_color(p.primary).child(
-                                                rust_i18n::t!("monitor.network_section.downlink")
-                                                    .to_string(),
-                                            ),
-                                        ),
-                                )
-                                .child(
-                                    h_flex()
-                                        .gap_1()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .w(px(6.0))
-                                                .h(px(6.0))
-                                                .rounded_full()
-                                                .bg(p.sidebar_accent_foreground),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(p.sidebar_accent_foreground)
-                                                .child(
-                                                    rust_i18n::t!("monitor.network_section.uplink")
-                                                        .to_string(),
-                                                ),
-                                        ),
-                                ),
-                        )
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .child(
-                                    div().text_color(p.primary).child(
-                                        rust_i18n::t!(
-                                            "monitor.network_section.rx_peak",
-                                            rate = format_size(total_rx),
-                                            peak = format_size(rx_peak)
-                                        )
-                                        .to_string(),
-                                    ),
-                                )
-                                .child(
-                                    div().text_color(p.sidebar_accent_foreground).child(
-                                        rust_i18n::t!(
-                                            "monitor.network_section.tx_peak",
-                                            rate = format_size(total_tx),
-                                            peak = format_size(tx_peak)
-                                        )
-                                        .to_string(),
-                                    ),
-                                ),
-                        ),
-                )
+                .child(self.render_network_trend_header(total_rx, total_tx, rx_peak, tx_peak, p))
                 .child(render_network_dual_sparkline(
                     &rx_hist,
                     &tx_hist,
