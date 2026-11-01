@@ -239,6 +239,15 @@ impl MonitorView {
                     cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
                 })),
             )
+            .child(self.render_window_actions(drawer_width, cx))
+            .into_any_element()
+    }
+
+    /// 宽度切换、脱离为标签页与关闭抽屉。
+    fn render_window_actions(&self, drawer_width: f32, cx: &mut Context<Self>) -> AnyElement {
+        h_flex()
+            .gap_1p5()
+            .items_center()
             // 宽度缩放切换芯片（快速切换 420px / 600px）
             .child(
                 crate::widgets::IconButton::new(
