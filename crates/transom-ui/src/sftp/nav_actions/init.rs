@@ -31,6 +31,15 @@ impl AppShell {
                 self.state.send_command(command.clone());
                 cx.notify();
             }
+            SftpPanelEvent::PersistSettings { status } => {
+                let snapshot = crate::app::app_settings(cx).clone();
+                if let Err(error) = self.state.persist_settings(&snapshot) {
+                    self.state
+                        .set_error(crate::palette::localized_error(&error));
+                }
+                self.state.status = Some(status.clone());
+                cx.notify();
+            }
             SftpPanelEvent::ConfirmLocalDelete { tab_id, paths } => {
                 self.state.sftp_modals.confirm = Some(crate::sftp::SftpConfirmModalState {
                     action: crate::sftp::SftpPendingDelete::Local {

@@ -1,11 +1,10 @@
 //! 实体侧的队列控制与单任务操作。
 //!
-//! 状态流转在实体完成，远端取消命令经 with_shell_parts 投递。
+//! 状态流转在实体完成；远端取消与设置持久化都经面板事件交外壳处理。
 
 use super::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
-use crate::palette::localized_error;
 use crate::sftp::queue_actions::is_verify_failure;
 use crate::sftp::{TransferMode, TransferStatus};
 use transom_core::{SftpCommand, TransferId};
@@ -21,23 +20,13 @@ impl SftpPanelView {
 
     /// 循环切换并发传输数；增加时立即补位启动待处理任务。
     pub(crate) fn cycle_concurrency(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let app = self.app.clone();
-        let Some(current) = read_shell_parts(&app, cx, |_shell| {
-            app_settings(cx).sftp.max_concurrent_transfers.clamp(1, 4)
-        }) else {
-            return;
-        };
+        let current = app_settings(cx).sftp.max_concurrent_transfers.clamp(1, 4);
         let next = if current >= 4 { 1 } else { current + 1 };
-        with_shell_parts(&app, cx, |shell, cx| {
-            update_app_settings(cx, |s| s.sftp.max_concurrent_transfers = next);
-            let settings_snapshot = app_settings(cx).clone();
-            if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
-                shell.state.set_error(localized_error(&error));
-            }
-            shell.state.status =
-                Some(rust_i18n::t!("sftp.queue_actions.concurrency_set", count = next).to_string());
-            cx.notify();
+        update_app_settings(cx, |s| s.sftp.max_concurrent_transfers = next);
+        cx.emit(crate::sftp::SftpPanelEvent::PersistSettings {
+            status: rust_i18n::t!("sftp.queue_actions.concurrency_set", count = next).to_string(),
         });
+        cx.notify();
         self.process_queue(tab_id, cx);
     }
 
@@ -144,14 +133,11 @@ impl SftpPanelView {
         if op_ids.is_empty() {
             return;
         }
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, _| {
-            for op_id in op_ids {
-                shell
-                    .state
-                    .send_command(SftpCommand::SftpCancel { tab_id, op_id });
-            }
-        });
+        for op_id in op_ids {
+            cx.emit(crate::sftp::SftpPanelEvent::SendCommand(
+                SftpCommand::SftpCancel { tab_id, op_id },
+            ));
+        }
     }
 }
 
