@@ -104,6 +104,53 @@ impl AppShell {
         };
 
         let app_entity = cx.entity().clone();
+        let header = self.render_sidebar_header(p, cx);
+
+        v_flex()
+            .size_full()
+            .overflow_hidden()
+            .bg(p.sidebar)
+            .text_color(p.sidebar_foreground)
+            .child(header)
+            .child(
+                v_flex()
+                    .id("session-list")
+                    .flex_1()
+                    .w_full()
+                    .overflow_hidden()
+                    .p_2()
+                    .on_drop(move |drag: &SidebarDrag, window, cx| {
+                        let drag = *drag;
+                        app_entity.update(cx, |this, cx| {
+                            this.handle_sidebar_drop(drag, SidebarTarget::Root, cx);
+                            window.refresh();
+                        });
+                    })
+                    .child(content),
+            )
+            .into_any_element()
+    }
+
+    fn sidebar_icon_button(
+        props: SidebarButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
+        _p: &Palette,
+    ) -> AnyElement {
+        let SidebarButtonProps {
+            id,
+            icon,
+            tooltip,
+            active,
+            on_click,
+        } = props;
+        crate::widgets::IconButton::new(id, icon, tooltip)
+            .selected(active)
+            .render()
+            .on_click(on_click)
+            .into_any_element()
+    }
+
+    /// 侧栏头部：搜索框、选择/新建按钮、筛选与新建会话/批量入口。
+    fn render_sidebar_header(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let mut header = v_flex()
             .w_full()
             .p_3()
@@ -191,47 +238,7 @@ impl AppShell {
                     ),
             );
         }
-        v_flex()
-            .size_full()
-            .overflow_hidden()
-            .bg(p.sidebar)
-            .text_color(p.sidebar_foreground)
-            .child(header)
-            .child(
-                v_flex()
-                    .id("session-list")
-                    .flex_1()
-                    .w_full()
-                    .overflow_hidden()
-                    .p_2()
-                    .on_drop(move |drag: &SidebarDrag, window, cx| {
-                        let drag = *drag;
-                        app_entity.update(cx, |this, cx| {
-                            this.handle_sidebar_drop(drag, SidebarTarget::Root, cx);
-                            window.refresh();
-                        });
-                    })
-                    .child(content),
-            )
-            .into_any_element()
-    }
-
-    fn sidebar_icon_button(
-        props: SidebarButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
-        _p: &Palette,
-    ) -> AnyElement {
-        let SidebarButtonProps {
-            id,
-            icon,
-            tooltip,
-            active,
-            on_click,
-        } = props;
-        crate::widgets::IconButton::new(id, icon, tooltip)
-            .selected(active)
-            .render()
-            .on_click(on_click)
-            .into_any_element()
+        header.into_any_element()
     }
 
     fn render_sidebar_empty(&self, query: &str, p: &Palette) -> AnyElement {
