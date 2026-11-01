@@ -21,29 +21,10 @@ impl ForwardView {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        // 会话规则与转发状态属于外壳：一次性取好快照再渲染，避免渲染期间反复跨界读取。
-        let Some(context) = self
-            .with_shell(cx, |shell, _| {
-                let tab_id = shell.state.workspace.active_tab?;
-                let tab = shell.state.workspace.tab(tab_id)?;
-                let pane = tab.session_pane()?;
-                let session = shell
-                    .state
-                    .catalog
-                    .sessions
-                    .iter()
-                    .find(|session| session.id == tab.session_id)?;
-                Some((
-                    tab_id,
-                    session.forwards.clone(),
-                    pane.forward_statuses.clone(),
-                ))
-            })
-            .flatten()
-        else {
-            return div().into_any_element();
-        };
-        let (tab_id, forwards, statuses) = context;
+        // 规则与状态由外壳注入：渲染期不反查外壳。
+        let tab_id = self.tab_id();
+        let forwards = self.rules().to_vec();
+        let statuses = self.statuses().clone();
 
         let header = self.render_forward_header(cx, p);
         let rules_list = self.render_forward_rules_list(tab_id, &forwards, &statuses, cx, p);
@@ -83,12 +64,10 @@ impl ForwardView {
                     .ghost()
                     .xsmall()
                     .icon(IconName::X)
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|_this, _, _, cx| {
                         // 句柄由窗格持有，回收动作回交外壳；实体只发请求。
-                        this.with_shell(cx, |shell, cx| {
-                            shell.close_forward_panel();
-                            cx.notify();
-                        });
+                        cx.emit(super::ForwardPanelEvent::ClosePanel);
+                        cx.notify();
                     })),
             )
             .into_any_element()
@@ -193,20 +172,21 @@ impl ForwardView {
                             Button::new(ElementId::Name(format!("forward-stop-{rule_id}").into()))
                                 .small()
                                 .label(rust_i18n::t!("forward.stop").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.with_shell(cx, |shell, cx| {
-                                        shell.stop_forward_rule(tab_id, rule_id, cx)
-                                    });
+                                .on_click(cx.listener(move |_this, _, _, cx| {
+                                    cx.emit(super::ForwardPanelEvent::StopRule { tab_id, rule_id });
+                                    cx.notify();
                                 }))
                         } else {
                             Button::new(ElementId::Name(format!("forward-start-{rule_id}").into()))
                                 .small()
                                 .primary()
                                 .label(rust_i18n::t!("forward.start").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.with_shell(cx, |shell, cx| {
-                                        shell.start_forward_rule(tab_id, rule_id, cx)
+                                .on_click(cx.listener(move |_this, _, _, cx| {
+                                    cx.emit(super::ForwardPanelEvent::StartRule {
+                                        tab_id,
+                                        rule_id,
                                     });
+                                    cx.notify();
                                 }))
                         })
                         .child(
@@ -218,10 +198,12 @@ impl ForwardView {
                             .icon(IconName::Trash)
                             .label(rust_i18n::t!("forward.delete").to_string())
                             .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.with_shell(cx, |shell, cx| {
-                                        shell.delete_forward_rule(tab_id, rule_id, cx)
+                                move |_this, _, _, cx| {
+                                    cx.emit(super::ForwardPanelEvent::DeleteRule {
+                                        tab_id,
+                                        rule_id,
                                     });
+                                    cx.notify();
                                 },
                             )),
                         ),
@@ -355,9 +337,8 @@ impl ForwardView {
                 .on_click(cx.listener(move |this, _, _, cx| {
                     // 表单校验在实体里完成，通过后把规则交给外壳落库并发命令。
                     if let Some(rule) = this.build_rule(cx) {
-                        this.with_shell(cx, |shell, cx| {
-                            shell.submit_forward_rule(tab_id, rule, cx)
-                        });
+                        cx.emit(super::ForwardPanelEvent::SubmitRule { tab_id, rule });
+                        cx.notify();
                     }
                 })),
         );

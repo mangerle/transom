@@ -69,6 +69,36 @@ impl AppShell {
         view.update(cx, |view, _| view.set_mount_candidates(candidates));
     }
 
+    /// 把会话规则与转发状态推给当前转发面板。
+    fn refresh_forward_panel_data(&mut self, cx: &mut Context<Self>) {
+        let Some(tab_id) = self.state.workspace.active_tab else {
+            return;
+        };
+        let Some(view) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.forwards_view())
+        else {
+            return;
+        };
+        let Some((session_id, statuses)) = self.state.workspace.tab(tab_id).and_then(|tab| {
+            let pane = tab.session_pane()?;
+            Some((tab.session_id, pane.forward_statuses.clone()))
+        }) else {
+            return;
+        };
+        let rules = self
+            .state
+            .catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.forwards.clone())
+            .unwrap_or_default();
+        view.update(cx, |view, _| view.set_session_data(rules, statuses));
+    }
+
     /// 执行面板在事件里排队的窗口动作。
     fn flush_pending_sftp_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::sftp::SftpPanelEvent;
@@ -115,6 +145,7 @@ impl Render for AppShell {
         // 面板请求的"需要窗口"的动作在渲染期统一执行：事件派发阶段没有 Window。
         self.flush_pending_sftp_requests(window, cx);
         self.refresh_sftp_mount_candidates(cx);
+        self.refresh_forward_panel_data(cx);
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
         // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的

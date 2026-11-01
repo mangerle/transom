@@ -54,6 +54,35 @@ impl AppState {
 }
 
 impl AppShell {
+    /// 处理转发面板发来的意图。
+    ///
+    /// 只用事件携带的数据，不回读面板：事件派发阶段面板仍被租借。
+    fn on_forward_panel_event(
+        &mut self,
+        event: &crate::forward::ForwardPanelEvent,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::forward::ForwardPanelEvent;
+        match event {
+            ForwardPanelEvent::SubmitRule { tab_id, rule } => {
+                self.submit_forward_rule(*tab_id, rule.clone(), cx);
+            }
+            ForwardPanelEvent::StartRule { tab_id, rule_id } => {
+                self.start_forward_rule(*tab_id, *rule_id, cx);
+            }
+            ForwardPanelEvent::StopRule { tab_id, rule_id } => {
+                self.stop_forward_rule(*tab_id, *rule_id, cx);
+            }
+            ForwardPanelEvent::DeleteRule { tab_id, rule_id } => {
+                self.delete_forward_rule(*tab_id, *rule_id, cx);
+            }
+            ForwardPanelEvent::ClosePanel => {
+                self.close_forward_panel();
+                cx.notify();
+            }
+        }
+    }
+
     pub(crate) fn auto_start_forwards(
         &mut self,
         tab_id: TabId,
@@ -153,18 +182,29 @@ impl AppShell {
             rust_i18n::t!("forward.target_port").as_ref(),
         );
         let view = cx.new(|_| {
-            super::ForwardView::new(ForwardPanelState {
-                name_input: name,
-                bind_host_input: bind_host,
-                bind_port_input: bind_port,
-                target_host_input: target_host,
-                target_port_input: target_port,
-                kind: ForwardKindChoice::Local,
-                error: None,
-            })
+            super::ForwardView::new(
+                ForwardPanelState {
+                    name_input: name,
+                    bind_host_input: bind_host,
+                    bind_port_input: bind_port,
+                    target_host_input: target_host,
+                    target_port_input: target_port,
+                    kind: ForwardKindChoice::Local,
+                    error: None,
+                },
+                tab_id,
+            )
         });
-        let weak = cx.entity().downgrade();
-        view.update(cx, |view, _| view.attach(weak));
+        let subscription = cx.subscribe(
+            &view,
+            |shell, _view, event: &crate::forward::ForwardPanelEvent, cx| {
+                shell.on_forward_panel_event(event, cx);
+            },
+        );
+        self.state
+            .tasks
+            .forward_panel_subscriptions
+            .insert(tab_id, subscription);
         if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
             pane.forwards_view = Some(view);
         }

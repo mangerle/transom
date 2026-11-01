@@ -2,9 +2,11 @@
 
 mod actions;
 mod entity;
+mod panel_event;
 mod view;
 
 pub(crate) use entity::ForwardView;
+pub(crate) use panel_event::ForwardPanelEvent;
 
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
