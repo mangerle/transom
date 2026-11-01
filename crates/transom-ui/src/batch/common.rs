@@ -5,7 +5,7 @@ pub(super) use crate::palette::{Palette, sftp_text_input};
 pub(super) use crate::session_form::AuthChoice;
 pub(super) use gpui_kit::base::{Selectable, h_flex, v_flex};
 pub(super) use gpui_kit::component::Sizable;
-pub(super) use gpui_kit::component::button::{Button, ButtonVariants};
+pub(super) use gpui_kit::component::button::Button;
 pub(super) use gpui_kit::component::checkbox::Checkbox;
 pub(super) use gpui_kit::component::input::{Input, InputState};
 pub(super) use gpui_kit::component::switch::Switch;

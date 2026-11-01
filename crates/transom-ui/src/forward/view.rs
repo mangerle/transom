@@ -373,15 +373,15 @@ impl AppShell {
                     this.cancel_forward_confirm(cx)
                 }),
             ))
-            .child(
-                Button::new("accept-forward-confirm")
-                    .danger()
-                    .label(rust_i18n::t!("forward.confirm_start").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.confirm_forward_start(cx),
-                    )),
-            );
+            .child(crate::widgets::dialog_confirm_button(
+                "accept-forward-confirm",
+                rust_i18n::t!("forward.confirm_start").to_string(),
+                None,
+                crate::widgets::DialogConfirmKind::Danger,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.confirm_forward_start(cx);
+                }),
+            ));
 
         crate::widgets::dialog_body(
             "forward-confirm-modal",

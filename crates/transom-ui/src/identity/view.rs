@@ -230,14 +230,15 @@ impl SettingsView {
                             this.cancel_identity_edit(cx);
                         }),
                     ))
-                    .child(
-                        Button::new("identity-save")
-                            .primary()
-                            .label(rust_i18n::t!("common.save").to_string())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.save_identity(cx);
-                            })),
-                    ),
+                    .child(crate::widgets::dialog_confirm_button(
+                        "identity-save",
+                        rust_i18n::t!("common.save").to_string(),
+                        None,
+                        crate::widgets::DialogConfirmKind::Primary,
+                        cx.listener(|this, _, _, cx| {
+                            this.save_identity(cx);
+                        }),
+                    )),
             )
             .into_any_element()
     }

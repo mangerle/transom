@@ -5,7 +5,7 @@ use crate::app::app_settings;
 use crate::palette::Palette;
 use crate::session_form::SessionForm;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use transom_core::FolderId;
@@ -359,15 +359,15 @@ impl AppShell {
                     cx.notify();
                 }),
             ))
-            .child(
-                Button::new("save-folder")
-                    .primary()
-                    .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.save_folder_form(cx),
-                    )),
-            );
+            .child(crate::widgets::dialog_confirm_button(
+                "save-folder",
+                rust_i18n::t!("common.save").to_string(),
+                None,
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.save_folder_form(cx);
+                }),
+            ));
 
         crate::widgets::dialog_body(
             "folder-form-modal",

@@ -6,7 +6,6 @@ use crate::app::{AppShell, AppState};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{Connection, ConnectionId, ErrorCode, PromptKind, SecretKey, SessionId};
@@ -249,15 +248,15 @@ impl AppShell {
                         cx.notify();
                     }),
                 ))
-                .child(
-                    Button::new("submit-auth")
-                        .primary()
-                        .label(rust_i18n::t!("prompt.submit").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, _: &ClickEvent, _, cx| this.submit_auth_prompt(cx),
-                        )),
-                ),
+                .child(crate::widgets::dialog_confirm_button(
+                    "submit-auth",
+                    rust_i18n::t!("prompt.submit").to_string(),
+                    None,
+                    crate::widgets::DialogConfirmKind::Primary,
+                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                        this.submit_auth_prompt(cx);
+                    }),
+                )),
         );
         let hint = if client_generated {
             rust_i18n::t!("prompt.credential_hint").to_string()

@@ -115,16 +115,15 @@ impl AppShell {
                     cx.notify();
                 }),
             ))
-            .child(
-                Button::new("save-session")
-                    .primary()
-                    .icon(IconName::Check)
-                    .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.save_session_form(cx),
-                    )),
-            );
+            .child(crate::widgets::dialog_confirm_button(
+                "save-session",
+                rust_i18n::t!("common.save").to_string(),
+                Some(IconName::Check),
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.save_session_form(cx);
+                }),
+            ));
 
         let mut footer_block = v_flex().gap_2().items_end();
         if let Some(error) = &form.error {

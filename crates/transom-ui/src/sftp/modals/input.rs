@@ -35,18 +35,15 @@ impl AppShell {
                     cx.notify();
                 }),
             ))
-            .child(
-                Button::new("confirm-sftp-input")
-                    .primary()
-                    .icon(IconName::Check)
-                    .label(rust_i18n::t!("common.confirm").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.commit_sftp_input_modal(window, cx);
-                        },
-                    )),
-            );
+            .child(crate::widgets::dialog_confirm_button(
+                "confirm-sftp-input",
+                rust_i18n::t!("common.confirm").to_string(),
+                Some(IconName::Check),
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                    this.commit_sftp_input_modal(window, cx);
+                }),
+            ));
 
         crate::widgets::dialog_body(
             "sftp-input-modal",

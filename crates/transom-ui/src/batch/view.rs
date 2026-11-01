@@ -212,15 +212,15 @@ impl AppShell {
                     cx.notify();
                 }),
             ))
-            .child(
-                Button::new("apply-batch-edit")
-                    .primary()
-                    .label(rust_i18n::t!("batch.apply").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.save_batch_edit(cx),
-                    )),
-            );
+            .child(crate::widgets::dialog_confirm_button(
+                "apply-batch-edit",
+                rust_i18n::t!("batch.apply").to_string(),
+                None,
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    this.save_batch_edit(cx);
+                }),
+            ));
 
         crate::widgets::dialog_body(
             "batch-edit-modal",

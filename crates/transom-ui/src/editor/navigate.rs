@@ -17,7 +17,6 @@ use crate::palette::{Palette, sftp_text_input};
 use crate::sftp::EditorGotoLineModalState;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{EditorState, Input, InputEvent, Position, RopeExt};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
@@ -151,18 +150,15 @@ impl AppShell {
                     this.cancel_editor_goto_line(window, cx);
                 }),
             ))
-            .child(
-                Button::new("editor-goto-confirm")
-                    .primary()
-                    .icon(IconName::Check)
-                    .label(rust_i18n::t!("editor.goto_action").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.commit_editor_goto_line(window, cx);
-                        },
-                    )),
-            );
+            .child(crate::widgets::dialog_confirm_button(
+                "editor-goto-confirm",
+                rust_i18n::t!("editor.goto_action").to_string(),
+                Some(IconName::Check),
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                    this.commit_editor_goto_line(window, cx);
+                }),
+            ));
 
         crate::widgets::dialog_body(
             "editor-goto-line-modal",

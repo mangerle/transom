@@ -39,18 +39,15 @@ impl AppShell {
                     cx.notify();
                 }),
             ))
-            .child(
-                Button::new("save-sftp-filter")
-                    .primary()
-                    .icon(IconName::Check)
-                    .label(rust_i18n::t!("sftp.modals.filter_save").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.save_sftp_filter_modal(window, cx);
-                        },
-                    )),
-            );
+            .child(crate::widgets::dialog_confirm_button(
+                "save-sftp-filter",
+                rust_i18n::t!("sftp.modals.filter_save").to_string(),
+                Some(IconName::Check),
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                    this.save_sftp_filter_modal(window, cx);
+                }),
+            ));
 
         crate::widgets::dialog_body(
             "sftp-filter-modal",
