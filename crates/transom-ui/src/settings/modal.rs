@@ -59,6 +59,193 @@ fn setting_group_with_window(
         )
 }
 
+/// 分组渲染函数：普通签名或需要窗口度量的签名。
+type PlainGroup = fn(&mut SettingsView, &Palette, &mut Context<SettingsView>) -> AnyElement;
+type WindowGroup =
+    fn(&mut SettingsView, &mut Window, &Palette, &mut Context<SettingsView>) -> AnyElement;
+
+enum GroupRender {
+    Plain(PlainGroup),
+    WithWindow(WindowGroup),
+}
+
+struct GroupSpec {
+    search: GroupSearch,
+    render: GroupRender,
+}
+
+struct PageSpec {
+    title_key: &'static str,
+    icon: IconName,
+    groups: &'static [GroupSpec],
+}
+
+const fn plain(search: GroupSearch, render: PlainGroup) -> GroupSpec {
+    GroupSpec {
+        search,
+        render: GroupRender::Plain(render),
+    }
+}
+
+const fn window(search: GroupSearch, render: WindowGroup) -> GroupSpec {
+    GroupSpec {
+        search,
+        render: GroupRender::WithWindow(render),
+    }
+}
+
+/// 设置页签与分组目录；顺序即界面顺序。
+static SETTINGS_PAGES: &[PageSpec] = &[
+    PageSpec {
+        title_key: "settings.tab_appearance",
+        icon: IconName::Palette,
+        groups: &[
+            plain(GroupSearch::UiTheme, SettingsView::render_settings_ui_theme),
+            plain(GroupSearch::UiFont, SettingsView::render_settings_ui_font),
+            plain(
+                GroupSearch::WindowAppearance,
+                SettingsView::render_settings_window_appearance,
+            ),
+            plain(GroupSearch::Divider, SettingsView::render_settings_divider),
+        ],
+    },
+    PageSpec {
+        title_key: "settings.tab_terminal",
+        icon: IconName::Terminal,
+        groups: &[
+            plain(
+                GroupSearch::TerminalFont,
+                SettingsView::render_settings_terminal_font,
+            ),
+            plain(GroupSearch::Cursor, SettingsView::render_settings_cursor),
+            plain(
+                GroupSearch::TerminalTheme,
+                SettingsView::render_settings_themes,
+            ),
+            plain(
+                GroupSearch::Highlight,
+                SettingsView::render_settings_highlight,
+            ),
+            plain(GroupSearch::Trigger, SettingsView::render_settings_triggers),
+            plain(
+                GroupSearch::BlockView,
+                SettingsView::render_settings_block_view,
+            ),
+            plain(
+                GroupSearch::KeyBindings,
+                SettingsView::render_settings_key_bindings,
+            ),
+        ],
+    },
+    PageSpec {
+        title_key: "settings.tab_files",
+        icon: IconName::Folder,
+        groups: &[
+            plain(GroupSearch::Editor, SettingsView::render_settings_editor),
+            plain(
+                GroupSearch::FilePanel,
+                SettingsView::render_settings_file_panel,
+            ),
+            plain(
+                GroupSearch::Transfer,
+                SettingsView::render_settings_transfer,
+            ),
+            plain(GroupSearch::Zmodem, SettingsView::render_settings_zmodem),
+            plain(GroupSearch::Audit, SettingsView::render_settings_audit),
+            plain(
+                GroupSearch::Identities,
+                SettingsView::render_settings_identities,
+            ),
+            plain(GroupSearch::History, SettingsView::render_settings_history),
+        ],
+    },
+    PageSpec {
+        title_key: "settings.tab_mouse_clipboard",
+        icon: IconName::ArrowLeftRight,
+        groups: &[
+            plain(GroupSearch::Mouse, SettingsView::render_settings_mouse),
+            plain(
+                GroupSearch::Selection,
+                SettingsView::render_settings_selection,
+            ),
+            plain(
+                GroupSearch::Clipboard,
+                SettingsView::render_settings_clipboard,
+            ),
+        ],
+    },
+    PageSpec {
+        title_key: "settings.tab_shortcuts",
+        icon: IconName::Search,
+        groups: &[plain(
+            GroupSearch::Shortcuts,
+            SettingsView::render_settings_shortcuts,
+        )],
+    },
+    PageSpec {
+        title_key: "settings.tab_window_layout",
+        icon: IconName::PanelLeft,
+        groups: &[
+            plain(GroupSearch::Tabs, SettingsView::render_settings_tabs),
+            plain(GroupSearch::Window, SettingsView::render_settings_window),
+            plain(
+                GroupSearch::ActivityBar,
+                SettingsView::render_settings_activity_bar,
+            ),
+            plain(
+                GroupSearch::StatusBar,
+                SettingsView::render_settings_status_bar,
+            ),
+            plain(GroupSearch::Startup, SettingsView::render_settings_startup),
+        ],
+    },
+    PageSpec {
+        title_key: "settings.tab_general",
+        icon: IconName::Globe,
+        groups: GENERAL_PAGE_GROUPS,
+    },
+    PageSpec {
+        title_key: "settings.tab_monitor",
+        icon: IconName::Gauge,
+        groups: &[
+            plain(
+                GroupSearch::MonitorSections,
+                SettingsView::render_settings_monitor_sections,
+            ),
+            plain(
+                GroupSearch::MonitorBehavior,
+                SettingsView::render_settings_monitor_behavior,
+            ),
+        ],
+    },
+    PageSpec {
+        title_key: "settings.tab_about",
+        icon: IconName::Info,
+        groups: &[window(
+            GroupSearch::About,
+            SettingsView::render_settings_about,
+        )],
+    },
+];
+
+/// 通用页分组：桌面集成只在 Linux 下出现，其余分组固定。
+static GENERAL_PAGE_GROUPS: &[GroupSpec] = &[
+    plain(
+        GroupSearch::Language,
+        SettingsView::render_settings_language,
+    ),
+    plain(GroupSearch::Notify, SettingsView::render_settings_notify),
+    plain(GroupSearch::Proxy, SettingsView::render_settings_proxy),
+    #[cfg(target_os = "linux")]
+    plain(
+        GroupSearch::DesktopIntegration,
+        SettingsView::render_settings_desktop_integration,
+    ),
+    plain(GroupSearch::Backup, SettingsView::render_settings_backup),
+    plain(GroupSearch::Sync, SettingsView::render_settings_cloud_sync),
+    plain(GroupSearch::Logs, SettingsView::render_settings_logs),
+];
+
 impl SettingsView {
     /// 偏好设置弹窗的弹窗体。
     ///
@@ -193,288 +380,30 @@ impl SettingsView {
     }
 
     /// 构建偏好设置所有分类页面。
+    ///
+    /// 页面与分组全部来自声明式表 [`SETTINGS_PAGES`]：顺序即页签顺序，
+    /// 新增分组只需在表里补一行，不再在九个 `SettingPage` 链式调用中找位置。
     fn build_settings_pages(app: &Entity<SettingsView>, p: &Palette) -> Vec<SettingPage> {
-        // 命令面板的设置页目录与本函数的装配顺序必须一致（共 9 页）：
-        // 顺序不一致会让跳转落到错误页面，因此开发期直接断言。
-        debug_assert_eq!(super::page_entries().len(), 9);
-        let page_appearance =
-            SettingPage::new(rust_i18n::t!("settings.tab_appearance").to_string())
-                .icon(IconName::Palette)
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::UiTheme,
-                    SettingsView::render_settings_ui_theme,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::UiFont,
-                    SettingsView::render_settings_ui_font,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::WindowAppearance,
-                    SettingsView::render_settings_window_appearance,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::Divider,
-                    SettingsView::render_settings_divider,
-                ));
-
-        let page_terminal = SettingPage::new(rust_i18n::t!("settings.tab_terminal").to_string())
-            .icon(IconName::Terminal)
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::TerminalFont,
-                SettingsView::render_settings_terminal_font,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Cursor,
-                SettingsView::render_settings_cursor,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::TerminalTheme,
-                SettingsView::render_settings_themes,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Highlight,
-                SettingsView::render_settings_highlight,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Trigger,
-                SettingsView::render_settings_triggers,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::BlockView,
-                SettingsView::render_settings_block_view,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::KeyBindings,
-                SettingsView::render_settings_key_bindings,
-            ));
-
-        let page_files = SettingPage::new(rust_i18n::t!("settings.tab_files").to_string())
-            .icon(IconName::Folder)
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Editor,
-                SettingsView::render_settings_editor,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::FilePanel,
-                SettingsView::render_settings_file_panel,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Transfer,
-                SettingsView::render_settings_transfer,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Zmodem,
-                SettingsView::render_settings_zmodem,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Audit,
-                SettingsView::render_settings_audit,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Identities,
-                SettingsView::render_settings_identities,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::History,
-                SettingsView::render_settings_history,
-            ));
-
-        let page_mouse =
-            SettingPage::new(rust_i18n::t!("settings.tab_mouse_clipboard").to_string())
-                .icon(IconName::ArrowLeftRight)
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::Mouse,
-                    SettingsView::render_settings_mouse,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::Selection,
-                    SettingsView::render_settings_selection,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::Clipboard,
-                    SettingsView::render_settings_clipboard,
-                ));
-
-        let page_shortcuts = SettingPage::new(rust_i18n::t!("settings.tab_shortcuts").to_string())
-            .icon(IconName::Search)
-            .group(
-                SettingGroup::new().item(
-                    SettingItem::render({
-                        let app = app.clone();
-                        let p = p.clone();
-                        move |_options, _window, cx| {
-                            app.update(cx, |this, cx| this.render_settings_shortcuts(&p, cx))
-                        }
-                    })
-                    .keywords(GroupSearch::Shortcuts.keywords()),
-                ),
-            );
-
-        let page_window_layout =
-            SettingPage::new(rust_i18n::t!("settings.tab_window_layout").to_string())
-                .icon(IconName::PanelLeft)
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::Tabs,
-                    SettingsView::render_settings_tabs,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::Window,
-                    SettingsView::render_settings_window,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::ActivityBar,
-                    SettingsView::render_settings_activity_bar,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::StatusBar,
-                    SettingsView::render_settings_status_bar,
-                ))
-                .group(setting_group(
-                    app,
-                    p,
-                    GroupSearch::Startup,
-                    SettingsView::render_settings_startup,
-                ));
-
-        let page_general = SettingPage::new(rust_i18n::t!("settings.tab_general").to_string())
-            .icon(IconName::Globe)
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Language,
-                SettingsView::render_settings_language,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Notify,
-                SettingsView::render_settings_notify,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Proxy,
-                SettingsView::render_settings_proxy,
-            ));
-
-        #[cfg(target_os = "linux")]
-        let page_general = page_general.group(setting_group(
-            app,
-            p,
-            GroupSearch::DesktopIntegration,
-            SettingsView::render_settings_desktop_integration,
-        ));
-        let page_general = page_general
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Backup,
-                SettingsView::render_settings_backup,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Sync,
-                SettingsView::render_settings_cloud_sync,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::Logs,
-                SettingsView::render_settings_logs,
-            ));
-
-        let page_monitor = SettingPage::new(rust_i18n::t!("settings.tab_monitor").to_string())
-            .icon(IconName::Gauge)
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::MonitorSections,
-                SettingsView::render_settings_monitor_sections,
-            ))
-            .group(setting_group(
-                app,
-                p,
-                GroupSearch::MonitorBehavior,
-                SettingsView::render_settings_monitor_behavior,
-            ));
-
-        let page_about = SettingPage::new(rust_i18n::t!("settings.tab_about").to_string())
-            .icon(IconName::Info)
-            .group(setting_group_with_window(
-                app,
-                p,
-                GroupSearch::About,
-                SettingsView::render_settings_about,
-            ));
-
-        // 页头横线由组件内部写死 1px，这里用页面样式覆盖成当前档位。
+        // 命令面板的设置页目录与这张表必须一致；顺序不一致会把跳转落到错页。
+        debug_assert_eq!(super::page_entries().len(), SETTINGS_PAGES.len());
         let header_style = StyleRefinement::default()
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Bottom, p.divider_width);
-        [
-            page_appearance,
-            page_terminal,
-            page_files,
-            page_mouse,
-            page_shortcuts,
-            page_window_layout,
-            page_general,
-            page_monitor,
-            page_about,
-        ]
-        .into_iter()
-        .map(|page| page.header_style(&header_style))
-        .collect()
+        SETTINGS_PAGES
+            .iter()
+            .map(|page| {
+                let mut built =
+                    SettingPage::new(rust_i18n::t!(page.title_key).to_string()).icon(page.icon);
+                for group in page.groups {
+                    built = built.group(match group.render {
+                        GroupRender::Plain(render) => setting_group(app, p, group.search, render),
+                        GroupRender::WithWindow(render) => {
+                            setting_group_with_window(app, p, group.search, render)
+                        }
+                    });
+                }
+                built.header_style(&header_style)
+            })
+            .collect()
     }
 }
