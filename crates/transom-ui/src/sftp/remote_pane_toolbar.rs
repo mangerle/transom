@@ -6,6 +6,7 @@ use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
 use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
+use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::separator::Separator;
 use gpui_kit::component::{Selectable, Sizable};
@@ -32,15 +33,7 @@ impl SftpPanelView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let RemoteToolbarProps {
-            tab_id,
-            target,
-            pane,
-            show_filter,
-            show_hidden,
-            sync_navigation,
-            show_editor_list,
-        } = *props;
+        let RemoteToolbarProps { tab_id, target, .. } = *props;
         let home_btn = Button::new(format!("remote-home-{key}"))
             .ghost()
             .xsmall()
@@ -50,6 +43,36 @@ impl SftpPanelView {
                 this.go_home_pane(tab_id, target, window, cx);
             }));
 
+        let file_ops = self.render_file_op_buttons(props, key, p, cx);
+        let view_ops = self.render_view_op_buttons(props, key, cx);
+        crate::widgets::toolbar()
+            .child(home_btn)
+            .child(
+                Separator::vertical()
+                    .h(px(14.0))
+                    .mx_1()
+                    .color(p.sidebar_border),
+            )
+            .child(file_ops)
+            .child(view_ops)
+            .into_any_element()
+    }
+
+    /// 文件操作组：下载、新建、搜索、重命名、编辑、权限、删除与上传。
+    fn render_file_op_buttons(
+        &self,
+        props: &RemoteToolbarProps<'_>,
+        key: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let RemoteToolbarProps {
+            tab_id,
+            target,
+            pane,
+            show_editor_list,
+            ..
+        } = *props;
         let download_btn = Button::new(format!("remote-download-{key}"))
             .primary()
             .xsmall()
@@ -136,6 +159,43 @@ impl SftpPanelView {
                 this.upload_local_selection(target, cx);
             }));
 
+        let editor_list = show_editor_list.then(|| {
+            let Some(editors) = self.state.editors.clone() else {
+                return div().into_any_element();
+            };
+            render_editor_list_popover(editors.read(cx), &editors, tab_id, p)
+        });
+
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(download_btn)
+            .child(mkdir_btn)
+            .child(new_file_btn)
+            .child(search_btn)
+            .child(rename_btn)
+            .child(edit_btn)
+            .when_some(editor_list, |this, el| this.child(el))
+            .child(chmod_btn)
+            .child(delete_btn)
+            .child(upload_btn)
+            .into_any_element()
+    }
+
+    /// 视图选项组：显隐、同步导航、目录对比与过滤。
+    fn render_view_op_buttons(
+        &self,
+        props: &RemoteToolbarProps<'_>,
+        key: &str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let RemoteToolbarProps {
+            target,
+            show_filter,
+            show_hidden,
+            sync_navigation,
+            ..
+        } = *props;
         let hidden_btn = Button::new(format!("remote-toggle-hidden-{key}"))
             .ghost()
             .xsmall()
@@ -169,7 +229,6 @@ impl SftpPanelView {
             }));
         // 同步导航属于"主远端 ↔ 本地"这一对列的关系；并列列不显示该按钮，
         // 避免一列切换时所有列的按钮同时变亮。
-        let is_main = target == SftpRemotePaneRef::Main;
 
         let compare_btn = Button::new(format!("remote-compare-{key}"))
             .ghost()
@@ -191,35 +250,13 @@ impl SftpPanelView {
             }));
 
         // 编辑列表浮层归面板实体渲染，这里只提供实体句柄与当前标签。
-        let editor_list = show_editor_list.then(|| {
-            let Some(editors) = self.state.editors.clone() else {
-                return div().into_any_element();
-            };
-            render_editor_list_popover(editors.read(cx), &editors, tab_id, p)
-        });
-
-        // 主远端与并列列使用同一组按钮：列宽度不足时由横向裁切吸收，
-        // 不再为某类列偷偷删减入口。
-        crate::widgets::toolbar()
-            .child(home_btn)
-            .child(
-                Separator::vertical()
-                    .h(px(14.0))
-                    .mx_1()
-                    .color(p.sidebar_border),
-            )
-            .child(download_btn)
-            .child(mkdir_btn)
-            .child(new_file_btn)
-            .child(search_btn)
-            .child(rename_btn)
-            .child(edit_btn)
-            .when_some(editor_list, |this, el| this.child(el))
-            .child(chmod_btn)
-            .child(delete_btn)
-            .child(upload_btn)
+        h_flex()
+            .gap_1()
+            .items_center()
             .child(hidden_btn)
-            .when(is_main, |this| this.child(sync_btn))
+            .when(target == SftpRemotePaneRef::Main, |this| {
+                this.child(sync_btn)
+            })
             .child(compare_btn)
             .child(filter_btn)
             .into_any_element()
