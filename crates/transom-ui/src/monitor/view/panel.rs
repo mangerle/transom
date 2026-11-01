@@ -87,7 +87,54 @@ impl MonitorView {
 
         // 顶栏工具条：标题、采样档位芯片、刷新、关闭
         let current_interval = self.state.interval_mode;
-        let actions = h_flex()
+        let actions = self.render_header_actions(current_interval, drawer_width, cx);
+        let header =
+            crate::widgets::PanelHeader::new(rust_i18n::t!("monitor.title").to_string(), p)
+                .icon(IconName::Gauge)
+                .border(p.border)
+                .action(actions)
+                .render(p);
+
+        panel = panel.child(header);
+
+        // 错误提示条
+        if let Some(error) = &self.state.error {
+            panel = panel.child(
+                div()
+                    .px_3()
+                    .py_1p5()
+                    .bg(p.danger.opacity(0.1))
+                    .text_xs()
+                    .text_color(p.danger)
+                    .child(error.clone()),
+            );
+        }
+
+        // 可滚动卡片内容区
+        panel
+            .child(
+                div()
+                    .id("monitor-body")
+                    .w_full()
+                    .flex_1()
+                    .overflow_hidden()
+                    .overflow_y_scroll()
+                    .child(body),
+            )
+            .into_any_element()
+    }
+
+    /// 监控标题栏右侧动作：采样档位、走势形态、刷新、宽度、脱离与关闭。
+    ///
+    /// 动作区较长且互相独立，抽出来后 `render_monitor_panel` 只负责布局，
+    /// 调整某个按钮的 tooltip 或禁用条件不会撑长主渲染函数。
+    fn render_header_actions(
+        &self,
+        current_interval: crate::monitor::SampleIntervalMode,
+        drawer_width: f32,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
             .gap_1p5()
             .items_center()
             .flex_shrink_0()
@@ -233,39 +280,6 @@ impl MonitorView {
                         this.state.process_order_cache = None;
                         cx.notify();
                     })),
-            );
-        let header =
-            crate::widgets::PanelHeader::new(rust_i18n::t!("monitor.title").to_string(), p)
-                .icon(IconName::Gauge)
-                .border(p.border)
-                .action(actions)
-                .render(p);
-
-        panel = panel.child(header);
-
-        // 错误提示条
-        if let Some(error) = &self.state.error {
-            panel = panel.child(
-                div()
-                    .px_3()
-                    .py_1p5()
-                    .bg(p.danger.opacity(0.1))
-                    .text_xs()
-                    .text_color(p.danger)
-                    .child(error.clone()),
-            );
-        }
-
-        // 可滚动卡片内容区
-        panel
-            .child(
-                div()
-                    .id("monitor-body")
-                    .w_full()
-                    .flex_1()
-                    .overflow_hidden()
-                    .overflow_y_scroll()
-                    .child(body),
             )
             .into_any_element()
     }
