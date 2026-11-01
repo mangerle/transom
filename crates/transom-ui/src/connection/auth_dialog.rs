@@ -159,6 +159,41 @@ impl AppShell {
     ///
     /// Enter 提交不再由这里单独接：`dialog_host` 对每个弹窗体统一接
     /// 输入框的 Enter 与容器的 Confirm，两条落点同一条逻辑。
+    /// 认证提示页脚：错误、取消与提交。
+    fn render_auth_footer(
+        prompt: &crate::connection::AuthPromptState,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let mut footer = v_flex().gap_2().items_end();
+        if let Some(error) = &prompt.error {
+            footer = footer.child(div().text_sm().text_color(p.danger).child(error.clone()));
+        }
+        footer = footer.child(
+            h_flex()
+                .gap_2()
+                .justify_end()
+                .child(crate::widgets::dialog_cancel_button(
+                    "cancel-auth",
+                    rust_i18n::t!("common.cancel").to_string(),
+                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                        this.state.cancel_auth_prompt();
+                        cx.notify();
+                    }),
+                ))
+                .child(crate::widgets::dialog_confirm_button(
+                    "submit-auth",
+                    rust_i18n::t!("prompt.submit").to_string(),
+                    None,
+                    crate::widgets::DialogConfirmKind::Primary,
+                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                        this.submit_auth_prompt(cx);
+                    }),
+                )),
+        );
+        footer.into_any_element()
+    }
+
     pub(crate) fn render_auth_prompt_body(
         &self,
         app: &Entity<AppShell>,
@@ -232,32 +267,7 @@ impl AppShell {
             );
         }
 
-        let mut footer = v_flex().gap_2().items_end();
-        if let Some(error) = &prompt.error {
-            footer = footer.child(div().text_sm().text_color(p.danger).child(error.clone()));
-        }
-        footer = footer.child(
-            h_flex()
-                .gap_2()
-                .justify_end()
-                .child(crate::widgets::dialog_cancel_button(
-                    "cancel-auth",
-                    rust_i18n::t!("common.cancel").to_string(),
-                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        this.state.cancel_auth_prompt();
-                        cx.notify();
-                    }),
-                ))
-                .child(crate::widgets::dialog_confirm_button(
-                    "submit-auth",
-                    rust_i18n::t!("prompt.submit").to_string(),
-                    None,
-                    crate::widgets::DialogConfirmKind::Primary,
-                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        this.submit_auth_prompt(cx);
-                    }),
-                )),
-        );
+        let footer = Self::render_auth_footer(prompt, app, p);
         let hint = if client_generated {
             rust_i18n::t!("prompt.credential_hint").to_string()
         } else {
