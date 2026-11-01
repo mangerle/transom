@@ -332,12 +332,8 @@ impl AppShell {
             .into_any_element()
     }
 
-    pub(crate) fn render_broadcast_bar(
-        &mut self,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let multiline = self.state.broadcast.multiline;
+    /// 广播目标选择浮层：触发按钮与目标行列表。
+    fn render_broadcast_targets(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
         let target_trigger = Button::new("broadcast-targets-trigger")
             .ghost()
             .xsmall()
@@ -349,7 +345,7 @@ impl AppShell {
         let app_open = app.clone();
         let content_app = app.clone();
         let content_palette = p.clone();
-        let targets_popover = Popover::new("broadcast-targets-popover")
+        Popover::new("broadcast-targets-popover")
             .anchor(Anchor::BottomLeft)
             .offset(px(-1.0))
             .trigger_style(StyleRefinement::default().flex_none().flex().items_center())
@@ -368,7 +364,16 @@ impl AppShell {
                 let rows = content_app.read(cx).broadcast_target_rows(&content_palette);
                 render_target_rows(&content_app, rows, &content_palette)
             })
-            .into_any_element();
+            .into_any_element()
+    }
+
+    pub(crate) fn render_broadcast_bar(
+        &mut self,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let multiline = self.state.broadcast.multiline;
+        let targets_popover = self.render_broadcast_targets(cx, p);
 
         let close = Button::new("broadcast-close")
             .ghost()
