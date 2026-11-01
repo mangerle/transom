@@ -5,7 +5,7 @@ use crate::app::update_app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::settings::{SettingsEvent, SettingsView};
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
@@ -21,78 +21,42 @@ impl SettingsView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let close_btn_card =
-            h_flex()
-                .w_full()
-                .min_w_0()
-                .justify_between()
-                .items_center()
-                .gap_3()
-                .py_2()
-                .px_3()
-                .rounded(p.radius.md)
-                .border_1()
-                .border_color(p.border)
-                .bg(p.popover)
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .gap_0p5()
-                        .child(
-                            div()
-                                .text_sm()
-                                .child(rust_i18n::t!("settings.show_tab_close_button").to_string()),
-                        )
-                        .child(div().text_xs().text_color(p.muted_foreground).child(
-                            rust_i18n::t!("settings.show_tab_close_button_desc").to_string(),
-                        )),
-                )
-                .child(
-                    Switch::new("toggle-tab-close-btn")
-                        .small()
-                        .checked(app_settings(cx).window.show_tab_close_button)
-                        .on_click(cx.listener(|_this, &checked, _, cx| {
-                            update_app_settings(cx, |s| s.window.show_tab_close_button = checked);
-                            cx.notify();
-                        })),
-                );
-
-        let quit_on_close_card = h_flex()
-            .w_full()
-            .min_w_0()
-            .justify_between()
-            .items_center()
-            .gap_3()
-            .py_2()
-            .px_3()
-            .rounded(p.radius.md)
-            .border_1()
-            .border_color(p.border)
-            .bg(p.popover)
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap_0p5()
-                    .child(div().text_sm().child(
-                        rust_i18n::t!("settings.close_window_on_all_tabs_closed").to_string(),
-                    ))
-                    .child(div().text_xs().text_color(p.muted_foreground).child(
-                        rust_i18n::t!("settings.close_window_on_all_tabs_closed_desc").to_string(),
-                    )),
-            )
-            .child(
-                Switch::new("toggle-close-on-last-tab")
-                    .small()
-                    .checked(app_settings(cx).window.close_window_on_all_tabs_closed)
-                    .on_click(cx.listener(|_this, &checked, _, cx| {
-                        update_app_settings(cx, |s| {
-                            s.window.close_window_on_all_tabs_closed = checked
-                        });
-                        cx.notify();
-                    })),
-            );
+        let close_btn_card = crate::widgets::switch_card(
+            crate::widgets::SwitchCardProps {
+                id: "toggle-tab-close-btn",
+                title: rust_i18n::t!("settings.show_tab_close_button")
+                    .to_string()
+                    .into(),
+                description: rust_i18n::t!("settings.show_tab_close_button_desc")
+                    .to_string()
+                    .into(),
+                checked: app_settings(cx).window.show_tab_close_button,
+                on_toggle: Box::new(cx.listener(|_this, checked, _, cx| {
+                    update_app_settings(cx, |s| s.window.show_tab_close_button = *checked);
+                    cx.notify();
+                })),
+            },
+            p,
+        );
+        let quit_on_close_card = crate::widgets::switch_card(
+            crate::widgets::SwitchCardProps {
+                id: "toggle-close-on-last-tab",
+                title: rust_i18n::t!("settings.close_window_on_all_tabs_closed")
+                    .to_string()
+                    .into(),
+                description: rust_i18n::t!("settings.close_window_on_all_tabs_closed_desc")
+                    .to_string()
+                    .into(),
+                checked: app_settings(cx).window.close_window_on_all_tabs_closed,
+                on_toggle: Box::new(cx.listener(|_this, checked, _, cx| {
+                    update_app_settings(cx, |s| {
+                        s.window.close_window_on_all_tabs_closed = *checked
+                    });
+                    cx.notify();
+                })),
+            },
+            p,
+        );
 
         let position_row = crate::widgets::setting_row(
             "settings.tab_position",

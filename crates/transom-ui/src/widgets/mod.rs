@@ -26,6 +26,7 @@ mod menu;
 mod notice;
 mod panel_header;
 mod status;
+mod switch_card;
 mod toolbar;
 
 pub(crate) use button::{
@@ -43,4 +44,5 @@ pub(crate) use menu::{MenuItem, menu_item};
 pub(crate) use notice::{NoticeKind, notice};
 pub(crate) use panel_header::PanelHeader;
 pub(crate) use status::{status_badge, status_dot, status_dot_bare};
+pub(crate) use switch_card::{SwitchCardProps, switch_card};
 pub(crate) use toolbar::toolbar;
