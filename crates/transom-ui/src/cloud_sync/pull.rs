@@ -71,7 +71,8 @@ impl AppShell {
         let saved = self.state.persist_catalog();
         self.state.refresh_tab_sessions();
         self.state.settings.sync.last_pull_at = Some(chrono::Utc::now().timestamp());
-        if let Err(error) = self.state.persist_settings() {
+        let settings_snapshot = self.state.settings.clone();
+        if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             self.state.set_error(localized_error(&error));
         }
 

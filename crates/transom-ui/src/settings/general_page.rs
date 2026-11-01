@@ -305,7 +305,8 @@ impl AppShell {
                         this.state.settings.window.default_terminal = checked;
                         match transom_desktop::apply_default_terminal(checked) {
                             Ok(()) => {
-                                this.state.persist_settings_reported();
+                                let settings_snapshot = this.state.settings.clone();
+                                this.state.persist_settings_reported(&settings_snapshot);
                             }
                             Err(error) => {
                                 log::error!(

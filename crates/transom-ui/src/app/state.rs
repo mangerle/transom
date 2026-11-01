@@ -143,19 +143,22 @@ impl AppState {
     ///
     /// 高频开关（监控板块折叠、窗口外观等）走这条路径，UI 不做同步 `fsync`；
     /// 写盘线程不可用时退回同步写并把错误交给调用方。
-    pub(crate) fn persist_settings(&self) -> Result<(), transom_core::AppError> {
-        if self.persistence.enqueue_settings(self.settings.clone()) {
+    pub(crate) fn persist_settings(
+        &self,
+        settings: &AppSettings,
+    ) -> Result<(), transom_core::AppError> {
+        if self.persistence.enqueue_settings(settings.clone()) {
             return Ok(());
         }
-        self.services.settings_store.save(&self.settings)
+        self.services.settings_store.save(settings)
     }
 
     /// 统一的“保存并上报”入口：失败时记录日志并写入应用级错误队列。
     ///
     /// 高频开关不应各自决定“失败要不要提示”；统一走这里，避免再次出现
     /// `let _ = save(...)` 这类静默降级。
-    pub(crate) fn persist_settings_reported(&mut self) -> bool {
-        match self.persist_settings() {
+    pub(crate) fn persist_settings_reported(&mut self, settings: &AppSettings) -> bool {
+        match self.persist_settings(settings) {
             Ok(()) => true,
             Err(error) => {
                 log::error!("保存设置失败，界面仍是新值但下次启动会回退，原因: {error}");

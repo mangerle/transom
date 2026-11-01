@@ -194,7 +194,8 @@ impl AppShell {
         } else {
             self.state.settings.snippets.items.push(candidate);
         }
-        if let Err(error) = self.state.persist_settings() {
+        let settings_snapshot = self.state.settings.clone();
+        if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             if let Some(form) = self.state.modals.snippet_panel.form.as_mut() {
                 form.error = Some(localized_error(&error));
             }

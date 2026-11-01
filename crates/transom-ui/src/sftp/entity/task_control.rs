@@ -33,7 +33,8 @@ impl SftpPanelView {
         let next = if current >= 4 { 1 } else { current + 1 };
         with_shell_parts(&app, cx, |shell, cx| {
             shell.state.settings.sftp.max_concurrent_transfers = next;
-            if let Err(error) = shell.state.persist_settings() {
+            let settings_snapshot = shell.state.settings.clone();
+            if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
                 shell.state.set_error(localized_error(&error));
             }
             shell.state.status =

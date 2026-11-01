@@ -65,7 +65,8 @@ impl AppShell {
             .recent_sessions
             .retain(|id| *id != session_id);
         if self.state.settings.window.recent_sessions.len() != before_len {
-            if let Err(error) = self.state.persist_settings() {
+            let settings_snapshot = self.state.settings.clone();
+            if let Err(error) = self.state.persist_settings(&settings_snapshot) {
                 log::warn!("保存最近打开会话设置失败，原因: {error}");
             }
             cx.notify();
@@ -313,7 +314,8 @@ impl AppShell {
             .recent_sessions
             .insert(0, session_id);
         self.state.settings.window.recent_sessions.truncate(20);
-        if let Err(error) = self.state.persist_settings() {
+        let settings_snapshot = self.state.settings.clone();
+        if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             log::warn!("保存最近打开会话失败，原因: {error}");
         }
     }

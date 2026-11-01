@@ -14,7 +14,8 @@ impl AppShell {
     /// 拖拽或显隐发生在设置弹窗之外，不能等待弹窗的保存按钮；这里只做保存与
     /// 错误上报，不重复解析字体等输入框状态，也不改变弹窗的取消语义。
     pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
-        self.state.persist_settings_reported();
+        let settings_snapshot = self.state.settings.clone();
+        self.state.persist_settings_reported(&settings_snapshot);
         cx.notify();
     }
 
@@ -285,7 +286,8 @@ impl AppShell {
         }
         // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
         self.state.modals.settings.window_appearance_snapshot = None;
-        if !self.state.persist_settings_reported() {
+        let settings_snapshot = self.state.settings.clone();
+        if !self.state.persist_settings_reported(&settings_snapshot) {
             // 保存失败时保持弹窗打开，让用户看到错误并重试，而不是误以为已保存。
             cx.notify();
             return;

@@ -161,7 +161,8 @@ impl AppShell {
         self.state.settings.monitor.ports_expanded = !collapse.ports;
         self.state.settings.monitor.services_expanded = !collapse.services;
         self.state.settings.monitor.processes_expanded = !collapse.processes;
-        self.state.persist_settings_reported();
+        let settings_snapshot = self.state.settings.clone();
+        self.state.persist_settings_reported(&settings_snapshot);
         if expanded_processes {
             // 刚展开进程卡片，按“未折叠”采样全量明细；这里不能再读面板实体，
             // 面板的点击回调执行期间它正被租借。

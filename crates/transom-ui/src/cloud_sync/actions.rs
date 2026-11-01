@@ -127,7 +127,8 @@ impl AppShell {
         match result {
             Ok(report) => {
                 self.state.settings.sync.last_push_at = Some(report.at);
-                if let Err(error) = self.state.persist_settings() {
+                let settings_snapshot = self.state.settings.clone();
+                if let Err(error) = self.state.persist_settings(&settings_snapshot) {
                     self.state.set_error(localized_error(&error));
                 }
                 self.state.status = Some(

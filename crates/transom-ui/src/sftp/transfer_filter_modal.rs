@@ -49,7 +49,8 @@ impl AppShell {
             return;
         }
         self.state.settings.sftp.transfer_filter = text;
-        match self.state.persist_settings() {
+        let settings_snapshot = self.state.settings.clone();
+        match self.state.persist_settings(&settings_snapshot) {
             Ok(()) => {
                 self.state.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());
             }

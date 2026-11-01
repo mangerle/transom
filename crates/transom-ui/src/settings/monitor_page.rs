@@ -28,7 +28,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.state.collapse.cpu = !checked);
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -45,7 +46,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.state.collapse.memory = !checked);
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -62,7 +64,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.state.collapse.disk = !checked);
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -79,7 +82,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.state.collapse.network = !checked);
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -96,7 +100,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.state.collapse.ports = !checked);
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -113,7 +118,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.state.collapse.services = !checked);
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -130,7 +136,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.state.collapse.processes = !checked);
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -172,7 +179,8 @@ impl AppShell {
                         this.state
                             .monitor
                             .update(cx, |view, _| view.set_drawer_width(width));
-                        this.state.persist_settings_reported();
+                        let settings_snapshot = this.state.settings.clone();
+                        this.state.persist_settings_reported(&settings_snapshot);
                         cx.notify();
                     },
                     cx,
