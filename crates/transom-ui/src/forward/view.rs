@@ -83,129 +83,7 @@ impl ForwardView {
             );
         }
         for rule in rules {
-            let rule_id = rule.id;
-            let status = statuses.get(&rule_id).cloned();
-            let running = status.as_ref().is_some_and(|status| {
-                matches!(
-                    status.state,
-                    ForwardState::Active { .. } | ForwardState::Starting
-                )
-            });
-            let (status_text, status_color) = match &status {
-                Some(status) => match &status.state {
-                    ForwardState::Stopped => (
-                        rust_i18n::t!("forward.stopped").to_string(),
-                        p.muted_foreground,
-                    ),
-                    ForwardState::Starting => (
-                        rust_i18n::t!("forward.starting").to_string(),
-                        p.muted_foreground,
-                    ),
-                    ForwardState::Active { bound_port } => (
-                        match bound_port {
-                            Some(port) => {
-                                format!("{} :{}", rust_i18n::t!("forward.active"), port)
-                            }
-                            None => rust_i18n::t!("forward.active").to_string(),
-                        },
-                        p.success,
-                    ),
-                    ForwardState::Failed => (rust_i18n::t!("forward.failed").to_string(), p.danger),
-                    ForwardState::NeedsConfirmation => (
-                        rust_i18n::t!("forward.needs_confirmation").to_string(),
-                        p.warning,
-                    ),
-                    _ => (String::new(), p.muted_foreground),
-                },
-                None => (
-                    rust_i18n::t!("forward.stopped").to_string(),
-                    p.muted_foreground,
-                ),
-            };
-            let summary = match &rule.kind {
-                ForwardKind::Local { bind, target } => format!(
-                    "L {}:{} -> {}:{}",
-                    bind.host, bind.port, target.host, target.port
-                ),
-                ForwardKind::Remote { bind, target } => format!(
-                    "R {}:{} -> {}:{}",
-                    bind.host, bind.port, target.host, target.port
-                ),
-                ForwardKind::Dynamic { bind, .. } => format!("D {}:{}", bind.host, bind.port),
-                _ => String::new(),
-            };
-            let mut row = v_flex()
-                .gap_1()
-                .p_2()
-                .rounded(p.radius.sm)
-                .border_1()
-                .border_color(p.sidebar_border)
-                .child(
-                    h_flex()
-                        .justify_between()
-                        .items_center()
-                        .child(div().text_sm().child(rule.name.clone()))
-                        .child(crate::widgets::status_badge(status_text, status_color, p)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(summary),
-                )
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .justify_end()
-                        .child(if running {
-                            Button::new(ElementId::Name(format!("forward-stop-{rule_id}").into()))
-                                .small()
-                                .label(rust_i18n::t!("forward.stop").to_string())
-                                .on_click(cx.listener(move |_this, _, _, cx| {
-                                    cx.emit(super::ForwardPanelEvent::StopRule { tab_id, rule_id });
-                                    cx.notify();
-                                }))
-                        } else {
-                            Button::new(ElementId::Name(format!("forward-start-{rule_id}").into()))
-                                .small()
-                                .primary()
-                                .label(rust_i18n::t!("forward.start").to_string())
-                                .on_click(cx.listener(move |_this, _, _, cx| {
-                                    cx.emit(super::ForwardPanelEvent::StartRule {
-                                        tab_id,
-                                        rule_id,
-                                    });
-                                    cx.notify();
-                                }))
-                        })
-                        .child(
-                            Button::new(ElementId::Name(
-                                format!("forward-delete-{rule_id}").into(),
-                            ))
-                            .ghost()
-                            .small()
-                            .icon(IconName::Trash)
-                            .label(rust_i18n::t!("forward.delete").to_string())
-                            .on_click(cx.listener(
-                                move |_this, _, _, cx| {
-                                    cx.emit(super::ForwardPanelEvent::DeleteRule {
-                                        tab_id,
-                                        rule_id,
-                                    });
-                                    cx.notify();
-                                },
-                            )),
-                        ),
-                );
-            if let Some(error) = status.and_then(|status| status.error) {
-                row = row.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.danger)
-                        .child(localized_error(&error)),
-                );
-            }
-            rule_rows.push(row.into_any_element());
+            rule_rows.push(self.render_forward_rule_row(rule, statuses, tab_id, cx, p));
         }
 
         v_flex()
@@ -216,6 +94,130 @@ impl ForwardView {
             .gap_2()
             .children(rule_rows)
             .into_any_element()
+    }
+
+    /// 单条转发规则行：状态、摘要、启停/编辑/删除与错误。
+    fn render_forward_rule_row(
+        &self,
+        rule: &transom_core::ForwardRule,
+        statuses: &std::collections::HashMap<transom_core::ForwardId, transom_core::ForwardStatus>,
+        tab_id: transom_core::TabId,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let rule_id = rule.id;
+        let status = statuses.get(&rule_id).cloned();
+        let running = status.as_ref().is_some_and(|status| {
+            matches!(
+                status.state,
+                ForwardState::Active { .. } | ForwardState::Starting
+            )
+        });
+        let (status_text, status_color) = match &status {
+            Some(status) => match &status.state {
+                ForwardState::Stopped => (
+                    rust_i18n::t!("forward.stopped").to_string(),
+                    p.muted_foreground,
+                ),
+                ForwardState::Starting => (
+                    rust_i18n::t!("forward.starting").to_string(),
+                    p.muted_foreground,
+                ),
+                ForwardState::Active { bound_port } => (
+                    match bound_port {
+                        Some(port) => {
+                            format!("{} :{}", rust_i18n::t!("forward.active"), port)
+                        }
+                        None => rust_i18n::t!("forward.active").to_string(),
+                    },
+                    p.success,
+                ),
+                ForwardState::Failed => (rust_i18n::t!("forward.failed").to_string(), p.danger),
+                ForwardState::NeedsConfirmation => (
+                    rust_i18n::t!("forward.needs_confirmation").to_string(),
+                    p.warning,
+                ),
+                _ => (String::new(), p.muted_foreground),
+            },
+            None => (
+                rust_i18n::t!("forward.stopped").to_string(),
+                p.muted_foreground,
+            ),
+        };
+        let summary = match &rule.kind {
+            ForwardKind::Local { bind, target } => format!(
+                "L {}:{} -> {}:{}",
+                bind.host, bind.port, target.host, target.port
+            ),
+            ForwardKind::Remote { bind, target } => format!(
+                "R {}:{} -> {}:{}",
+                bind.host, bind.port, target.host, target.port
+            ),
+            ForwardKind::Dynamic { bind, .. } => format!("D {}:{}", bind.host, bind.port),
+            _ => String::new(),
+        };
+        let mut row = v_flex()
+            .gap_1()
+            .p_2()
+            .rounded(p.radius.sm)
+            .border_1()
+            .border_color(p.sidebar_border)
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .child(div().text_sm().child(rule.name.clone()))
+                    .child(crate::widgets::status_badge(status_text, status_color, p)),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(summary),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .justify_end()
+                    .child(if running {
+                        Button::new(ElementId::Name(format!("forward-stop-{rule_id}").into()))
+                            .small()
+                            .label(rust_i18n::t!("forward.stop").to_string())
+                            .on_click(cx.listener(move |_this, _, _, cx| {
+                                cx.emit(super::ForwardPanelEvent::StopRule { tab_id, rule_id });
+                                cx.notify();
+                            }))
+                    } else {
+                        Button::new(ElementId::Name(format!("forward-start-{rule_id}").into()))
+                            .small()
+                            .primary()
+                            .label(rust_i18n::t!("forward.start").to_string())
+                            .on_click(cx.listener(move |_this, _, _, cx| {
+                                cx.emit(super::ForwardPanelEvent::StartRule { tab_id, rule_id });
+                                cx.notify();
+                            }))
+                    })
+                    .child(
+                        Button::new(ElementId::Name(format!("forward-delete-{rule_id}").into()))
+                            .ghost()
+                            .small()
+                            .icon(IconName::Trash)
+                            .label(rust_i18n::t!("forward.delete").to_string())
+                            .on_click(cx.listener(move |_this, _, _, cx| {
+                                cx.emit(super::ForwardPanelEvent::DeleteRule { tab_id, rule_id });
+                                cx.notify();
+                            })),
+                    ),
+            );
+        if let Some(error) = status.and_then(|status| status.error) {
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(p.danger)
+                    .child(localized_error(&error)),
+            );
+        }
+        row.into_any_element()
     }
 
     /// 端口转发新增规则表单渲染。
