@@ -185,32 +185,53 @@ impl SftpPanelView {
         self.dismiss_hover_preview(cx);
         window.focus(&self.state.focus_handle, cx);
         if event.click_count >= 2 {
-            match row.side {
-                SftpSide::Local => {
-                    if row.is_parent {
-                        self.local_go_up(self.tab_id, window, cx);
-                    } else if row.is_dir
-                        && let Some(path) = row.path.local()
-                    {
-                        self.local_navigate(self.tab_id, path.to_path_buf(), window, cx);
-                    } else if let Some(path) = row.path.local() {
-                        self.local_edit_file(path.to_path_buf(), cx);
-                    }
-                }
-                SftpSide::Remote(target) => {
-                    if row.is_parent {
-                        self.go_up_pane(self.tab_id, target, window, cx);
-                    } else if row.is_dir {
-                        if let Some(path) = row.path.remote() {
-                            self.navigate_pane(self.tab_id, target, path.to_string(), window, cx);
-                        }
-                    } else if let Some(path) = row.path.remote() {
-                        self.edit_remote_file(target, path.to_string(), window, cx);
-                    }
-                }
-            }
+            self.row_double_click(row, window, cx);
             return;
         }
+        self.row_single_click(row, event, window, cx);
+    }
+
+    /// 双击：本地/远端进入目录或打开文件。
+    fn row_double_click(
+        &mut self,
+        row: &SftpRowContext,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match row.side {
+            SftpSide::Local => {
+                if row.is_parent {
+                    self.local_go_up(self.tab_id, window, cx);
+                } else if row.is_dir
+                    && let Some(path) = row.path.local()
+                {
+                    self.local_navigate(self.tab_id, path.to_path_buf(), window, cx);
+                } else if let Some(path) = row.path.local() {
+                    self.local_edit_file(path.to_path_buf(), cx);
+                }
+            }
+            SftpSide::Remote(target) => {
+                if row.is_parent {
+                    self.go_up_pane(self.tab_id, target, window, cx);
+                } else if row.is_dir {
+                    if let Some(path) = row.path.remote() {
+                        self.navigate_pane(self.tab_id, target, path.to_string(), window, cx);
+                    }
+                } else if let Some(path) = row.path.remote() {
+                    self.edit_remote_file(target, path.to_string(), window, cx);
+                }
+            }
+        }
+    }
+
+    /// 单选：范围/多选/普通选择、选中计数提示与名称回填。
+    fn row_single_click(
+        &mut self,
+        row: &SftpRowContext,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if row.is_parent {
             return;
         }
