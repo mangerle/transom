@@ -22,8 +22,8 @@ impl MonitorView {
         } = params;
         let current_interval = self.state.interval_mode;
 
-        // 顶栏宽幅工具条
-        let mut header = h_flex()
+        // 顶栏宽幅工具条：左侧标题/概要，右侧采样与窗口动作。
+        let header = h_flex()
             .h(rems(size::TAB_BAR_HEIGHT))
             .w_full()
             .justify_between()
@@ -31,152 +31,9 @@ impl MonitorView {
             .px_4()
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .bg(p.background);
-
-        // 顶栏左侧：图标与标题、主机概要
-        let mut title_part = h_flex()
-            .gap_2p5()
-            .items_center()
-            .child(Icon::new(IconName::Gauge).text_color(p.primary))
-            .child(
-                h_flex().gap_2().items_baseline().child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(p.foreground)
-                        .child(
-                            rust_i18n::t!("monitor.view.tab_header", host = &target_title)
-                                .to_string(),
-                        ),
-                ),
-            );
-
-        if let Some(stats_ref) = &stats {
-            let cores = stats_ref.cpu_cores.len();
-            let mem_gb = stats_ref.mem_total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
-            let days = stats_ref.uptime_secs / 86400;
-            let hours = (stats_ref.uptime_secs % 86400) / 3600;
-            let uptime_str = if days > 0 {
-                rust_i18n::t!("monitor.view.uptime_days", days = days, hours = hours).to_string()
-            } else {
-                let mins = (stats_ref.uptime_secs % 3600) / 60;
-                rust_i18n::t!("monitor.view.uptime_hours", hours = hours, minutes = mins)
-                    .to_string()
-            };
-
-            let mut info_flex = h_flex().gap_1p5().text_xs().text_color(p.muted_foreground);
-            if cores > 0 {
-                info_flex = info_flex
-                    .child("•")
-                    .child(rust_i18n::t!("monitor.view.cpu_cores", count = cores).to_string());
-            }
-            if stats_ref.mem_total_bytes > 0 {
-                let mem_gb_text = format!("{mem_gb:.1}");
-                info_flex = info_flex
-                    .child("•")
-                    .child(rust_i18n::t!("monitor.view.mem_total", gb = mem_gb_text).to_string());
-            }
-            if stats_ref.uptime_secs > 0 {
-                info_flex = info_flex.child("•").child(uptime_str);
-            }
-            title_part = title_part.child(info_flex);
-        }
-
-        header = header.child(title_part);
-
-        // 顶栏右侧：采样频率切换、刷新、停靠为抽屉、关闭
-        let actions = h_flex()
-            .gap_2()
-            .items_center()
-            .child(
-                h_flex()
-                    .gap_0p5()
-                    .child(
-                        Button::new("tab-sample-rate-fast")
-                            .xsmall()
-                            .label(SampleIntervalMode::Fast.label())
-                            .selected(current_interval == SampleIntervalMode::Fast)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Fast) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new("tab-sample-rate-normal")
-                            .xsmall()
-                            .label(SampleIntervalMode::Normal.label())
-                            .selected(current_interval == SampleIntervalMode::Normal)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Normal) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new("tab-sample-rate-eco")
-                            .xsmall()
-                            .label(SampleIntervalMode::Eco.label())
-                            .selected(current_interval == SampleIntervalMode::Eco)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Eco) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    ),
-            )
-            .child(
-                Button::new("tab-monitor-refresh")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RefreshCw)
-                    .tooltip(rust_i18n::t!("monitor.view.refresh_tooltip").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        let collapsed = this.state.collapse.processes;
-                        cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
-                    })),
-            )
-            .child(
-                Button::new("tab-monitor-dock-drawer")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::PanelRightOpen)
-                    .label(rust_i18n::t!("monitor.view.dock_label").to_string())
-                    .tooltip(rust_i18n::t!("monitor.view.dock_tooltip").to_string())
-                    .on_click(cx.listener(move |this, _, _window, cx| {
-                        // 抽屉开合属于面板状态，先自己落定再回交外壳切标签与关标签。
-                        this.set_open(true);
-                        cx.notify();
-                        cx.emit(crate::monitor::MonitorPanelEvent::DockToDrawer {
-                            tab_id,
-                            target_tab_id,
-                        });
-                    })),
-            )
-            .child(
-                Button::new("tab-monitor-close-btn")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Close)
-                    .tooltip(rust_i18n::t!("monitor.view.close_tab_tooltip").to_string())
-                    .on_click(cx.listener(move |_this, _, _window, cx| {
-                        cx.emit(crate::monitor::MonitorPanelEvent::ClosePane { tab_id });
-                    })),
-            );
-
-        header = header.child(actions);
+            .bg(p.background)
+            .child(tab_title_part(&target_title, &stats, p))
+            .child(self.render_tab_actions(current_interval, tab_id, target_tab_id, cx));
 
         let oom_banner = render_oom_banner(&stats, p);
         let content = self.render_tab_body(&stats, oom_banner, cx, p);
@@ -312,4 +169,164 @@ pub(crate) struct MonitorTabParams {
     pub(crate) target_tab_id: TabId,
     pub(crate) target_title: String,
     pub(crate) stats: Option<transom_core::SystemStats>,
+}
+
+impl MonitorView {
+    /// 全屏看板右上角动作：采样档位、刷新、停靠抽屉与关闭。
+    fn render_tab_actions(
+        &mut self,
+        current_interval: crate::monitor::SampleIntervalMode,
+        tab_id: transom_core::TabId,
+        target_tab_id: transom_core::TabId,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        // 顶栏右侧：采样频率切换、刷新、停靠为抽屉、关闭
+        let actions = h_flex()
+            .gap_2()
+            .items_center()
+            .child(
+                h_flex()
+                    .gap_0p5()
+                    .child(
+                        Button::new("tab-sample-rate-fast")
+                            .xsmall()
+                            .label(SampleIntervalMode::Fast.label())
+                            .selected(current_interval == SampleIntervalMode::Fast)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if this.set_interval_mode(SampleIntervalMode::Fast) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new("tab-sample-rate-normal")
+                            .xsmall()
+                            .label(SampleIntervalMode::Normal.label())
+                            .selected(current_interval == SampleIntervalMode::Normal)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if this.set_interval_mode(SampleIntervalMode::Normal) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new("tab-sample-rate-eco")
+                            .xsmall()
+                            .label(SampleIntervalMode::Eco.label())
+                            .selected(current_interval == SampleIntervalMode::Eco)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if this.set_interval_mode(SampleIntervalMode::Eco) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
+                                }
+                            })),
+                    ),
+            )
+            .child(
+                Button::new("tab-monitor-refresh")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::RefreshCw)
+                    .tooltip(rust_i18n::t!("monitor.view.refresh_tooltip").to_string())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        let collapsed = this.state.collapse.processes;
+                        cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
+                    })),
+            )
+            .child(
+                Button::new("tab-monitor-dock-drawer")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::PanelRightOpen)
+                    .label(rust_i18n::t!("monitor.view.dock_label").to_string())
+                    .tooltip(rust_i18n::t!("monitor.view.dock_tooltip").to_string())
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        // 抽屉开合属于面板状态，先自己落定再回交外壳切标签与关标签。
+                        this.set_open(true);
+                        cx.notify();
+                        cx.emit(crate::monitor::MonitorPanelEvent::DockToDrawer {
+                            tab_id,
+                            target_tab_id,
+                        });
+                    })),
+            )
+            .child(
+                Button::new("tab-monitor-close-btn")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close)
+                    .tooltip(rust_i18n::t!("monitor.view.close_tab_tooltip").to_string())
+                    .on_click(cx.listener(move |_this, _, _window, cx| {
+                        cx.emit(crate::monitor::MonitorPanelEvent::ClosePane { tab_id });
+                    })),
+            );
+        actions.into_any_element()
+    }
+}
+
+/// 全屏看板标题：主机名与核心数/内存/运行时间概要。
+fn tab_title_part(
+    target_title: &str,
+    stats: &Option<transom_core::SystemStats>,
+    p: &Palette,
+) -> AnyElement {
+    // 顶栏左侧：图标与标题、主机概要
+    let mut title_part = h_flex()
+        .gap_2p5()
+        .items_center()
+        .child(Icon::new(IconName::Gauge).text_color(p.primary))
+        .child(
+            h_flex().gap_2().items_baseline().child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(p.foreground)
+                    .child(
+                        rust_i18n::t!("monitor.view.tab_header", host = &target_title).to_string(),
+                    ),
+            ),
+        );
+
+    if let Some(stats_ref) = &stats {
+        let cores = stats_ref.cpu_cores.len();
+        let mem_gb = stats_ref.mem_total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+        let days = stats_ref.uptime_secs / 86400;
+        let hours = (stats_ref.uptime_secs % 86400) / 3600;
+        let uptime_str = if days > 0 {
+            rust_i18n::t!("monitor.view.uptime_days", days = days, hours = hours).to_string()
+        } else {
+            let mins = (stats_ref.uptime_secs % 3600) / 60;
+            rust_i18n::t!("monitor.view.uptime_hours", hours = hours, minutes = mins).to_string()
+        };
+
+        let mut info_flex = h_flex().gap_1p5().text_xs().text_color(p.muted_foreground);
+        if cores > 0 {
+            info_flex = info_flex
+                .child("•")
+                .child(rust_i18n::t!("monitor.view.cpu_cores", count = cores).to_string());
+        }
+        if stats_ref.mem_total_bytes > 0 {
+            let mem_gb_text = format!("{mem_gb:.1}");
+            info_flex = info_flex
+                .child("•")
+                .child(rust_i18n::t!("monitor.view.mem_total", gb = mem_gb_text).to_string());
+        }
+        if stats_ref.uptime_secs > 0 {
+            info_flex = info_flex.child("•").child(uptime_str);
+        }
+        title_part = title_part.child(info_flex);
+    }
+
+    title_part.into_any_element()
 }
