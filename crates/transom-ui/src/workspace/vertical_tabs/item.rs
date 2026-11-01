@@ -180,40 +180,14 @@ pub(super) fn render_vertical_tab_row(
     }
 
     if app_settings(cx).window.show_tab_close_button {
-        let close = div()
-            .id(ElementId::Name(
-                format!("vertical-tab-close-{group_id}").into(),
-            ))
-            .size(px(18.0))
-            .rounded(p.radius.sm)
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .text_color(if active {
-                p.sidebar_accent_foreground
-            } else {
-                p.muted_foreground
-            })
-            .hover(|style| {
-                style
-                    .bg(p.muted_foreground.opacity(0.2))
-                    .text_color(p.foreground)
-            })
-            .active(|style| style.bg(p.muted_foreground.opacity(0.3)))
-            .tooltip(|_window, cx| {
-                Tooltip::new(rust_i18n::t!("app.close").to_string()).build(_window, cx)
-            })
-            .on_mouse_down(MouseButton::Left, |_, window, cx| {
-                window.prevent_default();
-                cx.stop_propagation();
-            })
-            .on_click(cx.listener(move |this, _, window, cx| {
-                cx.stop_propagation();
-                this.close_group(group_id, window, cx);
-            }))
-            .child(Icon::new(IconName::WindowClose).xsmall());
-        band = band.child(close);
+        band = band.child(crate::workspace::tab_strip::render_tab_close_button(
+            group_id,
+            active,
+            tiled,
+            &app_entity,
+            p,
+            cx,
+        ));
     }
 
     let tooltip_label = if subtitle.is_empty() {

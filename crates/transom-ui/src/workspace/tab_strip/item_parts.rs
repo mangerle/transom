@@ -116,7 +116,7 @@ pub(super) fn render_pane_badge(
 }
 
 /// 渲染标签关闭按钮（支持并排组下拉或单标签直接关闭）。
-pub(super) fn render_tab_close_button(
+pub(crate) fn render_tab_close_button(
     group_id: GroupId,
     active: bool,
     tiled_set: Option<&TiledTabs>,

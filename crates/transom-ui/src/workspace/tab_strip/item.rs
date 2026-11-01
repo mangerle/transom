@@ -15,7 +15,7 @@ use gpui_kit::*;
 use transom_core::{Connection, GroupId, SplitAxis, TabId};
 
 #[path = "item_parts.rs"]
-mod item_parts;
+pub(super) mod item_parts;
 
 use self::item_parts::{render_pane_badge, render_tab_close_button};
 use super::badges::{PaneRow, build_tab_tooltip, build_tiled_group_badge};
