@@ -10,8 +10,6 @@ use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{TransferKind, TransferStatus, TransferTask};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{TabId, TransferDirection};
@@ -50,127 +48,149 @@ pub(super) fn render_queue_task_row(
         TransferStatus::Transferring => {
             actions = actions
                 .child(
-                    Button::new(format!("queue-pause-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Pause)
-                        .tooltip(rust_i18n::t!("sftp.queue.pause_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.pause_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-pause-{idx}"),
+                        IconName::Pause,
+                        rust_i18n::t!("sftp.queue.pause_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.pause_task(tab_id, task_id, cx);
+                    })),
                 )
                 .child(
-                    Button::new(format!("queue-cancel-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::X)
-                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.cancel_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-cancel-{idx}"),
+                        IconName::X,
+                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.cancel_task(tab_id, task_id, cx);
+                    })),
                 );
         }
         TransferStatus::Verifying => {
             actions = actions.child(
-                Button::new(format!("queue-cancel-{idx}"))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::X)
-                    .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.cancel_task(tab_id, task_id, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    format!("queue-cancel-{idx}"),
+                    IconName::X,
+                    rust_i18n::t!("sftp.queue.cancel_task").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.cancel_task(tab_id, task_id, cx);
+                })),
             );
         }
         TransferStatus::Paused => {
             actions = actions
                 .child(
-                    Button::new(format!("queue-prioritize-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ArrowUpToLine)
-                        .tooltip(rust_i18n::t!("sftp.queue.prioritize_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.prioritize_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-prioritize-{idx}"),
+                        IconName::ArrowUpToLine,
+                        rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.prioritize_task(tab_id, task_id, cx);
+                    })),
                 )
                 .child(
-                    Button::new(format!("queue-resume-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Play)
-                        .tooltip(rust_i18n::t!("sftp.queue.resume_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.resume_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-resume-{idx}"),
+                        IconName::Play,
+                        rust_i18n::t!("sftp.queue.resume_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.resume_task(tab_id, task_id, cx);
+                    })),
                 )
                 .child(
-                    Button::new(format!("queue-cancel-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::X)
-                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.cancel_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-cancel-{idx}"),
+                        IconName::X,
+                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.cancel_task(tab_id, task_id, cx);
+                    })),
                 );
         }
         TransferStatus::Pending => {
             actions = actions
                 .child(
-                    Button::new(format!("queue-prioritize-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ArrowUpToLine)
-                        .tooltip(rust_i18n::t!("sftp.queue.prioritize_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.prioritize_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-prioritize-{idx}"),
+                        IconName::ArrowUpToLine,
+                        rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.prioritize_task(tab_id, task_id, cx);
+                    })),
                 )
                 .child(
-                    Button::new(format!("queue-cancel-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::X)
-                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.cancel_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-cancel-{idx}"),
+                        IconName::X,
+                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.cancel_task(tab_id, task_id, cx);
+                    })),
                 );
         }
         TransferStatus::Failed(_) => {
             actions = actions
                 .child(
-                    Button::new(format!("queue-retry-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::RotateCw)
-                        .tooltip(rust_i18n::t!("sftp.queue.retry_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.resume_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-retry-{idx}"),
+                        IconName::RotateCw,
+                        rust_i18n::t!("sftp.queue.retry_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.resume_task(tab_id, task_id, cx);
+                    })),
                 )
                 .child(
-                    Button::new(format!("queue-cancel-{idx}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::X)
-                        .tooltip(rust_i18n::t!("sftp.queue.cancel_task").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.cancel_task(tab_id, task_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        format!("queue-cancel-{idx}"),
+                        IconName::X,
+                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.cancel_task(tab_id, task_id, cx);
+                    })),
                 );
         }
         TransferStatus::Completed | TransferStatus::Cancelled => {
             actions = actions.child(
-                Button::new(format!("queue-remove-{idx}"))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Trash)
-                    .tooltip(rust_i18n::t!("sftp.overlay_remove").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.remove_task(task_id, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    format!("queue-remove-{idx}"),
+                    IconName::Trash,
+                    rust_i18n::t!("sftp.overlay_remove").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.remove_task(task_id, cx);
+                })),
             );
         }
     }

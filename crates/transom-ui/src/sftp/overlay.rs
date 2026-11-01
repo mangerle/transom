@@ -236,14 +236,16 @@ impl AppShell {
                     })),
             )
             .child(
-                Button::new(format!("overlay-dismiss-{tab_id}"))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::X)
-                    .tooltip(rust_i18n::t!("sftp.overlay_dismiss"))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.dismiss_drop_overlay(tab_id, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    format!("overlay-dismiss-{tab_id}"),
+                    IconName::X,
+                    rust_i18n::t!("sftp.overlay_dismiss"),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.dismiss_drop_overlay(tab_id, cx);
+                })),
             );
 
         header.into_any_element()
@@ -258,26 +260,30 @@ impl AppShell {
     ) -> AnyElement {
         let bulk_actions = h_flex().gap_0p5().when(busy > 0, |this| {
             this.child(
-                Button::new(format!("overlay-pause-all-{tab_id}"))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Pause)
-                    .tooltip(rust_i18n::t!("sftp.overlay_pause_all"))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.sftp_pause_all(tab_id, cx);
-                        this.sync_drop_overlay(tab_id, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    format!("overlay-pause-all-{tab_id}"),
+                    IconName::Pause,
+                    rust_i18n::t!("sftp.overlay_pause_all"),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.sftp_pause_all(tab_id, cx);
+                    this.sync_drop_overlay(tab_id, cx);
+                })),
             )
             .child(
-                Button::new(format!("overlay-cancel-all-{tab_id}"))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Ban)
-                    .tooltip(rust_i18n::t!("sftp.overlay_cancel_all"))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.sftp_cancel_all(tab_id, cx);
-                        this.sync_drop_overlay(tab_id, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    format!("overlay-cancel-all-{tab_id}"),
+                    IconName::Ban,
+                    rust_i18n::t!("sftp.overlay_cancel_all"),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.sftp_cancel_all(tab_id, cx);
+                    this.sync_drop_overlay(tab_id, cx);
+                })),
             )
         });
 
@@ -438,28 +444,32 @@ fn overlay_row(
                 )
             })
             .child(
-                Button::new(format!("overlay-act-{task_id}-cancel"))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::X)
-                    .tooltip(rust_i18n::t!("sftp.overlay_cancel"))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.sftp_cancel_task(tab_id, task_id, cx);
-                        this.sync_drop_overlay(tab_id, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    format!("overlay-act-{task_id}-cancel"),
+                    IconName::X,
+                    rust_i18n::t!("sftp.overlay_cancel"),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.sftp_cancel_task(tab_id, task_id, cx);
+                    this.sync_drop_overlay(tab_id, cx);
+                })),
             )
         })
         .when(!is_busy(task), |this| {
             this.child(
-                Button::new(format!("overlay-act-{task_id}-remove"))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Trash)
-                    .tooltip(rust_i18n::t!("sftp.overlay_remove"))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.sftp_remove_task(tab_id, task_id, cx);
-                        this.sync_drop_overlay(tab_id, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    format!("overlay-act-{task_id}-remove"),
+                    IconName::Trash,
+                    rust_i18n::t!("sftp.overlay_remove"),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.sftp_remove_task(tab_id, task_id, cx);
+                    this.sync_drop_overlay(tab_id, cx);
+                })),
             )
         });
 

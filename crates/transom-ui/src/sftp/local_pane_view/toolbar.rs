@@ -66,32 +66,40 @@ pub(super) fn render_local_toolbar(
                 )
                 .child(div().flex_1().child(Input::new(local_path_input).w_full()))
                 .child(
-                    Button::new("local-up")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ArrowUp)
-                        .tooltip(rust_i18n::t!("sftp.menu.go_up").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
+                    crate::widgets::IconButton::new(
+                        "local-up",
+                        IconName::ArrowUp,
+                        rust_i18n::t!("sftp.menu.go_up").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(
+                        cx.listener(move |this, _, window, cx| {
                             this.local_go_up(tab_id, window, cx)
-                        })),
+                        }),
+                    ),
                 )
                 .child(
-                    Button::new("local-refresh")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::RefreshCw)
-                        .tooltip(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| this.local_refresh(cx))),
+                    crate::widgets::IconButton::new(
+                        "local-refresh",
+                        IconName::RefreshCw,
+                        rust_i18n::t!("sftp.nav.refresh_local_dir").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| this.local_refresh(cx))),
                 )
                 .child(
-                    Button::new("local-enter")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ArrowRight)
-                        .tooltip(rust_i18n::t!("sftp.nav.enter_path").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.local_enter_path(tab_id, window, cx)
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-enter",
+                        IconName::ArrowRight,
+                        rust_i18n::t!("sftp.nav.enter_path").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.local_enter_path(tab_id, window, cx)
+                    })),
                 )
                 .when(remote_available, |this| {
                     this.child(
@@ -108,14 +116,16 @@ pub(super) fn render_local_toolbar(
                 })
                 .when(remote_available, |this| {
                     this.child(
-                        Button::new("local-collapse")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::PanelLeftClose)
-                            .tooltip(rust_i18n::t!("sftp.sidebar.collapse_local").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.toggle_local_collapse(cx);
-                            })),
+                        crate::widgets::IconButton::new(
+                            "local-collapse",
+                            IconName::PanelLeftClose,
+                            rust_i18n::t!("sftp.sidebar.collapse_local").to_string(),
+                        )
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.toggle_local_collapse(cx);
+                        })),
                     )
                 }),
         )
@@ -166,90 +176,104 @@ pub(super) fn render_local_toolbar(
                     )
                 })
                 .child(
-                    Button::new("local-action-mkdir")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::FolderPlus)
-                        .tooltip(rust_i18n::t!("sftp.menu.new_local_folder").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_local_mkdir_modal(window, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-action-mkdir",
+                        IconName::FolderPlus,
+                        rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_local_mkdir_modal(window, cx);
+                    })),
                 )
                 .child(
-                    Button::new("local-action-new-file")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::FilePlus)
-                        .tooltip(rust_i18n::t!("sftp.menu.new_local_file").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_local_new_file_modal(window, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-action-new-file",
+                        IconName::FilePlus,
+                        rust_i18n::t!("sftp.menu.new_local_file").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_local_new_file_modal(window, cx);
+                    })),
                 )
                 .child(
-                    Button::new("local-action-rename")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Pencil)
-                        .tooltip(rust_i18n::t!("sftp.rename").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_local_rename_modal(window, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-action-rename",
+                        IconName::Pencil,
+                        rust_i18n::t!("sftp.rename").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_local_rename_modal(window, cx);
+                    })),
                 )
                 .child(
-                    Button::new("local-action-edit")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::FilePen)
-                        .tooltip(rust_i18n::t!("common.edit").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            let selected = this.state.local.selected.clone();
-                            if let Some(target) = selected {
-                                this.local_edit_file(target, cx);
-                            } else {
-                                this.state.set_local_error(
-                                    rust_i18n::t!("sftp.row.select_local_to_edit").to_string(),
-                                );
-                                cx.notify();
-                            }
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-action-edit",
+                        IconName::FilePen,
+                        rust_i18n::t!("common.edit").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let selected = this.state.local.selected.clone();
+                        if let Some(target) = selected {
+                            this.local_edit_file(target, cx);
+                        } else {
+                            this.state.set_local_error(
+                                rust_i18n::t!("sftp.row.select_local_to_edit").to_string(),
+                            );
+                            cx.notify();
+                        }
+                    })),
                 )
                 .child(
-                    Button::new("local-action-properties")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Info)
-                        .tooltip(rust_i18n::t!("sftp.menu.properties").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            let path = this
-                                .state
-                                .local
-                                .selected
-                                .clone()
-                                .or_else(|| Some(this.state.local.path.clone()));
-                            if let Some(target) = path {
-                                this.show_local_properties(target, cx);
-                            }
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-action-properties",
+                        IconName::Info,
+                        rust_i18n::t!("sftp.menu.properties").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let path = this
+                            .state
+                            .local
+                            .selected
+                            .clone()
+                            .or_else(|| Some(this.state.local.path.clone()));
+                        if let Some(target) = path {
+                            this.show_local_properties(target, cx);
+                        }
+                    })),
                 )
                 .child(
-                    Button::new("local-action-delete")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Trash)
-                        .tooltip(rust_i18n::t!("sftp.delete").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.local_delete_selection(tab_id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-action-delete",
+                        IconName::Trash,
+                        rust_i18n::t!("sftp.delete").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.local_delete_selection(tab_id, cx);
+                    })),
                 )
                 .child(
-                    Button::new("local-action-open-fm")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::FolderOpen)
-                        .tooltip(rust_i18n::t!("sftp.menu.open_file_manager").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.local_open_file_manager(cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-action-open-fm",
+                        IconName::FolderOpen,
+                        rust_i18n::t!("sftp.menu.open_file_manager").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.local_open_file_manager(cx);
+                    })),
                 )
                 .child(
                     Button::new("local-toggle-hidden")

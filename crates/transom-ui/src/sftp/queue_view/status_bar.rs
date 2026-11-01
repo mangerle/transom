@@ -11,8 +11,6 @@ use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -146,24 +144,28 @@ impl SftpPanelView {
                     .gap_1()
                     .items_center()
                     .child(
-                        Button::new("top-sftp-pause-all")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Pause)
-                            .tooltip(rust_i18n::t!("sftp.queue.pause_all").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.pause_all(tab_id, cx);
-                            })),
+                        crate::widgets::IconButton::new(
+                            "top-sftp-pause-all",
+                            IconName::Pause,
+                            rust_i18n::t!("sftp.queue.pause_all").to_string(),
+                        )
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.pause_all(tab_id, cx);
+                        })),
                     )
                     .child(
-                        Button::new("top-sftp-cancel-all")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::X)
-                            .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.cancel_all(tab_id, cx);
-                            })),
+                        crate::widgets::IconButton::new(
+                            "top-sftp-cancel-all",
+                            IconName::X,
+                            rust_i18n::t!("sftp.queue.cancel_all").to_string(),
+                        )
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.cancel_all(tab_id, cx);
+                        })),
                     )
                     .into_any_element(),
             )
@@ -173,24 +175,28 @@ impl SftpPanelView {
                     .gap_1()
                     .items_center()
                     .child(
-                        Button::new("top-sftp-resume-all")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Play)
-                            .tooltip(rust_i18n::t!("sftp.queue.resume_all").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.resume_all(tab_id, cx);
-                            })),
+                        crate::widgets::IconButton::new(
+                            "top-sftp-resume-all",
+                            IconName::Play,
+                            rust_i18n::t!("sftp.queue.resume_all").to_string(),
+                        )
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.resume_all(tab_id, cx);
+                        })),
                     )
                     .child(
-                        Button::new("top-sftp-cancel-paused-all")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::X)
-                            .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.cancel_all(tab_id, cx);
-                            })),
+                        crate::widgets::IconButton::new(
+                            "top-sftp-cancel-paused-all",
+                            IconName::X,
+                            rust_i18n::t!("sftp.queue.cancel_all").to_string(),
+                        )
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.cancel_all(tab_id, cx);
+                        })),
                     )
                     .into_any_element(),
             )

@@ -187,15 +187,17 @@ impl MonitorView {
                     ),
             )
             .child(
-                Button::new("tab-monitor-refresh")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RefreshCw)
-                    .tooltip(rust_i18n::t!("monitor.view.refresh_tooltip").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        let collapsed = this.state.collapse.processes;
-                        cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
-                    })),
+                crate::widgets::IconButton::new(
+                    "tab-monitor-refresh",
+                    IconName::RefreshCw,
+                    rust_i18n::t!("monitor.view.refresh_tooltip").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    let collapsed = this.state.collapse.processes;
+                    cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
+                })),
             )
             .child(
                 Button::new("tab-monitor-dock-drawer")
@@ -215,14 +217,16 @@ impl MonitorView {
                     })),
             )
             .child(
-                Button::new("tab-monitor-close-btn")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Close)
-                    .tooltip(rust_i18n::t!("monitor.view.close_tab_tooltip").to_string())
-                    .on_click(cx.listener(move |_this, _, _window, cx| {
-                        cx.emit(crate::monitor::MonitorPanelEvent::ClosePane { tab_id });
-                    })),
+                crate::widgets::IconButton::new(
+                    "tab-monitor-close-btn",
+                    IconName::Close,
+                    rust_i18n::t!("monitor.view.close_tab_tooltip").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |_this, _, _window, cx| {
+                    cx.emit(crate::monitor::MonitorPanelEvent::ClosePane { tab_id });
+                })),
             );
         actions.into_any_element()
     }
