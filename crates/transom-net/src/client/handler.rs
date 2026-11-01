@@ -78,6 +78,9 @@ impl RemoteForwardTasks {
     }
 
     /// 登记指定远端端口新派生的转发任务句柄，并清理该端口已结束的历史任务。
+    ///
+    /// `port = 0` 是 SSH Agent 转发的保留哨兵：它没有监听端口，但同属会话级
+    /// 后台通道，需要参与 `abort_all` 的统一收割。
     pub(crate) fn track(&self, port: u16, handle: JoinHandle<()>) {
         if let Ok(mut lock) = self.tasks.lock() {
             let list = lock.entry(port).or_default();
@@ -288,7 +291,9 @@ impl client::Handler for ClientHandler {
         reply.accept().await;
         let mut channel_stream = channel.into_stream();
 
-        tokio::spawn(async move {
+        // Agent 转发与远端端口转发同属会话级后台通道：登记到同一追踪器
+        // （端口 0 为保留哨兵），会话关闭时 abort_all 一并收割，不留孤儿任务。
+        let forward_task = tokio::spawn(async move {
             let _permit = permit;
             match connect_local_agent(&auth_sock).await {
                 Ok(mut local_stream) => {
@@ -302,6 +307,7 @@ impl client::Handler for ClientHandler {
                 }
             }
         });
+        self.forward_tasks.track(0, forward_task);
 
         Ok(())
     }
