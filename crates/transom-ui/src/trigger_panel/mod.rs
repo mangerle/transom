@@ -340,6 +340,58 @@ impl SettingsView {
     }
 
     /// 内联编辑表单：模式、动作与校验错误。
+    /// 动作类型三选一：响铃、通知、自动响应。
+    fn render_action_kind_selector(
+        &self,
+        action_kind: ActionKindChoice,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
+            .gap_2()
+            .items_center()
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(rust_i18n::t!("trigger.action_kind").to_string()),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new("action-bell-btn")
+                            .xsmall()
+                            .outline()
+                            .selected(action_kind == ActionKindChoice::Bell)
+                            .label(rust_i18n::t!("trigger.action_bell").to_string())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_trigger_action_kind(ActionKindChoice::Bell, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("action-notify-btn")
+                            .xsmall()
+                            .outline()
+                            .selected(action_kind == ActionKindChoice::Notification)
+                            .label(rust_i18n::t!("trigger.action_notification").to_string())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_trigger_action_kind(ActionKindChoice::Notification, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("action-response-btn")
+                            .xsmall()
+                            .outline()
+                            .selected(action_kind == ActionKindChoice::AutoResponse)
+                            .label(rust_i18n::t!("trigger.action_auto_response").to_string())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_trigger_action_kind(ActionKindChoice::AutoResponse, cx);
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn render_trigger_editor(
         &self,
         edit_state: crate::trigger_panel::TriggerEditState,
@@ -397,59 +449,7 @@ impl SettingsView {
                             })),
                     ),
             )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(rust_i18n::t!("trigger.action_kind").to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .child(
-                                Button::new("action-bell-btn")
-                                    .xsmall()
-                                    .outline()
-                                    .selected(action_kind == ActionKindChoice::Bell)
-                                    .label(rust_i18n::t!("trigger.action_bell").to_string())
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.set_trigger_action_kind(ActionKindChoice::Bell, cx);
-                                    })),
-                            )
-                            .child(
-                                Button::new("action-notify-btn")
-                                    .xsmall()
-                                    .outline()
-                                    .selected(action_kind == ActionKindChoice::Notification)
-                                    .label(rust_i18n::t!("trigger.action_notification").to_string())
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.set_trigger_action_kind(
-                                            ActionKindChoice::Notification,
-                                            cx,
-                                        );
-                                    })),
-                            )
-                            .child(
-                                Button::new("action-response-btn")
-                                    .xsmall()
-                                    .outline()
-                                    .selected(action_kind == ActionKindChoice::AutoResponse)
-                                    .label(
-                                        rust_i18n::t!("trigger.action_auto_response").to_string(),
-                                    )
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.set_trigger_action_kind(
-                                            ActionKindChoice::AutoResponse,
-                                            cx,
-                                        );
-                                    })),
-                            ),
-                    ),
-            );
+            .child(self.render_action_kind_selector(action_kind, cx));
 
         if action_kind != ActionKindChoice::Bell {
             form = form.child(crate::widgets::form_field(
