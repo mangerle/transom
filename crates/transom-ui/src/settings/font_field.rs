@@ -187,12 +187,12 @@ impl AppShell {
     fn refresh_font_selects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let fields = [
             (
-                self.state.modals.settings.font_family.clone(),
+                self.settings_modal(cx).font_family.clone(),
                 MONO_DEFAULT_KEY,
             ),
-            (self.state.modals.settings.cjk_font.clone(), CJK_DEFAULT_KEY),
+            (self.settings_modal(cx).cjk_font.clone(), CJK_DEFAULT_KEY),
             (
-                self.state.modals.settings.ui_font_family.clone(),
+                self.settings_modal(cx).ui_font_family.clone(),
                 UI_DEFAULT_KEY,
             ),
         ];

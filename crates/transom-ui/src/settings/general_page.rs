@@ -55,8 +55,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let current_bell = app_settings(cx).window.bell_style;
-        let stepper =
-            Self::setting_stepper(&self.state.modals.settings.notify_threshold, px(110.0));
+        let stepper = Self::setting_stepper(&self.settings_modal(cx).notify_threshold, px(110.0));
         let bell_options = vec![
             (
                 "bell-none",
@@ -126,11 +125,11 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let kind = self.state.modals.settings.proxy.kind;
-        let host = self.state.modals.settings.proxy.host.clone();
-        let port = self.state.modals.settings.proxy.port.clone();
-        let username = self.state.modals.settings.proxy.username.clone();
-        let password = self.state.modals.settings.proxy.password.clone();
+        let kind = self.settings_modal(cx).proxy.kind;
+        let host = self.settings_modal(cx).proxy.host.clone();
+        let port = self.settings_modal(cx).proxy.port.clone();
+        let username = self.settings_modal(cx).proxy.username.clone();
+        let password = self.settings_modal(cx).proxy.password.clone();
         // 代理模式与全页其它枚举项统一走下拉：三档选项长度不一，分段按钮
         // 长短参差且窄面板下会把整行占满，下拉的控件宽度稳定、靠右对齐。
         let mode_control = Self::setting_dropdown(
@@ -151,7 +150,7 @@ impl AppShell {
                 ),
             ],
             |this, protocol, cx| {
-                this.state.modals.settings.proxy.kind = protocol;
+                this.settings_modal_mut(cx, |s| s.proxy.kind = protocol);
                 cx.notify();
             },
             cx,
@@ -213,7 +212,7 @@ impl AppShell {
         let enabled = app_settings(cx).block_view.enabled;
         let integrate = app_settings(cx).block_view.shell_integration;
         let style = app_settings(cx).block_view.style;
-        let rows_input = self.state.modals.settings.block_collapse_rows.clone();
+        let rows_input = self.settings_modal(cx).block_collapse_rows.clone();
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(

@@ -13,8 +13,8 @@ mod drag;
 mod menu;
 mod metrics;
 
+use crate::app::AppShell;
 use crate::app::app_settings;
-use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use drag::{
@@ -31,23 +31,34 @@ use transom_core::{ActivityItemId, Connection, TabPosition};
 
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 
-impl AppState {
+impl AppShell {
     fn activity_item_selected(&self, id: ActivityItemId, monitor_open: bool, cx: &App) -> bool {
         match id {
-            ActivityItemId::Sessions => self.sidebar.visible && !self.vertical_tabs_open,
-            ActivityItemId::Tabs => self.sidebar.visible && self.vertical_tabs_open,
+            ActivityItemId::Sessions => {
+                self.state.sidebar.visible && !self.state.vertical_tabs_open
+            }
+            ActivityItemId::Tabs => self.state.sidebar.visible && self.state.vertical_tabs_open,
             ActivityItemId::Forwards => self
+                .state
                 .workspace
                 .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
+                .and_then(|tab_id| self.state.workspace.tab(tab_id))
                 .is_some_and(|tab| tab.forwards_view().is_some()),
             ActivityItemId::Sftp => self
+                .state
                 .workspace
                 .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id)?.sftp_view())
+                .and_then(|tab_id| self.state.workspace.tab(tab_id)?.sftp_view())
                 .is_some_and(|view| view.read(cx).open),
             ActivityItemId::Monitor => monitor_open,
-            ActivityItemId::Keys => self.modals.settings.key_wizard.is_some(),
+            ActivityItemId::Keys => self
+                .state
+                .modals
+                .settings
+                .read(cx)
+                .state()
+                .key_wizard
+                .is_some(),
             _ => false,
         }
     }
@@ -57,9 +68,10 @@ impl AppState {
             return false;
         }
         let Some(tab) = self
+            .state
             .workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id))
+            .and_then(|tab_id| self.state.workspace.tab(tab_id))
         else {
             return true;
         };
@@ -145,10 +157,8 @@ impl AppShell {
         let label = activity_item_label(id);
         let icon = activity_item_icon(id);
         let tooltip = self.activity_item_tooltip(id, &label, app_settings(cx));
-        let selected =
-            self.state
-                .activity_item_selected(id, self.state.monitor.read(cx).is_open(), cx);
-        let disabled = self.state.activity_item_disabled(id);
+        let selected = self.activity_item_selected(id, self.state.monitor.read(cx).is_open(), cx);
+        let disabled = self.activity_item_disabled(id);
         let app = cx.entity().clone();
 
         let mut button = div()

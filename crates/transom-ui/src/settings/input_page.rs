@@ -75,14 +75,14 @@ impl AppShell {
     pub(crate) fn render_settings_selection(
         &mut self,
         p: &Palette,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.word_separators").to_string(),
-                    self.state.modals.settings.word_separators.clone(),
+                    self.settings_modal(cx).word_separators.clone(),
                     p,
                 ),
                 Some(rust_i18n::t!("settings.word_separators_note").to_string()),

@@ -46,7 +46,7 @@ impl AppShell {
         // 粗细是 1/2/3 的连续小数值：步进器比下拉少一次点击，和字号/行高一致；
         // 量纲写在说明文案里，输入框内只留数字，避免控件被单位挤窄。
         let width_control =
-            Self::setting_stepper(&self.state.modals.settings.divider_width, px(110.0));
+            Self::setting_stepper(&self.settings_modal(cx).divider_width, px(110.0));
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -71,9 +71,7 @@ impl AppShell {
     /// 避免界面闪一帧错误线宽。
     pub(crate) fn apply_divider_width_from_input(&mut self, cx: &mut Context<Self>) {
         let value = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .divider_width
             .read(cx)
             .value()
@@ -94,15 +92,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let mode = app_settings(cx).window.window_background;
-        let transparency = slider_percent(
-            &self
-                .state
-                .modals
-                .settings
-                .window_transparency
-                .read(cx)
-                .value(),
-        );
+        let transparency =
+            slider_percent(&self.settings_modal(cx).window_transparency.read(cx).value());
         let mode_buttons = h_flex()
             .gap_1()
             .children(
@@ -143,7 +134,7 @@ impl AppShell {
                 "settings.window_transparency",
                 Some("settings.window_transparency_desc"),
                 Self::percent_slider(
-                    &self.state.modals.settings.window_transparency,
+                    &self.settings_modal(cx).window_transparency,
                     transparency,
                     p,
                 ),
@@ -196,9 +187,7 @@ impl AppShell {
                 s.window.window_transparency = DEFAULT_WINDOW_TRANSPARENCY
             });
             let value = f32::from(DEFAULT_WINDOW_TRANSPARENCY);
-            self.state
-                .modals
-                .settings
+            self.settings_modal(cx)
                 .window_transparency
                 .update(cx, |state, cx| {
                     state.set_value(value, window, cx);

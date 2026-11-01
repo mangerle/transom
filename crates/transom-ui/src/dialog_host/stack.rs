@@ -75,11 +75,11 @@ impl OpenModals {
 
 impl AppShell {
     /// 当前应当打开的弹窗栈，按层序由下到上。
-    fn desired_modal_stack(&self) -> Vec<ModalKind> {
+    fn desired_modal_stack(&self, cx: &App) -> Vec<ModalKind> {
         ModalKind::ORDER
             .iter()
             .copied()
-            .filter(|kind| kind.is_open(self))
+            .filter(|kind| kind.is_open(self, cx))
             .collect()
     }
 
@@ -90,7 +90,7 @@ impl AppShell {
     /// 为什么要 `defer`：`open_dialog` 会移交焦点并通知组件层，在渲染过程中
     /// 改这些状态会踩借用与重入，延到绘制之后再执行。
     pub(crate) fn reconcile_dialogs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let desired = self.desired_modal_stack();
+        let desired = self.desired_modal_stack(cx);
         let actual: Vec<ModalKind> = self
             .state
             .open_modals

@@ -9,7 +9,7 @@ use crate::app::app_settings;
 
 impl ModalKind {
     /// 该弹窗此刻是否应当存在。只读状态、不产生副作用：对账每帧都会问一次。
-    pub(super) fn is_open(self, shell: &AppShell) -> bool {
+    pub(super) fn is_open(self, shell: &AppShell, cx: &App) -> bool {
         match self {
             ModalKind::AuthPrompt => shell.state.modals.auth_prompt.is_some(),
             ModalKind::HostKeyConfirm => shell.state.modals.host_key_confirm.is_some(),
@@ -28,11 +28,11 @@ impl ModalKind {
             ModalKind::BatchEdit => shell.state.modals.batch_edit.is_some(),
             ModalKind::SnippetForm => shell.state.modals.snippet_panel.form.is_some(),
             ModalKind::KnownHosts => shell.state.modals.known_hosts.open,
-            ModalKind::KeyWizard => shell.state.modals.settings.key_wizard.is_some(),
+            ModalKind::KeyWizard => shell.settings_modal(cx).key_wizard.is_some(),
             ModalKind::BackupPrompt => shell.state.modals.backup_prompt.is_some(),
             ModalKind::AuditViewer => shell.state.modals.audit_viewer.is_some(),
             ModalKind::Replay => shell.state.modals.replay.is_some(),
-            ModalKind::Settings => shell.state.modals.settings.open,
+            ModalKind::Settings => shell.settings_modal(cx).open,
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture.is_some(),
             ModalKind::DiffViewer => shell.state.diff_viewer.is_some(),
         }
@@ -165,7 +165,7 @@ impl ModalKind {
                 true
             }
             ModalKind::KeyWizard => {
-                shell.state.modals.settings.key_wizard = None;
+                shell.settings_modal_mut(cx, |settings| settings.key_wizard = None);
                 true
             }
             ModalKind::BackupPrompt => {
@@ -212,7 +212,7 @@ impl ModalKind {
         cx: &mut Context<AppShell>,
     ) -> bool {
         self.run_commit(shell, window, cx);
-        !self.is_open(shell)
+        !self.is_open(shell, cx)
     }
 
     fn run_commit(self, shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
@@ -247,7 +247,7 @@ impl ModalKind {
             ModalKind::BackupPrompt => shell.submit_backup(window, cx),
             // 查看与管理类弹窗只有一个"关闭"主按钮，Enter 与它同义。
             ModalKind::KnownHosts => shell.state.modals.known_hosts.open = false,
-            ModalKind::KeyWizard => shell.state.modals.settings.key_wizard = None,
+            ModalKind::KeyWizard => shell.settings_modal_mut(cx, |s| s.key_wizard = None),
             ModalKind::AuditViewer => shell.state.modals.audit_viewer = None,
             ModalKind::Replay => shell.state.modals.replay = None,
             ModalKind::Settings => shell.cancel_settings(window, cx),

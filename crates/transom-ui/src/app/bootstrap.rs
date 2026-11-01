@@ -165,7 +165,7 @@ impl AppShell {
                     records: known_hosts_records,
                     search: known_hosts_search,
                 },
-                settings_modal,
+                cx.new(|_| crate::settings::SettingsView::new(settings_modal)),
                 quick_open_state,
                 SnippetPanelState {
                     open: false,

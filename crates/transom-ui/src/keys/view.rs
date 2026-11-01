@@ -18,23 +18,19 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        if self.state.modals.settings.key_wizard.is_none() {
+        if self.settings_modal(cx).key_wizard.is_none() {
             return div().into_any_element();
         }
         let generate = self.render_key_generate_section(app, p, cx);
         let list = self.render_key_list_section(app, p, cx);
         let deploy = self.render_key_deploy_section(app, p, cx);
         let message = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .key_wizard
             .as_ref()
             .and_then(|state| state.message.clone());
         let error = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .key_wizard
             .as_ref()
             .and_then(|state| state.error.clone());
@@ -93,9 +89,10 @@ impl AppShell {
         &self,
         app: &Entity<AppShell>,
         p: &Palette,
-        _cx: &App,
+        cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.state.modals.settings.key_wizard.as_ref() else {
+        let settings = self.settings_modal(cx);
+        let Some(state) = settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let current_algorithm = state.algorithm;
@@ -190,13 +187,9 @@ impl AppShell {
             .into_any_element()
     }
 
-    fn render_key_list_section(
-        &self,
-        app: &Entity<AppShell>,
-        p: &Palette,
-        _cx: &App,
-    ) -> AnyElement {
-        let Some(state) = self.state.modals.settings.key_wizard.as_ref() else {
+    fn render_key_list_section(&self, app: &Entity<AppShell>, p: &Palette, cx: &App) -> AnyElement {
+        let settings = self.settings_modal(cx);
+        let Some(state) = settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let keys = state.keys.clone();
@@ -330,9 +323,10 @@ impl AppShell {
         &self,
         app: &Entity<AppShell>,
         p: &Palette,
-        _cx: &App,
+        cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.state.modals.settings.key_wizard.as_ref() else {
+        let settings = self.settings_modal(cx);
+        let Some(state) = settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
         let selected_key = state

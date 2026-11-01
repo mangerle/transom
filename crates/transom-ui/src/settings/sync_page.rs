@@ -55,7 +55,7 @@ impl AppShell {
             cx,
         );
 
-        let form = &self.state.modals.settings.sync_form;
+        let form = &self.settings_modal(cx).sync_form;
         let mut content = v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
@@ -291,9 +291,7 @@ impl AppShell {
             "off" => {
                 update_app_settings(cx, |s| s.sync.endpoint = None);
                 update_app_settings(cx, |s| s.sync.git = None);
-                self.state
-                    .modals
-                    .settings
+                self.settings_modal(cx)
                     .sync_form
                     .git_remote
                     .update(cx, |input, cx| {
@@ -302,9 +300,7 @@ impl AppShell {
             }
             "webdav" => {
                 update_app_settings(cx, |s| s.sync.git = None);
-                self.state
-                    .modals
-                    .settings
+                self.settings_modal(cx)
                     .sync_form
                     .git_remote
                     .update(cx, |input, cx| {
@@ -323,9 +319,7 @@ impl AppShell {
             }
             "s3" => {
                 update_app_settings(cx, |s| s.sync.git = None);
-                self.state
-                    .modals
-                    .settings
+                self.settings_modal(cx)
                     .sync_form
                     .git_remote
                     .update(cx, |input, cx| {

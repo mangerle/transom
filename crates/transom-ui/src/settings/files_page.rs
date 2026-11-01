@@ -54,14 +54,14 @@ impl AppShell {
     pub(crate) fn render_settings_file_panel(
         &mut self,
         p: &Palette,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.panel_hidden").to_string(),
-                    self.state.modals.settings.panel_hidden_patterns.clone(),
+                    self.settings_modal(cx).panel_hidden_patterns.clone(),
                     p,
                 ),
                 Some(rust_i18n::t!("settings.panel_hidden_note").to_string()),
@@ -78,10 +78,8 @@ impl AppShell {
     ) -> AnyElement {
         let current_algo = app_settings(cx).sftp.checksum_algorithm;
         let current_mode = app_settings(cx).sftp.verify_mode;
-        let stepper = Self::setting_stepper(
-            &self.state.modals.settings.max_concurrent_transfers,
-            px(110.0),
-        );
+        let stepper =
+            Self::setting_stepper(&self.settings_modal(cx).max_concurrent_transfers, px(110.0));
         v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(

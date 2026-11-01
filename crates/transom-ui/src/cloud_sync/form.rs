@@ -7,6 +7,7 @@ use crate::app::app_settings;
 ///
 /// 密码、Secret Key 与同步口令为掩码输入且打开弹窗时不回填：钥匙串里
 /// 已有的值不回显，只有用户重新输入才会覆盖，避免旁人看到明文。
+#[derive(Clone)]
 pub(crate) struct SyncFormInputs {
     pub(crate) webdav_url: Entity<InputState>,
     pub(crate) webdav_username: Entity<InputState>,
@@ -72,7 +73,7 @@ impl AppShell {
     /// 打开设置弹窗时回填云同步表单；秘密一律留空。
     pub(crate) fn fill_sync_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let sync = app_settings(cx).sync.clone();
-        let form = &self.state.modals.settings.sync_form;
+        let form = &self.settings_modal(cx).sync_form;
         let mut set = |input: &Entity<InputState>, value: &str| {
             input.update(cx, |state, cx| state.set_value(value, window, cx));
         };
@@ -124,7 +125,7 @@ impl AppShell {
     /// 端点类型以设置内存态为准（用户在页上点选），字段值取输入框现状，
     /// 因此"填完直接点上传"无需先保存；汇总后再做一次清洗兜底。
     pub(crate) fn collect_sync_settings(&self, cx: &App) -> SyncSettings {
-        let form = &self.state.modals.settings.sync_form;
+        let form = &self.settings_modal(cx).sync_form;
         let read = |input: &Entity<InputState>| input.read(cx).value().trim().to_string();
         let endpoint = match app_settings(cx).sync.endpoint.clone() {
             Some(SyncEndpoint::Webdav { .. }) => Some(SyncEndpoint::Webdav {
@@ -171,7 +172,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let form = &self.state.modals.settings.sync_form;
+        let form = &self.settings_modal(cx).sync_form;
         let is_webdav = matches!(
             app_settings(cx).sync.endpoint,
             Some(SyncEndpoint::Webdav { .. })

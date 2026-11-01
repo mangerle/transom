@@ -16,6 +16,8 @@ use transom_core::SessionId;
 pub(crate) struct TaskHub {
     pub(crate) probe_expiry: HashMap<SessionId, Task<()>>,
     pub(crate) monitor: Option<Task<()>>,
+    /// 密钥生成任务。
+    pub(crate) keygen: Option<Task<()>>,
     pub(crate) git_sync: Option<Task<()>>,
     pub(crate) backup: Option<Task<()>>,
     pub(crate) sync_pull: Option<Task<()>>,
@@ -42,6 +44,7 @@ impl TaskHub {
         Self {
             probe_expiry: HashMap::new(),
             monitor: None,
+            keygen: None,
             git_sync: None,
             backup: None,
             sync_pull: None,

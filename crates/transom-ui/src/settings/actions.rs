@@ -24,15 +24,16 @@ impl AppShell {
 
     pub(crate) fn open_settings_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // 菜单/快捷键入口不指定页：清掉面板残留的跳页请求，回到组件上次的位置。
-        self.state.modals.settings.jump_page = None;
+        self.settings_modal_mut(cx, |s| s.jump_page = None);
         let profile = app_settings(cx).terminal_profile.clone();
         // 界面主题与密度在弹窗内即时预览，取消时凭这份快照恢复。
-        self.state.modals.settings.appearance_snapshot = Some(app_settings(cx).appearance.clone());
+        let appearance = app_settings(cx).appearance.clone();
+        self.settings_modal_mut(cx, |s| s.appearance_snapshot = Some(appearance));
         // 字体清单可能在本进程之外变化（例如系统装了新字体）：开弹窗时按
         // 当前系统字体重建选项，再按配置值回填，避免下拉里看不到已存的族名。
         let mono_default = rust_i18n::t!(MONO_DEFAULT_KEY).to_string();
         reset_font_select(
-            &self.state.modals.settings.font_family,
+            &self.settings_modal(cx).font_family,
             &mono_default,
             profile.font_family.as_deref(),
             window,
@@ -40,7 +41,7 @@ impl AppShell {
         );
         let ui_default = rust_i18n::t!(UI_DEFAULT_KEY).to_string();
         reset_font_select(
-            &self.state.modals.settings.ui_font_family,
+            &self.settings_modal(cx).ui_font_family,
             &ui_default,
             app_settings(cx)
                 .appearance
@@ -52,28 +53,20 @@ impl AppShell {
         );
         let cjk_default = rust_i18n::t!(CJK_DEFAULT_KEY).to_string();
         reset_font_select(
-            &self.state.modals.settings.cjk_font,
+            &self.settings_modal(cx).cjk_font,
             &cjk_default,
             profile.cjk_font_family.as_deref(),
             window,
             cx,
         );
         let font_size = app_settings(cx).terminal_profile.font_size.to_string();
-        self.state
-            .modals
-            .settings
-            .font_size
-            .update(cx, |input, cx| {
-                input.set_value(&font_size, window, cx);
-            });
+        self.settings_modal(cx).font_size.update(cx, |input, cx| {
+            input.set_value(&font_size, window, cx);
+        });
         let line_height = app_settings(cx).terminal_profile.line_height.to_string();
-        self.state
-            .modals
-            .settings
-            .line_height
-            .update(cx, |input, cx| {
-                input.set_value(&line_height, window, cx);
-            });
+        self.settings_modal(cx).line_height.update(cx, |input, cx| {
+            input.set_value(&line_height, window, cx);
+        });
         // 分割线粗细步进器回填当前档位（1/2/3 像素）；配置可能在弹窗之外被改过。
         let divider_width = app_settings(cx)
             .appearance
@@ -81,9 +74,7 @@ impl AppShell {
             .width
             .pixels()
             .to_string();
-        self.state
-            .modals
-            .settings
+        self.settings_modal(cx)
             .divider_width
             .update(cx, |input, cx| input.set_value(divider_width, window, cx));
         // 旧配置里可能存着"不透明"档：窗口背景现在只有透明与毛玻璃两档，
@@ -94,19 +85,15 @@ impl AppShell {
         }
         // 滑块初值跟随当前配置：配置可能在本弹窗之外被改过。
         let transparency = f32::from(app_settings(cx).window.window_transparency);
-        self.state
-            .modals
-            .settings
+        self.settings_modal(cx)
             .window_transparency
             .update(cx, |state, cx| state.set_value(transparency, window, cx));
         // 取消时按这份快照回滚外观预览。
-        self.state.modals.settings.window_appearance_snapshot = Some(WindowAppearanceSnapshot {
+        self.settings_modal(cx).window_appearance_snapshot = Some(WindowAppearanceSnapshot {
             transparency: app_settings(cx).window.window_transparency,
             background: app_settings(cx).window.window_background,
         });
-        self.state
-            .modals
-            .settings
+        self.settings_modal(cx)
             .word_separators
             .update(cx, |input, cx| {
                 input.set_value(
@@ -115,48 +102,36 @@ impl AppShell {
                     cx,
                 );
             });
-        self.state
-            .modals
-            .settings
+        self.settings_modal(cx)
             .highlight_keywords
             .update(cx, |input, cx| {
                 input.set_value(profile.highlight.keywords_joined(), window, cx);
             });
         let notify_threshold = app_settings(cx).window.notify_threshold_secs.to_string();
-        self.state
-            .modals
-            .settings
+        self.settings_modal(cx)
             .notify_threshold
             .update(cx, |input, cx| {
                 input.set_value(notify_threshold, window, cx);
             });
         let scrollback = app_settings(cx).terminal_profile.scrollback.to_string();
-        self.state
-            .modals
-            .settings
-            .scrollback
-            .update(cx, |input, cx| {
-                input.set_value(&scrollback, window, cx);
-            });
+        self.settings_modal(cx).scrollback.update(cx, |input, cx| {
+            input.set_value(&scrollback, window, cx);
+        });
         let key_bindings = transom_core::TerminalKeyBinding::to_multiline(
             &app_settings(cx).terminal_profile.key_bindings,
         );
-        self.state
-            .modals
-            .settings
+        self.settings_modal(cx)
             .terminal_key_bindings
             .update(cx, |state, cx| state.set_value(key_bindings, window, cx));
         let block_rows = app_settings(cx).block_view.auto_collapse_rows.to_string();
-        self.state
-            .modals
-            .settings
+        self.settings_modal(cx)
             .block_collapse_rows
             .update(cx, |input, cx| {
                 input.set_value(block_rows, window, cx);
             });
         self.fill_sync_form(window, cx);
         self.fill_proxy_form(window, cx);
-        self.state.modals.settings.open = true;
+        self.settings_modal_mut(cx, |s| s.open = true);
         cx.notify();
     }
 
@@ -172,7 +147,7 @@ impl AppShell {
     ) {
         self.open_settings_modal(window, cx);
         if page < super::page_entries().len() {
-            self.state.modals.settings.jump_page = Some(page);
+            self.settings_modal_mut(cx, |s| s.jump_page = Some(page));
         }
         cx.notify();
     }
@@ -209,12 +184,12 @@ impl AppShell {
                     .map_or_else(String::new, |a| a.password.clone()),
             ),
         };
-        self.state.modals.settings.proxy.kind = kind;
+        self.settings_modal_mut(cx, |s| s.proxy.kind = kind);
         let inputs = [
-            (&self.state.modals.settings.proxy.host, host),
-            (&self.state.modals.settings.proxy.port, port),
-            (&self.state.modals.settings.proxy.username, username),
-            (&self.state.modals.settings.proxy.password, password),
+            (&self.settings_modal(cx).proxy.host, host),
+            (&self.settings_modal(cx).proxy.port, port),
+            (&self.settings_modal(cx).proxy.username, username),
+            (&self.settings_modal(cx).proxy.password, password),
         ];
         for (input, value) in inputs {
             input.clone().update(cx, |state, cx| {
@@ -229,7 +204,7 @@ impl AppShell {
     /// 在受限网络中表现为"设置改了却还是连不上"。
     fn commit_proxy_form(&mut self, cx: &mut Context<Self>) {
         use crate::settings::ProxyProtocol;
-        let form = &self.state.modals.settings.proxy;
+        let form = &self.settings_modal(cx).proxy;
         let host = form.host.read(cx).value().trim().to_string();
         let port = form
             .port
@@ -261,20 +236,20 @@ impl AppShell {
     /// 成对闭环，否则点取消会留下改了一半的界面；其余设置项维持既有的内存态
     /// 修改保留、等待下次保存覆盖的行为。
     pub(crate) fn cancel_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(snapshot) = self.state.modals.settings.appearance_snapshot.take() {
+        if let Some(snapshot) = self.settings_modal(cx).appearance_snapshot.take() {
             update_app_settings(cx, |s| s.appearance = snapshot);
             let appearance = app_settings(cx).appearance.clone();
             crate::theme::apply_appearance(&appearance, cx);
         }
         // 滑块是即时预览：取消要把窗口外观改回打开弹窗时的值。
-        if let Some(snapshot) = self.state.modals.settings.window_appearance_snapshot.take() {
+        if let Some(snapshot) = self.settings_modal(cx).window_appearance_snapshot.take() {
             update_app_settings(cx, |s| s.window.window_transparency = snapshot.transparency);
             update_app_settings(cx, |s| s.window.window_background = snapshot.background);
             self.refresh_window_appearance(window, cx);
             self.apply_appearance_to_live_panes(cx);
         }
-        self.state.modals.settings.open = false;
-        self.state.modals.settings.jump_page = None;
+        self.settings_modal_mut(cx, |s| s.open = false);
+        self.settings_modal_mut(cx, |s| s.jump_page = None);
         cx.notify();
     }
 
@@ -283,7 +258,7 @@ impl AppShell {
             return;
         }
         // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
-        self.state.modals.settings.window_appearance_snapshot = None;
+        self.settings_modal_mut(cx, |s| s.window_appearance_snapshot = None);
         let settings_snapshot = app_settings(cx).clone();
         if !self.state.persist_settings_reported(&settings_snapshot) {
             // 保存失败时保持弹窗打开，让用户看到错误并重试，而不是误以为已保存。
@@ -311,8 +286,8 @@ impl AppShell {
             terminal.update(cx, |view, _| view.reload_triggers(&triggers));
         }
         self.state.status = Some(rust_i18n::t!("status.ready").to_string());
-        self.state.modals.settings.open = false;
-        self.state.modals.settings.jump_page = None;
+        self.settings_modal_mut(cx, |s| s.open = false);
+        self.settings_modal_mut(cx, |s| s.jump_page = None);
         cx.notify();
     }
 
@@ -338,9 +313,7 @@ impl AppShell {
     /// 避免用户以为已保存、实际运行期静默跳过某条映射。
     fn collect_key_bindings(&mut self, cx: &mut Context<Self>) -> bool {
         let raw = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .terminal_key_bindings
             .read(cx)
             .value()
@@ -362,21 +335,17 @@ impl AppShell {
     fn collect_interface_preferences(&mut self, cx: &mut Context<Self>) {
         // 界面字体族：留空表示跟随主题。
         app_settings_mut(cx).appearance.ui_font_family =
-            selected_font(&self.state.modals.settings.ui_font_family, cx);
+            selected_font(&self.settings_modal(cx).ui_font_family, cx);
         // 文件面板显示排除：原样保存（glob 语法与传输过滤一致，非法规则在
         // 匹配时被静默跳过，不阻断保存）。
         app_settings_mut(cx).sftp.panel_hidden_patterns = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .panel_hidden_patterns
             .read(cx)
             .value()
             .to_string();
         if let Ok(max) = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .max_concurrent_transfers
             .read(cx)
             .value()
@@ -388,9 +357,7 @@ impl AppShell {
         }
         // 阈值越界回退存量；0 是"不自动折叠"的合法表达。
         if let Ok(rows) = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .block_collapse_rows
             .read(cx)
             .value()
@@ -413,18 +380,16 @@ impl AppShell {
     /// 终端字体、尺寸、高亮、滚动与通知阈值。
     fn collect_terminal_profile(&mut self, cx: &mut Context<Self>) {
         app_settings_mut(cx).terminal_profile.font_family =
-            selected_font(&self.state.modals.settings.font_family, cx);
+            selected_font(&self.settings_modal(cx).font_family, cx);
         app_settings_mut(cx).terminal_profile.cjk_font_family =
-            selected_font(&self.state.modals.settings.cjk_font, cx);
+            selected_font(&self.settings_modal(cx).cjk_font, cx);
         // 关键词列表先解析再清洗（去空、不分大小写去重、限长限条数），
         // 让"界面上看到的"与"存进文件的"是同一份。
         app_settings_mut(cx).terminal_profile.highlight.keywords =
             transom_core::TerminalHighlight {
                 enabled: app_settings(cx).terminal_profile.highlight.enabled,
                 keywords: transom_core::TerminalHighlight::parse_keywords(
-                    self.state
-                        .modals
-                        .settings
+                    self.settings_modal(cx)
                         .highlight_keywords
                         .read(cx)
                         .value()
@@ -434,9 +399,7 @@ impl AppShell {
             .sanitized()
             .keywords;
         if let Ok(font_size) = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .font_size
             .read(cx)
             .value()
@@ -447,9 +410,7 @@ impl AppShell {
             update_app_settings(cx, |s| s.terminal_profile.font_size = font_size);
         }
         if let Ok(line_height) = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .line_height
             .read(cx)
             .value()
@@ -461,17 +422,13 @@ impl AppShell {
         }
         // 空串是有值意义的（不按任何字符断词），因此这里不 trim、也不拒绝空值。
         app_settings_mut(cx).terminal_profile.word_separators = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .word_separators
             .read(cx)
             .value()
             .to_string();
         if let Some(threshold) = crate::notify::parse_notify_threshold(
-            self.state
-                .modals
-                .settings
+            self.settings_modal(cx)
                 .notify_threshold
                 .read(cx)
                 .value()
@@ -480,9 +437,7 @@ impl AppShell {
             update_app_settings(cx, |s| s.window.notify_threshold_secs = threshold);
         }
         if let Ok(scrollback) = self
-            .state
-            .modals
-            .settings
+            .settings_modal(cx)
             .scrollback
             .read(cx)
             .value()

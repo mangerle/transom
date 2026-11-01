@@ -35,6 +35,7 @@ pub(crate) enum ProxyProtocol {
 }
 
 /// 设置弹窗的代理表单输入。
+#[derive(Clone)]
 pub(crate) struct ProxyFormInputs {
     pub(crate) kind: ProxyProtocol,
     pub(crate) host: Entity<InputState>,
@@ -48,6 +49,7 @@ pub(crate) struct ProxyFormInputs {
 /// 字段仍由各设置页直接读写：它们只在弹窗打开期间存活，且没有跨字段
 /// 不变式需要维护；把控件集中在一个类型里是为了让 `AppShell` 不必平铺
 /// 二十多个输入框句柄。
+#[derive(Clone)]
 pub(crate) struct SettingsModalState {
     pub(crate) open: bool,
     /// 命令面板要求打开时直接定位的页签序号。

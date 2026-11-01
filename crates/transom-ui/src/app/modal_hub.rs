@@ -13,7 +13,7 @@ use crate::backup::BackupPromptState;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
 use crate::keys::KnownHostsModalState;
 use crate::session_form::SessionForm;
-use crate::settings::SettingsModalState;
+use crate::settings::SettingsView;
 use crate::sidebar::FolderForm;
 use crate::snippets::SnippetPanelState;
 use gpui_kit::Entity;
@@ -30,7 +30,7 @@ pub(crate) struct ModalHub {
     pub(crate) clipboard_request: Option<crate::clipboard_prompt::ClipboardWritePrompt>,
     pub(crate) pending_credential: Option<PendingCredential>,
     pub(crate) known_hosts: KnownHostsModalState,
-    pub(crate) settings: SettingsModalState,
+    pub(crate) settings: Entity<SettingsView>,
     pub(crate) replay: Option<crate::record::ReplayModalState>,
     pub(crate) audit_viewer: Option<crate::audit_viewer::AuditViewer>,
     pub(crate) backup_prompt: Option<BackupPromptState>,
@@ -54,7 +54,7 @@ impl ModalHub {
     /// 构造新的模态聚合容器。
     pub(crate) fn new(
         known_hosts: KnownHostsModalState,
-        settings: SettingsModalState,
+        settings: Entity<SettingsView>,
         quick_open_state: Entity<CommandState>,
         snippet_panel: SnippetPanelState,
     ) -> Self {

@@ -2,6 +2,9 @@
 
 mod about_page;
 mod actions;
+mod entity;
+
+pub(crate) use entity::SettingsView;
 mod appearance_page;
 mod files_page;
 mod font_field;

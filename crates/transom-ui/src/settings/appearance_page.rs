@@ -232,7 +232,7 @@ impl AppShell {
                 FontFieldSpec {
                     id: "ui-font-family",
                     label: rust_i18n::t!("settings.ui_font_family").to_string(),
-                    select: self.state.modals.settings.ui_font_family.clone(),
+                    select: self.settings_modal(cx).ui_font_family.clone(),
                     note_key: Some("settings.ui_font_note"),
                 },
                 p,

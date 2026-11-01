@@ -158,6 +158,27 @@ pub(crate) struct AppShell {
 }
 
 impl AppShell {
+    /// 设置弹窗状态只读访问。
+    /// 设置弹窗状态快照。
+    ///
+    /// 返回克隆而不是借用：调用点常常在同一个表达式里还要用 `cx`，持有借用会
+    /// 与后续可变借用冲突。快照只克隆实体句柄与少量字符串，成本可忽略。
+    pub(crate) fn settings_modal(&self, cx: &App) -> crate::settings::SettingsModalState {
+        self.state.modals.settings.read(cx).state().clone()
+    }
+
+    /// 设置弹窗状态可变访问（经实体 update 完成）。
+    pub(crate) fn settings_modal_mut<R>(
+        &mut self,
+        cx: &mut Context<Self>,
+        action: impl FnOnce(&mut crate::settings::SettingsModalState) -> R,
+    ) -> R {
+        self.state
+            .modals
+            .settings
+            .update(cx, |view, _| action(view.state_mut()))
+    }
+
     /// 设置工具面板（SFTP/转发）停靠方向。
     pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<Self>) {
         if app_settings(cx).window.sftp_panel_side == side {

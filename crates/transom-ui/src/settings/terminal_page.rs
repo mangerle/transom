@@ -20,9 +20,8 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let stepper_size = Self::setting_stepper(&self.state.modals.settings.font_size, px(110.0));
-        let stepper_height =
-            Self::setting_stepper(&self.state.modals.settings.line_height, px(110.0));
+        let stepper_size = Self::setting_stepper(&self.settings_modal(cx).font_size, px(110.0));
+        let stepper_height = Self::setting_stepper(&self.settings_modal(cx).line_height, px(110.0));
         let metrics_row = h_flex()
             .w_full()
             .gap_6()
@@ -60,7 +59,7 @@ impl AppShell {
                 FontFieldSpec {
                     id: "terminal-font-family",
                     label: rust_i18n::t!("settings.font_family").to_string(),
-                    select: self.state.modals.settings.font_family.clone(),
+                    select: self.settings_modal(cx).font_family.clone(),
                     note_key: None,
                 },
                 p,
@@ -70,7 +69,7 @@ impl AppShell {
                 FontFieldSpec {
                     id: "terminal-cjk-font",
                     label: rust_i18n::t!("settings.cjk_font").to_string(),
-                    select: self.state.modals.settings.cjk_font.clone(),
+                    select: self.settings_modal(cx).cjk_font.clone(),
                     note_key: Some("settings.cjk_font_note"),
                 },
                 p,
@@ -175,7 +174,7 @@ impl AppShell {
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.scrollback").to_string(),
-                    self.state.modals.settings.scrollback.clone(),
+                    self.settings_modal(cx).scrollback.clone(),
                     p,
                 ),
                 None,
@@ -207,7 +206,7 @@ impl AppShell {
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
                     rust_i18n::t!("settings.highlight_keywords").to_string(),
-                    self.state.modals.settings.highlight_keywords.clone(),
+                    self.settings_modal(cx).highlight_keywords.clone(),
                     p,
                 ),
                 Some(rust_i18n::t!("settings.highlight_keywords_note").to_string()),
@@ -220,7 +219,7 @@ impl AppShell {
     pub(crate) fn render_settings_key_bindings(
         &mut self,
         p: &Palette,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::widgets::setting_frame(
             v_flex()
@@ -233,7 +232,7 @@ impl AppShell {
                         .child(rust_i18n::t!("settings.key_bindings_desc").to_string()),
                 )
                 .child(
-                    Textarea::new(&self.state.modals.settings.terminal_key_bindings)
+                    Textarea::new(&self.settings_modal(cx).terminal_key_bindings)
                         .h(px(120.0))
                         .w_full(),
                 )
