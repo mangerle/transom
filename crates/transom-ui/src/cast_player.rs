@@ -326,19 +326,13 @@ impl CastPlayerView {
     }
 }
 
-impl Render for CastPlayerView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let p = Palette::from(cx);
+impl CastPlayerView {
+    /// 底部控制条：播放/步进/时间/进度/倍速/重播与分辨率徽标。
+    fn render_control_bar(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let current_time = self.current_time;
         let total_duration = self.total_duration;
         let is_playing = self.is_playing;
         let speed = self.speed;
-
-        // 刷新渲染帧时静默同步滑块位置
-        self.progress_slider.update(cx, |slider, cx| {
-            slider.set_value(current_time as f32, window, cx);
-        });
-
         let play_icon = if is_playing {
             IconName::Pause
         } else {
@@ -443,6 +437,22 @@ impl Render for CastPlayerView {
                     .text_color(p.muted_foreground)
                     .child(resolution_badge),
             );
+
+        control_bar.into_any_element()
+    }
+}
+
+impl Render for CastPlayerView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::from(cx);
+        let current_time = self.current_time;
+
+        // 刷新渲染帧时静默同步滑块位置
+        self.progress_slider.update(cx, |slider, cx| {
+            slider.set_value(current_time as f32, window, cx);
+        });
+
+        let control_bar = self.render_control_bar(&p, cx);
 
         v_flex()
             .id("cast-player-root")
