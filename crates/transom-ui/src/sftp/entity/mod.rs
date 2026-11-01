@@ -4,9 +4,8 @@
 //! - SFTP 状态挂在窗格上（`SessionPaneState`），随连接建立、断开、标签关闭
 //!   而生死。若做成窗口级单实体，某个标签的传输进度变化会放大成整个实体
 //!   重绘，等于回到整壳重绘，不符合"状态按生命周期归属"。
-//! - 每窗格一份 `Entity<SftpPanelView>` 由窗格强持有，实体用
-//!   `WeakEntity<AppShell>` 回指外壳：外壳不会因子实体而被延长生命周期，
-//!   也不会形成强引用环。
+//! - 每窗格一份 `Entity<SftpPanelView>` 由窗格强持有；面板不持有外壳句柄，
+//!   数据由外壳注入、意图用事件上报，不会形成强引用环。
 //! - 状态只有一份：`SftpPanelView::state` 是面板状态的唯一事实源，
 //!   `SessionPaneState` 只保存实体句柄，不保留任何影子副本。
 //!
@@ -93,7 +92,7 @@ impl Render for SftpPanelView {
         let content = self.render_panel_content(cx);
 
         // 面板级键盘与鼠标监听挂在实体上：状态变更直接落在本实体，
-        // 跨域动作再经 with_shell_parts 回交外壳。
+        // 跨域动作经面板事件交给外壳执行。
         v_flex()
             .id(ElementId::Name("sftp-panel-container".into()))
             .track_focus(&self.state.focus_handle)

@@ -1,7 +1,7 @@
 //! 实体侧的文件操作入口：收集目标信息并打开输入/归档弹窗。
 //!
 //! 输入弹窗的装配仍在外壳（需要窗口与 InputState），因此实体只负责从自身
-//! 状态算出参数，再经 `with_shell_parts` 回交外壳；外壳方法不读写实体。
+//! 状态算出参数，再经面板事件交给外壳；外壳方法不读写实体。
 
 use super::*;
 use crate::sftp::{SftpInputModalParams, SftpInputTarget, SftpRemotePaneRef};

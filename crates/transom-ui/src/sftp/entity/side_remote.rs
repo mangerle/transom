@@ -2,7 +2,7 @@
 //!
 //! 列状态、宽度记忆与分栏状态都在实体上；挂载新列需要创建输入框与订阅，
 //! 这些持有实体上下文即可完成。向工作区申请加宽属于外壳布局，经
-//! `with_shell_parts` 回交。
+//! 经面板事件交给外壳执行。
 
 use super::*;
 use crate::sftp::columns::{SftpColumnId, plan_side_mount};

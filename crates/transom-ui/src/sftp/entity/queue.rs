@@ -1,7 +1,7 @@
 //! 实体侧的传输队列调度。
 //!
 //! 调度只依赖面板状态与外壳设置：状态变更全部落在实体上，命令通过
-//! `with_shell_parts` 回交外壳投递。外壳不再为一次补位调度去借还实体。
+//! 命令经面板事件交给外壳投递，外壳不再为一次补位调度去借还实体。
 
 use super::*;
 use crate::sftp::queue_actions::{sftp_operation_for_task, task_connection_id};
