@@ -1855,6 +1855,9 @@ forward:
   title:
     en: Port Forwarding
     zh-CN: 端口转发
+  close_panel:
+    en: Close Forwarding Panel
+    zh-CN: 关闭端口转发面板
   mode:
     en: Mode
     zh-CN: 模式

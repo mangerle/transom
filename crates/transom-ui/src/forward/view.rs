@@ -5,7 +5,6 @@ use super::ForwardView;
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
-use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -46,31 +45,19 @@ impl ForwardView {
     /// 高度取标签栏 token 而不是靠内边距撑开：该面板与主区标签条、监控抽屉
     /// 并排，三条横线必须在同一水平线上。
     fn render_forward_header(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
-        h_flex()
-            .h(rems(size::TAB_BAR_HEIGHT))
-            .px_3()
-            .items_center()
-            .justify_between()
-            .border_color(p.divider(p.sidebar_border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(rust_i18n::t!("forward.title").to_string()),
-            )
-            .child(
-                Button::new("close-forward")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::X)
-                    .on_click(cx.listener(|_this, _, _, cx| {
-                        // 句柄由窗格持有，回收动作回交外壳；实体只发请求。
-                        cx.emit(super::ForwardPanelEvent::ClosePanel);
-                        cx.notify();
-                    })),
-            )
-            .into_any_element()
+        let close = Button::new("close-forward")
+            .ghost()
+            .xsmall()
+            .icon(IconName::X)
+            .tooltip(rust_i18n::t!("forward.close_panel").to_string())
+            .on_click(cx.listener(|_this, _, _, cx| {
+                // 句柄由窗格持有，回收动作回交外壳；实体只发请求。
+                cx.emit(super::ForwardPanelEvent::ClosePanel);
+                cx.notify();
+            }));
+        crate::widgets::PanelHeader::new(rust_i18n::t!("forward.title").to_string(), p)
+            .action(close)
+            .render(p)
     }
 
     /// 端口转发规则列表渲染。

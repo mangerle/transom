@@ -4,12 +4,9 @@
 //! - 实现初衷：为 SFTP 双栏文件浏览器主面板及全屏/单栏模式提供统一的标题条渲染；
 //! - 核心优势：集中封装面板标题、关闭事件及额外的右侧按钮扩展点。
 
-use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
-use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
@@ -35,31 +32,10 @@ impl SftpPanelView {
                 cx.notify();
             }));
 
-        let mut right_actions = h_flex().gap_1().items_center();
+        let mut header = crate::widgets::PanelHeader::new(title, p);
         if let Some(extra_element) = extra {
-            right_actions = right_actions.child(extra_element);
+            header = header.action(extra_element);
         }
-        right_actions = right_actions.child(close_btn);
-
-        h_flex()
-            .h(rems(size::TAB_BAR_HEIGHT))
-            .px_3()
-            .items_center()
-            .justify_between()
-            .border_color(p.divider(p.sidebar_border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.0))
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .truncate()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(title),
-            )
-            .child(right_actions)
-            .into_any_element()
+        header.action(close_btn).render(p)
     }
 }

@@ -87,185 +87,157 @@ impl MonitorView {
 
         // 顶栏工具条：标题、采样档位芯片、刷新、关闭
         let current_interval = self.state.interval_mode;
-        let header = h_flex()
-            .h(rems(size::TAB_BAR_HEIGHT))
-            .w_full()
-            .overflow_hidden()
-            .justify_between()
+        let actions = h_flex()
+            .gap_1p5()
             .items_center()
-            .px_3()
-            .border_color(p.divider(p.border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
+            .flex_shrink_0()
+            // 采样频率档位切换
             .child(
                 h_flex()
-                    .gap_2()
-                    .items_center()
-                    .min_w_0()
-                    .flex_shrink_1()
-                    .child(Icon::new(IconName::Gauge).small().text_color(p.primary))
+                    .gap_0p5()
                     .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::BOLD)
-                            .truncate()
-                            .child(rust_i18n::t!("monitor.title").to_string()),
+                        Button::new("sample-rate-fast")
+                            .xsmall()
+                            .label(SampleIntervalMode::Fast.label())
+                            .selected(current_interval == SampleIntervalMode::Fast)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if this.set_interval_mode(SampleIntervalMode::Fast) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new("sample-rate-normal")
+                            .xsmall()
+                            .label(SampleIntervalMode::Normal.label())
+                            .selected(current_interval == SampleIntervalMode::Normal)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if this.set_interval_mode(SampleIntervalMode::Normal) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new("sample-rate-eco")
+                            .xsmall()
+                            .label(SampleIntervalMode::Eco.label())
+                            .selected(current_interval == SampleIntervalMode::Eco)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if this.set_interval_mode(SampleIntervalMode::Eco) {
+                                    cx.notify();
+                                    let interval = this.interval_mode().interval();
+                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
+                                        interval,
+                                    ));
+                                }
+                            })),
                     ),
             )
+            // 走势图形态切换（折线面积图 / 柱状图）
             .child(
-                h_flex()
-                    .gap_1p5()
-                    .items_center()
-                    .flex_shrink_0()
-                    // 采样频率档位切换
-                    .child(
-                        h_flex()
-                            .gap_0p5()
-                            .child(
-                                Button::new("sample-rate-fast")
-                                    .xsmall()
-                                    .label(SampleIntervalMode::Fast.label())
-                                    .selected(current_interval == SampleIntervalMode::Fast)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if this.set_interval_mode(SampleIntervalMode::Fast) {
-                                            cx.notify();
-                                            let interval = this.interval_mode().interval();
-                                            cx.emit(
-                                                crate::monitor::MonitorPanelEvent::RestartSampling(
-                                                    interval,
-                                                ),
-                                            );
-                                        }
-                                    })),
-                            )
-                            .child(
-                                Button::new("sample-rate-normal")
-                                    .xsmall()
-                                    .label(SampleIntervalMode::Normal.label())
-                                    .selected(current_interval == SampleIntervalMode::Normal)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if this.set_interval_mode(SampleIntervalMode::Normal) {
-                                            cx.notify();
-                                            let interval = this.interval_mode().interval();
-                                            cx.emit(
-                                                crate::monitor::MonitorPanelEvent::RestartSampling(
-                                                    interval,
-                                                ),
-                                            );
-                                        }
-                                    })),
-                            )
-                            .child(
-                                Button::new("sample-rate-eco")
-                                    .xsmall()
-                                    .label(SampleIntervalMode::Eco.label())
-                                    .selected(current_interval == SampleIntervalMode::Eco)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if this.set_interval_mode(SampleIntervalMode::Eco) {
-                                            cx.notify();
-                                            let interval = this.interval_mode().interval();
-                                            cx.emit(
-                                                crate::monitor::MonitorPanelEvent::RestartSampling(
-                                                    interval,
-                                                ),
-                                            );
-                                        }
-                                    })),
-                            ),
-                    )
-                    // 走势图形态切换（折线面积图 / 柱状图）
-                    .child(
-                        Button::new("monitor-toggle-chart-type")
-                            .ghost()
-                            .xsmall()
-                            .icon(match self.state.chart_type {
-                                SparklineChartType::Line => IconName::ChartLine,
-                                SparklineChartType::Bar => IconName::ChartBar,
-                            })
-                            .tooltip(match self.state.chart_type {
-                                SparklineChartType::Line => {
-                                    rust_i18n::t!("monitor.view.chart_line_tooltip").to_string()
-                                }
-                                SparklineChartType::Bar => {
-                                    rust_i18n::t!("monitor.view.chart_bar_tooltip").to_string()
-                                }
-                            })
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.state.chart_type = match this.state.chart_type {
-                                    SparklineChartType::Line => SparklineChartType::Bar,
-                                    SparklineChartType::Bar => SparklineChartType::Line,
-                                };
-                                cx.notify();
-                            })),
-                    )
-                    // 刷新按钮
-                    .child(
-                        Button::new("monitor-refresh")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::RefreshCw)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let collapsed = this.state.collapse.processes;
-                                cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses {
-                                    collapsed,
-                                });
-                            })),
-                    )
-                    // 宽度缩放切换芯片（快速切换 420px / 600px）
-                    .child(
-                        Button::new("monitor-toggle-width")
-                            .ghost()
-                            .xsmall()
-                            .icon(if drawer_width > 480.0 {
-                                IconName::Minimize2
-                            } else {
-                                IconName::Maximize2
-                            })
-                            .tooltip(if drawer_width > 480.0 {
-                                rust_i18n::t!("monitor.view.width_compact_tooltip").to_string()
-                            } else {
-                                rust_i18n::t!("monitor.view.width_wide_tooltip").to_string()
-                            })
-                            .on_click(cx.listener(|this, _, _window, cx| {
-                                let new_width = if this.drawer_width() > 480.0 {
-                                    420.0
-                                } else {
-                                    600.0
-                                };
-                                this.set_drawer_width(new_width);
-                                cx.notify();
-                                cx.emit(crate::monitor::MonitorPanelEvent::DrawerWidthChanged(
-                                    new_width,
-                                ));
-                            })),
-                    )
-                    // 脱离为独立标签页按钮
-                    .child(
-                        Button::new("monitor-maximize-to-tab")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::ArrowUpRight)
-                            .tooltip(rust_i18n::t!("monitor.view.detach_tooltip").to_string())
-                            .on_click(cx.listener(|this, _, _window, cx| {
-                                // 抽屉开合属于面板状态，先自己落定再回交外壳切标签。
-                                this.set_open(false);
-                                cx.notify();
-                                cx.emit(crate::monitor::MonitorPanelEvent::MaximizeToTab);
-                            })),
-                    )
-                    // 关闭抽屉按钮
-                    .child(
-                        Button::new("monitor-close")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Close)
-                            .tooltip(rust_i18n::t!("monitor.view.close_tooltip").to_string())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.state.open = false;
-                                this.state.processes.clear();
-                                cx.notify();
-                            })),
-                    ),
+                Button::new("monitor-toggle-chart-type")
+                    .ghost()
+                    .xsmall()
+                    .icon(match self.state.chart_type {
+                        SparklineChartType::Line => IconName::ChartLine,
+                        SparklineChartType::Bar => IconName::ChartBar,
+                    })
+                    .tooltip(match self.state.chart_type {
+                        SparklineChartType::Line => {
+                            rust_i18n::t!("monitor.view.chart_line_tooltip").to_string()
+                        }
+                        SparklineChartType::Bar => {
+                            rust_i18n::t!("monitor.view.chart_bar_tooltip").to_string()
+                        }
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.state.chart_type = match this.state.chart_type {
+                            SparklineChartType::Line => SparklineChartType::Bar,
+                            SparklineChartType::Bar => SparklineChartType::Line,
+                        };
+                        cx.notify();
+                    })),
+            )
+            // 刷新按钮
+            .child(
+                Button::new("monitor-refresh")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::RefreshCw)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        let collapsed = this.state.collapse.processes;
+                        cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
+                    })),
+            )
+            // 宽度缩放切换芯片（快速切换 420px / 600px）
+            .child(
+                Button::new("monitor-toggle-width")
+                    .ghost()
+                    .xsmall()
+                    .icon(if drawer_width > 480.0 {
+                        IconName::Minimize2
+                    } else {
+                        IconName::Maximize2
+                    })
+                    .tooltip(if drawer_width > 480.0 {
+                        rust_i18n::t!("monitor.view.width_compact_tooltip").to_string()
+                    } else {
+                        rust_i18n::t!("monitor.view.width_wide_tooltip").to_string()
+                    })
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        let new_width = if this.drawer_width() > 480.0 {
+                            420.0
+                        } else {
+                            600.0
+                        };
+                        this.set_drawer_width(new_width);
+                        cx.notify();
+                        cx.emit(crate::monitor::MonitorPanelEvent::DrawerWidthChanged(
+                            new_width,
+                        ));
+                    })),
+            )
+            // 脱离为独立标签页按钮
+            .child(
+                Button::new("monitor-maximize-to-tab")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::ArrowUpRight)
+                    .tooltip(rust_i18n::t!("monitor.view.detach_tooltip").to_string())
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        // 抽屉开合属于面板状态，先自己落定再回交外壳切标签。
+                        this.set_open(false);
+                        cx.notify();
+                        cx.emit(crate::monitor::MonitorPanelEvent::MaximizeToTab);
+                    })),
+            )
+            // 关闭抽屉按钮
+            .child(
+                Button::new("monitor-close")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close)
+                    .tooltip(rust_i18n::t!("monitor.view.close_tooltip").to_string())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.state.open = false;
+                        this.state.processes.clear();
+                        cx.notify();
+                    })),
             );
+        let header =
+            crate::widgets::PanelHeader::new(rust_i18n::t!("monitor.title").to_string(), p)
+                .icon(IconName::Gauge)
+                .border(p.border)
+                .action(actions)
+                .render(p);
 
         panel = panel.child(header);
 
