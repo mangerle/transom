@@ -18,6 +18,240 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{HostAction, SessionId};
 
+/// 会话行主体（图标、名称、详情、选中框与活动条）的渲染参数。
+struct SessionBandParams {
+    session_id: SessionId,
+    title: String,
+    detail: String,
+    icon: gpui_kit::assets::IconName,
+    icon_color: Option<Hsla>,
+    is_active: bool,
+    selection_mode: bool,
+    is_selected: bool,
+    is_selected_row: bool,
+    fill: Hsla,
+}
+
+/// 渲染会话行主体；行尾动作（拨测、拖拽落点）由调用方追加。
+///
+/// 拆出来是为了让 `render_session_row` 只负责行级交互与菜单装配，
+/// 视觉结构（选中底、活动条、图标着色、两行文本）集中在一处，
+/// 便于与文件夹行对齐行高与内边距。
+fn session_band(
+    params: SessionBandParams,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> gpui_kit::Stateful<gpui_kit::Div> {
+    let SessionBandParams {
+        session_id,
+        title,
+        detail,
+        icon,
+        icon_color,
+        is_active,
+        selection_mode,
+        is_selected,
+        is_selected_row,
+        fill,
+    } = params;
+    let mut inner = h_flex()
+        .id(ElementId::Name(format!("session-band-{session_id}").into()))
+        .relative()
+        .w_full()
+        .h(BAND_HEIGHT)
+        .px_2()
+        .gap_2()
+        .items_center()
+        .rounded(p.radius.md)
+        .bg(fill)
+        .text_color(if is_active {
+            p.sidebar_accent_foreground
+        } else {
+            p.sidebar_foreground
+        });
+    if is_active {
+        // 当前会话：列表激活底色 + 左侧竖条。竖条绝对定位、不占布局宽度，
+        // 切换活动会话时行内图标不会发生位移。
+        inner = inner.child(
+            div()
+                .absolute()
+                .left_0()
+                .top_0()
+                .bottom_0()
+                .w(px(2.0))
+                .rounded_full()
+                .bg(p.list_active_border),
+        );
+    } else if !is_selected_row {
+        // 悬停只给未选中的行，避免悬浮色把选中态的底色顶掉。
+        inner = inner.hover(|style| style.bg(p.list_hover));
+    }
+    if selection_mode {
+        inner = inner.child(
+            Checkbox::new(ElementId::Name(
+                format!("session-select-{session_id}").into(),
+            ))
+            .small()
+            .checked(is_selected)
+            .on_click(cx.listener(move |this, &checked, _, cx| {
+                cx.stop_propagation();
+                this.toggle_session_selection(session_id, checked, cx);
+            })),
+        );
+    }
+    inner
+        .child(
+            Icon::new(icon)
+                .with_size(ROW_ICON_SIZE)
+                .text_color(icon_color.unwrap_or(if is_active {
+                    p.sidebar_accent_foreground
+                } else {
+                    p.muted_foreground
+                })),
+        )
+        .child(
+            v_flex()
+                .flex_1()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .text_sm()
+                        .line_height(px(17.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .truncate()
+                        .child(title.clone()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .line_height(px(14.0))
+                        .truncate()
+                        .text_color(p.muted_foreground)
+                        .child(detail),
+                ),
+        )
+}
+
+/// 会话行右键菜单：连接、移动、复制、编辑、审计、复制主机与删除。
+///
+/// 菜单在渲染期构建、点击后才回交外壳；`app` 是外壳实体句柄，菜单闭包
+/// 不持有会话行的借用，避免菜单还开着时会话被删除导致的悬垂引用。
+fn session_context_menu(
+    session_id: SessionId,
+    folder_id: Option<transom_core::FolderId>,
+    menu_host: Option<String>,
+    app_entity: Entity<AppShell>,
+) -> impl Fn(
+    gpui_kit::component::menu::PopupMenu,
+    &mut Window,
+    &mut Context<gpui_kit::component::menu::PopupMenu>,
+) -> gpui_kit::component::menu::PopupMenu
++ 'static {
+    move |menu, _window, _cx| {
+        let app = app_entity.clone();
+        let mut menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("menu.connect").to_string(),
+            IconName::Terminal,
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.connect_session(session_id, window, cx);
+                        this.reveal_vertical_tabs_panel(cx);
+                    });
+                }
+            },
+        ));
+        if folder_id.is_some() {
+            menu = menu.item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.move_to_root").to_string(),
+                IconName::FolderTree,
+                {
+                    let app = app.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.handle_sidebar_drop(
+                                SidebarDrag::Session(session_id),
+                                SidebarTarget::Root,
+                                cx,
+                            );
+                        });
+                    }
+                },
+            ));
+        }
+        menu = menu
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.duplicate").to_string(),
+                IconName::Plus,
+                {
+                    let app = app.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.duplicate_session(session_id, cx);
+                        });
+                    }
+                },
+            ))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.edit").to_string(),
+                IconName::Settings,
+                {
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.open_edit_session(session_id, window, cx);
+                        });
+                    }
+                },
+            ))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("audit_viewer.menu_item").to_string(),
+                IconName::FileText,
+                {
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.open_audit_viewer_for_session(session_id, window, cx);
+                        });
+                    }
+                },
+            ));
+
+        // 与标签栏同一口径：取不到地址（本地终端、串口）就不放这一项。
+        if let Some(host) = menu_host.clone() {
+            let copy_app = app.clone();
+            menu = menu.item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.copy_host").to_string(),
+                IconName::Copy,
+                move |_, _, cx| {
+                    let text = host.clone();
+                    cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                    copy_app.update(cx, |this, cx| {
+                        this.state.status =
+                            Some(rust_i18n::t!("sidebar.host_copied", host = text).to_string());
+                        cx.notify();
+                    });
+                },
+            ));
+        }
+
+        menu.item(PopupMenuItem::separator())
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.delete").to_string(),
+                IconName::Trash,
+                {
+                    let app = app.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.delete_session_by_id(session_id, cx);
+                        });
+                    }
+                },
+            ))
+    }
+}
+
 impl AppShell {
     /// 渲染单个会话树行，支持连接状态着色、双击连接、拖放排序与右键菜单。
     pub(crate) fn render_session_row(
@@ -90,114 +324,12 @@ impl AppShell {
                     });
                 }
             })
-            .context_menu({
-                let app_entity = app_entity.clone();
-                move |menu, _window, _cx| {
-                    let app = app_entity.clone();
-                    let mut menu = menu.item(crate::widgets::menu_item(
-                        rust_i18n::t!("menu.connect").to_string(),
-                        IconName::Terminal,
-                        {
-                            let app = app.clone();
-                            move |_, window, cx| {
-                                app.update(cx, |this, cx| {
-                                    this.connect_session(session_id, window, cx);
-                                    this.reveal_vertical_tabs_panel(cx);
-                                });
-                            }
-                        },
-                    ));
-                    if folder_id.is_some() {
-                        menu = menu.item(crate::widgets::menu_item(
-                            rust_i18n::t!("menu.move_to_root").to_string(),
-                            IconName::FolderTree,
-                            {
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.handle_sidebar_drop(
-                                            SidebarDrag::Session(session_id),
-                                            SidebarTarget::Root,
-                                            cx,
-                                        );
-                                    });
-                                }
-                            },
-                        ));
-                    }
-                    menu = menu
-                        .item(crate::widgets::menu_item(
-                            rust_i18n::t!("menu.duplicate").to_string(),
-                            IconName::Plus,
-                            {
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.duplicate_session(session_id, cx);
-                                    });
-                                }
-                            },
-                        ))
-                        .item(crate::widgets::menu_item(
-                            rust_i18n::t!("menu.edit").to_string(),
-                            IconName::Settings,
-                            {
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_edit_session(session_id, window, cx);
-                                    });
-                                }
-                            },
-                        ))
-                        .item(crate::widgets::menu_item(
-                            rust_i18n::t!("audit_viewer.menu_item").to_string(),
-                            IconName::FileText,
-                            {
-                                let app = app.clone();
-                                move |_, window, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.open_audit_viewer_for_session(session_id, window, cx);
-                                    });
-                                }
-                            },
-                        ));
-
-                    // 与标签栏同一口径：取不到地址（本地终端、串口）就不放这一项。
-                    if let Some(host) = menu_host.clone() {
-                        let copy_app = app.clone();
-                        menu = menu.item(crate::widgets::menu_item(
-                            rust_i18n::t!("menu.copy_host").to_string(),
-                            IconName::Copy,
-                            move |_, _, cx| {
-                                let text = host.clone();
-                                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                                copy_app.update(cx, |this, cx| {
-                                    this.state.status = Some(
-                                        rust_i18n::t!("sidebar.host_copied", host = text)
-                                            .to_string(),
-                                    );
-                                    cx.notify();
-                                });
-                            },
-                        ));
-                    }
-
-                    menu.item(PopupMenuItem::separator())
-                        .item(crate::widgets::menu_item(
-                            rust_i18n::t!("menu.delete").to_string(),
-                            IconName::Trash,
-                            {
-                                let app = app.clone();
-                                move |_, _, cx| {
-                                    app.update(cx, |this, cx| {
-                                        this.delete_session_by_id(session_id, cx);
-                                    });
-                                }
-                            },
-                        ))
-                }
-            });
+            .context_menu(session_context_menu(
+                session_id,
+                folder_id,
+                menu_host,
+                app_entity.clone(),
+            ));
         // 行底取主题的列表令牌：常态是列表背景，选中与当前用列表激活色。
         // 浅色与深色主题各自给值，不再对强调色叠低透明度。
         let is_selected_row = is_marked || (selection_mode && is_selected);
@@ -209,80 +341,22 @@ impl AppShell {
         // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配
         // global_id 与悬浮状态，缺少 id 时鼠标移入不会触发重绘，高亮只能等
         // 别的事件顺带重绘才补上，看上去就是"悬停不跟手"。
-        let mut inner = h_flex()
-            .id(ElementId::Name(format!("session-band-{session_id}").into()))
-            .relative()
-            .w_full()
-            .h(BAND_HEIGHT)
-            .px_2()
-            .gap_2()
-            .items_center()
-            .rounded(p.radius.md)
-            .bg(fill)
-            .text_color(if is_active {
-                p.sidebar_accent_foreground
-            } else {
-                p.sidebar_foreground
-            });
-        if is_active {
-            // 当前会话：列表激活底色 + 左侧竖条。竖条绝对定位、不占布局宽度，
-            // 切换活动会话时行内图标不会发生位移。
-            inner = inner.child(
-                div()
-                    .absolute()
-                    .left_0()
-                    .top_0()
-                    .bottom_0()
-                    .w(px(2.0))
-                    .rounded_full()
-                    .bg(p.list_active_border),
-            );
-        } else if !is_selected_row {
-            // 悬停只给未选中的行，避免悬浮色把选中态的底色顶掉。
-            inner = inner.hover(|style| style.bg(p.list_hover));
-        }
-        if selection_mode {
-            inner = inner.child(
-                Checkbox::new(ElementId::Name(
-                    format!("session-select-{session_id}").into(),
-                ))
-                .small()
-                .checked(is_selected)
-                .on_click(cx.listener(move |this, &checked, _, cx| {
-                    cx.stop_propagation();
-                    this.toggle_session_selection(session_id, checked, cx);
-                })),
-            );
-        }
-        let inner = inner
-            .child(Icon::new(icon_name).with_size(ROW_ICON_SIZE).text_color(
-                session_color.unwrap_or(if is_active {
-                    p.sidebar_accent_foreground
-                } else {
-                    p.muted_foreground
-                }),
-            ))
-            .child(
-                v_flex()
-                    .flex_1()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .text_sm()
-                            .line_height(px(17.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .truncate()
-                            .child(session.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .line_height(px(14.0))
-                            .truncate()
-                            .text_color(p.muted_foreground)
-                            .child(detail_text),
-                    ),
-            );
+        let inner = session_band(
+            SessionBandParams {
+                session_id,
+                title: session.name.clone(),
+                detail: detail_text,
+                icon: icon_name,
+                icon_color: session_color,
+                is_active,
+                selection_mode,
+                is_selected,
+                is_selected_row,
+                fill,
+            },
+            p,
+            cx,
+        );
         // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
         let probe_badge = self
             .state
