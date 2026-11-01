@@ -89,6 +89,7 @@ impl AppShell {
             return;
         };
         let state = SftpPanelState {
+            main_connection: None,
             open: true,
             remote: SftpRemotePaneState::new_main(
                 String::new(),

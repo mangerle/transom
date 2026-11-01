@@ -27,6 +27,10 @@ impl AppShell {
     fn on_sftp_panel_event(&mut self, event: &crate::sftp::SftpPanelEvent, cx: &mut Context<Self>) {
         use crate::sftp::SftpPanelEvent;
         match event {
+            SftpPanelEvent::SendCommand(command) => {
+                self.state.send_command(command.clone());
+                cx.notify();
+            }
             SftpPanelEvent::ConfirmLocalDelete { tab_id, paths } => {
                 self.state.sftp_modals.confirm = Some(crate::sftp::SftpConfirmModalState {
                     action: crate::sftp::SftpPendingDelete::Local {
@@ -206,10 +210,13 @@ impl AppShell {
             rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
         );
 
+        // 主连接在借用窗格之前取好：面板之后自己解析目标列，不再反查外壳。
+        let main_connection = self.state.workspace.tabs[index].connection_id;
         let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
             return;
         };
         let state = SftpPanelState {
+            main_connection,
             open,
             remote: SftpRemotePaneState::new_main(
                 initial_remote_path.clone(),

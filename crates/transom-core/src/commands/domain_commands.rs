@@ -44,6 +44,7 @@ pub enum TerminalCommand {
 }
 
 /// SFTP 远程文件操作命令。
+#[derive(Clone)]
 pub enum SftpCommand {
     Sftp {
         tab_id: TabId,

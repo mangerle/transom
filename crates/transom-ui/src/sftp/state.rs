@@ -197,6 +197,10 @@ pub(crate) struct SftpQueueState {
 /// 与展开状态互相穿插，任何模块都能直接改写任意字段；按"远端列 / 本地栏 /
 /// 传输队列"分组后，字段归属一眼可见，读写落在各自的子结构上。
 pub(crate) struct SftpPanelState {
+    /// 面板所属主连接：打开面板时由外壳注入，重连后更新。
+    ///
+    /// 面板靠它解析"主远端列该用哪条连接"，从而不必在动作与渲染里反查外壳。
+    pub(crate) main_connection: Option<ConnectionId>,
     /// 面板列是否展开显示。
     ///
     /// 设计原理（Why）：`tab.sftp` 是 `Some` 只代表传输队列与目录状态存在，

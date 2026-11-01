@@ -52,8 +52,8 @@ pub(crate) struct SftpPanelView {
 impl EventEmitter<super::SftpPanelEvent> for SftpPanelView {}
 
 impl SftpPanelView {
-    /// 用已构造好的面板状态创建实体；`attach` 负责绑定外壳。
-    pub(crate) fn new(state: SftpPanelState, tab_id: TabId) -> Self {
+    /// 用给定状态创建面板实体；`attach` 之后才具备回交外壳的能力。
+    pub(crate) fn new(state: SftpPanelState, tab_id: transom_core::TabId) -> Self {
         Self {
             state,
             tab_id,

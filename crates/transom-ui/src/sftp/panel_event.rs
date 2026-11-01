@@ -5,10 +5,12 @@
 //! 否则会与正在派发事件的实体形成双重租借。
 
 use std::path::PathBuf;
-use transom_core::{ConnectionId, RemoteDeleteTarget, TabId};
+use transom_core::{ConnectionId, RemoteDeleteTarget, SftpCommand, TabId};
 
 /// SFTP 面板向外壳发出的意图。
 pub(crate) enum SftpPanelEvent {
+    /// 请求向后台投递一条 SFTP 命令；命令已构造完整，外壳直接转发。
+    SendCommand(SftpCommand),
     /// 请求弹出本地删除确认。
     ConfirmLocalDelete { tab_id: TabId, paths: Vec<PathBuf> },
     /// 请求弹出远端删除确认；`connection_id` 为 `None` 表示主远端列。

@@ -36,15 +36,7 @@ impl SftpPanelView {
         op: SftpOperation,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(self.tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(target) = self
@@ -57,15 +49,12 @@ impl SftpPanelView {
         if let Some(pane) = self.state.remote_pane_mut(target) {
             pane.error = None;
         }
-        let tab_id = self.tab_id;
-        with_shell_parts(&app, cx, |shell, _| {
-            shell.state.send_command(SftpCommand::Sftp {
-                tab_id,
-                connection_id,
-                op_id: TransferId::new(),
-                op,
-            });
-        });
+        cx.emit(super::SftpPanelEvent::SendCommand(SftpCommand::Sftp {
+            tab_id: self.tab_id,
+            connection_id,
+            op_id: TransferId::new(),
+            op,
+        }));
         cx.notify();
     }
 
@@ -100,15 +89,7 @@ impl SftpPanelView {
         archive_path: String,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(self.tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
@@ -202,15 +183,7 @@ impl SftpPanelView {
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(self.tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let paths = self.state.selected_local_paths();
@@ -240,15 +213,7 @@ impl SftpPanelView {
         is_dir: bool,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(self.tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(source_connection_id) =
