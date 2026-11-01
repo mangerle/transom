@@ -58,33 +58,7 @@ impl SftpPanelView {
             let progress_bar = Progress::new("sftp-transfer-progress").value(percent);
 
             if props.queue_expanded {
-                // 队列展开时底部保留进度条与总速率小字
-                return Some(
-                    v_flex()
-                        .px_3()
-                        .py_1p5()
-                        .gap_1()
-                        .bg(p.muted)
-                        .child(progress_bar)
-                        .when_some(props.total_speed_bps, |this, speed| {
-                            let speed_text = format_speed(speed);
-                            this.child(
-                                h_flex()
-                                    .justify_between()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(
-                                        rust_i18n::t!(
-                                            "sftp.queue.total_speed",
-                                            speed = speed_text.as_str()
-                                        )
-                                        .to_string(),
-                                    )
-                                    .child(format!("{:.1}%", percent)),
-                            )
-                        })
-                        .into_any_element(),
-                );
+                return Some(expanded_progress_bar(percent, props.total_speed_bps, p));
             }
 
             let progress_str = match total {
@@ -122,58 +96,8 @@ impl SftpPanelView {
                 .justify_between()
                 .items_center()
                 .child(div().text_xs().child(progress_str));
-            if props.active_count > 0 {
-                header = header.child(
-                    h_flex()
-                        .gap_1()
-                        .items_center()
-                        .child(
-                            Button::new("top-sftp-pause-all")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Pause)
-                                .tooltip(rust_i18n::t!("sftp.queue.pause_all").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.pause_all(tab_id, cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("top-sftp-cancel-all")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::X)
-                                .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.cancel_all(tab_id, cx);
-                                })),
-                        ),
-                );
-            } else if props.paused_count > 0 {
-                header = header.child(
-                    h_flex()
-                        .gap_1()
-                        .items_center()
-                        .child(
-                            Button::new("top-sftp-resume-all")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Play)
-                                .tooltip(rust_i18n::t!("sftp.queue.resume_all").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.resume_all(tab_id, cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("top-sftp-cancel-paused-all")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::X)
-                                .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.cancel_all(tab_id, cx);
-                                })),
-                        ),
-                );
+            if let Some(actions) = self.progress_actions(&props, tab_id, cx) {
+                header = header.child(actions);
             }
             Some(
                 v_flex()
@@ -208,4 +132,95 @@ impl SftpPanelView {
             })
         }
     }
+
+    /// 传输中的批量动作：活动任务给暂停/取消，暂停任务给恢复/取消。
+    fn progress_actions(
+        &self,
+        props: &SftpStatusBarProps,
+        tab_id: TabId,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if props.active_count > 0 {
+            Some(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        Button::new("top-sftp-pause-all")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Pause)
+                            .tooltip(rust_i18n::t!("sftp.queue.pause_all").to_string())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.pause_all(tab_id, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("top-sftp-cancel-all")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::X)
+                            .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.cancel_all(tab_id, cx);
+                            })),
+                    )
+                    .into_any_element(),
+            )
+        } else if props.paused_count > 0 {
+            Some(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        Button::new("top-sftp-resume-all")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Play)
+                            .tooltip(rust_i18n::t!("sftp.queue.resume_all").to_string())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.resume_all(tab_id, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("top-sftp-cancel-paused-all")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::X)
+                            .tooltip(rust_i18n::t!("sftp.queue.cancel_all").to_string())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.cancel_all(tab_id, cx);
+                            })),
+                    )
+                    .into_any_element(),
+            )
+        } else {
+            None
+        }
+    }
+}
+
+/// 队列展开时的底部进度条：进度与总速率小字。
+fn expanded_progress_bar(percent: f32, total_speed_bps: Option<u64>, p: &Palette) -> AnyElement {
+    v_flex()
+        .px_3()
+        .py_1p5()
+        .gap_1()
+        .bg(p.muted)
+        .child(Progress::new("sftp-transfer-progress").value(percent))
+        .when_some(total_speed_bps, |this, speed| {
+            let speed_text = format_speed(speed);
+            this.child(
+                h_flex()
+                    .justify_between()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(
+                        rust_i18n::t!("sftp.queue.total_speed", speed = speed_text.as_str())
+                            .to_string(),
+                    )
+                    .child(format!("{:.1}%", percent)),
+            )
+        })
+        .into_any_element()
 }
