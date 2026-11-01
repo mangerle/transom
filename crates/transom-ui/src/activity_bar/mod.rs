@@ -51,14 +51,7 @@ impl AppShell {
                 .and_then(|tab_id| self.state.workspace.tab(tab_id)?.sftp_view())
                 .is_some_and(|view| view.read(cx).state.open),
             ActivityItemId::Monitor => monitor_open,
-            ActivityItemId::Keys => self
-                .state
-                .modals
-                .settings
-                .read(cx)
-                .state()
-                .key_wizard
-                .is_some(),
+            ActivityItemId::Keys => self.state.key_wizard.is_some(),
             _ => false,
         }
     }

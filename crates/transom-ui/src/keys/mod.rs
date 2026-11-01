@@ -76,9 +76,8 @@ impl KeyWizardState {
 
 impl AppShell {
     /// 当前向导里选中的公钥副本；从设置实体读取。
-    fn selected_key(&self, cx: &App) -> Option<PublicKeyInfo> {
-        let settings = self.settings_modal(cx);
-        let wizard = settings.key_wizard.as_ref()?;
+    fn selected_key(&self, _cx: &App) -> Option<PublicKeyInfo> {
+        let wizard = self.state.key_wizard.as_ref()?;
         wizard
             .selected
             .and_then(|index| wizard.keys.get(index))
@@ -117,12 +116,12 @@ impl AppShell {
             }
             Err(error) => state.error = Some(localized_error(&error)),
         }
-        self.settings_modal_mut(cx, |s| s.key_wizard = Some(state));
+        self.state.key_wizard = Some(state);
         cx.notify();
     }
 
     pub(crate) fn close_key_wizard(&mut self, cx: &mut Context<Self>) {
-        self.settings_modal_mut(cx, |s| s.key_wizard = None);
+        self.state.key_wizard = None;
         cx.notify();
     }
 
@@ -133,7 +132,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(wizard) = self.settings_modal(cx).key_wizard else {
+        let Some(wizard) = self.state.key_wizard.clone() else {
             return;
         };
         if wizard.algorithm == algorithm {
@@ -151,12 +150,10 @@ impl AppShell {
             .display()
             .to_string();
         let path_input = wizard.path;
-        self.settings_modal_mut(cx, |settings| {
-            if let Some(state) = settings.key_wizard.as_mut() {
-                state.algorithm = algorithm;
-                state.error = None;
-            }
-        });
+        if let Some(state) = self.state.key_wizard.as_mut() {
+            state.algorithm = algorithm;
+            state.error = None;
+        }
         if current.is_empty() || current == old_default {
             path_input.update(cx, |input, cx| input.set_value(&new_default, window, cx));
         }
@@ -164,7 +161,7 @@ impl AppShell {
     }
 
     pub(crate) fn generate_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(wizard) = self.settings_modal(cx).key_wizard else {
+        let Some(wizard) = self.state.key_wizard.clone() else {
             return;
         };
         if wizard.generating {
@@ -172,11 +169,9 @@ impl AppShell {
         }
         let path_text = wizard.path.read(cx).value().trim().to_string();
         if path_text.is_empty() {
-            self.settings_modal_mut(cx, |settings| {
-                if let Some(state) = settings.key_wizard.as_mut() {
-                    state.error = Some(rust_i18n::t!("keys.error_path_empty").to_string());
-                }
-            });
+            if let Some(state) = self.state.key_wizard.as_mut() {
+                state.error = Some(rust_i18n::t!("keys.error_path_empty").to_string());
+            }
             cx.notify();
             return;
         }
@@ -185,13 +180,11 @@ impl AppShell {
         let passphrase = Zeroizing::new(wizard.passphrase.read(cx).value().to_string());
         let private_path = expand_home(&path_text);
         let ssh_dir = wizard.ssh_dir.clone();
-        self.settings_modal_mut(cx, |settings| {
-            if let Some(state) = settings.key_wizard.as_mut() {
-                state.generating = true;
-                state.error = None;
-                state.message = None;
-            }
-        });
+        if let Some(state) = self.state.key_wizard.as_mut() {
+            state.generating = true;
+            state.error = None;
+            state.message = None;
+        }
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = cx
                 .background_executor()
@@ -219,7 +212,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(wizard) = self.settings_modal(cx).key_wizard else {
+        let Some(wizard) = self.state.key_wizard.clone() else {
             return;
         };
         self.state.tasks.background.keygen = None;
@@ -234,32 +227,28 @@ impl AppShell {
                     fingerprint = generated.public_key.fingerprint.as_str()
                 )
                 .to_string();
-                self.settings_modal_mut(cx, |settings| {
-                    if let Some(state) = settings.key_wizard.as_mut() {
-                        state.generating = false;
-                        match &scanned {
-                            Ok(keys) => {
-                                state.keys = keys.clone();
-                                state.error = None;
-                                state.selected = keys
-                                    .iter()
-                                    .position(|key| key.path == generated.public_path);
-                            }
-                            Err(error) => state.error = Some(localized_error(error)),
+                if let Some(state) = self.state.key_wizard.as_mut() {
+                    state.generating = false;
+                    match &scanned {
+                        Ok(keys) => {
+                            state.keys = keys.clone();
+                            state.error = None;
+                            state.selected = keys
+                                .iter()
+                                .position(|key| key.path == generated.public_path);
                         }
-                        state.message = Some(message);
+                        Err(error) => state.error = Some(localized_error(error)),
                     }
-                });
+                    state.message = Some(message);
+                }
                 passphrase_input.update(cx, |input, cx| input.set_value("", window, cx));
             }
             Err(error) => {
-                self.settings_modal_mut(cx, |settings| {
-                    if let Some(state) = settings.key_wizard.as_mut() {
-                        state.generating = false;
-                        state.error = Some(localized_error(&error));
-                        state.message = None;
-                    }
-                });
+                if let Some(state) = self.state.key_wizard.as_mut() {
+                    state.generating = false;
+                    state.error = Some(localized_error(&error));
+                    state.message = None;
+                }
             }
         }
         cx.notify();
@@ -267,7 +256,7 @@ impl AppShell {
 
     pub(crate) fn select_key(&mut self, index: usize, cx: &mut Context<Self>) {
         let len = self
-            .settings_modal(cx)
+            .state
             .key_wizard
             .as_ref()
             .map(|wizard| wizard.keys.len());
@@ -275,12 +264,10 @@ impl AppShell {
             return;
         };
         if index < len {
-            self.settings_modal_mut(cx, |settings| {
-                if let Some(state) = settings.key_wizard.as_mut() {
-                    state.selected = Some(index);
-                    state.error = None;
-                }
-            });
+            if let Some(state) = self.state.key_wizard.as_mut() {
+                state.selected = Some(index);
+                state.error = None;
+            }
             cx.notify();
         }
     }
@@ -350,16 +337,14 @@ impl AppShell {
             host = target.title.as_str()
         )
         .to_string();
-        self.settings_modal_mut(cx, |settings| {
-            if let Some(state) = settings.key_wizard.as_mut() {
-                if sent {
-                    state.message = Some(message);
-                    state.error = None;
-                } else {
-                    state.error = Some(rust_i18n::t!("keys.deploy_send_failed").to_string());
-                }
+        if let Some(state) = self.state.key_wizard.as_mut() {
+            if sent {
+                state.message = Some(message);
+                state.error = None;
+            } else {
+                state.error = Some(rust_i18n::t!("keys.deploy_send_failed").to_string());
             }
-        });
+        }
         cx.notify();
     }
 
@@ -370,21 +355,19 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let key = key_name.clone();
-        self.settings_modal_mut(cx, |settings| {
-            if let Some(state) = settings.key_wizard.as_mut() {
-                match &error {
-                    Some(error) => {
-                        state.error = Some(localized_error(error));
-                        state.message = None;
-                    }
-                    None => {
-                        state.message =
-                            Some(rust_i18n::t!("keys.deployed", key = key.as_str()).to_string());
-                        state.error = None;
-                    }
+        if let Some(state) = self.state.key_wizard.as_mut() {
+            match &error {
+                Some(error) => {
+                    state.error = Some(localized_error(error));
+                    state.message = None;
+                }
+                None => {
+                    state.message =
+                        Some(rust_i18n::t!("keys.deployed", key = key.as_str()).to_string());
+                    state.error = None;
                 }
             }
-        });
+        }
         match error {
             Some(error) => self.state.set_error(localized_error(&error)),
             None => {
@@ -397,22 +380,18 @@ impl AppShell {
     }
 
     fn set_key_notice(&mut self, message: &str, cx: &mut Context<Self>) {
-        self.settings_modal_mut(cx, |settings| {
-            if let Some(state) = settings.key_wizard.as_mut() {
-                state.message = Some(message.to_string());
-                state.error = None;
-            }
-        });
+        if let Some(state) = self.state.key_wizard.as_mut() {
+            state.message = Some(message.to_string());
+            state.error = None;
+        }
         cx.notify();
     }
 
     fn set_key_error(&mut self, message: &str, cx: &mut Context<Self>) {
-        self.settings_modal_mut(cx, |settings| {
-            if let Some(state) = settings.key_wizard.as_mut() {
-                state.error = Some(message.to_string());
-                state.message = None;
-            }
-        });
+        if let Some(state) = self.state.key_wizard.as_mut() {
+            state.error = Some(message.to_string());
+            state.message = None;
+        }
         cx.notify();
     }
 }

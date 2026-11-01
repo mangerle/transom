@@ -196,6 +196,7 @@ impl AppShell {
             immersive: false,
             sftp_panel_width_target: None,
             window_requests: Default::default(),
+            key_wizard: None,
             stats_sampling: true,
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,

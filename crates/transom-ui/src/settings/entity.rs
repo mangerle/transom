@@ -83,11 +83,6 @@ impl SettingsView {
         &self.state
     }
 
-    /// 弹窗状态可变访问。
-    pub(crate) fn state_mut(&mut self) -> &mut SettingsModalState {
-        &mut self.state
-    }
-
     /// 刷新凭据模板页使用的目录快照。
     pub(crate) fn set_catalog(&mut self, catalog: SessionCatalog) {
         self.catalog = catalog;

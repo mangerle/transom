@@ -28,7 +28,7 @@ impl ModalKind {
             ModalKind::BatchEdit => shell.state.modals.session.batch_edit.is_some(),
             ModalKind::SnippetForm => shell.state.modals.tools.snippet_panel.form.is_some(),
             ModalKind::KnownHosts => shell.state.modals.connection.known_hosts.open,
-            ModalKind::KeyWizard => shell.settings_modal(cx).key_wizard.is_some(),
+            ModalKind::KeyWizard => shell.state.key_wizard.is_some(),
             ModalKind::BackupPrompt => shell.state.modals.tools.backup_prompt.is_some(),
             ModalKind::AuditViewer => shell.state.modals.tools.audit_viewer.is_some(),
             ModalKind::Replay => shell.state.modals.tools.replay.is_some(),
@@ -169,7 +169,7 @@ impl ModalKind {
                 true
             }
             ModalKind::KeyWizard => {
-                shell.settings_modal_mut(cx, |settings| settings.key_wizard = None);
+                shell.state.key_wizard = None;
                 true
             }
             ModalKind::BackupPrompt => {
@@ -251,7 +251,7 @@ impl ModalKind {
             ModalKind::BackupPrompt => shell.submit_backup(window, cx),
             // 查看与管理类弹窗只有一个"关闭"主按钮，Enter 与它同义。
             ModalKind::KnownHosts => shell.state.modals.connection.known_hosts.open = false,
-            ModalKind::KeyWizard => shell.settings_modal_mut(cx, |s| s.key_wizard = None),
+            ModalKind::KeyWizard => shell.state.key_wizard = None,
             ModalKind::AuditViewer => shell.state.modals.tools.audit_viewer = None,
             ModalKind::Replay => shell.state.modals.tools.replay = None,
             ModalKind::Settings => shell.save_settings(window, cx),

@@ -189,38 +189,6 @@ impl AppShell {
         view.update(cx, |view, cx| view.cancel_settings(window, cx));
     }
 
-    /// 设置弹窗状态只读借用（不克隆）。
-    ///
-    /// 渲染路径每帧都要读草稿状态，快照克隆会把这三十多个实体句柄复制一遍；
-    /// 只读借用要求调用方在持有期间不再可变借用外壳，渲染函数满足这一约束。
-    pub(crate) fn settings_state<'a>(
-        &self,
-        cx: &'a App,
-    ) -> &'a crate::settings::SettingsModalState {
-        self.state.modals.settings.read(cx).state()
-    }
-
-    /// 设置弹窗状态只读访问。
-    /// 设置弹窗状态快照。
-    ///
-    /// 返回克隆而不是借用：调用点常常在同一个表达式里还要用 `cx`，持有借用会
-    /// 与后续可变借用冲突。快照只克隆实体句柄与少量字符串，成本可忽略。
-    pub(crate) fn settings_modal(&self, cx: &App) -> crate::settings::SettingsModalState {
-        self.state.modals.settings.read(cx).state().clone()
-    }
-
-    /// 设置弹窗状态可变访问（经实体 update 完成）。
-    pub(crate) fn settings_modal_mut<R>(
-        &mut self,
-        cx: &mut Context<Self>,
-        action: impl FnOnce(&mut crate::settings::SettingsModalState) -> R,
-    ) -> R {
-        self.state
-            .modals
-            .settings
-            .update(cx, |view, _| action(view.state_mut()))
-    }
-
     /// 直接操作型设置（活动栏/状态栏拖拽、显隐）的即时落盘。
     ///
     /// 这些动作发生在设置弹窗之外，不需要经过实体；与实体保存共用

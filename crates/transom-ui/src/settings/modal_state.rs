@@ -8,7 +8,6 @@
 use super::SettingsView;
 use crate::cloud_sync::SyncFormInputs;
 use crate::identity::IdentityEditState;
-use crate::keys::KeyWizardState;
 use crate::trigger_panel::TriggerEditState;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::slider::SliderState;
@@ -58,7 +57,6 @@ pub(crate) struct SettingsModalState {
     /// `default_selected_index`；因此跳页通过"换一个带页号的组件 id"实现，
     /// 由渲染侧读取本字段。关闭弹窗时清空，下一次从菜单打开仍回到上次位置。
     pub(crate) jump_page: Option<usize>,
-    pub(crate) key_wizard: Option<KeyWizardState>,
     /// 字体族是封闭取值：只能从系统已安装的字体里选，不能手输自由文本。
     pub(crate) font_family: Entity<FontSelect>,
     pub(crate) ui_font_family: Entity<FontSelect>,
@@ -261,7 +259,6 @@ impl SettingsModalState {
             open: false,
             jump_page: None,
             proxy,
-            key_wizard: None,
             font_family: settings_font_family,
             ui_font_family: settings_ui_font_family,
             panel_hidden_patterns: settings_panel_hidden,
