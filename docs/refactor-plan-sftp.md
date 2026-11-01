@@ -139,3 +139,18 @@ SFTP 状态挂在窗格上（`SessionPane.sftp: Option<SftpPanelState>`），随
   禁止其读写 SFTP 实体。
 - `sftp_panel_state_has_single_source_of_truth`：窗格只允许保存实体句柄。
 - `sftp_files_stay_within_line_limit`：SFTP 源码单文件不超过 500 行。
+
+## 八、收尾判定（本轮结束态）
+
+`crates/transom-ui/src/sftp` 下仍有 63 个 `impl AppShell` 方法，逐类核对后判定保留，理由：
+
+| 类别 | 数量 | 为什么留在外壳 |
+| :--- | ---: | :--- |
+| 外壳适配器（`fn f(&mut self, tab_id, cx)` → `sftp_view(tab_id).update(...)`） | 25 | 调用方只持有 `(tab_id, cx)`，适配器负责拿句柄；逻辑已在实体 |
+| 模态 body 渲染（同步/搜索/权限/属性/过滤） | 6 | 弹窗本体归 `dialog_host`（窗口级生命周期），实体只持有打开状态 |
+| 模态提交（`commit_sftp_input_modal` 等） | 4 | 属于对话框提交路径，横跨 SFTP 与编辑器/删除确认 |
+| 面板装配与几何（`build_sftp_panel`、`sync_sftp_panel_width`、拖拽浮层） | 10 | 需要窗口级布局与 `ResizableState`，属于窗口布局而非面板内部 |
+| 实体访问器（`sftp_view`/`sftp_state`/`sftp_view_mut`/连接匹配） | 8 | 外壳读取实体的唯一入口，必须留在外壳 |
+| 生命周期入口（`toggle_sftp`、`close_sftp_panel`、本地单栏打开） | 10 | 由活动栏/标签生命周期驱动 |
+
+硬约束守卫见 `crates/transom-ui/src/theme/tests.rs` 中的 SFTP 面板回调测试。
