@@ -92,50 +92,7 @@ impl AppShell {
                         .cloned();
                     app.update(cx, |this, cx| {
                         this.state.modals.tools.show_quick_open = false;
-                        match target {
-                            Some(PaletteTarget::Local) => {
-                                this.open_local_terminal(window, cx);
-                            }
-                            Some(PaletteTarget::Session(session_id)) => {
-                                this.connect_session(session_id, window, cx);
-                            }
-                            Some(PaletteTarget::QuickConnect) => {
-                                // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
-                                let host = this
-                                    .state
-                                    .modals
-                                    .tools
-                                    .quick_open_state
-                                    .read(cx)
-                                    .query(cx)
-                                    .trim()
-                                    .to_string();
-                                this.connect_quick_host(&host, cx);
-                            }
-                            Some(PaletteTarget::SettingsPage(page)) => {
-                                this.open_settings_modal(Some(page), window, cx);
-                            }
-                            Some(PaletteTarget::UiTheme(name)) => {
-                                this.apply_ui_theme_choice(&name, cx);
-                            }
-                            Some(PaletteTarget::TerminalTheme(name)) => {
-                                this.apply_terminal_theme_choice(&name, cx);
-                            }
-                            Some(PaletteTarget::Snippet(id)) => {
-                                let snippet = app_settings(cx)
-                                    .snippets
-                                    .items
-                                    .iter()
-                                    .find(|snippet| snippet.id == id)
-                                    .cloned();
-                                if let Some(snippet) = snippet {
-                                    let execute = app_settings(cx).snippets.execute_directly;
-                                    this.apply_snippet(&snippet, execute, cx);
-                                }
-                            }
-                            // 动作已由组件派发；None 表示索引失效，静默忽略。
-                            Some(PaletteTarget::Action) | None => {}
-                        }
+                        this.apply_palette_target(target, window, cx);
                         cx.notify();
                     });
                 }
@@ -217,5 +174,58 @@ impl AppShell {
             self.state.set_error(localized_error(&error));
         }
         cx.notify();
+    }
+
+    /// 执行命令面板选中的目标；动作已由组件派发，其余在此路由。
+    fn apply_palette_target(
+        &mut self,
+        target: Option<PaletteTarget>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match target {
+            Some(PaletteTarget::Local) => {
+                self.open_local_terminal(window, cx);
+            }
+            Some(PaletteTarget::Session(session_id)) => {
+                self.connect_session(session_id, window, cx);
+            }
+            Some(PaletteTarget::QuickConnect) => {
+                // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
+                let host = self
+                    .state
+                    .modals
+                    .tools
+                    .quick_open_state
+                    .read(cx)
+                    .query(cx)
+                    .trim()
+                    .to_string();
+                self.connect_quick_host(&host, cx);
+            }
+            Some(PaletteTarget::SettingsPage(page)) => {
+                self.open_settings_modal(Some(page), window, cx);
+            }
+            Some(PaletteTarget::UiTheme(name)) => {
+                self.apply_ui_theme_choice(&name, cx);
+            }
+            Some(PaletteTarget::TerminalTheme(name)) => {
+                self.apply_terminal_theme_choice(&name, cx);
+            }
+            Some(PaletteTarget::Snippet(id)) => {
+                let snippet = app_settings(cx)
+                    .snippets
+                    .items
+                    .iter()
+                    .find(|snippet| snippet.id == id)
+                    .cloned();
+                if let Some(snippet) = snippet {
+                    let execute = app_settings(cx).snippets.execute_directly;
+                    self.apply_snippet(&snippet, execute, cx);
+                }
+            }
+            // 动作已由组件派发；None 表示索引失效，静默忽略。
+            Some(PaletteTarget::Action) | None => {}
+        }
     }
 }
