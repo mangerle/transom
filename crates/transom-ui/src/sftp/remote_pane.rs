@@ -145,7 +145,7 @@ impl SftpPanelView {
                 tab_id,
                 target,
                 connection_id,
-                remote_scroll_handle: scroll_handle,
+                remote_scroll_handle: scroll_handle.clone(),
                 remote_selection: remote_selection.clone(),
                 remote_primary: remote_primary.clone(),
             },
@@ -153,10 +153,119 @@ impl SftpPanelView {
             cx,
         );
 
+        self.render_drop_area(
+            RemoteDropArea {
+                header: header.into_any_element(),
+                content,
+                tab_id,
+                target,
+                connection_id,
+                key,
+                target_dir: pane.path.clone(),
+                scroll_handle,
+            },
+            p,
+            cx,
+        )
+    }
+}
+
+/// 工具栏渲染输入：目标列与列级开关状态。
+impl SftpPanelView {
+    /// 远端列导航按钮：上一级、刷新、进入路径、折叠与关闭并列列。
+    fn render_remote_nav_buttons(
+        &self,
+        tab_id: transom_core::TabId,
+        target: SftpRemotePaneRef,
+        side_index: Option<usize>,
+        key: &str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let up_btn = Button::new(format!("remote-up-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::ArrowUp)
+            .tooltip(rust_i18n::t!("sftp.remote.go_up").to_string())
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
+            );
+
+        let refresh_btn = Button::new(format!("remote-refresh-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::RefreshCw)
+            .tooltip(rust_i18n::t!("sftp.remote.refresh").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
+
+        let enter_btn = Button::new(format!("remote-enter-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(IconName::ArrowRight)
+            .tooltip(rust_i18n::t!("sftp.remote.enter_path").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
+
+        let collapse_btn = Button::new(format!("remote-collapse-{key}"))
+            .ghost()
+            .xsmall()
+            .icon(if side_index.is_some() {
+                IconName::PanelRightClose
+            } else {
+                IconName::PanelLeftClose
+            })
+            .tooltip(if side_index.is_some() {
+                rust_i18n::t!("sftp.sidebar.collapse_side").to_string()
+            } else {
+                rust_i18n::t!("sftp.remote.collapse").to_string()
+            })
+            .on_click(cx.listener(move |this, _, _, cx| match side_index {
+                Some(index) => this.toggle_side_remote_collapse(index, cx),
+                None => this.toggle_remote_collapse(cx),
+            }));
+
+        let close_btn = side_index.map(|index| {
+            Button::new(format!("remote-close-{key}"))
+                .ghost()
+                .xsmall()
+                .icon(IconName::X)
+                .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.close_side_remote(index, cx);
+                }))
+        });
+
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(up_btn)
+            .child(refresh_btn)
+            .child(enter_btn)
+            .child(collapse_btn)
+            .when_some(close_btn, |this, button| this.child(button))
+            .into_any_element()
+    }
+}
+
+impl SftpPanelView {
+    /// 远端列表拖放区：外部文件上传、跨列复制与目录级右键菜单。
+    fn render_drop_area(
+        &self,
+        area: RemoteDropArea,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let RemoteDropArea {
+            header,
+            content,
+            tab_id,
+            target,
+            connection_id,
+            key,
+            target_dir,
+            scroll_handle,
+        } = area;
         let app_drop = cx.entity().clone();
         let app_upload_drop = cx.entity().clone();
         let app_blank_menu = cx.entity().clone();
-        let target_dir = pane.path.clone();
         let drop_bg = p.sidebar_accent.opacity(0.3);
         let drop_border = p.primary;
         v_flex()
@@ -234,7 +343,7 @@ impl SftpPanelView {
                         });
                     })
                     .child(content)
-                    .vertical_scrollbar(&pane.scroll_handle)
+                    .vertical_scrollbar(&scroll_handle)
                     // 空白区右键给目录级动作：行元素上的菜单命中时优先并停止冒泡。
                     .context_menu(move |menu, _window, _cx| {
                         build_remote_blank_context_menu(
@@ -249,79 +358,16 @@ impl SftpPanelView {
     }
 }
 
-/// 工具栏渲染输入：目标列与列级开关状态。
-impl SftpPanelView {
-    /// 远端列导航按钮：上一级、刷新、进入路径、折叠与关闭并列列。
-    fn render_remote_nav_buttons(
-        &self,
-        tab_id: transom_core::TabId,
-        target: SftpRemotePaneRef,
-        side_index: Option<usize>,
-        key: &str,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let up_btn = Button::new(format!("remote-up-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::ArrowUp)
-            .tooltip(rust_i18n::t!("sftp.remote.go_up").to_string())
-            .on_click(
-                cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
-            );
-
-        let refresh_btn = Button::new(format!("remote-refresh-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::RefreshCw)
-            .tooltip(rust_i18n::t!("sftp.remote.refresh").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
-
-        let enter_btn = Button::new(format!("remote-enter-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::ArrowRight)
-            .tooltip(rust_i18n::t!("sftp.remote.enter_path").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
-
-        let collapse_btn = Button::new(format!("remote-collapse-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(if side_index.is_some() {
-                IconName::PanelRightClose
-            } else {
-                IconName::PanelLeftClose
-            })
-            .tooltip(if side_index.is_some() {
-                rust_i18n::t!("sftp.sidebar.collapse_side").to_string()
-            } else {
-                rust_i18n::t!("sftp.remote.collapse").to_string()
-            })
-            .on_click(cx.listener(move |this, _, _, cx| match side_index {
-                Some(index) => this.toggle_side_remote_collapse(index, cx),
-                None => this.toggle_remote_collapse(cx),
-            }));
-
-        let close_btn = side_index.map(|index| {
-            Button::new(format!("remote-close-{key}"))
-                .ghost()
-                .xsmall()
-                .icon(IconName::X)
-                .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.close_side_remote(index, cx);
-                }))
-        });
-
-        h_flex()
-            .gap_1()
-            .items_center()
-            .child(up_btn)
-            .child(refresh_btn)
-            .child(enter_btn)
-            .child(collapse_btn)
-            .when_some(close_btn, |this, button| this.child(button))
-            .into_any_element()
-    }
+/// 远端拖放区参数：头部/内容元素与目标列信息。
+struct RemoteDropArea {
+    header: AnyElement,
+    content: AnyElement,
+    tab_id: TabId,
+    target: SftpRemotePaneRef,
+    connection_id: transom_core::ConnectionId,
+    key: String,
+    target_dir: String,
+    scroll_handle: gpui_kit::component::VirtualListScrollHandle,
 }
 
 pub(super) struct RemoteToolbarProps<'a> {
