@@ -151,54 +151,7 @@ impl AppShell {
         let body = v_flex()
             .gap_3()
             .h(px(320.0))
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("recorder.double_click_play_hint").to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(
-                                Button::new("pick-external-play-btn")
-                                    .outline()
-                                    .small()
-                                    .icon(IconName::Disc)
-                                    .label(rust_i18n::t!("recorder.open_player").to_string())
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, _: &ClickEvent, window, cx| {
-                                            this.state.modals.tools.replay = None;
-                                            this.pick_and_play_external_cast(window, cx);
-                                        },
-                                    )),
-                            )
-                            .child(
-                                Button::new("pick-external-cast-btn")
-                                    .ghost()
-                                    .small()
-                                    .icon(IconName::FolderOpen)
-                                    .label(rust_i18n::t!("recorder.pick_external").to_string())
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, _: &ClickEvent, window, cx| {
-                                            this.state.modals.tools.replay = None;
-                                            this.pick_and_replay_external_cast(
-                                                target_tab_id,
-                                                window,
-                                                cx,
-                                            );
-                                        },
-                                    )),
-                            ),
-                    ),
-            )
+            .child(self.render_replay_toolbar(app, target_tab_id, p))
             .child(
                 div()
                     .flex_1()
@@ -219,6 +172,58 @@ impl AppShell {
             body,
             Some(footer),
         )
+    }
+
+    /// 回放工具栏：双击提示、打开外部播放器与选择脚本。
+    fn render_replay_toolbar(
+        &self,
+        app: &Entity<AppShell>,
+        target_tab_id: transom_core::TabId,
+        p: &Palette,
+    ) -> AnyElement {
+        h_flex()
+            .justify_between()
+            .items_center()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("recorder.double_click_play_hint").to_string()),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        Button::new("pick-external-play-btn")
+                            .outline()
+                            .small()
+                            .icon(IconName::Disc)
+                            .label(rust_i18n::t!("recorder.open_player").to_string())
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, window, cx| {
+                                    this.state.modals.tools.replay = None;
+                                    this.pick_and_play_external_cast(window, cx);
+                                },
+                            )),
+                    )
+                    .child(
+                        Button::new("pick-external-cast-btn")
+                            .ghost()
+                            .small()
+                            .icon(IconName::FolderOpen)
+                            .label(rust_i18n::t!("recorder.pick_external").to_string())
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, window, cx| {
+                                    this.state.modals.tools.replay = None;
+                                    this.pick_and_replay_external_cast(target_tab_id, window, cx);
+                                },
+                            )),
+                    ),
+            )
+            .into_any_element()
     }
 
     /// 回放弹窗页脚：取消、按选中脚本回放、或在独立播放器中打开。
