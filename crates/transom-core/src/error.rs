@@ -64,22 +64,93 @@ pub enum ErrorCode {
     CloudSyncMissing,
 }
 
+/// 跨层保留的失败现场。
+///
+/// 设计原理（Why）：`detail` 是给人看的裸字符串，调用方无法在不解析文案的
+/// 前提下区分“认证失败”和“握手失败”。把连接链路的关键字段结构化后，上层
+/// 可以按类型选择恢复路径（重试、换认证方式、提示检查 known_hosts），而不必
+/// 依赖远端 locale 或错误文案的关键字。
+///
+/// 代价与局限：这里只保留稳定、可序列化的现场字段，不携带底层 `source`
+/// 错误对象；排查完整因果仍以 `detail` 与日志为准。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ErrorContext {
+    /// 拨号失败。
+    Connect { host: String, port: u16 },
+    /// SSH 握手或版本协商失败。
+    Handshake {
+        host: String,
+        port: u16,
+        reason: String,
+    },
+    /// 主机密钥校验未通过。
+    HostKey {
+        host: String,
+        port: u16,
+        reason: String,
+    },
+    /// 认证失败；`reason` 标明失败环节（password / publickey / agent / keyboard）。
+    Auth { reason: String },
+    /// 出站代理隧道失败。
+    Proxy {
+        proxy: String,
+        target: String,
+        reason: String,
+    },
+    /// 通道或子系统打开失败。
+    Channel { reason: String },
+    /// 操作被取消。
+    Cancelled { reason: String },
+    /// 端口拨测超时。
+    ProbeTimeout {
+        host: String,
+        port: u16,
+        timeout_ms: u64,
+    },
+    /// Wake-on-LAN 发包失败。
+    Wake { mac: String, reason: String },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppError {
     pub code: ErrorCode,
     pub detail: Option<String>,
+    /// 结构化现场；旧版本错误文件/事件里没有这个字段，反序列化按 `None` 兜底。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<ErrorContext>,
 }
 
 impl AppError {
     pub fn new(code: ErrorCode) -> Self {
-        Self { code, detail: None }
+        Self {
+            code,
+            detail: None,
+            context: None,
+        }
     }
 
     pub fn with_detail(code: ErrorCode, detail: impl Into<String>) -> Self {
         Self {
             code,
             detail: Some(detail.into()),
+            context: None,
         }
+    }
+
+    /// 同时携带可读文案与结构化现场。
+    pub fn with_context(code: ErrorCode, detail: impl Into<String>, context: ErrorContext) -> Self {
+        Self {
+            code,
+            detail: Some(detail.into()),
+            context: Some(context),
+        }
+    }
+
+    /// 失败现场；调用方按变体选择恢复路径。
+    pub fn context(&self) -> Option<&ErrorContext> {
+        self.context.as_ref()
     }
 }
 
@@ -97,5 +168,38 @@ impl std::error::Error for AppError {}
 impl From<std::io::Error> for AppError {
     fn from(value: std::io::Error) -> Self {
         Self::with_detail(ErrorCode::Io, value.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AppError, ErrorCode, ErrorContext};
+
+    /// 旧错误文件没有 context 字段，必须按 None 反序列化而不是报错。
+    #[test]
+    fn legacy_error_json_without_context_still_parses() {
+        let error: AppError = serde_json::from_str(r#"{"code":"auth_failed","detail":"口令错误"}"#)
+            .expect("旧格式错误应可反序列化");
+        assert_eq!(error.code, ErrorCode::AuthFailed);
+        assert_eq!(error.context(), None);
+    }
+
+    /// 结构化现场随错误一起序列化与还原，上层可据变体选择恢复路径。
+    #[test]
+    fn error_context_roundtrips_through_json() {
+        let error = AppError::with_context(
+            ErrorCode::AuthFailed,
+            "SSH 认证失败: publickey",
+            ErrorContext::Auth {
+                reason: "publickey".to_string(),
+            },
+        );
+        let encoded = serde_json::to_string(&error).expect("错误应可序列化");
+        let decoded: AppError = serde_json::from_str(&encoded).expect("错误应可反序列化");
+        assert_eq!(decoded, error);
+        assert!(matches!(
+            decoded.context(),
+            Some(ErrorContext::Auth { reason }) if reason == "publickey"
+        ));
     }
 }

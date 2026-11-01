@@ -28,7 +28,7 @@ pub use commands::{
     HostAppEvent, HostCommand, SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats,
     TerminalAppEvent, TerminalCommand, ZmodemAppEvent, ZmodemCommand,
 };
-pub use error::{AppError, ErrorCode};
+pub use error::{AppError, ErrorCode, ErrorContext};
 pub use ids::{
     ConnectionId, FolderId, ForwardId, GroupId, IdentityId, SessionId, SnippetId, SplitId, TabId,
     TransferId, TriggerId,

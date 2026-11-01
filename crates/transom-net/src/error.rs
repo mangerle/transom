@@ -10,7 +10,7 @@
 //!   错误码已细分），后续按需迁移；russh 等第三方错误只作为 `source`
 //!   存储、不做 `#[from]`，避免外部依赖变动破坏本层契约。
 
-use transom_core::{AppError, ErrorCode};
+use transom_core::{AppError, ErrorCode, ErrorContext};
 
 /// 连接链路的细粒度错误；经 `From` 转换为全工程 `AppError` 后跨层传递。
 #[derive(Debug, thiserror::Error)]
@@ -84,9 +84,64 @@ impl NetError {
     }
 }
 
+impl NetError {
+    /// 结构化失败现场；与 `detail` 同步生成，跨层后仍可按变体匹配。
+    fn context(&self) -> ErrorContext {
+        match self {
+            Self::Connect { host, port, .. } => ErrorContext::Connect {
+                host: host.clone(),
+                port: *port,
+            },
+            Self::Handshake { host, port, reason } => ErrorContext::Handshake {
+                host: host.clone(),
+                port: *port,
+                reason: reason.clone(),
+            },
+            Self::HostKey { host, port, reason } => ErrorContext::HostKey {
+                host: host.clone(),
+                port: *port,
+                reason: reason.clone(),
+            },
+            Self::Auth { reason } => ErrorContext::Auth {
+                reason: reason.clone(),
+            },
+            Self::Proxy {
+                proxy,
+                target,
+                reason,
+            } => ErrorContext::Proxy {
+                proxy: proxy.clone(),
+                target: target.clone(),
+                reason: reason.clone(),
+            },
+            Self::Channel { reason } => ErrorContext::Channel {
+                reason: reason.clone(),
+            },
+            Self::Cancelled { reason } => ErrorContext::Cancelled {
+                reason: reason.clone(),
+            },
+            Self::ProbeTimeout {
+                host,
+                port,
+                timeout_ms,
+            } => ErrorContext::ProbeTimeout {
+                host: host.clone(),
+                port: *port,
+                timeout_ms: *timeout_ms,
+            },
+            Self::Wake { mac, reason } => ErrorContext::Wake {
+                mac: mac.clone(),
+                reason: reason.clone(),
+            },
+        }
+    }
+}
+
 impl From<NetError> for AppError {
     fn from(error: NetError) -> Self {
-        AppError::with_detail(error.code(), error.to_string())
+        let code = error.code();
+        let context = error.context();
+        AppError::with_context(code, error.to_string(), context)
     }
 }
 
@@ -105,6 +160,11 @@ mod tests {
         let app_error = transom_core::AppError::from(error);
         assert_eq!(app_error.code, transom_core::ErrorCode::ConnectionFailed);
         assert!(app_error.to_string().contains("web-01"));
+        assert!(matches!(
+            app_error.context(),
+            Some(transom_core::ErrorContext::Connect { host, port })
+                if host == "web-01" && *port == 22
+        ));
 
         let error = NetError::Auth {
             reason: "服务器拒绝了全部认证方式".to_string(),
