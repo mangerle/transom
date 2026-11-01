@@ -21,55 +21,33 @@ impl AppShell {
         let save_passphrase = form.save_passphrase;
         let error = form.error.clone();
 
-        let port_row = h_flex()
-            .gap_2()
-            .items_center()
-            .child(
-                Checkbox::new("batch-change-port")
-                    .small()
-                    .checked(change_port)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, checked: &bool, _, cx| {
-                            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                                form.change_port = *checked;
-                            }
-                            cx.notify();
-                        },
-                    )),
-            )
-            .child(
-                div()
-                    .w(px(72.0))
-                    .text_sm()
-                    .child(rust_i18n::t!("form.port").to_string()),
-            )
-            .child(div().flex_1().child(Input::new(&form.port)));
+        let port_row = crate::widgets::checkbox_field_row(
+            "batch-change-port",
+            change_port,
+            rust_i18n::t!("form.port").to_string(),
+            Input::new(&form.port).into_any_element(),
+            crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
+                if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                    form.change_port = *checked;
+                }
+                cx.notify();
+            }),
+            p,
+        );
 
-        let username_row = h_flex()
-            .gap_2()
-            .items_center()
-            .child(
-                Checkbox::new("batch-change-username")
-                    .small()
-                    .checked(change_username)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, checked: &bool, _, cx| {
-                            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                                form.change_username = *checked;
-                            }
-                            cx.notify();
-                        },
-                    )),
-            )
-            .child(
-                div()
-                    .w(px(72.0))
-                    .text_sm()
-                    .child(rust_i18n::t!("form.username").to_string()),
-            )
-            .child(div().flex_1().child(Input::new(&form.username)));
+        let username_row = crate::widgets::checkbox_field_row(
+            "batch-change-username",
+            change_username,
+            rust_i18n::t!("form.username").to_string(),
+            Input::new(&form.username).into_any_element(),
+            crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
+                if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                    form.change_username = *checked;
+                }
+                cx.notify();
+            }),
+            p,
+        );
 
         let auth_buttons = h_flex()
             .gap_2()
@@ -119,32 +97,19 @@ impl AppShell {
                     )),
             );
 
-        let mut auth_section = v_flex().gap_2().child(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .child(
-                    Checkbox::new("batch-change-auth")
-                        .small()
-                        .checked(change_auth)
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, checked: &bool, _, cx| {
-                                if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                                    form.change_auth = *checked;
-                                }
-                                cx.notify();
-                            },
-                        )),
-                )
-                .child(
-                    div()
-                        .w(px(72.0))
-                        .text_sm()
-                        .child(rust_i18n::t!("form.auth").to_string()),
-                )
-                .child(auth_buttons),
-        );
+        let mut auth_section = v_flex().gap_2().child(crate::widgets::checkbox_field_row(
+            "batch-change-auth",
+            change_auth,
+            rust_i18n::t!("form.auth").to_string(),
+            auth_buttons.into_any_element(),
+            crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
+                if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                    form.change_auth = *checked;
+                }
+                cx.notify();
+            }),
+            p,
+        ));
         if change_auth {
             match auth {
                 AuthChoice::Password => {

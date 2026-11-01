@@ -16,6 +16,7 @@
 //!   为了“组件化”制造一次性抽象。
 
 mod button;
+mod checkbox_row;
 mod controls;
 mod dialog;
 mod empty;
@@ -30,6 +31,7 @@ mod toolbar;
 pub(crate) use button::{
     DialogConfirmKind, IconButton, IconButtonSize, dialog_cancel_button, dialog_confirm_button,
 };
+pub(crate) use checkbox_row::checkbox_field_row;
 pub(crate) use controls::{dropdown, number_stepper, path_value};
 pub(crate) use dialog::{dialog_actions, dialog_body};
 pub(crate) use empty::empty_state;
