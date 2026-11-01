@@ -198,8 +198,31 @@ pub(crate) struct SshConnectionBuild {
 }
 
 /// 表单初始值聚合，避免构造函数平铺过多参数。
+/// 由基础会话推导出的目标字段：名称、地址、代理、外观与连接选项。
+pub(crate) struct SessionTargetDefaults {
+    pub name: String,
+    pub host: String,
+    pub port: String,
+    pub username: String,
+    pub identity_choice: Option<transom_core::IdentityId>,
+    pub jump_choice: Option<transom_core::SessionId>,
+    pub proxy_choice: ProxyChoice,
+    pub proxy_host: String,
+    pub proxy_port: String,
+    pub proxy_username: String,
+    pub proxy_password: String,
+    pub icon: transom_core::SessionIcon,
+    pub color: transom_core::SessionColor,
+    pub auto_reconnect: bool,
+    pub agent_forward: bool,
+    pub wol_mac: String,
+    pub mosh_server_path: String,
+    pub mosh_server_port: String,
+}
+
 pub(crate) struct SessionFormSeed {
     pub base: Option<Session>,
+    pub target: SessionTargetDefaults,
     pub connection: ConnectionChoice,
     pub auth: AuthChoice,
     pub save_password: bool,

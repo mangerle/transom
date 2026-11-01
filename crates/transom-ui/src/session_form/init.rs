@@ -2,6 +2,7 @@
 
 use super::types::{
     AuthChoice, ConnectionChoice, ProxyChoice, SessionForm, SessionFormInit, SessionFormSeed,
+    SessionTargetDefaults,
 };
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::{AppContext, Context, Entity, Window};
@@ -124,8 +125,10 @@ fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
     let serial_flow_control = serial
         .map(|serial| serial.flow_control)
         .unwrap_or(SerialFlowControl::None);
+    let target = target_defaults(&base, connection);
     SessionFormSeed {
         base,
+        target,
         connection,
         auth,
         save_password: save_password && connection == ConnectionChoice::Ssh,
@@ -148,6 +151,130 @@ fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         folder_options,
         global_proxy,
         block_view,
+    }
+}
+
+/// 由基础会话推导名称、地址、代理、外观与连接选项。
+fn target_defaults(
+    base: &Option<transom_core::Session>,
+    connection: ConnectionChoice,
+) -> SessionTargetDefaults {
+    let ssh = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Ssh(ssh) => Some(ssh),
+        _ => None,
+    });
+    let mosh = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Mosh(mosh) => Some(mosh),
+        _ => None,
+    });
+    let telnet = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Telnet(telnet) => Some(telnet),
+        _ => None,
+    });
+    let name = base
+        .as_ref()
+        .map(|session| session.name.clone())
+        .unwrap_or_default();
+    let host = ssh
+        .map(|ssh| ssh.host.clone())
+        .or_else(|| mosh.map(|mosh| mosh.host.clone()))
+        .or_else(|| telnet.map(|telnet| telnet.host.clone()))
+        .unwrap_or_default();
+    let port = ssh
+        .map(|ssh| ssh.port)
+        .or_else(|| mosh.map(|mosh| mosh.ssh_port))
+        .or_else(|| telnet.map(|telnet| telnet.port))
+        .unwrap_or(match connection {
+            ConnectionChoice::Telnet => 23,
+            _ => 22,
+        })
+        .to_string();
+    let username = ssh
+        .map(|ssh| ssh.username.clone())
+        .or_else(|| mosh.map(|mosh| mosh.username.clone()))
+        .unwrap_or_else(default_username);
+    // Self 字面量会移走 base，需要读的字段先取出来。
+    let identity_choice = base.as_ref().and_then(|session| session.identity_id);
+    let jump_choice = ssh
+        .and_then(|ssh| ssh.proxy_jump.as_ref())
+        .map(|jump| jump.jump_session_id);
+    let (proxy_choice, proxy_host_text, proxy_port_text, proxy_username_text, proxy_password_text) =
+        match base.as_ref().and_then(|session| session.proxy.as_ref()) {
+            None => (
+                ProxyChoice::FollowGlobal,
+                String::new(),
+                "1080".to_string(),
+                String::new(),
+                String::new(),
+            ),
+            Some(OutboundProxy::Direct) => (
+                ProxyChoice::Direct,
+                String::new(),
+                "1080".to_string(),
+                String::new(),
+                String::new(),
+            ),
+            Some(OutboundProxy::Socks5 { host, port, auth }) => (
+                ProxyChoice::Socks5,
+                host.clone(),
+                port.to_string(),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.username.clone()),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.password.clone()),
+            ),
+            Some(OutboundProxy::Http { host, port, auth }) => (
+                ProxyChoice::Http,
+                host.clone(),
+                port.to_string(),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.username.clone()),
+                auth.as_ref()
+                    .map_or_else(String::new, |a| a.password.clone()),
+            ),
+        };
+    let icon = base
+        .as_ref()
+        .map(|session| session.icon)
+        .unwrap_or_default();
+    let color = base
+        .as_ref()
+        .map(|session| session.color)
+        .unwrap_or_default();
+    let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
+        || mosh.is_some_and(|mosh| mosh.options.auto_reconnect)
+        || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
+    let agent_forward = ssh.is_some_and(|ssh| ssh.options.agent_forward)
+        || mosh.is_some_and(|mosh| mosh.options.agent_forward);
+    // 只有 SSH 会话有 MAC 字段（见 HostAction::wake_for），回填同口径。
+    let wol_mac = ssh
+        .and_then(|ssh| ssh.options.wol_mac.clone())
+        .unwrap_or_default();
+    let mosh_server_path_val =
+        mosh.map_or_else(|| "mosh-server".to_string(), |m| m.server_path.clone());
+    let mosh_server_port_val = mosh
+        .and_then(|m| m.server_port)
+        .map_or_else(String::new, |p| p.to_string());
+
+    SessionTargetDefaults {
+        name,
+        host,
+        port,
+        username,
+        identity_choice,
+        jump_choice,
+        proxy_choice,
+        proxy_host: proxy_host_text,
+        proxy_port: proxy_port_text,
+        proxy_username: proxy_username_text,
+        proxy_password: proxy_password_text,
+        icon,
+        color,
+        auto_reconnect,
+        agent_forward,
+        wol_mac,
+        mosh_server_path: mosh_server_path_val,
+        mosh_server_port: mosh_server_port_val,
     }
 }
 
@@ -225,6 +352,7 @@ impl SessionForm {
     fn build(window: &mut Window, cx: &mut Context<impl Sized>, seed: SessionFormSeed) -> Self {
         let SessionFormSeed {
             base,
+            target,
             connection,
             auth,
             save_password,
@@ -248,108 +376,26 @@ impl SessionForm {
             global_proxy,
             block_view,
         } = seed;
-        let ssh = base.as_ref().and_then(|session| match &session.connection {
-            Connection::Ssh(ssh) => Some(ssh),
-            _ => None,
-        });
-        let mosh = base.as_ref().and_then(|session| match &session.connection {
-            Connection::Mosh(mosh) => Some(mosh),
-            _ => None,
-        });
-        let telnet = base.as_ref().and_then(|session| match &session.connection {
-            Connection::Telnet(telnet) => Some(telnet),
-            _ => None,
-        });
-        let name = base
-            .as_ref()
-            .map(|session| session.name.clone())
-            .unwrap_or_default();
-        let host = ssh
-            .map(|ssh| ssh.host.clone())
-            .or_else(|| mosh.map(|mosh| mosh.host.clone()))
-            .or_else(|| telnet.map(|telnet| telnet.host.clone()))
-            .unwrap_or_default();
-        let port = ssh
-            .map(|ssh| ssh.port)
-            .or_else(|| mosh.map(|mosh| mosh.ssh_port))
-            .or_else(|| telnet.map(|telnet| telnet.port))
-            .unwrap_or(match connection {
-                ConnectionChoice::Telnet => 23,
-                _ => 22,
-            })
-            .to_string();
-        let username = ssh
-            .map(|ssh| ssh.username.clone())
-            .or_else(|| mosh.map(|mosh| mosh.username.clone()))
-            .unwrap_or_else(default_username);
-        // Self 字面量会移走 base，需要读的字段先取出来。
-        let identity_choice = base.as_ref().and_then(|session| session.identity_id);
-        let jump_choice = ssh
-            .and_then(|ssh| ssh.proxy_jump.as_ref())
-            .map(|jump| jump.jump_session_id);
-        let (
+        let SessionTargetDefaults {
+            name,
+            host,
+            port,
+            username,
+            identity_choice,
+            jump_choice,
             proxy_choice,
-            proxy_host_text,
-            proxy_port_text,
-            proxy_username_text,
-            proxy_password_text,
-        ) = match base.as_ref().and_then(|session| session.proxy.as_ref()) {
-            None => (
-                ProxyChoice::FollowGlobal,
-                String::new(),
-                "1080".to_string(),
-                String::new(),
-                String::new(),
-            ),
-            Some(OutboundProxy::Direct) => (
-                ProxyChoice::Direct,
-                String::new(),
-                "1080".to_string(),
-                String::new(),
-                String::new(),
-            ),
-            Some(OutboundProxy::Socks5 { host, port, auth }) => (
-                ProxyChoice::Socks5,
-                host.clone(),
-                port.to_string(),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.username.clone()),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.password.clone()),
-            ),
-            Some(OutboundProxy::Http { host, port, auth }) => (
-                ProxyChoice::Http,
-                host.clone(),
-                port.to_string(),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.username.clone()),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.password.clone()),
-            ),
-        };
-        let icon = base
-            .as_ref()
-            .map(|session| session.icon)
-            .unwrap_or_default();
-        let color = base
-            .as_ref()
-            .map(|session| session.color)
-            .unwrap_or_default();
-        let auto_reconnect = ssh.is_some_and(|ssh| ssh.options.auto_reconnect)
-            || mosh.is_some_and(|mosh| mosh.options.auto_reconnect)
-            || telnet.is_some_and(|telnet| telnet.options.auto_reconnect);
-        let agent_forward = ssh.is_some_and(|ssh| ssh.options.agent_forward)
-            || mosh.is_some_and(|mosh| mosh.options.agent_forward);
-        // 只有 SSH 会话有 MAC 字段（见 HostAction::wake_for），回填同口径。
-        let wol_mac = ssh
-            .and_then(|ssh| ssh.options.wol_mac.clone())
-            .unwrap_or_default();
-        let mosh_server_path_val =
-            mosh.map_or_else(|| "mosh-server".to_string(), |m| m.server_path.clone());
-        let mosh_server_port_val = mosh
-            .and_then(|m| m.server_port)
-            .map_or_else(String::new, |p| p.to_string());
-
+            proxy_host: proxy_host_text,
+            proxy_port: proxy_port_text,
+            proxy_username: proxy_username_text,
+            proxy_password: proxy_password_text,
+            icon,
+            color,
+            auto_reconnect,
+            agent_forward,
+            wol_mac,
+            mosh_server_path: mosh_server_path_val,
+            mosh_server_port: mosh_server_port_val,
+        } = target;
         Self {
             base,
             name: text_input(window, cx, &name, &rust_i18n::t!("form.name_placeholder")),
