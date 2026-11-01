@@ -1,5 +1,6 @@
 //! 偏好设置中心弹窗的骨架与页签装配。
 
+use super::search_keywords::GroupSearch;
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
@@ -14,19 +15,25 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 
 /// 组装配 helper：把 AppShell 的组渲染函数包装成带标题的 `SettingGroup`。
+///
+/// 分组内容整体是一个自绘元素，上游搜索只按元素项声明的关键词过滤，因此这里
+/// 必须同时挂上 [`GroupSearch::keywords`]；漏挂就会表现为"搜索什么都搜不到"。
 fn setting_group(
     app: &Entity<AppShell>,
     p: &Palette,
-    title: &'static str,
+    group: GroupSearch,
     render: fn(&mut AppShell, &Palette, &mut Context<AppShell>) -> AnyElement,
 ) -> SettingGroup {
     let app = app.clone();
     let p = p.clone();
     SettingGroup::new()
-        .title(rust_i18n::t!(title).to_string())
-        .item(SettingItem::render(move |_options, _window, cx| {
-            app.update(cx, |this, cx| render(this, &p, cx))
-        }))
+        .title(rust_i18n::t!(group.title_key()).to_string())
+        .item(
+            SettingItem::render(move |_options, _window, cx| {
+                app.update(cx, |this, cx| render(this, &p, cx))
+            })
+            .keywords(group.keywords()),
+        )
 }
 
 /// 组装配 helper（带 `window` 版）。
@@ -37,16 +44,19 @@ fn setting_group(
 fn setting_group_with_window(
     app: &Entity<AppShell>,
     p: &Palette,
-    title: &'static str,
+    group: GroupSearch,
     render: fn(&mut AppShell, &mut Window, &Palette, &mut Context<AppShell>) -> AnyElement,
 ) -> SettingGroup {
     let app = app.clone();
     let p = p.clone();
     SettingGroup::new()
-        .title(rust_i18n::t!(title).to_string())
-        .item(SettingItem::render(move |_options, window, cx| {
-            app.update(cx, |this, cx| render(this, window, &p, cx))
-        }))
+        .title(rust_i18n::t!(group.title_key()).to_string())
+        .item(
+            SettingItem::render(move |_options, window, cx| {
+                app.update(cx, |this, cx| render(this, window, &p, cx))
+            })
+            .keywords(group.keywords()),
+        )
 }
 
 impl AppShell {
@@ -193,25 +203,25 @@ impl AppShell {
                 .group(setting_group(
                     app,
                     p,
-                    "settings.ui_theme_group",
+                    GroupSearch::UiTheme,
                     AppShell::render_settings_ui_theme,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.ui_font_group",
+                    GroupSearch::UiFont,
                     AppShell::render_settings_ui_font,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.window_appearance_group",
+                    GroupSearch::WindowAppearance,
                     AppShell::render_settings_window_appearance,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.divider_group",
+                    GroupSearch::Divider,
                     AppShell::render_settings_divider,
                 ));
 
@@ -220,43 +230,43 @@ impl AppShell {
             .group(setting_group(
                 app,
                 p,
-                "settings.terminal_font_group",
+                GroupSearch::TerminalFont,
                 AppShell::render_settings_terminal_font,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.cursor_group",
+                GroupSearch::Cursor,
                 AppShell::render_settings_cursor,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.terminal_theme_group",
+                GroupSearch::TerminalTheme,
                 AppShell::render_settings_themes,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.highlight_group",
+                GroupSearch::Highlight,
                 AppShell::render_settings_highlight,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.trigger_group",
+                GroupSearch::Trigger,
                 AppShell::render_settings_triggers,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.block_view_group",
+                GroupSearch::BlockView,
                 AppShell::render_settings_block_view,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.key_bindings_group",
+                GroupSearch::KeyBindings,
                 AppShell::render_settings_key_bindings,
             ));
 
@@ -265,43 +275,43 @@ impl AppShell {
             .group(setting_group(
                 app,
                 p,
-                "settings.editor_group",
+                GroupSearch::Editor,
                 AppShell::render_settings_editor,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.file_panel_group",
+                GroupSearch::FilePanel,
                 AppShell::render_settings_file_panel,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.transfer_group",
+                GroupSearch::Transfer,
                 AppShell::render_settings_transfer,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.zmodem_group",
+                GroupSearch::Zmodem,
                 AppShell::render_settings_zmodem,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.audit_group",
+                GroupSearch::Audit,
                 AppShell::render_settings_audit,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.identity_group",
+                GroupSearch::Identities,
                 AppShell::render_settings_identities,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.history_group",
+                GroupSearch::History,
                 AppShell::render_settings_history,
             ));
 
@@ -311,31 +321,36 @@ impl AppShell {
                 .group(setting_group(
                     app,
                     p,
-                    "settings.mouse_group",
+                    GroupSearch::Mouse,
                     AppShell::render_settings_mouse,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.selection_group",
+                    GroupSearch::Selection,
                     AppShell::render_settings_selection,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.clipboard_group",
+                    GroupSearch::Clipboard,
                     AppShell::render_settings_clipboard,
                 ));
 
         let page_shortcuts = SettingPage::new(rust_i18n::t!("settings.tab_shortcuts").to_string())
             .icon(IconName::Search)
-            .group(SettingGroup::new().item(SettingItem::render({
-                let app = app.clone();
-                let p = p.clone();
-                move |_options, _window, cx| {
-                    app.update(cx, |this, cx| this.render_settings_shortcuts(&p, cx))
-                }
-            })));
+            .group(
+                SettingGroup::new().item(
+                    SettingItem::render({
+                        let app = app.clone();
+                        let p = p.clone();
+                        move |_options, _window, cx| {
+                            app.update(cx, |this, cx| this.render_settings_shortcuts(&p, cx))
+                        }
+                    })
+                    .keywords(GroupSearch::Shortcuts.keywords()),
+                ),
+            );
 
         let page_window_layout =
             SettingPage::new(rust_i18n::t!("settings.tab_window_layout").to_string())
@@ -343,31 +358,31 @@ impl AppShell {
                 .group(setting_group(
                     app,
                     p,
-                    "settings.tabs_group",
+                    GroupSearch::Tabs,
                     AppShell::render_settings_tabs,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.window_group",
+                    GroupSearch::Window,
                     AppShell::render_settings_window,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.activity_bar",
+                    GroupSearch::ActivityBar,
                     AppShell::render_settings_activity_bar,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.status_bar",
+                    GroupSearch::StatusBar,
                     AppShell::render_settings_status_bar,
                 ))
                 .group(setting_group(
                     app,
                     p,
-                    "settings.startup_group",
+                    GroupSearch::Startup,
                     AppShell::render_settings_startup,
                 ));
 
@@ -376,19 +391,19 @@ impl AppShell {
             .group(setting_group(
                 app,
                 p,
-                "settings.language_group",
+                GroupSearch::Language,
                 AppShell::render_settings_language,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.notify_group",
+                GroupSearch::Notify,
                 AppShell::render_settings_notify,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.proxy_group",
+                GroupSearch::Proxy,
                 AppShell::render_settings_proxy,
             ));
 
@@ -396,26 +411,26 @@ impl AppShell {
         let page_general = page_general.group(setting_group(
             app,
             p,
-            "settings.desktop_integration_group",
+            GroupSearch::DesktopIntegration,
             AppShell::render_settings_desktop_integration,
         ));
         let page_general = page_general
             .group(setting_group(
                 app,
                 p,
-                "settings.backup_group",
+                GroupSearch::Backup,
                 AppShell::render_settings_backup,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.sync_group",
+                GroupSearch::Sync,
                 AppShell::render_settings_cloud_sync,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.log_group",
+                GroupSearch::Logs,
                 AppShell::render_settings_logs,
             ));
 
@@ -424,13 +439,13 @@ impl AppShell {
             .group(setting_group(
                 app,
                 p,
-                "settings.monitor_sections_group",
+                GroupSearch::MonitorSections,
                 AppShell::render_settings_monitor_sections,
             ))
             .group(setting_group(
                 app,
                 p,
-                "settings.monitor_behavior_group",
+                GroupSearch::MonitorBehavior,
                 AppShell::render_settings_monitor_behavior,
             ));
 
@@ -439,7 +454,7 @@ impl AppShell {
             .group(setting_group_with_window(
                 app,
                 p,
-                "settings.about_group",
+                GroupSearch::About,
                 AppShell::render_settings_about,
             ));
 

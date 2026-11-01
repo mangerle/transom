@@ -1,0 +1,397 @@
+//! 分组关键词表：每个设置分组包含哪些可搜索的文案键。
+//!
+//! 单独成文件只为控制单文件长度，内容与 [`super::GroupSearch`] 同属一个实体。
+
+use super::GroupSearch;
+
+impl GroupSearch {
+    /// 分组标题键与组内行文案键的唯一来源。
+    ///
+    /// 声明式映射表：一臂一组，行数较多但都是数据，不拆函数。
+    pub(super) fn entry(self) -> (&'static str, &'static [&'static str]) {
+        match self {
+            GroupSearch::UiTheme => (
+                "settings.ui_theme_group",
+                &[
+                    "settings.ui_mode",
+                    "settings.ui_mode_system",
+                    "settings.ui_mode_light",
+                    "settings.ui_mode_dark",
+                    "settings.density",
+                    "settings.ui_theme_note",
+                    "settings.appearance_contrast",
+                    "settings.theme_mode_dark",
+                    "settings.theme_mode_light",
+                ],
+            ),
+            GroupSearch::UiFont => (
+                "settings.ui_font_group",
+                &["settings.ui_font_family", "settings.ui_font_note"],
+            ),
+            GroupSearch::WindowAppearance => (
+                "settings.window_appearance_group",
+                &[
+                    "settings.window_background",
+                    "settings.window_background_desc",
+                    "settings.window_transparency",
+                    "settings.window_transparency_desc",
+                ],
+            ),
+            GroupSearch::Divider => (
+                "settings.divider_group",
+                &[
+                    "settings.divider_color",
+                    "settings.divider_color_desc",
+                    "settings.divider_width",
+                    "settings.divider_width_desc",
+                ],
+            ),
+            GroupSearch::TerminalFont => (
+                "settings.terminal_font_group",
+                &[
+                    "settings.font_size",
+                    "settings.line_height",
+                    "settings.font_family",
+                    "settings.cjk_font",
+                    "settings.cjk_font_note",
+                ],
+            ),
+            GroupSearch::Cursor => (
+                "settings.cursor_group",
+                &[
+                    "settings.cursor_shape",
+                    "settings.cursor_shape_desc",
+                    "settings.cursor_blink",
+                    "settings.cursor_blink_desc",
+                    "settings.bold_is_bright",
+                    "settings.bold_is_bright_desc",
+                    "settings.alternate_scroll",
+                    "settings.alternate_scroll_desc",
+                    "settings.scroll_on_input",
+                    "settings.scroll_on_input_desc",
+                    "settings.scrollback",
+                ],
+            ),
+            GroupSearch::TerminalTheme => (
+                "settings.terminal_theme_group",
+                &[
+                    "settings.terminal_follow_ui",
+                    "settings.terminal_follow_ui_note",
+                    "settings.terminal_theme_note",
+                ],
+            ),
+            GroupSearch::Highlight => (
+                "settings.highlight_group",
+                &[
+                    "settings.keyword_highlight",
+                    "settings.keyword_highlight_desc",
+                    "settings.highlight_keywords",
+                    "settings.highlight_keywords_note",
+                ],
+            ),
+            GroupSearch::Trigger => (
+                "settings.trigger_group",
+                &[
+                    "trigger.master_switch",
+                    "trigger.master_switch_desc",
+                    "trigger.rules_list",
+                    "trigger.add_rule",
+                    "trigger.rule_name",
+                    "trigger.rule_pattern",
+                    "trigger.action_kind",
+                    "trigger.case_sensitive",
+                ],
+            ),
+            GroupSearch::BlockView => (
+                "settings.block_view_group",
+                &[
+                    "settings.block_view_enable",
+                    "settings.block_view_enable_desc",
+                    "settings.shell_integration_enable",
+                    "settings.shell_integration_enable_desc",
+                    "settings.block_view_style",
+                    "settings.block_view_rows",
+                    "settings.block_view_rows_hint",
+                ],
+            ),
+            GroupSearch::KeyBindings => (
+                "settings.key_bindings_group",
+                &["settings.key_bindings_desc", "settings.key_bindings_hint"],
+            ),
+            GroupSearch::Editor => (
+                "settings.editor_group",
+                &[
+                    "settings.editor_soft_wrap",
+                    "settings.editor_soft_wrap_desc",
+                    "settings.editor_line_numbers",
+                    "settings.editor_line_numbers_desc",
+                ],
+            ),
+            GroupSearch::FilePanel => (
+                "settings.file_panel_group",
+                &["settings.panel_hidden", "settings.panel_hidden_note"],
+            ),
+            GroupSearch::Transfer => (
+                "settings.transfer_group",
+                &[
+                    "settings.max_concurrent_transfers",
+                    "settings.max_concurrent_transfers_desc",
+                    "settings.verify_after_transfer",
+                    "settings.verify_after_transfer_desc",
+                    "settings.checksum_algorithm",
+                    "settings.checksum_algorithm_desc",
+                    "settings.verify_mode",
+                    "settings.verify_mode_desc",
+                ],
+            ),
+            GroupSearch::Zmodem => (
+                "settings.zmodem_group",
+                &[
+                    "settings.zmodem_dir",
+                    "settings.zmodem_dir_desc",
+                    "settings.zmodem_dir_default",
+                    "settings.zmodem_auto_receive",
+                    "settings.zmodem_auto_receive_desc",
+                ],
+            ),
+            GroupSearch::Audit => (
+                "settings.audit_group",
+                &[
+                    "settings.audit_enabled",
+                    "settings.audit_enabled_desc",
+                    "settings.audit_dir",
+                    "settings.audit_dir_desc",
+                    "settings.audit_dir_open",
+                ],
+            ),
+            GroupSearch::Identities => (
+                "settings.identity_group",
+                &["identity.new", "identity.empty", "identity.used_by"],
+            ),
+            GroupSearch::History => (
+                "settings.history_group",
+                &["settings.history_enabled", "settings.history_enabled_desc"],
+            ),
+            GroupSearch::Mouse => (
+                "settings.mouse_group",
+                &[
+                    "settings.right_click_action",
+                    "settings.right_click_action_desc",
+                    "settings.right_click_paste_action",
+                    "settings.right_click_menu",
+                    "settings.right_click_menu_paste",
+                    "settings.middle_click_paste",
+                    "settings.middle_click_paste_desc",
+                ],
+            ),
+            GroupSearch::Selection => (
+                "settings.selection_group",
+                &["settings.word_separators", "settings.word_separators_note"],
+            ),
+            GroupSearch::Clipboard => (
+                "settings.clipboard_group",
+                &[
+                    "settings.copy_on_select",
+                    "settings.copy_on_select_desc",
+                    "settings.multiline_paste",
+                    "settings.multiline_paste_desc",
+                    "settings.trim_trailing_whitespace",
+                    "settings.trim_trailing_whitespace_desc",
+                    "settings.suppress_ctrl_v",
+                    "settings.suppress_ctrl_v_desc",
+                ],
+            ),
+            GroupSearch::Shortcuts => (
+                "settings.tab_shortcuts",
+                &[
+                    "settings.shortcut_action",
+                    "settings.shortcut_keys",
+                    "settings.shortcut_edit",
+                    "settings.shortcut_reset",
+                    "settings.shortcut_reset_all",
+                    "settings.shortcut_conflicts",
+                    "settings.shortcut_hint",
+                ],
+            ),
+            GroupSearch::Tabs => (
+                "settings.tabs_group",
+                &[
+                    "settings.show_tab_close_button",
+                    "settings.show_tab_close_button_desc",
+                    "settings.close_window_on_all_tabs_closed",
+                    "settings.close_window_on_all_tabs_closed_desc",
+                    "settings.tab_position",
+                    "settings.tab_position_desc",
+                ],
+            ),
+            GroupSearch::Window => (
+                "settings.window_group",
+                &[
+                    "settings.sftp_panel_side",
+                    "settings.sftp_panel_side_desc",
+                    "settings.remember_window_bounds",
+                    "settings.remember_window_bounds_desc",
+                ],
+            ),
+            // 两个布局条目的可见性由枚举驱动渲染，这里同步列出条目名称键。
+            GroupSearch::ActivityBar => (
+                "settings.activity_bar",
+                &[
+                    "activity.restore_default",
+                    "app.sessions",
+                    "activity.tabs",
+                    "app.quick_open",
+                    "forward.title",
+                    "sftp.title",
+                    "monitor.title",
+                    "activity.language",
+                    "app.import_ssh_config",
+                    "known_hosts.title",
+                    "keys.title",
+                    "settings.title",
+                ],
+            ),
+            GroupSearch::StatusBar => (
+                "settings.status_bar",
+                &[
+                    "activity.restore_default",
+                    "status.network",
+                    "monitor.cpu",
+                    "monitor.mem",
+                    "monitor.disk",
+                    "status.os",
+                    "monitor.uptime",
+                ],
+            ),
+            GroupSearch::Startup => (
+                "settings.startup_group",
+                &[
+                    "settings.startup_tabs",
+                    "settings.startup_tabs_desc",
+                    "settings.sidebar_startup",
+                    "settings.sidebar_startup_desc",
+                ],
+            ),
+            GroupSearch::Language => (
+                "settings.language_group",
+                &[
+                    "app.language",
+                    "settings.language_desc",
+                    "settings.language_system",
+                ],
+            ),
+            GroupSearch::Notify => (
+                "settings.notify_group",
+                &[
+                    "settings.bell_style",
+                    "settings.bell_style_desc",
+                    "settings.desktop_notifications_desc",
+                    "notify.desktop_switch",
+                    "notify.threshold",
+                    "notify.threshold_note",
+                ],
+            ),
+            GroupSearch::Proxy => (
+                "settings.proxy_group",
+                &[
+                    "settings.proxy_mode",
+                    "settings.proxy_mode_desc",
+                    "settings.proxy_host",
+                    "settings.proxy_port",
+                    "settings.proxy_username",
+                    "settings.proxy_password",
+                    "settings.proxy_auth_hint",
+                    "form.proxy_direct",
+                    "form.proxy_http",
+                    "form.proxy_socks5",
+                ],
+            ),
+            GroupSearch::DesktopIntegration => (
+                "settings.desktop_integration_group",
+                &[
+                    "desktop.default_terminal_switch",
+                    "desktop.default_terminal_desc",
+                ],
+            ),
+            GroupSearch::Backup => (
+                "settings.backup_group",
+                &[
+                    "backup.settings_hint",
+                    "backup.export_action",
+                    "backup.import_action",
+                ],
+            ),
+            GroupSearch::Sync => (
+                "settings.sync_group",
+                &[
+                    "sync.endpoint",
+                    "sync.endpoint_desc",
+                    "sync.webdav_url",
+                    "sync.s3_endpoint",
+                    "sync.git_remote",
+                    "sync.directory",
+                    "sync.git_sync_now",
+                    "sync.push",
+                    "sync.pull",
+                    "sync.include_secrets",
+                    "sync.include_secrets_desc",
+                    "sync.git_interval",
+                ],
+            ),
+            GroupSearch::Logs => (
+                "settings.log_group",
+                &[
+                    "settings.log_level",
+                    "settings.log_level_desc",
+                    "settings.log_dir",
+                    "settings.log_dir_desc",
+                    "settings.log_dir_open",
+                    "settings.log_cleanup",
+                    "settings.log_cleanup_desc",
+                    "settings.log_cleanup_action",
+                ],
+            ),
+            GroupSearch::MonitorSections => (
+                "settings.monitor_sections_group",
+                &[
+                    "settings.monitor_cpu_expanded",
+                    "settings.monitor_cpu_expanded_desc",
+                    "settings.monitor_memory_expanded",
+                    "settings.monitor_memory_expanded_desc",
+                    "settings.monitor_disk_expanded",
+                    "settings.monitor_disk_expanded_desc",
+                    "settings.monitor_network_expanded",
+                    "settings.monitor_network_expanded_desc",
+                    "settings.monitor_ports_expanded",
+                    "settings.monitor_ports_expanded_desc",
+                    "settings.monitor_services_expanded",
+                    "settings.monitor_services_expanded_desc",
+                    "settings.monitor_processes_expanded",
+                    "settings.monitor_processes_expanded_desc",
+                ],
+            ),
+            GroupSearch::MonitorBehavior => (
+                "settings.monitor_behavior_group",
+                &[
+                    "settings.monitor_default_width",
+                    "settings.monitor_default_width_desc",
+                    "settings.monitor_default_interval",
+                    "settings.monitor_default_interval_desc",
+                ],
+            ),
+            GroupSearch::About => (
+                "settings.about_group",
+                &[
+                    "settings.about_version",
+                    "settings.about_build",
+                    "settings.about_license",
+                    "settings.about_author",
+                    "settings.about_platform",
+                    "settings.about_homepage",
+                    "settings.about_config_dir",
+                    "settings.about_summary",
+                ],
+            ),
+        }
+    }
+}

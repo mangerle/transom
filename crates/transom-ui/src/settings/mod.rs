@@ -16,6 +16,7 @@ mod logs_page;
 mod modal;
 mod modal_state;
 mod monitor_page;
+mod search_keywords;
 mod security_page;
 mod shortcuts_page;
 mod startup_page;
