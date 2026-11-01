@@ -138,56 +138,66 @@ impl MonitorView {
             .gap_1p5()
             .items_center()
             .flex_shrink_0()
-            // 采样频率档位切换
+            .child(self.render_sampling_controls(current_interval, cx))
+            .child(self.render_view_actions(drawer_width, cx))
+            .into_any_element()
+    }
+
+    /// 采样频率三档切换。
+    fn render_sampling_controls(
+        &self,
+        current_interval: SampleIntervalMode,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
+            .gap_0p5()
             .child(
-                h_flex()
-                    .gap_0p5()
-                    .child(
-                        Button::new("sample-rate-fast")
-                            .xsmall()
-                            .label(SampleIntervalMode::Fast.label())
-                            .selected(current_interval == SampleIntervalMode::Fast)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Fast) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new("sample-rate-normal")
-                            .xsmall()
-                            .label(SampleIntervalMode::Normal.label())
-                            .selected(current_interval == SampleIntervalMode::Normal)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Normal) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new("sample-rate-eco")
-                            .xsmall()
-                            .label(SampleIntervalMode::Eco.label())
-                            .selected(current_interval == SampleIntervalMode::Eco)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Eco) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    ),
+                Button::new("sample-rate-fast")
+                    .xsmall()
+                    .label(SampleIntervalMode::Fast.label())
+                    .selected(current_interval == SampleIntervalMode::Fast)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if this.set_interval_mode(SampleIntervalMode::Fast) {
+                            cx.notify();
+                            let interval = this.interval_mode().interval();
+                            cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(interval));
+                        }
+                    })),
             )
+            .child(
+                Button::new("sample-rate-normal")
+                    .xsmall()
+                    .label(SampleIntervalMode::Normal.label())
+                    .selected(current_interval == SampleIntervalMode::Normal)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if this.set_interval_mode(SampleIntervalMode::Normal) {
+                            cx.notify();
+                            let interval = this.interval_mode().interval();
+                            cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(interval));
+                        }
+                    })),
+            )
+            .child(
+                Button::new("sample-rate-eco")
+                    .xsmall()
+                    .label(SampleIntervalMode::Eco.label())
+                    .selected(current_interval == SampleIntervalMode::Eco)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if this.set_interval_mode(SampleIntervalMode::Eco) {
+                            cx.notify();
+                            let interval = this.interval_mode().interval();
+                            cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(interval));
+                        }
+                    })),
+            )
+            .into_any_element()
+    }
+
+    /// 走势图形态、刷新、宽度、脱离与关闭动作。
+    fn render_view_actions(&self, drawer_width: f32, cx: &mut Context<Self>) -> AnyElement {
+        h_flex()
+            .gap_1p5()
+            .items_center()
             // 走势图形态切换（折线面积图 / 柱状图）
             .child(
                 crate::widgets::IconButton::new(
