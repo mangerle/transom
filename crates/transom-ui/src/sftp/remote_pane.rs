@@ -86,56 +86,23 @@ impl SftpPanelView {
 
         let nav_buttons = self.render_remote_nav_buttons(tab_id, target, side_index, &key, cx);
 
-        let header = v_flex()
-            .border_color(p.divider(p.sidebar_border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .p_2()
-            .gap_1()
-            .child(
-                h_flex()
-                    .gap_1()
-                    .items_center()
-                    .child(
-                        Icon::new(IconName::Server)
-                            .small()
-                            .text_color(p.muted_foreground),
-                    )
-                    .child(
-                        div()
-                            .max_w(px(120.0))
-                            .min_w(px(0.0))
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .truncate()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.muted_foreground)
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .child(Input::new(&path_input).w_full()),
-                    )
-                    .child(nav_buttons),
-            )
-            .child(self.render_remote_toolbar(
-                RemoteToolbarProps {
-                    tab_id,
-                    target,
-                    pane,
-                    show_filter,
-                    show_hidden,
-                    sync_navigation,
-                    show_editor_list,
-                },
-                p,
-                cx,
-            ))
-            .when(show_filter, |this| {
-                this.child(Input::new(&filter_input).w_full())
-            });
+        let header = self.render_remote_header(
+            RemoteHeaderInput {
+                tab_id,
+                target,
+                title,
+                path_input: &path_input,
+                nav_buttons,
+                filter_input: &filter_input,
+                pane,
+                show_filter,
+                show_hidden,
+                sync_navigation,
+                show_editor_list,
+            },
+            p,
+            cx,
+        );
 
         let content = self.render_remote_content(
             RemoteContentProps {
@@ -167,6 +134,97 @@ impl SftpPanelView {
             p,
             cx,
         )
+    }
+}
+
+/// 远端列头部渲染输入：标题、路径输入、导航按钮与列级开关。
+struct RemoteHeaderInput<'a> {
+    tab_id: TabId,
+    target: SftpRemotePaneRef,
+    title: String,
+    path_input: &'a Entity<gpui_kit::component::input::InputState>,
+    nav_buttons: AnyElement,
+    filter_input: &'a Entity<gpui_kit::component::input::InputState>,
+    pane: &'a SftpRemotePaneState,
+    show_filter: bool,
+    show_hidden: bool,
+    sync_navigation: bool,
+    show_editor_list: bool,
+}
+
+impl SftpPanelView {
+    /// 远端列头部：标题、路径导航、操作工具栏与过滤框。
+    fn render_remote_header(
+        &self,
+        input: RemoteHeaderInput<'_>,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let RemoteHeaderInput {
+            tab_id,
+            target,
+            title,
+            path_input,
+            nav_buttons,
+            filter_input,
+            pane,
+            show_filter,
+            show_hidden,
+            sync_navigation,
+            show_editor_list,
+        } = input;
+        let header = v_flex()
+            .border_color(p.divider(p.sidebar_border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
+            .p_2()
+            .gap_1()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        Icon::new(IconName::Server)
+                            .small()
+                            .text_color(p.muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(120.0))
+                            .min_w(px(0.0))
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .truncate()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(p.muted_foreground)
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .child(Input::new(path_input).w_full()),
+                    )
+                    .child(nav_buttons),
+            )
+            .child(self.render_remote_toolbar(
+                RemoteToolbarProps {
+                    tab_id,
+                    target,
+                    pane,
+                    show_filter,
+                    show_hidden,
+                    sync_navigation,
+                    show_editor_list,
+                },
+                p,
+                cx,
+            ))
+            .when(show_filter, |this| {
+                this.child(Input::new(filter_input).w_full())
+            });
+
+        header.into_any_element()
     }
 }
 
