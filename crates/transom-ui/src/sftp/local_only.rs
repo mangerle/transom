@@ -94,6 +94,7 @@ impl AppShell {
             main_connection,
             command_tx,
             editors: Some(self.state.editors.clone()),
+            mount_candidates: Vec::new(),
             open: true,
             remote: SftpRemotePaneState::new_main(
                 String::new(),
@@ -136,12 +137,7 @@ impl AppShell {
             restored_width: None,
             _subscriptions: vec![local_enter_sub],
         };
-        let app = cx.entity().downgrade();
-        let view = cx.new(|_| {
-            let mut view = SftpPanelView::new(state, tab_id);
-            view.attach(app);
-            view
-        });
+        let view = cx.new(|_| SftpPanelView::new(state, tab_id));
         pane.sftp_view = Some(view);
         // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
         self.spawn_local_dir_refresh(tab_id, None, cx);

@@ -197,6 +197,15 @@ pub(crate) struct SftpQueueState {
 /// 设计原理（Why）：此前 47 个字段平铺在同一个结构体里，路径、选择、队列
 /// 与展开状态互相穿插，任何模块都能直接改写任意字段；按"远端列 / 本地栏 /
 /// 传输队列"分组后，字段归属一眼可见，读写落在各自的子结构上。
+/// 可挂载到并列列的远端候选。
+#[derive(Clone)]
+pub(crate) struct SftpMountCandidate {
+    pub(crate) connection_id: ConnectionId,
+    pub(crate) display_name: String,
+    pub(crate) view: Option<Entity<crate::sftp::SftpPanelView>>,
+    pub(crate) cwd: Option<String>,
+}
+
 pub(crate) struct SftpPanelState {
     /// 面板所属主连接：打开面板时由外壳注入，重连后更新。
     ///
@@ -206,6 +215,8 @@ pub(crate) struct SftpPanelState {
     pub(crate) command_tx: Option<flume::Sender<transom_core::AppCommand>>,
     /// 编辑面板实体句柄：远端工具栏要渲染"已打开编辑器"浮层，需要读取它。
     pub(crate) editors: Option<Entity<crate::editor::EditorPanels>>,
+    /// 可挂载的并列远端候选：外壳在标签变化时推送，面板渲染不再读工作区。
+    pub(crate) mount_candidates: Vec<SftpMountCandidate>,
     /// 面板列是否展开显示。
     ///
     /// 设计原理（Why）：`tab.sftp` 是 `Some` 只代表传输队列与目录状态存在，

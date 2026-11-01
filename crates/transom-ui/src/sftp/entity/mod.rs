@@ -45,41 +45,25 @@ pub(crate) struct SftpPanelView {
     pub(crate) state: SftpPanelState,
     /// 所属窗格 id；命令投递与事件路由都按它寻址。
     pub(super) tab_id: TabId,
-    /// 回到外壳的弱引用；创建后立即绑定。
-    pub(super) app: Option<WeakEntity<AppShell>>,
 }
 
 impl EventEmitter<super::SftpPanelEvent> for SftpPanelView {}
 
 impl SftpPanelView {
-    /// 用给定状态创建面板实体；`attach` 之后才具备回交外壳的能力。
-    pub(crate) fn new(state: SftpPanelState, tab_id: transom_core::TabId) -> Self {
-        Self {
-            state,
-            tab_id,
-            app: None,
-        }
+    /// 接收外壳推送的并列远端候选；标签变化时调用。
+    pub(crate) fn set_mount_candidates(&mut self, candidates: Vec<super::SftpMountCandidate>) {
+        self.state.mount_candidates = candidates;
     }
 
-    /// 绑定外壳弱引用；必须在实体创建后立即调用一次。
-    pub(crate) fn attach(&mut self, app: WeakEntity<AppShell>) {
-        self.app = Some(app);
+    /// 用给定状态创建面板实体；`attach` 之后才具备回交外壳的能力。
+    pub(crate) fn new(state: SftpPanelState, tab_id: transom_core::TabId) -> Self {
+        Self { state, tab_id }
     }
 
     /// 面板状态只读访问。
     pub(crate) fn state(&self) -> &SftpPanelState {
         &self.state
     }
-}
-
-/// 只读外壳状态；用于取设置、连接与工作区快照。
-pub(super) fn read_shell_parts<R>(
-    app: &Option<WeakEntity<AppShell>>,
-    cx: &App,
-    read: impl FnOnce(&AppShell) -> R,
-) -> Option<R> {
-    let app = app.as_ref()?.upgrade()?;
-    Some(read(app.read(cx)))
 }
 
 /// 视图对面板状态的透明访问。

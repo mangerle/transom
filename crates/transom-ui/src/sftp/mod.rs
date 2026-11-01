@@ -67,8 +67,8 @@ pub(crate) use self::side_remote::SftpActivePane;
 pub(crate) use self::state::{
     LocalFileEntry, RemoteDirCacheEntry, SFTP_DIR_CACHE_TTL, SftpChmodModalState,
     SftpFilterModalState, SftpInputModalState, SftpInputTarget, SftpLocalPaneInit,
-    SftpLocalPaneState, SftpPanelState, SftpQueueState, SftpRemotePaneRef, SftpRemotePaneState,
-    SftpSyncModalState,
+    SftpLocalPaneState, SftpMountCandidate, SftpPanelState, SftpQueueState, SftpRemotePaneRef,
+    SftpRemotePaneState, SftpSyncModalState,
 };
 pub(crate) use self::task::{
     SftpTransferRequest, TransferKind, TransferMode, TransferStatus, TransferTask,

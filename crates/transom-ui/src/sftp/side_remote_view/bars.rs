@@ -16,15 +16,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{Icon, Selectable, Sizable};
 use gpui_kit::*;
-use std::collections::HashSet;
-use transom_core::{Connection, ConnectionId};
-
-type MountCandidate = (
-    ConnectionId,
-    String,
-    Option<gpui_kit::Entity<SftpPanelView>>,
-    Option<String>,
-);
+use transom_core::ConnectionId;
 
 impl SftpPanelView {
     /// 渲染挂载并列远端按钮及其 Popover 菜单。
@@ -50,55 +42,25 @@ impl SftpPanelView {
             .selected(open)
             .tooltip(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string());
 
-        // 收集当前标签页的连接与排除信息。工作区快照从外壳读取，
-        // 其他标签的 SFTP 实体句柄随后再用实体上下文读取目录。
-        let current_conn_id = self.state.remote.connection_id;
-        let is_local_only = self.state.local.only;
-        let Some(tabs) = crate::sftp::entity::read_shell_parts(&self.app, cx, |shell| {
-            let current_tab = shell.state.workspace.tab(tab_id);
-            let current_conn_id = current_tab.and_then(|t| t.connection_id);
-            let current_session_id = current_tab.map(|t| t.session.id);
-            let mut seen_sessions = HashSet::new();
-            if !is_local_only && let Some(sid) = current_session_id {
-                seen_sessions.insert(sid);
-            }
-            let mut candidates: Vec<MountCandidate> = Vec::new();
-            for t in &shell.state.workspace.tabs {
-                if t.id == tab_id {
-                    continue;
-                }
-                let Some(conn_id) = t.connection_id else {
-                    continue;
-                };
-                if Some(conn_id) == current_conn_id {
-                    continue;
-                }
-                if mounted_conn_ids.contains(&conn_id) {
-                    continue;
-                }
-                if matches!(&t.session.connection, Connection::Local(_)) {
-                    continue;
-                }
-                if !seen_sessions.insert(t.session.id) {
-                    continue;
-                }
-                candidates.push((conn_id, t.display_name(), t.sftp_view(), t.cwd.clone()));
-            }
-            candidates
-        }) else {
-            return div().into_any_element();
-        };
-        let _ = current_conn_id;
+        // 候选由外壳在标签变化时推送：渲染期不读工作区。
+        let candidates = self.state.mount_candidates.clone();
         let mut active_candidates: Vec<(ConnectionId, String, String)> = Vec::new();
-        for (conn_id, display_name, view, cwd) in tabs {
-            let initial_path = view
+        for candidate in candidates {
+            if mounted_conn_ids.contains(&candidate.connection_id) {
+                continue;
+            }
+            let initial_path = candidate
+                .view
                 .map(|view| view.read(cx).remote.path.clone())
                 .filter(|p| !p.is_empty() && p != ".")
-                .or_else(|| cwd.as_deref().and_then(normalize_remote_cwd))
+                .or_else(|| candidate.cwd.as_deref().and_then(normalize_remote_cwd))
                 .unwrap_or_else(|| ".".to_string());
-            active_candidates.push((conn_id, display_name, initial_path));
+            active_candidates.push((
+                candidate.connection_id,
+                candidate.display_name,
+                initial_path,
+            ));
         }
-
         let app_menu = cx.entity().clone();
         let palette = p.clone();
 

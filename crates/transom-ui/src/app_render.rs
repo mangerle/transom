@@ -15,6 +15,60 @@ use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 
 impl AppShell {
+    /// 把可挂载的并列远端候选推给当前面板。
+    ///
+    /// 候选依赖整个工作区（其他标签的连接与目录），属于外壳数据；推送发生在渲染期，
+    /// 面板只读自己的状态，渲染路径不再反查工作区。
+    fn refresh_sftp_mount_candidates(&mut self, cx: &mut Context<Self>) {
+        use transom_core::Connection;
+
+        let Some(tab_id) = self.state.workspace.active_tab else {
+            return;
+        };
+        let Some(view) = self.sftp_view(tab_id) else {
+            return;
+        };
+        let current_conn = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id);
+        let is_local_only = self
+            .sftp_state(tab_id, cx)
+            .is_some_and(|panel| panel.local.only);
+        let current_session = self.state.workspace.tab(tab_id).map(|tab| tab.session.id);
+
+        let mut seen = std::collections::HashSet::new();
+        if !is_local_only && let Some(session_id) = current_session {
+            seen.insert(session_id);
+        }
+        let mut candidates = Vec::new();
+        for tab in &self.state.workspace.tabs {
+            if tab.id == tab_id {
+                continue;
+            }
+            let Some(connection_id) = tab.connection_id else {
+                continue;
+            };
+            if Some(connection_id) == current_conn {
+                continue;
+            }
+            if matches!(&tab.session.connection, Connection::Local(_)) {
+                continue;
+            }
+            if !seen.insert(tab.session.id) {
+                continue;
+            }
+            candidates.push(crate::sftp::SftpMountCandidate {
+                connection_id,
+                display_name: tab.display_name(),
+                view: tab.sftp_view(),
+                cwd: tab.cwd.clone(),
+            });
+        }
+        view.update(cx, |view, _| view.set_mount_candidates(candidates));
+    }
+
     /// 执行面板在事件里排队的窗口动作。
     fn flush_pending_sftp_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::sftp::SftpPanelEvent;
@@ -60,6 +114,7 @@ impl Render for AppShell {
         }
         // 面板请求的"需要窗口"的动作在渲染期统一执行：事件派发阶段没有 Window。
         self.flush_pending_sftp_requests(window, cx);
+        self.refresh_sftp_mount_candidates(cx);
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
         // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的

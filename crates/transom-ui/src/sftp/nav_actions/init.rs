@@ -287,6 +287,7 @@ impl AppShell {
             main_connection,
             command_tx,
             editors: Some(self.state.editors.clone()),
+            mount_candidates: Vec::new(),
             open,
             remote: SftpRemotePaneState::new_main(
                 initial_remote_path.clone(),
@@ -331,12 +332,7 @@ impl AppShell {
             restored_width: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         };
-        let app = cx.entity().downgrade();
-        let view = cx.new(|_| {
-            let mut view = SftpPanelView::new(state, tab_id);
-            view.attach(app);
-            view
-        });
+        let view = cx.new(|_| SftpPanelView::new(state, tab_id));
         let subscription = cx.subscribe(
             &view,
             |shell, _view, event: &crate::sftp::SftpPanelEvent, cx| {
