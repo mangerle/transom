@@ -6,9 +6,9 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 
 impl AppShell {
@@ -352,18 +352,20 @@ fn audit_file_row(
                 ),
         )
         .child(
-            Button::new(ElementId::Name(format!("delete-audit-log-{idx}").into()))
-                .ghost()
-                .xsmall()
-                .icon(IconName::Trash)
-                .tooltip(rust_i18n::t!("common.delete").to_string())
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        cx.stop_propagation();
-                        this.delete_audit_log(item_delete_idx, cx);
-                    },
-                )),
+            crate::widgets::IconButton::new(
+                ElementId::Name(format!("delete-audit-log-{idx}").into()),
+                IconName::Trash,
+                rust_i18n::t!("common.delete").to_string(),
+            )
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(crate::dialog_host::on_event(
+                app,
+                move |this, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    this.delete_audit_log(item_delete_idx, cx);
+                },
+            )),
         )
         .into_any_element()
 }

@@ -127,34 +127,36 @@ pub(super) fn render_tab_close_button(
     if let Some(tiled) = tiled_set {
         let menu_app = app_entity.clone();
         let tiling_id = tiled.id;
-        Button::new(ElementId::Name(format!("close-{group_id}").into()))
-            .ghost()
-            .xsmall()
-            .icon(IconName::WindowClose)
-            .tooltip(rust_i18n::t!("app.close").to_string())
-            .dropdown_menu(move |menu, _window, _cx| {
-                let close_current = menu_app.clone();
-                let close_all = menu_app.clone();
-                menu.item(crate::widgets::menu_item(
-                    rust_i18n::t!("menu.close_tab").to_string(),
-                    IconName::X,
-                    move |_, window, cx| {
-                        close_current.update(cx, |this, cx| {
-                            this.close_group(group_id, window, cx);
-                        });
-                    },
-                ))
-                .item(crate::widgets::menu_item(
-                    rust_i18n::t!("menu.close_tiling_group").to_string(),
-                    IconName::Trash,
-                    move |_, window, cx| {
-                        close_all.update(cx, |this, cx| {
-                            this.close_tiling_group(tiling_id, window, cx);
-                        });
-                    },
-                ))
-            })
-            .into_any_element()
+        crate::widgets::IconButton::new(
+            ElementId::Name(format!("close-{group_id}").into()),
+            IconName::WindowClose,
+            rust_i18n::t!("app.close").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .dropdown_menu(move |menu, _window, _cx| {
+            let close_current = menu_app.clone();
+            let close_all = menu_app.clone();
+            menu.item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.close_tab").to_string(),
+                IconName::X,
+                move |_, window, cx| {
+                    close_current.update(cx, |this, cx| {
+                        this.close_group(group_id, window, cx);
+                    });
+                },
+            ))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.close_tiling_group").to_string(),
+                IconName::Trash,
+                move |_, window, cx| {
+                    close_all.update(cx, |this, cx| {
+                        this.close_tiling_group(tiling_id, window, cx);
+                    });
+                },
+            ))
+        })
+        .into_any_element()
     } else {
         div()
             .id(ElementId::Name(format!("close-{group_id}").into()))

@@ -375,14 +375,16 @@ impl AppShell {
         let multiline = self.state.broadcast.multiline;
         let targets_popover = self.render_broadcast_targets(cx, p);
 
-        let close = Button::new("broadcast-close")
-            .ghost()
-            .xsmall()
-            .icon(IconName::X)
-            .tooltip(rust_i18n::t!("app.close").to_string())
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.close_broadcast_bar(window, cx);
-            }));
+        let close = crate::widgets::IconButton::new(
+            "broadcast-close",
+            IconName::X,
+            rust_i18n::t!("app.close").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.close_broadcast_bar(window, cx);
+        }));
         let toggle = Button::new("broadcast-mode-toggle")
             .ghost()
             .xsmall()

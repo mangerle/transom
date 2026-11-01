@@ -29,15 +29,17 @@ impl AppShell {
         let app_entity = cx.entity().clone();
 
         let badge = if !active_is_recording {
-            Button::new("start-recording-btn")
-                .ghost()
-                .xsmall()
-                .icon(IconName::Disc)
-                .tooltip(rust_i18n::t!("recorder.start_btn").to_string())
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.toggle_recording_for_active_tab(window, cx);
-                }))
-                .into_any_element()
+            crate::widgets::IconButton::new(
+                "start-recording-btn",
+                IconName::Disc,
+                rust_i18n::t!("recorder.start_btn").to_string(),
+            )
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.toggle_recording_for_active_tab(window, cx);
+            }))
+            .into_any_element()
         } else {
             let stop_tip = rust_i18n::t!("recorder.stop_btn").to_string();
             // 正在录制：使用 Tag::danger() 规范化徽标
@@ -357,23 +359,25 @@ fn replay_row(
                         .child(title),
                 )
                 .child(
-                    Button::new(ElementId::Name(format!("play-entry-btn-{idx}").into()))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Disc)
-                        .tooltip(rust_i18n::t!("recorder.open_player").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            move |this, _: &ClickEvent, window, cx| {
-                                this.state.modals.tools.replay = None;
-                                this.open_cast_player(
-                                    item_play_path.clone(),
-                                    Some(item_play_title.clone()),
-                                    window,
-                                    cx,
-                                );
-                            },
-                        )),
+                    crate::widgets::IconButton::new(
+                        ElementId::Name(format!("play-entry-btn-{idx}").into()),
+                        IconName::Disc,
+                        rust_i18n::t!("recorder.open_player").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, window, cx| {
+                            this.state.modals.tools.replay = None;
+                            this.open_cast_player(
+                                item_play_path.clone(),
+                                Some(item_play_title.clone()),
+                                window,
+                                cx,
+                            );
+                        },
+                    )),
                 ),
         )
         .child(

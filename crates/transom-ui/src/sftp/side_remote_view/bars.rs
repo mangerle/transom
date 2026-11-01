@@ -91,14 +91,16 @@ impl SftpPanelView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let expand_btn = Button::new("expand-sftp-local-btn")
-            .ghost()
-            .xsmall()
-            .icon(IconName::PanelLeftOpen)
-            .tooltip(rust_i18n::t!("sftp.sidebar.expand_local").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_local_collapse(cx);
-            }));
+        let expand_btn = crate::widgets::IconButton::new(
+            "expand-sftp-local-btn",
+            IconName::PanelLeftOpen,
+            rust_i18n::t!("sftp.sidebar.expand_local").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.toggle_local_collapse(cx);
+        }));
 
         v_flex()
             .w(px(32.0))
@@ -129,14 +131,16 @@ impl SftpPanelView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let expand_btn = Button::new("expand-sftp-remote-btn")
-            .ghost()
-            .xsmall()
-            .icon(IconName::PanelLeftOpen)
-            .tooltip(rust_i18n::t!("sftp.sidebar.expand_remote").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_remote_collapse(cx);
-            }));
+        let expand_btn = crate::widgets::IconButton::new(
+            "expand-sftp-remote-btn",
+            IconName::PanelLeftOpen,
+            rust_i18n::t!("sftp.sidebar.expand_remote").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.toggle_remote_collapse(cx);
+        }));
 
         v_flex()
             .w(px(32.0))
@@ -169,23 +173,27 @@ impl SftpPanelView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let expand_btn = Button::new(format!("expand-side-{side_index}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::PanelRightOpen)
-            .tooltip(rust_i18n::t!("sftp.sidebar.expand_side_remote").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_side_remote_collapse(side_index, cx);
-            }));
+        let expand_btn = crate::widgets::IconButton::new(
+            format!("expand-side-{side_index}"),
+            IconName::PanelRightOpen,
+            rust_i18n::t!("sftp.sidebar.expand_side_remote").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.toggle_side_remote_collapse(side_index, cx);
+        }));
 
-        let close_btn = Button::new(format!("close-side-{side_index}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::X)
-            .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.close_side_remote(side_index, cx);
-            }));
+        let close_btn = crate::widgets::IconButton::new(
+            format!("close-side-{side_index}"),
+            IconName::X,
+            rust_i18n::t!("sftp.sidebar.close_side_remote").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.close_side_remote(side_index, cx);
+        }));
 
         v_flex()
             .w(px(32.0))
