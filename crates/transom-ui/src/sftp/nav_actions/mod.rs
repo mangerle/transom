@@ -51,20 +51,14 @@ impl SftpPanelView {
         main_connection: ConnectionId,
         cx: &mut Context<Self>,
     ) {
-        self.dismiss_hover_preview(cx);
-        let app = self.app.clone();
-        let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
-        else {
+        let Some(connection_id) = self.prepare_remote_list(target, main_connection) else {
             log::warn!("远端目录请求找不到目标列，窗格: {tab_id}，目标: {target:?}，路径: {path}");
             return;
         };
         log::debug!(
             "请求远端目录列表，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}"
         );
-        if let Some(pane) = self.state.remote_pane_mut(target) {
-            pane.loading = true;
-            pane.error = None;
-        }
+        let app = self.app.clone();
         with_shell_parts(&app, cx, |shell, _| {
             shell.state.send_command(SftpCommand::Sftp {
                 tab_id,
@@ -74,6 +68,25 @@ impl SftpPanelView {
             });
         });
         cx.notify();
+    }
+
+    /// 只改面板自身的加载态并解析目标列连接号。
+    ///
+    /// 命令投递由调用方负责：外壳在持有借用时必须走这条只碰面板状态的路径，
+    /// 否则实体内再调外壳就是双重租借。
+    pub(crate) fn prepare_remote_list(
+        &mut self,
+        target: SftpRemotePaneRef,
+        main_connection: ConnectionId,
+    ) -> Option<ConnectionId> {
+        let connection_id = self
+            .state
+            .remote_connection(target, Some(main_connection))?;
+        if let Some(pane) = self.state.remote_pane_mut(target) {
+            pane.loading = true;
+            pane.error = None;
+        }
+        Some(connection_id)
     }
 
     pub(crate) fn request_list(&mut self, tab_id: TabId, path: String, cx: &mut Context<Self>) {
@@ -159,11 +172,22 @@ impl AppShell {
         else {
             return;
         };
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.request_list_pane_with_connection(tab_id, target, path, main_connection, cx)
-            });
-        }
+        let Some(view) = self.sftp_view(tab_id) else {
+            return;
+        };
+        let Some(connection_id) = view.update(cx, |view, _| {
+            view.prepare_remote_list(target, main_connection)
+        }) else {
+            return;
+        };
+        self.dismiss_sftp_hover_preview(tab_id, cx);
+        self.state.send_command(SftpCommand::Sftp {
+            tab_id,
+            connection_id,
+            op_id: TransferId::new(),
+            op: SftpOperation::List { path },
+        });
+        cx.notify();
     }
 
     pub(crate) fn request_sftp_list(
@@ -181,17 +205,22 @@ impl AppShell {
         else {
             return;
         };
-        if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.request_list_pane_with_connection(
-                    tab_id,
-                    SftpRemotePaneRef::Main,
-                    path,
-                    main_connection,
-                    cx,
-                )
-            });
-        }
+        let Some(view) = self.sftp_view(tab_id) else {
+            return;
+        };
+        let Some(connection_id) = view.update(cx, |view, _| {
+            view.prepare_remote_list(SftpRemotePaneRef::Main, main_connection)
+        }) else {
+            return;
+        };
+        self.dismiss_sftp_hover_preview(tab_id, cx);
+        self.state.send_command(SftpCommand::Sftp {
+            tab_id,
+            connection_id,
+            op_id: TransferId::new(),
+            op: SftpOperation::List { path },
+        });
+        cx.notify();
     }
 
     pub(crate) fn sftp_sync_with_terminal_cwd(
