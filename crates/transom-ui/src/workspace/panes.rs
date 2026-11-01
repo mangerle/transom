@@ -190,56 +190,13 @@ impl AppShell {
             }),
         )
         .context_menu(move |menu, _window, _cx| {
-            let app = app_entity.clone();
-            menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("menu.split_right").to_string(),
-                IconName::Columns2,
-                {
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            this.activate_tab(tab_id, window, cx);
-                            this.split_active_pane(SplitAxis::Horizontal, window, cx);
-                        });
-                    }
-                },
-            ))
-            .item(crate::widgets::menu_item(
-                rust_i18n::t!("menu.split_down").to_string(),
-                IconName::Rows2,
-                {
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            this.activate_tab(tab_id, window, cx);
-                            this.split_active_pane(SplitAxis::Vertical, window, cx);
-                        });
-                    }
-                },
-            ))
-            .item(PopupMenuItem::separator())
-            .item(crate::widgets::menu_item(zoom_label.clone(), zoom_icon, {
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.activate_tab(tab_id, window, cx);
-                        this.toggle_zoom_pane(tab_id, cx);
-                    });
-                }
-            }))
-            .item(crate::widgets::menu_item(
-                rust_i18n::t!("menu.detach_pane").to_string(),
-                IconName::ArrowUpRight,
-                {
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            this.activate_tab(tab_id, window, cx);
-                            this.detach_pane_to_tab(tab_id, window, cx);
-                        });
-                    }
-                },
-            ))
+            pane_context_menu(
+                menu,
+                tab_id,
+                zoom_label.clone(),
+                zoom_icon,
+                app_entity.clone(),
+            )
         });
 
         let body = self.render_pane_body(tab_id, window, cx, p);
@@ -316,4 +273,63 @@ impl AppShell {
 /// 兄弟窗格增删后祖先重建也不会让子树误当成新元素而重置尺寸。
 pub(super) fn split_element_id(id: SplitId) -> ElementId {
     ElementId::Name(format!("pane-split-{id}").into())
+}
+
+/// 窗格头右键菜单：左右/上下分屏、缩放、脱离为标签页。
+fn pane_context_menu(
+    menu: gpui_kit::component::menu::PopupMenu,
+    tab_id: TabId,
+    zoom_label: String,
+    zoom_icon: IconName,
+    app: Entity<AppShell>,
+) -> gpui_kit::component::menu::PopupMenu {
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("menu.split_right").to_string(),
+        IconName::Columns2,
+        {
+            let app = app.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.activate_tab(tab_id, window, cx);
+                    this.split_active_pane(SplitAxis::Horizontal, window, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("menu.split_down").to_string(),
+        IconName::Rows2,
+        {
+            let app = app.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.activate_tab(tab_id, window, cx);
+                    this.split_active_pane(SplitAxis::Vertical, window, cx);
+                });
+            }
+        },
+    ))
+    .item(PopupMenuItem::separator())
+    .item(crate::widgets::menu_item(zoom_label, zoom_icon, {
+        let app = app.clone();
+        move |_, window, cx| {
+            app.update(cx, |this, cx| {
+                this.activate_tab(tab_id, window, cx);
+                this.toggle_zoom_pane(tab_id, cx);
+            });
+        }
+    }))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("menu.detach_pane").to_string(),
+        IconName::ArrowUpRight,
+        {
+            let app = app.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    this.activate_tab(tab_id, window, cx);
+                    this.detach_pane_to_tab(tab_id, window, cx);
+                });
+            }
+        },
+    ))
 }
