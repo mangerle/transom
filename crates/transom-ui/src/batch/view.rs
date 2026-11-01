@@ -93,15 +93,8 @@ impl AppShell {
     }
 
     /// 认证切换区：密码/私钥/Agent 选择与对应补充字段。
-    fn render_batch_auth_section(
-        &self,
-        form: &super::state::BatchEditForm,
-        app: &Entity<AppShell>,
-        p: &Palette,
-    ) -> AnyElement {
-        let change_auth = form.change_auth;
-        let auth = form.auth;
-        let save_passphrase = form.save_passphrase;
+    /// 批量认证方式三选一：口令、私钥、Agent。
+    fn render_batch_auth_buttons(auth: AuthChoice, app: &Entity<AppShell>) -> AnyElement {
         let auth_buttons = h_flex()
             .gap_2()
             .child(
@@ -150,6 +143,19 @@ impl AppShell {
                     )),
             );
 
+        auth_buttons.into_any_element()
+    }
+
+    fn render_batch_auth_section(
+        &self,
+        form: &super::state::BatchEditForm,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let change_auth = form.change_auth;
+        let auth = form.auth;
+        let save_passphrase = form.save_passphrase;
+        let auth_buttons = Self::render_batch_auth_buttons(auth, app);
         let mut auth_section = v_flex().gap_2().child(crate::widgets::checkbox_field_row(
             "batch-change-auth",
             change_auth,
