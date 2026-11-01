@@ -80,81 +80,7 @@ impl SftpPanelView {
         })
         .trigger(trigger)
         .content(move |_window, _cx, _area| {
-            let mut menu = v_flex()
-                .min_w(px(240.0))
-                .max_h(px(320.0))
-                .overflow_hidden()
-                .p_1()
-                .gap_1()
-                .bg(palette.popover)
-                .text_color(palette.popover_foreground)
-                .rounded(palette.radius.md)
-                .border_1()
-                .border_color(palette.border);
-
-            if active_candidates.is_empty() {
-                return menu
-                    .p_3()
-                    .items_center()
-                    .text_xs()
-                    .text_color(palette.muted_foreground)
-                    .child(rust_i18n::t!("sftp.sidebar.no_candidates").to_string())
-                    .into_any_element();
-            }
-
-            menu = menu.child(
-                div()
-                    .px_2()
-                    .py_1()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(palette.muted_foreground)
-                    .child(rust_i18n::t!("sftp.sidebar.candidates_header").to_string()),
-            );
-            for (conn_id, display_name, initial_path) in active_candidates.clone() {
-                let app = app_menu.clone();
-                let title_str = display_name.clone();
-                let path_str = initial_path.clone();
-                menu = menu.child(
-                    h_flex()
-                        .id(ElementId::Name(
-                            format!("mount-candidate-{}", conn_id).into(),
-                        ))
-                        .px_2()
-                        .py_1p5()
-                        .gap_2()
-                        .items_center()
-                        .rounded(palette.radius.sm)
-                        .cursor_pointer()
-                        .hover(|style| {
-                            style
-                                .bg(palette.sidebar_accent)
-                                .text_color(palette.sidebar_accent_foreground)
-                        })
-                        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                            app.update(cx, |this, cx| {
-                                this.mount_side_remote(
-                                    conn_id,
-                                    title_str.clone(),
-                                    path_str.clone(),
-                                    window,
-                                    cx,
-                                );
-                            });
-                        })
-                        .child(Icon::new(IconName::Server).small())
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_xs()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .truncate()
-                                .child(display_name),
-                        ),
-                );
-            }
-            menu.into_any_element()
+            mount_menu(active_candidates.clone(), app_menu.clone(), palette.clone())
         })
         .into_any_element()
     }
@@ -284,4 +210,87 @@ impl SftpPanelView {
             )
             .into_any_element()
     }
+}
+
+/// 并列远端挂载弹层：候选为空时的提示与逐连接入口。
+fn mount_menu(
+    candidates: Vec<(ConnectionId, String, String)>,
+    app: Entity<SftpPanelView>,
+    palette: Palette,
+) -> AnyElement {
+    let mut menu = v_flex()
+        .min_w(px(240.0))
+        .max_h(px(320.0))
+        .overflow_hidden()
+        .p_1()
+        .gap_1()
+        .bg(palette.popover)
+        .text_color(palette.popover_foreground)
+        .rounded(palette.radius.md)
+        .border_1()
+        .border_color(palette.border);
+
+    if candidates.is_empty() {
+        return menu
+            .p_3()
+            .items_center()
+            .text_xs()
+            .text_color(palette.muted_foreground)
+            .child(rust_i18n::t!("sftp.sidebar.no_candidates").to_string())
+            .into_any_element();
+    }
+
+    menu = menu.child(
+        div()
+            .px_2()
+            .py_1()
+            .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(palette.muted_foreground)
+            .child(rust_i18n::t!("sftp.sidebar.candidates_header").to_string()),
+    );
+    for (conn_id, display_name, initial_path) in candidates.clone() {
+        let app = app.clone();
+        let title_str = display_name.clone();
+        let path_str = initial_path.clone();
+        menu = menu.child(
+            h_flex()
+                .id(ElementId::Name(
+                    format!("mount-candidate-{}", conn_id).into(),
+                ))
+                .px_2()
+                .py_1p5()
+                .gap_2()
+                .items_center()
+                .rounded(palette.radius.sm)
+                .cursor_pointer()
+                .hover(|style| {
+                    style
+                        .bg(palette.sidebar_accent)
+                        .text_color(palette.sidebar_accent_foreground)
+                })
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.mount_side_remote(
+                            conn_id,
+                            title_str.clone(),
+                            path_str.clone(),
+                            window,
+                            cx,
+                        );
+                    });
+                })
+                .child(Icon::new(IconName::Server).small())
+                .child(
+                    div()
+                        .flex_1()
+                        .text_xs()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .truncate()
+                        .child(display_name),
+                ),
+        );
+    }
+    menu.into_any_element()
 }
