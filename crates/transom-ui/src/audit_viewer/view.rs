@@ -214,75 +214,13 @@ impl AppShell {
             );
         } else {
             for (idx, entry) in viewer.entries.iter().enumerate() {
-                let is_selected = idx == viewer.selected_index;
-                let bg_color = if is_selected {
-                    p.primary.opacity(0.15)
-                } else {
-                    gpui::transparent_black()
-                };
-                let border_color = if is_selected {
-                    p.primary
-                } else {
-                    gpui::transparent_black()
-                };
-
-                let item_delete_idx = idx;
-                file_list = file_list.child(
-                    h_flex()
-                        .id(ElementId::Name(format!("audit-log-item-{idx}").into()))
-                        .p_2()
-                        .rounded(p.radius.sm)
-                        .bg(bg_color)
-                        .border_1()
-                        .border_color(border_color)
-                        .cursor_pointer()
-                        .hover(|style| style.bg(p.muted.opacity(0.4)))
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            move |this, _: &ClickEvent, _, cx| {
-                                this.select_audit_log(idx, cx);
-                            },
-                        ))
-                        .child(
-                            v_flex()
-                                .flex_1()
-                                .min_w_0()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.foreground)
-                                        .truncate()
-                                        .child(entry.file_name.clone()),
-                                )
-                                .child(
-                                    h_flex()
-                                        .justify_between()
-                                        .text_xs()
-                                        .text_color(p.muted_foreground)
-                                        .child(entry.modified_display.clone())
-                                        .child(format_file_size(entry.size_bytes)),
-                                ),
-                        )
-                        .child(
-                            Button::new(ElementId::Name(format!("delete-audit-log-{idx}").into()))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Trash)
-                                .tooltip(rust_i18n::t!("common.delete").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    move |this, _: &ClickEvent, _, cx| {
-                                        cx.stop_propagation();
-                                        this.delete_audit_log(item_delete_idx, cx);
-                                    },
-                                )),
-                        ),
-                );
+                file_list = file_list.child(audit_file_row(
+                    idx,
+                    entry,
+                    idx == viewer.selected_index,
+                    app,
+                    p,
+                ));
             }
         }
 
@@ -352,4 +290,80 @@ fn render_audit_content(
         );
 
     right_pane.into_any_element()
+}
+
+/// 单条审计日志行：文件名、时间/大小与删除入口。
+fn audit_file_row(
+    idx: usize,
+    entry: &super::types::AuditLogEntry,
+    is_selected: bool,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let bg_color = if is_selected {
+        p.primary.opacity(0.15)
+    } else {
+        gpui::transparent_black()
+    };
+    let border_color = if is_selected {
+        p.primary
+    } else {
+        gpui::transparent_black()
+    };
+    let item_delete_idx = idx;
+    h_flex()
+        .id(ElementId::Name(format!("audit-log-item-{idx}").into()))
+        .p_2()
+        .rounded(p.radius.sm)
+        .bg(bg_color)
+        .border_1()
+        .border_color(border_color)
+        .cursor_pointer()
+        .hover(|style| style.bg(p.muted.opacity(0.4)))
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .on_click(crate::dialog_host::on_event(
+            app,
+            move |this, _: &ClickEvent, _, cx| {
+                this.select_audit_log(idx, cx);
+            },
+        ))
+        .child(
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.foreground)
+                        .truncate()
+                        .child(entry.file_name.clone()),
+                )
+                .child(
+                    h_flex()
+                        .justify_between()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(entry.modified_display.clone())
+                        .child(format_file_size(entry.size_bytes)),
+                ),
+        )
+        .child(
+            Button::new(ElementId::Name(format!("delete-audit-log-{idx}").into()))
+                .ghost()
+                .xsmall()
+                .icon(IconName::Trash)
+                .tooltip(rust_i18n::t!("common.delete").to_string())
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.delete_audit_log(item_delete_idx, cx);
+                    },
+                )),
+        )
+        .into_any_element()
 }
