@@ -2,6 +2,7 @@
 
 use super::validate::name_validation_error;
 use crate::app::AppShell;
+use crate::sftp::state::SftpInputModalState;
 use crate::sftp::{
     SftpInputTarget, SftpRemotePaneRef, join_remote, parent_remote, spawn_blocking_local,
 };
@@ -18,191 +19,202 @@ impl AppShell {
         let tab_id = modal.tab_id;
         let name = modal.input.read(cx).value().trim().to_string();
         if name.is_empty() {
-            let mut modal = modal;
-            modal.error = Some(rust_i18n::t!("sftp.file_ops.name_empty").to_string());
-            let input = modal.input.clone();
-            self.state.sftp_modals.input = Some(modal);
-            input.update(cx, |state, cx| state.focus(window, cx));
-            cx.notify();
+            let message = rust_i18n::t!("sftp.file_ops.name_empty").to_string();
+            self.fail_sftp_input(modal, message, window, cx);
             return;
         }
         if let Some(message) = name_validation_error(&modal.target, &name) {
-            let mut modal = modal;
-            modal.error = Some(message);
-            let input = modal.input.clone();
-            self.state.sftp_modals.input = Some(modal);
-            input.update(cx, |state, cx| state.focus(window, cx));
-            cx.notify();
+            self.fail_sftp_input(modal, message, window, cx);
             return;
         }
 
-        // 远端目标的连接与当前目录：并列远端弹窗携带目标连接，主远端沿用
-        // 标签页连接。所有远端操作与后续刷新都按这里解析出的连接路由。
         let target = match modal.connection_id {
             Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
             None => SftpRemotePaneRef::Main,
         };
-        let remote_scope = self.remote_pane_scope(tab_id, target, cx).map(|scope| {
-            (
-                scope.connection_id,
-                scope.pane.path.clone(),
-                scope.pane.entries.clone(),
-            )
-        });
+        let scope = self
+            .remote_pane_scope(tab_id, target, cx)
+            .map(|scope| SftpInputScope {
+                connection_id: scope.connection_id,
+                base_path: scope.pane.path.clone(),
+                entries: scope.pane.entries.clone(),
+            });
 
-        // 新建文件在通用校验后直接分流：目录列表里已有同名条目时不创建，
-        // 目录报错回填、文件直接打开编辑；全新路径才生成空编辑面板。
-        // 整条分支在 match 之前完成，避免部分移动的模态再被改写。
+        // 新建文件在通用校验后直接分流：同名目录报错回填，同名文件交给打开
+        // 流程，全新路径才生成空编辑面板。
         if matches!(modal.target, SftpInputTarget::RemoteEditorNewFile) {
-            let Some((connection_id, base_path, entries)) = remote_scope else {
-                return;
-            };
-            let path = join_remote(&base_path, &name);
-            let existing_is_dir = entries
-                .iter()
-                .find(|entry| entry.path == path)
-                .map(|entry| entry.is_dir);
-            match existing_is_dir {
-                Some(true) => {
-                    let mut modal = modal;
-                    modal.error = Some(
-                        rust_i18n::t!("sftp.file_ops.file_exists_as_dir", name = name.as_str())
-                            .to_string(),
-                    );
-                    let input = modal.input.clone();
-                    self.state.sftp_modals.input = Some(modal);
-                    input.update(cx, |state, cx| state.focus(window, cx));
-                    cx.notify();
-                }
-                // 列表里已有同名文件：交给既有打开流程（读取失败会在面板内报错）。
-                Some(false) => {
-                    self.sftp_edit_remote_file_on(tab_id, connection_id, path, window, cx)
-                }
-                // 目录列表未命中：按新文件打开空编辑面板。
-                None => self.spawn_new_editor_panel(tab_id, connection_id, path, name, window, cx),
+            if let Some(scope) = scope {
+                self.commit_new_remote_file(modal, &name, &scope, window, cx);
             }
             return;
         }
 
-        match modal.target {
-            SftpInputTarget::RemoteMkdir => {
-                let Some((connection_id, base_path, _)) = remote_scope else {
-                    return;
-                };
-                let op = SftpOperation::Mkdir {
-                    path: join_remote(&base_path, &name),
-                };
-                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
-            }
-            // 新建文件已在 match 之前的前置分支完整处理：同名条目分流、
-            // 目录报错回填、文件直接打开或生成空面板。
-            SftpInputTarget::RemoteEditorNewFile => {}
-            SftpInputTarget::RemoteRename { old_path } => {
-                let Some((connection_id, _, _)) = remote_scope else {
-                    return;
-                };
-                let op = SftpOperation::Rename {
-                    from: old_path.clone(),
-                    to: join_remote(&parent_remote(&old_path), &name),
-                };
-                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
-            }
-            SftpInputTarget::RemoteSymlink { target } => {
-                let Some((connection_id, base_path, _)) = remote_scope else {
-                    return;
-                };
-                let op = SftpOperation::Symlink {
-                    target,
-                    link_path: join_remote(&base_path, &name),
-                };
-                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
-            }
-            SftpInputTarget::RemoteArchive {
-                source_paths,
-                parent_dir,
-            } => {
-                let Some((connection_id, _, _)) = remote_scope else {
-                    return;
-                };
-                let dest_archive_path = join_remote(&parent_dir, &name);
-                let op = SftpOperation::Archive {
-                    source_paths,
-                    dest_archive_path,
-                };
-                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
-            }
-            SftpInputTarget::RemoteExtract {
-                archive_path,
-                parent_dir,
-            } => {
-                let Some((connection_id, _, _)) = remote_scope else {
-                    return;
-                };
-                let dest_dir = join_remote(&parent_dir, &name);
-                let op = SftpOperation::Extract {
-                    archive_path,
-                    dest_dir,
-                };
-                self.send_sftp_op_for_connection(tab_id, connection_id, op, cx);
-            }
+        match &modal.target {
             SftpInputTarget::SudoElevation { editor } => {
-                let password = if name.trim().is_empty() {
-                    None
-                } else {
-                    Some(name)
-                };
-                self.submit_sudo_editor_write(&editor, password, window, cx);
+                let password = (!name.trim().is_empty()).then_some(name);
+                self.submit_sudo_editor_write(editor, password, window, cx);
             }
-            SftpInputTarget::LocalMkdir => {
-                let Some(local_path) = self
-                    .sftp_state(tab_id, cx)
-                    .map(|panel| panel.local.path.clone())
-                else {
-                    return;
-                };
-                let op = LocalFsOp::Mkdir(local_path.join(&name));
-                self.spawn_local_fs(tab_id, op, cx);
+            SftpInputTarget::RemoteMkdir
+            | SftpInputTarget::RemoteRename { .. }
+            | SftpInputTarget::RemoteSymlink { .. }
+            | SftpInputTarget::RemoteArchive { .. }
+            | SftpInputTarget::RemoteExtract { .. } => {
+                if let Some(scope) = &scope
+                    && let Some(op) = remote_operation(&modal.target, &scope.base_path, &name)
+                {
+                    self.send_sftp_op_for_connection(tab_id, scope.connection_id, op, cx);
+                }
             }
-            SftpInputTarget::LocalNewFile => {
-                let Some(local_path) = self
-                    .sftp_state(tab_id, cx)
-                    .map(|panel| panel.local.path.clone())
-                else {
-                    return;
-                };
-                let op = LocalFsOp::NewFile(local_path.join(&name));
-                self.spawn_local_fs(tab_id, op, cx);
-            }
-            SftpInputTarget::LocalRename { old_path } => {
-                let Some(parent) = old_path.parent() else {
-                    if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-                        panel.state.set_local_error(
-                            rust_i18n::t!(
-                                "sftp.file_ops.local_rename_failed",
-                                error = rust_i18n::t!("sftp.file_ops.no_parent_dir")
-                            )
-                            .to_string(),
-                        );
-                    }
-                    cx.notify();
-                    return;
-                };
-                let op = LocalFsOp::Rename(old_path.clone(), parent.join(&name));
-                self.spawn_local_fs(tab_id, op, cx);
-            }
-            SftpInputTarget::LocalSymlink { target_path } => {
-                let Some(local_path) = self
-                    .sftp_state(tab_id, cx)
-                    .map(|panel| panel.local.path.clone())
-                else {
-                    return;
-                };
-                let op = LocalFsOp::Symlink(target_path, local_path.join(&name));
-                self.spawn_local_fs(tab_id, op, cx);
+            SftpInputTarget::RemoteEditorNewFile => {}
+            SftpInputTarget::LocalMkdir
+            | SftpInputTarget::LocalNewFile
+            | SftpInputTarget::LocalRename { .. }
+            | SftpInputTarget::LocalSymlink { .. } => {
+                self.commit_local_input(&modal.target, &name, tab_id, cx);
             }
         }
         self.focus_active_sftp_panel(window, cx);
         cx.notify();
+    }
+
+    /// 校验失败：把弹窗放回去、写错误并聚焦输入框。
+    fn fail_sftp_input(
+        &mut self,
+        mut modal: SftpInputModalState,
+        message: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        modal.error = Some(message);
+        let input = modal.input.clone();
+        self.state.sftp_modals.input = Some(modal);
+        input.update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
+    /// 远端新建文件：同名目录报错，同名文件直接打开，全新路径生成空编辑面板。
+    fn commit_new_remote_file(
+        &mut self,
+        modal: SftpInputModalState,
+        name: &str,
+        scope: &SftpInputScope,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let tab_id = modal.tab_id;
+        let path = join_remote(&scope.base_path, name);
+        let existing_is_dir = scope
+            .entries
+            .iter()
+            .find(|entry| entry.path == path)
+            .map(|entry| entry.is_dir);
+        match existing_is_dir {
+            Some(true) => {
+                let message =
+                    rust_i18n::t!("sftp.file_ops.file_exists_as_dir", name = name).to_string();
+                self.fail_sftp_input(modal, message, window, cx);
+            }
+            Some(false) => {
+                self.sftp_edit_remote_file_on(tab_id, scope.connection_id, path, window, cx);
+            }
+            None => self.spawn_new_editor_panel(
+                tab_id,
+                scope.connection_id,
+                path,
+                name.to_string(),
+                window,
+                cx,
+            ),
+        }
+    }
+
+    /// 本地目标：新建目录/文件、重命名或软链接。
+    fn commit_local_input(
+        &mut self,
+        target: &SftpInputTarget,
+        name: &str,
+        tab_id: TabId,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(local_path) = self
+            .sftp_state(tab_id, cx)
+            .map(|panel| panel.local.path.clone())
+        else {
+            return;
+        };
+        if let SftpInputTarget::LocalRename { old_path } = target {
+            let Some(parent) = old_path.parent() else {
+                if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+                    panel.state.set_local_error(
+                        rust_i18n::t!(
+                            "sftp.file_ops.local_rename_failed",
+                            error = rust_i18n::t!("sftp.file_ops.no_parent_dir")
+                        )
+                        .to_string(),
+                    );
+                }
+                cx.notify();
+                return;
+            };
+            self.spawn_local_fs(
+                tab_id,
+                LocalFsOp::Rename(old_path.clone(), parent.join(name)),
+                cx,
+            );
+            return;
+        }
+        let op = match target {
+            SftpInputTarget::LocalMkdir => LocalFsOp::Mkdir(local_path.join(name)),
+            SftpInputTarget::LocalNewFile => LocalFsOp::NewFile(local_path.join(name)),
+            SftpInputTarget::LocalSymlink { target_path } => {
+                LocalFsOp::Symlink(target_path.clone(), local_path.join(name))
+            }
+            _ => return,
+        };
+        self.spawn_local_fs(tab_id, op, cx);
+    }
+}
+
+/// 本次输入的目标远端范围：连接、当前目录与条目快照。
+struct SftpInputScope {
+    connection_id: transom_core::ConnectionId,
+    base_path: String,
+    entries: Vec<transom_core::RemoteFile>,
+}
+
+/// 由输入目标构造远端操作；本地目标返回 `None`。
+fn remote_operation(
+    target: &SftpInputTarget,
+    base_path: &str,
+    name: &str,
+) -> Option<SftpOperation> {
+    match target {
+        SftpInputTarget::RemoteMkdir => Some(SftpOperation::Mkdir {
+            path: join_remote(base_path, name),
+        }),
+        SftpInputTarget::RemoteRename { old_path } => Some(SftpOperation::Rename {
+            from: old_path.clone(),
+            to: join_remote(&parent_remote(old_path), name),
+        }),
+        SftpInputTarget::RemoteSymlink { target } => Some(SftpOperation::Symlink {
+            target: target.clone(),
+            link_path: join_remote(base_path, name),
+        }),
+        SftpInputTarget::RemoteArchive {
+            source_paths,
+            parent_dir,
+        } => Some(SftpOperation::Archive {
+            source_paths: source_paths.clone(),
+            dest_archive_path: join_remote(parent_dir, name),
+        }),
+        SftpInputTarget::RemoteExtract {
+            archive_path,
+            parent_dir,
+        } => Some(SftpOperation::Extract {
+            archive_path: archive_path.clone(),
+            dest_dir: join_remote(parent_dir, name),
+        }),
+        _ => None,
     }
 }
 
