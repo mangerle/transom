@@ -8,7 +8,7 @@ use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{Connection, TabId};
+use transom_core::TabId;
 
 /// 目标选择列表里的一行快照；下拉内容点开时才构建，闭包内不再借用 `AppShell`。
 pub(super) struct BroadcastTargetRow {
@@ -67,14 +67,4 @@ pub(super) fn render_target_rows(
         .overflow_y_scrollbar()
         .child(list)
         .into_any_element()
-}
-
-pub(super) fn connection_icon(connection: &Connection) -> IconName {
-    match connection {
-        Connection::Local(_) => IconName::Terminal,
-        Connection::Serial(_) => IconName::Cable,
-        Connection::Telnet(_) => IconName::Network,
-        Connection::Mosh(_) => IconName::Radio,
-        _ => IconName::Server,
-    }
 }

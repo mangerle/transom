@@ -10,7 +10,7 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{Connection, GroupId, TabId};
+use transom_core::{GroupId, TabId};
 
 /// 窗格列表里的一行预渲染数据。
 ///
@@ -33,17 +33,6 @@ pub(super) struct TiledRow {
     pub(super) dot_color: Hsla,
     pub(super) icon: IconName,
     pub(super) focused: bool,
-}
-
-/// 标签栏与并排分组下拉共用的连接类型图标。
-pub(super) fn connection_icon(connection: &Connection) -> IconName {
-    match connection {
-        Connection::Local(_) => IconName::Terminal,
-        Connection::Serial(_) => IconName::Cable,
-        Connection::Telnet(_) => IconName::Network,
-        Connection::Mosh(_) => IconName::Radio,
-        _ => IconName::Server,
-    }
 }
 
 /// 标签栏图标按钮参数属性。
@@ -111,7 +100,7 @@ pub(super) fn build_tiled_group_badge(
             ordinal: slot + 1,
             title,
             dot_color,
-            icon: connection_icon(&tab.session.connection),
+            icon: crate::connection::icon(&tab.session.connection),
             focused: slot == tiled.focused,
         });
     }

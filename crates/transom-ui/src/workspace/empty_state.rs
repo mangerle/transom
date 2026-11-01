@@ -22,7 +22,7 @@ use gpui_kit::component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedi
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
-use transom_core::{Connection, Session};
+use transom_core::Session;
 
 /// 品牌 Logo 显示边长（rem）。
 const LOGO_SIZE: f32 = 3.5;
@@ -174,26 +174,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let session_id = session.id;
-        let (default_icon, detail_text) = match &session.connection {
-            Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
-            Connection::Mosh(mosh) => (
-                IconName::Radio,
-                format!("mosh {}@{}", mosh.username, mosh.host),
-            ),
-            Connection::Telnet(telnet) => (
-                IconName::Network,
-                format!("{}:{}", telnet.host, telnet.port),
-            ),
-            Connection::Local(local) => {
-                let shell = local.shell.as_deref().unwrap_or("sh");
-                (IconName::Terminal, shell.to_string())
-            }
-            Connection::Serial(serial) => (
-                IconName::Cable,
-                format!("{} @ {}", serial.port, serial.baud_rate),
-            ),
-            _ => (IconName::Server, String::new()),
-        };
+        let default_icon = crate::connection::icon(&session.connection);
+        let detail_text = crate::connection::display_compact(&session.connection);
 
         let icon = session_icon(session.icon).unwrap_or(default_icon);
         let color = session_color(session.color).unwrap_or(p.foreground);

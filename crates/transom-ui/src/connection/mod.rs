@@ -2,9 +2,11 @@
 
 mod auth_dialog;
 mod local_and_quick;
+mod presentation;
 mod secrets;
 
-pub(crate) use secrets::{describe_target, session_host};
+pub(crate) use presentation::{describe_target, display_compact, display_with_port, icon};
+pub(crate) use secrets::session_host;
 
 use crate::app::app_settings;
 use crate::app::app_settings_mut;

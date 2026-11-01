@@ -5,27 +5,6 @@ use transom_core::{
     AuthMethod, Connection, ConnectionSecrets, SecretKey, SecretKind, SecretStore, Session,
 };
 
-/// 连接目标的展示描述：`user@host:port`，本地与串口按各自口径。
-pub(crate) fn describe_target(session: &Session) -> String {
-    match &session.connection {
-        Connection::Ssh(ssh) => format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
-        Connection::Mosh(mosh) => format!("mosh {}@{}:{}", mosh.username, mosh.host, mosh.ssh_port),
-        Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
-        Connection::Local(local) => rust_i18n::t!(
-            "connection.local_terminal",
-            shell = local.shell.as_deref().unwrap_or("sh")
-        )
-        .to_string(),
-        Connection::Serial(serial) => rust_i18n::t!(
-            "connection.serial",
-            port = serial.port,
-            baud = serial.baud_rate
-        )
-        .to_string(),
-        _ => rust_i18n::t!("connection.unknown").to_string(),
-    }
-}
-
 /// 会话的对端主机地址；本地终端与串口没有主机可言，返回 `None` 供界面隐藏入口。
 ///
 /// 设计原理（Why）：

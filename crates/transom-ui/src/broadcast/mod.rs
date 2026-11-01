@@ -23,7 +23,7 @@ use gpui_kit::*;
 use std::collections::HashSet;
 mod rows;
 
-use rows::{BroadcastTargetRow, connection_icon, render_target_rows};
+use rows::{BroadcastTargetRow, render_target_rows};
 use transom_core::{GroupId, TabId};
 
 /// 广播条的运行期状态。
@@ -310,7 +310,7 @@ impl AppShell {
                     tab_id: *pane_id,
                     title,
                     dot_color,
-                    icon: connection_icon(&tab.session.connection),
+                    icon: crate::connection::icon(&tab.session.connection),
                     selected: self.state.broadcast.targets.contains(pane_id),
                 });
             }

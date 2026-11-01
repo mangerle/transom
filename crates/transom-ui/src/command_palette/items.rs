@@ -16,7 +16,7 @@ use gpui_kit::component::command::{CommandGroup, CommandItem};
 use gpui_kit::component::theme::ThemeRegistry;
 use gpui_kit::*;
 use transom_core::AppSettings;
-use transom_core::{Connection, SessionId, SnippetId, preset_themes};
+use transom_core::{SessionId, SnippetId, preset_themes};
 
 /// 面板条目的落点；Action 条目的动作已挂在 `CommandItem` 上，由组件派发。
 #[derive(Clone)]
@@ -95,29 +95,8 @@ impl AppState {
         }
 
         for session in &self.catalog.sessions {
-            let (detail, icon_name) = match &session.connection {
-                Connection::Ssh(ssh) => (
-                    format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
-                    IconName::Server,
-                ),
-                Connection::Mosh(mosh) => (
-                    format!("Mosh: {}@{}:{}", mosh.username, mosh.host, mosh.ssh_port),
-                    IconName::Radio,
-                ),
-                Connection::Telnet(telnet) => (
-                    format!("Telnet: {}:{}", telnet.host, telnet.port),
-                    IconName::Network,
-                ),
-                Connection::Local(local) => {
-                    let shell = local.shell.as_deref().unwrap_or("sh");
-                    (format!("Local: {shell}"), IconName::Terminal)
-                }
-                Connection::Serial(serial) => (
-                    format!("Serial: {} @ {}", serial.port, serial.baud_rate),
-                    IconName::Cable,
-                ),
-                _ => (String::new(), IconName::Server),
-            };
+            let detail = crate::connection::display_with_port(&session.connection);
+            let icon_name = crate::connection::icon(&session.connection);
 
             let mut keywords: Vec<SharedString> = vec![session.name.clone().into(), detail.into()];
             if let Some(folder_id) = session.folder_id

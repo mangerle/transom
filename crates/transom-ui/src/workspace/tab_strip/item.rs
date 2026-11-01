@@ -18,9 +18,7 @@ use transom_core::{Connection, GroupId, SplitAxis, TabId};
 mod item_parts;
 
 use self::item_parts::{render_pane_badge, render_tab_close_button};
-use super::badges::{
-    PaneRow, build_tab_tooltip, build_tiled_group_badge, calculate_dot_color, connection_icon,
-};
+use super::badges::{PaneRow, build_tab_tooltip, build_tiled_group_badge, calculate_dot_color};
 use super::menu::{TabContextMenuParams, build_tab_context_menu};
 use crate::app::app_settings;
 use crate::connection::session_host;
@@ -119,7 +117,7 @@ pub(super) fn render_tab_entry(
     } else if tab.is_monitor() {
         IconName::Gauge
     } else {
-        connection_icon(&tab.session.connection)
+        crate::connection::icon(&tab.session.connection)
     };
 
     let appearance = shell.session_appearance(tab);

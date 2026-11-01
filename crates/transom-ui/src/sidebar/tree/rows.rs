@@ -5,7 +5,7 @@
 
 use super::{FolderRow, SessionRow, SidebarRow};
 use std::collections::{HashMap, HashSet};
-use transom_core::{Connection, FolderId, Session, SessionCatalog, SessionFolder, SessionId};
+use transom_core::{FolderId, Session, SessionCatalog, SessionFolder, SessionId};
 
 pub(crate) fn build_rows(catalog: &SessionCatalog, query: &str) -> Vec<SidebarRow> {
     let query = query.trim().to_ascii_lowercase();
@@ -155,18 +155,7 @@ fn subtree_counts(
 }
 
 fn session_matches(session: &Session, query: &str, folder_path: &str) -> bool {
-    let endpoint = match &session.connection {
-        Connection::Ssh(ssh) => format!("{} {} {}", ssh.username, ssh.host, ssh.port),
-        Connection::Mosh(mosh) => format!("mosh {} {} {}", mosh.username, mosh.host, mosh.ssh_port),
-        Connection::Telnet(telnet) => format!("telnet {} {}", telnet.host, telnet.port),
-        Connection::Local(local) => {
-            format!("local {}", local.shell.as_deref().unwrap_or("sh"))
-        }
-        Connection::Serial(serial) => {
-            format!("serial {} {} {}", serial.port, serial.baud_rate, "com tty")
-        }
-        _ => String::new(),
-    };
+    let endpoint = crate::connection::display_with_port(&session.connection);
     let haystack = format!(
         "{} {} {}",
         session.name.to_ascii_lowercase(),

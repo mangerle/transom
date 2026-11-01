@@ -5,8 +5,8 @@ use crate::sftp::SftpPanelView;
 use gpui_kit::*;
 use std::collections::{HashMap, VecDeque};
 use transom_core::{
-    Connection, ConnectionId, ForwardId, ForwardStatus, GroupId, NetworkTraffic, Session,
-    SessionId, SystemStats, TabId,
+    ConnectionId, ForwardId, ForwardStatus, GroupId, NetworkTraffic, Session, SessionId,
+    SystemStats, TabId,
 };
 use transom_terminal::TerminalView;
 
@@ -177,14 +177,7 @@ impl TerminalTab {
         if !name.is_empty() {
             return name.to_string();
         }
-        match &self.session.connection {
-            Connection::Ssh(ssh) => format!("{}@{}", ssh.username, ssh.host),
-            Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
-            Connection::Serial(serial) => serial.port.clone(),
-            Connection::Local(local) => local.shell.clone().unwrap_or_else(|| "shell".to_string()),
-            Connection::Mosh(mosh) => format!("{}@{}", mosh.username, mosh.host),
-            _ => self.title.clone(),
-        }
+        crate::connection::display_compact(&self.session.connection)
     }
 
     /// 标签栏主名：运行期标题优先，空标题回落到会话身份名。

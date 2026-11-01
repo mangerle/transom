@@ -56,13 +56,13 @@ pub(super) fn render_vertical_tab_row(
     } else {
         title.clone()
     };
-    let subtitle = connection_detail(&tab.session.connection);
+    let subtitle = crate::connection::display_compact(&tab.session.connection);
     let is_local = matches!(tab.session.connection, Connection::Local(_));
     let (dot_color, _) = pane_status_indicator(&tab.status, p);
     let appearance = shell.session_appearance(tab);
     let icon = appearance
         .icon
-        .unwrap_or_else(|| connection_icon(&tab.session.connection));
+        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection));
     let icon_color = appearance.color.unwrap_or(if active {
         p.sidebar_accent_foreground
     } else {
@@ -323,27 +323,4 @@ pub(super) fn render_vertical_tab_row(
     .tooltip(move |_window, cx| Tooltip::new(tooltip_label.clone()).build(_window, cx));
 
     Some(row.into_any_element())
-}
-
-/// 行副标题：主机地址或本地 Shell 名，没有可展示信息时为空串。
-fn connection_detail(connection: &Connection) -> String {
-    match connection {
-        Connection::Ssh(ssh) => format!("{}@{}", ssh.username, ssh.host),
-        Connection::Mosh(mosh) => format!("{}@{}", mosh.username, mosh.host),
-        Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
-        Connection::Local(local) => local.shell.clone().unwrap_or_default(),
-        Connection::Serial(serial) => serial.port.clone(),
-        _ => String::new(),
-    }
-}
-
-/// 连接类型图标：与横向标签栏使用同一套映射。
-pub(super) fn connection_icon(connection: &Connection) -> IconName {
-    match connection {
-        Connection::Local(_) => IconName::Terminal,
-        Connection::Serial(_) => IconName::Cable,
-        Connection::Telnet(_) => IconName::Network,
-        Connection::Mosh(_) => IconName::Radio,
-        _ => IconName::Server,
-    }
 }

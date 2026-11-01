@@ -16,7 +16,7 @@ use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{Connection, HostAction, SessionId};
+use transom_core::{HostAction, SessionId};
 
 impl AppShell {
     /// 渲染单个会话树行，支持连接状态着色、双击连接、拖放排序与右键菜单。
@@ -34,26 +34,9 @@ impl AppShell {
         // 右键菜单在渲染期就把地址算好带走：菜单闭包运行时会话行早已渲染完，
         // 届时再回查 row 的借用不成立。
         let menu_host = session_host(session).map(str::to_string);
-        let (icon_name, detail_text) = match &session.connection {
-            Connection::Ssh(ssh) => (IconName::Server, format!("{}@{}", ssh.username, ssh.host)),
-            Connection::Mosh(mosh) => (
-                IconName::Radio,
-                format!("mosh {}@{}", mosh.username, mosh.host),
-            ),
-            Connection::Telnet(telnet) => (
-                IconName::Network,
-                format!("Telnet: {}:{}", telnet.host, telnet.port),
-            ),
-            Connection::Local(local) => {
-                let shell = local.shell.as_deref().unwrap_or("sh");
-                (IconName::Terminal, format!("Local: {shell}"))
-            }
-            Connection::Serial(serial) => (
-                IconName::Cable,
-                format!("Serial: {} @ {}", serial.port, serial.baud_rate),
-            ),
-            _ => (IconName::Server, String::new()),
-        };
+        let icon_name = crate::connection::icon(&session.connection);
+        let detail_text = crate::connection::display_compact(&session.connection);
+
         // 会话专属图标覆盖连接类型图标；环境色直接染在图标上：侧栏行里没有
         // 放竖杠的位置，图标着色既能标出环境，又不挤占名称与详情的宽度。
         let session_color = session_color(session.color);

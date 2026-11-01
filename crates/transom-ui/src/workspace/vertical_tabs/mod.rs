@@ -79,7 +79,7 @@ impl AppState {
                     session.name.clone()
                 },
                 icon: session_icon(session.icon)
-                    .unwrap_or_else(|| item::connection_icon(&session.connection)),
+                    .unwrap_or_else(|| crate::connection::icon(&session.connection)),
             };
             let Some(folder_id) = session.folder_id else {
                 root.push(entry);
