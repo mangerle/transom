@@ -147,6 +147,82 @@ impl EditorPanels {
     /// 读取态与新建态共用一套装配，只差初始状态字段（见 `PanelSeed`）；
     /// 新建面板可编辑、无在途任务，读取面板等待 `SftpTextRead` 装载内容。
     /// 返回读取请求：只有读取态需要外壳投递 `ReadText`。
+    /// 编辑器输入与光标订阅：标记脏状态、同步光标并避免自激重绘。
+    fn subscribe_editor(
+        &mut self,
+        editor: &Entity<EditorState>,
+        cx: &mut Context<Self>,
+    ) -> (Subscription, Subscription) {
+        let change_sub = cx.subscribe(editor, |this, editor, event: &InputEvent, cx| {
+            if !matches!(event, InputEvent::Change) {
+                return;
+            }
+            if let Some(item) = this
+                .manager_mut()
+                .panels
+                .iter_mut()
+                .find(|item| item.editor == editor)
+            {
+                // 未成功装载远端内容的缓冲区不允许变成"可保存的改动"，
+                // 否则读取失败后随手打几个字就能把远端文件覆盖掉。
+                if !item.loaded {
+                    return;
+                }
+                item.dirty = true;
+                item.phase = EditorPhase::Idle;
+                item.written_size = None;
+                item.error = None;
+            }
+            cx.notify();
+        });
+        // 光标移动只 notify、不 emit 事件，因此观察通知本身；只在行列真的变了时
+        // 才重绘，既让状态栏实时，也切断「面板重绘 → 编辑器通知 → 面板重绘」的自激。
+        let caret_sub = cx.observe(editor, |this, editor, cx| {
+            let next = caret_of(&editor, cx);
+            let changed = this
+                .manager_mut()
+                .panels
+                .iter_mut()
+                .find(|item| item.editor == editor)
+                .is_some_and(|item| {
+                    if item.caret == next {
+                        false
+                    } else {
+                        item.caret = next;
+                        true
+                    }
+                });
+            if changed {
+                cx.notify();
+            }
+        });
+        (change_sub, caret_sub)
+    }
+
+    /// 按权限设置只读、聚焦并读取初始光标位置。
+    fn prepare_editor_state(
+        &self,
+        editor: &Entity<EditorState>,
+        seed: &PanelSeed,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (Option<u32>, bool, (u32, u32)) {
+        // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
+        // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。
+        // 新建文件没有已存在的权限位可依据，视作可写。
+        let permissions = match &seed {
+            PanelSeed::Reading { permissions, .. } => *permissions,
+            PanelSeed::NewFile => None,
+        };
+        let writable = permissions_writable(permissions);
+        if !writable {
+            editor.update(cx, |state, cx| state.set_readonly(true, cx));
+        }
+        editor.update(cx, |state, cx| state.focus(window, cx));
+        let caret = caret_of(editor, cx);
+        (permissions, writable, caret)
+    }
+
     pub(crate) fn spawn_editor_panel(
         &mut self,
         params: SpawnEditorPanelParams,
@@ -173,65 +249,11 @@ impl EditorPanels {
                 .searchable(true)
                 .soft_wrap(settings.soft_wrap)
         });
-        // 无写权限的文件（如 444 的密钥、锁定的配置）直接按只读打开：
-        // 用户能看到内容但编辑器拒绝输入，避免改完才发现保存必然失败。
-        // 新建文件没有已存在的权限位可依据，视作可写。
-        let permissions = match &seed {
-            PanelSeed::Reading { permissions, .. } => *permissions,
-            PanelSeed::NewFile => None,
-        };
-        let writable = permissions_writable(permissions);
-        if !writable {
-            editor.update(cx, |state, cx| state.set_readonly(true, cx));
-        }
-        editor.update(cx, |state, cx| state.focus(window, cx));
-        let caret = caret_of(&editor, cx);
+        let (permissions, writable, caret) = self.prepare_editor_state(&editor, &seed, window, cx);
         let cascade = self.len();
         let viewport = window.viewport_size();
         let (left, top) = cascade_origin(cascade, viewport);
-        let change_sub = cx.subscribe(&editor, |this, editor, event: &InputEvent, cx| {
-            if !matches!(event, InputEvent::Change) {
-                return;
-            }
-            if let Some(item) = this
-                .manager_mut()
-                .panels
-                .iter_mut()
-                .find(|item| item.editor == editor)
-            {
-                // 未成功装载远端内容的缓冲区不允许变成"可保存的改动"，
-                // 否则读取失败后随手打几个字就能把远端文件覆盖掉。
-                if !item.loaded {
-                    return;
-                }
-                item.dirty = true;
-                item.phase = EditorPhase::Idle;
-                item.written_size = None;
-                item.error = None;
-            }
-            cx.notify();
-        });
-        // 光标移动只 notify、不 emit 事件，因此观察通知本身；只在行列真的变了时
-        // 才重绘，既让状态栏实时，也切断「面板重绘 → 编辑器通知 → 面板重绘」的自激。
-        let caret_sub = cx.observe(&editor, |this, editor, cx| {
-            let next = caret_of(&editor, cx);
-            let changed = this
-                .manager_mut()
-                .panels
-                .iter_mut()
-                .find(|item| item.editor == editor)
-                .is_some_and(|item| {
-                    if item.caret == next {
-                        false
-                    } else {
-                        item.caret = next;
-                        true
-                    }
-                });
-            if changed {
-                cx.notify();
-            }
-        });
+        let (change_sub, caret_sub) = self.subscribe_editor(&editor, cx);
         let (loaded, phase, pending_op, remote_meta, new_file) = match seed {
             PanelSeed::Reading { op_id, .. } => {
                 (false, EditorPhase::Reading, Some(op_id), None, false)
