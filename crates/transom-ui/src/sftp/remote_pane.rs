@@ -354,50 +354,13 @@ impl SftpPanelView {
                     })
                     .on_drop(move |drag: &SftpDragItem, _window, cx| {
                         let item = drag.clone();
-                        let dir = target_dir.clone();
-                        app_drop.update(cx, |this, cx| {
-                            if item.source_connection_id == Some(connection_id) {
-                                return; // 同端内部不触发
-                            }
-                            if let Some(src_conn) = item.source_connection_id {
-                                for path in &item.paths {
-                                    let fname = path.rsplit('/').next().unwrap_or(path);
-                                    let target_path =
-                                        format!("{}/{}", dir.trim_end_matches('/'), fname);
-                                    this.enqueue_remote_transfer(
-                                        tab_id,
-                                        SftpRemoteCopyParams {
-                                            source_connection_id: src_conn,
-                                            source_path: path.clone(),
-                                            target_connection_id: connection_id,
-                                            target_path,
-                                            is_dir: item.is_dir,
-                                        },
-                                        cx,
-                                    );
-                                }
-                            } else {
-                                for path_str in &item.paths {
-                                    let path_buf = std::path::PathBuf::from(path_str);
-                                    let fname = path_buf
-                                        .file_name()
-                                        .map(|n| n.to_string_lossy().to_string())
-                                        .unwrap_or_else(|| "upload".into());
-                                    let target_path =
-                                        format!("{}/{}", dir.trim_end_matches('/'), fname);
-                                    this.enqueue_transfer(
-                                        SftpTransferRequest {
-                                            tab_id,
-                                            connection_id,
-                                            direction: TransferDirection::Upload,
-                                            is_dir: item.is_dir,
-                                            local_path: path_buf,
-                                            remote_path: target_path,
-                                        },
-                                        cx,
-                                    );
-                                }
-                            }
+                        let target_info = SftpDropTarget {
+                            tab_id,
+                            connection_id,
+                            dir: target_dir.clone(),
+                        };
+                        app_drop.update(cx, move |this, cx| {
+                            drop_remote_item(this, &item, &target_info, cx);
                         });
                     })
                     .child(content)
@@ -413,6 +376,69 @@ impl SftpPanelView {
                     }),
             )
             .into_any_element()
+    }
+}
+
+/// 远端拖放目标：标签、连接与目标目录。
+struct SftpDropTarget {
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    dir: String,
+}
+
+/// 把拖入的远端条目转成跨列复制或本地上传请求。
+fn drop_remote_item(
+    this: &mut SftpPanelView,
+    item: &SftpDragItem,
+    target_info: &SftpDropTarget,
+    cx: &mut Context<SftpPanelView>,
+) {
+    let SftpDropTarget {
+        tab_id,
+        connection_id,
+        dir,
+    } = target_info;
+    let tab_id = *tab_id;
+    let connection_id = *connection_id;
+    if item.source_connection_id == Some(connection_id) {
+        return; // 同端内部不触发
+    }
+    if let Some(src_conn) = item.source_connection_id {
+        for path in &item.paths {
+            let fname = path.rsplit('/').next().unwrap_or(path);
+            let target_path = format!("{}/{}", dir.trim_end_matches('/'), fname);
+            this.enqueue_remote_transfer(
+                tab_id,
+                SftpRemoteCopyParams {
+                    source_connection_id: src_conn,
+                    source_path: path.clone(),
+                    target_connection_id: connection_id,
+                    target_path,
+                    is_dir: item.is_dir,
+                },
+                cx,
+            );
+        }
+    } else {
+        for path_str in &item.paths {
+            let path_buf = std::path::PathBuf::from(path_str);
+            let fname = path_buf
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "upload".into());
+            let target_path = format!("{}/{}", dir.trim_end_matches('/'), fname);
+            this.enqueue_transfer(
+                SftpTransferRequest {
+                    tab_id,
+                    connection_id,
+                    direction: TransferDirection::Upload,
+                    is_dir: item.is_dir,
+                    local_path: path_buf,
+                    remote_path: target_path,
+                },
+                cx,
+            );
+        }
     }
 }
 
