@@ -178,50 +178,35 @@ impl MonitorView {
 
         header = header.child(actions);
 
-        // OOM 警报 Banner
-        let mut oom_banner = None;
-        if let Some(stats_ref) = &stats
-            && let Some(oom) = &stats_ref.recent_oom
-        {
-            oom_banner = Some(
-                h_flex()
-                    .w_full()
-                    .gap_2()
-                    .p_2p5()
-                    .rounded_md()
-                    .bg(p.danger.opacity(0.15))
-                    .border_1()
-                    .border_color(p.danger.opacity(0.4))
-                    .items_center()
-                    .child(
-                        Icon::new(IconName::TriangleAlert)
-                            .small()
-                            .text_color(p.danger),
-                    )
-                    .child(
-                        v_flex()
-                            .gap_0p5()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(p.danger)
-                                    .child(rust_i18n::t!("monitor.view.oom_title").to_string()),
-                            )
-                            .child(
-                                div().text_xs().text_color(p.foreground).child(
-                                    rust_i18n::t!(
-                                        "monitor.view.oom_killed_full",
-                                        name = &oom.process_name,
-                                        pid = oom.pid
-                                    )
-                                    .to_string(),
-                                ),
-                            ),
-                    ),
-            );
-        }
+        let oom_banner = render_oom_banner(&stats, p);
+        let content = self.render_tab_body(&stats, oom_banner, cx, p);
 
+        v_flex()
+            .size_full()
+            .bg(p.background)
+            .child(header)
+            .child(
+                div()
+                    .id("monitor-tab-scroll-viewport")
+                    .size_full()
+                    .flex_1()
+                    .overflow_y_scroll()
+                    .p_4()
+                    .child(content),
+            )
+            .into_any_element()
+    }
+}
+
+impl MonitorView {
+    /// 全屏看板主体：有样本时画双列指标 + 进程卡；无样本时显示等待态。
+    fn render_tab_body(
+        &mut self,
+        stats: &Option<transom_core::SystemStats>,
+        oom_banner: Option<AnyElement>,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
         // 主体内容
         let content = if let Some(stats) = &stats {
             let left_col = v_flex()
@@ -265,22 +250,57 @@ impl MonitorView {
                         .child(rust_i18n::t!("monitor.waiting").to_string()),
                 )
         };
-
-        v_flex()
-            .size_full()
-            .bg(p.background)
-            .child(header)
-            .child(
-                div()
-                    .id("monitor-tab-scroll-viewport")
-                    .size_full()
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .p_4()
-                    .child(content),
-            )
-            .into_any_element()
+        content.into_any_element()
     }
+}
+
+/// OOM 告警横幅：最近一次 OOM killer 记录存在时才出现。
+fn render_oom_banner(stats: &Option<transom_core::SystemStats>, p: &Palette) -> Option<AnyElement> {
+    // OOM 警报 Banner
+    let mut oom_banner = None;
+    if let Some(stats_ref) = &stats
+        && let Some(oom) = &stats_ref.recent_oom
+    {
+        oom_banner = Some(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .p_2p5()
+                .rounded_md()
+                .bg(p.danger.opacity(0.15))
+                .border_1()
+                .border_color(p.danger.opacity(0.4))
+                .items_center()
+                .child(
+                    Icon::new(IconName::TriangleAlert)
+                        .small()
+                        .text_color(p.danger),
+                )
+                .child(
+                    v_flex()
+                        .gap_0p5()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(p.danger)
+                                .child(rust_i18n::t!("monitor.view.oom_title").to_string()),
+                        )
+                        .child(
+                            div().text_xs().text_color(p.foreground).child(
+                                rust_i18n::t!(
+                                    "monitor.view.oom_killed_full",
+                                    name = &oom.process_name,
+                                    pid = oom.pid
+                                )
+                                .to_string(),
+                            ),
+                        ),
+                ),
+        );
+    }
+
+    oom_banner.map(IntoElement::into_any_element)
 }
 
 /// 全屏监控看板的渲染入参。
