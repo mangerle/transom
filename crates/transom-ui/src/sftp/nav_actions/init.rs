@@ -24,13 +24,14 @@ impl AppShell {
     /// 处理面板发来的意图事件。
     ///
     /// 只使用事件携带的数据，不回读面板：事件派发阶段面板仍处于租借中。
-    fn on_sftp_panel_event(&mut self, event: &crate::sftp::SftpPanelEvent, cx: &mut Context<Self>) {
+    /// 打开类事件：直接写入对应弹窗状态；返回是否已处理。
+    fn try_open_sftp_modal(
+        &mut self,
+        event: &crate::sftp::SftpPanelEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
         use crate::sftp::SftpPanelEvent;
         match event {
-            SftpPanelEvent::SendCommand(command) => {
-                self.state.send_command(command.clone());
-                cx.notify();
-            }
             SftpPanelEvent::OpenChmodModal {
                 tab_id,
                 connection_id,
@@ -52,34 +53,6 @@ impl AppShell {
             }
             SftpPanelEvent::OpenSearchModal(state) => {
                 self.state.sftp_modals.search = Some((**state).clone());
-                cx.notify();
-            }
-            SftpPanelEvent::OpenEditor(_)
-            | SftpPanelEvent::OpenInputModal(_)
-            | SftpPanelEvent::GrowPanelWidth(_) => {
-                // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
-                self.state.window_requests.push_sftp(event.clone());
-            }
-            SftpPanelEvent::OpenSyncModal(state) => {
-                self.state.sftp_modals.sync = Some((**state).clone());
-                cx.notify();
-            }
-            SftpPanelEvent::OpenFilterModal { textarea } => {
-                self.state.sftp_modals.filter = Some(crate::sftp::SftpFilterModalState {
-                    textarea: textarea.clone(),
-                    error: None,
-                });
-                cx.notify();
-            }
-            SftpPanelEvent::ClosePanel { tab_id } => {
-                self.state.close_sftp_panel(*tab_id);
-                cx.notify();
-            }
-            SftpPanelEvent::OpenLocalDiff { tab_id, target } => {
-                self.open_local_diff_with_target(*tab_id, target.clone(), cx);
-            }
-            SftpPanelEvent::SetStatus(message) => {
-                self.state.status = Some(message.clone());
                 cx.notify();
             }
             SftpPanelEvent::ShowProperties { scope, properties } => {
@@ -130,6 +103,51 @@ impl AppShell {
                 });
                 cx.notify();
             }
+            _ => return false,
+        }
+        true
+    }
+
+    fn on_sftp_panel_event(&mut self, event: &crate::sftp::SftpPanelEvent, cx: &mut Context<Self>) {
+        use crate::sftp::SftpPanelEvent;
+        if self.try_open_sftp_modal(event, cx) {
+            return;
+        }
+        match event {
+            SftpPanelEvent::SendCommand(command) => {
+                self.state.send_command(command.clone());
+                cx.notify();
+            }
+            SftpPanelEvent::OpenEditor(_)
+            | SftpPanelEvent::OpenInputModal(_)
+            | SftpPanelEvent::GrowPanelWidth(_) => {
+                // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
+                self.state.window_requests.push_sftp(event.clone());
+            }
+            SftpPanelEvent::OpenSyncModal(state) => {
+                self.state.sftp_modals.sync = Some((**state).clone());
+                cx.notify();
+            }
+            SftpPanelEvent::OpenFilterModal { textarea } => {
+                self.state.sftp_modals.filter = Some(crate::sftp::SftpFilterModalState {
+                    textarea: textarea.clone(),
+                    error: None,
+                });
+                cx.notify();
+            }
+            SftpPanelEvent::ClosePanel { tab_id } => {
+                self.state.close_sftp_panel(*tab_id);
+                cx.notify();
+            }
+            SftpPanelEvent::OpenLocalDiff { tab_id, target } => {
+                self.open_local_diff_with_target(*tab_id, target.clone(), cx);
+            }
+            SftpPanelEvent::SetStatus(message) => {
+                self.state.status = Some(message.clone());
+                cx.notify();
+            }
+            // 需要弹窗状态的分支已由 try_open_sftp_modal 处理。
+            _ => {}
         }
     }
 
