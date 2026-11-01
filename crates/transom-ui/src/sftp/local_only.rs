@@ -37,45 +37,15 @@ impl AppShell {
         // 终端上报过 OSC 7 就从当前 shell 目录打开；否则依次回落到会话配置的
         // 工作目录、Home、下载目录。本地终端默认从 Home 启动，把下载目录排在
         // 前面会让面板与终端看起来完全无关。
-        let session_dir = match &tab.session.connection {
-            Connection::Local(local) => local.working_dir.clone().filter(|path| path.is_dir()),
-            _ => None,
-        };
-        let local_path = tab
-            .cwd
-            .as_deref()
-            .and_then(normalize_local_cwd)
-            .or(session_dir)
-            .or_else(|| quick_paths.home.clone())
-            .or_else(|| quick_paths.downloads.clone())
-            .unwrap_or_else(|| PathBuf::from("."));
+        let local_path = initial_local_path(tab, &quick_paths);
         log::info!(
             "打开本地文件面板，窗格: {tab_id}，初始目录: {}，终端 cwd: {:?}",
             local_path.display(),
             tab.cwd
         );
-        let path_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.path").as_ref());
-        let name_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref());
-        let remote_filter_input = sftp_text_input(
-            window,
-            cx,
-            "",
-            rust_i18n::t!("sftp.sidebar.filter_remote_placeholder").as_ref(),
-        );
-        let local_path_input = sftp_text_input(
-            window,
-            cx,
-            &local_path.display().to_string(),
-            rust_i18n::t!("sftp.local_folder").as_ref(),
-        );
-        let local_filter_input = sftp_text_input(
-            window,
-            cx,
-            "",
-            rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
-        );
+        let inputs = LocalPanelInputs::new(window, cx, &local_path);
         let local_enter_sub = cx.subscribe_in(
-            &local_path_input,
+            &inputs.local_path_input,
             window,
             move |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { .. }) {
@@ -98,15 +68,15 @@ impl AppShell {
             open: true,
             remote: SftpRemotePaneState::new_main(
                 String::new(),
-                path_input,
-                name_input,
-                remote_filter_input,
+                inputs.path_input,
+                inputs.name_input,
+                inputs.remote_filter_input,
                 false,
             ),
             local: SftpLocalPaneState::new(SftpLocalPaneInit {
                 path: local_path,
-                path_input: local_path_input,
-                filter_input: local_filter_input,
+                path_input: inputs.local_path_input,
+                filter_input: inputs.local_filter_input,
                 quick_paths,
                 only: true,
                 error: None,
@@ -237,5 +207,61 @@ impl SftpPanelView {
             panel = panel.child(status_bar);
         }
         panel.into_any_element()
+    }
+}
+
+/// 本地面板初始目录：OSC 7 cwd → 会话工作目录 → Home → 下载目录。
+fn initial_local_path(tab: &crate::app::TerminalTab, quick_paths: &LocalQuickPaths) -> PathBuf {
+    let session_dir = match &tab.session.connection {
+        Connection::Local(local) => local.working_dir.clone().filter(|path| path.is_dir()),
+        _ => None,
+    };
+    tab.cwd
+        .as_deref()
+        .and_then(normalize_local_cwd)
+        .or(session_dir)
+        .or_else(|| quick_paths.home.clone())
+        .or_else(|| quick_paths.downloads.clone())
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// 本地面板创建时用到的输入框集合。
+struct LocalPanelInputs {
+    path_input: Entity<gpui_kit::component::input::InputState>,
+    name_input: Entity<gpui_kit::component::input::InputState>,
+    remote_filter_input: Entity<gpui_kit::component::input::InputState>,
+    local_path_input: Entity<gpui_kit::component::input::InputState>,
+    local_filter_input: Entity<gpui_kit::component::input::InputState>,
+}
+
+impl LocalPanelInputs {
+    fn new(window: &mut Window, cx: &mut Context<AppShell>, local_path: &std::path::Path) -> Self {
+        let path_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.path").as_ref());
+        let name_input = sftp_text_input(window, cx, "", rust_i18n::t!("sftp.name").as_ref());
+        let remote_filter_input = sftp_text_input(
+            window,
+            cx,
+            "",
+            rust_i18n::t!("sftp.sidebar.filter_remote_placeholder").as_ref(),
+        );
+        let local_path_input = sftp_text_input(
+            window,
+            cx,
+            &local_path.display().to_string(),
+            rust_i18n::t!("sftp.local_folder").as_ref(),
+        );
+        let local_filter_input = sftp_text_input(
+            window,
+            cx,
+            "",
+            rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
+        );
+        Self {
+            path_input,
+            name_input,
+            remote_filter_input,
+            local_path_input,
+            local_filter_input,
+        }
     }
 }
