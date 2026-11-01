@@ -139,15 +139,6 @@ impl SftpPanelView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let QueueHeaderParams {
-            tab_id,
-            queue_len,
-            resume_enabled,
-            verify_after_transfer,
-            max_concurrent_transfers,
-            queue_expanded,
-            failed_count,
-        } = params;
         h_flex()
             .px_3()
             .py_1()
@@ -158,149 +149,193 @@ impl SftpPanelView {
                 h_flex()
                     .gap_2()
                     .items_center()
+                    .child(self.render_queue_switches(params, p, cx))
+                    .child(self.render_concurrency_button(params, cx)),
+            )
+            .child(self.render_queue_controls(params, cx))
+            .into_any_element()
+    }
+
+    /// 队列标题、恢复开关与传输后校验开关。
+    fn render_queue_switches(
+        &self,
+        params: QueueHeaderParams,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let QueueHeaderParams {
+            queue_len,
+            resume_enabled,
+            verify_after_transfer,
+            ..
+        } = params;
+
+        h_flex()
+            .gap_2()
+            .items_center()
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(format!(
+                        "{} ({})",
+                        rust_i18n::t!("sftp.queue.title"),
+                        queue_len
+                    )),
+            )
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
                     .child(
                         div()
                             .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(format!(
-                                "{} ({})",
-                                rust_i18n::t!("sftp.queue.title"),
-                                queue_len
-                            )),
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("sftp.resume_transfer").to_string()),
                     )
                     .child(
-                        h_flex()
-                            .gap_1p5()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("sftp.resume_transfer").to_string()),
-                            )
-                            .child(
-                                Switch::new("toggle-resume")
-                                    .small()
-                                    .checked(resume_enabled)
-                                    .on_click(cx.listener(move |this, &checked, _, cx| {
-                                        this.state.queue.resume_enabled = checked;
-                                        cx.notify();
-                                    })),
-                            ),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_1p5()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("sftp.verify_after_transfer").to_string()),
-                            )
-                            .child(
-                                Switch::new("toggle-verify-after-transfer")
-                                    .small()
-                                    .checked(verify_after_transfer)
-                                    .on_click(cx.listener(move |_this, &checked, _, cx| {
-                                        update_app_settings(cx, |s| {
-                                            s.sftp.verify_after_transfer = checked;
-                                        });
-                                        let algo = app_settings(cx).sftp.checksum_algorithm.label();
-                                        let status = if checked {
-                                            rust_i18n::t!("sftp.queue.verify_on", algo = algo)
-                                                .to_string()
-                                        } else {
-                                            rust_i18n::t!("sftp.queue.verify_off", algo = algo)
-                                                .to_string()
-                                        };
-                                        cx.emit(crate::sftp::SftpPanelEvent::PersistSettings {
-                                            status,
-                                        });
-                                        cx.notify();
-                                    })),
-                            ),
-                    )
-                    .child(
-                        Button::new("sftp-concurrency")
-                            .ghost()
-                            .xsmall()
-                            .label(
-                                rust_i18n::t!(
-                                    "sftp.queue.concurrency",
-                                    count = max_concurrent_transfers
-                                )
-                                .to_string(),
-                            )
-                            .tooltip(rust_i18n::t!("sftp.queue.concurrency_tooltip").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.cycle_concurrency(tab_id, cx);
+                        Switch::new("toggle-resume")
+                            .small()
+                            .checked(resume_enabled)
+                            .on_click(cx.listener(move |this, &checked, _, cx| {
+                                this.state.queue.resume_enabled = checked;
+                                cx.notify();
                             })),
                     ),
             )
             .child(
                 h_flex()
-                    .gap_1()
-                    .when(failed_count > 0, |this| {
-                        this.child(
-                            Button::new("retry-all-failed")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::RotateCw)
-                                .label(
-                                    rust_i18n::t!("sftp.queue.retry_failed", count = failed_count)
-                                        .to_string(),
-                                )
-                                .tooltip(rust_i18n::t!("sftp.queue.retry_all_tooltip").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.retry_all_failed(tab_id, cx);
-                                })),
-                        )
-                    })
+                    .gap_1p5()
+                    .items_center()
                     .child(
-                        Button::new("sftp-filter-rules")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::ListFilter)
-                            .tooltip(rust_i18n::t!("sftp.queue.filter_rules_tooltip").to_string())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.open_filter_modal(window, cx);
-                            })),
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("sftp.verify_after_transfer").to_string()),
                     )
                     .child(
-                        Button::new("clear-queue-done")
-                            .ghost()
-                            .xsmall()
-                            .label(rust_i18n::t!("sftp.clear_done").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.queue_clear_done(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("toggle-queue-exp")
-                            .ghost()
-                            .xsmall()
-                            .icon(if queue_expanded {
-                                IconName::ChevronDown
-                            } else {
-                                IconName::ChevronUp
-                            })
-                            .tooltip(if queue_expanded {
-                                rust_i18n::t!("sftp.queue.collapse").to_string()
-                            } else {
-                                rust_i18n::t!("sftp.queue.expand").to_string()
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.state.queue.expanded = !this.state.queue.expanded;
+                        Switch::new("toggle-verify-after-transfer")
+                            .small()
+                            .checked(verify_after_transfer)
+                            .on_click(cx.listener(move |_this, &checked, _, cx| {
+                                update_app_settings(cx, |s| {
+                                    s.sftp.verify_after_transfer = checked;
+                                });
+                                let algo = app_settings(cx).sftp.checksum_algorithm.label();
+                                let status = if checked {
+                                    rust_i18n::t!("sftp.queue.verify_on", algo = algo).to_string()
+                                } else {
+                                    rust_i18n::t!("sftp.queue.verify_off", algo = algo).to_string()
+                                };
+                                cx.emit(crate::sftp::SftpPanelEvent::PersistSettings { status });
                                 cx.notify();
                             })),
                     ),
             )
             .into_any_element()
     }
+
+    /// 并发数循环切换按钮。
+    fn render_concurrency_button(
+        &self,
+        params: QueueHeaderParams,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let QueueHeaderParams {
+            tab_id,
+            max_concurrent_transfers,
+            ..
+        } = params;
+
+        Button::new("sftp-concurrency")
+            .ghost()
+            .xsmall()
+            .label(
+                rust_i18n::t!("sftp.queue.concurrency", count = max_concurrent_transfers)
+                    .to_string(),
+            )
+            .tooltip(rust_i18n::t!("sftp.queue.concurrency_tooltip").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.cycle_concurrency(tab_id, cx);
+            }))
+            .into_any_element()
+    }
+
+    /// 失败重试、过滤规则、清理已完成与折叠动作。
+    fn render_queue_controls(
+        &self,
+        params: QueueHeaderParams,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let QueueHeaderParams {
+            tab_id,
+            queue_expanded,
+            failed_count,
+            ..
+        } = params;
+
+        h_flex()
+            .gap_1()
+            .when(failed_count > 0, |this| {
+                this.child(
+                    Button::new("retry-all-failed")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::RotateCw)
+                        .label(
+                            rust_i18n::t!("sftp.queue.retry_failed", count = failed_count)
+                                .to_string(),
+                        )
+                        .tooltip(rust_i18n::t!("sftp.queue.retry_all_tooltip").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.retry_all_failed(tab_id, cx);
+                        })),
+                )
+            })
+            .child(
+                Button::new("sftp-filter-rules")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::ListFilter)
+                    .tooltip(rust_i18n::t!("sftp.queue.filter_rules_tooltip").to_string())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_filter_modal(window, cx);
+                    })),
+            )
+            .child(
+                Button::new("clear-queue-done")
+                    .ghost()
+                    .xsmall()
+                    .label(rust_i18n::t!("sftp.clear_done").to_string())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.queue_clear_done(cx);
+                    })),
+            )
+            .child(
+                Button::new("toggle-queue-exp")
+                    .ghost()
+                    .xsmall()
+                    .icon(if queue_expanded {
+                        IconName::ChevronDown
+                    } else {
+                        IconName::ChevronUp
+                    })
+                    .tooltip(if queue_expanded {
+                        rust_i18n::t!("sftp.queue.collapse").to_string()
+                    } else {
+                        rust_i18n::t!("sftp.queue.expand").to_string()
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.state.queue.expanded = !this.state.queue.expanded;
+                        cx.notify();
+                    })),
+            )
+            .into_any_element()
+    }
 }
 
 /// 队列标题栏参数：计数与开关值都由调用方读好。
+#[derive(Clone, Copy)]
 struct QueueHeaderParams {
     tab_id: transom_core::TabId,
     queue_len: usize,
