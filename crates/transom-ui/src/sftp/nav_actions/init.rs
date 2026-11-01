@@ -58,7 +58,7 @@ impl AppShell {
             | SftpPanelEvent::OpenInputModal(_)
             | SftpPanelEvent::GrowPanelWidth(_) => {
                 // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
-                self.state.pending_sftp_requests.push(event.clone());
+                self.state.window_requests.push_sftp(event.clone());
             }
             SftpPanelEvent::OpenSyncModal(state) => {
                 self.state.sftp_modals.sync = Some((**state).clone());

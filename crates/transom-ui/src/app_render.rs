@@ -87,26 +87,26 @@ impl AppShell {
     }
 
     /// 执行编辑面板排队的窗口动作。
-    fn flush_pending_editor_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// 执行一条编辑面板窗口动作。
+    fn handle_editor_request(
+        &mut self,
+        request: crate::editor::EditorPanelEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         use crate::editor::EditorPanelEvent;
-        if self.state.pending_editor_requests.is_empty() {
-            return;
-        }
-        let requests = std::mem::take(&mut self.state.pending_editor_requests);
-        for request in requests {
-            match request {
-                EditorPanelEvent::OpenGotoLine(editor) => {
-                    self.open_editor_goto_line(editor, window, cx);
-                }
-                EditorPanelEvent::FocusSftpPanel => self.focus_active_sftp_panel(window, cx),
-                EditorPanelEvent::ResumePendingClose => {
-                    self.defer_editor_close_resume(window, cx);
-                }
-                EditorPanelEvent::OpenLocalDiff(source) => {
-                    self.open_editor_local_diff(source, cx);
-                }
-                EditorPanelEvent::ListOpenChanged => cx.notify(),
+        match request {
+            EditorPanelEvent::OpenGotoLine(editor) => {
+                self.open_editor_goto_line(editor, window, cx);
             }
+            EditorPanelEvent::FocusSftpPanel => self.focus_active_sftp_panel(window, cx),
+            EditorPanelEvent::ResumePendingClose => {
+                self.defer_editor_close_resume(window, cx);
+            }
+            EditorPanelEvent::OpenLocalDiff(source) => {
+                self.open_editor_local_diff(source, cx);
+            }
+            EditorPanelEvent::ListOpenChanged => cx.notify(),
         }
     }
 
@@ -127,31 +127,31 @@ impl AppShell {
     }
 
     /// 执行监控面板排队的窗口动作。
-    fn flush_pending_monitor_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// 执行一条监控面板窗口动作。
+    fn handle_monitor_request(
+        &mut self,
+        request: crate::monitor::MonitorPanelEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         use crate::monitor::MonitorPanelEvent;
-        if self.state.pending_monitor_requests.is_empty() {
-            return;
-        }
-        let requests = std::mem::take(&mut self.state.pending_monitor_requests);
-        for request in requests {
-            match request {
-                MonitorPanelEvent::DrawerWidthChanged(width) => {
-                    self.apply_monitor_drawer_width(width, window, cx);
-                }
-                MonitorPanelEvent::MaximizeToTab => {
-                    self.maximize_monitor_to_tab(window, cx);
-                }
-                MonitorPanelEvent::DockToDrawer {
-                    tab_id,
-                    target_tab_id,
-                } => {
-                    self.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx);
-                }
-                MonitorPanelEvent::ClosePane { tab_id } => {
-                    self.close_pane(tab_id, window, cx);
-                }
-                _ => {}
+        match request {
+            MonitorPanelEvent::DrawerWidthChanged(width) => {
+                self.apply_monitor_drawer_width(width, window, cx);
             }
+            MonitorPanelEvent::MaximizeToTab => {
+                self.maximize_monitor_to_tab(window, cx);
+            }
+            MonitorPanelEvent::DockToDrawer {
+                tab_id,
+                target_tab_id,
+            } => {
+                self.dock_monitor_to_drawer(tab_id, target_tab_id, window, cx);
+            }
+            MonitorPanelEvent::ClosePane { tab_id } => {
+                self.close_pane(tab_id, window, cx);
+            }
+            _ => {}
         }
     }
 
@@ -193,24 +193,41 @@ impl AppShell {
     }
 
     /// 执行面板在事件里排队的窗口动作。
-    fn flush_pending_sftp_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// 执行一条 SFTP 面板窗口动作。
+    fn handle_sftp_request(
+        &mut self,
+        request: crate::sftp::SftpPanelEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         use crate::sftp::SftpPanelEvent;
-        if self.state.pending_sftp_requests.is_empty() {
+        match request {
+            SftpPanelEvent::OpenEditor(params) => {
+                self.open_remote_editor_panel(params, window, cx);
+            }
+            SftpPanelEvent::OpenInputModal(params) => {
+                self.open_sftp_input_modal(params, window, cx);
+            }
+            SftpPanelEvent::GrowPanelWidth(extra) => {
+                self.grow_sftp_panel_width(extra, window, cx);
+            }
+            _ => {}
+        }
+    }
+
+    /// 统一消费本轮全部窗口请求，按入队顺序执行。
+    fn flush_window_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::app::WindowRequest;
+        if self.state.window_requests.is_empty() {
             return;
         }
-        let requests = std::mem::take(&mut self.state.pending_sftp_requests);
+        let requests = self.state.window_requests.take();
         for request in requests {
             match request {
-                SftpPanelEvent::OpenEditor(params) => {
-                    self.open_remote_editor_panel(params, window, cx);
-                }
-                SftpPanelEvent::OpenInputModal(params) => {
-                    self.open_sftp_input_modal(params, window, cx);
-                }
-                SftpPanelEvent::GrowPanelWidth(extra) => {
-                    self.grow_sftp_panel_width(extra, window, cx);
-                }
-                _ => {}
+                WindowRequest::Sftp(event) => self.handle_sftp_request(event, window, cx),
+                WindowRequest::Monitor(event) => self.handle_monitor_request(event, window, cx),
+                WindowRequest::Editor(event) => self.handle_editor_request(event, window, cx),
+                WindowRequest::Settings(event) => self.handle_settings_request(event, window, cx),
             }
         }
     }
@@ -514,13 +531,11 @@ impl AppShell {
             self.state.set_error(localized_error(&error));
         }
         // 面板请求的"需要窗口"的动作在渲染期统一执行：事件派发阶段没有 Window。
-        self.flush_pending_sftp_requests(window, cx);
+
         self.refresh_sftp_mount_candidates(cx);
         self.refresh_forward_panel_data(cx);
         self.refresh_monitor_stats(cx);
-        self.flush_pending_editor_requests(window, cx);
-        self.flush_pending_monitor_requests(window, cx);
-        self.flush_pending_settings_requests(window, cx);
+        self.flush_window_requests(window, cx);
     }
 }
 

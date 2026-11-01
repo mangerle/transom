@@ -3,7 +3,7 @@
 //! 设置实体只改自己领域内的状态；活窗格外观、SFTP 列宽、监控采样、云同步与
 //! 文件选择器都属于窗口级动作，集中在这里由外壳执行。处理函数运行在实体
 //! 事件派发阶段，**不得回读设置实体**：事件已自带快照，需要窗口的动作排进
-//! `pending_settings_requests`，由 [`AppShell::flush_pending_settings_requests`]
+//! `window_requests`，由 [`AppShell::flush_window_requests`]
 //! 在渲染期执行。
 
 use super::{SettingsEvent, SettingsRequest};
@@ -81,38 +81,38 @@ impl AppShell {
             }
             SettingsEvent::OpenShortcutCapture(id) => {
                 self.state
-                    .pending_settings_requests
-                    .push(SettingsRequest::OpenShortcutCapture(id));
+                    .window_requests
+                    .push_settings(SettingsRequest::OpenShortcutCapture(id));
             }
             SettingsEvent::OpenBackupImport => {
                 self.state
-                    .pending_settings_requests
-                    .push(SettingsRequest::OpenBackupImport);
+                    .window_requests
+                    .push_settings(SettingsRequest::OpenBackupImport);
             }
             SettingsEvent::OpenBackupExport => {
                 self.state
-                    .pending_settings_requests
-                    .push(SettingsRequest::OpenBackupExport);
+                    .window_requests
+                    .push_settings(SettingsRequest::OpenBackupExport);
             }
             SettingsEvent::OpenAuditViewer => {
                 self.state
-                    .pending_settings_requests
-                    .push(SettingsRequest::OpenAuditViewer);
+                    .window_requests
+                    .push_settings(SettingsRequest::OpenAuditViewer);
             }
             SettingsEvent::CloudSyncPush => {
                 self.state
-                    .pending_settings_requests
-                    .push(SettingsRequest::CloudSyncPush);
+                    .window_requests
+                    .push_settings(SettingsRequest::CloudSyncPush);
             }
             SettingsEvent::CloudSyncPull => {
                 self.state
-                    .pending_settings_requests
-                    .push(SettingsRequest::CloudSyncPull);
+                    .window_requests
+                    .push_settings(SettingsRequest::CloudSyncPull);
             }
             SettingsEvent::GitSyncNow => {
                 self.state
-                    .pending_settings_requests
-                    .push(SettingsRequest::GitSyncNow);
+                    .window_requests
+                    .push_settings(SettingsRequest::GitSyncNow);
             }
             SettingsEvent::Status(message) => {
                 self.state.status = Some(message.clone());
@@ -125,28 +125,23 @@ impl AppShell {
         }
     }
 
-    /// 执行设置实体排队的窗口动作；每帧渲染期调用一次。
-    pub(crate) fn flush_pending_settings_requests(
+    /// 执行一条设置实体排队的窗口动作。
+    pub(crate) fn handle_settings_request(
         &mut self,
+        request: super::SettingsRequest,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.state.pending_settings_requests.is_empty() {
-            return;
-        }
-        let requests = std::mem::take(&mut self.state.pending_settings_requests);
-        for request in requests {
-            match request {
-                SettingsRequest::OpenShortcutCapture(id) => {
-                    self.open_shortcut_capture(id, window, cx);
-                }
-                SettingsRequest::OpenBackupImport => self.open_backup_import(window, cx),
-                SettingsRequest::OpenBackupExport => self.open_backup_export(window, cx),
-                SettingsRequest::OpenAuditViewer => self.open_audit_viewer(None, window, cx),
-                SettingsRequest::CloudSyncPush => self.start_cloud_sync_push(window, cx),
-                SettingsRequest::CloudSyncPull => self.start_cloud_sync_pull(window, cx),
-                SettingsRequest::GitSyncNow => self.start_git_sync(window, cx),
+        match request {
+            SettingsRequest::OpenShortcutCapture(id) => {
+                self.open_shortcut_capture(id, window, cx);
             }
+            SettingsRequest::OpenBackupImport => self.open_backup_import(window, cx),
+            SettingsRequest::OpenBackupExport => self.open_backup_export(window, cx),
+            SettingsRequest::OpenAuditViewer => self.open_audit_viewer(None, window, cx),
+            SettingsRequest::CloudSyncPush => self.start_cloud_sync_push(window, cx),
+            SettingsRequest::CloudSyncPull => self.start_cloud_sync_pull(window, cx),
+            SettingsRequest::GitSyncNow => self.start_git_sync(window, cx),
         }
     }
 }

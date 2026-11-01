@@ -195,10 +195,7 @@ impl AppShell {
             pending_notices,
             immersive: false,
             sftp_panel_width_target: None,
-            pending_sftp_requests: Vec::new(),
-            pending_monitor_requests: Vec::new(),
-            pending_editor_requests: Vec::new(),
-            pending_settings_requests: Vec::new(),
+            window_requests: Default::default(),
             stats_sampling: true,
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,

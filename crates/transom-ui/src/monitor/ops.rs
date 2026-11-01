@@ -58,7 +58,7 @@ impl AppShell {
             | MonitorPanelEvent::MaximizeToTab
             | MonitorPanelEvent::DockToDrawer { .. }
             | MonitorPanelEvent::ClosePane { .. } => {
-                self.state.pending_monitor_requests.push(event.clone());
+                self.state.window_requests.push_monitor(event.clone());
             }
         }
     }

@@ -107,6 +107,7 @@ mod secret_prefill;
 mod state;
 mod task_hub;
 mod types;
+mod window_requests;
 
 pub(crate) use modal_hub::ModalHub;
 pub(crate) use persistence::Persistence;
@@ -137,6 +138,7 @@ use transom_core::{
 };
 
 pub(crate) use types::*;
+pub(crate) use window_requests::{WindowRequest, WindowRequests};
 
 /// 命令发送失败的界面文案：队列满提示稍后重试，控制器退出提示重启应用。
 pub(crate) fn command_send_error_text(error: flume::TrySendError<AppCommand>) -> String {

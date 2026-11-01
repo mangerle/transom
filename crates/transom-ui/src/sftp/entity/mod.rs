@@ -13,7 +13,7 @@
 //! 实体回调执行期间本实体已被 GPUI 租借。面板向外壳上报
 //! [`super::SftpPanelEvent`] 时，外壳处理函数**不得**再 `read`/`update` 本实体，
 //! 否则触发 “cannot update while it is already being updated” 崩溃。正确切分是：
-//! 状态变更留在实体内完成，需要窗口的动作排进 `pending_sftp_requests`，由外壳
+//! 状态变更留在实体内完成，需要窗口的动作排进 `window_requests`，由外壳
 //! 在渲染期统一执行。
 //!
 //! # 代价与局限

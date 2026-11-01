@@ -12,7 +12,7 @@
 //!
 //! # 代价与局限
 //! 跨域动作多一次事件派发与外壳消费；事件处理阶段面板仍被租借，外壳因此
-//! 不得回读本实体，需要窗口的动作一律排进 `pending_monitor_requests`，由
+//! 不得回读本实体，需要窗口的动作一律排进 `window_requests`，由
 //! 渲染期统一执行。
 
 use super::types::MonitorState;

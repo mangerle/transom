@@ -11,7 +11,7 @@
 //! # 调用约束
 //! 实体回调执行期间本实体已被 GPUI 租借。外壳处理事件时**不得**再
 //! `read`/`update` 本实体，否则触发 “cannot update while it is already being
-//! updated” 崩溃；需要窗口的动作排进 `pending_editor_requests`，由渲染期统一
+//! updated” 崩溃；需要窗口的动作排进 `window_requests`，由渲染期统一
 //! 执行，状态变更则留在本实体内先完成。
 
 use super::close::PendingEditorClose;
@@ -258,7 +258,7 @@ impl AppShell {
         event: &EditorPanelEvent,
         cx: &mut Context<Self>,
     ) {
-        self.state.pending_editor_requests.push(event.clone());
+        self.state.window_requests.push_editor(event.clone());
         cx.notify();
     }
 }
