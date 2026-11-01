@@ -17,76 +17,7 @@ impl AppShell {
         let name = properties.name.clone();
         let path = properties.path.clone();
 
-        let mut rows: Vec<AnyElement> = Vec::with_capacity(9);
-        rows.push(property_row(
-            rust_i18n::t!("sftp.properties.label_name").as_ref(),
-            name.clone(),
-            p,
-        ));
-        rows.push(property_row(
-            rust_i18n::t!("sftp.properties.label_kind").as_ref(),
-            properties.kind.clone(),
-            p,
-        ));
-        if let Some(size) = properties.size {
-            rows.push(property_row(
-                rust_i18n::t!("sftp.properties.label_size").as_ref(),
-                rust_i18n::t!(
-                    "sftp.properties.size_value",
-                    size = format_size(size),
-                    bytes = size
-                )
-                .to_string(),
-                p,
-            ));
-        }
-        if let Some(permissions) = properties.permissions {
-            rows.push(property_row(
-                rust_i18n::t!("sftp.properties.label_permissions").as_ref(),
-                format!(
-                    "{} ({})",
-                    format_rwx_permissions(permissions),
-                    format_octal_permissions(permissions)
-                ),
-                p,
-            ));
-        }
-        if let Some(owner) = properties.owner.clone() {
-            rows.push(property_row(
-                rust_i18n::t!("sftp.properties.label_owner").as_ref(),
-                owner,
-                p,
-            ));
-        }
-        if let Some(group) = properties.group.clone() {
-            rows.push(property_row(
-                rust_i18n::t!("sftp.properties.label_group").as_ref(),
-                group,
-                p,
-            ));
-        }
-        if let Some(modified) = properties.modified {
-            rows.push(property_row(
-                rust_i18n::t!("sftp.properties.label_modified").as_ref(),
-                format_unix_time(modified),
-                p,
-            ));
-        }
-        if let Some(accessed) = properties.accessed {
-            rows.push(property_row(
-                rust_i18n::t!("sftp.properties.label_accessed").as_ref(),
-                format_unix_time(accessed),
-                p,
-            ));
-        }
-        if let Some(link_target) = properties.link_target.clone() {
-            rows.push(property_row(
-                rust_i18n::t!("sftp.properties.label_link_target").as_ref(),
-                link_target,
-                p,
-            ));
-        }
-
+        let rows = property_rows(&properties, p);
         let content = v_flex().gap_1().children(rows);
 
         let footer = h_flex().gap_2().child(
@@ -125,6 +56,81 @@ impl AppShell {
             Some(footer),
         )
     }
+}
+
+/// 属性弹窗的全部字段行：名称、类型与可选的尺寸/权限/时间信息。
+fn property_rows(properties: &crate::sftp::FileProperties, p: &Palette) -> Vec<AnyElement> {
+    let mut rows: Vec<AnyElement> = Vec::with_capacity(9);
+    rows.push(property_row(
+        rust_i18n::t!("sftp.properties.label_name").as_ref(),
+        properties.name.clone(),
+        p,
+    ));
+    rows.push(property_row(
+        rust_i18n::t!("sftp.properties.label_kind").as_ref(),
+        properties.kind.clone(),
+        p,
+    ));
+    if let Some(size) = properties.size {
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_size").as_ref(),
+            rust_i18n::t!(
+                "sftp.properties.size_value",
+                size = format_size(size),
+                bytes = size
+            )
+            .to_string(),
+            p,
+        ));
+    }
+    if let Some(permissions) = properties.permissions {
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_permissions").as_ref(),
+            format!(
+                "{} ({})",
+                format_rwx_permissions(permissions),
+                format_octal_permissions(permissions)
+            ),
+            p,
+        ));
+    }
+    if let Some(owner) = properties.owner.clone() {
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_owner").as_ref(),
+            owner,
+            p,
+        ));
+    }
+    if let Some(group) = properties.group.clone() {
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_group").as_ref(),
+            group,
+            p,
+        ));
+    }
+    if let Some(modified) = properties.modified {
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_modified").as_ref(),
+            format_unix_time(modified),
+            p,
+        ));
+    }
+    if let Some(accessed) = properties.accessed {
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_accessed").as_ref(),
+            format_unix_time(accessed),
+            p,
+        ));
+    }
+    if let Some(link_target) = properties.link_target.clone() {
+        rows.push(property_row(
+            rust_i18n::t!("sftp.properties.label_link_target").as_ref(),
+            link_target,
+            p,
+        ));
+    }
+
+    rows
 }
 
 /// 渲染属性弹窗中的单行「标签 - 值」条目
