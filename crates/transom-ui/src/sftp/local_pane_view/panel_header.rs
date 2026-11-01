@@ -7,8 +7,6 @@
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 impl SftpPanelView {
@@ -20,17 +18,19 @@ impl SftpPanelView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let close_btn = Button::new("close-sftp")
-            .ghost()
-            .xsmall()
-            .icon(IconName::X)
-            .tooltip(rust_i18n::t!("sftp.nav.close_panel").to_string())
-            .on_click(cx.listener(|this, _, _, cx| {
-                cx.emit(crate::sftp::SftpPanelEvent::ClosePanel {
-                    tab_id: this.tab_id,
-                });
-                cx.notify();
-            }));
+        let close_btn = crate::widgets::IconButton::new(
+            "close-sftp",
+            IconName::X,
+            rust_i18n::t!("sftp.nav.close_panel").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(|this, _, _, cx| {
+            cx.emit(crate::sftp::SftpPanelEvent::ClosePanel {
+                tab_id: this.tab_id,
+            });
+            cx.notify();
+        }));
 
         let mut header = crate::widgets::PanelHeader::new(title, p);
         if let Some(extra_element) = extra {

@@ -45,16 +45,18 @@ impl ForwardView {
     /// 高度取标签栏 token 而不是靠内边距撑开：该面板与主区标签条、监控抽屉
     /// 并排，三条横线必须在同一水平线上。
     fn render_forward_header(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
-        let close = Button::new("close-forward")
-            .ghost()
-            .xsmall()
-            .icon(IconName::X)
-            .tooltip(rust_i18n::t!("forward.close_panel").to_string())
-            .on_click(cx.listener(|_this, _, _, cx| {
-                // 句柄由窗格持有，回收动作回交外壳；实体只发请求。
-                cx.emit(super::ForwardPanelEvent::ClosePanel);
-                cx.notify();
-            }));
+        let close = crate::widgets::IconButton::new(
+            "close-forward",
+            IconName::X,
+            rust_i18n::t!("forward.close_panel").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(|_this, _, _, cx| {
+            // 句柄由窗格持有，回收动作回交外壳；实体只发请求。
+            cx.emit(super::ForwardPanelEvent::ClosePanel);
+            cx.notify();
+        }));
         crate::widgets::PanelHeader::new(rust_i18n::t!("forward.title").to_string(), p)
             .action(close)
             .render(p)

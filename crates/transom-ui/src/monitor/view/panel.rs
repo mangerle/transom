@@ -190,96 +190,107 @@ impl MonitorView {
             )
             // 走势图形态切换（折线面积图 / 柱状图）
             .child(
-                Button::new("monitor-toggle-chart-type")
-                    .ghost()
-                    .xsmall()
-                    .icon(match self.state.chart_type {
+                crate::widgets::IconButton::new(
+                    "monitor-toggle-chart-type",
+                    match self.state.chart_type {
                         SparklineChartType::Line => IconName::ChartLine,
                         SparklineChartType::Bar => IconName::ChartBar,
-                    })
-                    .tooltip(match self.state.chart_type {
+                    },
+                    match self.state.chart_type {
                         SparklineChartType::Line => {
                             rust_i18n::t!("monitor.view.chart_line_tooltip").to_string()
                         }
                         SparklineChartType::Bar => {
                             rust_i18n::t!("monitor.view.chart_bar_tooltip").to_string()
                         }
-                    })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.state.chart_type = match this.state.chart_type {
-                            SparklineChartType::Line => SparklineChartType::Bar,
-                            SparklineChartType::Bar => SparklineChartType::Line,
-                        };
-                        cx.notify();
-                    })),
+                    },
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.state.chart_type = match this.state.chart_type {
+                        SparklineChartType::Line => SparklineChartType::Bar,
+                        SparklineChartType::Bar => SparklineChartType::Line,
+                    };
+                    cx.notify();
+                })),
             )
             // 刷新按钮
             .child(
-                Button::new("monitor-refresh")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RefreshCw)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        let collapsed = this.state.collapse.processes;
-                        cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
-                    })),
+                crate::widgets::IconButton::new(
+                    "monitor-refresh",
+                    IconName::RefreshCw,
+                    rust_i18n::t!("monitor.view.refresh_tooltip").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    let collapsed = this.state.collapse.processes;
+                    cx.emit(crate::monitor::MonitorPanelEvent::SampleProcesses { collapsed });
+                })),
             )
             // 宽度缩放切换芯片（快速切换 420px / 600px）
             .child(
-                Button::new("monitor-toggle-width")
-                    .ghost()
-                    .xsmall()
-                    .icon(if drawer_width > 480.0 {
+                crate::widgets::IconButton::new(
+                    "monitor-toggle-width",
+                    if drawer_width > 480.0 {
                         IconName::Minimize2
                     } else {
                         IconName::Maximize2
-                    })
-                    .tooltip(if drawer_width > 480.0 {
+                    },
+                    if drawer_width > 480.0 {
                         rust_i18n::t!("monitor.view.width_compact_tooltip").to_string()
                     } else {
                         rust_i18n::t!("monitor.view.width_wide_tooltip").to_string()
-                    })
-                    .on_click(cx.listener(|this, _, _window, cx| {
-                        let new_width = if this.drawer_width() > 480.0 {
-                            420.0
-                        } else {
-                            600.0
-                        };
-                        this.set_drawer_width(new_width);
-                        cx.notify();
-                        cx.emit(crate::monitor::MonitorPanelEvent::DrawerWidthChanged(
-                            new_width,
-                        ));
-                    })),
+                    },
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _window, cx| {
+                    let new_width = if this.drawer_width() > 480.0 {
+                        420.0
+                    } else {
+                        600.0
+                    };
+                    this.set_drawer_width(new_width);
+                    cx.notify();
+                    cx.emit(crate::monitor::MonitorPanelEvent::DrawerWidthChanged(
+                        new_width,
+                    ));
+                })),
             )
             // 脱离为独立标签页按钮
             .child(
-                Button::new("monitor-maximize-to-tab")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::ArrowUpRight)
-                    .tooltip(rust_i18n::t!("monitor.view.detach_tooltip").to_string())
-                    .on_click(cx.listener(|this, _, _window, cx| {
-                        // 抽屉开合属于面板状态，先自己落定再回交外壳切标签。
-                        this.set_open(false);
-                        cx.notify();
-                        cx.emit(crate::monitor::MonitorPanelEvent::MaximizeToTab);
-                    })),
+                crate::widgets::IconButton::new(
+                    "monitor-maximize-to-tab",
+                    IconName::ArrowUpRight,
+                    rust_i18n::t!("monitor.view.detach_tooltip").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _window, cx| {
+                    // 抽屉开合属于面板状态，先自己落定再回交外壳切标签。
+                    this.set_open(false);
+                    cx.notify();
+                    cx.emit(crate::monitor::MonitorPanelEvent::MaximizeToTab);
+                })),
             )
             // 关闭抽屉按钮
             .child(
-                Button::new("monitor-close")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Close)
-                    .tooltip(rust_i18n::t!("monitor.view.close_tooltip").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.state.open = false;
-                        this.state.processes = std::rc::Rc::new(Vec::new());
-                        this.state.process_revision = this.state.process_revision.wrapping_add(1);
-                        this.state.process_order_cache = None;
-                        cx.notify();
-                    })),
+                crate::widgets::IconButton::new(
+                    "monitor-close",
+                    IconName::Close,
+                    rust_i18n::t!("monitor.view.close_tooltip").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.state.open = false;
+                    this.state.processes = std::rc::Rc::new(Vec::new());
+                    this.state.process_revision = this.state.process_revision.wrapping_add(1);
+                    this.state.process_order_cache = None;
+                    cx.notify();
+                })),
             )
             .into_any_element()
     }
