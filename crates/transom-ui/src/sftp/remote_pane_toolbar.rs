@@ -59,20 +59,14 @@ impl SftpPanelView {
     }
 
     /// 文件操作组：下载、新建、搜索、重命名、编辑、权限、删除与上传。
-    fn render_file_op_buttons(
+    /// 下载、新建目录/文件与检索按钮。
+    fn render_browse_buttons(
         &self,
         props: &RemoteToolbarProps<'_>,
         key: &str,
-        p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let RemoteToolbarProps {
-            tab_id,
-            target,
-            pane,
-            show_editor_list,
-            ..
-        } = *props;
+        let RemoteToolbarProps { target, .. } = *props;
         let download_btn = Button::new(format!("remote-download-{key}"))
             .primary()
             .xsmall()
@@ -109,6 +103,31 @@ impl SftpPanelView {
                 this.open_search_modal(target, window, cx);
             }));
 
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(download_btn)
+            .child(mkdir_btn)
+            .child(new_file_btn)
+            .child(search_btn)
+            .into_any_element()
+    }
+
+    /// 重命名、编辑、编辑列表、权限、删除与上传按钮。
+    fn render_file_edit_buttons(
+        &self,
+        props: &RemoteToolbarProps<'_>,
+        key: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let RemoteToolbarProps {
+            tab_id,
+            target,
+            pane,
+            show_editor_list,
+            ..
+        } = *props;
         let rename_btn = Button::new(format!("remote-rename-{key}"))
             .ghost()
             .xsmall()
@@ -169,16 +188,29 @@ impl SftpPanelView {
         h_flex()
             .gap_1()
             .items_center()
-            .child(download_btn)
-            .child(mkdir_btn)
-            .child(new_file_btn)
-            .child(search_btn)
             .child(rename_btn)
             .child(edit_btn)
             .when_some(editor_list, |this, el| this.child(el))
             .child(chmod_btn)
             .child(delete_btn)
             .child(upload_btn)
+            .into_any_element()
+    }
+
+    fn render_file_op_buttons(
+        &self,
+        props: &RemoteToolbarProps<'_>,
+        key: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let browse = self.render_browse_buttons(props, key, cx);
+        let edit = self.render_file_edit_buttons(props, key, p, cx);
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(browse)
+            .child(edit)
             .into_any_element()
     }
 
