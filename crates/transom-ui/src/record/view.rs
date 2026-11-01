@@ -311,6 +311,25 @@ impl AppShell {
                     .child(list),
             );
 
+        let footer = self.render_replay_footer(target_tab_id, selected_entry.as_ref(), app);
+
+        crate::widgets::dialog_body(
+            "replay-cast-modal",
+            rust_i18n::t!("recorder.replay_title").to_string(),
+            Some(rust_i18n::t!("recorder.format_notice").to_string()),
+            body,
+            Some(footer),
+        )
+    }
+
+    /// 回放弹窗页脚：取消、按选中脚本回放、或在独立播放器中打开。
+    fn render_replay_footer(
+        &self,
+        target_tab_id: transom_core::TabId,
+        selected_entry: Option<&super::types::RecordingEntry>,
+        app: &Entity<AppShell>,
+    ) -> AnyElement {
+        let selected_entry = selected_entry.cloned();
         let play_entry = selected_entry.clone();
         let footer = h_flex()
             .justify_between()
@@ -363,13 +382,6 @@ impl AppShell {
                             )),
                     ),
             );
-
-        crate::widgets::dialog_body(
-            "replay-cast-modal",
-            rust_i18n::t!("recorder.replay_title").to_string(),
-            Some(rust_i18n::t!("recorder.format_notice").to_string()),
-            body,
-            Some(footer),
-        )
+        footer.into_any_element()
     }
 }
