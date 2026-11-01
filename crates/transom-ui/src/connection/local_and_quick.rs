@@ -170,6 +170,9 @@ impl AppShell {
     }
 
     /// 导入本地 ~/.ssh/config 配置。
+    ///
+    /// 读取放在阻塞线程池：家目录位于 NFS 或配置较大时，同步读会卡住 UI
+    /// 线程；解析与目录合并仍在界面线程完成，保证状态只有一个写入点。
     pub(crate) fn import_ssh_config(&mut self, cx: &mut Context<Self>) {
         let ssh_config_path =
             directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));
@@ -188,15 +191,26 @@ impl AppShell {
             return;
         }
 
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(e) => {
-                self.state.set_error(e.to_string());
-                cx.notify();
+        cx.spawn(async move |this, cx| {
+            let Some(result) =
+                crate::sftp::spawn_blocking_local(move || std::fs::read_to_string(path)).await
+            else {
+                log::error!("读取 SSH 配置的阻塞线程创建失败");
                 return;
-            }
-        };
+            };
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(content) => this.finish_import_ssh_config(content, cx),
+                Err(error) => {
+                    this.state.set_error(error.to_string());
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
 
+    /// 解析并合并 SSH 配置；在界面线程执行。
+    fn finish_import_ssh_config(&mut self, content: String, cx: &mut Context<Self>) {
         let parsed = parse_ssh_config(&content);
         if parsed.is_empty() {
             self.state
