@@ -113,49 +113,9 @@ impl ForwardView {
                 ForwardState::Active { .. } | ForwardState::Starting
             )
         });
-        let (status_text, status_color) = match &status {
-            Some(status) => match &status.state {
-                ForwardState::Stopped => (
-                    rust_i18n::t!("forward.stopped").to_string(),
-                    p.muted_foreground,
-                ),
-                ForwardState::Starting => (
-                    rust_i18n::t!("forward.starting").to_string(),
-                    p.muted_foreground,
-                ),
-                ForwardState::Active { bound_port } => (
-                    match bound_port {
-                        Some(port) => {
-                            format!("{} :{}", rust_i18n::t!("forward.active"), port)
-                        }
-                        None => rust_i18n::t!("forward.active").to_string(),
-                    },
-                    p.success,
-                ),
-                ForwardState::Failed => (rust_i18n::t!("forward.failed").to_string(), p.danger),
-                ForwardState::NeedsConfirmation => (
-                    rust_i18n::t!("forward.needs_confirmation").to_string(),
-                    p.warning,
-                ),
-                _ => (String::new(), p.muted_foreground),
-            },
-            None => (
-                rust_i18n::t!("forward.stopped").to_string(),
-                p.muted_foreground,
-            ),
-        };
-        let summary = match &rule.kind {
-            ForwardKind::Local { bind, target } => format!(
-                "L {}:{} -> {}:{}",
-                bind.host, bind.port, target.host, target.port
-            ),
-            ForwardKind::Remote { bind, target } => format!(
-                "R {}:{} -> {}:{}",
-                bind.host, bind.port, target.host, target.port
-            ),
-            ForwardKind::Dynamic { bind, .. } => format!("D {}:{}", bind.host, bind.port),
-            _ => String::new(),
-        };
+        let (status_text, status_color) = forward_rule_status(status.as_ref(), p);
+        let summary = forward_rule_summary(rule);
+
         let mut row = v_flex()
             .gap_1()
             .p_2()
@@ -394,5 +354,59 @@ impl AppShell {
             content,
             Some(footer),
         )
+    }
+}
+
+/// 转发状态文案与颜色；无状态视为已停止。
+fn forward_rule_status(
+    status: Option<&transom_core::ForwardStatus>,
+    p: &Palette,
+) -> (String, Hsla) {
+    match status {
+        Some(status) => match &status.state {
+            ForwardState::Stopped => (
+                rust_i18n::t!("forward.stopped").to_string(),
+                p.muted_foreground,
+            ),
+            ForwardState::Starting => (
+                rust_i18n::t!("forward.starting").to_string(),
+                p.muted_foreground,
+            ),
+            ForwardState::Active { bound_port } => (
+                match bound_port {
+                    Some(port) => {
+                        format!("{} :{}", rust_i18n::t!("forward.active"), port)
+                    }
+                    None => rust_i18n::t!("forward.active").to_string(),
+                },
+                p.success,
+            ),
+            ForwardState::Failed => (rust_i18n::t!("forward.failed").to_string(), p.danger),
+            ForwardState::NeedsConfirmation => (
+                rust_i18n::t!("forward.needs_confirmation").to_string(),
+                p.warning,
+            ),
+            _ => (String::new(), p.muted_foreground),
+        },
+        None => (
+            rust_i18n::t!("forward.stopped").to_string(),
+            p.muted_foreground,
+        ),
+    }
+}
+
+/// 转发规则摘要：L/R/D 与绑定/目标地址。
+fn forward_rule_summary(rule: &transom_core::ForwardRule) -> String {
+    match &rule.kind {
+        ForwardKind::Local { bind, target } => format!(
+            "L {}:{} -> {}:{}",
+            bind.host, bind.port, target.host, target.port
+        ),
+        ForwardKind::Remote { bind, target } => format!(
+            "R {}:{} -> {}:{}",
+            bind.host, bind.port, target.host, target.port
+        ),
+        ForwardKind::Dynamic { bind, .. } => format!("D {}:{}", bind.host, bind.port),
+        _ => String::new(),
     }
 }
