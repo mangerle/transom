@@ -143,10 +143,33 @@ impl SessionForm {
         if self.auth == AuthChoice::PrivateKey && key_path.is_empty() {
             return Err(rust_i18n::t!("form.error_key").to_string());
         }
-        // 存展开后的绝对路径：与 ssh_config 导入同一口径，连接层不必再理解 `~`。
-        let key_path = crate::keys::expand_home(&key_path)
-            .to_string_lossy()
-            .to_string();
+        let options = self.ssh_options(cx)?;
+        let (auth, password, key_passphrase) = self.ssh_auth(template, cx);
+        Ok(SshConnectionBuild {
+            connection: Connection::Ssh(SshConnection {
+                host,
+                port,
+                username,
+                auth,
+                options,
+                proxy_jump: self
+                    .jump_choice
+                    .map(|jump_session_id| ProxyJumpConfig { jump_session_id }),
+            }),
+            password,
+            key_passphrase,
+        })
+    }
+
+    /// 构建 Telnet 连接：无内建认证，仅主机、端口、编码与选项。
+    ///
+    /// 超时与保活的取值口径与 SSH 一致：越界一律回退存量，不用报错打断
+    /// 保存流程。
+    /// SSH 选项：继承基础会话，再合并界面开关与数值。
+    fn ssh_options(
+        &self,
+        cx: &mut Context<impl Sized>,
+    ) -> Result<transom_core::SessionOptions, String> {
         let mut options = self
             .base
             .as_ref()
@@ -176,6 +199,22 @@ impl SessionForm {
         {
             options.keepalive_secs = keepalive;
         }
+        Ok(options)
+    }
+
+    /// SSH 认证方式与内联口令/私钥口令；引用模板时不产出内联口令。
+    fn ssh_auth(
+        &self,
+        template: Option<&IdentityOption>,
+        cx: &mut Context<impl Sized>,
+    ) -> (
+        AuthMethod,
+        Option<Zeroizing<String>>,
+        Option<Zeroizing<String>>,
+    ) {
+        let key_path = crate::keys::expand_home(self.key_path.read(cx).value().trim())
+            .to_string_lossy()
+            .to_string();
         let auth = match self.auth {
             AuthChoice::Password => AuthMethod::Password {
                 save: self.save_password,
@@ -208,26 +247,9 @@ impl SessionForm {
             }
             _ => None,
         };
-        Ok(SshConnectionBuild {
-            connection: Connection::Ssh(SshConnection {
-                host,
-                port,
-                username,
-                auth,
-                options,
-                proxy_jump: self
-                    .jump_choice
-                    .map(|jump_session_id| ProxyJumpConfig { jump_session_id }),
-            }),
-            password,
-            key_passphrase,
-        })
+        (auth, password, key_passphrase)
     }
 
-    /// 构建 Telnet 连接：无内建认证，仅主机、端口、编码与选项。
-    ///
-    /// 超时与保活的取值口径与 SSH 一致：越界一律回退存量，不用报错打断
-    /// 保存流程。
     fn build_telnet_connection(
         &self,
         cx: &mut Context<impl Sized>,
