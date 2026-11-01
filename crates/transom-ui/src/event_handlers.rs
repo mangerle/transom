@@ -15,6 +15,14 @@ use std::sync::Arc;
 use transom_core::{HostAppEvent, PromptKind, SecretKind, TerminalAppEvent};
 use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
 
+/// 终端就绪后的收尾参数。
+struct TerminalReadyFinish {
+    tab_id: transom_core::TabId,
+    connection_id: transom_core::ConnectionId,
+    session_id: transom_core::SessionId,
+    focus_handle: gpui_kit::FocusHandle,
+}
+
 impl AppShell {
     /// 连接建立：构造终端视图、挂接订阅与外观覆盖，并处理焦点与启动命令。
     ///
@@ -48,30 +56,7 @@ impl AppShell {
             .find(|session| session.id == session_id)
             .map(|session| session.terminal.clone())
             .unwrap_or_else(|| self.state.workspace.tabs[index].session.terminal.clone());
-        // 光标外观与外观偏好（字体族、中文字体、字号、行高、关键词高亮）属于全局设置，
-        // 覆盖会话里可能残留的旧默认值：界面上没有任何会话级字体入口，
-        // 若这里不覆盖，用户在设置里改的字体只会作用于已打开的窗格。
-        profile.cursor_shape = app_settings(cx).terminal_profile.cursor_shape;
-        profile.cursor_blink = app_settings(cx).terminal_profile.cursor_blink;
-        profile.font_family = app_settings(cx).terminal_profile.font_family.clone();
-        profile.cjk_font_family = app_settings(cx).terminal_profile.cjk_font_family.clone();
-        profile.font_size = app_settings(cx).terminal_profile.font_size;
-        profile.line_height = app_settings(cx).terminal_profile.line_height;
-        // 分隔符同样没有会话级入口，且老会话文件里存的是内核默认值；
-        // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
-        profile.word_separators = app_settings(cx).terminal_profile.word_separators.clone();
-        // 自定义按键映射属于全局终端偏好：会话文件里的旧副本不参与生效。
-        profile.key_bindings = app_settings(cx).terminal_profile.key_bindings.clone();
-        profile.highlight = app_settings(cx).terminal_profile.highlight.clone();
-        profile.alternate_scroll = app_settings(cx).terminal_profile.alternate_scroll;
-        // 终端配色同理：会话文件里残留的旧调色板会压掉全局选择，
-        // 表现为"改了终端配色但重开会话不生效"。运行期程序仍可通过
-        // OSC 4/10/11 动态改色，不受此静态基线影响。
-        profile.theme_name = app_settings(cx).terminal_profile.theme_name.clone();
-        profile.palette = app_settings(cx).terminal_profile.palette.clone();
-        // 终端背景透明度跟随窗口整体透明：窗口半透明时终端区也要透出
-        // 桌面，否则只有界面变透明、终端仍是一块实色。
-        profile.background_transparency = app_settings(cx).window.window_transparency;
+        apply_global_terminal_profile(&mut profile, cx);
         let interaction = app_settings(cx).terminal_interaction;
         let reserved = self.state.shortcut_recording.filter.clone();
         let key_filter: KeyFilter = Arc::new(move |keystroke| {
@@ -94,38 +79,19 @@ impl AppShell {
         );
         let shell_integration_enabled =
             app_settings(cx).block_view.shell_integration && !exec_local;
-        let terminal = cx.new(|cx| {
-            TerminalView::new(
-                window,
-                cx,
-                transom_terminal::TerminalViewParams {
-                    io,
-                    profile,
-                    interaction,
-                    key_filter: Some(key_filter),
-                    audit_path,
-                    shell_integration_enabled,
-                },
-            )
-        });
-        // 建议能力挂到视图：查询回调是全应用共享的一份内存快照。
-        let provider = self.state.history_provider.clone();
-        let triggers = app_settings(cx).triggers.clone();
-        let block_override = self
-            .state
-            .catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == session_id)
-            .map_or(transom_core::BlockViewOverride::FollowGlobal, |session| {
-                session.block_view
-            });
-        let block_view = app_settings(cx).block_view.resolved(block_override);
-        terminal.update(cx, |view, cx| {
-            view.attach_history(provider);
-            view.reload_triggers(&triggers);
-            view.set_block_view(Some(block_view), cx);
-        });
+        let terminal = self.spawn_terminal_view(
+            window,
+            cx,
+            TerminalSpawn {
+                io,
+                profile,
+                interaction,
+                key_filter,
+                audit_path,
+                shell_integration_enabled,
+                session_id,
+            },
+        );
         let focus_handle = terminal.read(cx).focus_handle().clone();
         // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，
         // 普通 subscribe 拿不到 Window。
@@ -149,6 +115,32 @@ impl AppShell {
             tab.session.name,
             crate::connection::describe_target(&tab.session)
         );
+        self.finish_terminal_ready(
+            TerminalReadyFinish {
+                tab_id,
+                connection_id,
+                session_id,
+                focus_handle,
+            },
+            window,
+            cx,
+        );
+        true
+    }
+
+    /// 终端就绪收尾：焦点/组内激活、凭据落盘、启动命令、转发与进程采样。
+    fn finish_terminal_ready(
+        &mut self,
+        finish: TerminalReadyFinish,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let TerminalReadyFinish {
+            tab_id,
+            connection_id,
+            session_id,
+            focus_handle,
+        } = finish;
         // 连接建立期间用户可能已经切走：启动期的默认标签与深链目录标签
         // 会并发建连，晚完成者若无条件激活，会把焦点从后创建的深链标签
         // 抢回启动标签。只有该窗格仍是当前选中项时才切换组内焦点并聚焦。
@@ -167,7 +159,6 @@ impl AppShell {
         if still_active && self.state.monitor.read(cx).is_open() {
             self.sample_processes(self.state.monitor.read(cx).processes_collapsed(), cx);
         }
-        true
     }
 
     /// 连接建立失败：标记标签状态、回收未落盘凭据并安排自动重连。
@@ -408,4 +399,93 @@ impl AppShell {
         }
         false
     }
+
+    /// 按当前全局设置组装并创建终端视图。
+    fn spawn_terminal_view(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        spawn: TerminalSpawn,
+    ) -> Entity<TerminalView> {
+        let TerminalSpawn {
+            io,
+            profile,
+            interaction,
+            key_filter,
+            audit_path,
+            shell_integration_enabled,
+            session_id,
+        } = spawn;
+        let terminal = cx.new(|cx| {
+            TerminalView::new(
+                window,
+                cx,
+                transom_terminal::TerminalViewParams {
+                    io,
+                    profile,
+                    interaction,
+                    key_filter: Some(key_filter),
+                    audit_path,
+                    shell_integration_enabled,
+                },
+            )
+        });
+        let provider = self.state.history_provider.clone();
+        let triggers = app_settings(cx).triggers.clone();
+        let block_override = self
+            .state
+            .catalog
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map_or(transom_core::BlockViewOverride::FollowGlobal, |session| {
+                session.block_view
+            });
+        let block_view = app_settings(cx).block_view.resolved(block_override);
+        terminal.update(cx, |view, cx| {
+            view.attach_history(provider);
+            view.reload_triggers(&triggers);
+            view.set_block_view(Some(block_view), cx);
+        });
+        terminal
+    }
+}
+
+/// 终端创建参数：连接 IO、已合并的配置与审计上下文。
+struct TerminalSpawn {
+    io: transom_core::TerminalIo,
+    profile: transom_core::TerminalProfile,
+    interaction: transom_core::TerminalInteraction,
+    key_filter: transom_terminal::KeyFilter,
+    audit_path: Option<std::path::PathBuf>,
+    shell_integration_enabled: bool,
+    session_id: transom_core::SessionId,
+}
+
+/// 用全局终端外观覆盖会话里可能残留的旧默认值。
+fn apply_global_terminal_profile(profile: &mut transom_core::TerminalProfile, cx: &App) {
+    // 光标外观与外观偏好（字体族、中文字体、字号、行高、关键词高亮）属于全局设置，
+    // 覆盖会话里可能残留的旧默认值：界面上没有任何会话级字体入口，
+    // 若这里不覆盖，用户在设置里改的字体只会作用于已打开的窗格。
+    profile.cursor_shape = app_settings(cx).terminal_profile.cursor_shape;
+    profile.cursor_blink = app_settings(cx).terminal_profile.cursor_blink;
+    profile.font_family = app_settings(cx).terminal_profile.font_family.clone();
+    profile.cjk_font_family = app_settings(cx).terminal_profile.cjk_font_family.clone();
+    profile.font_size = app_settings(cx).terminal_profile.font_size;
+    profile.line_height = app_settings(cx).terminal_profile.line_height;
+    // 分隔符同样没有会话级入口，且老会话文件里存的是内核默认值；
+    // 不覆盖的话，用户在设置里改的分隔符会被会话里的陈旧值压掉。
+    profile.word_separators = app_settings(cx).terminal_profile.word_separators.clone();
+    // 自定义按键映射属于全局终端偏好：会话文件里的旧副本不参与生效。
+    profile.key_bindings = app_settings(cx).terminal_profile.key_bindings.clone();
+    profile.highlight = app_settings(cx).terminal_profile.highlight.clone();
+    profile.alternate_scroll = app_settings(cx).terminal_profile.alternate_scroll;
+    // 终端配色同理：会话文件里残留的旧调色板会压掉全局选择，
+    // 表现为"改了终端配色但重开会话不生效"。运行期程序仍可通过
+    // OSC 4/10/11 动态改色，不受此静态基线影响。
+    profile.theme_name = app_settings(cx).terminal_profile.theme_name.clone();
+    profile.palette = app_settings(cx).terminal_profile.palette.clone();
+    // 终端背景透明度跟随窗口整体透明：窗口半透明时终端区也要透出
+    // 桌面，否则只有界面变透明、终端仍是一块实色。
+    profile.background_transparency = app_settings(cx).window.window_transparency;
 }
