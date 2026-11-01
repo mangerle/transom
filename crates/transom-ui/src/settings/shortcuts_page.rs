@@ -20,71 +20,7 @@ impl SettingsView {
     ) -> AnyElement {
         let rows: Vec<AnyElement> = keymap::specs()
             .iter()
-            .map(|spec| {
-                let effective = keymap::effective_keys(spec, &app_settings(cx).shortcuts);
-                let customized = app_settings(cx).shortcuts.bindings.contains_key(spec.id);
-                let id = spec.id;
-                let key_elements =
-                    h_flex()
-                        .gap_1()
-                        .children(effective.into_iter().map(|key_str| {
-                            if let Ok(keystroke) = Keystroke::parse(&key_str) {
-                                Kbd::new(keystroke).outline().into_any_element()
-                            } else {
-                                div()
-                                    .px_2()
-                                    .py_0p5()
-                                    .rounded(p.radius.md)
-                                    .border_1()
-                                    .border_color(p.border)
-                                    .bg(p.muted)
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(p.foreground)
-                                    .child(key_str)
-                                    .into_any_element()
-                            }
-                        }));
-                crate::widgets::list_row(
-                    ElementId::Name(format!("shortcut-row-{id}").into()),
-                    false,
-                    p,
-                )
-                .justify_between()
-                .child(
-                    div()
-                        .text_size(rems(crate::theme::tokens::typography::BODY))
-                        .child(rust_i18n::t!(spec.label_key).to_string()),
-                )
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .child(key_elements)
-                        .child(
-                            Button::new(ElementId::Name(format!("shortcut-edit-{id}").into()))
-                                .ghost()
-                                .xsmall()
-                                .label(rust_i18n::t!("settings.shortcut_edit").to_string())
-                                .on_click(cx.listener(move |_this, _, _window, cx| {
-                                    cx.emit(SettingsEvent::OpenShortcutCapture(id));
-                                })),
-                        )
-                        .when(customized, |row| {
-                            row.child(
-                                Button::new(ElementId::Name(format!("shortcut-reset-{id}").into()))
-                                    .ghost()
-                                    .xsmall()
-                                    .label(rust_i18n::t!("settings.shortcut_reset").to_string())
-                                    .on_click(cx.listener(move |_this, _, _, cx| {
-                                        app_settings_mut(cx).shortcuts.bindings.remove(id);
-                                        cx.notify();
-                                    })),
-                            )
-                        }),
-                )
-                .into_any_element()
-            })
+            .map(|spec| self.render_shortcut_row(spec, p, cx))
             .collect();
 
         let conflicts = keymap::conflict_pairs(&app_settings(cx).shortcuts);
@@ -153,5 +89,76 @@ impl SettingsView {
             ))
             .child(v_flex().gap_1().children(rows))
             .into_any_element()
+    }
+
+    /// 单条快捷键行：名称、有效键位、编辑与重置。
+    fn render_shortcut_row(
+        &self,
+        spec: &keymap::ShortcutSpec,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let effective = keymap::effective_keys(spec, &app_settings(cx).shortcuts);
+        let customized = app_settings(cx).shortcuts.bindings.contains_key(spec.id);
+        let id = spec.id;
+        let key_elements = h_flex()
+            .gap_1()
+            .children(effective.into_iter().map(|key_str| {
+                if let Ok(keystroke) = Keystroke::parse(&key_str) {
+                    Kbd::new(keystroke).outline().into_any_element()
+                } else {
+                    div()
+                        .px_2()
+                        .py_0p5()
+                        .rounded(p.radius.md)
+                        .border_1()
+                        .border_color(p.border)
+                        .bg(p.muted)
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(p.foreground)
+                        .child(key_str)
+                        .into_any_element()
+                }
+            }));
+        crate::widgets::list_row(
+            ElementId::Name(format!("shortcut-row-{id}").into()),
+            false,
+            p,
+        )
+        .justify_between()
+        .child(
+            div()
+                .text_size(rems(crate::theme::tokens::typography::BODY))
+                .child(rust_i18n::t!(spec.label_key).to_string()),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(key_elements)
+                .child(
+                    Button::new(ElementId::Name(format!("shortcut-edit-{id}").into()))
+                        .ghost()
+                        .xsmall()
+                        .label(rust_i18n::t!("settings.shortcut_edit").to_string())
+                        .on_click(cx.listener(move |_this, _, _window, cx| {
+                            cx.emit(SettingsEvent::OpenShortcutCapture(id));
+                        })),
+                )
+                .when(customized, |row| {
+                    row.child(
+                        Button::new(ElementId::Name(format!("shortcut-reset-{id}").into()))
+                            .ghost()
+                            .xsmall()
+                            .label(rust_i18n::t!("settings.shortcut_reset").to_string())
+                            .on_click(cx.listener(move |_this, _, _, cx| {
+                                app_settings_mut(cx).shortcuts.bindings.remove(id);
+                                cx.notify();
+                            })),
+                    )
+                }),
+        )
+        .into_any_element()
     }
 }
