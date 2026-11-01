@@ -252,8 +252,57 @@ fn session_context_menu(
     }
 }
 
+/// 会话行尾的拨测展示部件。
+struct SessionProbeParts {
+    badge: Option<AnyElement>,
+    button: Option<AnyElement>,
+}
+
 impl AppShell {
     /// 渲染单个会话树行，支持连接状态着色、双击连接、拖放排序与右键菜单。
+    /// 行尾拨测状态点与按钮；无网络地址的会话两者都不出现。
+    fn session_probe_parts(
+        &self,
+        session: &transom_core::Session,
+        is_active: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> SessionProbeParts {
+        let session_id = session.id;
+        // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
+        let probe_badge = self
+            .state
+            .probe_badges
+            .get(&session_id)
+            .map(|badge| AppShell::render_probe_badge(session_id, badge, p));
+        // 本地 Shell 与串口没有可拨测的网络地址，按钮也不画：点了只会弹一句
+        // "没有可拨测主机"，不如根本不给出这个动作。
+        let probe_button = HostAction::probe_for(session).map(|_| {
+            row_action_button(
+                RowActionButtonProps {
+                    element_id: format!("session-probe-{session_id}"),
+                    icon: IconName::Radar,
+                    tooltip: rust_i18n::t!("probe.session_tooltip").to_string(),
+                    idle_color: if is_active {
+                        p.sidebar_accent_foreground
+                    } else {
+                        p.muted_foreground
+                    },
+                    on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
+                        // 拨测这一台不该同时选中这一行，更不该触发双击连接。
+                        cx.stop_propagation();
+                        this.probe_session(session_id, cx);
+                    }),
+                },
+                p,
+            )
+        });
+        SessionProbeParts {
+            badge: probe_badge,
+            button: probe_button.map(IntoElement::into_any_element),
+        }
+    }
+
     pub(crate) fn render_session_row(
         &mut self,
         row: &SessionRow,
@@ -357,39 +406,12 @@ impl AppShell {
             p,
             cx,
         );
-        // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
-        let probe_badge = self
-            .state
-            .probe_badges
-            .get(&session_id)
-            .map(|badge| AppShell::render_probe_badge(session_id, badge, p));
-        // 本地 Shell 与串口没有可拨测的网络地址，按钮也不画：点了只会弹一句
-        // "没有可拨测主机"，不如根本不给出这个动作。
-        let probe_button = HostAction::probe_for(session).map(|_| {
-            row_action_button(
-                RowActionButtonProps {
-                    element_id: format!("session-probe-{session_id}"),
-                    icon: IconName::Radar,
-                    tooltip: rust_i18n::t!("probe.session_tooltip").to_string(),
-                    idle_color: if is_active {
-                        p.sidebar_accent_foreground
-                    } else {
-                        p.muted_foreground
-                    },
-                    on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                        // 拨测这一台不该同时选中这一行，更不该触发双击连接。
-                        cx.stop_propagation();
-                        this.probe_session(session_id, cx);
-                    }),
-                },
-                p,
-            )
-        });
+        let probe = self.session_probe_parts(session, is_active, p, cx);
         let anchor = SidebarDrag::Session(session_id);
         // 会话行没有子级，整行二分为“插到之前/之后”，不存在落空的中间区。
         let inner = inner
-            .children(probe_badge)
-            .children(probe_button)
+            .children(probe.badge)
+            .children(probe.button)
             .child(reorder_overlay(&app_entity, anchor, false, p));
         element.child(inner).into_any_element()
     }
