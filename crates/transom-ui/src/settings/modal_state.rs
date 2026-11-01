@@ -182,58 +182,7 @@ impl SettingsModalState {
                 .placeholder("ctrl-shift-left = \\e[1;6D")
                 .default_value(key_bindings_text)
         });
-        let (proxy_kind, proxy_host_val, proxy_port_val, proxy_user_val, proxy_pass_val) =
-            match &settings.proxy {
-                transom_core::OutboundProxy::Direct => (
-                    ProxyProtocol::Direct,
-                    String::new(),
-                    "1080".to_string(),
-                    String::new(),
-                    String::new(),
-                ),
-                transom_core::OutboundProxy::Socks5 { host, port, auth } => (
-                    ProxyProtocol::Socks5,
-                    host.clone(),
-                    port.to_string(),
-                    auth.as_ref()
-                        .map_or_else(String::new, |auth| auth.username.clone()),
-                    auth.as_ref()
-                        .map_or_else(String::new, |auth| auth.password.clone()),
-                ),
-                transom_core::OutboundProxy::Http { host, port, auth } => (
-                    ProxyProtocol::Http,
-                    host.clone(),
-                    port.to_string(),
-                    auth.as_ref()
-                        .map_or_else(String::new, |auth| auth.username.clone()),
-                    auth.as_ref()
-                        .map_or_else(String::new, |auth| auth.password.clone()),
-                ),
-            };
-        let proxy = ProxyFormInputs {
-            kind: proxy_kind,
-            host: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .placeholder("127.0.0.1")
-                    .default_value(proxy_host_val)
-            }),
-            port: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .placeholder("1080")
-                    .default_value(proxy_port_val)
-            }),
-            username: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .placeholder(rust_i18n::t!("settings.proxy_username_hint").to_string())
-                    .default_value(proxy_user_val)
-            }),
-            password: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .masked(true)
-                    .placeholder(rust_i18n::t!("settings.proxy_password_hint").to_string())
-                    .default_value(proxy_pass_val)
-            }),
-        };
+        let proxy = ProxyFormInputs::from_settings(window, cx, settings);
         // 分割线粗细只有 1/2/3px 三档，用步进器而不是下拉：数值小且连续，
         // 键盘上下键与加减按钮都能直接调，和字号/行高的操作手感一致。
         let divider_width = cx.new(|cx| {
@@ -280,6 +229,67 @@ impl SettingsModalState {
             trigger_edit: None,
             sync_form,
             monitor_interval: crate::monitor::SampleIntervalMode::default(),
+        }
+    }
+}
+impl ProxyFormInputs {
+    /// 由当前出站代理设置回填表单；凭据字段保持明文值供编辑。
+    fn from_settings(
+        window: &mut Window,
+        cx: &mut Context<impl Sized>,
+        settings: &transom_core::AppSettings,
+    ) -> Self {
+        let (proxy_kind, proxy_host_val, proxy_port_val, proxy_user_val, proxy_pass_val) =
+            match &settings.proxy {
+                transom_core::OutboundProxy::Direct => (
+                    ProxyProtocol::Direct,
+                    String::new(),
+                    "1080".to_string(),
+                    String::new(),
+                    String::new(),
+                ),
+                transom_core::OutboundProxy::Socks5 { host, port, auth } => (
+                    ProxyProtocol::Socks5,
+                    host.clone(),
+                    port.to_string(),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.username.clone()),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.password.clone()),
+                ),
+                transom_core::OutboundProxy::Http { host, port, auth } => (
+                    ProxyProtocol::Http,
+                    host.clone(),
+                    port.to_string(),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.username.clone()),
+                    auth.as_ref()
+                        .map_or_else(String::new, |auth| auth.password.clone()),
+                ),
+            };
+        Self {
+            kind: proxy_kind,
+            host: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("127.0.0.1")
+                    .default_value(proxy_host_val)
+            }),
+            port: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("1080")
+                    .default_value(proxy_port_val)
+            }),
+            username: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder(rust_i18n::t!("settings.proxy_username_hint").to_string())
+                    .default_value(proxy_user_val)
+            }),
+            password: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .masked(true)
+                    .placeholder(rust_i18n::t!("settings.proxy_password_hint").to_string())
+                    .default_value(proxy_pass_val)
+            }),
         }
     }
 }
