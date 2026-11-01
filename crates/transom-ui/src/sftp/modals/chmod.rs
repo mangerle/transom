@@ -20,63 +20,10 @@ impl AppShell {
 
         let grid = chmod_grid(perms, app, p);
 
-        let rwx_str = format_rwx_permissions(perms);
-        let presets = [
-            (0o755, "755"),
-            (0o644, "644"),
-            (0o700, "700"),
-            (0o600, "600"),
-        ];
-        let mut preset_btns = h_flex().gap_1p5().items_center();
-        for (mode_val, label_str) in presets {
-            preset_btns = preset_btns.child(
-                Button::new(format!("chmod-preset-{label_str}"))
-                    .ghost()
-                    .xsmall()
-                    .label(label_str)
-                    .selected(perms == mode_val)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        move |this, _: &ClickEvent, window, cx| {
-                            this.sftp_set_chmod_preset(mode_val, window, cx);
-                        },
-                    )),
-            );
-        }
-
         let content = v_flex()
             .gap_3()
             .child(grid)
-            .child(
-                h_flex()
-                    .gap_3()
-                    .items_center()
-                    .justify_between()
-                    .pt_1()
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("sftp.chmod.octal_label").to_string()),
-                            )
-                            .child(div().w(px(90.0)).child(Input::new(&octal_input).w_full()))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .px_2()
-                                    .py_1()
-                                    .rounded(p.radius.sm)
-                                    .bg(p.muted)
-                                    .text_color(p.muted_foreground)
-                                    .child(rwx_str),
-                            ),
-                    )
-                    .child(preset_btns),
-            )
+            .child(chmod_octal_row(perms, &octal_input, app, p))
             .when_some(error, |this, err| {
                 this.child(div().text_xs().text_color(p.danger).child(err))
             });
@@ -113,6 +60,68 @@ impl AppShell {
             Some(footer),
         )
     }
+}
+
+/// 八进制输入、等价的 rwx 文案与四个常用预设。
+fn chmod_octal_row(
+    perms: u32,
+    octal_input: &Entity<gpui_kit::component::input::InputState>,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let rwx_str = format_rwx_permissions(perms);
+    let presets = [
+        (0o755, "755"),
+        (0o644, "644"),
+        (0o700, "700"),
+        (0o600, "600"),
+    ];
+    let mut preset_btns = h_flex().gap_1p5().items_center();
+    for (mode_val, label_str) in presets {
+        preset_btns = preset_btns.child(
+            Button::new(format!("chmod-preset-{label_str}"))
+                .ghost()
+                .xsmall()
+                .label(label_str)
+                .selected(perms == mode_val)
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, window, cx| {
+                        this.sftp_set_chmod_preset(mode_val, window, cx);
+                    },
+                )),
+        );
+    }
+
+    h_flex()
+        .gap_3()
+        .items_center()
+        .justify_between()
+        .pt_1()
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("sftp.chmod.octal_label").to_string()),
+                )
+                .child(div().w(px(90.0)).child(Input::new(octal_input).w_full()))
+                .child(
+                    div()
+                        .text_xs()
+                        .px_2()
+                        .py_1()
+                        .rounded(p.radius.sm)
+                        .bg(p.muted)
+                        .text_color(p.muted_foreground)
+                        .child(rwx_str),
+                ),
+        )
+        .child(preset_btns)
+        .into_any_element()
 }
 
 /// 三组权限复选行：属主/属组/其他，各含读/写/执行。
