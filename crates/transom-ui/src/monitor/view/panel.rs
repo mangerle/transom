@@ -16,44 +16,9 @@ impl MonitorView {
 
         // 1. 异常前哨感知横幅（OOM 告警横幅）
         if let Some(stats_ref) = &stats
-            && let Some(oom) = &stats_ref.recent_oom
+            && let Some(banner) = crate::monitor::components::oom_banner(stats_ref, p)
         {
-            body = body.child(
-                h_flex()
-                    .gap_2()
-                    .p_2()
-                    .rounded_md()
-                    .bg(p.danger.opacity(0.15))
-                    .border_1()
-                    .border_color(p.danger.opacity(0.4))
-                    .items_center()
-                    .child(
-                        Icon::new(IconName::TriangleAlert)
-                            .small()
-                            .text_color(p.danger),
-                    )
-                    .child(
-                        v_flex()
-                            .gap_0p5()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(p.danger)
-                                    .child(rust_i18n::t!("monitor.view.oom_title").to_string()),
-                            )
-                            .child(
-                                div().text_xs().text_color(p.foreground).child(
-                                    rust_i18n::t!(
-                                        "monitor.view.oom_killed",
-                                        name = &oom.process_name,
-                                        pid = oom.pid
-                                    )
-                                    .to_string(),
-                                ),
-                            ),
-                    ),
-            );
+            body = body.child(banner);
         }
 
         // 2. 各板块按需组装

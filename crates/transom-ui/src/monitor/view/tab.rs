@@ -35,7 +35,9 @@ impl MonitorView {
             .child(tab_title_part(&target_title, &stats, p))
             .child(self.render_tab_actions(current_interval, tab_id, target_tab_id, cx));
 
-        let oom_banner = render_oom_banner(&stats, p);
+        let oom_banner = stats
+            .as_ref()
+            .and_then(|stats| crate::monitor::components::oom_banner(stats, p));
         let content = self.render_tab_body(&stats, oom_banner, cx, p);
 
         v_flex()
@@ -109,55 +111,6 @@ impl MonitorView {
         };
         content.into_any_element()
     }
-}
-
-/// OOM 告警横幅：最近一次 OOM killer 记录存在时才出现。
-fn render_oom_banner(stats: &Option<transom_core::SystemStats>, p: &Palette) -> Option<AnyElement> {
-    // OOM 警报 Banner
-    let mut oom_banner = None;
-    if let Some(stats_ref) = &stats
-        && let Some(oom) = &stats_ref.recent_oom
-    {
-        oom_banner = Some(
-            h_flex()
-                .w_full()
-                .gap_2()
-                .p_2p5()
-                .rounded_md()
-                .bg(p.danger.opacity(0.15))
-                .border_1()
-                .border_color(p.danger.opacity(0.4))
-                .items_center()
-                .child(
-                    Icon::new(IconName::TriangleAlert)
-                        .small()
-                        .text_color(p.danger),
-                )
-                .child(
-                    v_flex()
-                        .gap_0p5()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(p.danger)
-                                .child(rust_i18n::t!("monitor.view.oom_title").to_string()),
-                        )
-                        .child(
-                            div().text_xs().text_color(p.foreground).child(
-                                rust_i18n::t!(
-                                    "monitor.view.oom_killed_full",
-                                    name = &oom.process_name,
-                                    pid = oom.pid
-                                )
-                                .to_string(),
-                            ),
-                        ),
-                ),
-        );
-    }
-
-    oom_banner.map(IntoElement::into_any_element)
 }
 
 /// 全屏监控看板的渲染入参。
