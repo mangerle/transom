@@ -228,7 +228,9 @@ impl MonitorView {
                     .tooltip(rust_i18n::t!("monitor.view.close_tooltip").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.state.open = false;
-                        this.state.processes.clear();
+                        this.state.processes = std::rc::Rc::new(Vec::new());
+                        this.state.process_revision = this.state.process_revision.wrapping_add(1);
+                        this.state.process_order_cache = None;
                         cx.notify();
                     })),
             );

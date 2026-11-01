@@ -151,11 +151,27 @@ impl MonitorView {
         )
     }
 
-    /// 过滤与排序后的行下标。
+    /// 过滤与排序后的行下标，按“筛选词 + 排序 + 快照版本”缓存。
     ///
-    /// 表头计数与虚拟列表数据都走这里，保证条数与实际行数不会错位。
-    fn filtered_order(&self, cx: &mut Context<Self>) -> Vec<usize> {
-        let filter = self.state.filter.read(cx).value().to_lowercase();
+    /// 表头计数与虚拟列表数据都走这里，保证条数与实际行数不会错位。进程表
+    /// 每 5 秒才更新一轮，但渲染可能因光标闪烁/布局变化每帧发生：缓存让
+    /// 逐进程小写比较与排序只在筛选变化或新样本到达时执行。
+    fn filtered_order(&mut self, cx: &mut Context<Self>) -> Vec<usize> {
+        let filter_value = self.state.filter.read(cx).value();
+        let sort = self.state.sort;
+        let ascending = self.state.sort_ascending;
+        let revision = self.state.process_revision;
+        if let Some((cached, cached_sort, cached_ascending, cached_revision, order)) =
+            &self.state.process_order_cache
+            && *cached == filter_value
+            && *cached_sort == sort
+            && *cached_ascending == ascending
+            && *cached_revision == revision
+        {
+            return order.clone();
+        }
+
+        let filter = filter_value.to_lowercase();
         let processes = &self.state.processes;
         let mut order: Vec<usize> = processes
             .iter()
@@ -172,8 +188,7 @@ impl MonitorView {
             })
             .map(|(index, _)| index)
             .collect();
-        let ascending = self.state.sort_ascending;
-        match self.state.sort {
+        match sort {
             ProcessSort::Cpu => order.sort_by(|a, b| {
                 let cmp = processes[*a]
                     .cpu_percent
@@ -185,6 +200,8 @@ impl MonitorView {
                 if ascending { cmp } else { cmp.reverse() }
             }),
         }
+        self.state.process_order_cache =
+            Some((filter_value, sort, ascending, revision, order.clone()));
         order
     }
 

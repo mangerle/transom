@@ -89,7 +89,9 @@ impl MonitorView {
     pub(crate) fn set_open(&mut self, open: bool) {
         self.state.open = open;
         if !open {
-            self.state.processes.clear();
+            self.state.processes = std::rc::Rc::new(Vec::new());
+            self.state.process_revision = self.state.process_revision.wrapping_add(1);
+            self.state.process_order_cache = None;
             self.state.process_total = 0;
         }
     }
@@ -111,7 +113,9 @@ impl MonitorView {
     /// 进程明细采样落地；总数同步取明细条数。
     pub(crate) fn set_processes(&mut self, processes: Vec<transom_core::ProcessInfo>) {
         self.state.process_total = u32::try_from(processes.len()).unwrap_or(u32::MAX);
-        self.state.processes = processes;
+        self.state.processes = std::rc::Rc::new(processes);
+        self.state.process_revision = self.state.process_revision.wrapping_add(1);
+        self.state.process_order_cache = None;
         self.state.error = None;
     }
 

@@ -108,7 +108,15 @@ pub(crate) struct MonitorState {
     /// 进程排序方向：false 为降序（最大值在前），点同一列表头翻转。
     pub(crate) sort_ascending: bool,
     /// 进程明细快照。
-    pub(crate) processes: Vec<ProcessInfo>,
+    ///
+    /// 用 `Rc` 共享给虚拟列表的绘制闭包：每帧只增加一次引用计数，
+    /// 不再把整份进程表克隆进闭包。
+    pub(crate) processes: std::rc::Rc<Vec<ProcessInfo>>,
+    /// 进程快照版本：筛选/排序缓存以它为失效键。
+    pub(crate) process_revision: u64,
+    /// 筛选与排序结果缓存：(筛选词、排序字段、方向、版本) → 行下标。
+    pub(crate) process_order_cache:
+        Option<(gpui_kit::SharedString, ProcessSort, bool, u64, Vec<usize>)>,
     /// 进程列表滚动句柄：虚拟列表与可见滚动条共用同一个偏移。
     pub(crate) process_scroll: VirtualListScrollHandle,
     /// 监听端口列表滚动句柄。
@@ -152,7 +160,9 @@ impl MonitorState {
             chart_type: SparklineChartType::default(),
             sort: ProcessSort::Cpu,
             sort_ascending: false,
-            processes: Vec::new(),
+            processes: std::rc::Rc::new(Vec::new()),
+            process_revision: 0,
+            process_order_cache: None,
             process_scroll: VirtualListScrollHandle::new(),
             ports_scroll: VirtualListScrollHandle::new(),
             process_total: 0,
