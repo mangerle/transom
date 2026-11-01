@@ -24,7 +24,7 @@ use crate::keymap;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Editor, EditorState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Icon, Sizable};
@@ -208,62 +208,74 @@ impl EditorPanels {
         close_editor: Entity<EditorState>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let fold_icon = if item.collapsed {
+            IconName::ChevronUp
+        } else {
+            IconName::ChevronDown
+        };
+        let fold_label = if item.collapsed {
+            rust_i18n::t!("editor.expand_panel").to_string()
+        } else {
+            rust_i18n::t!("editor.collapse_panel").to_string()
+        };
+        let zoom_icon = if item.maximized {
+            IconName::Minimize2
+        } else {
+            IconName::Maximize2
+        };
+        let zoom_label = if item.maximized {
+            rust_i18n::t!("editor.restore_panel").to_string()
+        } else {
+            rust_i18n::t!("editor.maximize_panel").to_string()
+        };
         h_flex()
             .gap_1()
             .items_center()
             .child(
-                Button::new(if item.collapsed {
-                    "editor-panel-expand"
-                } else {
-                    "editor-panel-collapse"
-                })
-                .ghost()
-                .xsmall()
-                .icon(if item.collapsed {
-                    IconName::ChevronUp
-                } else {
-                    IconName::ChevronDown
-                })
-                .accessibility_label(if item.collapsed {
-                    rust_i18n::t!("editor.expand_panel").to_string()
-                } else {
-                    rust_i18n::t!("editor.collapse_panel").to_string()
-                })
+                crate::widgets::IconButton::new(
+                    if item.collapsed {
+                        "editor-panel-expand"
+                    } else {
+                        "editor-panel-collapse"
+                    },
+                    fold_icon,
+                    fold_label.clone(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .accessibility_label(fold_label)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_editor_panel_collapsed(&fold_editor, cx);
                 })),
             )
             .child(
-                Button::new(if item.maximized {
-                    "editor-panel-restore"
-                } else {
-                    "editor-panel-maximize"
-                })
-                .ghost()
-                .xsmall()
-                .icon(if item.maximized {
-                    IconName::Minimize2
-                } else {
-                    IconName::Maximize2
-                })
-                .accessibility_label(if item.maximized {
-                    rust_i18n::t!("editor.restore_panel").to_string()
-                } else {
-                    rust_i18n::t!("editor.maximize_panel").to_string()
-                })
+                crate::widgets::IconButton::new(
+                    if item.maximized {
+                        "editor-panel-restore"
+                    } else {
+                        "editor-panel-maximize"
+                    },
+                    zoom_icon,
+                    zoom_label.clone(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .accessibility_label(zoom_label)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_editor_panel_maximized(&zoom_editor, cx);
                 })),
             )
             .child(
-                Button::new("editor-panel-close")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Close)
-                    .accessibility_label(rust_i18n::t!("editor.close_panel").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.request_close_editor_panel(&close_editor, window, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    "editor-panel-close",
+                    IconName::Close,
+                    rust_i18n::t!("editor.close_panel").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.request_close_editor_panel(&close_editor, window, cx);
+                })),
             )
             .into_any_element()
     }
