@@ -327,35 +327,9 @@ impl CastPlayerView {
 }
 
 impl CastPlayerView {
-    /// 底部控制条：播放/步进/时间/进度/倍速/重播与分辨率徽标。
+    /// 底部控制条：播放组与进度组横向拼接。
     fn render_control_bar(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let current_time = self.current_time;
-        let total_duration = self.total_duration;
-        let is_playing = self.is_playing;
-        let speed = self.speed;
-        let play_icon = if is_playing {
-            IconName::Pause
-        } else {
-            IconName::Play
-        };
-        let play_tooltip = if is_playing {
-            rust_i18n::t!("recorder.pause").to_string()
-        } else {
-            rust_i18n::t!("recorder.play").to_string()
-        };
-
-        let time_label = format!(
-            "{} / {}",
-            format_duration(current_time),
-            format_duration(total_duration)
-        );
-
-        let resolution_badge = format!(
-            "{} · {}×{}",
-            self.title, self.header.width, self.header.height
-        );
-
-        let control_bar = h_flex()
+        h_flex()
             .id("player-control-bar")
             .h(px(40.0))
             .px_3()
@@ -364,6 +338,26 @@ impl CastPlayerView {
             .bg(p.tab_bar)
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Top, p.divider_width)
+            .child(self.render_playback_buttons(p, cx))
+            .child(self.render_progress_controls(p, cx))
+            .into_any_element()
+    }
+
+    /// 播放/后退/前进三个按钮。
+    fn render_playback_buttons(&self, _p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let play_icon = if self.is_playing {
+            IconName::Pause
+        } else {
+            IconName::Play
+        };
+        let play_tooltip = if self.is_playing {
+            rust_i18n::t!("recorder.pause").to_string()
+        } else {
+            rust_i18n::t!("recorder.play").to_string()
+        };
+        h_flex()
+            .gap_2()
+            .items_center()
             .child(
                 Button::new("player-play-toggle")
                     .ghost()
@@ -394,6 +388,25 @@ impl CastPlayerView {
                         this.step_forward(5.0, cx);
                     })),
             )
+            .into_any_element()
+    }
+
+    /// 时间、进度滑块、倍速、重播与分辨率徽标。
+    fn render_progress_controls(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let time_label = format!(
+            "{} / {}",
+            format_duration(self.current_time),
+            format_duration(self.total_duration)
+        );
+        let speed = self.speed;
+        let resolution_badge = format!(
+            "{} · {}×{}",
+            self.title, self.header.width, self.header.height
+        );
+        h_flex()
+            .flex_1()
+            .gap_2()
+            .items_center()
             .child(
                 div()
                     .text_xs()
@@ -436,9 +449,8 @@ impl CastPlayerView {
                     .text_xs()
                     .text_color(p.muted_foreground)
                     .child(resolution_badge),
-            );
-
-        control_bar.into_any_element()
+            )
+            .into_any_element()
     }
 }
 
