@@ -3,6 +3,7 @@
 use super::width::{COLLAPSED_COLUMN_WIDTH, sftp_columns_content_width};
 use super::*;
 use crate::sftp::entity::SftpPanelView;
+use transom_core::AppSettings;
 
 impl AppShell {
     /// 折叠或展开后同步 SFTP 面板的整体宽度。
@@ -29,7 +30,7 @@ impl AppShell {
             self.state.sftp_panel_width_target = None;
             return;
         };
-        let Some(index) = self.sftp_resizable_index() else {
+        let Some(index) = self.sftp_resizable_index(&self.state.settings) else {
             return;
         };
         let panels = if self.state.settings.window.sftp_panel_side.is_left() {
@@ -84,7 +85,7 @@ impl AppShell {
         if delta <= 0.5 {
             return;
         }
-        let Some(index) = self.sftp_resizable_index() else {
+        let Some(index) = self.sftp_resizable_index(&self.state.settings) else {
             return;
         };
         let panels = if self.state.settings.window.sftp_panel_side.is_left() {
@@ -110,11 +111,11 @@ impl AppShell {
     ///
     /// 侧栏恒占索引 0（不可见时也保留占位以稳定索引），SFTP 停靠左侧时紧随其后，
     /// 停靠右侧时排在主面板之后。
-    fn sftp_resizable_index(&self) -> Option<usize> {
+    fn sftp_resizable_index(&self, settings: &AppSettings) -> Option<usize> {
         if self.state.immersive {
             return None;
         }
-        Some(if self.state.settings.window.sftp_panel_side.is_left() {
+        Some(if settings.window.sftp_panel_side.is_left() {
             1
         } else {
             2

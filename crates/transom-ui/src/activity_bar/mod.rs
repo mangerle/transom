@@ -25,6 +25,7 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use metrics::METRICS;
+use transom_core::AppSettings;
 use transom_core::{ActivityItemId, Connection, TabPosition};
 
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
@@ -84,14 +85,14 @@ impl AppShell {
             .settings
             .activity_bar
             .top_items()
-            .filter(|id| self.activity_item_available(*id))
+            .filter(|id| self.activity_item_available(*id, &self.state.settings))
             .collect();
         let bottom: Vec<ActivityItemId> = self
             .state
             .settings
             .activity_bar
             .bottom_items()
-            .filter(|id| self.activity_item_available(*id))
+            .filter(|id| self.activity_item_available(*id, &self.state.settings))
             .collect();
         let mut top_children = Vec::with_capacity(top.len());
         for id in top {
@@ -146,7 +147,7 @@ impl AppShell {
     ) -> AnyElement {
         let label = activity_item_label(id);
         let icon = activity_item_icon(id);
-        let tooltip = self.activity_item_tooltip(id, &label);
+        let tooltip = self.activity_item_tooltip(id, &label, &self.state.settings);
         let selected =
             self.state
                 .activity_item_selected(id, self.state.monitor.read(cx).is_open(), cx);
@@ -250,9 +251,14 @@ impl AppShell {
         }
     }
 
-    fn activity_item_tooltip(&self, id: ActivityItemId, label: &str) -> String {
+    fn activity_item_tooltip(
+        &self,
+        id: ActivityItemId,
+        label: &str,
+        settings: &AppSettings,
+    ) -> String {
         if id == ActivityItemId::Language {
-            if crate::i18n::resolve_language(&self.state.settings.language) == "zh-CN" {
+            if crate::i18n::resolve_language(&settings.language) == "zh-CN" {
                 rust_i18n::t!("activity.switch_to_english").to_string()
             } else {
                 rust_i18n::t!("activity.switch_to_chinese").to_string()
@@ -274,8 +280,8 @@ impl AppShell {
     ///
     /// 纵向标签条目只在"标签位置 = 左侧"时有意义；顶部模式下直接不渲染，
     /// 避免保留一个点击无反应的图标。设置页仍保留该条目，方便用户调整顺序。
-    fn activity_item_available(&self, id: ActivityItemId) -> bool {
-        id != ActivityItemId::Tabs || self.state.settings.window.tab_position == TabPosition::Left
+    fn activity_item_available(&self, id: ActivityItemId, settings: &AppSettings) -> bool {
+        id != ActivityItemId::Tabs || settings.window.tab_position == TabPosition::Left
     }
 }
 

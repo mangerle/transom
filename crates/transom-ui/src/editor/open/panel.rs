@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::sftp::format_size;
+use transom_core::AppSettings;
 
 /// 已通过目录闸门的远端编辑面板打开参数。
 pub(crate) struct RemoteEditorOpen {
@@ -132,7 +133,7 @@ impl AppShell {
         // 这里的尺寸闸门只是第一道：目录列表的尺寸可能过期，net 层还会在读取循环内
         // 按同一上限二次设限，两道一起才挡得住"列出之后文件变大"的情况。
         let op_id = TransferId::new();
-        let settings = self.editor_panel_settings();
+        let settings = self.editor_panel_settings(&self.state.settings);
         let request = self.state.editors.update(cx, |panels, cx| {
             panels.spawn_editor_panel(
                 SpawnEditorPanelParams {
@@ -166,7 +167,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let settings = self.editor_panel_settings();
+        let settings = self.editor_panel_settings(&self.state.settings);
         self.state.editors.update(cx, |panels, cx| {
             panels.spawn_editor_panel(
                 SpawnEditorPanelParams {
@@ -185,10 +186,10 @@ impl AppShell {
     }
 
     /// 面板编辑器外观设置快照：实体装配时直接使用，避免反向读取工作区。
-    fn editor_panel_settings(&self) -> EditorPanelSettings {
+    fn editor_panel_settings(&self, settings: &AppSettings) -> EditorPanelSettings {
         EditorPanelSettings {
-            line_numbers: self.state.settings.sftp.editor_line_numbers,
-            soft_wrap: self.state.settings.sftp.editor_soft_wrap,
+            line_numbers: settings.sftp.editor_line_numbers,
+            soft_wrap: settings.sftp.editor_soft_wrap,
         }
     }
 }

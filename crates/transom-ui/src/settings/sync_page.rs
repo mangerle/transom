@@ -10,6 +10,7 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
+use transom_core::AppSettings;
 use transom_core::SyncEndpoint;
 
 /// 同步页输入行：标签 + 输入框，带分割线。
@@ -34,7 +35,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let current_kind = self.sync_endpoint_kind();
+        let current_kind = self.sync_endpoint_kind(&self.state.settings);
 
         // 四种端点类型走下拉：与全页其它枚举项一致，长标签（WebDAV、Git 仓库）
         // 不会把整行占满；切换要回填表单输入框，所以用带窗口句柄的变体。
@@ -182,7 +183,10 @@ impl AppShell {
                         .into_any_element(),
                     p,
                 ))
-                .child(crate::widgets::setting_frame(self.sync_status_row(p), p))
+                .child(crate::widgets::setting_frame(
+                    self.sync_status_row(p, &self.state.settings),
+                    p,
+                ))
                 .child(crate::widgets::setting_frame(
                     h_flex()
                         .w_full()
@@ -226,7 +230,7 @@ impl AppShell {
     }
 
     /// 最近一次上传/下载时间行；从未同步时显示"从未"。
-    fn sync_status_row(&self, p: &Palette) -> AnyElement {
+    fn sync_status_row(&self, p: &Palette, settings: &AppSettings) -> AnyElement {
         let format = |at: Option<i64>| {
             at.and_then(|secs| chrono::DateTime::from_timestamp(secs, 0))
                 .map(|time| {
@@ -243,22 +247,22 @@ impl AppShell {
             .child(format!(
                 "{}: {}",
                 rust_i18n::t!("sync.last_push"),
-                format(self.state.settings.sync.last_push_at)
+                format(settings.sync.last_push_at)
             ))
             .child(format!(
                 "{}: {}",
                 rust_i18n::t!("sync.last_pull"),
-                format(self.state.settings.sync.last_pull_at)
+                format(settings.sync.last_pull_at)
             ))
             .into_any_element()
     }
 
     /// 当前生效的同步端点类型：Git 优先（`git` 有值时端点字段恒为空）。
-    fn sync_endpoint_kind(&self) -> &'static str {
-        if self.state.settings.sync.git.is_some() {
+    fn sync_endpoint_kind(&self, settings: &AppSettings) -> &'static str {
+        if settings.sync.git.is_some() {
             "git"
         } else {
-            match self.state.settings.sync.endpoint {
+            match settings.sync.endpoint {
                 Some(SyncEndpoint::Webdav { .. }) => "webdav",
                 Some(SyncEndpoint::S3 { .. }) => "s3",
                 None => "off",
@@ -277,7 +281,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if kind == self.sync_endpoint_kind() {
+        if kind == self.sync_endpoint_kind(&self.state.settings) {
             return;
         }
         match kind {

@@ -30,6 +30,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use std::collections::HashSet;
+use transom_core::AppSettings;
 use transom_core::{GroupId, SessionId, TabPosition};
 
 impl AppState {
@@ -243,8 +244,8 @@ impl AppShell {
         crate::widgets::empty_state(IconName::Terminal, title, hint, p)
     }
 
-    pub(crate) fn show_vertical_tabs_panel(&self) -> bool {
-        self.state.settings.window.tab_position == TabPosition::Left
+    pub(crate) fn show_vertical_tabs_panel(&self, settings: &AppSettings) -> bool {
+        settings.window.tab_position == TabPosition::Left
             && self.state.sidebar.visible
             && self.state.vertical_tabs_open
     }

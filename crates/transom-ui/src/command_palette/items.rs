@@ -14,6 +14,7 @@ use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::command::{CommandGroup, CommandItem};
 use gpui_kit::component::theme::ThemeRegistry;
 use gpui_kit::*;
+use transom_core::AppSettings;
 use transom_core::{Connection, SessionId, SnippetId, preset_themes};
 
 /// 面板条目的落点；Action 条目的动作已挂在 `CommandItem` 上，由组件派发。
@@ -198,7 +199,7 @@ impl AppShell {
         );
         model.push(
             rust_i18n::t!("app.palette_terminal_themes").to_string(),
-            self.terminal_theme_items(&needle),
+            self.terminal_theme_items(&needle, &self.state.settings),
         );
         model
     }
@@ -227,8 +228,12 @@ impl AppShell {
             })
             .collect()
     }
-    fn terminal_theme_items(&self, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
-        let active = self.state.settings.terminal_profile.theme_name.as_str();
+    fn terminal_theme_items(
+        &self,
+        needle: &str,
+        settings: &AppSettings,
+    ) -> Vec<(CommandItem, PaletteTarget)> {
+        let active = settings.terminal_profile.theme_name.as_str();
         // 中文关键词取本地化标题，避免把界面文案硬编码进源码。
         let group_keyword = rust_i18n::t!("app.palette_terminal_themes").to_string();
         preset_themes()
