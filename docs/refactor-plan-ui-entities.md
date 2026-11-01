@@ -49,6 +49,23 @@
 | `cloud_sync` | 14 个方法全是跨域编排（命令、合并、安全副本、凭据），无自家 UI 状态 |
 | `workspace`/`tabs`/`sidebar` | 标签与窗格生命周期本就是外壳职责 |
 
+## 四之二、已知未修的系统性风险
+
+外壳持有 `&mut AppShell` 时调用 `view.update(...)`，若实体方法内部再
+`read_shell_parts` / `with_shell_parts` 读外壳，会 panic：
+`cannot read AppShell while it is already being updated`。
+
+已修：`request_sftp_list` / `request_sftp_list_pane`（连接号由外壳算好传入）。
+
+**未修（按风险排序，需逐个改成"外壳算好参数 → 实体只用手上数据"）**：
+
+1. `SftpPanelView::send_op_for_connection`（外壳 `send_sftp_op_for_connection` 调用）
+2. `SftpPanelView::enqueue_uploads`、`process_queue`（外壳队列/拖拽入口调用）
+3. 其余 `with_shell_parts` 副作用型调用：建议改为 `cx.defer` 延后到租借释放后执行
+
+判据：实体方法体内出现 `read_shell_parts` / `with_shell_parts` 的，一律不能被
+外壳在持有借用时直接调用。
+
 ## 五、硬约束（违反会 panic 或回归）
 
 1. 实体回调回交外壳后，外壳方法不得再 `read`/`update` 同一实体（双重租借 panic）。

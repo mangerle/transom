@@ -12,7 +12,7 @@ use super::{SftpRemotePaneRef, normalize_local_cwd, normalize_remote_cwd};
 use crate::app::AppShell;
 use gpui_kit::*;
 use std::path::Path;
-use transom_core::{SftpCommand, SftpOperation, TabId, TransferId};
+use transom_core::{ConnectionId, SftpCommand, SftpOperation, TabId, TransferId};
 
 impl SftpPanelView {
     /// 向目标远端列发起目录列举：主远端与并列远端共用同一套加载态与错误清理。
@@ -36,6 +36,23 @@ impl SftpPanelView {
             log::warn!("远端目录请求找不到目标列，窗格: {tab_id}，目标: {target:?}，路径: {path}");
             return;
         };
+        self.request_list_pane_with_connection(tab_id, target, path, main_connection, cx);
+    }
+
+    /// 主连接由调用方给出时的列举入口。
+    ///
+    /// 外壳在持有 `&mut AppShell` 期间调用本方法，此时实体若再去读外壳会触发
+    /// “cannot read while it is already being updated”，因此连接号必须由外壳算好传入。
+    pub(crate) fn request_list_pane_with_connection(
+        &mut self,
+        tab_id: TabId,
+        target: SftpRemotePaneRef,
+        path: String,
+        main_connection: ConnectionId,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismiss_hover_preview(cx);
+        let app = self.app.clone();
         let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
         else {
             log::warn!("远端目录请求找不到目标列，窗格: {tab_id}，目标: {target:?}，路径: {path}");
@@ -133,9 +150,18 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
+        // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
+        let Some(main_connection) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+        else {
+            return;
+        };
         if let Some(view) = self.sftp_view(tab_id) {
             view.update(cx, |view, cx| {
-                view.request_list_pane(tab_id, target, path, cx)
+                view.request_list_pane_with_connection(tab_id, target, path, main_connection, cx)
             });
         }
     }
@@ -146,8 +172,25 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
+        // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
+        let Some(main_connection) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+        else {
+            return;
+        };
         if let Some(view) = self.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.request_list(tab_id, path, cx));
+            view.update(cx, |view, cx| {
+                view.request_list_pane_with_connection(
+                    tab_id,
+                    SftpRemotePaneRef::Main,
+                    path,
+                    main_connection,
+                    cx,
+                )
+            });
         }
     }
 
