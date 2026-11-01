@@ -1,6 +1,5 @@
 //! AppShell 依赖的各类模态弹窗与输入状态契约定义。
 
-use crate::forward::ForwardPanelState;
 use crate::pane_tree::LayoutNode;
 use crate::sftp::SftpPanelView;
 use gpui_kit::*;
@@ -74,7 +73,7 @@ pub(crate) struct SessionPaneState {
     pub(crate) terminal: Option<Entity<TerminalView>>,
     /// 该窗格 SFTP 面板的实体句柄；实体随窗格强持有，置 `None` 即销毁。
     pub(crate) sftp_view: Option<Entity<SftpPanelView>>,
-    pub(crate) forwards_panel: Option<ForwardPanelState>,
+    pub(crate) forwards_view: Option<Entity<crate::forward::ForwardView>>,
     pub(crate) forward_statuses: HashMap<ForwardId, ForwardStatus>,
     pub(crate) system_stats: Option<SystemStats>,
     pub(crate) network_traffic: Option<NetworkTraffic>,
@@ -148,15 +147,9 @@ impl TerminalTab {
         self.session_pane().and_then(|p| p.sftp_view.clone())
     }
 
-    /// 快捷访问端口转发面板引用。
-    pub(crate) fn forwards_panel(&self) -> Option<&ForwardPanelState> {
-        self.session_pane().and_then(|p| p.forwards_panel.as_ref())
-    }
-
-    /// 快捷访问端口转发面板可变引用。
-    pub(crate) fn forwards_panel_mut(&mut self) -> Option<&mut ForwardPanelState> {
-        self.session_pane_mut()
-            .and_then(|p| p.forwards_panel.as_mut())
+    /// 快捷访问端口转发面板实体。
+    pub(crate) fn forwards_view(&self) -> Option<Entity<crate::forward::ForwardView>> {
+        self.session_pane().and_then(|p| p.forwards_view.clone())
     }
 
     /// 快捷访问 Zmodem 传输状态。

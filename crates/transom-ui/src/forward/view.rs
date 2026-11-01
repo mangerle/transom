@@ -1,6 +1,7 @@
 //! 端口转发面板与公网监听确认弹窗视图渲染。
 
 use super::ForwardKindChoice;
+use super::ForwardView;
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
@@ -13,44 +14,40 @@ use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_core::{ForwardKind, ForwardState};
 
-impl AppShell {
+impl ForwardView {
     pub(crate) fn render_forward_panel(
         &mut self,
         _window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(tab_id) = self.state.workspace.active_tab else {
-            return div().into_any_element();
-        };
-        let Some(tab) = self.state.workspace.tab(tab_id) else {
-            return div().into_any_element();
-        };
-        let Some(pane) = tab.session_pane() else {
-            return div().into_any_element();
-        };
-        let Some(panel) = pane.forwards_panel.as_ref() else {
-            return div().into_any_element();
-        };
-        let Some(session) = self
-            .state
-            .catalog
-            .sessions
-            .iter()
-            .find(|session| session.id == tab.session_id)
+        // 会话规则与转发状态属于外壳：一次性取好快照再渲染，避免渲染期间反复跨界读取。
+        let Some(context) = self
+            .with_shell(cx, |shell, _| {
+                let tab_id = shell.state.workspace.active_tab?;
+                let tab = shell.state.workspace.tab(tab_id)?;
+                let pane = tab.session_pane()?;
+                let session = shell
+                    .state
+                    .catalog
+                    .sessions
+                    .iter()
+                    .find(|session| session.id == tab.session_id)?;
+                Some((
+                    tab_id,
+                    session.forwards.clone(),
+                    pane.forward_statuses.clone(),
+                ))
+            })
+            .flatten()
         else {
             return div().into_any_element();
         };
+        let (tab_id, forwards, statuses) = context;
 
-        let header = Self::render_forward_header(cx, p);
-        let rules_list = Self::render_forward_rules_list(
-            tab_id,
-            &session.forwards,
-            &pane.forward_statuses,
-            cx,
-            p,
-        );
-        let add_form = Self::render_forward_add_form(tab_id, panel, cx, p);
+        let header = self.render_forward_header(cx, p);
+        let rules_list = self.render_forward_rules_list(tab_id, &forwards, &statuses, cx, p);
+        let add_form = self.render_forward_add_form(tab_id, cx, p);
 
         v_flex()
             .w(px(360.0))
@@ -67,7 +64,7 @@ impl AppShell {
     ///
     /// 高度取标签栏 token 而不是靠内边距撑开：该面板与主区标签条、监控抽屉
     /// 并排，三条横线必须在同一水平线上。
-    fn render_forward_header(cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+    fn render_forward_header(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
         h_flex()
             .h(rems(size::TAB_BAR_HEIGHT))
             .px_3()
@@ -87,13 +84,11 @@ impl AppShell {
                     .xsmall()
                     .icon(IconName::X)
                     .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(tab_id) = this.state.workspace.active_tab
-                            && let Some(tab) = this.state.workspace.tab_mut(tab_id)
-                            && let Some(pane) = tab.session_pane_mut()
-                        {
-                            pane.forwards_panel = None;
-                        }
-                        cx.notify();
+                        // 句柄由窗格持有，回收动作回交外壳；实体只发请求。
+                        this.with_shell(cx, |shell, cx| {
+                            shell.close_forward_panel();
+                            cx.notify();
+                        });
                     })),
             )
             .into_any_element()
@@ -101,6 +96,7 @@ impl AppShell {
 
     /// 端口转发规则列表渲染。
     fn render_forward_rules_list(
+        &self,
         tab_id: transom_core::TabId,
         rules: &[transom_core::ForwardRule],
         statuses: &std::collections::HashMap<transom_core::ForwardId, transom_core::ForwardStatus>,
@@ -198,7 +194,9 @@ impl AppShell {
                                 .small()
                                 .label(rust_i18n::t!("forward.stop").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.stop_forward_rule(tab_id, rule_id, cx)
+                                    this.with_shell(cx, |shell, cx| {
+                                        shell.stop_forward_rule(tab_id, rule_id, cx)
+                                    });
                                 }))
                         } else {
                             Button::new(ElementId::Name(format!("forward-start-{rule_id}").into()))
@@ -206,7 +204,9 @@ impl AppShell {
                                 .primary()
                                 .label(rust_i18n::t!("forward.start").to_string())
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.start_forward_rule(tab_id, rule_id, cx)
+                                    this.with_shell(cx, |shell, cx| {
+                                        shell.start_forward_rule(tab_id, rule_id, cx)
+                                    });
                                 }))
                         })
                         .child(
@@ -218,7 +218,11 @@ impl AppShell {
                             .icon(IconName::Trash)
                             .label(rust_i18n::t!("forward.delete").to_string())
                             .on_click(cx.listener(
-                                move |this, _, _, cx| this.delete_forward_rule(tab_id, rule_id, cx),
+                                move |this, _, _, cx| {
+                                    this.with_shell(cx, |shell, cx| {
+                                        shell.delete_forward_rule(tab_id, rule_id, cx)
+                                    });
+                                },
                             )),
                         ),
                 );
@@ -245,18 +249,18 @@ impl AppShell {
 
     /// 端口转发新增规则表单渲染。
     fn render_forward_add_form(
+        &self,
         tab_id: transom_core::TabId,
-        panel: &super::ForwardPanelState,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let kind = panel.kind;
-        let panel_error = panel.error.clone();
-        let name_input = panel.name_input.clone();
-        let bind_host_input = panel.bind_host_input.clone();
-        let bind_port_input = panel.bind_port_input.clone();
-        let target_host_input = panel.target_host_input.clone();
-        let target_port_input = panel.target_port_input.clone();
+        let kind = self.state.kind;
+        let panel_error = self.state.error.clone();
+        let name_input = self.state.name_input.clone();
+        let bind_host_input = self.state.bind_host_input.clone();
+        let bind_port_input = self.state.bind_port_input.clone();
+        let target_host_input = self.state.target_host_input.clone();
+        let target_port_input = self.state.target_port_input.clone();
 
         let local_button = if kind == ForwardKindChoice::Local {
             Button::new("forward-mode-local")
@@ -269,11 +273,7 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.local").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.state.workspace.active_tab
-                && let Some(panel) = this.state.forward_panel_mut(tab_id)
-            {
-                panel.kind = ForwardKindChoice::Local;
-            }
+            this.state.kind = ForwardKindChoice::Local;
             cx.notify();
         }));
 
@@ -288,11 +288,7 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.remote").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.state.workspace.active_tab
-                && let Some(panel) = this.state.forward_panel_mut(tab_id)
-            {
-                panel.kind = ForwardKindChoice::Remote;
-            }
+            this.state.kind = ForwardKindChoice::Remote;
             cx.notify();
         }));
 
@@ -307,11 +303,7 @@ impl AppShell {
                 .label(rust_i18n::t!("forward.dynamic").to_string())
         }
         .on_click(cx.listener(|this, _, _, cx| {
-            if let Some(tab_id) = this.state.workspace.active_tab
-                && let Some(panel) = this.state.forward_panel_mut(tab_id)
-            {
-                panel.kind = ForwardKindChoice::Dynamic;
-            }
+            this.state.kind = ForwardKindChoice::Dynamic;
             cx.notify();
         }));
 
@@ -360,7 +352,14 @@ impl AppShell {
                 .small()
                 .icon(IconName::Plus)
                 .label(rust_i18n::t!("forward.add").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| this.add_forward_rule(tab_id, cx))),
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    // 表单校验在实体里完成，通过后把规则交给外壳落库并发命令。
+                    if let Some(rule) = this.build_rule(cx) {
+                        this.with_shell(cx, |shell, cx| {
+                            shell.submit_forward_rule(tab_id, rule, cx)
+                        });
+                    }
+                })),
         );
         if let Some(error) = panel_error {
             add_form = add_form.child(div().text_xs().text_color(p.danger).child(error));
@@ -368,7 +367,9 @@ impl AppShell {
 
         add_form.into_any_element()
     }
+}
 
+impl AppShell {
     /// 端口转发冲突确认的弹窗体。
     ///
     /// 取消与"确认启动"分别绑到 `cancel_forward_confirm` /

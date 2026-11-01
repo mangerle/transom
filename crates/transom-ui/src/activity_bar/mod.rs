@@ -40,7 +40,7 @@ impl AppState {
                 .workspace
                 .active_tab
                 .and_then(|tab_id| self.workspace.tab(tab_id))
-                .is_some_and(|tab| tab.forwards_panel().is_some()),
+                .is_some_and(|tab| tab.forwards_view().is_some()),
             ActivityItemId::Sftp => self
                 .workspace
                 .active_tab

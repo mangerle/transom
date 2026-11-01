@@ -9,9 +9,8 @@ use crate::keymap;
 use crate::palette::sftp_text_input;
 use gpui_kit::*;
 use transom_core::{
-    AppError, BindAddress, Connection, ConnectionId, ErrorCode, ForwardCommand, ForwardId,
-    ForwardKind, ForwardRule, ForwardState, ForwardStatus, SessionId, SocksOptions, TabId,
-    TargetAddress,
+    AppError, Connection, ConnectionId, ErrorCode, ForwardCommand, ForwardId, ForwardRule,
+    ForwardState, ForwardStatus, SessionId, TabId,
 };
 
 impl AppState {
@@ -51,12 +50,6 @@ impl AppState {
                 },
             );
         }
-    }
-
-    pub(crate) fn forward_panel_mut(&mut self, tab_id: TabId) -> Option<&mut ForwardPanelState> {
-        self.workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.forwards_panel_mut())
     }
 }
 
@@ -109,9 +102,9 @@ impl AppShell {
         let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return;
         };
-        if self.state.workspace.tabs[index].forwards_panel().is_some() {
+        if self.state.workspace.tabs[index].forwards_view().is_some() {
             if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
-                pane.forwards_panel = None;
+                pane.forwards_view = None;
             }
             cx.notify();
             return;
@@ -159,8 +152,8 @@ impl AppShell {
             "80",
             rust_i18n::t!("forward.target_port").as_ref(),
         );
-        if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
-            pane.forwards_panel = Some(ForwardPanelState {
+        let view = cx.new(|_| {
+            super::ForwardView::new(ForwardPanelState {
                 name_input: name,
                 bind_host_input: bind_host,
                 bind_port_input: bind_port,
@@ -168,12 +161,33 @@ impl AppShell {
                 target_port_input: target_port,
                 kind: ForwardKindChoice::Local,
                 error: None,
-            });
+            })
+        });
+        let weak = cx.entity().downgrade();
+        view.update(cx, |view, _| view.attach(weak));
+        if let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() {
+            pane.forwards_view = Some(view);
         }
         cx.notify();
     }
 
-    pub(crate) fn add_forward_rule(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    /// 关闭当前活动窗格的转发面板：句柄由窗格持有，只有外壳能回收。
+    pub(crate) fn close_forward_panel(&mut self) {
+        if let Some(tab_id) = self.state.workspace.active_tab
+            && let Some(tab) = self.state.workspace.tab_mut(tab_id)
+            && let Some(pane) = tab.session_pane_mut()
+        {
+            pane.forwards_view = None;
+        }
+    }
+
+    /// 面板校验通过后提交规则：落库、必要时要求公网确认，否则直接下发启动命令。
+    pub(crate) fn submit_forward_rule(
+        &mut self,
+        tab_id: TabId,
+        rule: ForwardRule,
+        cx: &mut Context<Self>,
+    ) {
         let Some(tab) = self.state.workspace.tab(tab_id) else {
             return;
         };
@@ -181,81 +195,7 @@ impl AppShell {
             return;
         };
         let session_id = tab.session_id;
-        let Some(panel) = tab.forwards_panel() else {
-            return;
-        };
-        let name = panel.name_input.read(cx).value().trim().to_string();
-        let bind_host = panel.bind_host_input.read(cx).value().trim().to_string();
-        let target_host = panel.target_host_input.read(cx).value().trim().to_string();
-        let bind_port: u16 = match panel.bind_port_input.read(cx).value().trim().parse() {
-            Ok(port) if port > 0 => port,
-            _ => {
-                if let Some(panel) = self.state.forward_panel_mut(tab_id) {
-                    panel.error = Some(rust_i18n::t!("forward.error_port").to_string());
-                }
-                cx.notify();
-                return;
-            }
-        };
-        let target_port: u16 = match panel.target_port_input.read(cx).value().trim().parse() {
-            Ok(port) if port > 0 => port,
-            _ => {
-                if let Some(panel) = self.state.forward_panel_mut(tab_id) {
-                    panel.error = Some(rust_i18n::t!("forward.error_port").to_string());
-                }
-                cx.notify();
-                return;
-            }
-        };
-        if bind_host.is_empty() {
-            if let Some(panel) = self.state.forward_panel_mut(tab_id) {
-                panel.error = Some(rust_i18n::t!("forward.bind_host").to_string());
-            }
-            cx.notify();
-            return;
-        }
-        if panel.kind != ForwardKindChoice::Dynamic && target_host.is_empty() {
-            if let Some(panel) = self.state.forward_panel_mut(tab_id) {
-                panel.error = Some(rust_i18n::t!("forward.error_target").to_string());
-            }
-            cx.notify();
-            return;
-        }
-        let kind = match panel.kind {
-            ForwardKindChoice::Local => ForwardKind::Local {
-                bind: BindAddress {
-                    host: bind_host.clone(),
-                    port: bind_port,
-                },
-                target: TargetAddress {
-                    host: target_host,
-                    port: target_port,
-                },
-            },
-            ForwardKindChoice::Remote => ForwardKind::Remote {
-                bind: BindAddress {
-                    host: bind_host.clone(),
-                    port: bind_port,
-                },
-                target: TargetAddress {
-                    host: target_host,
-                    port: target_port,
-                },
-            },
-            ForwardKindChoice::Dynamic => ForwardKind::Dynamic {
-                bind: BindAddress {
-                    host: bind_host.clone(),
-                    port: bind_port,
-                },
-                socks: SocksOptions::default(),
-            },
-        };
-        let name = if name.is_empty() {
-            format!("{bind_host}:{bind_port}")
-        } else {
-            name
-        };
-        let rule = ForwardRule::new(name, kind);
+
         if let Some(session) = self
             .state
             .catalog
@@ -266,11 +206,9 @@ impl AppShell {
             session.forwards.push(rule.clone());
         }
         self.state.persist_catalog();
-        if let Some(panel) = self.state.forward_panel_mut(tab_id) {
-            panel.error = None;
-        }
 
-        if is_public_bind_address(&bind_host) {
+        // 公网监听必须二次确认：不能因为点了一次「添加」就把端口开到公网。
+        if is_public_bind_address(forward_bind_host(&rule)) {
             self.state.modals.confirm_forward_any = Some(PendingForwardConfirm {
                 tab_id,
                 connection_id,

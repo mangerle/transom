@@ -14,6 +14,22 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 
+impl AppShell {
+    /// 转发面板以实体元素形式挂载；没有活动面板时返回占位空元素。
+    fn forward_view_element(&self, _cx: &mut Context<Self>) -> AnyElement {
+        match self
+            .state
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.state.workspace.tab(tab_id))
+            .and_then(|tab| tab.forwards_view())
+        {
+            Some(view) => view.into_any_element(),
+            None => div().into_any_element(),
+        }
+    }
+}
+
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(error) = self.state.take_persistence_error() {
@@ -98,7 +114,7 @@ impl Render for AppShell {
                     resizable_panel()
                         .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
                         .fixed()
-                        .child(self.render_forward_panel(window, cx, &p)),
+                        .child(self.forward_view_element(cx)),
                 );
             }
         }
@@ -119,7 +135,7 @@ impl Render for AppShell {
                     resizable_panel()
                         .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
                         .fixed()
-                        .child(self.render_forward_panel(window, cx, &p)),
+                        .child(self.forward_view_element(cx)),
                 );
             }
         }
@@ -304,7 +320,7 @@ impl AppShell {
         let sftp_collapsed_width = sftp_panel
             .map(SftpPanelState::all_collapsed_width)
             .unwrap_or(32.0);
-        let show_forwards = active_panel.is_some_and(|tab| tab.forwards_panel().is_some());
+        let show_forwards = active_panel.is_some_and(|tab| tab.forwards_view().is_some());
         let (sftp_width, mut sftp_min_width) = if sftp_all_collapsed {
             (sftp_collapsed_width, sftp_collapsed_width)
         } else if sftp_local_only && sftp_panel.is_some_and(|panel| panel.side_remotes.is_empty()) {

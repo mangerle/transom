@@ -1,7 +1,10 @@
 //! 端口转发面板与公网监听确认弹窗模块。
 
 mod actions;
+mod entity;
 mod view;
+
+pub(crate) use entity::ForwardView;
 
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
