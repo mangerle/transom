@@ -11,148 +11,149 @@ use transom_core::{
     SerialStopBits, TextEncoding,
 };
 
+/// 从初始化上下文推导表单默认值，与控件创建解耦。
+fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
+    let SessionFormInit {
+        base,
+        folder_path,
+        identities,
+        jump_options,
+        folder_options,
+        global_proxy,
+        block_view,
+    } = init;
+    let connection = match base.as_ref().map(|session| &session.connection) {
+        Some(Connection::Serial(_)) => ConnectionChoice::Serial,
+        Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
+        Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
+        _ => ConnectionChoice::Ssh,
+    };
+    let serial = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Serial(serial) => Some(serial),
+        _ => None,
+    });
+    let telnet = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Telnet(telnet) => Some(telnet),
+        _ => None,
+    });
+    let ssh = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Ssh(ssh) => Some(ssh),
+        _ => None,
+    });
+    let mosh = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Mosh(mosh) => Some(mosh),
+        _ => None,
+    });
+    let auth_source = ssh.map(|s| &s.auth).or_else(|| mosh.map(|m| &m.auth));
+    let (auth, save_password, save_passphrase, key_path, cert_path) = match auth_source {
+        Some(AuthMethod::Password { save }) => (
+            AuthChoice::Password,
+            *save,
+            false,
+            String::new(),
+            String::new(),
+        ),
+        Some(AuthMethod::PrivateKey {
+            path,
+            cert_path,
+            save_passphrase,
+        }) => (
+            AuthChoice::PrivateKey,
+            false,
+            *save_passphrase,
+            path.display().to_string(),
+            cert_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_default(),
+        ),
+        Some(AuthMethod::Agent) => (
+            AuthChoice::Agent,
+            false,
+            false,
+            String::new(),
+            String::new(),
+        ),
+        _ => (
+            AuthChoice::Password,
+            true,
+            false,
+            String::new(),
+            String::new(),
+        ),
+    };
+    let startup_commands = base
+        .as_ref()
+        .map(|session| session.startup.to_multiline())
+        .unwrap_or_default();
+    let (connect_timeout, keepalive) = base
+        .as_ref()
+        .and_then(|session| match &session.connection {
+            Connection::Ssh(ssh) => {
+                Some((ssh.options.connect_timeout_secs, ssh.options.keepalive_secs))
+            }
+            Connection::Mosh(mosh) => Some((
+                mosh.options.connect_timeout_secs,
+                mosh.options.keepalive_secs,
+            )),
+            Connection::Telnet(telnet) => Some((
+                telnet.options.connect_timeout_secs,
+                telnet.options.keepalive_secs,
+            )),
+            _ => None,
+        })
+        .map(|(timeout, keepalive)| (timeout.to_string(), keepalive.to_string()))
+        .unwrap_or_else(|| ("15".to_string(), "30".to_string()));
+    let telnet_encoding = telnet
+        .map(|telnet| telnet.encoding)
+        .unwrap_or(TextEncoding::Utf8);
+    let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
+    let serial_baud = serial
+        .map(|serial| serial.baud_rate)
+        .unwrap_or(115_200)
+        .to_string();
+    let serial_data_bits = serial
+        .map(|serial| serial.data_bits)
+        .unwrap_or(SerialDataBits::Eight);
+    let serial_parity = serial
+        .map(|serial| serial.parity)
+        .unwrap_or(SerialParity::None);
+    let serial_stop_bits = serial
+        .map(|serial| serial.stop_bits)
+        .unwrap_or(SerialStopBits::One);
+    let serial_flow_control = serial
+        .map(|serial| serial.flow_control)
+        .unwrap_or(SerialFlowControl::None);
+    SessionFormSeed {
+        base,
+        connection,
+        auth,
+        save_password: save_password && connection == ConnectionChoice::Ssh,
+        save_passphrase,
+        key_path,
+        cert_path,
+        folder_path: folder_path.unwrap_or_default(),
+        startup_commands,
+        connect_timeout,
+        keepalive,
+        serial_port,
+        serial_baud,
+        serial_data_bits,
+        serial_parity,
+        serial_stop_bits,
+        serial_flow_control,
+        telnet_encoding,
+        identities,
+        jump_options,
+        folder_options,
+        global_proxy,
+        block_view,
+    }
+}
+
 impl SessionForm {
     pub fn new(window: &mut Window, cx: &mut Context<impl Sized>, init: SessionFormInit) -> Self {
-        let SessionFormInit {
-            base,
-            folder_path,
-            identities,
-            jump_options,
-            folder_options,
-            global_proxy,
-            block_view,
-        } = init;
-        let connection = match base.as_ref().map(|session| &session.connection) {
-            Some(Connection::Serial(_)) => ConnectionChoice::Serial,
-            Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
-            Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
-            _ => ConnectionChoice::Ssh,
-        };
-        let serial = base.as_ref().and_then(|session| match &session.connection {
-            Connection::Serial(serial) => Some(serial),
-            _ => None,
-        });
-        let telnet = base.as_ref().and_then(|session| match &session.connection {
-            Connection::Telnet(telnet) => Some(telnet),
-            _ => None,
-        });
-        let ssh = base.as_ref().and_then(|session| match &session.connection {
-            Connection::Ssh(ssh) => Some(ssh),
-            _ => None,
-        });
-        let mosh = base.as_ref().and_then(|session| match &session.connection {
-            Connection::Mosh(mosh) => Some(mosh),
-            _ => None,
-        });
-        let auth_source = ssh.map(|s| &s.auth).or_else(|| mosh.map(|m| &m.auth));
-        let (auth, save_password, save_passphrase, key_path, cert_path) = match auth_source {
-            Some(AuthMethod::Password { save }) => (
-                AuthChoice::Password,
-                *save,
-                false,
-                String::new(),
-                String::new(),
-            ),
-            Some(AuthMethod::PrivateKey {
-                path,
-                cert_path,
-                save_passphrase,
-            }) => (
-                AuthChoice::PrivateKey,
-                false,
-                *save_passphrase,
-                path.display().to_string(),
-                cert_path
-                    .as_ref()
-                    .map(|path| path.display().to_string())
-                    .unwrap_or_default(),
-            ),
-            Some(AuthMethod::Agent) => (
-                AuthChoice::Agent,
-                false,
-                false,
-                String::new(),
-                String::new(),
-            ),
-            _ => (
-                AuthChoice::Password,
-                true,
-                false,
-                String::new(),
-                String::new(),
-            ),
-        };
-        let startup_commands = base
-            .as_ref()
-            .map(|session| session.startup.to_multiline())
-            .unwrap_or_default();
-        let (connect_timeout, keepalive) = base
-            .as_ref()
-            .and_then(|session| match &session.connection {
-                Connection::Ssh(ssh) => {
-                    Some((ssh.options.connect_timeout_secs, ssh.options.keepalive_secs))
-                }
-                Connection::Mosh(mosh) => Some((
-                    mosh.options.connect_timeout_secs,
-                    mosh.options.keepalive_secs,
-                )),
-                Connection::Telnet(telnet) => Some((
-                    telnet.options.connect_timeout_secs,
-                    telnet.options.keepalive_secs,
-                )),
-                _ => None,
-            })
-            .map(|(timeout, keepalive)| (timeout.to_string(), keepalive.to_string()))
-            .unwrap_or_else(|| ("15".to_string(), "30".to_string()));
-        let telnet_encoding = telnet
-            .map(|telnet| telnet.encoding)
-            .unwrap_or(TextEncoding::Utf8);
-        let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
-        let serial_baud = serial
-            .map(|serial| serial.baud_rate)
-            .unwrap_or(115_200)
-            .to_string();
-        let serial_data_bits = serial
-            .map(|serial| serial.data_bits)
-            .unwrap_or(SerialDataBits::Eight);
-        let serial_parity = serial
-            .map(|serial| serial.parity)
-            .unwrap_or(SerialParity::None);
-        let serial_stop_bits = serial
-            .map(|serial| serial.stop_bits)
-            .unwrap_or(SerialStopBits::One);
-        let serial_flow_control = serial
-            .map(|serial| serial.flow_control)
-            .unwrap_or(SerialFlowControl::None);
-        Self::build(
-            window,
-            cx,
-            SessionFormSeed {
-                base,
-                connection,
-                auth,
-                save_password: save_password && connection == ConnectionChoice::Ssh,
-                save_passphrase,
-                key_path,
-                cert_path,
-                folder_path: folder_path.unwrap_or_default(),
-                startup_commands,
-                connect_timeout,
-                keepalive,
-                serial_port,
-                serial_baud,
-                serial_data_bits,
-                serial_parity,
-                serial_stop_bits,
-                serial_flow_control,
-                telnet_encoding,
-                identities,
-                jump_options,
-                folder_options,
-                global_proxy,
-                block_view,
-            },
-        )
+        Self::build(window, cx, seed_from_init(init))
     }
 
     /// 当前跳板链的拓扑展示文本：`本机 -> 外层 -> 内层 -> 目标`。
