@@ -17,32 +17,9 @@ impl AppShell {
             .detach();
         cx.observe(&inputs.workspace_panels_left, |_, _, cx| cx.notify())
             .detach();
-        let event_rx = services.event_rx.clone();
-        let event_task = cx.spawn_in(window, async move |this, cx| {
-            while let Ok(event) = event_rx.recv_async().await {
-                if this
-                    .update_in(cx, |view, window, cx| {
-                        view.handle_app_event(event, window, cx)
-                    })
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        });
+        let event_task = Self::spawn_event_pump(window, cx, services.event_rx.clone());
 
-        let app_entity = cx.entity();
-        let appearance_app = app_entity.clone();
-        let appearance_subscription = window.observe_window_appearance(move |window, cx| {
-            let follows_system =
-                update_app_settings(cx, |s| s.appearance.mode == UiThemeMode::System);
-            if follows_system {
-                crate::theme::sync_with_system(window, cx);
-                if crate::settings::sync_terminal_palette(cx) {
-                    appearance_app.update(cx, |shell, cx| shell.apply_appearance_to_live_panes(cx));
-                }
-            }
-        });
+        let appearance_subscription = Self::observe_window_appearance(window, cx);
 
         let known_hosts_records = services.known_hosts.list().unwrap_or_default();
 
@@ -145,6 +122,41 @@ impl AppShell {
 
         this
     }
+    /// 应用事件泵：逐条转交给外壳，接收端关闭或实体失效即退出。
+    fn spawn_event_pump(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        event_rx: flume::Receiver<transom_core::AppEvent>,
+    ) -> gpui::Task<()> {
+        cx.spawn_in(window, async move |this, cx| {
+            while let Ok(event) = event_rx.recv_async().await {
+                if this
+                    .update_in(cx, |view, window, cx| {
+                        view.handle_app_event(event, window, cx)
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+    }
+
+    /// 跟随系统外观：仅在设置为 System 时同步主题与终端调色板。
+    fn observe_window_appearance(window: &mut Window, cx: &mut Context<Self>) -> Subscription {
+        let app_entity = cx.entity();
+        window.observe_window_appearance(move |window, cx| {
+            let follows_system =
+                update_app_settings(cx, |s| s.appearance.mode == UiThemeMode::System);
+            if follows_system {
+                crate::theme::sync_with_system(window, cx);
+                if crate::settings::sync_terminal_palette(cx) {
+                    app_entity.update(cx, |shell, cx| shell.apply_appearance_to_live_panes(cx));
+                }
+            }
+        })
+    }
+
     /// 安装面板事件订阅与输入框联动；全部订阅由 `TaskHub` 托管生命周期。
     fn bootstrap_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // 监控面板的意图事件由外壳订阅处理。
