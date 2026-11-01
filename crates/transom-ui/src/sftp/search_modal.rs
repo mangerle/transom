@@ -168,73 +168,14 @@ impl AppShell {
             );
         } else {
             for (idx, item) in results.into_iter().enumerate() {
-                let tab_id = modal.tab_id;
-                let target_path = item.path.clone();
-                let line_info = item
-                    .line_number
-                    .map(|num| rust_i18n::t!("sftp.search.line", line = num).to_string());
-                let content_excerpt = item.line_content.clone();
-
-                let row = h_flex()
-                    .id(("search-res", idx))
-                    .gap_2()
-                    .p_1()
-                    .rounded_md()
-                    .hover(|s| s.bg(p.muted.opacity(0.3)))
-                    .cursor_pointer()
-                    .child(
-                        Icon::new(IconName::File)
-                            .with_size(px(14.0))
-                            .text_color(p.muted_foreground),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.foreground)
-                            .child(target_path.clone()),
-                    )
-                    .when_some(line_info, |this, line_text| {
-                        this.child(
-                            div()
-                                .text_xs()
-                                .text_color(p.primary)
-                                .bg(p.secondary)
-                                .px_1()
-                                .rounded_sm()
-                                .child(line_text),
-                        )
-                    })
-                    .when_some(content_excerpt, |this, excerpt| {
-                        this.child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(format!(": {excerpt}")),
-                        )
-                    })
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        move |this, _: &ClickEvent, window, cx| {
-                            // 点击条目：关闭弹窗并导航到目标所在文件夹。
-                            // 并列远端的检索结果必须回到该列自己的连接，不能落到主远端。
-                            this.state.sftp_modals.search = None;
-                            let dir = parent_remote(&target_path);
-                            if let Some(connection_id) = target_connection {
-                                this.request_sftp_list_for_connection(
-                                    tab_id,
-                                    connection_id,
-                                    dir,
-                                    cx,
-                                );
-                            } else {
-                                this.request_sftp_list(tab_id, dir, cx);
-                            }
-                            this.focus_active_sftp_panel(window, cx);
-                            cx.notify();
-                        },
-                    ));
-
-                results_container = results_container.child(row);
+                results_container = results_container.child(search_result_row(SearchResultRow {
+                    idx,
+                    item: &item,
+                    tab_id: modal.tab_id,
+                    connection_id: target_connection,
+                    app,
+                    p,
+                }));
             }
         }
 
@@ -343,4 +284,85 @@ fn render_search_header(
             this.child(div().text_xs().text_color(p.danger).child(err))
         });
     header.into_any_element()
+}
+
+/// 检索结果行参数。
+struct SearchResultRow<'a> {
+    idx: usize,
+    item: &'a transom_core::RemoteSearchResultItem,
+    tab_id: transom_core::TabId,
+    connection_id: Option<transom_core::ConnectionId>,
+    app: &'a Entity<AppShell>,
+    p: &'a Palette,
+}
+
+/// 单条检索结果：路径、行号、匹配内容与跳转。
+fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
+    let SearchResultRow {
+        idx,
+        item,
+        tab_id,
+        connection_id,
+        app,
+        p,
+    } = row;
+    let target_path = item.path.clone();
+    let line_info = item
+        .line_number
+        .map(|num| rust_i18n::t!("sftp.search.line", line = num).to_string());
+    let content_excerpt = item.line_content.clone();
+    let row = h_flex()
+        .id(("search-res", idx))
+        .gap_2()
+        .p_1()
+        .rounded_md()
+        .hover(|s| s.bg(p.muted.opacity(0.3)))
+        .cursor_pointer()
+        .child(
+            Icon::new(IconName::File)
+                .with_size(px(14.0))
+                .text_color(p.muted_foreground),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.foreground)
+                .child(target_path.clone()),
+        )
+        .when_some(line_info, |this, line_text| {
+            this.child(
+                div()
+                    .text_xs()
+                    .text_color(p.primary)
+                    .bg(p.secondary)
+                    .px_1()
+                    .rounded_sm()
+                    .child(line_text),
+            )
+        })
+        .when_some(content_excerpt, |this, excerpt| {
+            this.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(format!(": {excerpt}")),
+            )
+        })
+        .on_click(crate::dialog_host::on_event(
+            app,
+            move |this, _: &ClickEvent, window, cx| {
+                // 点击条目：关闭弹窗并导航到目标所在文件夹。
+                // 并列远端的检索结果必须回到该列自己的连接，不能落到主远端。
+                this.state.sftp_modals.search = None;
+                let dir = parent_remote(&target_path);
+                if let Some(connection_id) = connection_id {
+                    this.request_sftp_list_for_connection(tab_id, connection_id, dir, cx);
+                } else {
+                    this.request_sftp_list(tab_id, dir, cx);
+                }
+                this.focus_active_sftp_panel(window, cx);
+                cx.notify();
+            },
+        ));
+    row.into_any_element()
 }
