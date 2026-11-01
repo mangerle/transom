@@ -199,40 +199,8 @@ fn target_defaults(
         .and_then(|ssh| ssh.proxy_jump.as_ref())
         .map(|jump| jump.jump_session_id);
     let (proxy_choice, proxy_host_text, proxy_port_text, proxy_username_text, proxy_password_text) =
-        match base.as_ref().and_then(|session| session.proxy.as_ref()) {
-            None => (
-                ProxyChoice::FollowGlobal,
-                String::new(),
-                "1080".to_string(),
-                String::new(),
-                String::new(),
-            ),
-            Some(OutboundProxy::Direct) => (
-                ProxyChoice::Direct,
-                String::new(),
-                "1080".to_string(),
-                String::new(),
-                String::new(),
-            ),
-            Some(OutboundProxy::Socks5 { host, port, auth }) => (
-                ProxyChoice::Socks5,
-                host.clone(),
-                port.to_string(),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.username.clone()),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.password.clone()),
-            ),
-            Some(OutboundProxy::Http { host, port, auth }) => (
-                ProxyChoice::Http,
-                host.clone(),
-                port.to_string(),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.username.clone()),
-                auth.as_ref()
-                    .map_or_else(String::new, |a| a.password.clone()),
-            ),
-        };
+        proxy_defaults(base);
+
     let icon = base
         .as_ref()
         .map(|session| session.icon)
@@ -275,6 +243,46 @@ fn target_defaults(
         wol_mac,
         mosh_server_path: mosh_server_path_val,
         mosh_server_port: mosh_server_port_val,
+    }
+}
+
+/// 由基础会话推导代理表单默认值：类型、主机、端口、用户名与密码。
+fn proxy_defaults(
+    base: &Option<transom_core::Session>,
+) -> (ProxyChoice, String, String, String, String) {
+    match base.as_ref().and_then(|session| session.proxy.as_ref()) {
+        None => (
+            ProxyChoice::FollowGlobal,
+            String::new(),
+            "1080".to_string(),
+            String::new(),
+            String::new(),
+        ),
+        Some(OutboundProxy::Direct) => (
+            ProxyChoice::Direct,
+            String::new(),
+            "1080".to_string(),
+            String::new(),
+            String::new(),
+        ),
+        Some(OutboundProxy::Socks5 { host, port, auth }) => (
+            ProxyChoice::Socks5,
+            host.clone(),
+            port.to_string(),
+            auth.as_ref()
+                .map_or_else(String::new, |a| a.username.clone()),
+            auth.as_ref()
+                .map_or_else(String::new, |a| a.password.clone()),
+        ),
+        Some(OutboundProxy::Http { host, port, auth }) => (
+            ProxyChoice::Http,
+            host.clone(),
+            port.to_string(),
+            auth.as_ref()
+                .map_or_else(String::new, |a| a.username.clone()),
+            auth.as_ref()
+                .map_or_else(String::new, |a| a.password.clone()),
+        ),
     }
 }
 
