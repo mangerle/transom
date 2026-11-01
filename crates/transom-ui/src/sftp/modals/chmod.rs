@@ -18,93 +18,7 @@ impl AppShell {
         let octal_input = modal.octal_input.clone();
         let error = modal.error.clone();
 
-        let groups = [
-            (
-                rust_i18n::t!("sftp.chmod.group_owner").to_string(),
-                (0o400, "chmod-ur"),
-                (0o200, "chmod-uw"),
-                (0o100, "chmod-ux"),
-            ),
-            (
-                rust_i18n::t!("sftp.chmod.group_group").to_string(),
-                (0o040, "chmod-gr"),
-                (0o020, "chmod-gw"),
-                (0o010, "chmod-gx"),
-            ),
-            (
-                rust_i18n::t!("sftp.chmod.group_others").to_string(),
-                (0o004, "chmod-or"),
-                (0o002, "chmod-ow"),
-                (0o001, "chmod-ox"),
-            ),
-        ];
-
-        let mut grid_rows: Vec<AnyElement> = Vec::with_capacity(3);
-        for (group_title, (r_mask, r_id), (w_mask, w_id), (x_mask, x_id)) in groups {
-            grid_rows.push(
-                h_flex()
-                    .py_2()
-                    .px_3()
-                    .rounded(p.radius.md)
-                    .border_1()
-                    .border_color(p.border)
-                    .bg(p.muted.opacity(0.4))
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .w(px(140.0))
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(group_title),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_4()
-                            .items_center()
-                            .child(
-                                Checkbox::new(r_id)
-                                    .label(rust_i18n::t!("sftp.chmod.read").to_string())
-                                    .checked(perms & r_mask != 0)
-                                    .on_change(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, checked: &bool, window, cx| {
-                                            this.sftp_toggle_chmod_bit(
-                                                r_mask, *checked, window, cx,
-                                            );
-                                        },
-                                    )),
-                            )
-                            .child(
-                                Checkbox::new(w_id)
-                                    .label(rust_i18n::t!("sftp.chmod.write").to_string())
-                                    .checked(perms & w_mask != 0)
-                                    .on_change(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, checked: &bool, window, cx| {
-                                            this.sftp_toggle_chmod_bit(
-                                                w_mask, *checked, window, cx,
-                                            );
-                                        },
-                                    )),
-                            )
-                            .child(
-                                Checkbox::new(x_id)
-                                    .label(rust_i18n::t!("sftp.chmod.execute").to_string())
-                                    .checked(perms & x_mask != 0)
-                                    .on_change(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, checked: &bool, window, cx| {
-                                            this.sftp_toggle_chmod_bit(
-                                                x_mask, *checked, window, cx,
-                                            );
-                                        },
-                                    )),
-                            ),
-                    )
-                    .into_any_element(),
-            );
-        }
+        let grid = chmod_grid(perms, app, p);
 
         let rwx_str = format_rwx_permissions(perms);
         let presets = [
@@ -132,7 +46,7 @@ impl AppShell {
 
         let content = v_flex()
             .gap_3()
-            .children(grid_rows)
+            .child(grid)
             .child(
                 h_flex()
                     .gap_3()
@@ -199,4 +113,91 @@ impl AppShell {
             Some(footer),
         )
     }
+}
+
+/// 三组权限复选行：属主/属组/其他，各含读/写/执行。
+fn chmod_grid(perms: u32, app: &Entity<AppShell>, p: &Palette) -> AnyElement {
+    let groups = [
+        (
+            rust_i18n::t!("sftp.chmod.group_owner").to_string(),
+            (0o400, "chmod-ur"),
+            (0o200, "chmod-uw"),
+            (0o100, "chmod-ux"),
+        ),
+        (
+            rust_i18n::t!("sftp.chmod.group_group").to_string(),
+            (0o040, "chmod-gr"),
+            (0o020, "chmod-gw"),
+            (0o010, "chmod-gx"),
+        ),
+        (
+            rust_i18n::t!("sftp.chmod.group_others").to_string(),
+            (0o004, "chmod-or"),
+            (0o002, "chmod-ow"),
+            (0o001, "chmod-ox"),
+        ),
+    ];
+
+    let mut grid_rows: Vec<AnyElement> = Vec::with_capacity(3);
+    for (group_title, (r_mask, r_id), (w_mask, w_id), (x_mask, x_id)) in groups {
+        grid_rows.push(
+            h_flex()
+                .py_2()
+                .px_3()
+                .rounded(p.radius.md)
+                .border_1()
+                .border_color(p.border)
+                .bg(p.muted.opacity(0.4))
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .w(px(140.0))
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(group_title),
+                )
+                .child(
+                    h_flex()
+                        .gap_4()
+                        .items_center()
+                        .child(
+                            Checkbox::new(r_id)
+                                .label(rust_i18n::t!("sftp.chmod.read").to_string())
+                                .checked(perms & r_mask != 0)
+                                .on_change(crate::dialog_host::on_event(
+                                    app,
+                                    move |this, checked: &bool, window, cx| {
+                                        this.sftp_toggle_chmod_bit(r_mask, *checked, window, cx);
+                                    },
+                                )),
+                        )
+                        .child(
+                            Checkbox::new(w_id)
+                                .label(rust_i18n::t!("sftp.chmod.write").to_string())
+                                .checked(perms & w_mask != 0)
+                                .on_change(crate::dialog_host::on_event(
+                                    app,
+                                    move |this, checked: &bool, window, cx| {
+                                        this.sftp_toggle_chmod_bit(w_mask, *checked, window, cx);
+                                    },
+                                )),
+                        )
+                        .child(
+                            Checkbox::new(x_id)
+                                .label(rust_i18n::t!("sftp.chmod.execute").to_string())
+                                .checked(perms & x_mask != 0)
+                                .on_change(crate::dialog_host::on_event(
+                                    app,
+                                    move |this, checked: &bool, window, cx| {
+                                        this.sftp_toggle_chmod_bit(x_mask, *checked, window, cx);
+                                    },
+                                )),
+                        ),
+                )
+                .into_any_element(),
+        );
+    }
+
+    v_flex().gap_2().children(grid_rows).into_any_element()
 }
