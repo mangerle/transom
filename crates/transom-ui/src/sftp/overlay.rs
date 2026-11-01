@@ -83,6 +83,14 @@ impl DropOverlayState {
     }
 }
 
+/// 浮层标题参数：标签、展开态与汇总文案。
+struct OverlayHeader {
+    tab_id: TabId,
+    expanded: bool,
+    summary: String,
+    counters: String,
+}
+
 impl AppShell {
     /// 拖入即显示：展开明细并撤掉待收起定时器。
     pub(crate) fn show_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
@@ -178,40 +186,19 @@ impl AppShell {
     }
 
     /// 渲染窗格终端区右下角的上传浮层；不该显示时返回 `None`。
-    pub(crate) fn render_drop_overlay(
+    /// 浮层标题：上传图标、汇总/计数器、展开与关闭。
+    fn render_overlay_header(
         &self,
-        tab_id: TabId,
+        header_input: OverlayHeader,
         p: &Palette,
         cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let panel = self.sftp_state(tab_id, cx)?;
-        if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
-            return None;
-        }
-        let expanded = panel.queue.drop_overlay.expanded;
-        let tasks = panel.queue.tasks.clone();
-        let total = tasks.len();
-        let busy = tasks.iter().filter(|task| is_busy(task)).count();
-        let speed = panel.queue.drop_overlay.rate_bytes_per_sec;
-        let (done_bytes, total_bytes) = panel.queue.progress.unwrap_or((0, None));
-        // 目标目录挂在 tooltip 上：浮层面积有限，但"传到哪儿"必须能查到。
-        let target_tip = format!(
-            "{} · {}",
-            rust_i18n::t!("sftp.overlay_target"),
-            panel.remote.path
-        );
-        let summary = rust_i18n::t!("sftp.overlay_summary", busy = busy, total = total).to_string();
-        let counters = match total_bytes {
-            Some(bytes) => format!(
-                " · {}/{} · {}",
-                format_size(done_bytes),
-                format_size(bytes),
-                format_rate(speed)
-            ),
-            // 目录树任务拿不到总大小，只报已传字节与速率。
-            None => format!(" · {} · {}", format_size(done_bytes), format_rate(speed)),
-        };
-
+    ) -> AnyElement {
+        let OverlayHeader {
+            tab_id,
+            expanded,
+            summary,
+            counters,
+        } = header_input;
         let header = h_flex()
             .w_full()
             .items_center()
@@ -259,6 +246,16 @@ impl AppShell {
                     })),
             );
 
+        header.into_any_element()
+    }
+
+    /// 浮层批量动作：有活动任务时暂停/取消全部。
+    fn render_overlay_bulk_actions(
+        &self,
+        tab_id: TabId,
+        busy: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let bulk_actions = h_flex().gap_0p5().when(busy > 0, |this| {
             this.child(
                 Button::new(format!("overlay-pause-all-{tab_id}"))
@@ -283,6 +280,55 @@ impl AppShell {
                     })),
             )
         });
+
+        bulk_actions.into_any_element()
+    }
+
+    pub(crate) fn render_drop_overlay(
+        &self,
+        tab_id: TabId,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let panel = self.sftp_state(tab_id, cx)?;
+        if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
+            return None;
+        }
+        let expanded = panel.queue.drop_overlay.expanded;
+        let tasks = panel.queue.tasks.clone();
+        let total = tasks.len();
+        let busy = tasks.iter().filter(|task| is_busy(task)).count();
+        let speed = panel.queue.drop_overlay.rate_bytes_per_sec;
+        let (done_bytes, total_bytes) = panel.queue.progress.unwrap_or((0, None));
+        // 目标目录挂在 tooltip 上：浮层面积有限，但"传到哪儿"必须能查到。
+        let target_tip = format!(
+            "{} · {}",
+            rust_i18n::t!("sftp.overlay_target"),
+            panel.remote.path
+        );
+        let summary = rust_i18n::t!("sftp.overlay_summary", busy = busy, total = total).to_string();
+        let counters = match total_bytes {
+            Some(bytes) => format!(
+                " · {}/{} · {}",
+                format_size(done_bytes),
+                format_size(bytes),
+                format_rate(speed)
+            ),
+            // 目录树任务拿不到总大小，只报已传字节与速率。
+            None => format!(" · {} · {}", format_size(done_bytes), format_rate(speed)),
+        };
+
+        let header = self.render_overlay_header(
+            OverlayHeader {
+                tab_id,
+                expanded,
+                summary,
+                counters,
+            },
+            p,
+            cx,
+        );
+        let bulk_actions = self.render_overlay_bulk_actions(tab_id, busy, cx);
 
         let detail = v_flex()
             .gap_1()
