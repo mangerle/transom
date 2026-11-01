@@ -9,6 +9,7 @@
 //!   3. 采用 RIS 复位 + 增量事件流秒级快照重建技术，彻底解决终端状态机回退时的错乱与残影问题；
 //!   4. 复用 GPUI-kit 官方原生 Slider 组件，保持全应用 UI 风格统一。
 
+use crate::cast_player_io::{ChannelReader, format_duration};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -17,43 +18,11 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState, SliderValue};
 use gpui_kit::*;
-use std::io::{Cursor, Read, sink};
+use std::io::sink;
 use std::path::PathBuf;
 use std::time::Duration;
 use transom_core::{TerminalControlHandle, TerminalInteraction, TerminalIo, TerminalProfile};
 use transom_terminal::{CastEvent, CastEventType, CastHeader, TerminalView};
-
-/// 管道流式读取器：将 flume 接收端适配为标准 Read trait。
-struct ChannelReader {
-    rx: flume::Receiver<Vec<u8>>,
-    current: Cursor<Vec<u8>>,
-}
-
-impl ChannelReader {
-    fn new(rx: flume::Receiver<Vec<u8>>) -> Self {
-        Self {
-            rx,
-            current: Cursor::new(Vec::new()),
-        }
-    }
-}
-
-impl Read for ChannelReader {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        loop {
-            let n = self.current.read(buf)?;
-            if n > 0 {
-                return Ok(n);
-            }
-            match self.rx.recv() {
-                Ok(chunk) => {
-                    self.current = Cursor::new(chunk);
-                }
-                Err(_) => return Ok(0),
-            }
-        }
-    }
-}
 
 /// 录像终端输出帧。
 #[derive(Debug, Clone)]
@@ -487,18 +456,5 @@ impl Render for CastPlayerView {
                     .child(self.terminal.clone()),
             )
             .child(control_bar)
-    }
-}
-
-/// 将秒数格式化为 `mm:ss` 或 `hh:mm:ss`。
-fn format_duration(seconds: f64) -> String {
-    let total_secs = seconds.max(0.0).round() as u64;
-    let hours = total_secs / 3600;
-    let mins = (total_secs % 3600) / 60;
-    let secs = total_secs % 60;
-    if hours > 0 {
-        format!("{hours:02}:{mins:02}:{secs:02}")
-    } else {
-        format!("{mins:02}:{secs:02}")
     }
 }

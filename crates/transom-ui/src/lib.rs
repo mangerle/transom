@@ -13,6 +13,7 @@ mod app;
 mod audit;
 mod brand;
 mod cast_player;
+mod cast_player_io;
 mod divider;
 mod format;
 mod i18n;
