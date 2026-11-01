@@ -22,6 +22,15 @@ pub(crate) enum SftpPanelEvent {
         permissions: u32,
         octal_input: Entity<InputState>,
     },
+    /// 请求关闭指定窗格的面板；句柄由外壳回收。
+    ClosePanel { tab_id: TabId },
+    /// 请求打开本地对比面板；目标已由面板校验完成。
+    OpenLocalDiff {
+        tab_id: TabId,
+        target: crate::diff_viewer::LocalDiffTarget,
+    },
+    /// 请求把一条提示写进状态栏。
+    SetStatus(String),
     /// 请求展示属性弹窗；属性内容已由面板读取完成。
     ShowProperties {
         scope: String,

@@ -50,6 +50,17 @@ impl AppShell {
                 });
                 cx.notify();
             }
+            SftpPanelEvent::ClosePanel { tab_id } => {
+                self.close_sftp_panel(*tab_id);
+                cx.notify();
+            }
+            SftpPanelEvent::OpenLocalDiff { tab_id, target } => {
+                self.open_local_diff_with_target(*tab_id, target.clone(), cx);
+            }
+            SftpPanelEvent::SetStatus(message) => {
+                self.state.status = Some(message.clone());
+                cx.notify();
+            }
             SftpPanelEvent::ShowProperties { scope, properties } => {
                 self.state.sftp_modals.properties = Some(crate::sftp::SftpPropertiesModalState {
                     scope: scope.clone(),

@@ -67,6 +67,7 @@ pub(crate) enum LocalDiffCheck {
     Rejected(String),
 }
 
+#[derive(Clone)]
 pub(crate) struct LocalDiffTarget {
     connection_id: ConnectionId,
     local_path: PathBuf,
@@ -141,76 +142,62 @@ impl DiffViewerState {
     }
 }
 
-impl AppState {
-    /// 面板渲染期使用：实体正被租借，条件判断只能基于传入的状态。
-    pub(crate) fn diff_entry_ready_with_panel(
-        &self,
-        tab_id: TabId,
-        panel: &crate::sftp::SftpPanelState,
-    ) -> bool {
-        matches!(
-            self.local_diff_check_with_panel(tab_id, panel),
-            LocalDiffCheck::Ready(_)
-        )
-    }
+impl AppState {}
 
-    /// 校验"本地文件 → 远端同名文件"的对比前提；入口置灰与真正打开共用同一套口径。
-    pub(crate) fn local_diff_check_with_panel(
-        &self,
-        tab_id: TabId,
-        panel: &crate::sftp::SftpPanelState,
-    ) -> LocalDiffCheck {
-        let Some(tab) = self.workspace.tab(tab_id) else {
-            return LocalDiffCheck::NotApplicable;
-        };
-        let Some(connection_id) = tab.connection_id else {
-            return LocalDiffCheck::NotApplicable;
-        };
-        let Some(local_path) = panel
-            .local
-            .selected
-            .clone()
-            .or_else(|| panel.local.selection.iter().next().cloned())
-        else {
-            return LocalDiffCheck::Rejected("请先选中一个本地文件".to_string());
-        };
-        if panel
-            .local
-            .entries
-            .iter()
-            .any(|entry| entry.path == local_path && entry.is_dir)
-        {
-            return LocalDiffCheck::Rejected("目录不能参与文件内容对比".to_string());
-        }
-        let Some(file_name) = local_path
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-        else {
-            return LocalDiffCheck::Rejected("无法获取本地文件名".to_string());
-        };
-        let remote_path = join_remote(&panel.remote.path, &file_name);
-        let Some(entry) = panel
-            .remote
-            .entries
-            .iter()
-            .find(|entry| entry.path == remote_path && !entry.is_dir)
-        else {
-            return LocalDiffCheck::Rejected(format!(
-                "远端当前目录没有同名文件「{file_name}」，请先上传或选择对应文件"
-            ));
-        };
-        if entry.size > MAX_DIFF_BYTES {
-            return LocalDiffCheck::Rejected(format!(
-                "远端文件超过对比上限 {}，请改用编辑器或先下载",
-                format_size(MAX_DIFF_BYTES)
-            ));
-        }
-        LocalDiffCheck::Ready(LocalDiffTarget {
-            connection_id,
-            local_path,
-            remote_path,
-        })
+/// 校验"本地文件 → 远端同名文件"的对比前提；入口置灰与真正打开共用同一套口径。
+///
+/// 只依赖连接号与面板状态，面板实体可直接调用，渲染期不必反查外壳。
+pub(crate) fn local_diff_check(
+    connection_id: Option<transom_core::ConnectionId>,
+    panel: &crate::sftp::SftpPanelState,
+) -> LocalDiffCheck {
+    let Some(connection_id) = connection_id else {
+        return LocalDiffCheck::NotApplicable;
+    };
+    let Some(local_path) = panel
+        .local
+        .selected
+        .clone()
+        .or_else(|| panel.local.selection.iter().next().cloned())
+    else {
+        return LocalDiffCheck::Rejected("请先选中一个本地文件".to_string());
+    };
+    if panel
+        .local
+        .entries
+        .iter()
+        .any(|entry| entry.path == local_path && entry.is_dir)
+    {
+        return LocalDiffCheck::Rejected("目录不能参与文件内容对比".to_string());
     }
+    let Some(file_name) = local_path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+    else {
+        return LocalDiffCheck::Rejected("无法获取本地文件名".to_string());
+    };
+    let remote_path = join_remote(&panel.remote.path, &file_name);
+    let Some(entry) = panel
+        .remote
+        .entries
+        .iter()
+        .find(|entry| entry.path == remote_path && !entry.is_dir)
+    else {
+        return LocalDiffCheck::Rejected(format!(
+            "远端当前目录没有同名文件「{file_name}」，请先上传或选择对应文件"
+        ));
+    };
+    if entry.size > MAX_DIFF_BYTES {
+        return LocalDiffCheck::Rejected(format!(
+            "远端文件超过对比上限 {}，请改用编辑器或先下载",
+            format_size(MAX_DIFF_BYTES)
+        ));
+    }
+    LocalDiffCheck::Ready(LocalDiffTarget {
+        connection_id,
+        local_path,
+        remote_path,
+    })
 }
 
 impl AppShell {

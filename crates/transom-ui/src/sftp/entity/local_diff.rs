@@ -6,25 +6,17 @@ use crate::diff_viewer::LocalDiffCheck;
 impl SftpPanelView {
     /// 从本地栏打开：选中本地文件，与远端当前目录的同名文件比对。
     pub(crate) fn open_local_diff(&mut self, cx: &mut Context<Self>) {
-        let app = self.app.clone();
-        let Some(check) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .local_diff_check_with_panel(self.tab_id, &self.state)
-        }) else {
-            return;
-        };
-        match check {
+        match crate::diff_viewer::local_diff_check(self.state.main_connection, &self.state) {
             LocalDiffCheck::Ready(target) => {
-                with_shell_parts(&app, cx, |shell, cx| {
-                    shell.open_local_diff_with_target(self.tab_id, target, cx);
+                cx.emit(crate::sftp::SftpPanelEvent::OpenLocalDiff {
+                    tab_id: self.tab_id,
+                    target,
                 });
+                cx.notify();
             }
             LocalDiffCheck::Rejected(reason) => {
-                with_shell_parts(&app, cx, |shell, cx| {
-                    shell.state.status = Some(reason);
-                    cx.notify();
-                });
+                cx.emit(crate::sftp::SftpPanelEvent::SetStatus(reason));
+                cx.notify();
             }
             LocalDiffCheck::NotApplicable => {}
         }

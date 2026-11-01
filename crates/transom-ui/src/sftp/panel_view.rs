@@ -14,7 +14,7 @@ use crate::app::AppState;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use crate::sftp::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
+use crate::sftp::entity::SftpPanelView;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
@@ -81,19 +81,8 @@ impl SftpPanelView {
     pub(crate) fn render_panel_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::from(&*cx);
         let tab_id = self.tab_id;
-        let app = self.app.clone();
-        let Some((tab_conn_id, settings)) = read_shell_parts(&app, cx, |shell| {
-            (
-                shell
-                    .state
-                    .workspace
-                    .tab(tab_id)
-                    .and_then(|tab| tab.connection_id),
-                app_settings(cx).sftp.clone(),
-            )
-        }) else {
-            return div().into_any_element();
-        };
+        let tab_conn_id = self.state.main_connection;
+        let settings = app_settings(cx).sftp.clone();
         let state = &self.state;
         if state.local.only && state.side_remotes.is_empty() {
             return self.render_local_only_content(cx);
@@ -282,10 +271,10 @@ impl SftpPanelView {
             });
         }
 
-        let diff_ready = read_shell_parts(&self.app, cx, |shell| {
-            shell.state.diff_entry_ready_with_panel(tab_id, state)
-        })
-        .unwrap_or(false);
+        let diff_ready = matches!(
+            crate::diff_viewer::local_diff_check(self.state.main_connection, state),
+            crate::diff_viewer::LocalDiffCheck::Ready(_)
+        );
         let local_pane = self.render_sftp_local_pane(
             SftpLocalPaneProps {
                 tab_id,
@@ -414,11 +403,9 @@ impl SftpPanelView {
                         .xsmall()
                         .icon(IconName::X)
                         .tooltip(rust_i18n::t!("app.close").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            let app = this.app.clone();
-                            with_shell_parts(&app, cx, |shell, _| {
-                                shell.close_sftp_panel(tab_id);
-                            });
+                        .on_click(cx.listener(move |_this, _, _, cx| {
+                            cx.emit(crate::sftp::SftpPanelEvent::ClosePanel { tab_id });
+                            cx.notify();
                         })),
                 )
                 .divider_edge(DividerEdge::Bottom, p.divider_width)
