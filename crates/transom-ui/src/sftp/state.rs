@@ -201,6 +201,8 @@ pub(crate) struct SftpPanelState {
     ///
     /// 面板靠它解析"主远端列该用哪条连接"，从而不必在动作与渲染里反查外壳。
     pub(crate) main_connection: Option<ConnectionId>,
+    /// 命令通道：面板自己就能投递命令，不必回读外壳服务。
+    pub(crate) command_tx: Option<flume::Sender<transom_core::AppCommand>>,
     /// 面板列是否展开显示。
     ///
     /// 设计原理（Why）：`tab.sftp` 是 `Some` 只代表传输队列与目录状态存在，

@@ -4,7 +4,7 @@
 //! 文件类型判定、文本行生成与缩略图解码等纯逻辑留在 `preview`，
 //! 两者拆开是为了让状态机与内容处理都能被单独审阅。
 
-use super::entity::{SftpPanelView, read_shell_parts};
+use super::entity::SftpPanelView;
 use super::format_size;
 use super::preview::{
     HOVER_PREVIEW_DELAY, PREVIEW_IMAGE_MAX_BYTES, PREVIEW_TEXT_MAX_BYTES, PreviewContent,
@@ -144,9 +144,7 @@ impl SftpPanelView {
         kind: PreviewKind,
         cx: &mut Context<Self>,
     ) {
-        let Some(command_tx) = read_shell_parts(&self.app, cx, |shell| {
-            shell.state.services.command_tx.clone()
-        }) else {
+        let Some(command_tx) = self.state.command_tx.clone() else {
             return;
         };
         // 本地缩略图任务在状态变更前启动：回调晚于本函数返回，句柄随即挂回预览项。

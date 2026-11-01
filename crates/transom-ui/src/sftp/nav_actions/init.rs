@@ -245,13 +245,15 @@ impl AppShell {
             rust_i18n::t!("sftp.sidebar.filter_local_placeholder").as_ref(),
         );
 
-        // 主连接在借用窗格之前取好：面板之后自己解析目标列，不再反查外壳。
+        // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
         let main_connection = self.state.workspace.tabs[index].connection_id;
+        let command_tx = Some(self.state.services.command_tx.clone());
         let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
             return;
         };
         let state = SftpPanelState {
             main_connection,
+            command_tx,
             open,
             remote: SftpRemotePaneState::new_main(
                 initial_remote_path.clone(),
