@@ -22,6 +22,7 @@ mod empty;
 mod form;
 mod list_row;
 mod menu;
+mod notice;
 mod panel_header;
 mod status;
 mod toolbar;
@@ -37,6 +38,7 @@ pub(crate) use form::{
 };
 pub(crate) use list_row::{list_row, table_header};
 pub(crate) use menu::{MenuItem, menu_item};
+pub(crate) use notice::{NoticeKind, notice};
 pub(crate) use panel_header::PanelHeader;
 pub(crate) use status::{status_badge, status_dot, status_dot_bare};
 pub(crate) use toolbar::toolbar;

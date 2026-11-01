@@ -6,13 +6,12 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::settings::SettingsView;
 use crate::window_appearance::DEFAULT_WINDOW_TRANSPARENCY;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::slider::{Slider, SliderState};
 use gpui_kit::component::theme::{ThemeConfig, ThemeMode, ThemeRegistry, try_parse_color};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
@@ -180,34 +179,23 @@ impl SettingsView {
         );
 
         // 主题卡自带边框，不按行画线；说明、卡片与反差提示同属一项，在组末补一条。
-        let card_block =
-            v_flex()
-                .w_full()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("settings.ui_theme_note").to_string()),
-                )
-                .children(cards)
-                .when(contrast_hint, |this| {
-                    this.child(
-                        h_flex()
-                            .gap_2()
-                            .items_start()
-                            .child(
-                                Icon::new(IconName::TriangleAlert)
-                                    .size_3()
-                                    .text_color(p.warning),
-                            )
-                            .child(
-                                div().flex_1().text_xs().text_color(p.warning).child(
-                                    rust_i18n::t!("settings.appearance_contrast").to_string(),
-                                ),
-                            ),
-                    )
-                });
+        let card_block = v_flex()
+            .w_full()
+            .gap_2()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.ui_theme_note").to_string()),
+            )
+            .children(cards)
+            .when(contrast_hint, |this| {
+                this.child(crate::widgets::notice(
+                    crate::widgets::NoticeKind::Warning,
+                    rust_i18n::t!("settings.appearance_contrast").to_string(),
+                    p,
+                ))
+            });
 
         v_flex()
             .gap_3()

@@ -55,7 +55,6 @@ pub(crate) struct Palette {
     /// 警示语义色（设置页明暗反差提示等场景）。
     pub(crate) warning: Hsla,
     pub(crate) danger: Hsla,
-    pub(crate) danger_foreground: Hsla,
     pub(crate) success: Hsla,
     /// 模态遮罩底色：自带透明度，随主题明暗变化。
     pub(crate) overlay: Hsla,
@@ -118,7 +117,6 @@ impl Palette {
             primary: theme.primary,
             warning: theme.warning,
             danger: theme.danger,
-            danger_foreground: theme.danger_foreground,
             success: theme.success,
             overlay: theme.overlay,
             popover: theme.popover,

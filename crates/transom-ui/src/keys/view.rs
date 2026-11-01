@@ -44,29 +44,18 @@ impl AppShell {
             .child(list)
             .child(deploy)
             .when_some(message, |this, message| {
-                this.child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .px_3()
-                        .py_2()
-                        .rounded(p.radius.md)
-                        .bg(p.muted)
-                        .child(Icon::new(IconName::Check).small().text_color(p.success))
-                        .child(div().text_xs().text_color(p.foreground).child(message)),
-                )
+                this.child(crate::widgets::notice(
+                    crate::widgets::NoticeKind::Success,
+                    message,
+                    p,
+                ))
             })
             .when_some(error, |this, error| {
-                this.child(
-                    div()
-                        .px_3()
-                        .py_2()
-                        .rounded(p.radius.md)
-                        .bg(p.danger)
-                        .text_xs()
-                        .text_color(p.danger_foreground)
-                        .child(error),
-                )
+                this.child(crate::widgets::notice(
+                    crate::widgets::NoticeKind::Error,
+                    error,
+                    p,
+                ))
             });
 
         let footer = Button::new("close-key-wizard")
