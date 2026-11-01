@@ -85,6 +85,32 @@ impl SettingsView {
                     .child(rust_i18n::t!("sync.credential_hint").to_string()),
             );
 
+        content = content.child(self.render_sync_endpoint_fields(current_kind, p));
+
+        // 只要启用了任一同步方式（WebDAV / S3 / Git），就展示同步口令
+        if current_kind != "off" {
+            content = content.child(crate::widgets::setting_field_row(
+                crate::widgets::form_field(
+                    rust_i18n::t!("sync.passphrase").to_string(),
+                    form.passphrase.clone(),
+                    p,
+                ),
+                Some(rust_i18n::t!("sync.passphrase_hint").to_string()),
+                p,
+            ));
+        }
+
+        if let Some(actions) = self.render_sync_actions(current_kind, p, cx) {
+            content = content.child(actions);
+        }
+
+        content.into_any_element()
+    }
+
+    /// 端点类型对应的字段组：关闭提示、WebDAV、S3 或 Git。
+    fn render_sync_endpoint_fields(&self, current_kind: &str, p: &Palette) -> AnyElement {
+        let form = &self.state.sync_form;
+        let mut content = v_flex().gap_2();
         match current_kind {
             "off" => {
                 content = content.child(crate::widgets::setting_frame(
@@ -171,19 +197,20 @@ impl SettingsView {
             _ => {}
         }
 
-        // 只要启用了任一同步方式（WebDAV / S3 / Git），就展示同步口令
-        if current_kind != "off" {
-            content = content.child(crate::widgets::setting_field_row(
-                crate::widgets::form_field(
-                    rust_i18n::t!("sync.passphrase").to_string(),
-                    form.passphrase.clone(),
-                    p,
-                ),
-                Some(rust_i18n::t!("sync.passphrase_hint").to_string()),
-                p,
-            ));
-        }
+        content.into_any_element()
+    }
 
+    /// 包含密钥、状态行与上传/下载/Git 同步动作；关闭端点时返回 `None`。
+    fn render_sync_actions(
+        &self,
+        current_kind: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if current_kind == "off" {
+            return None;
+        }
+        let mut content = v_flex().gap_2();
         // WebDAV 或 S3 提供包含密钥开关、状态行与上传/下载操作
         if current_kind == "webdav" || current_kind == "s3" {
             content = content
@@ -243,7 +270,7 @@ impl SettingsView {
             ));
         }
 
-        content.into_any_element()
+        Some(content.into_any_element())
     }
 
     /// 最近一次上传/下载时间行；从未同步时显示"从未"。
