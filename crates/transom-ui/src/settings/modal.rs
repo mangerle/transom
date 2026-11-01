@@ -322,59 +322,7 @@ impl SettingsView {
                     .overflow_hidden()
                     .child(settings_component),
             )
-            .child(
-                h_flex()
-                    .w_full()
-                    .px_5()
-                    .py_3()
-                    .justify_between()
-                    .items_center()
-                    .border_color(p.divider(p.border))
-                    .divider_edge(DividerEdge::Top, p.divider_width)
-                    .bg(p.status_bar)
-                    .child(
-                        h_flex().gap_2().items_center().child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(format!(
-                                    "{}: {}　{}: {}",
-                                    rust_i18n::t!("settings.current_ui_theme"),
-                                    cx.theme().theme_name(),
-                                    rust_i18n::t!("settings.current_theme"),
-                                    app_settings(cx).terminal_profile.theme_name
-                                )),
-                        ),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("cancel-settings")
-                                    .ghost()
-                                    .small()
-                                    .label(rust_i18n::t!("common.cancel").to_string())
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        |this, _: &ClickEvent, window, cx| {
-                                            this.cancel_settings(window, cx);
-                                        },
-                                    )),
-                            )
-                            .child(
-                                Button::new("save-settings")
-                                    .primary()
-                                    .small()
-                                    .label(rust_i18n::t!("common.save").to_string())
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        |this, _: &ClickEvent, window, cx| {
-                                            this.save_settings(window, cx);
-                                        },
-                                    )),
-                            ),
-                    ),
-            );
+            .child(self.render_settings_footer(app, cx, p));
 
         panel.into_any_element()
     }
@@ -405,5 +353,66 @@ impl SettingsView {
                 built.header_style(&header_style)
             })
             .collect()
+    }
+
+    /// 设置弹窗页脚：当前主题提示、取消与保存。
+    fn render_settings_footer(
+        &self,
+        app: &Entity<SettingsView>,
+        cx: &App,
+        p: &Palette,
+    ) -> AnyElement {
+        h_flex()
+            .w_full()
+            .px_5()
+            .py_3()
+            .justify_between()
+            .items_center()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
+            .bg(p.status_bar)
+            .child(
+                h_flex().gap_2().items_center().child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(format!(
+                            "{}: {}　{}: {}",
+                            rust_i18n::t!("settings.current_ui_theme"),
+                            cx.theme().theme_name(),
+                            rust_i18n::t!("settings.current_theme"),
+                            app_settings(cx).terminal_profile.theme_name
+                        )),
+                ),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new("cancel-settings")
+                            .ghost()
+                            .small()
+                            .label(rust_i18n::t!("common.cancel").to_string())
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, window, cx| {
+                                    this.cancel_settings(window, cx);
+                                },
+                            )),
+                    )
+                    .child(
+                        Button::new("save-settings")
+                            .primary()
+                            .small()
+                            .label(rust_i18n::t!("common.save").to_string())
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, _: &ClickEvent, window, cx| {
+                                    this.save_settings(window, cx);
+                                },
+                            )),
+                    ),
+            )
+            .into_any_element()
     }
 }
