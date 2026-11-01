@@ -2,7 +2,7 @@ use crate::error::AppError;
 use crate::ids::ForwardId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ForwardRule {
     pub id: ForwardId,
     pub name: String,
@@ -26,7 +26,7 @@ fn default_enabled() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum ForwardKind {
@@ -44,7 +44,7 @@ pub enum ForwardKind {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BindAddress {
     pub host: String,
     pub port: u16,
@@ -59,19 +59,19 @@ impl BindAddress {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TargetAddress {
     pub host: String,
     pub port: u16,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SocksOptions {
     #[serde(default)]
     pub auth: SocksAuth,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum SocksAuth {
@@ -92,7 +92,7 @@ pub enum ForwardState {
     NeedsConfirmation,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ForwardStatus {
     pub rule_id: ForwardId,
     pub state: ForwardState,

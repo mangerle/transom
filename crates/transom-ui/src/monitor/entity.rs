@@ -161,7 +161,7 @@ impl MonitorView {
     }
 
     /// 当前统计快照。
-    pub(super) fn stats(&self) -> Option<&transom_core::SystemStats> {
+    pub(crate) fn stats(&self) -> Option<&transom_core::SystemStats> {
         self.stats.as_ref()
     }
 }

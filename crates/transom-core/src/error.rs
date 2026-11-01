@@ -64,7 +64,7 @@ pub enum ErrorCode {
     CloudSyncMissing,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppError {
     pub code: ErrorCode,
     pub detail: Option<String>,

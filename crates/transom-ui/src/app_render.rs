@@ -66,6 +66,23 @@ impl AppShell {
                 cwd: tab.cwd.clone(),
             });
         }
+        let unchanged = {
+            let view = view.read(cx);
+            view.mount_candidates().len() == candidates.len()
+                && view
+                    .mount_candidates()
+                    .iter()
+                    .zip(&candidates)
+                    .all(|(old, new)| {
+                        old.connection_id == new.connection_id
+                            && old.display_name == new.display_name
+                            && old.cwd == new.cwd
+                    })
+                && !candidates.is_empty()
+        };
+        if unchanged {
+            return;
+        }
         view.update(cx, |view, _| view.set_mount_candidates(candidates));
     }
 
@@ -101,6 +118,9 @@ impl AppShell {
             .active_tab
             .and_then(|tab_id| self.state.workspace.tab(tab_id))
             .and_then(|tab| tab.system_stats().cloned());
+        if self.state.monitor.read(cx).stats() == stats.as_ref() {
+            return;
+        }
         self.state
             .monitor
             .update(cx, |view, _| view.set_stats(stats));
@@ -162,6 +182,13 @@ impl AppShell {
             .find(|session| session.id == session_id)
             .map(|session| session.forwards.clone())
             .unwrap_or_default();
+        let unchanged = {
+            let current = view.read(cx);
+            current.rules() == rules.as_slice() && current.statuses() == &statuses
+        };
+        if unchanged {
+            return;
+        }
         view.update(cx, |view, _| view.set_session_data(rules, statuses));
     }
 

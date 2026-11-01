@@ -55,8 +55,13 @@ impl SftpPanelView {
     }
 
     /// 用给定状态创建面板实体；`attach` 之后才具备回交外壳的能力。
-    pub(crate) fn new(state: SftpPanelState, tab_id: transom_core::TabId) -> Self {
+    pub(crate) fn new(state: SftpPanelState, tab_id: TabId) -> Self {
         Self { state, tab_id }
+    }
+
+    /// 当前挂载候选；外壳推送前用它做去抖比较。
+    pub(crate) fn mount_candidates(&self) -> &[crate::sftp::SftpMountCandidate] {
+        &self.state.mount_candidates
     }
 
     /// 面板状态只读访问。
