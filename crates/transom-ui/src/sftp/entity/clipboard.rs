@@ -64,17 +64,7 @@ impl SftpPanelView {
             SftpActivePane::SideRemote(connection_id) => SftpRemotePaneRef::Side(connection_id),
             SftpActivePane::Local => return,
         };
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell.state.workspace.active_tab.and_then(|tab_id| {
-                shell
-                    .state
-                    .workspace
-                    .tab(tab_id)
-                    .and_then(|tab| tab.connection_id)
-            })
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
@@ -166,17 +156,7 @@ impl SftpPanelView {
             SftpActivePane::SideRemote(connection_id) => SftpRemotePaneRef::Side(connection_id),
             SftpActivePane::Local => return,
         };
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell.state.workspace.active_tab.and_then(|tab_id| {
-                shell
-                    .state
-                    .workspace
-                    .tab(tab_id)
-                    .and_then(|tab| tab.connection_id)
-            })
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(target_conn) = self.state.remote_connection(target, Some(main_connection)) else {

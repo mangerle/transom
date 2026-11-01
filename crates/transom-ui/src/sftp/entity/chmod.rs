@@ -5,22 +5,14 @@
 
 use super::*;
 use crate::palette::sftp_text_input;
+use crate::sftp::SftpRemotePaneRef;
 use crate::sftp::chmod::exec_granted_mode;
-use crate::sftp::{SftpChmodModalState, SftpRemotePaneRef};
 use transom_core::{SftpOperation, format_octal_permissions};
 
 impl SftpPanelView {
     /// 远端右键一键授予执行位：对目标列选中项逐个下发 Chmod。
     pub(crate) fn grant_remote_exec(&mut self, target: SftpRemotePaneRef, cx: &mut Context<Self>) {
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(self.tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
@@ -139,21 +131,16 @@ impl SftpPanelView {
         let permissions = entry.permissions.unwrap_or(default_mode) & 0o777;
         let octal_str = format_octal_permissions(permissions);
         let placeholder = rust_i18n::t!("sftp.chmod.octal_placeholder").to_string();
-        let tab_id = self.tab_id;
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, shell_cx| {
-            let octal_input = sftp_text_input(window, shell_cx, &octal_str, &placeholder);
-            octal_input.update(shell_cx, |state, cx| state.focus(window, cx));
-            shell.state.sftp_modals.chmod = Some(SftpChmodModalState {
-                tab_id,
-                connection_id: side_connection,
-                remote_path: entry.path,
-                file_name: entry.name,
-                permissions,
-                octal_input,
-                error: None,
-            });
-            shell_cx.notify();
+        let octal_input = sftp_text_input(window, cx, &octal_str, &placeholder);
+        octal_input.update(cx, |state, cx| state.focus(window, cx));
+        cx.emit(crate::sftp::SftpPanelEvent::OpenChmodModal {
+            tab_id: self.tab_id,
+            connection_id: side_connection,
+            remote_path: entry.path,
+            file_name: entry.name,
+            permissions,
+            octal_input,
         });
+        cx.notify();
     }
 }

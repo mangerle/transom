@@ -31,6 +31,25 @@ impl AppShell {
                 self.state.send_command(command.clone());
                 cx.notify();
             }
+            SftpPanelEvent::OpenChmodModal {
+                tab_id,
+                connection_id,
+                remote_path,
+                file_name,
+                permissions,
+                octal_input,
+            } => {
+                self.state.sftp_modals.chmod = Some(crate::sftp::SftpChmodModalState {
+                    tab_id: *tab_id,
+                    connection_id: *connection_id,
+                    remote_path: remote_path.clone(),
+                    file_name: file_name.clone(),
+                    permissions: *permissions,
+                    octal_input: octal_input.clone(),
+                    error: None,
+                });
+                cx.notify();
+            }
             SftpPanelEvent::PersistSettings { status } => {
                 let snapshot = crate::app::app_settings(cx).clone();
                 if let Err(error) = self.state.persist_settings(&snapshot) {

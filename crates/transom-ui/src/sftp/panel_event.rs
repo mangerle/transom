@@ -4,6 +4,8 @@
 //! 外壳在创建面板时订阅一次。事件必须自带全部数据，外壳的处理函数不得回读面板，
 //! 否则会与正在派发事件的实体形成双重租借。
 
+use gpui_kit::Entity;
+use gpui_kit::component::input::InputState;
 use std::path::PathBuf;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpCommand, TabId};
 
@@ -11,6 +13,15 @@ use transom_core::{ConnectionId, RemoteDeleteTarget, SftpCommand, TabId};
 pub(crate) enum SftpPanelEvent {
     /// 请求向后台投递一条 SFTP 命令；命令已构造完整，外壳直接转发。
     SendCommand(SftpCommand),
+    /// 请求打开 Chmod 弹窗；输入框已由面板建好并聚焦。
+    OpenChmodModal {
+        tab_id: TabId,
+        connection_id: Option<ConnectionId>,
+        remote_path: String,
+        file_name: String,
+        permissions: u32,
+        octal_input: Entity<InputState>,
+    },
     /// 请求持久化设置并回写状态栏；面板改完 Global 设置后发出。
     PersistSettings { status: String },
     /// 请求弹出本地删除确认。
