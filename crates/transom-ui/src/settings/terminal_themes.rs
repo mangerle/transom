@@ -22,240 +22,15 @@ impl SettingsView {
     ) -> AnyElement {
         let themes = preset_themes();
         let current_theme_name = app_settings(cx).terminal_profile.theme_name.clone();
-
-        // "跟随界面主题"卡：终端配色默认随 UI 主题明暗联动（Islands Dark 配
-        // Islands 终端色），显式选预设即覆盖。置于列表首位。
         let follow_selected = current_theme_name == FOLLOW_UI_THEME;
-        let follow_card = v_flex()
-            .id(ElementId::Name("terminal-follow-card".into()))
-            .w_full()
-            .p_3()
-            .rounded_lg()
-            .border_1()
-            .border_color(if follow_selected {
-                p.sidebar_accent_foreground
-            } else {
-                p.border
-            })
-            .bg(if follow_selected {
-                p.sidebar_accent
-            } else {
-                p.popover
-            })
-            .gap_2p5()
-            .cursor_pointer()
-            .hover(|s| {
-                if follow_selected {
-                    s
-                } else {
-                    s.border_color(p.muted_foreground)
-                }
-            })
-            .on_click(cx.listener(|this, _, _, cx| {
-                update_app_settings(cx, |s| {
-                    s.terminal_profile.theme_name = FOLLOW_UI_THEME.to_string()
-                });
-                this.sync_terminal_palette(cx);
-                cx.notify();
-            }))
-            .child(
-                h_flex().w_full().justify_between().items_center().child(
-                    div()
-                        .text_sm()
-                        .font_weight(if follow_selected {
-                            FontWeight::BOLD
-                        } else {
-                            FontWeight::NORMAL
-                        })
-                        .child(rust_i18n::t!("settings.terminal_follow_ui").to_string()),
-                ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("settings.terminal_follow_ui_note").to_string()),
-            )
-            .into_any_element();
+
+        let follow_card = self.render_follow_theme_card(follow_selected, p, cx);
 
         let theme_cards: Vec<AnyElement> = themes
             .into_iter()
             .enumerate()
             .map(|(idx, theme)| {
-                let is_selected = theme.name == current_theme_name;
-                let theme_clone = theme.clone();
-                let theme_name = theme.name.clone();
-
-                let dots = h_flex()
-                    .gap_1()
-                    .children(theme.palette.ansi.iter().take(8).map(|color| {
-                        div()
-                            .size(px(10.0))
-                            .rounded_full()
-                            .bg(Hsla::from(rgb(color.to_hex())))
-                    }));
-
-                v_flex()
-                    .id(ElementId::NamedInteger("theme-card".into(), idx as u64))
-                    .w_full()
-                    .p_3()
-                    .rounded(p.radius.lg)
-                    .border_1()
-                    .border_color(if is_selected {
-                        p.sidebar_accent_foreground
-                    } else {
-                        p.border
-                    })
-                    .bg(if is_selected {
-                        p.sidebar_accent
-                    } else {
-                        p.popover
-                    })
-                    .gap_2p5()
-                    .cursor_pointer()
-                    .hover(|s| {
-                        if is_selected {
-                            s
-                        } else {
-                            s.border_color(p.muted_foreground)
-                        }
-                    })
-                    .on_click(cx.listener(move |_this, _, _, cx| {
-                        update_app_settings(cx, |s| {
-                            s.terminal_profile.theme_name = theme_clone.name.clone()
-                        });
-                        update_app_settings(cx, |s| {
-                            s.terminal_profile.palette = theme_clone.palette.clone()
-                        });
-                        cx.notify();
-                    }))
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .size(px(12.0))
-                                            .rounded_full()
-                                            .border_2()
-                                            .border_color(if is_selected {
-                                                p.sidebar_accent_foreground
-                                            } else {
-                                                p.border
-                                            })
-                                            .bg(if is_selected {
-                                                p.sidebar_accent_foreground
-                                            } else {
-                                                transparent_black()
-                                            }),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::BOLD)
-                                            .child(theme_name),
-                                    ),
-                            )
-                            .child(dots),
-                    )
-                    .child(
-                        v_flex()
-                            .w_full()
-                            .p_2p5()
-                            .rounded(p.radius.md)
-                            .bg(Hsla::from(rgb(theme.palette.background.to_hex())))
-                            .text_xs()
-                            .gap_1()
-                            .child(
-                                h_flex()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_color(Hsla::from(rgb(
-                                                theme.palette.ansi[2].to_hex()
-                                            )))
-                                            .child("user@transom"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_color(Hsla::from(rgb(theme
-                                                .palette
-                                                .foreground
-                                                .to_hex())))
-                                            .child(":"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_color(Hsla::from(rgb(
-                                                theme.palette.ansi[4].to_hex()
-                                            )))
-                                            .child("~"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_color(Hsla::from(rgb(theme
-                                                .palette
-                                                .foreground
-                                                .to_hex())))
-                                            .child("$ ls -la"),
-                                    ),
-                            )
-                            .child(
-                                h_flex()
-                                    .gap_3()
-                                    .child(
-                                        h_flex()
-                                            .gap_1()
-                                            .child(Icon::new(IconName::Folder).size_3().text_color(
-                                                Hsla::from(rgb(theme.palette.ansi[4].to_hex())),
-                                            ))
-                                            .child(
-                                                div()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(Hsla::from(rgb(theme.palette.ansi
-                                                        [4]
-                                                    .to_hex())))
-                                                    .child("Documents"),
-                                            ),
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .gap_1()
-                                            .child(Icon::new(IconName::Folder).size_3().text_color(
-                                                Hsla::from(rgb(theme.palette.ansi[2].to_hex())),
-                                            ))
-                                            .child(
-                                                div()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(Hsla::from(rgb(theme.palette.ansi
-                                                        [2]
-                                                    .to_hex())))
-                                                    .child("Downloads"),
-                                            ),
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .gap_1()
-                                            .child(Icon::new(IconName::File).size_3().text_color(
-                                                Hsla::from(rgb(theme.palette.foreground.to_hex())),
-                                            ))
-                                            .child(
-                                                div()
-                                                    .text_color(Hsla::from(rgb(theme
-                                                        .palette
-                                                        .foreground
-                                                        .to_hex())))
-                                                    .child("main.rs"),
-                                            ),
-                                    ),
-                            ),
-                    )
-                    .into_any_element()
+                self.render_theme_card(idx, &theme, theme.name == current_theme_name, p, cx)
             })
             .collect();
 
@@ -279,5 +54,241 @@ impl SettingsView {
                 .into_any_element(),
             p,
         )
+    }
+
+    /// "跟随界面主题"卡：选中态与说明固定，点击写回哨兵值。
+    fn render_follow_theme_card(
+        &self,
+        selected: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        // "跟随界面主题"卡：终端配色默认随 UI 主题明暗联动（Islands Dark 配
+        // Islands 终端色），显式选预设即覆盖。置于列表首位。
+        v_flex()
+            .id(ElementId::Name("terminal-follow-card".into()))
+            .w_full()
+            .p_3()
+            .rounded_lg()
+            .border_1()
+            .border_color(if selected {
+                p.sidebar_accent_foreground
+            } else {
+                p.border
+            })
+            .bg(if selected {
+                p.sidebar_accent
+            } else {
+                p.popover
+            })
+            .gap_2p5()
+            .cursor_pointer()
+            .hover(|s| {
+                if selected {
+                    s
+                } else {
+                    s.border_color(p.muted_foreground)
+                }
+            })
+            .on_click(cx.listener(|this, _, _, cx| {
+                update_app_settings(cx, |s| {
+                    s.terminal_profile.theme_name = FOLLOW_UI_THEME.to_string()
+                });
+                this.sync_terminal_palette(cx);
+                cx.notify();
+            }))
+            .child(
+                h_flex().w_full().justify_between().items_center().child(
+                    div()
+                        .text_sm()
+                        .font_weight(if selected {
+                            FontWeight::BOLD
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .child(rust_i18n::t!("settings.terminal_follow_ui").to_string()),
+                ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.terminal_follow_ui_note").to_string()),
+            )
+            .into_any_element()
+    }
+
+    /// 单个预设法卡片：色点、名称、选中圈与终端预览。
+    fn render_theme_card(
+        &self,
+        idx: usize,
+        theme: &transom_core::PresetTheme,
+        is_selected: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme_clone = theme.clone();
+        let theme_name = theme.name.clone();
+
+        let dots = h_flex()
+            .gap_1()
+            .children(theme.palette.ansi.iter().take(8).map(|color| {
+                div()
+                    .size(px(10.0))
+                    .rounded_full()
+                    .bg(Hsla::from(rgb(color.to_hex())))
+            }));
+
+        v_flex()
+            .id(ElementId::NamedInteger("theme-card".into(), idx as u64))
+            .w_full()
+            .p_3()
+            .rounded(p.radius.lg)
+            .border_1()
+            .border_color(if is_selected {
+                p.sidebar_accent_foreground
+            } else {
+                p.border
+            })
+            .bg(if is_selected {
+                p.sidebar_accent
+            } else {
+                p.popover
+            })
+            .gap_2p5()
+            .cursor_pointer()
+            .hover(|s| {
+                if is_selected {
+                    s
+                } else {
+                    s.border_color(p.muted_foreground)
+                }
+            })
+            .on_click(cx.listener(move |_this, _, _, cx| {
+                update_app_settings(cx, |s| {
+                    s.terminal_profile.theme_name = theme_clone.name.clone()
+                });
+                update_app_settings(cx, |s| {
+                    s.terminal_profile.palette = theme_clone.palette.clone()
+                });
+                cx.notify();
+            }))
+            .child(
+                h_flex()
+                    .w_full()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(
+                                div()
+                                    .size(px(12.0))
+                                    .rounded_full()
+                                    .border_2()
+                                    .border_color(if is_selected {
+                                        p.sidebar_accent_foreground
+                                    } else {
+                                        p.border
+                                    })
+                                    .bg(if is_selected {
+                                        p.sidebar_accent_foreground
+                                    } else {
+                                        transparent_black()
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(theme_name),
+                            ),
+                    )
+                    .child(dots),
+            )
+            .child(
+                v_flex()
+                    .w_full()
+                    .p_2p5()
+                    .rounded(p.radius.md)
+                    .bg(Hsla::from(rgb(theme.palette.background.to_hex())))
+                    .text_xs()
+                    .gap_1()
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_color(Hsla::from(rgb(theme.palette.ansi[2].to_hex())))
+                                    .child("user@transom"),
+                            )
+                            .child(
+                                div()
+                                    .text_color(Hsla::from(rgb(theme.palette.foreground.to_hex())))
+                                    .child(":"),
+                            )
+                            .child(
+                                div()
+                                    .text_color(Hsla::from(rgb(theme.palette.ansi[4].to_hex())))
+                                    .child("~"),
+                            )
+                            .child(
+                                div()
+                                    .text_color(Hsla::from(rgb(theme.palette.foreground.to_hex())))
+                                    .child("$ ls -la"),
+                            ),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_3()
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .child(Icon::new(IconName::Folder).size_3().text_color(
+                                        Hsla::from(rgb(theme.palette.ansi[4].to_hex())),
+                                    ))
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(Hsla::from(rgb(
+                                                theme.palette.ansi[4].to_hex()
+                                            )))
+                                            .child("Documents"),
+                                    ),
+                            )
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .child(Icon::new(IconName::Folder).size_3().text_color(
+                                        Hsla::from(rgb(theme.palette.ansi[2].to_hex())),
+                                    ))
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(Hsla::from(rgb(
+                                                theme.palette.ansi[2].to_hex()
+                                            )))
+                                            .child("Downloads"),
+                                    ),
+                            )
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .child(Icon::new(IconName::File).size_3().text_color(
+                                        Hsla::from(rgb(theme.palette.foreground.to_hex())),
+                                    ))
+                                    .child(
+                                        div()
+                                            .text_color(Hsla::from(rgb(theme
+                                                .palette
+                                                .foreground
+                                                .to_hex())))
+                                            .child("main.rs"),
+                                    ),
+                            ),
+                    ),
+            )
+            .into_any_element()
     }
 }
