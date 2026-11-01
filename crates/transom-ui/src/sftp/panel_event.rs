@@ -24,6 +24,8 @@ pub(crate) enum SftpPanelEvent {
     },
     /// 请求打开远端检索弹窗；输入框已由面板建好并聚焦。
     OpenSearchModal(Box<crate::sftp::SftpSearchModalState>),
+    /// 请求打开目录同步弹窗；扫描状态已由面板构造。
+    OpenSyncModal(Box<crate::sftp::SftpSyncModalState>),
     /// 请求打开传输排除规则弹窗；文本框已由面板建好并聚焦。
     OpenFilterModal { textarea: Entity<TextareaState> },
     /// 请求关闭指定窗格的面板；句柄由外壳回收。

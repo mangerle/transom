@@ -1,7 +1,7 @@
 //! SFTP 目录对比与增量同步：打开对比弹窗、勾选差异项并创建同步任务。
 
 use super::SftpSyncModalState;
-use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
+use super::entity::SftpPanelView;
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::sftp::{SftpRemotePaneRef, TransferTask};
@@ -21,30 +21,22 @@ impl SftpPanelView {
         target: SftpRemotePaneRef,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some((main_connection, filter_text)) = read_shell_parts(&app, cx, |shell| {
-            (
-                shell
-                    .state
-                    .workspace
-                    .tab(self.tab_id)
-                    .and_then(|tab| tab.connection_id),
-                app_settings(cx).sftp.transfer_filter.clone(),
-            )
-        }) else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(pane) = self.state.remote_pane(target) else {
             return;
         };
-        let Some(connection_id) = self.state.remote_connection(target, main_connection) else {
+        let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
+        else {
             return;
         };
         let local_root = self.state.local.path.clone();
         let remote_root = pane.path.clone();
         let op_id = TransferId::new();
-        with_shell_parts(&app, cx, |shell, _| {
-            shell.state.send_command(SftpCommand::Sftp {
+        let filter_text = app_settings(cx).sftp.transfer_filter.clone();
+        cx.emit(crate::sftp::SftpPanelEvent::SendCommand(
+            SftpCommand::Sftp {
                 tab_id: self.tab_id,
                 connection_id,
                 op_id,
@@ -53,8 +45,10 @@ impl SftpPanelView {
                     remote_path: remote_root.clone(),
                     filter: TransferFilter::from_text(&filter_text),
                 },
-            });
-            shell.state.sftp_modals.sync = Some(SftpSyncModalState {
+            },
+        ));
+        cx.emit(crate::sftp::SftpPanelEvent::OpenSyncModal(Box::new(
+            SftpSyncModalState {
                 tab_id: self.tab_id,
                 connection_id,
                 op_id,
@@ -66,8 +60,8 @@ impl SftpPanelView {
                 skipped: 0,
                 error: None,
                 scroll_handle: VirtualListScrollHandle::new(),
-            });
-        });
+            },
+        )));
         cx.notify();
     }
 }

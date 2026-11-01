@@ -54,6 +54,10 @@ impl AppShell {
                 self.state.sftp_modals.search = Some((**state).clone());
                 cx.notify();
             }
+            SftpPanelEvent::OpenSyncModal(state) => {
+                self.state.sftp_modals.sync = Some((**state).clone());
+                cx.notify();
+            }
             SftpPanelEvent::OpenFilterModal { textarea } => {
                 self.state.sftp_modals.filter = Some(crate::sftp::SftpFilterModalState {
                     textarea: textarea.clone(),

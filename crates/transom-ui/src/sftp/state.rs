@@ -40,6 +40,7 @@ pub(crate) struct SftpFilterModalState {
 }
 
 /// 目录对比与增量同步弹窗状态。
+#[derive(Clone)]
 pub(crate) struct SftpSyncModalState {
     pub(crate) tab_id: TabId,
     pub(crate) connection_id: ConnectionId,

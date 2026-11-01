@@ -14,7 +14,6 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, sftp_text_input};
-use crate::sftp::entity::read_shell_parts;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
@@ -168,10 +167,7 @@ impl SftpPanelView {
             .value()
             .trim()
             .to_ascii_lowercase();
-        let hidden_patterns = read_shell_parts(&self.app, cx, |_shell| {
-            app_settings(cx).sftp.panel_hidden_patterns.clone()
-        })
-        .unwrap_or_default();
+        let hidden_patterns = app_settings(cx).sftp.panel_hidden_patterns.clone();
         let local_entries = crate::app::AppState::filter_local_entries(
             state,
             show_hidden,
