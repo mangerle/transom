@@ -84,6 +84,87 @@ pub(crate) struct SettingsModalState {
     pub(crate) monitor_interval: crate::monitor::SampleIntervalMode,
 }
 
+/// 外观相关输入控件：字体选择、字号/行高、分割线与窗口透明度。
+struct AppearanceInputs {
+    font_family: Entity<FontSelect>,
+    ui_font_family: Entity<FontSelect>,
+    cjk_font: Entity<FontSelect>,
+    font_size: Entity<InputState>,
+    line_height: Entity<InputState>,
+    divider_width: Entity<InputState>,
+    window_transparency: Entity<SliderState>,
+}
+
+impl AppearanceInputs {
+    fn new(window: &mut Window, cx: &mut Context<SettingsView>, settings: &AppSettings) -> Self {
+        let mono_default = rust_i18n::t!(MONO_DEFAULT_KEY).to_string();
+        let font_family = new_font_select(
+            &mono_default,
+            settings.terminal_profile.font_family.as_deref(),
+            window,
+            cx,
+        );
+        let ui_default = rust_i18n::t!(UI_DEFAULT_KEY).to_string();
+        let ui_font_family = new_font_select(
+            &ui_default,
+            settings.appearance.ui_font_family.as_deref(),
+            window,
+            cx,
+        );
+        let cjk_default = rust_i18n::t!(CJK_DEFAULT_KEY).to_string();
+        let cjk_font = new_font_select(
+            &cjk_default,
+            settings.terminal_profile.cjk_font_family.as_deref(),
+            window,
+            cx,
+        );
+        let font_size_val = settings.terminal_profile.font_size.to_string();
+        let font_size = cx.new(|cx| {
+            InputState::new(window, cx)
+                .min(6.0)
+                .max(72.0)
+                .step(1.0)
+                .placeholder("14")
+                .default_value(&font_size_val)
+        });
+        let line_height_val = settings.terminal_profile.line_height.to_string();
+        let line_height = cx.new(|cx| {
+            InputState::new(window, cx)
+                .min(1.0)
+                .max(3.0)
+                .step(0.1)
+                .placeholder("1.2")
+                .default_value(&line_height_val)
+        });
+        // 分割线粗细只有 1/2/3px 三档，用步进器而不是下拉。
+        let divider_width = cx.new(|cx| {
+            InputState::new(window, cx)
+                .min(1.0)
+                .max(3.0)
+                .step(1.0)
+                .placeholder("2")
+                .default_value(settings.appearance.divider.width.pixels().to_string())
+        });
+        // 窗口整体透明度是连续量：滑块比输入框直观。
+        let window_transparency = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(100.0)
+                .step(1.0)
+                .default_value(f32::from(settings.window.window_transparency))
+        });
+        Self {
+            font_family,
+            ui_font_family,
+            cjk_font,
+            font_size,
+            line_height,
+            divider_width,
+            window_transparency,
+        }
+    }
+}
+
 impl SettingsModalState {
     /// 按当前设置回填构造全部输入框与滑块。
     pub(crate) fn new(
@@ -91,20 +172,7 @@ impl SettingsModalState {
         cx: &mut Context<SettingsView>,
         settings: &AppSettings,
     ) -> Self {
-        let mono_default = rust_i18n::t!(MONO_DEFAULT_KEY).to_string();
-        let settings_font_family = new_font_select(
-            &mono_default,
-            settings.terminal_profile.font_family.as_deref(),
-            window,
-            cx,
-        );
-        let ui_default = rust_i18n::t!(UI_DEFAULT_KEY).to_string();
-        let settings_ui_font_family = new_font_select(
-            &ui_default,
-            settings.appearance.ui_font_family.as_deref(),
-            window,
-            cx,
-        );
+        let appearance = AppearanceInputs::new(window, cx, settings);
         let settings_panel_hidden = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("settings.panel_hidden_hint").to_string())
@@ -117,31 +185,6 @@ impl SettingsModalState {
                 .step(1.0)
                 .placeholder("3")
                 .default_value(settings.sftp.max_concurrent_transfers.to_string())
-        });
-        let cjk_default = rust_i18n::t!(CJK_DEFAULT_KEY).to_string();
-        let settings_cjk_font = new_font_select(
-            &cjk_default,
-            settings.terminal_profile.cjk_font_family.as_deref(),
-            window,
-            cx,
-        );
-        let font_size_val = settings.terminal_profile.font_size.to_string();
-        let settings_font_size = cx.new(|cx| {
-            InputState::new(window, cx)
-                .min(6.0)
-                .max(72.0)
-                .step(1.0)
-                .placeholder("14")
-                .default_value(&font_size_val)
-        });
-        let line_height_val = settings.terminal_profile.line_height.to_string();
-        let settings_line_height = cx.new(|cx| {
-            InputState::new(window, cx)
-                .min(1.0)
-                .max(3.0)
-                .step(0.1)
-                .placeholder("1.2")
-                .default_value(&line_height_val)
         });
         // 分隔符必须原样回填：空格本身就是合法分隔符，任何 trim 都会吃掉用户意图。
         let settings_word_separators = cx.new(|cx| {
@@ -183,24 +226,6 @@ impl SettingsModalState {
                 .default_value(key_bindings_text)
         });
         let proxy = ProxyFormInputs::from_settings(window, cx, settings);
-        // 分割线粗细只有 1/2/3px 三档，用步进器而不是下拉：数值小且连续，
-        // 键盘上下键与加减按钮都能直接调，和字号/行高的操作手感一致。
-        let divider_width = cx.new(|cx| {
-            InputState::new(window, cx)
-                .min(1.0)
-                .max(3.0)
-                .step(1.0)
-                .placeholder("2")
-                .default_value(settings.appearance.divider.width.pixels().to_string())
-        });
-        // 窗口整体透明度是连续量：滑块比输入框直观，拖动时还能即时预览。
-        let window_transparency = cx.new(|_| {
-            SliderState::new()
-                .min(0.0)
-                .max(100.0)
-                .step(1.0)
-                .default_value(f32::from(settings.window.window_transparency))
-        });
         // 云同步表单：端点字段回填设置值，凭据掩码框恒为空。
         let sync_form = SyncFormInputs::new(window, cx);
 
@@ -208,21 +233,21 @@ impl SettingsModalState {
             open: false,
             jump_page: None,
             proxy,
-            font_family: settings_font_family,
-            ui_font_family: settings_ui_font_family,
+            font_family: appearance.font_family,
+            ui_font_family: appearance.ui_font_family,
             panel_hidden_patterns: settings_panel_hidden,
             max_concurrent_transfers: settings_max_concurrent,
-            cjk_font: settings_cjk_font,
-            font_size: settings_font_size,
-            line_height: settings_line_height,
+            cjk_font: appearance.cjk_font,
+            font_size: appearance.font_size,
+            line_height: appearance.line_height,
             scrollback: settings_scrollback,
             word_separators: settings_word_separators,
             notify_threshold: settings_notify_threshold,
             block_collapse_rows: settings_block_collapse_rows,
             terminal_key_bindings: settings_terminal_key_bindings,
             highlight_keywords: settings_highlight_keywords,
-            divider_width,
-            window_transparency,
+            divider_width: appearance.divider_width,
+            window_transparency: appearance.window_transparency,
             window_appearance_snapshot: None,
             appearance_snapshot: None,
             identity_edit: None,
