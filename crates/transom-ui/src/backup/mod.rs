@@ -36,6 +36,16 @@ enum BackupOutcome {
     },
 }
 
+/// 备份后台任务输入：方向、服务、路径与口令。
+struct BackupJob {
+    is_export: bool,
+    backup: std::sync::Arc<dyn transom_core::BackupService>,
+    path: std::path::PathBuf,
+    catalog: transom_core::SessionCatalog,
+    passphrase: Option<Zeroizing<String>>,
+    include_secrets: bool,
+}
+
 impl AppShell {
     /// 校验口令后在后台执行导出或导入。
     ///
@@ -107,12 +117,47 @@ impl AppShell {
             prompt.error = None;
         }
 
-        let task = if is_export {
+        let passphrase = if is_export {
+            encrypt.then(|| Zeroizing::new(value))
+        } else {
+            encrypted_file.then(|| Zeroizing::new(value))
+        };
+        let task = self.spawn_backup_task(
+            window,
+            cx,
+            BackupJob {
+                is_export,
+                backup,
+                path,
+                catalog: self.state.catalog.clone(),
+                passphrase,
+                include_secrets,
+            },
+        );
+        self.state.tasks.background.backup = Some(task);
+        cx.notify();
+    }
+
+    /// 后台导出/导入任务：成功后回到 `finish_backup` 收尾。
+    fn spawn_backup_task(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        job: BackupJob,
+    ) -> gpui::Task<()> {
+        let BackupJob {
+            is_export,
+            backup,
+            path,
+            catalog,
+            passphrase,
+            include_secrets,
+        } = job;
+        if is_export {
             let options = BackupExportOptions {
-                passphrase: encrypt.then(|| Zeroizing::new(value)),
+                passphrase,
                 include_secrets,
             };
-            let catalog = self.state.catalog.clone();
             let target_path = path.clone();
             cx.spawn_in(window, async move |this, cx| {
                 let result = cx
@@ -130,9 +175,7 @@ impl AppShell {
                 });
             })
         } else {
-            let options = BackupImportOptions {
-                passphrase: encrypted_file.then(|| Zeroizing::new(value)),
-            };
+            let options = BackupImportOptions { passphrase };
             cx.spawn_in(window, async move |this, cx| {
                 let result = cx
                     .background_executor()
@@ -150,9 +193,7 @@ impl AppShell {
                     this.finish_backup(result, window, cx);
                 });
             })
-        };
-        self.state.tasks.background.backup = Some(task);
-        cx.notify();
+        }
     }
 
     /// 在弹窗上显示一条错误，不关闭弹窗以便用户就地改正。
