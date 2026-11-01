@@ -259,6 +259,70 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 文件夹默认值卡：默认端口/用户名与默认密钥路径选择。
+    fn render_folder_defaults(
+        form: &crate::sidebar::folders::FolderForm,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let key_picker = h_flex()
+            .gap_2()
+            .items_center()
+            .child(div().flex_1().child(form.default_key_path.clone()))
+            .child(
+                Button::new("browse-folder-key")
+                    .outline()
+                    .label(rust_i18n::t!("form.browse").to_string())
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, window, cx| {
+                            this.pick_folder_default_key_path(window, cx);
+                        },
+                    )),
+            );
+
+        v_flex()
+            .gap_2()
+            .p_3()
+            .rounded(p.radius.md)
+            .bg(p.muted)
+            .border_1()
+            .border_color(p.border)
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.foreground)
+                    .child(rust_i18n::t!("folder.defaults_legend").to_string()),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(div().flex_1().child(crate::widgets::form_field(
+                        rust_i18n::t!("folder.default_port").to_string(),
+                        form.default_port.clone(),
+                        p,
+                    )))
+                    .child(div().flex_1().child(crate::widgets::form_field(
+                        rust_i18n::t!("folder.default_username").to_string(),
+                        form.default_username.clone(),
+                        p,
+                    ))),
+            )
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("folder.default_key_path").to_string()),
+                    )
+                    .child(key_picker),
+            )
+            .into_any_element()
+    }
+
     pub(crate) fn render_folder_form_body(
         &self,
         app: &Entity<AppShell>,
@@ -281,22 +345,7 @@ impl AppShell {
             .map(|path| rust_i18n::t!("folder.parent_hint", path = path).to_string())
             .unwrap_or_else(|| rust_i18n::t!("folder.root_hint").to_string());
 
-        let key_picker = h_flex()
-            .gap_2()
-            .items_center()
-            .child(div().flex_1().child(form.default_key_path.clone()))
-            .child(
-                Button::new("browse-folder-key")
-                    .outline()
-                    .label(rust_i18n::t!("form.browse").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            this.pick_folder_default_key_path(window, cx);
-                        },
-                    )),
-            );
-
+        let defaults = Self::render_folder_defaults(form, app, p);
         let mut content = v_flex()
             .gap_3()
             .child(crate::widgets::form_field(
@@ -304,47 +353,7 @@ impl AppShell {
                 form.name.clone(),
                 p,
             ))
-            .child(
-                v_flex()
-                    .gap_2()
-                    .p_3()
-                    .rounded(p.radius.md)
-                    .bg(p.muted)
-                    .border_1()
-                    .border_color(p.border)
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.foreground)
-                            .child(rust_i18n::t!("folder.defaults_legend").to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(div().flex_1().child(crate::widgets::form_field(
-                                rust_i18n::t!("folder.default_port").to_string(),
-                                form.default_port.clone(),
-                                p,
-                            )))
-                            .child(div().flex_1().child(crate::widgets::form_field(
-                                rust_i18n::t!("folder.default_username").to_string(),
-                                form.default_username.clone(),
-                                p,
-                            ))),
-                    )
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("folder.default_key_path").to_string()),
-                            )
-                            .child(key_picker),
-                    ),
-            );
+            .child(defaults);
         if let Some(error) = &form.error {
             content = content.child(div().text_sm().text_color(p.danger).child(error.clone()));
         }
