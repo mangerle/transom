@@ -64,64 +64,7 @@ impl AppShell {
             );
         } else {
             for (index, record) in filtered.into_iter().enumerate() {
-                let host = record.host.clone();
-                let port = record.port;
-                let row = h_flex()
-                    .id(ElementId::Name(format!("known-host-{index}").into()))
-                    .px_3()
-                    .py_2()
-                    .gap_3()
-                    .items_center()
-                    .justify_between()
-                    .border_color(p.divider(p.border))
-                    .divider_edge(DividerEdge::Bottom, p.divider_width)
-                    .hover(|style| style.bg(p.muted))
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .gap_1()
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .child(format!("{}:{}", record.host, record.port)),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .px_1()
-                                            .rounded(p.radius.sm)
-                                            .bg(p.muted)
-                                            .text_color(p.muted_foreground)
-                                            .child(record.algorithm),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(record.fingerprint),
-                            ),
-                    )
-                    .child(
-                        Button::new(ElementId::Name(format!("del-kh-{index}").into()))
-                            .danger()
-                            .xsmall()
-                            .icon(IconName::Trash)
-                            .label(rust_i18n::t!("common.delete").to_string())
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                move |this, _: &ClickEvent, _, cx| {
-                                    this.remove_known_host(&host, port, cx);
-                                },
-                            )),
-                    )
-                    .into_any_element();
-                rows.push(row);
+                rows.push(known_host_row(index, &record, app, p));
             }
         }
 
@@ -162,4 +105,70 @@ impl AppState {
         self.modals.connection.known_hosts.records =
             self.services.known_hosts.list().unwrap_or_default();
     }
+}
+
+/// 单条已知主机记录：主机/端口、算法、指纹与删除按钮。
+fn known_host_row(
+    index: usize,
+    record: &transom_core::HostKeyRecord,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let host = record.host.clone();
+    let port = record.port;
+    h_flex()
+        .id(ElementId::Name(format!("known-host-{index}").into()))
+        .px_3()
+        .py_2()
+        .gap_3()
+        .items_center()
+        .justify_between()
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .hover(|style| style.bg(p.muted))
+        .child(
+            v_flex()
+                .flex_1()
+                .gap_1()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(format!("{}:{}", record.host, record.port)),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .px_1()
+                                .rounded(p.radius.sm)
+                                .bg(p.muted)
+                                .text_color(p.muted_foreground)
+                                .child(record.algorithm.clone()),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(record.fingerprint.clone()),
+                ),
+        )
+        .child(
+            Button::new(ElementId::Name(format!("del-kh-{index}").into()))
+                .danger()
+                .xsmall()
+                .icon(IconName::Trash)
+                .label(rust_i18n::t!("common.delete").to_string())
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    move |this, _: &ClickEvent, _, cx| {
+                        this.remove_known_host(&host, port, cx);
+                    },
+                )),
+        )
+        .into_any_element()
 }
