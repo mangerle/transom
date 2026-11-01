@@ -48,152 +48,24 @@ impl MonitorView {
 
         // 展开态详细内容
         let mut content = v_flex().gap_2p5();
-
-        // 双向流量波形走势（最近 40 个采样点，双线对比）
-        let rx_hist: Vec<u64> = self.state.rx_history.iter().copied().collect();
-        let tx_hist: Vec<u64> = self.state.tx_history.iter().copied().collect();
-        if !rx_hist.is_empty() || !tx_hist.is_empty() {
-            let rx_peak = rx_hist.iter().copied().max().unwrap_or(0);
-            let tx_peak = tx_hist.iter().copied().max().unwrap_or(0);
-            content = content.child(
-                v_flex()
-                    .gap_1p5()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .text_xs()
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(
-                                        div().text_color(p.muted_foreground).child(
-                                            rust_i18n::t!("monitor.network_section.trend_title")
-                                                .to_string(),
-                                        ),
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .gap_1()
-                                            .items_center()
-                                            .child(
-                                                div()
-                                                    .w(px(6.0))
-                                                    .h(px(6.0))
-                                                    .rounded_full()
-                                                    .bg(p.primary),
-                                            )
-                                            .child(
-                                                div().text_xs().text_color(p.primary).child(
-                                                    rust_i18n::t!(
-                                                        "monitor.network_section.downlink"
-                                                    )
-                                                    .to_string(),
-                                                ),
-                                            ),
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .gap_1()
-                                            .items_center()
-                                            .child(
-                                                div()
-                                                    .w(px(6.0))
-                                                    .h(px(6.0))
-                                                    .rounded_full()
-                                                    .bg(p.sidebar_accent_foreground),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(p.sidebar_accent_foreground)
-                                                    .child(
-                                                        rust_i18n::t!(
-                                                            "monitor.network_section.uplink"
-                                                        )
-                                                        .to_string(),
-                                                    ),
-                                            ),
-                                    ),
-                            )
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .child(
-                                        div().text_color(p.primary).child(
-                                            rust_i18n::t!(
-                                                "monitor.network_section.rx_peak",
-                                                rate = format_size(total_rx),
-                                                peak = format_size(rx_peak)
-                                            )
-                                            .to_string(),
-                                        ),
-                                    )
-                                    .child(
-                                        div().text_color(p.sidebar_accent_foreground).child(
-                                            rust_i18n::t!(
-                                                "monitor.network_section.tx_peak",
-                                                rate = format_size(total_tx),
-                                                peak = format_size(tx_peak)
-                                            )
-                                            .to_string(),
-                                        ),
-                                    ),
-                            ),
-                    )
-                    .child(render_network_dual_sparkline(
-                        &rx_hist,
-                        &tx_hist,
-                        48.0,
-                        p.primary,
-                        p.sidebar_accent_foreground,
-                        p.muted,
-                        self.state.chart_type,
-                    )),
-            );
+        if let Some(trend) = self.render_network_trend(total_rx, total_tx, p) {
+            content = content.child(trend);
         }
 
-        // 各网卡列表明细
+        let mut interface_rows: Vec<AnyElement> = Vec::with_capacity(stats.interfaces.len().max(1));
         if stats.interfaces.is_empty() {
-            content = content.child(
+            interface_rows.push(
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("monitor.no_data").to_string()),
+                    .child(rust_i18n::t!("monitor.no_data").to_string())
+                    .into_any_element(),
             );
         }
-
         for interface in &stats.interfaces {
-            content =
-                content.child(
-                    h_flex()
-                        .justify_between()
-                        .items_center()
-                        .px_1()
-                        .py_0p5()
-                        .rounded_sm()
-                        .hover(|s| s.bg(p.muted.opacity(0.3)))
-                        .text_xs()
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.foreground)
-                                .child(interface.name.clone()),
-                        )
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .child(div().text_color(p.muted_foreground).child(format!(
-                                    "↓ {}/s",
-                                    format_size(interface.rx_bytes_per_sec)
-                                )))
-                                .child(div().text_color(p.muted_foreground).child(format!(
-                                    "↑ {}/s",
-                                    format_size(interface.tx_bytes_per_sec)
-                                ))),
-                        ),
-                );
+            interface_rows.push(interface_row(interface, p));
         }
+        content = content.children(interface_rows);
 
         CollapsibleCard::new(
             "card-network",
@@ -218,4 +90,146 @@ impl MonitorView {
             }),
         )
     }
+
+    /// 双向流量走势：峰值、图例与双线波形；无历史数据时不渲染。
+    fn render_network_trend(
+        &self,
+        total_rx: u64,
+        total_tx: u64,
+        p: &Palette,
+    ) -> Option<AnyElement> {
+        let rx_hist: Vec<u64> = self.state.rx_history.iter().copied().collect();
+        let tx_hist: Vec<u64> = self.state.tx_history.iter().copied().collect();
+        if rx_hist.is_empty() && tx_hist.is_empty() {
+            return None;
+        }
+        let rx_peak = rx_hist.iter().copied().max().unwrap_or(0);
+        let tx_peak = tx_hist.iter().copied().max().unwrap_or(0);
+        Some(
+            v_flex()
+                .gap_1p5()
+                .child(
+                    h_flex()
+                        .justify_between()
+                        .text_xs()
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .child(
+                                    div().text_color(p.muted_foreground).child(
+                                        rust_i18n::t!("monitor.network_section.trend_title")
+                                            .to_string(),
+                                    ),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_1()
+                                        .items_center()
+                                        .child(
+                                            div()
+                                                .w(px(6.0))
+                                                .h(px(6.0))
+                                                .rounded_full()
+                                                .bg(p.primary),
+                                        )
+                                        .child(
+                                            div().text_xs().text_color(p.primary).child(
+                                                rust_i18n::t!("monitor.network_section.downlink")
+                                                    .to_string(),
+                                            ),
+                                        ),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_1()
+                                        .items_center()
+                                        .child(
+                                            div()
+                                                .w(px(6.0))
+                                                .h(px(6.0))
+                                                .rounded_full()
+                                                .bg(p.sidebar_accent_foreground),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(p.sidebar_accent_foreground)
+                                                .child(
+                                                    rust_i18n::t!("monitor.network_section.uplink")
+                                                        .to_string(),
+                                                ),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .child(
+                                    div().text_color(p.primary).child(
+                                        rust_i18n::t!(
+                                            "monitor.network_section.rx_peak",
+                                            rate = format_size(total_rx),
+                                            peak = format_size(rx_peak)
+                                        )
+                                        .to_string(),
+                                    ),
+                                )
+                                .child(
+                                    div().text_color(p.sidebar_accent_foreground).child(
+                                        rust_i18n::t!(
+                                            "monitor.network_section.tx_peak",
+                                            rate = format_size(total_tx),
+                                            peak = format_size(tx_peak)
+                                        )
+                                        .to_string(),
+                                    ),
+                                ),
+                        ),
+                )
+                .child(render_network_dual_sparkline(
+                    &rx_hist,
+                    &tx_hist,
+                    48.0,
+                    p.primary,
+                    p.sidebar_accent_foreground,
+                    p.muted,
+                    self.state.chart_type,
+                ))
+                .into_any_element(),
+        )
+    }
+}
+
+/// 单个网卡的上下行速率行。
+fn interface_row(interface: &transom_core::InterfaceRate, p: &Palette) -> AnyElement {
+    h_flex()
+        .justify_between()
+        .items_center()
+        .px_1()
+        .py_0p5()
+        .rounded_sm()
+        .hover(|s| s.bg(p.muted.opacity(0.3)))
+        .text_xs()
+        .child(
+            div()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.foreground)
+                .child(interface.name.clone()),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_color(p.muted_foreground)
+                        .child(format!("↓ {}/s", format_size(interface.rx_bytes_per_sec))),
+                )
+                .child(
+                    div()
+                        .text_color(p.muted_foreground)
+                        .child(format!("↑ {}/s", format_size(interface.tx_bytes_per_sec))),
+                ),
+        )
+        .into_any_element()
 }
