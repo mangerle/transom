@@ -39,6 +39,8 @@ pub(crate) mod event_handlers;
 pub(crate) mod events;
 #[path = "../forward/mod.rs"]
 pub(crate) mod forward;
+#[path = "../app_frame_effects.rs"]
+mod frame_effects;
 #[path = "../identity/mod.rs"]
 pub(crate) mod identity;
 #[path = "../keys/mod.rs"]
@@ -91,6 +93,8 @@ pub(crate) mod trigger_panel;
 pub(crate) mod window_state;
 #[path = "../workspace/mod.rs"]
 pub(crate) mod workspace;
+#[path = "../workspace_render.rs"]
+mod workspace_render;
 #[path = "../zmodem.rs"]
 pub(crate) mod zmodem;
 
