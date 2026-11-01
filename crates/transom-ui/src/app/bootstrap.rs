@@ -139,7 +139,6 @@ impl AppShell {
         let monitor = cx.new(|cx| crate::monitor::MonitorView::new(window, &settings.monitor, cx));
         let editors = cx.new(|_| EditorPanels::new());
 
-        let settings_subscription_handle = settings_view.clone();
         let state = AppState {
             services,
             catalog,
@@ -207,37 +206,45 @@ impl AppShell {
             dialog_hint: None,
         };
         let mut this = Self { state };
+        this.bootstrap_subscriptions(window, cx);
+
+        this.bootstrap_startup(window, cx);
+
+        this
+    }
+    /// 安装面板事件订阅与输入框联动；全部订阅由 `TaskHub` 托管生命周期。
+    fn bootstrap_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // 监控面板的意图事件由外壳订阅处理。
         let monitor_subscription = cx.subscribe(
-            &this.state.monitor,
+            &self.state.monitor,
             |shell, _view, event: &crate::monitor::MonitorPanelEvent, cx| {
                 shell.on_monitor_panel_event(event, cx);
             },
         );
-        this.state.tasks.subscriptions.monitor = Some(monitor_subscription);
+        self.state.tasks.subscriptions.monitor = Some(monitor_subscription);
         let settings_subscription = cx.subscribe(
-            &settings_subscription_handle,
+            &self.state.modals.settings,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {
                 shell.on_settings_event(event, cx);
             },
         );
-        this.state.tasks.subscriptions.settings = Some(settings_subscription);
+        self.state.tasks.subscriptions.settings = Some(settings_subscription);
         // 编辑器面板的意图事件由外壳订阅处理；命令通道在创建时注入，
         // 面板自己投递 SFTP 命令，不需要回指外壳。
-        let editor_command_tx = this.state.services.command_tx.clone();
+        let editor_command_tx = self.state.services.command_tx.clone();
         let editor_subscription = cx.subscribe(
-            &this.state.editors,
+            &self.state.editors,
             |shell, _panels, event: &crate::editor::EditorPanelEvent, cx| {
                 shell.on_editor_panel_event(event, cx);
             },
         );
-        this.state.tasks.subscriptions.editor = Some(editor_subscription);
-        this.state
+        self.state.tasks.subscriptions.editor = Some(editor_subscription);
+        self.state
             .editors
             .update(cx, |panels, _| panels.set_command_tx(editor_command_tx));
 
         cx.subscribe_in(
-            &this.state.broadcast.input,
+            &self.state.broadcast.input,
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
@@ -247,7 +254,7 @@ impl AppShell {
         )
         .detach();
         cx.subscribe_in(
-            &this.state.broadcast.textarea,
+            &self.state.broadcast.textarea,
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
@@ -258,7 +265,7 @@ impl AppShell {
         .detach();
         // 搜索词变化时整壳重绘，纵向标签列表的过滤结果才会跟着输入实时更新。
         cx.subscribe(
-            &this.state.vertical_tabs_search,
+            &self.state.vertical_tabs_search,
             |_, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
@@ -266,14 +273,17 @@ impl AppShell {
             },
         )
         .detach();
+    }
 
+    /// 启动期主题同步、标签恢复与 Git 同步定时器。
+    fn bootstrap_startup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if app_settings(cx).appearance.mode == UiThemeMode::System {
             crate::theme::sync_with_system(window, cx);
         }
         crate::settings::sync_terminal_palette(cx);
-        this.restore_startup_tabs(window, cx);
+        self.restore_startup_tabs(window, cx);
 
-        this.state.tasks.background.git_sync = Some(cx.spawn(async move |this, cx| {
+        self.state.tasks.background.git_sync = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_secs(60))
@@ -283,7 +293,5 @@ impl AppShell {
                 }
             }
         }));
-
-        this
     }
 }
