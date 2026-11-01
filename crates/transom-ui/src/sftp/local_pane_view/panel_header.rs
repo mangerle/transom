@@ -6,7 +6,7 @@
 
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use crate::sftp::entity::{SftpPanelView, with_shell_parts};
+use crate::sftp::entity::SftpPanelView;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
@@ -29,11 +29,10 @@ impl SftpPanelView {
             .icon(IconName::X)
             .tooltip(rust_i18n::t!("sftp.nav.close_panel").to_string())
             .on_click(cx.listener(|this, _, _, cx| {
-                let app = this.app.clone();
-                let tab_id = this.tab_id;
-                with_shell_parts(&app, cx, |shell, _| {
-                    shell.close_sftp_panel(tab_id);
+                cx.emit(crate::sftp::SftpPanelEvent::ClosePanel {
+                    tab_id: this.tab_id,
                 });
+                cx.notify();
             }));
 
         let mut right_actions = h_flex().gap_1().items_center();

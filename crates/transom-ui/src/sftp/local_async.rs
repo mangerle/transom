@@ -10,8 +10,7 @@
 //! - 代价与局限：刷新从"同步可见"变为"异步落地"，期间面板短暂显示旧内容
 //!   （导航场景先清空条目给出即时反馈）；同一目录的并发刷新以后完成者胜出。
 
-use super::entity::{SftpPanelView, with_shell_parts};
-use super::{SftpConfirmModalState, SftpPendingDelete, list_local_dir};
+use super::{SftpPanelView, list_local_dir};
 use crate::app::AppShell;
 use gpui_kit::*;
 use std::collections::BTreeSet;
@@ -75,16 +74,7 @@ impl SftpPanelView {
             cx.notify();
             return;
         }
-        let app = self.app.clone();
-        let count = paths.len();
-        with_shell_parts(&app, cx, |shell, _| {
-            shell.state.sftp_modals.confirm = Some(SftpConfirmModalState {
-                action: SftpPendingDelete::Local { tab_id, paths },
-                title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
-                description: rust_i18n::t!("sftp.local_async.delete_body", count = count)
-                    .to_string(),
-            });
-        });
+        cx.emit(crate::sftp::SftpPanelEvent::ConfirmLocalDelete { tab_id, paths });
         cx.notify();
     }
 

@@ -11,7 +11,7 @@
 //!
 //! 导航与过滤动作在 `remote_nav`，文件操作实现分散在各自的业务文件中。
 
-use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
+use super::entity::{SftpPanelView, with_shell_parts};
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
@@ -115,20 +115,12 @@ impl SftpPanelView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some((main_connection, max_bytes)) = read_shell_parts(&app, cx, |shell| {
-            (
-                shell
-                    .state
-                    .workspace
-                    .tab(self.tab_id)
-                    .and_then(|tab| tab.connection_id),
-                app_settings(cx).sftp.edit_max_bytes,
-            )
-        }) else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
-        let Some(connection_id) = self.state.remote_connection(target, main_connection) else {
+        let max_bytes = app_settings(cx).sftp.edit_max_bytes;
+        let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
+        else {
             return;
         };
         let Some(entry) = self.state.remote_pane(target).and_then(|pane| {
@@ -162,6 +154,7 @@ impl SftpPanelView {
             return;
         }
         let tab_id = self.tab_id;
+        let app = self.app.clone();
         with_shell_parts(&app, cx, |shell, cx| {
             shell.open_remote_editor_panel(
                 crate::editor::RemoteEditorOpen {

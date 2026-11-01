@@ -2,7 +2,7 @@
 
 use crate::app::app_settings;
 use crate::palette::localized_error;
-use crate::sftp::entity::{SftpPanelView, read_shell_parts};
+use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{SftpRemotePaneRef, TransferMode, TransferTask};
 use gpui_kit::*;
 use transom_core::TransferDirection;
@@ -10,24 +10,14 @@ use transom_core::TransferDirection;
 impl SftpPanelView {
     /// 下载目标远端列当前选中的条目到本地当前目录。
     pub(crate) fn download_pane(&mut self, target: SftpRemotePaneRef, cx: &mut Context<Self>) {
-        let app = self.app.clone();
-        let Some((main_connection, verify, verify_mode, checksum_algorithm)) =
-            read_shell_parts(&app, cx, |shell| {
-                (
-                    shell
-                        .state
-                        .workspace
-                        .tab(self.tab_id)
-                        .and_then(|tab| tab.connection_id),
-                    app_settings(cx).sftp.verify_after_transfer,
-                    app_settings(cx).sftp.verify_mode,
-                    app_settings(cx).sftp.checksum_algorithm,
-                )
-            })
-        else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
-        let Some(source_connection_id) = self.state.remote_connection(target, main_connection)
+        let verify = app_settings(cx).sftp.verify_after_transfer;
+        let verify_mode = app_settings(cx).sftp.verify_mode;
+        let checksum_algorithm = app_settings(cx).sftp.checksum_algorithm;
+        let Some(source_connection_id) =
+            self.state.remote_connection(target, Some(main_connection))
         else {
             if let Some(pane) = self.state.remote_pane_mut(target) {
                 pane.error =
