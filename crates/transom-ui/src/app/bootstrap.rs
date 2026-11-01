@@ -48,73 +48,24 @@ impl AppShell {
         let monitor = cx.new(|cx| crate::monitor::MonitorView::new(window, &settings.monitor, cx));
         let editors = cx.new(|_| EditorPanels::new());
 
-        let state = AppState {
-            services,
-            catalog: prepared.catalog,
-            catalog_revision: 0,
-            sidebar: SidebarState::new(sidebar_visible, inputs.search.clone()),
-            workspace: WorkspaceState::new(),
-            workspace_panels: inputs.workspace_panels.clone(),
-            workspace_panels_left: inputs.workspace_panels_left.clone(),
-            vertical_tabs_search: inputs.vertical_tabs_search.clone(),
-            vertical_tabs_open,
-            modals: ModalHub::new(
-                KnownHostsModalState {
-                    open: false,
-                    records: known_hosts_records,
-                    search: inputs.known_hosts_search.clone(),
-                },
+        let state = assemble_state(
+            BootstrapState {
+                services,
+                prepared,
+                inputs,
                 settings_view,
-                inputs.quick_open_state.clone(),
-                SnippetPanelState {
-                    open: false,
-                    form: None,
-                },
-            ),
-            tasks: TaskHub::new(appearance_subscription, event_task),
-            git_sync_schedule: GitSyncScheduler::default(),
-            history: prepared.history,
-            history_provider: prepared.history_provider,
-            probe_badges: HashMap::new(),
-            monitor,
-            editors,
-            diff_viewer: None,
-            sftp_modals: SftpModals {
-                chmod: None,
-                confirm: None,
-                input: None,
-                properties: None,
-                filter: None,
-                sync: None,
-                goto_line: None,
-                search: None,
+                monitor,
+                editors,
+                persistence,
+                appearance_subscription,
+                event_task,
+                known_hosts_records,
+                sidebar_visible,
+                vertical_tabs_open,
             },
-            broadcast: BroadcastBarState {
-                open: false,
-                multiline: false,
-                targets_open: false,
-                input: inputs.broadcast_input.clone(),
-                textarea: inputs.broadcast_textarea.clone(),
-                targets: HashSet::new(),
-                targets_scope: Vec::new(),
-            },
-            status: None,
-            persistence,
-            pending_notices: prepared.pending_notices,
-            immersive: false,
-            sftp_panel_width_target: None,
-            window_requests: Default::default(),
-            status_metrics: cx.new(|_| crate::status_bar::StatusBarMetricsView::new()),
-            key_wizard: None,
-            stats_sampling: true,
-            shortcut_recording: ShortcutRecordingState {
-                filter: prepared.shortcut_filter,
-                applied_keys: prepared.applied_shortcut_keys,
-                capture: None,
-            },
-            open_modals: crate::dialog_host::OpenModals::default(),
-            dialog_hint: None,
-        };
+            cx,
+        );
+
         let mut this = Self { state };
         this.bootstrap_subscriptions(window, cx);
 
@@ -260,6 +211,107 @@ struct BootstrapPrepared {
     applied_shortcut_keys: Vec<(String, &'static str)>,
     catalog: SessionCatalog,
     pending_notices: PendingNotices,
+}
+
+/// 启动状态装配输入：准备结果、实体与订阅。
+struct BootstrapState {
+    services: UiServices,
+    prepared: BootstrapPrepared,
+    inputs: BootstrapInputs,
+    settings_view: Entity<crate::settings::SettingsView>,
+    monitor: Entity<crate::monitor::MonitorView>,
+    editors: Entity<EditorPanels>,
+    persistence: Persistence,
+    appearance_subscription: Subscription,
+    event_task: gpui::Task<()>,
+    known_hosts_records: Vec<transom_core::HostKeyRecord>,
+    sidebar_visible: bool,
+    vertical_tabs_open: bool,
+}
+
+/// 组装 `AppState`：把启动准备、实体句柄与事件订阅一次性收进状态。
+fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState {
+    let BootstrapState {
+        services,
+        prepared,
+        inputs,
+        settings_view,
+        monitor,
+        editors,
+        persistence,
+        appearance_subscription,
+        event_task,
+        known_hosts_records,
+        sidebar_visible,
+        vertical_tabs_open,
+    } = input;
+    AppState {
+        services,
+        catalog: prepared.catalog,
+        catalog_revision: 0,
+        sidebar: SidebarState::new(sidebar_visible, inputs.search.clone()),
+        workspace: WorkspaceState::new(),
+        workspace_panels: inputs.workspace_panels.clone(),
+        workspace_panels_left: inputs.workspace_panels_left.clone(),
+        vertical_tabs_search: inputs.vertical_tabs_search.clone(),
+        vertical_tabs_open,
+        modals: ModalHub::new(
+            KnownHostsModalState {
+                open: false,
+                records: known_hosts_records,
+                search: inputs.known_hosts_search.clone(),
+            },
+            settings_view,
+            inputs.quick_open_state.clone(),
+            SnippetPanelState {
+                open: false,
+                form: None,
+            },
+        ),
+        tasks: TaskHub::new(appearance_subscription, event_task),
+        git_sync_schedule: GitSyncScheduler::default(),
+        history: prepared.history,
+        history_provider: prepared.history_provider,
+        probe_badges: HashMap::new(),
+        monitor,
+        editors,
+        diff_viewer: None,
+        sftp_modals: SftpModals {
+            chmod: None,
+            confirm: None,
+            input: None,
+            properties: None,
+            filter: None,
+            sync: None,
+            goto_line: None,
+            search: None,
+        },
+        broadcast: BroadcastBarState {
+            open: false,
+            multiline: false,
+            targets_open: false,
+            input: inputs.broadcast_input.clone(),
+            textarea: inputs.broadcast_textarea.clone(),
+            targets: HashSet::new(),
+            targets_scope: Vec::new(),
+        },
+        status: None,
+        persistence,
+        pending_notices: prepared.pending_notices,
+        immersive: false,
+        sftp_panel_width_target: None,
+        window_requests: Default::default(),
+        status_metrics: cx.new(|_| crate::status_bar::StatusBarMetricsView::new()),
+        key_wizard: None,
+        stats_sampling: true,
+        shortcut_recording: ShortcutRecordingState {
+            filter: prepared.shortcut_filter,
+            applied_keys: prepared.applied_shortcut_keys,
+            capture: None,
+        },
+        open_modals: crate::dialog_host::OpenModals::default(),
+        dialog_hint: None,
+    }
 }
 
 /// 归一设置、装载 Global/键位、加载历史与会话目录。
