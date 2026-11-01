@@ -33,12 +33,6 @@ use std::collections::HashSet;
 use transom_core::{GroupId, SessionId, TabPosition};
 
 impl AppState {
-    pub(crate) fn show_vertical_tabs_panel(&self) -> bool {
-        self.settings.window.tab_position == TabPosition::Left
-            && self.sidebar.visible
-            && self.vertical_tabs_open
-    }
-
     fn group_matches(&self, group_id: GroupId, query_lower: &str) -> bool {
         if query_lower.is_empty() {
             return true;
@@ -247,6 +241,12 @@ impl AppShell {
             )
         };
         crate::widgets::empty_state(IconName::Terminal, title, hint, p)
+    }
+
+    pub(crate) fn show_vertical_tabs_panel(&self) -> bool {
+        self.state.settings.window.tab_position == TabPosition::Left
+            && self.state.sidebar.visible
+            && self.state.vertical_tabs_open
     }
 }
 

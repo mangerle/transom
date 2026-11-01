@@ -148,9 +148,64 @@ impl AppState {
         }
         items
     }
+}
+
+impl AppShell {
+    /// 按当前模式与查询词构建条目模型。
+    ///
+    /// 普通模式先给会话（含本地终端与直连），再给命令类条目；动作模式只保留
+    /// 可执行条目——会话在动作模式里既不是动作也没有可派发的行为。
+    pub(super) fn build_palette_model(
+        &self,
+        action_mode: bool,
+        term: &str,
+        cx: &App,
+    ) -> PaletteModel {
+        let needle = term.to_lowercase();
+        let mut model = PaletteModel::with_capacity(6);
+
+        if action_mode {
+            // 动作模式把可执行项排在最前：用户敲 `>` 的目的就是执行。
+            model.push(
+                rust_i18n::t!("app.palette_actions").to_string(),
+                action_items(&needle),
+            );
+            model.push(
+                rust_i18n::t!("app.palette_snippets").to_string(),
+                self.snippet_items(&needle),
+            );
+        } else {
+            model.push(
+                rust_i18n::t!("app.sessions").to_string(),
+                self.state.session_items(term, &needle),
+            );
+            model.push(
+                rust_i18n::t!("app.palette_snippets").to_string(),
+                self.snippet_items(&needle),
+            );
+            model.push(
+                rust_i18n::t!("app.palette_actions").to_string(),
+                action_items(&needle),
+            );
+        }
+        model.push(
+            rust_i18n::t!("app.palette_settings_pages").to_string(),
+            settings_page_items(&needle),
+        );
+        model.push(
+            rust_i18n::t!("app.palette_ui_themes").to_string(),
+            ui_theme_items(&needle, cx),
+        );
+        model.push(
+            rust_i18n::t!("app.palette_terminal_themes").to_string(),
+            self.terminal_theme_items(&needle),
+        );
+        model
+    }
 
     fn snippet_items(&self, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
-        self.settings
+        self.state
+            .settings
             .snippets
             .items
             .iter()
@@ -172,9 +227,8 @@ impl AppState {
             })
             .collect()
     }
-
     fn terminal_theme_items(&self, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
-        let active = self.settings.terminal_profile.theme_name.as_str();
+        let active = self.state.settings.terminal_profile.theme_name.as_str();
         // 中文关键词取本地化标题，避免把界面文案硬编码进源码。
         let group_keyword = rust_i18n::t!("app.palette_terminal_themes").to_string();
         preset_themes()
@@ -204,60 +258,6 @@ impl AppState {
                 )
             })
             .collect()
-    }
-}
-
-impl AppShell {
-    /// 按当前模式与查询词构建条目模型。
-    ///
-    /// 普通模式先给会话（含本地终端与直连），再给命令类条目；动作模式只保留
-    /// 可执行条目——会话在动作模式里既不是动作也没有可派发的行为。
-    pub(super) fn build_palette_model(
-        &self,
-        action_mode: bool,
-        term: &str,
-        cx: &App,
-    ) -> PaletteModel {
-        let needle = term.to_lowercase();
-        let mut model = PaletteModel::with_capacity(6);
-
-        if action_mode {
-            // 动作模式把可执行项排在最前：用户敲 `>` 的目的就是执行。
-            model.push(
-                rust_i18n::t!("app.palette_actions").to_string(),
-                action_items(&needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_snippets").to_string(),
-                self.state.snippet_items(&needle),
-            );
-        } else {
-            model.push(
-                rust_i18n::t!("app.sessions").to_string(),
-                self.state.session_items(term, &needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_snippets").to_string(),
-                self.state.snippet_items(&needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_actions").to_string(),
-                action_items(&needle),
-            );
-        }
-        model.push(
-            rust_i18n::t!("app.palette_settings_pages").to_string(),
-            settings_page_items(&needle),
-        );
-        model.push(
-            rust_i18n::t!("app.palette_ui_themes").to_string(),
-            ui_theme_items(&needle, cx),
-        );
-        model.push(
-            rust_i18n::t!("app.palette_terminal_themes").to_string(),
-            self.state.terminal_theme_items(&needle),
-        );
-        model
     }
 }
 

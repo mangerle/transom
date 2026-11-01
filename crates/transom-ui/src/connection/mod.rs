@@ -52,19 +52,7 @@ pub(crate) struct HostKeyConfirmState {
     pub(crate) responder: tokio::sync::mpsc::Sender<bool>,
 }
 
-impl AppState {
-    pub(crate) fn record_recent_session(&mut self, session_id: SessionId) {
-        self.settings
-            .window
-            .recent_sessions
-            .retain(|id| *id != session_id);
-        self.settings.window.recent_sessions.insert(0, session_id);
-        self.settings.window.recent_sessions.truncate(20);
-        if let Err(error) = self.persist_settings() {
-            log::warn!("保存最近打开会话失败，原因: {error}");
-        }
-    }
-}
+impl AppState {}
 
 impl AppShell {
     /// 记录最近打开的会话 ID，并异步落盘保存。
@@ -101,7 +89,7 @@ impl AppShell {
             return;
         };
         let session = self.state.catalog.resolved_session(found);
-        self.state.record_recent_session(session_id);
+        self.record_recent_session(session_id);
 
         let tab_id = TabId::new();
         self.state.create_group(tab_id, session_id);
@@ -311,5 +299,22 @@ impl AppShell {
             self.prune_tab_overlays(cx);
         }
         cx.notify();
+    }
+
+    pub(crate) fn record_recent_session(&mut self, session_id: SessionId) {
+        self.state
+            .settings
+            .window
+            .recent_sessions
+            .retain(|id| *id != session_id);
+        self.state
+            .settings
+            .window
+            .recent_sessions
+            .insert(0, session_id);
+        self.state.settings.window.recent_sessions.truncate(20);
+        if let Err(error) = self.state.persist_settings() {
+            log::warn!("保存最近打开会话失败，原因: {error}");
+        }
     }
 }

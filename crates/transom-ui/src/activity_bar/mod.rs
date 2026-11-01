@@ -30,34 +30,6 @@ use transom_core::{ActivityItemId, Connection, TabPosition};
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 
 impl AppState {
-    fn activity_item_tooltip(&self, id: ActivityItemId, label: &str) -> String {
-        if id == ActivityItemId::Language {
-            if crate::i18n::resolve_language(&self.settings.language) == "zh-CN" {
-                rust_i18n::t!("activity.switch_to_english").to_string()
-            } else {
-                rust_i18n::t!("activity.switch_to_chinese").to_string()
-            }
-        } else if id == ActivityItemId::Sftp
-            && self
-                .workspace
-                .active_tab
-                .and_then(|tab_id| self.workspace.tab(tab_id))
-                .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
-        {
-            rust_i18n::t!("sftp.local_files_title").to_string()
-        } else {
-            label.to_string()
-        }
-    }
-
-    /// 条目在当前上下文是否可展示。
-    ///
-    /// 纵向标签条目只在"标签位置 = 左侧"时有意义；顶部模式下直接不渲染，
-    /// 避免保留一个点击无反应的图标。设置页仍保留该条目，方便用户调整顺序。
-    fn activity_item_available(&self, id: ActivityItemId) -> bool {
-        id != ActivityItemId::Tabs || self.settings.window.tab_position == TabPosition::Left
-    }
-
     fn activity_item_selected(&self, id: ActivityItemId, monitor_open: bool, cx: &App) -> bool {
         match id {
             ActivityItemId::Sessions => self.sidebar.visible && !self.vertical_tabs_open,
@@ -112,14 +84,14 @@ impl AppShell {
             .settings
             .activity_bar
             .top_items()
-            .filter(|id| self.state.activity_item_available(*id))
+            .filter(|id| self.activity_item_available(*id))
             .collect();
         let bottom: Vec<ActivityItemId> = self
             .state
             .settings
             .activity_bar
             .bottom_items()
-            .filter(|id| self.state.activity_item_available(*id))
+            .filter(|id| self.activity_item_available(*id))
             .collect();
         let mut top_children = Vec::with_capacity(top.len());
         for id in top {
@@ -174,7 +146,7 @@ impl AppShell {
     ) -> AnyElement {
         let label = activity_item_label(id);
         let icon = activity_item_icon(id);
-        let tooltip = self.state.activity_item_tooltip(id, &label);
+        let tooltip = self.activity_item_tooltip(id, &label);
         let selected =
             self.state
                 .activity_item_selected(id, self.state.monitor.read(cx).is_open(), cx);
@@ -276,6 +248,34 @@ impl AppShell {
             ActivityItemId::Settings => self.open_settings_modal(window, cx),
             ActivityItemId::Unknown => {}
         }
+    }
+
+    fn activity_item_tooltip(&self, id: ActivityItemId, label: &str) -> String {
+        if id == ActivityItemId::Language {
+            if crate::i18n::resolve_language(&self.state.settings.language) == "zh-CN" {
+                rust_i18n::t!("activity.switch_to_english").to_string()
+            } else {
+                rust_i18n::t!("activity.switch_to_chinese").to_string()
+            }
+        } else if id == ActivityItemId::Sftp
+            && self
+                .state
+                .workspace
+                .active_tab
+                .and_then(|tab_id| self.state.workspace.tab(tab_id))
+                .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
+        {
+            rust_i18n::t!("sftp.local_files_title").to_string()
+        } else {
+            label.to_string()
+        }
+    }
+    /// 条目在当前上下文是否可展示。
+    ///
+    /// 纵向标签条目只在"标签位置 = 左侧"时有意义；顶部模式下直接不渲染，
+    /// 避免保留一个点击无反应的图标。设置页仍保留该条目，方便用户调整顺序。
+    fn activity_item_available(&self, id: ActivityItemId) -> bool {
+        id != ActivityItemId::Tabs || self.state.settings.window.tab_position == TabPosition::Left
     }
 }
 
