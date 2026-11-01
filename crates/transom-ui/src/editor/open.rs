@@ -397,10 +397,22 @@ impl EditorPanels {
             op_id,
         };
         let max_bytes = self.edit_max_bytes(cx);
-        let sent = self
-            .with_shell(cx, |shell, _| shell.send_editor_read(request, max_bytes))
-            .unwrap_or(Err(()));
-        if sent.is_err() {
+        let sent = self.command_tx().is_some_and(|tx| {
+            tx.try_send(
+                SftpCommand::Sftp {
+                    tab_id: request.tab_id,
+                    connection_id: request.connection_id,
+                    op_id: request.op_id,
+                    op: SftpOperation::ReadText {
+                        path: request.remote_path,
+                        max_bytes,
+                    },
+                }
+                .into(),
+            )
+            .is_ok()
+        });
+        if !sent {
             self.fail_by_op(
                 op_id,
                 rust_i18n::t!("editor.error_read_dispatch").to_string(),

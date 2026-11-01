@@ -210,6 +210,7 @@ impl AppShell {
             sftp_panel_width_target: None,
             pending_sftp_requests: Vec::new(),
             pending_monitor_requests: Vec::new(),
+            pending_editor_requests: Vec::new(),
             shortcut_recording: ShortcutRecordingState {
                 filter: shortcut_filter,
                 applied_keys: applied_shortcut_keys,
@@ -228,10 +229,18 @@ impl AppShell {
         );
         this.state.tasks.monitor_panel_subscription = Some(monitor_subscription);
         // 编辑器面板仍在用同步回交，暂保留弱引用绑定。
-        let app_weak = cx.entity().downgrade();
+        let _app_weak = cx.entity().downgrade();
+        let editor_command_tx = this.state.services.command_tx.clone();
+        let editor_subscription = cx.subscribe(
+            &this.state.editors,
+            |shell, _panels, event: &crate::editor::EditorPanelEvent, cx| {
+                shell.on_editor_panel_event(event, cx);
+            },
+        );
+        this.state.tasks.editor_panel_subscription = Some(editor_subscription);
         this.state
             .editors
-            .update(cx, |panels, _| panels.attach(app_weak));
+            .update(cx, |panels, _| panels.set_command_tx(editor_command_tx));
 
         cx.subscribe_in(
             &this.state.broadcast.input,

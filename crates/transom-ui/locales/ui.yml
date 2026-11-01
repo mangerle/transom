@@ -4273,6 +4273,9 @@ editor:
   error_read_dispatch:
     en: Failed to dispatch the read command
     zh-CN: 读取命令投递失败
+  error_write_dispatch:
+    en: Failed to dispatch the write command
+    zh-CN: 写回命令投递失败
   error_no_connection_read:
     en: SSH connection is not ready; cannot read the remote file
     zh-CN: SSH 连接尚未就绪，无法读取远端文件

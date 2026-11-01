@@ -11,7 +11,7 @@
 //! - 横幅（错误、冲突、二次确认）是画布之外的附加信息，单独包一层内边距，
 //!   不让它们把编辑器挤成带边距的盒子。
 //! - 渲染归 `EditorPanels` 实体：按钮回调直接改实体状态，发命令/开弹窗等跨域
-//!   动作走 `with_shell`。图标一律取组件库资产，不用字符拟态。
+//!   动作走面板事件。图标一律取组件库资产，不用字符拟态。
 
 use super::drag_tracker::EditorDragTracker;
 use super::entity::EditorPanels;

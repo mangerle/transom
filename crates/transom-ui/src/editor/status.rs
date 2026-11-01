@@ -8,7 +8,7 @@
 //!   承载；Ctrl+S 已在键位表里，不依赖视觉上的大色块按钮。
 //! - 编码与行尾直接取自读回时的 `RemoteTextMeta`：GBK 转码只读预览、CRLF
 //!   回传保留形态，都是用户需要一眼确认的事实，放在状态栏比藏在提示里更可靠。
-//! - 菜单与按钮回调都改调实体方法；"与本地对比"属于跨域动作，经 `with_shell`
+//! - 菜单与按钮回调都改调实体方法；"与本地对比"属于跨域动作，经面板事件
 //!   回交外壳打开对比面板。
 
 use super::diff::diff_entry_allowed;
@@ -154,9 +154,7 @@ impl EditorPanels {
                                 let Some(source) = this.diff_source(&editor) else {
                                     return;
                                 };
-                                this.with_shell(cx, |shell, cx| {
-                                    shell.open_editor_local_diff(source, cx)
-                                });
+                                cx.emit(crate::editor::EditorPanelEvent::OpenLocalDiff(source));
                             });
                         },
                     ));

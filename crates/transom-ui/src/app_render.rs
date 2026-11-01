@@ -69,6 +69,30 @@ impl AppShell {
         view.update(cx, |view, _| view.set_mount_candidates(candidates));
     }
 
+    /// 执行编辑面板排队的窗口动作。
+    fn flush_pending_editor_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::editor::EditorPanelEvent;
+        if self.state.pending_editor_requests.is_empty() {
+            return;
+        }
+        let requests = std::mem::take(&mut self.state.pending_editor_requests);
+        for request in requests {
+            match request {
+                EditorPanelEvent::OpenGotoLine(editor) => {
+                    self.open_editor_goto_line(editor, window, cx);
+                }
+                EditorPanelEvent::FocusSftpPanel => self.focus_active_sftp_panel(window, cx),
+                EditorPanelEvent::ResumePendingClose => {
+                    self.defer_editor_close_resume(window, cx);
+                }
+                EditorPanelEvent::OpenLocalDiff(source) => {
+                    self.open_editor_local_diff(source, cx);
+                }
+                EditorPanelEvent::ListOpenChanged => cx.notify(),
+            }
+        }
+    }
+
     /// 把活动标签的统计快照推给监控面板。
     fn refresh_monitor_stats(&mut self, cx: &mut Context<Self>) {
         let stats = self
@@ -189,6 +213,7 @@ impl Render for AppShell {
         self.refresh_sftp_mount_candidates(cx);
         self.refresh_forward_panel_data(cx);
         self.refresh_monitor_stats(cx);
+        self.flush_pending_editor_requests(window, cx);
         self.flush_pending_monitor_requests(window, cx);
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步

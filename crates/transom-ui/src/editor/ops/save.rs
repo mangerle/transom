@@ -1,8 +1,7 @@
 //! 编辑器保存、提权探测与写回投递。
 //!
-//! 两段式：实体方法只改面板状态并返回"要投递什么"，外壳拿到请求后发命令；
-//! 发送失败的结果再回到实体落成失败态。这样实体回调回交外壳时，外壳不必
-//! 重新读写本实体，避免双重租借崩溃。
+//! 实体自己持有命令通道：写回与提权探测直接在这里投递，失败时把结果落回
+//! 面板状态；需要窗口的收尾动作通过事件交给外壳。
 
 use super::*;
 use crate::app::app_settings;
@@ -100,34 +99,87 @@ impl EditorPanels {
             return;
         };
         let op_id = request.op_id;
-        let sent = self
-            .with_shell(cx, |shell, _| shell.send_sudo_probe(&request))
-            .unwrap_or(Err(()));
-        if sent.is_err() {
+        let sent = self.command_tx().is_some_and(|tx| {
+            tx.try_send(
+                SftpCommand::Sftp {
+                    tab_id: request.tab_id,
+                    connection_id: request.connection_id,
+                    op_id: request.op_id,
+                    op: SftpOperation::ProbeSudo,
+                }
+                .into(),
+            )
+            .is_ok()
+        });
+        if !sent {
             self.fail_sudo_probe_dispatch(op_id, cx);
         }
         cx.notify();
     }
 
     /// 状态改完之后提交写回：投递失败时把错误落回面板。
+    /// 面板自己投递写回命令；保留同步返回值，失败时由调用方落错误态。
+    fn dispatch_write(
+        &mut self,
+        request: EditorWriteRequest,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let backup = app_settings(cx).sftp.editor_write_backup;
+        // expected 始终携带已知指纹：它同时承载并发比对基准与 BOM/CRLF 形态还原
+        // 标记（强制覆盖也必须还原形态，否则保存一次就改掉文件行尾）。
+        let op = if request.sudo {
+            SftpOperation::SudoWriteText {
+                path: request.remote_path,
+                content: request.content,
+                expected: request.expected,
+                force: false,
+                backup,
+                password: request.password,
+            }
+        } else {
+            SftpOperation::WriteText {
+                path: request.remote_path,
+                content: request.content,
+                expected: request.expected,
+                force: request.force,
+                backup,
+            }
+        };
+        let Some(tx) = self.command_tx() else {
+            return Err(rust_i18n::t!("editor.error_write_dispatch").to_string());
+        };
+        tx.try_send(
+            SftpCommand::Sftp {
+                tab_id: request.tab_id,
+                connection_id: request.connection_id,
+                op_id: request.op_id,
+                op,
+            }
+            .into(),
+        )
+        .map_err(crate::app::command_send_error_text)?;
+        cx.notify();
+        Ok(())
+    }
+
     fn submit_editor_write(
         &mut self,
         editor: &Entity<EditorState>,
         mode: EditorWriteMode,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(request) = self.prepare_editor_write(editor, mode, cx) else {
             return;
         };
         let op_id = request.op_id;
-        let result = self
-            .with_shell(cx, |shell, cx| {
-                shell.dispatch_editor_write(request, window, cx)
-            })
-            .unwrap_or_else(|| Err(String::new()));
-        if let Err(message) = result {
-            self.fail_editor_write_dispatch(op_id, message, cx);
+        match self.dispatch_write(request, cx) {
+            Ok(()) => {}
+            Err(message) => {
+                // 投递失败时把焦点还给 SFTP 面板，让用户看到错误来源。
+                cx.emit(crate::editor::EditorPanelEvent::FocusSftpPanel);
+                self.fail_editor_write_dispatch(op_id, message, cx);
+            }
         }
     }
 

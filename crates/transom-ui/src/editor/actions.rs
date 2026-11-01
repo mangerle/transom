@@ -4,7 +4,7 @@
 //! 保存回传在 `ops.rs`，关闭闸门在 `close.rs`，渲染在 `view.rs`。
 //!
 //! 这些方法都挂在 `EditorPanels` 实体上：状态变更在本实体完成，需要发命令、
-//! 开弹窗或聚焦其它面板时通过 `with_shell` 回交外壳。
+//! 开弹窗或聚焦其它面板时通过面板事件交给外壳。
 
 use super::entity::EditorPanels;
 use super::panel::{EditorPhase, PanelConfirm};
@@ -218,9 +218,9 @@ impl EditorPanels {
         let Some(editor) = self.focused_editor(window, cx) else {
             return;
         };
-        self.with_shell(cx, |shell, cx| {
-            shell.open_editor_goto_line(editor, window, cx)
-        });
+        cx.emit(crate::editor::EditorPanelEvent::OpenGotoLine(
+            editor.clone(),
+        ));
     }
 
     fn drop_panel(&mut self, editor: &Entity<EditorState>) {
@@ -230,13 +230,13 @@ impl EditorPanels {
     }
 
     /// 面板移除后把焦点交还当前 SFTP 面板。
-    fn focus_active_sftp(&self, window: &mut Window, cx: &mut Context<Self>) {
-        self.with_shell(cx, |shell, cx| shell.focus_active_sftp_panel(window, cx));
+    fn focus_active_sftp(&self, _window: &mut Window, cx: &mut Context<Self>) {
+        cx.emit(crate::editor::EditorPanelEvent::FocusSftpPanel);
     }
 
     /// 挂起关闭可能在任意面板处理完后满足；延后到本次实体租借结束后再续行，
     /// 避免外壳续行时重新读写本实体造成双重租借。
-    fn defer_close_resume(&self, window: &mut Window, cx: &mut Context<Self>) {
-        self.with_shell(cx, |shell, cx| shell.defer_editor_close_resume(window, cx));
+    fn defer_close_resume(&self, _window: &mut Window, cx: &mut Context<Self>) {
+        cx.emit(crate::editor::EditorPanelEvent::ResumePendingClose);
     }
 }

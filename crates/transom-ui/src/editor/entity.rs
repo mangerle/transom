@@ -27,7 +27,26 @@ use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
 use transom_core::{RemoteTextMeta, TabId};
 
+/// 编辑面板向外壳发出的意图。
+///
+/// 面板不持有外壳句柄后，需要窗口的动作与跨域动作都从这里交给外壳；
+/// 事件自带数据，外壳处理时不得回读面板。
+#[derive(Clone)]
+pub(crate) enum EditorPanelEvent {
+    /// 请打开"跳转到行"输入框。
+    OpenGotoLine(Entity<EditorState>),
+    /// 请把焦点还给 SFTP 面板。
+    FocusSftpPanel,
+    /// 请在下一帧续行挂起的关闭。
+    ResumePendingClose,
+    /// 请用编辑器当前基线与本地文件比对。
+    OpenLocalDiff(EditorDiffSource),
+    /// 编辑器列表显隐变化；外壳工具栏选中态需要重绘。
+    ListOpenChanged,
+}
+
 /// 外壳发起"与本地对比"时需要的远端快照；由实体只读产出。
+#[derive(Clone)]
 pub(crate) struct EditorDiffSource {
     pub(crate) tab_id: TabId,
     pub(crate) remote_path: String,
@@ -44,9 +63,11 @@ const FALLBACK_EDIT_MAX_BYTES: u64 = 8 * 1024 * 1024;
 pub(crate) struct EditorPanels {
     /// 面板集合、待关闭意图与列表浮层显隐等纯状态。
     manager: EditorManager,
-    /// 回到外壳的弱引用；构造完成后由 `attach` 绑定。
-    app: Option<WeakEntity<AppShell>>,
+    /// 命令通道：面板自己投递读写命令，保留同步返回值语义。
+    command_tx: Option<flume::Sender<transom_core::AppCommand>>,
 }
+
+impl EventEmitter<EditorPanelEvent> for EditorPanels {}
 
 impl Default for EditorPanels {
     fn default() -> Self {
@@ -58,33 +79,18 @@ impl EditorPanels {
     pub(crate) fn new() -> Self {
         Self {
             manager: EditorManager::new(),
-            app: None,
+            command_tx: None,
         }
     }
 
-    /// 绑定外壳弱引用；必须在外壳构造完成后立即调用一次。
-    pub(crate) fn attach(&mut self, app: WeakEntity<AppShell>) {
-        self.app = Some(app);
+    /// 命令通道句柄。
+    pub(super) fn command_tx(&self) -> Option<&flume::Sender<transom_core::AppCommand>> {
+        self.command_tx.as_ref()
     }
 
-    /// 回到外壳执行一次跨域动作；外壳已释放时返回 `None`。
-    ///
-    /// # 调用约束
-    /// 本方法通常在本实体的点击回调里执行，此时本实体正被 GPUI 租借，
-    /// 被调用的外壳方法不得再读写本实体。需要外壳改状态时，先把结果算好。
-    pub(super) fn with_shell<R>(
-        &self,
-        cx: &mut Context<Self>,
-        action: impl FnOnce(&mut AppShell, &mut Context<AppShell>) -> R,
-    ) -> Option<R> {
-        let app = self.app.as_ref()?.upgrade()?;
-        Some(app.update(cx, action))
-    }
-
-    /// 只读外壳状态；用于取设置、工作区快照等跨域数据。
-    pub(super) fn read_shell<R>(&self, cx: &App, read: impl FnOnce(&AppShell) -> R) -> Option<R> {
-        let app = self.app.as_ref()?.upgrade()?;
-        Some(read(app.read(cx)))
+    /// 注入命令通道；创建后调用一次。
+    pub(crate) fn set_command_tx(&mut self, tx: flume::Sender<transom_core::AppCommand>) {
+        self.command_tx = Some(tx);
     }
 
     /// 已打开面板数量。
@@ -114,7 +120,7 @@ impl EditorPanels {
         }
         self.manager.list_open = open;
         cx.notify();
-        self.with_shell(cx, |_, cx| cx.notify());
+        cx.emit(EditorPanelEvent::ListOpenChanged);
     }
 
     /// 挂起的关闭意图快照。
@@ -222,19 +228,41 @@ impl EditorPanels {
 
     /// 代码字号独立于界面密度；越界值按边界处理，避免极端值撑坏布局。
     pub(super) fn editor_font_size(&self, cx: &App) -> f32 {
-        self.read_shell(cx, |_shell| app_settings(cx).sftp.editor_font_size)
-            .unwrap_or(FALLBACK_EDITOR_FONT_SIZE)
-            .clamp(9.0, 40.0)
+        let configured = app_settings(cx).sftp.editor_font_size;
+        let size = if configured > 0.0 {
+            configured
+        } else {
+            FALLBACK_EDITOR_FONT_SIZE
+        };
+        size.clamp(9.0, 40.0)
     }
 
     /// 当前配置的编辑读取上限，实体在投递读取命令前读取。
     pub(super) fn edit_max_bytes(&self, cx: &App) -> u64 {
-        self.read_shell(cx, |_shell| app_settings(cx).sftp.edit_max_bytes)
-            .unwrap_or(FALLBACK_EDIT_MAX_BYTES)
+        let configured = app_settings(cx).sftp.edit_max_bytes;
+        if configured > 0 {
+            configured
+        } else {
+            FALLBACK_EDIT_MAX_BYTES
+        }
     }
 
     /// 保存中/读取中的面板不允许再次提交；
     pub(super) fn phase_busy(phase: EditorPhase) -> bool {
         matches!(phase, EditorPhase::Reading | EditorPhase::Writing)
+    }
+}
+
+impl AppShell {
+    /// 处理编辑面板发来的意图。
+    ///
+    /// 需要窗口的动作排到渲染期执行：事件派发阶段没有 `Window`。
+    pub(crate) fn on_editor_panel_event(
+        &mut self,
+        event: &EditorPanelEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.pending_editor_requests.push(event.clone());
+        cx.notify();
     }
 }

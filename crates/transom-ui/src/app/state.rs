@@ -88,6 +88,8 @@ pub(crate) struct AppState {
     pub(in crate::app) pending_sftp_requests: Vec<crate::sftp::SftpPanelEvent>,
     /// 监控面板的窗口相关请求，渲染期统一执行。
     pub(in crate::app) pending_monitor_requests: Vec<crate::monitor::MonitorPanelEvent>,
+    /// 编辑面板的窗口相关请求，渲染期统一执行。
+    pub(in crate::app) pending_editor_requests: Vec<crate::editor::EditorPanelEvent>,
     /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
     pub(in crate::app) shortcut_recording: ShortcutRecordingState,
     /// 组件库弹窗栈的影子记录：与容器实际栈同序，逐帧对账的依据。
