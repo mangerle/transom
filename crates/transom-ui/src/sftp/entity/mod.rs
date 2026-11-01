@@ -49,6 +49,8 @@ pub(crate) struct SftpPanelView {
     pub(super) app: Option<WeakEntity<AppShell>>,
 }
 
+impl EventEmitter<super::SftpPanelEvent> for SftpPanelView {}
+
 impl SftpPanelView {
     /// 用已构造好的面板状态创建实体；`attach` 负责绑定外壳。
     pub(crate) fn new(state: SftpPanelState, tab_id: TabId) -> Self {

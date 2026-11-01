@@ -1,0 +1,20 @@
+//! 面板发给外壳的意图事件。
+//!
+//! 面板不持有外壳句柄：需要外壳做事（开弹窗、投递命令、改布局）时发事件，
+//! 外壳在创建面板时订阅一次。事件必须自带全部数据，外壳的处理函数不得回读面板，
+//! 否则会与正在派发事件的实体形成双重租借。
+
+use std::path::PathBuf;
+use transom_core::{ConnectionId, RemoteDeleteTarget, TabId};
+
+/// SFTP 面板向外壳发出的意图。
+pub(crate) enum SftpPanelEvent {
+    /// 请求弹出本地删除确认。
+    ConfirmLocalDelete { tab_id: TabId, paths: Vec<PathBuf> },
+    /// 请求弹出远端删除确认；`connection_id` 为 `None` 表示主远端列。
+    ConfirmRemoteDelete {
+        tab_id: TabId,
+        connection_id: Option<ConnectionId>,
+        targets: Vec<RemoteDeleteTarget>,
+    },
+}

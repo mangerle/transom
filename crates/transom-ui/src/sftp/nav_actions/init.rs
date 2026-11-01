@@ -21,6 +21,47 @@ use std::path::PathBuf;
 use transom_core::{Connection, TabId};
 
 impl AppShell {
+    /// 处理面板发来的意图事件。
+    ///
+    /// 只使用事件携带的数据，不回读面板：事件派发阶段面板仍处于租借中。
+    fn on_sftp_panel_event(&mut self, event: &crate::sftp::SftpPanelEvent, cx: &mut Context<Self>) {
+        use crate::sftp::SftpPanelEvent;
+        match event {
+            SftpPanelEvent::ConfirmLocalDelete { tab_id, paths } => {
+                self.state.sftp_modals.confirm = Some(crate::sftp::SftpConfirmModalState {
+                    action: crate::sftp::SftpPendingDelete::Local {
+                        tab_id: *tab_id,
+                        paths: paths.clone(),
+                    },
+                    title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
+                    description: rust_i18n::t!("sftp.local_async.delete_body", count = paths.len())
+                        .to_string(),
+                });
+                cx.notify();
+            }
+            SftpPanelEvent::ConfirmRemoteDelete {
+                tab_id,
+                connection_id,
+                targets,
+            } => {
+                self.state.sftp_modals.confirm = Some(crate::sftp::SftpConfirmModalState {
+                    action: crate::sftp::SftpPendingDelete::Remote {
+                        tab_id: *tab_id,
+                        connection_id: *connection_id,
+                        targets: targets.clone(),
+                    },
+                    title: rust_i18n::t!("sftp.file_ops.delete_remote_title").to_string(),
+                    description: rust_i18n::t!(
+                        "sftp.file_ops.delete_remote_body",
+                        count = targets.len()
+                    )
+                    .to_string(),
+                });
+                cx.notify();
+            }
+        }
+    }
+
     /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
     pub(crate) fn focus_active_sftp_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
         let focus_handle = self
@@ -219,6 +260,16 @@ impl AppShell {
             view.attach(app);
             view
         });
+        let subscription = cx.subscribe(
+            &view,
+            |shell, _view, event: &crate::sftp::SftpPanelEvent, cx| {
+                shell.on_sftp_panel_event(event, cx);
+            },
+        );
+        self.state
+            .tasks
+            .sftp_panel_subscriptions
+            .insert(tab_id, subscription);
         pane.sftp_view = Some(view);
         if open {
             // 本地栏初始列表走后台读取，避免大目录或网络挂载阻塞面板打开

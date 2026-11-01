@@ -4,7 +4,7 @@
 //! 回到外壳执行，因为那一步需要投递命令与后台 IO。
 
 use super::*;
-use crate::sftp::{SftpConfirmModalState, SftpPendingDelete, SftpRemotePaneRef};
+use crate::sftp::SftpRemotePaneRef;
 use transom_core::RemoteDeleteTarget;
 
 impl SftpPanelView {
@@ -29,17 +29,11 @@ impl SftpPanelView {
             cx.notify();
             return;
         }
-        let tab_id = self.tab_id;
-        let count = paths.len();
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, _| {
-            shell.state.sftp_modals.confirm = Some(SftpConfirmModalState {
-                action: SftpPendingDelete::Local { tab_id, paths },
-                title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
-                description: rust_i18n::t!("sftp.local_async.delete_body", count = count)
-                    .to_string(),
-            });
+        cx.emit(crate::sftp::SftpPanelEvent::ConfirmLocalDelete {
+            tab_id: self.tab_id,
+            paths,
         });
+        cx.notify();
     }
 
     pub(crate) fn confirm_remote_delete(
@@ -74,20 +68,11 @@ impl SftpPanelView {
             SftpRemotePaneRef::Main => None,
             SftpRemotePaneRef::Side(connection_id) => Some(connection_id),
         };
-        let tab_id = self.tab_id;
-        let count = targets.len();
-        let app = self.app.clone();
-        with_shell_parts(&app, cx, |shell, _| {
-            shell.state.sftp_modals.confirm = Some(SftpConfirmModalState {
-                action: SftpPendingDelete::Remote {
-                    tab_id,
-                    connection_id: side_connection,
-                    targets,
-                },
-                title: rust_i18n::t!("sftp.file_ops.delete_remote_title").to_string(),
-                description: rust_i18n::t!("sftp.file_ops.delete_remote_body", count = count)
-                    .to_string(),
-            });
+        cx.emit(crate::sftp::SftpPanelEvent::ConfirmRemoteDelete {
+            tab_id: self.tab_id,
+            connection_id: side_connection,
+            targets,
         });
+        cx.notify();
     }
 }

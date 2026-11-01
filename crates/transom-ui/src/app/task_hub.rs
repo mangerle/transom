@@ -21,6 +21,8 @@ pub(crate) struct TaskHub {
     pub(crate) sync_pull: Option<Task<()>>,
     pub(crate) _appearance_subscription: Subscription,
     pub(crate) _terminal_appearance_subscriptions: Vec<Subscription>,
+    /// 面板事件订阅：面板发意图、外壳在此持有订阅并处理。
+    pub(crate) sftp_panel_subscriptions: HashMap<transom_core::TabId, Subscription>,
     pub(crate) _event: Task<()>,
 }
 
@@ -39,6 +41,7 @@ impl TaskHub {
             sync_pull: None,
             _appearance_subscription: appearance_subscription,
             _terminal_appearance_subscriptions: terminal_appearance_subscriptions,
+            sftp_panel_subscriptions: HashMap::new(),
             _event: event,
         }
     }

@@ -14,6 +14,9 @@ mod local_listing;
 mod local_only;
 mod local_pane_view;
 mod modals;
+mod panel_event;
+
+pub(crate) use panel_event::SftpPanelEvent;
 mod nav_actions;
 mod overlay;
 mod panel_view;
