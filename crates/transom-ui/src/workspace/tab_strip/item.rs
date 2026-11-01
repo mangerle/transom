@@ -91,7 +91,7 @@ pub(super) fn render_tab_entry(
         crate::connection::icon(&tab.session.connection)
     };
 
-    let appearance = shell.session_appearance(tab);
+    let appearance = shell.state.session_appearance(tab);
     let tab_icon = if tab.is_player() {
         IconName::Disc
     } else if tab.is_monitor() {

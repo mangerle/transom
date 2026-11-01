@@ -4,7 +4,7 @@
 //! 画的东西：图标资产名与色值。映射集中在一处，标签栏、侧栏与新建表单读的是
 //! 同一份定义，不会出现"表单里选了数据库、标签栏画成服务器"的分裂。
 
-use crate::app::{AppShell, TerminalTab};
+use crate::app::TerminalTab;
 use gpui_kit::assets::IconName;
 use gpui_kit::*;
 use transom_core::{SessionColor, SessionIcon};
@@ -73,14 +73,13 @@ pub(crate) fn session_color(color: SessionColor) -> Option<Hsla> {
     }
 }
 
-impl AppShell {
+impl crate::app::AppState {
     /// 标签对应的会话外观。
     ///
     /// 优先读目录里的会话定义：改了图标与颜色，已打开的标签立刻跟着变，不必
     /// 重连；本地终端没有目录条目，用标签自带的会话快照。
     pub(crate) fn session_appearance(&self, tab: &TerminalTab) -> SessionAppearance {
         let session = self
-            .state
             .catalog
             .sessions
             .iter()

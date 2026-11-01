@@ -62,7 +62,7 @@ pub(super) fn render_vertical_tab_row(
     let subtitle = crate::connection::display_compact(&tab.session.connection);
     let is_local = matches!(tab.session.connection, Connection::Local(_));
     let (dot_color, _) = pane_status_indicator(&tab.status, p);
-    let appearance = shell.session_appearance(tab);
+    let appearance = shell.state.session_appearance(tab);
     let icon = appearance
         .icon
         .unwrap_or_else(|| crate::connection::icon(&tab.session.connection));
