@@ -33,6 +33,69 @@ struct SftpFinishOutcome {
     status_message: Option<String>,
 }
 
+/// 单个传输任务完成后的刷新与通知计划。
+#[derive(Default)]
+struct TransferCompletion {
+    refresh_side: Option<(transom_core::ConnectionId, String)>,
+    refresh_local: bool,
+    notify_info: Option<(TransferDirection, String, u64)>,
+}
+
+/// 落定单个传输任务：状态、进度目标与通知信息。
+fn complete_transfer_task(
+    task: &mut crate::sftp::TransferTask,
+    transferred: Option<u64>,
+    main_conn: Option<transom_core::ConnectionId>,
+) -> TransferCompletion {
+    let mut completion = TransferCompletion::default();
+    task.status = TransferStatus::Completed;
+    task.speed_bps = None;
+    task.eta_secs = None;
+    if let Some(bytes) = transferred {
+        task.transferred = bytes;
+    }
+    if task.direction == TransferDirection::Download || task.direction == TransferDirection::Sync {
+        completion.refresh_local = true;
+    }
+    if task.direction == TransferDirection::RemoteCopy
+        && let (Some(target_conn), Some(target_path)) =
+            (task.target_connection_id, &task.target_remote_path)
+    {
+        let dir = target_path
+            .rsplit_once('/')
+            .map(|(d, _)| if d.is_empty() { "/" } else { d })
+            .unwrap_or("/");
+        completion.refresh_side = Some((target_conn, dir.to_string()));
+    }
+    // 上传落到并列远端列时刷新该列目录：完成路径原本只刷新主远端，
+    // 挂载列看不到刚上传的文件。上传到主远端仍由下方统一刷新覆盖。
+    if task.direction == TransferDirection::Upload
+        && let Some(target_conn) = task.target_connection_id
+        && Some(target_conn) != main_conn
+    {
+        completion.refresh_side = Some((target_conn, parent_remote(&task.remote_path)));
+    }
+    // 并列远端列的目录同步：任务记录的是远端根目录，完成后直接刷新该列根。
+    if task.direction == TransferDirection::Sync
+        && let Some(target_conn) = task.target_connection_id
+        && Some(target_conn) != main_conn
+    {
+        completion.refresh_side = Some((target_conn, task.remote_path.clone()));
+    }
+    let file_name = if task.direction == TransferDirection::RemoteCopy {
+        task.target_remote_path
+            .clone()
+            .unwrap_or_else(|| task.remote_path.clone())
+    } else {
+        task.local_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| task.remote_path.clone())
+    };
+    completion.notify_info = Some((task.direction, file_name, task.transferred));
+    completion
+}
+
 impl AppShell {
     /// SFTP 目录列表回填：主面板或并排远端列按连接归属分别落位。
     pub(crate) fn on_sftp_listing(
@@ -254,58 +317,17 @@ impl AppShell {
             .tab(tab_id)
             .and_then(|tab| tab.connection_id);
         if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx) {
-            let mut completed_transfer = false;
-            if let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id) {
-                completed_transfer = true;
-                task.status = TransferStatus::Completed;
-                task.speed_bps = None;
-                task.eta_secs = None;
-                if let Some(bytes) = transferred {
-                    task.transferred = bytes;
-                }
-                if task.direction == TransferDirection::Download
-                    || task.direction == TransferDirection::Sync
-                {
-                    refresh_local = true;
-                }
-                if task.direction == TransferDirection::RemoteCopy
-                    && let (Some(target_conn), Some(target_path)) =
-                        (task.target_connection_id, &task.target_remote_path)
-                {
-                    let dir = target_path
-                        .rsplit_once('/')
-                        .map(|(d, _)| if d.is_empty() { "/" } else { d })
-                        .unwrap_or("/");
-                    refresh_side = Some((target_conn, dir.to_string()));
-                }
-                // 上传落到并列远端列时刷新该列目录：完成路径原本只刷新主远端，
-                // 挂载列看不到刚上传的文件。上传到主远端仍由下方统一刷新覆盖。
-                if task.direction == TransferDirection::Upload
-                    && let Some(target_conn) = task.target_connection_id
-                    && Some(target_conn) != main_conn
-                {
-                    refresh_side = Some((target_conn, parent_remote(&task.remote_path)));
-                }
-                // 并列远端列的目录同步：任务记录的是远端根目录，完成后直接刷新该列根。
-                if task.direction == TransferDirection::Sync
-                    && let Some(target_conn) = task.target_connection_id
-                    && Some(target_conn) != main_conn
-                {
-                    refresh_side = Some((target_conn, task.remote_path.clone()));
-                }
-                let file_name = if task.direction == TransferDirection::RemoteCopy {
-                    task.target_remote_path
-                        .clone()
-                        .unwrap_or_else(|| task.remote_path.clone())
-                } else {
-                    task.local_path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| task.remote_path.clone())
-                };
-                notify_info = Some((task.direction, file_name, task.transferred));
-            }
-            if completed_transfer {
+            let completion = panel
+                .state
+                .queue
+                .tasks
+                .iter_mut()
+                .find(|t| t.id == op_id)
+                .map(|task| complete_transfer_task(task, transferred, main_conn));
+            if let Some(completion) = completion {
+                refresh_local = completion.refresh_local;
+                refresh_side = completion.refresh_side;
+                notify_info = completion.notify_info;
                 panel.state.queue.active_transfers.remove(&op_id);
                 panel.state.recompute_progress();
                 if panel.state.queue.active_transfers.is_empty() {
