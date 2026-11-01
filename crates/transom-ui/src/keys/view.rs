@@ -18,7 +18,7 @@ impl AppShell {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        if self.settings_modal(cx).key_wizard.is_none() {
+        if self.settings_state(cx).key_wizard.is_none() {
             return div().into_any_element();
         }
         let generate = self.render_key_generate_section(app, p, cx);
@@ -91,7 +91,7 @@ impl AppShell {
         p: &Palette,
         cx: &App,
     ) -> AnyElement {
-        let settings = self.settings_modal(cx);
+        let settings = self.settings_state(cx);
         let Some(state) = settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
@@ -188,7 +188,7 @@ impl AppShell {
     }
 
     fn render_key_list_section(&self, app: &Entity<AppShell>, p: &Palette, cx: &App) -> AnyElement {
-        let settings = self.settings_modal(cx);
+        let settings = self.settings_state(cx);
         let Some(state) = settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };
@@ -325,7 +325,7 @@ impl AppShell {
         p: &Palette,
         cx: &App,
     ) -> AnyElement {
-        let settings = self.settings_modal(cx);
+        let settings = self.settings_state(cx);
         let Some(state) = settings.key_wizard.as_ref() else {
             return div().into_any_element();
         };

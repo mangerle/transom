@@ -187,6 +187,17 @@ impl AppShell {
         view.update(cx, |view, cx| view.cancel_settings(window, cx));
     }
 
+    /// 设置弹窗状态只读借用（不克隆）。
+    ///
+    /// 渲染路径每帧都要读草稿状态，快照克隆会把这三十多个实体句柄复制一遍；
+    /// 只读借用要求调用方在持有期间不再可变借用外壳，渲染函数满足这一约束。
+    pub(crate) fn settings_state<'a>(
+        &self,
+        cx: &'a App,
+    ) -> &'a crate::settings::SettingsModalState {
+        self.state.modals.settings.read(cx).state()
+    }
+
     /// 设置弹窗状态只读访问。
     /// 设置弹窗状态快照。
     ///
