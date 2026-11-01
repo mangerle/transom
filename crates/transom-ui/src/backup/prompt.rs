@@ -131,6 +131,40 @@ impl AppShell {
                 .child(rust_i18n::t!("backup.hint").to_string()),
         );
 
+        content = content.child(self.render_backup_options(prompt, app, p));
+
+        if busy {
+            content = content.child(
+                div()
+                    .text_sm()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("backup.processing").to_string()),
+            );
+        }
+        if let Some(error) = error {
+            content = content.child(div().text_sm().text_color(p.danger).child(error));
+        }
+
+        let footer = self.render_backup_footer(prompt, app);
+
+        crate::widgets::dialog_body(
+            "backup-prompt-modal",
+            title,
+            Some(rust_i18n::t!("backup.dialog_hint").to_string()),
+            content,
+            Some(footer),
+        )
+    }
+
+    /// 导出/导入选项：加密、包含口令与口令输入。
+    fn render_backup_options(
+        &self,
+        prompt: &crate::backup::BackupPromptState,
+        app: &Entity<AppShell>,
+        p: &Palette,
+    ) -> AnyElement {
+        let is_export = prompt.action.is_export();
+        let mut content = v_flex().gap_3();
         if is_export {
             content = content
                 .child(
@@ -268,18 +302,17 @@ impl AppShell {
             }
         }
 
-        if busy {
-            content = content.child(
-                div()
-                    .text_sm()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("backup.processing").to_string()),
-            );
-        }
-        if let Some(error) = error {
-            content = content.child(div().text_sm().text_color(p.danger).child(error));
-        }
+        content.into_any_element()
+    }
 
+    /// 备份弹窗页脚：取消与提交，处理中禁用。
+    fn render_backup_footer(
+        &self,
+        prompt: &crate::backup::BackupPromptState,
+        app: &Entity<AppShell>,
+    ) -> AnyElement {
+        let is_export = prompt.action.is_export();
+        let busy = prompt.busy;
         let footer = h_flex()
             .gap_2()
             .child(
@@ -311,13 +344,6 @@ impl AppShell {
                         },
                     )),
             );
-
-        crate::widgets::dialog_body(
-            "backup-prompt-modal",
-            title,
-            Some(rust_i18n::t!("backup.dialog_hint").to_string()),
-            content,
-            Some(footer),
-        )
+        footer.into_any_element()
     }
 }
