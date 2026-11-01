@@ -22,6 +22,11 @@ pub(crate) enum SftpPanelEvent {
         permissions: u32,
         octal_input: Entity<InputState>,
     },
+    /// 请求展示属性弹窗；属性内容已由面板读取完成。
+    ShowProperties {
+        scope: String,
+        properties: crate::sftp::FileProperties,
+    },
     /// 请求持久化设置并回写状态栏；面板改完 Global 设置后发出。
     PersistSettings { status: String },
     /// 请求弹出本地删除确认。

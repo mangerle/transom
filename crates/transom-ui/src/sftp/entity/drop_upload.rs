@@ -14,15 +14,7 @@ impl SftpPanelView {
         if paths.is_empty() {
             return;
         }
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(self.tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))

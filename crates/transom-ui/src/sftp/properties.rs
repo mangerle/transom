@@ -1,6 +1,6 @@
 //! SFTP 文件属性查看：远端异步 stat 请求与本地同步属性读取。
 
-use super::entity::{SftpPanelView, read_shell_parts, with_shell_parts};
+use super::entity::SftpPanelView;
 use crate::sftp::SftpRemotePaneRef;
 use chrono::{Local, TimeZone};
 use gpui_kit::*;
@@ -15,15 +15,7 @@ impl SftpPanelView {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some(main_connection) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(self.tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(main_connection) = self.state.main_connection else {
             return;
         };
         let Some(connection_id) = self.state.remote_connection(target, Some(main_connection))
@@ -41,13 +33,11 @@ impl SftpPanelView {
     ) {
         match local_file_properties(&path) {
             Ok(properties) => {
-                let app = self.app.clone();
-                with_shell_parts(&app, cx, |shell, _| {
-                    shell.state.sftp_modals.properties = Some(SftpPropertiesModalState {
-                        scope: "本地".to_string(),
-                        properties,
-                    });
+                cx.emit(crate::sftp::SftpPanelEvent::ShowProperties {
+                    scope: "本地".to_string(),
+                    properties,
                 });
+                cx.notify();
             }
             Err(err) => {
                 self.state.set_local_error(

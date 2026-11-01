@@ -50,6 +50,13 @@ impl AppShell {
                 });
                 cx.notify();
             }
+            SftpPanelEvent::ShowProperties { scope, properties } => {
+                self.state.sftp_modals.properties = Some(crate::sftp::SftpPropertiesModalState {
+                    scope: scope.clone(),
+                    properties: properties.clone(),
+                });
+                cx.notify();
+            }
             SftpPanelEvent::PersistSettings { status } => {
                 let snapshot = crate::app::app_settings(cx).clone();
                 if let Err(error) = self.state.persist_settings(&snapshot) {

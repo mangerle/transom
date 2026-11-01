@@ -24,6 +24,8 @@ mod preview;
 mod preview_actions;
 mod preview_view;
 mod properties;
+
+pub(crate) use properties::FileProperties;
 mod queue_actions;
 mod queue_view;
 mod quick_paths;
