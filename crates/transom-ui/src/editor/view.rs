@@ -189,6 +189,28 @@ impl EditorPanels {
                 )
             })
             .child(div().flex_1())
+            .child(self.render_editor_panel_actions(
+                item,
+                fold_editor,
+                zoom_editor,
+                close_editor,
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    /// 面板头动作：折叠/展开、最大化/还原与关闭。
+    fn render_editor_panel_actions(
+        &self,
+        item: &EditorPanelState,
+        fold_editor: Entity<EditorState>,
+        zoom_editor: Entity<EditorState>,
+        close_editor: Entity<EditorState>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
+            .gap_1()
+            .items_center()
             .child(
                 Button::new(if item.collapsed {
                     "editor-panel-expand"
