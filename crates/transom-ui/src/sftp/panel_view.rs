@@ -81,7 +81,6 @@ impl SftpPanelView {
     pub(crate) fn render_panel_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::from(&*cx);
         let tab_id = self.tab_id;
-        let tab_conn_id = self.state.main_connection;
         let settings = app_settings(cx).sftp.clone();
         let state = &self.state;
         if state.local.only && state.side_remotes.is_empty() {
@@ -89,7 +88,6 @@ impl SftpPanelView {
         }
 
         let is_local_only = state.local.only;
-        let sync_navigation = state.sync_navigation;
         let queue_height = state.queue.height;
         let _focus_handle = state.focus_handle.clone();
         let local_scroll_handle = state.local.scroll_handle.clone();
@@ -115,13 +113,6 @@ impl SftpPanelView {
         let local_error = state.local.error.clone();
         let quick_paths = state.local.quick_paths.clone();
         let local_collapsed = state.local.collapsed;
-        let remote_collapsed = state.remote.collapsed;
-        let side_remotes_info = state
-            .side_remotes
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (i, s.collapsed, s.title.clone().unwrap_or_default()))
-            .collect::<Vec<_>>();
 
         let queue = state.queue.tasks.clone();
         let total_speed: u64 = queue
@@ -176,100 +167,8 @@ impl SftpPanelView {
         // 远端列借用 `state`，必须在调用 &mut self 的本地列/队列渲染之前完成。
         // 列按固定次序编排：本地 | 主远端 | 并列远端；折叠列由固定 32px 折叠条
         // 占住自己的位置，所有列始终在同一个可拖拽分栏组里。
-        let side_titles: Vec<(usize, String)> = side_remotes_info
-            .iter()
-            .map(|(index, _, title)| (*index, title.clone()))
-            .collect();
-        let hidden_patterns = settings.panel_hidden_patterns.clone();
-        let mut remote_columns: Vec<SftpColumn> = Vec::new();
-        if !is_local_only && let Some(connection_id) = tab_conn_id {
-            let content = if remote_collapsed {
-                self.render_sftp_collapsed_bar(SftpColumnId::Remote, &side_titles, &p, cx)
-            } else {
-                let filter_query = state
-                    .remote
-                    .filter_input
-                    .read(cx)
-                    .value()
-                    .trim()
-                    .to_ascii_lowercase();
-                let entries = AppState::filter_remote_entries(
-                    &state.remote,
-                    state.remote.show_hidden,
-                    &filter_query,
-                    &hidden_patterns,
-                );
-                self.render_remote_pane(
-                    RemotePaneProps {
-                        tab_id,
-                        target: SftpRemotePaneRef::Main,
-                        side_index: None,
-                        title: rust_i18n::t!("sftp.remote_title").to_string(),
-                        pane: &state.remote,
-                        connection_id,
-                        show_filter: state.remote.show_filter,
-                        show_hidden: state.remote.show_hidden,
-                        sync_navigation,
-                        show_editor_list: true,
-                        remote_entries: entries,
-                        remote_selection: state.remote.selection.clone(),
-                        remote_primary: state.remote.selected.clone(),
-                    },
-                    &p,
-                    cx,
-                )
-            };
-            remote_columns.push(SftpColumn {
-                id: SftpColumnId::Remote,
-                collapsed: remote_collapsed,
-                content,
-            });
-        }
-        for (side_index, side) in state.side_remotes.iter().enumerate() {
-            let content = if side.collapsed {
-                self.render_sftp_collapsed_bar(SftpColumnId::Side(side_index), &side_titles, &p, cx)
-            } else {
-                let Some(connection_id) = side.connection_id else {
-                    continue;
-                };
-                let filter_query = side
-                    .filter_input
-                    .read(cx)
-                    .value()
-                    .trim()
-                    .to_ascii_lowercase();
-                let entries = AppState::filter_remote_entries(
-                    side,
-                    side.show_hidden,
-                    &filter_query,
-                    &hidden_patterns,
-                );
-                self.render_remote_pane(
-                    RemotePaneProps {
-                        tab_id,
-                        target: SftpRemotePaneRef::Side(connection_id),
-                        side_index: Some(side_index),
-                        title: side.title.clone().unwrap_or_default(),
-                        pane: side,
-                        connection_id,
-                        show_filter: side.show_filter,
-                        show_hidden: side.show_hidden,
-                        sync_navigation,
-                        show_editor_list: is_local_only && side_index == 0,
-                        remote_entries: entries,
-                        remote_selection: side.selection.clone(),
-                        remote_primary: side.selected.clone(),
-                    },
-                    &p,
-                    cx,
-                )
-            };
-            remote_columns.push(SftpColumn {
-                id: SftpColumnId::Side(side_index),
-                collapsed: side.collapsed,
-                content,
-            });
-        }
+        let remote_columns = self.render_remote_columns(state, &p, cx);
+        let side_titles = side_remote_titles(state);
 
         let diff_ready = matches!(
             crate::diff_viewer::local_diff_check(self.state.main_connection, state),
@@ -420,4 +319,140 @@ impl SftpPanelView {
             self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx)
         }
     }
+
+    /// 构建远端列：主远端与并列远端共用同一套折叠/过滤/渲染路径。
+    ///
+    /// 单独成方法后 `render_panel_content` 只负责列顺序与整体拼装；新增一种
+    /// 远端列不需要再改主函数。
+    fn render_remote_columns(
+        &self,
+        state: &super::state::SftpPanelState,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Vec<super::columns::SftpColumn> {
+        let settings = app_settings(cx).sftp.clone();
+        let tab_id = self.tab_id;
+        let tab_conn_id = state.main_connection;
+        let is_local_only = state.local.only;
+        let sync_navigation = state.sync_navigation;
+        let remote_collapsed = state.remote.collapsed;
+        let side_remotes_info: Vec<(usize, bool, String)> = state
+            .side_remotes
+            .iter()
+            .enumerate()
+            .map(|(index, side)| {
+                (
+                    index,
+                    side.collapsed,
+                    side.title.clone().unwrap_or_default(),
+                )
+            })
+            .collect();
+        let side_titles: Vec<(usize, String)> = side_remotes_info
+            .iter()
+            .map(|(index, _, title)| (*index, title.clone()))
+            .collect();
+        let hidden_patterns = settings.panel_hidden_patterns.clone();
+        let mut remote_columns: Vec<SftpColumn> = Vec::new();
+        if !is_local_only && let Some(connection_id) = tab_conn_id {
+            let content = if remote_collapsed {
+                self.render_sftp_collapsed_bar(SftpColumnId::Remote, &side_titles, p, cx)
+            } else {
+                let filter_query = state
+                    .remote
+                    .filter_input
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .to_ascii_lowercase();
+                let entries = AppState::filter_remote_entries(
+                    &state.remote,
+                    state.remote.show_hidden,
+                    &filter_query,
+                    &hidden_patterns,
+                );
+                self.render_remote_pane(
+                    RemotePaneProps {
+                        tab_id,
+                        target: SftpRemotePaneRef::Main,
+                        side_index: None,
+                        title: rust_i18n::t!("sftp.remote_title").to_string(),
+                        pane: &state.remote,
+                        connection_id,
+                        show_filter: state.remote.show_filter,
+                        show_hidden: state.remote.show_hidden,
+                        sync_navigation,
+                        show_editor_list: true,
+                        remote_entries: entries,
+                        remote_selection: state.remote.selection.clone(),
+                        remote_primary: state.remote.selected.clone(),
+                    },
+                    p,
+                    cx,
+                )
+            };
+            remote_columns.push(SftpColumn {
+                id: SftpColumnId::Remote,
+                collapsed: remote_collapsed,
+                content,
+            });
+        }
+        for (side_index, side) in state.side_remotes.iter().enumerate() {
+            let content = if side.collapsed {
+                self.render_sftp_collapsed_bar(SftpColumnId::Side(side_index), &side_titles, p, cx)
+            } else {
+                let Some(connection_id) = side.connection_id else {
+                    continue;
+                };
+                let filter_query = side
+                    .filter_input
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .to_ascii_lowercase();
+                let entries = AppState::filter_remote_entries(
+                    side,
+                    side.show_hidden,
+                    &filter_query,
+                    &hidden_patterns,
+                );
+                self.render_remote_pane(
+                    RemotePaneProps {
+                        tab_id,
+                        target: SftpRemotePaneRef::Side(connection_id),
+                        side_index: Some(side_index),
+                        title: side.title.clone().unwrap_or_default(),
+                        pane: side,
+                        connection_id,
+                        show_filter: side.show_filter,
+                        show_hidden: side.show_hidden,
+                        sync_navigation,
+                        show_editor_list: is_local_only && side_index == 0,
+                        remote_entries: entries,
+                        remote_selection: side.selection.clone(),
+                        remote_primary: side.selected.clone(),
+                    },
+                    p,
+                    cx,
+                )
+            };
+            remote_columns.push(SftpColumn {
+                id: SftpColumnId::Side(side_index),
+                collapsed: side.collapsed,
+                content,
+            });
+        }
+
+        remote_columns
+    }
+}
+
+/// 并列远端列的标题菜单项：索引 + 显示名。
+fn side_remote_titles(state: &super::state::SftpPanelState) -> Vec<(usize, String)> {
+    state
+        .side_remotes
+        .iter()
+        .enumerate()
+        .map(|(index, side)| (index, side.title.clone().unwrap_or_default()))
+        .collect()
 }
