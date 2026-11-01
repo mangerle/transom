@@ -125,53 +125,55 @@ impl EditorPanels {
         }
         let panels = cx.entity();
         let menu_editor = editor.clone();
-        let trigger = Button::new("editor-panel-actions")
-            .ghost()
-            .xsmall()
-            .icon(IconName::Ellipsis)
-            .tooltip(rust_i18n::t!("editor.actions_more").to_string())
-            .dropdown_menu(move |menu, _window, _cx| {
-                let mut menu = menu;
-                if can_diff {
-                    let panels = panels.clone();
-                    let editor = menu_editor.clone();
-                    menu = menu.item(crate::widgets::menu_item(
-                        rust_i18n::t!("editor.action_compare").to_string(),
-                        IconName::FileDiff,
-                        move |_, _, cx| {
-                            panels.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
-                        },
-                    ));
-                }
-                if can_local {
-                    let panels = panels.clone();
-                    let editor = menu_editor.clone();
-                    menu = menu.item(crate::widgets::menu_item(
-                        rust_i18n::t!("editor.action_compare_local").to_string(),
-                        IconName::FileDiff,
-                        move |_, _, cx| {
-                            panels.update(cx, |this, cx| {
-                                let Some(source) = this.diff_source(&editor) else {
-                                    return;
-                                };
-                                cx.emit(crate::editor::EditorPanelEvent::OpenLocalDiff(source));
-                            });
-                        },
-                    ));
-                }
-                if can_revert {
-                    let panels = panels.clone();
-                    let editor = menu_editor.clone();
-                    menu = menu.item(crate::widgets::menu_item(
-                        rust_i18n::t!("editor.action_revert").to_string(),
-                        IconName::RotateCcw,
-                        move |_, _, cx| {
-                            panels.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
-                        },
-                    ));
-                }
-                menu
-            });
+        let trigger = crate::widgets::IconButton::new(
+            "editor-panel-actions",
+            IconName::Ellipsis,
+            rust_i18n::t!("editor.actions_more").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .dropdown_menu(move |menu, _window, _cx| {
+            let mut menu = menu;
+            if can_diff {
+                let panels = panels.clone();
+                let editor = menu_editor.clone();
+                menu = menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("editor.action_compare").to_string(),
+                    IconName::FileDiff,
+                    move |_, _, cx| {
+                        panels.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
+                    },
+                ));
+            }
+            if can_local {
+                let panels = panels.clone();
+                let editor = menu_editor.clone();
+                menu = menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("editor.action_compare_local").to_string(),
+                    IconName::FileDiff,
+                    move |_, _, cx| {
+                        panels.update(cx, |this, cx| {
+                            let Some(source) = this.diff_source(&editor) else {
+                                return;
+                            };
+                            cx.emit(crate::editor::EditorPanelEvent::OpenLocalDiff(source));
+                        });
+                    },
+                ));
+            }
+            if can_revert {
+                let panels = panels.clone();
+                let editor = menu_editor.clone();
+                menu = menu.item(crate::widgets::menu_item(
+                    rust_i18n::t!("editor.action_revert").to_string(),
+                    IconName::RotateCcw,
+                    move |_, _, cx| {
+                        panels.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
+                    },
+                ));
+            }
+            menu
+        });
         Some(trigger.into_any_element())
     }
 
@@ -185,16 +187,18 @@ impl EditorPanels {
     ) -> AnyElement {
         let action_editor = editor.clone();
         if item.writable {
-            return Button::new("editor-save-upload")
-                .ghost()
-                .xsmall()
-                .icon(IconName::Check)
-                .tooltip(rust_i18n::t!("editor.save_upload_tooltip").to_string())
-                .disabled(!item.dirty || busy)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.save_editor_panel(&action_editor, window, cx);
-                }))
-                .into_any_element();
+            return crate::widgets::IconButton::new(
+                "editor-save-upload",
+                IconName::Check,
+                rust_i18n::t!("editor.save_upload_tooltip").to_string(),
+            )
+            .disabled(!item.dirty || busy)
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.save_editor_panel(&action_editor, window, cx);
+            }))
+            .into_any_element();
         }
         Button::new("editor-sudo-save")
             .warning()

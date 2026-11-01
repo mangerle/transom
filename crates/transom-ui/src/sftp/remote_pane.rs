@@ -16,9 +16,9 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState};
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -239,56 +239,66 @@ impl SftpPanelView {
         key: &str,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let up_btn = Button::new(format!("remote-up-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::ArrowUp)
-            .tooltip(rust_i18n::t!("sftp.remote.go_up").to_string())
-            .on_click(
-                cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
-            );
+        let up_btn = IconButton::new(
+            format!("remote-up-{key}"),
+            IconName::ArrowUp,
+            rust_i18n::t!("sftp.remote.go_up").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(
+            cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
+        );
 
-        let refresh_btn = Button::new(format!("remote-refresh-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::RefreshCw)
-            .tooltip(rust_i18n::t!("sftp.remote.refresh").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
+        let refresh_btn = IconButton::new(
+            format!("remote-refresh-{key}"),
+            IconName::RefreshCw,
+            rust_i18n::t!("sftp.remote.refresh").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
 
-        let enter_btn = Button::new(format!("remote-enter-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(IconName::ArrowRight)
-            .tooltip(rust_i18n::t!("sftp.remote.enter_path").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
+        let enter_btn = IconButton::new(
+            format!("remote-enter-{key}"),
+            IconName::ArrowRight,
+            rust_i18n::t!("sftp.remote.enter_path").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
 
-        let collapse_btn = Button::new(format!("remote-collapse-{key}"))
-            .ghost()
-            .xsmall()
-            .icon(if side_index.is_some() {
+        let collapse_btn = IconButton::new(
+            format!("remote-collapse-{key}"),
+            if side_index.is_some() {
                 IconName::PanelRightClose
             } else {
                 IconName::PanelLeftClose
-            })
-            .tooltip(if side_index.is_some() {
+            },
+            if side_index.is_some() {
                 rust_i18n::t!("sftp.sidebar.collapse_side").to_string()
             } else {
                 rust_i18n::t!("sftp.remote.collapse").to_string()
-            })
-            .on_click(cx.listener(move |this, _, _, cx| match side_index {
-                Some(index) => this.toggle_side_remote_collapse(index, cx),
-                None => this.toggle_remote_collapse(cx),
-            }));
+            },
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| match side_index {
+            Some(index) => this.toggle_side_remote_collapse(index, cx),
+            None => this.toggle_remote_collapse(cx),
+        }));
 
         let close_btn = side_index.map(|index| {
-            Button::new(format!("remote-close-{key}"))
-                .ghost()
-                .xsmall()
-                .icon(IconName::X)
-                .tooltip(rust_i18n::t!("sftp.sidebar.close_side_remote").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.close_side_remote(index, cx);
-                }))
+            IconButton::new(
+                format!("remote-close-{key}"),
+                IconName::X,
+                rust_i18n::t!("sftp.sidebar.close_side_remote").to_string(),
+            )
+            .size(IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.close_side_remote(index, cx);
+            }))
         });
 
         h_flex()
