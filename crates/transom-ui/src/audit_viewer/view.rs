@@ -26,15 +26,73 @@ impl AppShell {
 
         let title = viewer.target_title.clone();
         let selected_file = viewer.entries.get(viewer.selected_index);
-        let selected_path = selected_file.map(|e| e.path.clone());
         let current_search = viewer.search_input.read(cx).value().trim().to_string();
 
+        let toolbar = self.render_audit_toolbar(app, viewer);
+        let file_list = self.render_audit_file_list(app, viewer, p);
+        let right_pane = render_audit_content(viewer, &current_search, p);
+
+        let left_pane = v_flex()
+            .w(px(260.0))
+            .h_full()
+            .min_h_0()
+            .flex_none()
+            .overflow_hidden()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Right, p.divider_width)
+            .pr_2()
+            .child(file_list);
+
+        let body = h_flex()
+            .gap_3()
+            .h(px(440.0))
+            .flex_none()
+            .child(left_pane)
+            .child(right_pane);
+
+        let footer = h_flex()
+            .w_full()
+            .flex_1()
+            .justify_between()
+            .items_center()
+            .child(toolbar)
+            .child(
+                Button::new("close-audit-viewer")
+                    .ghost()
+                    .label(rust_i18n::t!("audit_viewer.close").to_string())
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        |this, _: &ClickEvent, _, cx| {
+                            this.state.modals.tools.audit_viewer = None;
+                            cx.notify();
+                        },
+                    )),
+            );
+
+        crate::widgets::dialog_body(
+            "audit-viewer-modal",
+            title,
+            selected_file.map(|f| f.file_name.clone()),
+            body,
+            Some(footer),
+        )
+    }
+
+    /// 审计查看器顶栏操作：范围切换、定位文件、删除、复制。
+    fn render_audit_toolbar(
+        &self,
+        app: &Entity<AppShell>,
+        viewer: &super::types::AuditViewer,
+    ) -> AnyElement {
+        let selected_path = viewer
+            .entries
+            .get(viewer.selected_index)
+            .map(|entry| entry.path.clone());
         let scope_button_text = if viewer.show_all {
             rust_i18n::t!("audit_viewer.current_session").to_string()
         } else {
             rust_i18n::t!("audit_viewer.all_logs").to_string()
         };
-
         // 顶栏操作区
         let mut toolbar = h_flex().gap_2().items_center();
 
@@ -110,7 +168,16 @@ impl AppShell {
                     },
                 )),
         );
+        toolbar.into_any_element()
+    }
 
+    /// 审计日志文件列表；空态提供打开设置入口。
+    fn render_audit_file_list(
+        &self,
+        app: &Entity<AppShell>,
+        viewer: &super::types::AuditViewer,
+        p: &Palette,
+    ) -> AnyElement {
         // 左侧文件列表
         let mut file_list = v_flex()
             .id("audit-file-list")
@@ -219,104 +286,70 @@ impl AppShell {
             }
         }
 
-        // 右侧内容查看区
-        let mut filtered_lines = Vec::new();
-        for line in viewer.content.lines() {
-            if current_search.is_empty()
-                || line
-                    .to_ascii_lowercase()
-                    .contains(&current_search.to_ascii_lowercase())
-            {
-                filtered_lines.push(line);
-            }
-        }
-
-        let content_text = if filtered_lines.is_empty() && !viewer.content.is_empty() {
-            rust_i18n::t!("audit_viewer.no_search_matches").to_string()
-        } else {
-            filtered_lines.join("\n")
-        };
-
-        let right_pane = v_flex()
-            .flex_1()
-            .gap_2()
-            .size_full()
-            .overflow_hidden()
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(div().flex_1().child(viewer.search_input.clone()))
-                    .child(if viewer.is_truncated {
-                        div()
-                            .text_xs()
-                            .text_color(p.warning)
-                            .child(rust_i18n::t!("audit_viewer.truncated_hint").to_string())
-                    } else {
-                        div()
-                    }),
-            )
-            .child(
-                div()
-                    .id("audit-content-scroll")
-                    .flex_1()
-                    .size_full()
-                    .p_3()
-                    .rounded(p.radius.md)
-                    .bg(p.muted.opacity(0.3))
-                    .border_1()
-                    .border_color(p.border)
-                    .overflow_y_scroll()
-                    .font_family(p.mono_font_family.clone())
-                    .text_size(p.mono_font_size)
-                    .line_height(relative(1.4))
-                    .text_color(p.foreground)
-                    .child(content_text),
-            );
-
-        let left_pane = v_flex()
-            .w(px(260.0))
-            .h_full()
-            .min_h_0()
-            .flex_none()
-            .overflow_hidden()
-            .border_color(p.divider(p.border))
-            .divider_edge(DividerEdge::Right, p.divider_width)
-            .pr_2()
-            .child(file_list);
-
-        let body = h_flex()
-            .gap_3()
-            .h(px(440.0))
-            .flex_none()
-            .child(left_pane)
-            .child(right_pane);
-
-        let footer = h_flex()
-            .w_full()
-            .flex_1()
-            .justify_between()
-            .items_center()
-            .child(toolbar)
-            .child(
-                Button::new("close-audit-viewer")
-                    .ghost()
-                    .label(rust_i18n::t!("audit_viewer.close").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            this.state.modals.tools.audit_viewer = None;
-                            cx.notify();
-                        },
-                    )),
-            );
-
-        crate::widgets::dialog_body(
-            "audit-viewer-modal",
-            title,
-            selected_file.map(|f| f.file_name.clone()),
-            body,
-            Some(footer),
-        )
+        file_list.into_any_element()
     }
+}
+
+/// 右侧日志内容与搜索框；过滤逻辑保持纯函数，便于后续单测。
+fn render_audit_content(
+    viewer: &super::types::AuditViewer,
+    current_search: &str,
+    p: &Palette,
+) -> AnyElement {
+    // 右侧内容查看区
+    let mut filtered_lines = Vec::new();
+    for line in viewer.content.lines() {
+        if current_search.is_empty()
+            || line
+                .to_ascii_lowercase()
+                .contains(current_search.to_ascii_lowercase().as_str())
+        {
+            filtered_lines.push(line);
+        }
+    }
+
+    let content_text = if filtered_lines.is_empty() && !viewer.content.is_empty() {
+        rust_i18n::t!("audit_viewer.no_search_matches").to_string()
+    } else {
+        filtered_lines.join("\n")
+    };
+
+    let right_pane = v_flex()
+        .flex_1()
+        .gap_2()
+        .size_full()
+        .overflow_hidden()
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(div().flex_1().child(viewer.search_input.clone()))
+                .child(if viewer.is_truncated {
+                    div()
+                        .text_xs()
+                        .text_color(p.warning)
+                        .child(rust_i18n::t!("audit_viewer.truncated_hint").to_string())
+                } else {
+                    div()
+                }),
+        )
+        .child(
+            div()
+                .id("audit-content-scroll")
+                .flex_1()
+                .size_full()
+                .p_3()
+                .rounded(p.radius.md)
+                .bg(p.muted.opacity(0.3))
+                .border_1()
+                .border_color(p.border)
+                .overflow_y_scroll()
+                .font_family(p.mono_font_family.clone())
+                .text_size(p.mono_font_size)
+                .line_height(relative(1.4))
+                .text_color(p.foreground)
+                .child(content_text),
+        );
+
+    right_pane.into_any_element()
 }
