@@ -10,7 +10,7 @@ use self::context_menu::{RemoteContextMenuProps, build_remote_context_menu};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
-use crate::sftp::entity::{SftpPanelView, read_shell_parts};
+use crate::sftp::entity::SftpPanelView;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::spinner::Spinner;
@@ -174,36 +174,18 @@ impl SftpPanelView {
                 .collect(),
         );
         let remote_entries_rc = std::rc::Rc::new(remote_entries);
-        let Some(menu_app) = read_shell_parts(&self.app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(tab_id)
-                .map(|_| cx.entity().clone())
-        })
-        .flatten() else {
-            return div().into_any_element();
-        };
+        // 右键菜单只需要"回到自己"的句柄：直接取当前实体，不读外壳状态。
+        let menu_app = cx.entity().clone();
         let remote_selection = std::rc::Rc::new(remote_selection);
         let remote_primary = std::rc::Rc::new(remote_primary);
         let p = p.clone();
-        let app_entity = menu_app.clone();
-        let has_main_remote = read_shell_parts(&self.app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(tab_id)
-                .and_then(|tab| tab.connection_id)
-                .is_some()
-        })
-        .unwrap_or(false);
+        let has_main_remote = self.state.main_connection.is_some();
 
         v_virtual_list(
             cx.entity().clone(),
             format!("sftp-remote-virtual-list-{tab_id}-{target:?}"),
             remote_sizes,
             move |this, range, _window, cx| {
-                let app_entity = app_entity.clone();
                 range
                     .filter_map(|ix| {
                         let entry = remote_entries_rc.get(ix)?;
@@ -213,7 +195,7 @@ impl SftpPanelView {
                         let is_selected = remote_selection.contains(&entry.path)
                             || remote_primary.as_deref() == Some(entry.path.as_str());
                         let entry_path_cm = entry.path.clone();
-                        let app_cm = app_entity.clone();
+                        let app_cm = menu_app.clone();
                         let row = this.file_row(
                             SftpRowContext {
                                 tab_id,
