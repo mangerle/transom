@@ -80,9 +80,9 @@ impl AppShell {
             return;
         };
         let pattern = modal.input.read(cx).value().trim().to_string();
+        let input = modal.input.clone();
         if pattern.is_empty() {
             modal.error = Some(rust_i18n::t!("sftp.search.error_empty").to_string());
-            let input = modal.input.clone();
             input.update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
@@ -137,79 +137,11 @@ impl AppShell {
             return div().into_any_element();
         };
 
-        let root_path = modal.root_path.clone();
-        let input = modal.input.clone();
-        let is_content = modal.is_content;
-        let case_sensitive = modal.case_sensitive;
         let is_searching = modal.is_searching;
         let results = modal.results.clone();
-        let error = modal.error.clone();
         let target_connection = modal.connection_id;
 
-        let header =
-            v_flex()
-                .gap_2()
-                .child(div().text_xs().text_color(p.muted_foreground).child(
-                    rust_i18n::t!("sftp.search.root", path = root_path.as_str()).to_string(),
-                ))
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .w_full()
-                        .child(Input::new(&input).w_full())
-                        .child(
-                            Button::new("btn-trigger-search")
-                                .primary()
-                                .icon(IconName::Search)
-                                .label(if is_searching {
-                                    rust_i18n::t!("sftp.search.searching_short").to_string()
-                                } else {
-                                    rust_i18n::t!("sftp.search.search").to_string()
-                                })
-                                .disabled(is_searching)
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, _: &ClickEvent, window, cx| {
-                                        this.sftp_execute_search(window, cx);
-                                    },
-                                )),
-                        ),
-                )
-                .child(
-                    h_flex()
-                        .gap_4()
-                        .child(
-                            Checkbox::new("chk-is-content")
-                                .checked(is_content)
-                                .label(rust_i18n::t!("sftp.search.content_mode").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, checked: &bool, _, cx| {
-                                        if let Some(ref mut m) = this.state.sftp_modals.search {
-                                            m.is_content = *checked;
-                                            cx.notify();
-                                        }
-                                    },
-                                )),
-                        )
-                        .child(
-                            Checkbox::new("chk-case-sensitive")
-                                .checked(case_sensitive)
-                                .label(rust_i18n::t!("sftp.search.case_sensitive").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, checked: &bool, _, cx| {
-                                        if let Some(ref mut m) = this.state.sftp_modals.search {
-                                            m.case_sensitive = *checked;
-                                            cx.notify();
-                                        }
-                                    },
-                                )),
-                        ),
-                )
-                .when_some(error, |this, err| {
-                    this.child(div().text_xs().text_color(p.danger).child(err))
-                });
+        let header = render_search_header(modal, app, p);
 
         let mut results_container = v_flex()
             .id("sftp-search-results-list")
@@ -330,4 +262,85 @@ impl AppShell {
             Some(footer),
         )
     }
+}
+
+/// 检索弹窗头部：根路径、输入框、检索按钮、模式开关与错误提示。
+fn render_search_header(
+    modal: &SftpSearchModalState,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let root_path = modal.root_path.clone();
+    let input = modal.input.clone();
+    let is_content = modal.is_content;
+    let case_sensitive = modal.case_sensitive;
+    let is_searching = modal.is_searching;
+    let error = modal.error.clone();
+    let header = v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("sftp.search.root", path = root_path.as_str()).to_string()),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .w_full()
+                .child(Input::new(&input).w_full())
+                .child(
+                    Button::new("btn-trigger-search")
+                        .primary()
+                        .icon(IconName::Search)
+                        .label(if is_searching {
+                            rust_i18n::t!("sftp.search.searching_short").to_string()
+                        } else {
+                            rust_i18n::t!("sftp.search.search").to_string()
+                        })
+                        .disabled(is_searching)
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, window, cx| {
+                                this.sftp_execute_search(window, cx);
+                            },
+                        )),
+                ),
+        )
+        .child(
+            h_flex()
+                .gap_4()
+                .child(
+                    Checkbox::new("chk-is-content")
+                        .checked(is_content)
+                        .label(rust_i18n::t!("sftp.search.content_mode").to_string())
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, checked: &bool, _, cx| {
+                                if let Some(ref mut m) = this.state.sftp_modals.search {
+                                    m.is_content = *checked;
+                                    cx.notify();
+                                }
+                            },
+                        )),
+                )
+                .child(
+                    Checkbox::new("chk-case-sensitive")
+                        .checked(case_sensitive)
+                        .label(rust_i18n::t!("sftp.search.case_sensitive").to_string())
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, checked: &bool, _, cx| {
+                                if let Some(ref mut m) = this.state.sftp_modals.search {
+                                    m.case_sensitive = *checked;
+                                    cx.notify();
+                                }
+                            },
+                        )),
+                ),
+        )
+        .when_some(error, |this, err| {
+            this.child(div().text_xs().text_color(p.danger).child(err))
+        });
+    header.into_any_element()
 }
