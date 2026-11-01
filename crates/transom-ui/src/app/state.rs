@@ -72,7 +72,7 @@ pub(crate) struct AppState {
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
     pub(in crate::app) sftp_modals: SftpModals,
     /// 远程与本地文件分栏对比面板；同一时刻至多一个。
-    pub(in crate::app) diff_viewer: Option<crate::diff_viewer::DiffViewerState>,
+    pub(in crate::app) diff_viewer: Option<Entity<crate::diff_viewer::DiffViewerView>>,
     /// 底部广播输入条：目标集合、单行/多行输入与展开状态。
     pub(in crate::app) broadcast: BroadcastBarState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。

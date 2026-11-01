@@ -1,9 +1,9 @@
 //! 单向合并：确认、写回远端或本地、以及写回结果落地。
 
+use super::DiffViewerView;
 use super::local_io::write_local_text;
 use super::{DiffConfirm, DiffPhase};
 use crate::app::app_settings;
-use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use transom_core::{
     ConnectionId, MergeDirection, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId,
@@ -27,9 +27,9 @@ struct DiffWriteSync<'a> {
     meta: RemoteTextMeta,
 }
 
-impl AppState {
+impl DiffViewerView {
     fn build_merge_plan(&mut self) -> Option<MergePlan> {
-        let viewer = self.diff_viewer.as_mut()?;
+        let viewer = &mut self.state;
         let confirm = viewer.confirm.take()?;
         let diff = viewer.diff.as_ref()?;
         let local = viewer.local_text.as_deref()?;
@@ -56,12 +56,10 @@ impl AppState {
     }
 }
 
-impl AppShell {
+impl DiffViewerView {
     /// 请求合并当前变更块：先进入确认态，真正写回在用户确认后才发生。
     pub(crate) fn request_diff_merge(&mut self, direction: MergeDirection, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return;
-        };
+        let viewer = &mut self.state;
         if viewer.phase != DiffPhase::Ready {
             return;
         }
@@ -80,15 +78,13 @@ impl AppShell {
     }
 
     pub(crate) fn cancel_diff_merge(&mut self, cx: &mut Context<Self>) {
-        if let Some(viewer) = self.state.diff_viewer.as_mut() {
-            viewer.confirm = None;
-        }
+        self.state.confirm = None;
         cx.notify();
     }
 
     /// 确认合并：把选中的变更块从源侧应用到目标侧。
     pub(crate) fn confirm_diff_merge(&mut self, cx: &mut Context<Self>) {
-        let Some(plan) = self.state.build_merge_plan() else {
+        let Some(plan) = self.build_merge_plan() else {
             return;
         };
         match plan.direction {
@@ -104,7 +100,7 @@ impl AppShell {
         let backup = app_settings(cx).sftp.editor_write_backup;
         let op_id = TransferId::new();
         let merged = plan.merged;
-        let sent = self.state.send_command(SftpCommand::Sftp {
+        let command = SftpCommand::Sftp {
             tab_id: plan.tab_id,
             connection_id,
             op_id,
@@ -115,8 +111,10 @@ impl AppShell {
                 force: false,
                 backup,
             },
-        });
-        if let Some(viewer) = self.state.diff_viewer.as_mut() {
+        };
+        let sent = self.command_tx.try_send(command.into()).is_ok();
+        {
+            let viewer = &mut self.state;
             if sent {
                 viewer.pending_write = Some(op_id);
                 viewer.pending_merged = Some(merged);
@@ -130,9 +128,7 @@ impl AppShell {
     }
 
     fn submit_diff_local_write(&mut self, merged: String, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return;
-        };
+        let viewer = &mut self.state;
         let path = viewer.local_path.clone();
         let Some(expected) = viewer.local_text.clone() else {
             return;
@@ -158,9 +154,7 @@ impl AppShell {
         result: Option<Result<(), String>>,
         cx: &mut Context<Self>,
     ) {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return;
-        };
+        let viewer = &mut self.state;
         match result {
             Some(Ok(())) => {
                 if let Some(text) = viewer.pending_local_merged.take() {
@@ -192,9 +186,7 @@ impl AppShell {
         meta: RemoteTextMeta,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return false;
-        };
+        let viewer = &mut self.state;
         if viewer.pending_read != Some(op_id) {
             return false;
         }
@@ -215,9 +207,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return false;
-        };
+        let viewer = &mut self.state;
         if viewer.pending_write != Some(op_id) {
             return false;
         }
@@ -230,17 +220,12 @@ impl AppShell {
         let tab_id = viewer.tab_id;
         let connection_id = viewer.connection_id;
         let remote_path = viewer.remote_path.clone();
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && let Some(entry) = panel
-                .state
-                .remote
-                .entries
-                .iter_mut()
-                .find(|entry| entry.path == remote_path)
-        {
-            entry.size = meta.size;
-            entry.modified = meta.mtime;
-        }
+        cx.emit(super::DiffViewerEvent::RemoteEntryUpdated {
+            tab_id,
+            path: remote_path.clone(),
+            size: meta.size,
+            modified: meta.mtime,
+        });
         self.sync_editor_after_diff_write(
             DiffWriteSync {
                 tab_id,
@@ -274,7 +259,7 @@ impl AppShell {
         let Some(connection_id) = connection_id else {
             return;
         };
-        self.state.editors.update(cx, |panels, cx| {
+        self.editors.update(cx, |panels, cx| {
             panels.sync_after_diff_write(
                 crate::editor::EditorDiffWriteSync {
                     tab_id,
@@ -300,9 +285,7 @@ impl AppShell {
         conflict: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return false;
-        };
+        let viewer = &mut self.state;
         if viewer.pending_read == Some(op_id) {
             viewer.pending_read = None;
             viewer.phase = DiffPhase::Ready;

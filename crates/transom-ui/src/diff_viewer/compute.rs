@@ -3,8 +3,8 @@
 //! 设计原理（Why）：Myers 计算与统一补丁解析都是 CPU 密集段，放在 UI 线程会
 //! 让整个窗口卡顿；这里统一经后台线程执行，并用计算令牌丢弃迟到结果。
 
+use super::DiffViewerView;
 use super::{DiffPhase, sanitize_label};
-use crate::app::AppShell;
 use gpui_kit::component::diff::{DiffFile, DiffLinePosition, DiffMode, DiffSide, DiffState};
 use gpui_kit::*;
 use similar::TextDiff;
@@ -17,16 +17,14 @@ struct PreparedDiff {
     path: Option<SharedString>,
 }
 
-impl AppShell {
+impl DiffViewerView {
     /// 重算差异并重建 `DiffState`；两侧内容不齐时保持加载态。
     ///
     /// Myers 计算与补丁解析放到后台线程：4 MiB 上限内的文件在慢机器上也
     /// 可能占用数百毫秒，放在 UI 线程会让整个窗口卡住。每次重算生成新的
     /// `compute_token`，迟到的旧结果直接丢弃，避免合并后又被前一次计算覆盖。
     pub(crate) fn recompute_diff(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return;
-        };
+        let viewer = &mut self.state;
         let (Some(local), Some(remote)) = (viewer.local_text.clone(), viewer.remote_text.clone())
         else {
             // 另一侧仍在读取：阶段已由读取入口置为 Loading，等回调再触发重算。
@@ -57,9 +55,7 @@ impl AppShell {
         prepared: Option<PreparedDiff>,
         cx: &mut Context<Self>,
     ) {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return;
-        };
+        let viewer = &mut self.state;
         if viewer.compute_token != token {
             return;
         }
@@ -77,7 +73,8 @@ impl AppShell {
         } else {
             Some(cx.new(|cx| DiffState::new(prepared.files, cx).with_mode(DiffMode::Split)))
         };
-        if let Some(viewer) = self.state.diff_viewer.as_mut() {
+        {
+            let viewer = &mut self.state;
             if viewer.compute_token != token {
                 return;
             }
@@ -101,9 +98,7 @@ impl AppShell {
 
     /// 上一处/下一处变更；到端点时循环。
     pub(crate) fn step_diff_hunk(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return;
-        };
+        let viewer = &mut self.state;
         let Some(diff) = viewer.diff.as_ref() else {
             return;
         };
@@ -124,9 +119,7 @@ impl AppShell {
     }
 
     fn scroll_diff_to_hunk(&self, index: usize, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.diff_viewer.as_ref() else {
-            return;
-        };
+        let viewer = &self.state;
         let (Some(view), Some(path), Some(diff)) = (
             viewer.view.as_ref(),
             viewer.diff_path.as_ref(),

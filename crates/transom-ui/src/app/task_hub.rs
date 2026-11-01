@@ -46,6 +46,7 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) monitor: Option<Subscription>,
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
     pub(crate) settings: Option<Subscription>,
+    pub(crate) diff_viewer: Option<Subscription>,
 }
 
 impl PanelSubscriptions {
@@ -56,6 +57,7 @@ impl PanelSubscriptions {
             monitor: None,
             forward: HashMap::new(),
             settings: None,
+            diff_viewer: None,
         }
     }
 }

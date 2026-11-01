@@ -23,12 +23,13 @@ impl AppShell {
         &self,
         app: &Entity<AppShell>,
         window: &mut Window,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(viewer) = self.state.diff_viewer.as_ref() else {
+        let Some(view) = self.state.diff_viewer.as_ref() else {
             return div().into_any_element();
         };
+        let viewer = &view.read(cx).state;
         let title = rust_i18n::t!(
             "diff.title",
             local = viewer.local_path.display().to_string(),
@@ -62,7 +63,7 @@ impl AppShell {
     }
 }
 
-fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
+pub(crate) fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
     if viewer.phase == DiffPhase::Loading {
         return v_flex()
             .flex_1()

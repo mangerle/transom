@@ -17,7 +17,7 @@
 
 use super::entity::EditorPanels;
 use super::panel::PanelConfirm;
-use crate::app::{AppShell, AppState};
+use crate::app::AppShell;
 use gpui_kit::*;
 use transom_core::{GroupId, SessionId, TabId};
 
@@ -73,19 +73,20 @@ impl EditorPanels {
     }
 }
 
-impl AppState {
+impl AppShell {
     /// 丢弃标签已不存在的对比面板。
     ///
     /// 对比面板挂在 `TabId`（窗格）上，关闭标签、关闭窗格、关闭整组都会让它
     /// 失去宿主；编辑面板的同类裁剪由 [`AppShell::prune_tab_overlays`] 转交实体。
-    pub(crate) fn prune_tab_diff_overlay(&mut self) {
-        let alive: Vec<TabId> = self.workspace.tabs.iter().map(|tab| tab.id).collect();
-        if self
-            .diff_viewer
-            .as_ref()
-            .is_some_and(|viewer| !alive.contains(&viewer.tab_id))
-        {
-            self.diff_viewer = None;
+    pub(crate) fn prune_tab_diff_overlay(&mut self, cx: &App) {
+        let Some(view) = self.state.diff_viewer.as_ref() else {
+            return;
+        };
+        let tab_id = view.read(cx).state.tab_id;
+        let alive = self.state.workspace.tabs.iter().any(|tab| tab.id == tab_id);
+        if !alive {
+            self.state.diff_viewer = None;
+            self.state.tasks.subscriptions.diff_viewer = None;
         }
     }
 }
@@ -101,7 +102,7 @@ impl AppShell {
         self.state
             .editors
             .update(cx, |panels, _| panels.prune_dead_tabs(&alive));
-        self.state.prune_tab_diff_overlay();
+        self.prune_tab_diff_overlay(cx);
     }
 
     /// 关闭路径的脏面板闸门；实体决定是否拦截并展开确认横幅。

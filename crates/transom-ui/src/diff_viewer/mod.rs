@@ -18,6 +18,7 @@
 //! - 远端文件为非 UTF-8 编码（`transcoded`）时允许查看，但禁止写回。
 
 mod compute;
+mod entity;
 mod local_io;
 mod merge;
 mod view;
@@ -28,6 +29,7 @@ mod tests;
 use crate::app::{AppShell, AppState};
 use crate::editor::EditorDiffSource;
 use crate::format::format_size;
+pub(crate) use entity::{DiffViewerEvent, DiffViewerView};
 use gpui_kit::component::diff::DiffState;
 use gpui_kit::*;
 use local_io::read_local_text;
@@ -217,15 +219,18 @@ impl AppShell {
         } = target;
         let max_bytes = MAX_DIFF_BYTES;
         let op_id = TransferId::new();
-        self.state.diff_viewer = Some(DiffViewerState::new(
-            tab_id,
-            Some(connection_id),
-            local_path,
-            remote_path.clone(),
-            Some(op_id),
-        ));
-        self.spawn_diff_local_read(cx);
-        if !self.state.send_command(SftpCommand::Sftp {
+        let view = self.install_diff_viewer(
+            DiffViewerState::new(
+                tab_id,
+                Some(connection_id),
+                local_path,
+                remote_path.clone(),
+                Some(op_id),
+            ),
+            cx,
+        );
+        view.update(cx, |view, cx| view.spawn_local_read(cx));
+        let sent = self.state.send_command(SftpCommand::Sftp {
             tab_id,
             connection_id,
             op_id,
@@ -233,11 +238,14 @@ impl AppShell {
                 path: remote_path,
                 max_bytes,
             },
-        }) && let Some(viewer) = self.state.diff_viewer.as_mut()
-        {
-            viewer.pending_read = None;
-            viewer.phase = DiffPhase::Ready;
-            viewer.error = Some("读取远端文件的命令投递失败".to_string());
+        });
+        if !sent {
+            view.update(cx, |view, cx| {
+                view.state.pending_read = None;
+                view.state.phase = DiffPhase::Ready;
+                view.state.error = Some("读取远端文件的命令投递失败".to_string());
+                view.notify_changed(cx);
+            });
         }
         cx.notify();
     }
@@ -276,9 +284,8 @@ impl AppShell {
             DiffViewerState::new(tab_id, Some(connection_id), local_path, remote_path, None);
         viewer.remote_text = Some(remote_text);
         viewer.remote_meta = remote_meta;
-        self.state.diff_viewer = Some(viewer);
-        self.spawn_diff_local_read(cx);
-        self.recompute_diff(cx);
+        let view = self.install_diff_viewer(viewer, cx);
+        view.update(cx, |view, cx| view.spawn_local_read(cx));
         cx.notify();
     }
 
@@ -310,49 +317,190 @@ impl AppShell {
         None
     }
 
-    fn spawn_diff_local_read(&mut self, cx: &mut Context<Self>) {
-        let Some(viewer) = self.state.diff_viewer.as_ref() else {
+    pub(crate) fn close_diff_viewer(&mut self, cx: &mut Context<Self>) {
+        self.state.diff_viewer = None;
+        self.state.tasks.subscriptions.diff_viewer = None;
+        cx.notify();
+    }
+
+    /// 创建对比实体并订阅其状态事件；同一时刻只保留一个对比面板。
+    fn install_diff_viewer(
+        &mut self,
+        viewer: DiffViewerState,
+        cx: &mut Context<Self>,
+    ) -> Entity<DiffViewerView> {
+        let view = cx.new(|_| {
+            DiffViewerView::new(
+                viewer,
+                self.state.services.command_tx.clone(),
+                self.state.editors.clone(),
+            )
+        });
+        self.state.diff_viewer = Some(view.clone());
+        let subscription =
+            cx.subscribe(
+                &view,
+                |shell, _view, event: &DiffViewerEvent, cx| match event {
+                    DiffViewerEvent::Changed => cx.notify(),
+                    DiffViewerEvent::RemoteEntryUpdated {
+                        tab_id,
+                        path,
+                        size,
+                        modified,
+                    } => shell.update_diff_remote_entry(*tab_id, path, *size, *modified, cx),
+                },
+            );
+        self.state.tasks.subscriptions.diff_viewer = Some(subscription);
+        view
+    }
+
+    fn update_diff_remote_entry(
+        &mut self,
+        tab_id: TabId,
+        path: &str,
+        size: u64,
+        modified: Option<u32>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
+            && let Some(entry) = panel
+                .state
+                .remote
+                .entries
+                .iter_mut()
+                .find(|entry| entry.path == path)
+        {
+            entry.size = size;
+            entry.modified = modified;
+        }
+        cx.notify();
+    }
+
+    /// 转发远端读取完成事件到对比实体。
+    pub(crate) fn diff_handle_remote_read(
+        &mut self,
+        op_id: TransferId,
+        content: &str,
+        meta: RemoteTextMeta,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(view) = self.state.diff_viewer.clone() else {
+            return false;
+        };
+        let handled = view.update(cx, |view, cx| {
+            view.diff_handle_remote_read(op_id, content, meta, cx)
+        });
+        if handled {
+            cx.notify();
+        }
+        handled
+    }
+
+    /// 转发远端写回完成事件到对比实体。
+    pub(crate) fn diff_handle_remote_written(
+        &mut self,
+        op_id: TransferId,
+        meta: RemoteTextMeta,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(view) = self.state.diff_viewer.clone() else {
+            return false;
+        };
+        let handled = view.update(cx, |view, cx| {
+            view.diff_handle_remote_written(op_id, meta, window, cx)
+        });
+        if handled {
+            cx.notify();
+        }
+        handled
+    }
+
+    /// 转发远端失败事件到对比实体。
+    pub(crate) fn diff_handle_remote_failure(
+        &mut self,
+        op_id: TransferId,
+        message: &str,
+        conflict: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(view) = self.state.diff_viewer.clone() else {
+            return false;
+        };
+        let handled = view.update(cx, |view, cx| {
+            view.diff_handle_remote_failure(op_id, message, conflict, cx)
+        });
+        if handled {
+            cx.notify();
+        }
+        handled
+    }
+
+    /// 适配对比工具栏：上一处/下一处。
+    pub(crate) fn step_diff_hunk(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let Some(view) = self.state.diff_viewer.clone() else {
             return;
         };
-        let path = viewer.local_path.clone();
+        view.update(cx, |view, cx| view.step_diff_hunk(forward, cx));
+        cx.notify();
+    }
+
+    /// 适配对比工具栏：请求合并。
+    pub(crate) fn request_diff_merge(&mut self, direction: MergeDirection, cx: &mut Context<Self>) {
+        let Some(view) = self.state.diff_viewer.clone() else {
+            return;
+        };
+        view.update(cx, |view, cx| view.request_diff_merge(direction, cx));
+        cx.notify();
+    }
+
+    /// 适配对比工具栏：取消合并确认。
+    pub(crate) fn cancel_diff_merge(&mut self, cx: &mut Context<Self>) {
+        let Some(view) = self.state.diff_viewer.clone() else {
+            return;
+        };
+        view.update(cx, |view, cx| view.cancel_diff_merge(cx));
+        cx.notify();
+    }
+
+    /// 适配对比工具栏：确认合并。
+    pub(crate) fn confirm_diff_merge(&mut self, cx: &mut Context<Self>) {
+        let Some(view) = self.state.diff_viewer.clone() else {
+            return;
+        };
+        view.update(cx, |view, cx| view.confirm_diff_merge(cx));
+        cx.notify();
+    }
+}
+
+impl DiffViewerView {
+    /// 启动本地文件读取；结果回到实体后触发重算。
+    fn spawn_local_read(&mut self, cx: &mut Context<Self>) {
+        let path = self.state.local_path.clone();
         cx.spawn(async move |this, cx| {
             let result = crate::sftp::spawn_blocking_local(move || read_local_text(&path)).await;
-            let _ = this.update(cx, |this, cx| {
-                this.apply_diff_local_read(result, cx);
-            });
+            let _ = this.update(cx, |this, cx| this.apply_local_read(result, cx));
         })
         .detach();
     }
 
-    fn apply_diff_local_read(
-        &mut self,
-        result: Option<Result<String, String>>,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(viewer) = self.state.diff_viewer.as_mut() else {
-            return;
-        };
+    fn apply_local_read(&mut self, result: Option<Result<String, String>>, cx: &mut Context<Self>) {
         match result {
             Some(Ok(text)) => {
-                viewer.local_text = Some(text);
-                viewer.error = None;
+                self.state.local_text = Some(text);
+                self.state.error = None;
             }
             Some(Err(error)) => {
-                viewer.error = Some(error);
-                viewer.phase = DiffPhase::Ready;
+                self.state.error = Some(error);
+                self.state.phase = DiffPhase::Ready;
             }
             None => {
-                viewer.error = Some("本地文件读取线程启动失败".to_string());
-                viewer.phase = DiffPhase::Ready;
+                self.state.error = Some("本地文件读取线程启动失败".to_string());
+                self.state.phase = DiffPhase::Ready;
             }
         }
         self.recompute_diff(cx);
-        cx.notify();
-    }
-
-    pub(crate) fn close_diff_viewer(&mut self, cx: &mut Context<Self>) {
-        self.state.diff_viewer = None;
-        cx.notify();
+        self.notify_changed(cx);
     }
 }
 
