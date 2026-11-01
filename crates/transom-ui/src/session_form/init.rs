@@ -12,41 +12,11 @@ use transom_core::{
     SerialStopBits, TextEncoding,
 };
 
-/// 从初始化上下文推导表单默认值，与控件创建解耦。
-fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
-    let SessionFormInit {
-        base,
-        folder_path,
-        identities,
-        jump_options,
-        folder_options,
-        global_proxy,
-        block_view,
-    } = init;
-    let connection = match base.as_ref().map(|session| &session.connection) {
-        Some(Connection::Serial(_)) => ConnectionChoice::Serial,
-        Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
-        Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
-        _ => ConnectionChoice::Ssh,
-    };
-    let serial = base.as_ref().and_then(|session| match &session.connection {
-        Connection::Serial(serial) => Some(serial),
-        _ => None,
-    });
-    let telnet = base.as_ref().and_then(|session| match &session.connection {
-        Connection::Telnet(telnet) => Some(telnet),
-        _ => None,
-    });
-    let ssh = base.as_ref().and_then(|session| match &session.connection {
-        Connection::Ssh(ssh) => Some(ssh),
-        _ => None,
-    });
-    let mosh = base.as_ref().and_then(|session| match &session.connection {
-        Connection::Mosh(mosh) => Some(mosh),
-        _ => None,
-    });
-    let auth_source = ssh.map(|s| &s.auth).or_else(|| mosh.map(|m| &m.auth));
-    let (auth, save_password, save_passphrase, key_path, cert_path) = match auth_source {
+/// 由认证方式推导表单默认值：选择、保存开关、私钥与证书路径。
+fn auth_defaults(
+    auth_source: Option<&transom_core::AuthMethod>,
+) -> (AuthChoice, bool, bool, String, String) {
+    match auth_source {
         Some(AuthMethod::Password { save }) => (
             AuthChoice::Password,
             *save,
@@ -82,7 +52,44 @@ fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
             String::new(),
             String::new(),
         ),
+    }
+}
+
+/// 从初始化上下文推导表单默认值，与控件创建解耦。
+fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
+    let SessionFormInit {
+        base,
+        folder_path,
+        identities,
+        jump_options,
+        folder_options,
+        global_proxy,
+        block_view,
+    } = init;
+    let connection = match base.as_ref().map(|session| &session.connection) {
+        Some(Connection::Serial(_)) => ConnectionChoice::Serial,
+        Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
+        Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
+        _ => ConnectionChoice::Ssh,
     };
+    let serial = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Serial(serial) => Some(serial),
+        _ => None,
+    });
+    let telnet = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Telnet(telnet) => Some(telnet),
+        _ => None,
+    });
+    let ssh = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Ssh(ssh) => Some(ssh),
+        _ => None,
+    });
+    let mosh = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Mosh(mosh) => Some(mosh),
+        _ => None,
+    });
+    let auth_source = ssh.map(|s| &s.auth).or_else(|| mosh.map(|m| &m.auth));
+    let (auth, save_password, save_passphrase, key_path, cert_path) = auth_defaults(auth_source);
     let startup_commands = base
         .as_ref()
         .map(|session| session.startup.to_multiline())
