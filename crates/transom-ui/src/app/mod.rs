@@ -67,6 +67,8 @@ pub(crate) mod session_serial;
 pub(crate) mod settings;
 #[path = "../sftp/mod.rs"]
 pub(crate) mod sftp;
+#[path = "../sftp_events.rs"]
+mod sftp_events;
 #[path = "../sftp_handlers.rs"]
 pub(crate) mod sftp_handlers;
 #[path = "../shortcuts.rs"]
