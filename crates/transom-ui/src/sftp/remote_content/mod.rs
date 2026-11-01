@@ -11,6 +11,7 @@ use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
 use crate::sftp::entity::SftpPanelView;
+use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::spinner::Spinner;
@@ -65,12 +66,12 @@ impl SftpPanelView {
         } = props;
 
         let content = if remote_entries.is_empty() && !loading {
-            div()
-                .p_3()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("sftp.empty").to_string())
-                .into_any_element()
+            crate::widgets::empty_state(
+                IconName::FolderOpen,
+                rust_i18n::t!("sftp.empty").to_string(),
+                rust_i18n::t!("sftp.empty_hint").to_string(),
+                p,
+            )
         } else if remote_entries.is_empty() && loading {
             div()
                 .size_full()

@@ -20,6 +20,7 @@ use super::side_remote::SftpDragItem;
 use super::{LocalFileEntry, LocalQuickPaths, SftpTransferRequest};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
+use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -70,12 +71,12 @@ impl SftpPanelView {
 
         let menu_app = cx.entity().clone();
         let local_content = if local_entries.is_empty() {
-            div()
-                .p_3()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("sftp.empty").to_string())
-                .into_any_element()
+            crate::widgets::empty_state(
+                IconName::FolderOpen,
+                rust_i18n::t!("sftp.empty").to_string(),
+                rust_i18n::t!("sftp.empty_hint").to_string(),
+                p,
+            )
         } else {
             let local_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); local_entries.len()]);
             let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(

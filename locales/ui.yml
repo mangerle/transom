@@ -967,6 +967,9 @@ sftp:
   empty:
     en: Empty directory
     zh-CN: 空目录
+  empty_hint:
+    en: Drag files here to upload, or open another path.
+    zh-CN: 可把文件拖到这里上传，或打开其他路径。
   select_file:
     en: Select a remote file first
     zh-CN: 请先选择一个远程文件
