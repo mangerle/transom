@@ -14,28 +14,13 @@ use crate::monitor::MonitorView;
 
 impl MonitorView {
     /// 渲染 Systemd 崩溃服务监控卡片。
-    pub(crate) fn render_services_section_card(
+    /// 服务板块内容：空态或失败服务列表。
+    fn render_services_content(
         &self,
         stats: &SystemStats,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let collapsed = self.state.collapse.services;
-        let count = stats.failed_services.len();
-
-        let summary = if count == 0 {
-            div()
-                .text_xs()
-                .text_color(p.sidebar_accent_foreground)
-                .child(rust_i18n::t!("monitor.services.healthy").to_string())
-        } else {
-            div()
-                .text_xs()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(p.danger)
-                .child(rust_i18n::t!("monitor.services.failed_count", count = count).to_string())
-        };
-
         let mut content = v_flex().gap_1p5();
 
         if stats.failed_services.is_empty() {
@@ -99,6 +84,33 @@ impl MonitorView {
                 );
             }
         }
+
+        content.into_any_element()
+    }
+
+    pub(crate) fn render_services_section_card(
+        &self,
+        stats: &SystemStats,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let collapsed = self.state.collapse.services;
+        let count = stats.failed_services.len();
+
+        let summary = if count == 0 {
+            div()
+                .text_xs()
+                .text_color(p.sidebar_accent_foreground)
+                .child(rust_i18n::t!("monitor.services.healthy").to_string())
+        } else {
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.danger)
+                .child(rust_i18n::t!("monitor.services.failed_count", count = count).to_string())
+        };
+
+        let content = self.render_services_content(stats, cx, p);
 
         CollapsibleCard::new(
             "card-services",
