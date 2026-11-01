@@ -41,6 +41,61 @@ impl SettingsView {
             .collect();
         let active_name = cx.theme().theme_name().clone();
 
+        let (mode_row, density_row) = self.render_ui_mode_rows(p, cx);
+
+        let cards: Vec<AnyElement> = themes
+            .iter()
+            .enumerate()
+            .map(|(idx, config)| self.render_theme_option(idx, config, active_name.as_ref(), p, cx))
+            .collect();
+
+        // 明暗反差提示：界面主题与终端配色一个深一个浅时给出文案，不改用户选择。
+        let terminal_mode = preset_themes()
+            .into_iter()
+            .find(|theme| theme.name == app_settings(cx).terminal_profile.theme_name)
+            .map(|theme| theme.mode);
+        let contrast_hint = matches!(
+            (cx.theme().is_dark(), terminal_mode),
+            (true, Some(PaletteMode::Light)) | (false, Some(PaletteMode::Dark))
+        );
+
+        // 主题卡自带边框，不按行画线；说明、卡片与反差提示同属一项，在组末补一条。
+        let card_block = v_flex()
+            .w_full()
+            .gap_2()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("settings.ui_theme_note").to_string()),
+            )
+            .children(cards)
+            .when(contrast_hint, |this| {
+                this.child(crate::widgets::notice(
+                    crate::widgets::NoticeKind::Warning,
+                    rust_i18n::t!("settings.appearance_contrast").to_string(),
+                    p,
+                ))
+            });
+
+        v_flex()
+            .gap_3()
+            .child(mode_row)
+            .child(density_row)
+            .child(crate::widgets::setting_frame(
+                card_block.into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
+    /// 界面字体组：界面字体族覆盖；字号由配色方案页的密度档驱动。
+    /// 模式与密度两行下拉：都直接写入外观设置。
+    fn render_ui_mode_rows(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> (AnyElement, AnyElement) {
         let mode_row = h_flex()
             .w_full()
             .justify_between()
@@ -101,114 +156,79 @@ impl SettingsView {
                 cx,
             ));
 
-        let cards: Vec<AnyElement> = themes
-            .iter()
-            .enumerate()
-            .map(|(idx, config)| {
-                let is_active = config.name == active_name;
-                let name = config.name.to_string();
-                // 点击闭包要拿走一份名称，卡片标题继续用原值，各持一份。
-                let click_name = name.clone();
-                let mode = config.mode;
-                let mode_label = match mode {
-                    ThemeMode::Dark => rust_i18n::t!("settings.theme_mode_dark").to_string(),
-                    ThemeMode::Light => rust_i18n::t!("settings.theme_mode_light").to_string(),
-                };
-                h_flex()
-                    .id(ElementId::NamedInteger("ui-theme-card".into(), idx as u64))
-                    .w_full()
-                    .px_3()
-                    .py_2()
-                    .gap_3()
-                    .items_center()
-                    .rounded(p.radius.md)
-                    .border_1()
-                    .border_color(if is_active { p.primary } else { p.border })
-                    .bg(if is_active { p.muted } else { p.popover })
-                    .cursor_pointer()
-                    .hover(|s| {
-                        if is_active {
-                            s
-                        } else {
-                            s.border_color(p.muted_foreground)
-                        }
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        let theme_mode = match mode {
-                            ThemeMode::Dark => UiThemeMode::Dark,
-                            ThemeMode::Light => UiThemeMode::Light,
-                        };
-                        this.update_appearance(
-                            |appearance| {
-                                appearance.ui_theme = click_name.clone();
-                                appearance.mode = theme_mode;
-                            },
-                            cx,
-                        );
-                    }))
-                    .child(theme_color_dots(config))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(if is_active {
-                                FontWeight::BOLD
-                            } else {
-                                FontWeight::NORMAL
-                            })
-                            .child(name),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(mode_label),
-                    )
-                    .into_any_element()
-            })
-            .collect();
+        (mode_row.into_any_element(), density_row.into_any_element())
+    }
 
-        // 明暗反差提示：界面主题与终端配色一个深一个浅时给出文案，不改用户选择。
-        let terminal_mode = preset_themes()
-            .into_iter()
-            .find(|theme| theme.name == app_settings(cx).terminal_profile.theme_name)
-            .map(|theme| theme.mode);
-        let contrast_hint = matches!(
-            (cx.theme().is_dark(), terminal_mode),
-            (true, Some(PaletteMode::Light)) | (false, Some(PaletteMode::Dark))
-        );
-
-        // 主题卡自带边框，不按行画线；说明、卡片与反差提示同属一项，在组末补一条。
-        let card_block = v_flex()
+    /// 单张界面主题卡：色板、名称、明暗模式与选中态。
+    fn render_theme_option(
+        &self,
+        idx: usize,
+        config: &ThemeConfig,
+        active_name: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let is_active = config.name == active_name;
+        let name = config.name.to_string();
+        let click_name = name.clone();
+        let mode = config.mode;
+        let mode_label = match mode {
+            ThemeMode::Dark => rust_i18n::t!("settings.theme_mode_dark").to_string(),
+            ThemeMode::Light => rust_i18n::t!("settings.theme_mode_light").to_string(),
+        };
+        h_flex()
+            .id(ElementId::NamedInteger("ui-theme-card".into(), idx as u64))
             .w_full()
-            .gap_2()
+            .px_3()
+            .py_2()
+            .gap_3()
+            .items_center()
+            .rounded(p.radius.md)
+            .border_1()
+            .border_color(if is_active { p.primary } else { p.border })
+            .bg(if is_active { p.muted } else { p.popover })
+            .cursor_pointer()
+            .hover(|s| {
+                if is_active {
+                    s
+                } else {
+                    s.border_color(p.muted_foreground)
+                }
+            })
+            .on_click(cx.listener(move |this, _, _, cx| {
+                let theme_mode = match mode {
+                    ThemeMode::Dark => UiThemeMode::Dark,
+                    ThemeMode::Light => UiThemeMode::Light,
+                };
+                this.update_appearance(
+                    |appearance| {
+                        appearance.ui_theme = click_name.clone();
+                        appearance.mode = theme_mode;
+                    },
+                    cx,
+                );
+            }))
+            .child(theme_color_dots(config))
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(if is_active {
+                        FontWeight::BOLD
+                    } else {
+                        FontWeight::NORMAL
+                    })
+                    .child(name),
+            )
+            .child(div().flex_1())
             .child(
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("settings.ui_theme_note").to_string()),
+                    .child(mode_label),
             )
-            .children(cards)
-            .when(contrast_hint, |this| {
-                this.child(crate::widgets::notice(
-                    crate::widgets::NoticeKind::Warning,
-                    rust_i18n::t!("settings.appearance_contrast").to_string(),
-                    p,
-                ))
-            });
-
-        v_flex()
-            .gap_3()
-            .child(mode_row)
-            .child(density_row)
-            .child(crate::widgets::setting_frame(
-                card_block.into_any_element(),
-                p,
-            ))
             .into_any_element()
     }
 
-    /// 界面字体组：界面字体族覆盖；字号由配色方案页的密度档驱动。
     pub(crate) fn render_settings_ui_font(
         &mut self,
         p: &Palette,
