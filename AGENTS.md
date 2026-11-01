@@ -166,6 +166,7 @@
 - **文件拆分准则**：单文件超过 500 行按“状态 / 视图 / 动作 / 测试”拆分，不按行数机械切割；子模块共用导入收敛到 `common.rs` 之类的私有模块，禁止复制一长串 import。拆分后外部路径通过父模块重导出保持稳定。声明式键位表（如 `keymap/mod.rs`）属于规范例外，不为行数强行拆分。
 - **拆分落地清单**：菜单/按钮/空状态/列表行/表头/状态徽标/工具栏/表单行/弹窗骨架已全部收敛到 `widgets`；新增页面直接复用，不再在页面内重写这些结构。
 - **设置是 `Global`，不是外壳字段**：`AppSettings` 存在 `app::settings_global` 的 `SettingsGlobal` 里（守卫：`AppState` 不得再有 `settings` 字段）。读取写 `app_settings(cx)`，就地修改写 `app_settings_mut(cx)`，需要返回值或只改一处时用 `update_app_settings(cx, |s| ...)`；不持有 `cx` 的纯函数接收 `&AppSettings` 快照参数。落盘一律显式传快照给 `persist_settings`，禁止为了免传 `cx` 保留旁路读取。
+- **弹窗状态归实体、弹窗本体归 `dialog_host`**：模态弹窗（设置、SFTP 各确认框、触发器编辑等）的**状态**由对应实体持有（如 `Entity<SettingsView>` 持 `SettingsModalState`），**渲染**仍由 `dialog_host` 统一组装——弹窗是窗口级浮层，层级、遮罩、焦点与 Esc 语义都归它管，页面函数只需从实体读状态并在需要外壳动作时发事件。
 - **跨实体调用必须单向（数据向下、意图向上）**：
   - 面板实体**禁止持有** `WeakEntity<AppShell>` 等父实体句柄（守卫：`panel_entities_have_no_parent_entity_handle`）；需要外壳数据时由外壳在变更点 `view.update(|v, cx| v.set_*(...))` 注入。
   - 面板要外壳做事时 `cx.emit(PanelEvent)`，外壳在创建时 `cx.subscribe` 一次并持有订阅；**事件必须自带全部数据**，外壳处理函数禁止回读该面板。
