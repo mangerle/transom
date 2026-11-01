@@ -154,3 +154,13 @@ SFTP 状态挂在窗格上（`SessionPane.sftp: Option<SftpPanelState>`），随
 | 生命周期入口（`toggle_sftp`、`close_sftp_panel`、本地单栏打开） | 10 | 由活动栏/标签生命周期驱动 |
 
 硬约束守卫见 `crates/transom-ui/src/theme/tests.rs` 中的 SFTP 面板回调测试。
+
+## 九、其余模块判定（2026-11-01）
+
+| 模块 | 结论 | 理由 |
+| :--- | :--- | :--- |
+| `forward` | 已实体化 | 窗格级面板，状态与表单校验归 `ForwardView` |
+| `cloud_sync` | **不实体化** | 不是面板：14 个方法全是跨域编排（发 git/网盘命令、合并目录、写安全副本、存取凭据），没有属于自己的 UI 状态；状态在 `modals.settings.sync_form` 里，属于设置弹窗。强行做成实体会把一个纯粹的服务层包装成假面板。 |
+| `diff_viewer` | 待实体化 | 窗口级浮层，`Option<DiffViewerState>` 可搬；`compute.rs`/`merge.rs` 的连读连写需逐段拆开 |
+| `settings` | 待实体化 | 74 个方法，状态在 `modals.settings`；设置值本身已是 `Global` |
+| `workspace`/`tabs`/`sidebar` | **保留外壳** | 标签与窗格生命周期本来就是外壳职责，Zed 的 `Workspace` 同样保留 `Pane`/`PaneGroup` 编排 |
