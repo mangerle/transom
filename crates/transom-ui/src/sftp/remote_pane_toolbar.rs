@@ -20,6 +20,18 @@ impl SftpPanelView {
         p: &Palette,
         cx: &mut Context<SftpPanelView>,
     ) -> AnyElement {
+        let key = pane_key(props.target);
+        self.render_toolbar_buttons(&props, &key, p, cx)
+    }
+
+    /// 工具栏按钮组：文件操作、编辑、权限、上传、显隐、同步导航与过滤。
+    fn render_toolbar_buttons(
+        &self,
+        props: &RemoteToolbarProps<'_>,
+        key: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let RemoteToolbarProps {
             tab_id,
             target,
@@ -28,9 +40,7 @@ impl SftpPanelView {
             show_hidden,
             sync_navigation,
             show_editor_list,
-        } = props;
-        let key = pane_key(target);
-
+        } = *props;
         let home_btn = Button::new(format!("remote-home-{key}"))
             .ghost()
             .xsmall()
