@@ -51,7 +51,7 @@ impl SftpPanelView {
             }
             let initial_path = candidate
                 .view
-                .map(|view| view.read(cx).remote.path.clone())
+                .map(|view| view.read(cx).state.remote.path.clone())
                 .filter(|p| !p.is_empty() && p != ".")
                 .or_else(|| candidate.cwd.as_deref().and_then(normalize_remote_cwd))
                 .unwrap_or_else(|| ".".to_string());

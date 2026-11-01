@@ -34,7 +34,7 @@ impl AppShell {
             cx,
         );
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.set_status(
+            panel.state.set_status(
                 rust_i18n::t!("sftp.file_ops.deleting_remote", count = count).to_string(),
             );
         }

@@ -19,8 +19,8 @@ impl SftpPanelView {
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(STATUS_MESSAGE_TTL).await;
             let _ = this.update(cx, |view, _| {
-                if view.queue.status.as_deref() == Some(expiry_message.as_str()) {
-                    view.clear_status();
+                if view.state.queue.status.as_deref() == Some(expiry_message.as_str()) {
+                    view.state.clear_status();
                 }
             });
         });

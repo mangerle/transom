@@ -159,8 +159,8 @@ impl AppShell {
         task.checksum_algorithm = app_settings(cx).sftp.checksum_algorithm;
         task.target_connection_id = Some(modal.connection_id);
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.queue.tasks.push(task);
-            panel.set_status(
+            panel.state.queue.tasks.push(task);
+            panel.state.set_status(
                 rust_i18n::t!(
                     "sftp.nav.sync_queued",
                     upload = upload_count,

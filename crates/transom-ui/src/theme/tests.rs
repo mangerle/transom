@@ -758,6 +758,19 @@ fn monitor_rendering_belongs_to_entity() {
     );
 }
 
+/// SFTP 视图不得再实现 `Deref`/`DerefMut`：字段访问必须显式写
+/// `view.state.xxx`。迁移期的透明访问会让"状态归属"在调用点消失，也给
+/// 后续同名字段埋下静默遮蔽。
+#[test]
+fn sftp_view_has_no_deref() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/sftp/entity/mod.rs");
+    let content = std::fs::read_to_string(&path).expect("读取 sftp/entity/mod.rs 失败");
+    assert!(
+        !content.contains("impl std::ops::Deref"),
+        "SftpPanelView 不得再实现 Deref/DerefMut，请显式访问 view.state"
+    );
+}
+
 /// 设置弹窗的页面渲染、保存与取消必须归 `SettingsView`：`settings/` 下只允许
 /// `handler.rs`（跨域事件消费）与 `mod.rs`（通用控件与外观下发）保留
 /// `impl AppShell`。页面一旦重新挂回外壳，设置实体化就被回退了。

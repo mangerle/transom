@@ -90,12 +90,12 @@ impl AppShell {
             return;
         };
         // 面板已经展开时不弹浮层：它的队列区就在旁边，两处同时刷进度是纯重复。
-        if panel.open {
+        if panel.state.open {
             return;
         }
-        panel.queue.drop_overlay.visible = true;
-        panel.queue.drop_overlay.expanded = true;
-        panel.queue.drop_overlay.settle_task = None;
+        panel.state.queue.drop_overlay.visible = true;
+        panel.state.queue.drop_overlay.expanded = true;
+        panel.state.queue.drop_overlay.settle_task = None;
         drop(panel);
         cx.notify();
     }
@@ -117,15 +117,15 @@ impl AppShell {
         // 面板展开时由面板的队列区呈现进度，浮层不再重复。
         if open {
             if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-                panel.queue.drop_overlay.visible = false;
-                panel.queue.drop_overlay.settle_task = None;
+                panel.state.queue.drop_overlay.visible = false;
+                panel.state.queue.drop_overlay.settle_task = None;
             }
             return;
         }
         if busy {
             if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-                panel.queue.drop_overlay.visible = true;
-                panel.queue.drop_overlay.settle_task = None;
+                panel.state.queue.drop_overlay.visible = true;
+                panel.state.queue.drop_overlay.settle_task = None;
             }
             return;
         }
@@ -140,14 +140,14 @@ impl AppShell {
                 };
                 // 停留期间若又忙起来，`sync_drop_overlay` 已把本句柄换成 None；
                 // 能走到这里说明任务未被取消，直接收起。
-                panel.queue.drop_overlay.visible = false;
-                panel.queue.drop_overlay.expanded = true;
-                panel.queue.drop_overlay.settle_task = None;
+                panel.state.queue.drop_overlay.visible = false;
+                panel.state.queue.drop_overlay.expanded = true;
+                panel.state.queue.drop_overlay.settle_task = None;
             });
         });
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.queue.drop_overlay.reset_rate();
-            panel.queue.drop_overlay.settle_task = Some(task);
+            panel.state.queue.drop_overlay.reset_rate();
+            panel.state.queue.drop_overlay.settle_task = Some(task);
         }
     }
 
@@ -156,11 +156,11 @@ impl AppShell {
     /// 进度事件是高频信号，后台标签的浮层不值得整帧重绘外壳。
     pub(crate) fn note_drop_overlay_progress(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && !panel.open
-            && panel.queue.drop_overlay.visible
+            && !panel.state.open
+            && panel.state.queue.drop_overlay.visible
         {
-            let done_bytes = panel.queue.progress.map_or(0, |(done, _)| done);
-            panel.queue.drop_overlay.sample_rate(done_bytes);
+            let done_bytes = panel.state.queue.progress.map_or(0, |(done, _)| done);
+            panel.state.queue.drop_overlay.sample_rate(done_bytes);
         }
         if self.state.is_rendered_pane(tab_id) {
             cx.notify();
@@ -170,9 +170,9 @@ impl AppShell {
     /// 用户点关闭：撤下浮层与定时器，下次拖入会重新出现。
     fn dismiss_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.queue.drop_overlay.visible = false;
-            panel.queue.drop_overlay.settle_task = None;
-            panel.queue.drop_overlay.reset_rate();
+            panel.state.queue.drop_overlay.visible = false;
+            panel.state.queue.drop_overlay.settle_task = None;
+            panel.state.queue.drop_overlay.reset_rate();
         }
         cx.notify();
     }
@@ -242,7 +242,8 @@ impl AppShell {
                     .tooltip(rust_i18n::t!("sftp.overlay_expand"))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
-                            panel.queue.drop_overlay.expanded = !panel.queue.drop_overlay.expanded;
+                            panel.state.queue.drop_overlay.expanded =
+                                !panel.state.queue.drop_overlay.expanded;
                         }
                         cx.notify();
                     })),

@@ -309,6 +309,7 @@ impl AppShell {
         // 无需为刷新列表再发一次目录请求。
         if let Some(mut panel) = self.sftp_view_mut(action.tab_id, cx)
             && let Some(entry) = panel
+                .state
                 .remote
                 .entries
                 .iter_mut()
@@ -408,9 +409,10 @@ impl AppShell {
             .tab(tab_id)
             .and_then(|tab| tab.connection_id)
             && let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && let Some(target) =
-                panel.remote_pane_of_connection(connection_id, Some(main_connection))
-            && let Some(pane) = panel.remote_pane_mut(target)
+            && let Some(target) = panel
+                .state
+                .remote_pane_of_connection(connection_id, Some(main_connection))
+            && let Some(pane) = panel.state.remote_pane_mut(target)
         {
             pane.error = Some(message);
         }

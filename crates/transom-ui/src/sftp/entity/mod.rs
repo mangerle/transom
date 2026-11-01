@@ -70,24 +70,6 @@ impl SftpPanelView {
     }
 }
 
-/// 视图对面板状态的透明访问。
-///
-/// 迁移期允许 `view.remote` 这类字段访问直接落到状态上；特意不实现反向
-/// 依赖（状态不回指实体），避免两个类型生命周期纠缠。
-impl std::ops::Deref for SftpPanelView {
-    type Target = SftpPanelState;
-
-    fn deref(&self) -> &Self::Target {
-        &self.state
-    }
-}
-
-impl std::ops::DerefMut for SftpPanelView {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.state
-    }
-}
-
 /// 实体渲染入口：把本实体的状态交给外壳的视图代码构建元素。
 ///
 /// 渲染期间本实体已被 GPUI 租借，因此外壳拿到的只是 `&mut SftpPanelState`，

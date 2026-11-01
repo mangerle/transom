@@ -176,7 +176,7 @@ impl AppShell {
             SftpInputTarget::LocalRename { old_path } => {
                 let Some(parent) = old_path.parent() else {
                     if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-                        panel.set_local_error(
+                        panel.state.set_local_error(
                             rust_i18n::t!(
                                 "sftp.file_ops.local_rename_failed",
                                 error = rust_i18n::t!("sftp.file_ops.no_parent_dir")
@@ -361,10 +361,10 @@ impl AppShell {
                 return;
             };
             if let Some(error) = outcome.error {
-                panel.set_local_error(error);
+                panel.state.set_local_error(error);
             }
             if let Some(status) = outcome.status {
-                panel.set_status(status);
+                panel.state.set_status(status);
             }
             (outcome.select, outcome.reveal)
         };

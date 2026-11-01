@@ -232,6 +232,7 @@ impl AppShell {
         let remote_path = viewer.remote_path.clone();
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
             && let Some(entry) = panel
+                .state
                 .remote
                 .entries
                 .iter_mut()

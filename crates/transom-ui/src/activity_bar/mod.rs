@@ -49,7 +49,7 @@ impl AppShell {
                 .workspace
                 .active_tab
                 .and_then(|tab_id| self.state.workspace.tab(tab_id)?.sftp_view())
-                .is_some_and(|view| view.read(cx).open),
+                .is_some_and(|view| view.read(cx).state.open),
             ActivityItemId::Monitor => monitor_open,
             ActivityItemId::Keys => self
                 .state

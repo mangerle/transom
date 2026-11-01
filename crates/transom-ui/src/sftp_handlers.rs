@@ -38,10 +38,11 @@ impl AppShell {
             .and_then(|tab| tab.connection_id)
             && let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx)
         {
-            if let Some(target) =
-                panel.remote_pane_of_connection(connection_id, Some(main_connection))
+            if let Some(target) = panel
+                .state
+                .remote_pane_of_connection(connection_id, Some(main_connection))
             {
-                if let Some(pane) = panel.remote_pane_mut(target) {
+                if let Some(pane) = panel.state.remote_pane_mut(target) {
                     log::debug!(
                         "远端目录回填，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}，条目数: {}",
                         entries.len()
@@ -96,7 +97,7 @@ impl AppShell {
         };
         let mut applied = false;
         if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx)
-            && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
+            && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
         {
             task.transferred = transferred;
             if total.is_some() {
@@ -104,7 +105,7 @@ impl AppShell {
             }
             task.speed_bps = speed_bps;
             task.eta_secs = eta_secs;
-            panel.recompute_progress();
+            panel.state.recompute_progress();
             applied = true;
         }
         // 进度事件高频到达：只有当前可见标签的传输队列在显示进度时
@@ -135,7 +136,7 @@ impl AppShell {
             return true;
         };
         if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx)
-            && let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id)
+            && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
         {
             task.status = TransferStatus::Verifying;
             task.speed_bps = None;
@@ -170,7 +171,7 @@ impl AppShell {
             .and_then(|tab| tab.connection_id);
         if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx) {
             let mut completed_transfer = false;
-            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
+            if let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 completed_transfer = true;
                 task.status = TransferStatus::Completed;
                 task.speed_bps = None;
@@ -221,9 +222,9 @@ impl AppShell {
                 notify_info = Some((task.direction, file_name, task.transferred));
             }
             if completed_transfer {
-                panel.queue.active_transfers.remove(&op_id);
-                panel.recompute_progress();
-                if panel.queue.active_transfers.is_empty() {
+                panel.state.queue.active_transfers.remove(&op_id);
+                panel.state.recompute_progress();
+                if panel.state.queue.active_transfers.is_empty() {
                     let base = match transferred {
                         Some(bytes) => format!(
                             "{} ({})",
@@ -243,15 +244,16 @@ impl AppShell {
                         message.push_str(&format!(" | {}", rust_i18n::t!("sftp.sha256_verified")));
                     }
                     status_message = Some(message);
-                    panel.clear_queue_error();
-                    refresh = Some(panel.remote.path.clone());
+                    panel.state.clear_queue_error();
+                    refresh = Some(panel.state.remote.path.clone());
                 }
             } else {
                 // 非传输操作：按连接找到目标列并刷新它自己的当前目录；
                 // 主远端与并列列不再各写一条完成分支。
                 let pane_path = panel
+                    .state
                     .remote_pane_of_connection(connection_id, main_conn)
-                    .and_then(|target| panel.remote_pane(target))
+                    .and_then(|target| panel.state.remote_pane(target))
                     .map(|pane| pane.path.clone());
                 if let Some(path) = pane_path {
                     refresh_side = Some((connection_id, path));
@@ -425,7 +427,7 @@ impl AppShell {
         if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx) {
             let err_msg = localized_error(&error);
             let mut failed_transfer = false;
-            if let Some(task) = panel.queue.tasks.iter_mut().find(|t| t.id == op_id) {
+            if let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 failed_transfer = true;
                 task.status = TransferStatus::Failed(err_msg.clone());
                 let file_name = task
@@ -436,11 +438,13 @@ impl AppShell {
                 failed_notify = Some((file_name, err_msg.clone()));
             }
             if failed_transfer {
-                panel.queue.active_transfers.remove(&op_id);
-                panel.recompute_progress();
-                panel.set_queue_error(err_msg);
-            } else if let Some(target) = panel.remote_pane_of_connection(connection_id, main_conn)
-                && let Some(pane) = panel.remote_pane_mut(target)
+                panel.state.queue.active_transfers.remove(&op_id);
+                panel.state.recompute_progress();
+                panel.state.set_queue_error(err_msg);
+            } else if let Some(target) = panel
+                .state
+                .remote_pane_of_connection(connection_id, main_conn)
+                && let Some(pane) = panel.state.remote_pane_mut(target)
             {
                 // 非传输失败：错误只落在目标列自己的内容区，主远端与并列列
                 // 共用同一路径，互不覆盖加载状态。

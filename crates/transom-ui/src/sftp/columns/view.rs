@@ -47,13 +47,13 @@ impl AppShell {
             .map(|width| width.as_f32());
         if collapsed
             && let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && panel.restored_width.is_none()
+            && panel.state.restored_width.is_none()
         {
             // 折叠前的宽度只记一次：连续折叠多列时不覆盖最初那个值。
-            panel.restored_width = current_width;
+            panel.state.restored_width = current_width;
         } else if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             // 恢复目标已经捕获到 desired 里，这里清掉记录，后续按当前宽度重新开始。
-            panel.restored_width = None;
+            panel.state.restored_width = None;
         }
         // 以分栏状态里的实际宽度判断是否需要调整：目标宽度可能与上一帧的
         // size_range 最小值不一致而被夹住，只看记录的目标值会永久停在错误宽度。
