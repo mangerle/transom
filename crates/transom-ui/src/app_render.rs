@@ -503,8 +503,12 @@ fn sync_stats_sampling(state: &mut crate::app::AppState, cx: &mut Context<AppShe
     state.send_command(transom_core::HostCommand::SetStatsSampling { enabled: demand });
 }
 
-impl Render for AppShell {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+impl AppShell {
+    /// 渲染前的一次性效应：采样开关、持久化错误、面板请求与弹窗对账。
+    ///
+    /// 这些动作需要 `Window`，只能放在渲染期；集中成方法后 `render` 只负责
+    /// 布局与层序，新增一类窗口请求在这里排队，不必再改渲染主流程。
+    fn run_frame_effects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         sync_stats_sampling(&mut self.state, cx);
         if let Some(error) = self.state.take_persistence_error() {
             self.state.set_error(localized_error(&error));
@@ -517,6 +521,12 @@ impl Render for AppShell {
         self.flush_pending_editor_requests(window, cx);
         self.flush_pending_monitor_requests(window, cx);
         self.flush_pending_settings_requests(window, cx);
+    }
+}
+
+impl Render for AppShell {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.run_frame_effects(window, cx);
         let p = Palette::from(cx);
         // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
         // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的
