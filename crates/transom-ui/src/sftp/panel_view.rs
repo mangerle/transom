@@ -81,38 +81,59 @@ impl SftpPanelView {
     pub(crate) fn render_panel_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::from(&*cx);
         let tab_id = self.tab_id;
-        let settings = app_settings(cx).sftp.clone();
         let state = &self.state;
         if state.local.only && state.side_remotes.is_empty() {
             return self.render_local_only_content(cx);
         }
 
         let is_local_only = state.local.only;
-        let queue_height = state.queue.height;
+        let local_collapsed = state.local.collapsed;
         let _focus_handle = state.focus_handle.clone();
-        let local_scroll_handle = state.local.scroll_handle.clone();
-        let local_filter_input = state.local.filter_input.clone();
-        let local_filter_query = local_filter_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_ascii_lowercase();
+        // 先构建远端列：主远端与并列远端共用同一套视图，只按目标列取状态。
+        // 远端列借用 `state`，必须在调用 &mut self 的本地列/队列渲染之前完成。
+        // 列按固定次序编排：本地 | 主远端 | 并列远端；折叠列由固定 32px 折叠条
+        // 占住自己的位置，所有列始终在同一个可拖拽分栏组里。
+        let remote_columns = self.render_remote_columns(state, &p, cx);
+        let side_titles = side_remote_titles(state);
 
-        let local_entries = AppState::filter_local_entries(
-            state,
-            state.local.show_hidden,
-            &local_filter_query,
-            &settings.panel_hidden_patterns,
-        );
+        let local_pane = self.render_local_column(state, tab_id, &p, cx);
+
+        let (queue_pane, status_bar_element, queue_expanded) =
+            self.render_queue_and_status(state, tab_id, &p, cx);
+
+        self.assemble_panel(
+            SftpPanelAssembly {
+                local_pane,
+                local_collapsed,
+                remote_columns,
+                side_titles,
+                tab_id,
+                is_local_only,
+                queue_pane,
+                status_bar_element,
+                queue_expanded,
+            },
+            &p,
+            cx,
+        )
+    }
+
+    /// 队列与底部状态栏：进度回退、暂停汇总、速度与传输错误。
+    fn render_queue_and_status(
+        &self,
+        state: &super::state::SftpPanelState,
+        tab_id: transom_core::TabId,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> (AnyElement, Option<AnyElement>, bool) {
+        let settings = app_settings(cx).sftp.clone();
+        let queue_height = state.queue.height;
         let remote_error = state.queue.error.clone();
         let status = state.queue.status.clone();
         let progress = state.queue.progress;
         let active_count = state.queue.active_transfers.len();
 
-        let local_path_input = state.local.path_input.clone();
         let local_error = state.local.error.clone();
-        let quick_paths = state.local.quick_paths.clone();
-        let local_collapsed = state.local.collapsed;
 
         let queue = state.queue.tasks.clone();
         let total_speed: u64 = queue
@@ -163,36 +184,6 @@ impl SftpPanelView {
             progress
         };
 
-        // 先构建远端列：主远端与并列远端共用同一套视图，只按目标列取状态。
-        // 远端列借用 `state`，必须在调用 &mut self 的本地列/队列渲染之前完成。
-        // 列按固定次序编排：本地 | 主远端 | 并列远端；折叠列由固定 32px 折叠条
-        // 占住自己的位置，所有列始终在同一个可拖拽分栏组里。
-        let remote_columns = self.render_remote_columns(state, &p, cx);
-        let side_titles = side_remote_titles(state);
-
-        let diff_ready = matches!(
-            crate::diff_viewer::local_diff_check(self.state.main_connection, state),
-            crate::diff_viewer::LocalDiffCheck::Ready(_)
-        );
-        let local_pane = self.render_sftp_local_pane(
-            SftpLocalPaneProps {
-                tab_id,
-                show_filter: state.local.show_filter,
-                show_hidden: state.local.show_hidden,
-                local_path_input,
-                local_filter_input,
-                local_entries,
-                local_scroll_handle,
-                quick_paths,
-                remote_available: true,
-                local_selection: state.local.selection.clone(),
-                local_primary: state.local.selected.clone(),
-                diff_ready,
-            },
-            &p,
-            cx,
-        );
-
         let queue_pane = self.render_sftp_queue_pane(
             SftpQueuePaneProps {
                 tab_id,
@@ -203,7 +194,7 @@ impl SftpPanelView {
                 queue_expanded,
                 queue_height,
             },
-            &p,
+            p,
             cx,
         );
         let status_bar_element = self.render_sftp_status_bar(
@@ -218,25 +209,11 @@ impl SftpPanelView {
                 status,
                 total_speed_bps,
             },
-            &p,
+            p,
             cx,
         );
 
-        self.assemble_panel(
-            SftpPanelAssembly {
-                local_pane,
-                local_collapsed,
-                remote_columns,
-                side_titles,
-                tab_id,
-                is_local_only,
-                queue_pane,
-                status_bar_element,
-                queue_expanded,
-            },
-            &p,
-            cx,
-        )
+        (queue_pane, status_bar_element, queue_expanded)
     }
 
     /// 面板主体装配：本地列、远端列、顶栏、队列与状态栏。
@@ -353,6 +330,51 @@ impl SftpPanelView {
             };
             self.render_sftp_panel_header(title_text, Some(mount_btn), p, cx)
         }
+    }
+
+    /// 本地列：过滤、条目快照与差异可用性都在这里准备。
+    fn render_local_column(
+        &self,
+        state: &super::state::SftpPanelState,
+        tab_id: transom_core::TabId,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let settings = app_settings(cx).sftp.clone();
+        let local_filter_input = state.local.filter_input.clone();
+        let local_filter_query = local_filter_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_ascii_lowercase();
+        let local_entries = AppState::filter_local_entries(
+            state,
+            state.local.show_hidden,
+            &local_filter_query,
+            &settings.panel_hidden_patterns,
+        );
+        let diff_ready = matches!(
+            crate::diff_viewer::local_diff_check(state.main_connection, state),
+            crate::diff_viewer::LocalDiffCheck::Ready(_)
+        );
+        self.render_sftp_local_pane(
+            SftpLocalPaneProps {
+                tab_id,
+                show_filter: state.local.show_filter,
+                show_hidden: state.local.show_hidden,
+                local_path_input: state.local.path_input.clone(),
+                local_filter_input,
+                local_entries,
+                local_scroll_handle: state.local.scroll_handle.clone(),
+                quick_paths: state.local.quick_paths.clone(),
+                remote_available: true,
+                local_selection: state.local.selection.clone(),
+                local_primary: state.local.selected.clone(),
+                diff_ready,
+            },
+            p,
+            cx,
+        )
     }
 
     /// 构建远端列：主远端与并列远端共用同一套折叠/过滤/渲染路径。
