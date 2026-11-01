@@ -15,23 +15,7 @@ impl AppShell {
     /// 设置实体发出的跨域意图。
     pub(crate) fn on_settings_event(&mut self, event: &SettingsEvent, cx: &mut Context<Self>) {
         match event {
-            SettingsEvent::Saved(settings) => {
-                self.apply_appearance_to_live_panes(cx);
-                self.apply_shortcut_settings(cx);
-                self.apply_block_view_settings(cx);
-                let triggers = settings.triggers.clone();
-                let terminals: Vec<Entity<TerminalView>> = self
-                    .state
-                    .workspace
-                    .tabs
-                    .iter()
-                    .filter_map(|tab| tab.terminal())
-                    .collect();
-                for terminal in terminals {
-                    terminal.update(cx, |view, _| view.reload_triggers(&triggers));
-                }
-                cx.notify();
-            }
+            SettingsEvent::Saved(settings) => self.on_settings_saved(settings, cx),
             SettingsEvent::Cancelled | SettingsEvent::ProfilePreview => {
                 self.apply_appearance_to_live_panes(cx);
                 cx.notify();
@@ -68,51 +52,28 @@ impl AppShell {
                 cx.notify();
             }
             SettingsEvent::ApplyTriggers(triggers) => {
-                let terminals: Vec<Entity<TerminalView>> = self
-                    .state
-                    .workspace
-                    .tabs
-                    .iter()
-                    .filter_map(|tab| tab.terminal())
-                    .collect();
-                for terminal in terminals {
-                    terminal.update(cx, |view, _| view.reload_triggers(triggers));
-                }
+                self.apply_triggers_to_terminals(triggers.as_ref(), cx);
             }
             SettingsEvent::OpenShortcutCapture(id) => {
-                self.state
-                    .window_requests
-                    .push_settings(SettingsRequest::OpenShortcutCapture(id));
+                self.queue_settings_request(SettingsRequest::OpenShortcutCapture(id));
             }
             SettingsEvent::OpenBackupImport => {
-                self.state
-                    .window_requests
-                    .push_settings(SettingsRequest::OpenBackupImport);
+                self.queue_settings_request(SettingsRequest::OpenBackupImport);
             }
             SettingsEvent::OpenBackupExport => {
-                self.state
-                    .window_requests
-                    .push_settings(SettingsRequest::OpenBackupExport);
+                self.queue_settings_request(SettingsRequest::OpenBackupExport);
             }
             SettingsEvent::OpenAuditViewer => {
-                self.state
-                    .window_requests
-                    .push_settings(SettingsRequest::OpenAuditViewer);
+                self.queue_settings_request(SettingsRequest::OpenAuditViewer);
             }
             SettingsEvent::CloudSyncPush => {
-                self.state
-                    .window_requests
-                    .push_settings(SettingsRequest::CloudSyncPush);
+                self.queue_settings_request(SettingsRequest::CloudSyncPush);
             }
             SettingsEvent::CloudSyncPull => {
-                self.state
-                    .window_requests
-                    .push_settings(SettingsRequest::CloudSyncPull);
+                self.queue_settings_request(SettingsRequest::CloudSyncPull);
             }
             SettingsEvent::GitSyncNow => {
-                self.state
-                    .window_requests
-                    .push_settings(SettingsRequest::GitSyncNow);
+                self.queue_settings_request(SettingsRequest::GitSyncNow);
             }
             SettingsEvent::Status(message) => {
                 self.state.status = Some(message.clone());
@@ -123,6 +84,38 @@ impl AppShell {
                 cx.notify();
             }
         }
+    }
+
+    /// 设置保存后：应用外观、快捷键、块视图与触发器快照。
+    fn on_settings_saved(&mut self, settings: &transom_core::AppSettings, cx: &mut Context<Self>) {
+        self.apply_appearance_to_live_panes(cx);
+        self.apply_shortcut_settings(cx);
+        self.apply_block_view_settings(cx);
+        self.apply_triggers_to_terminals(&settings.triggers, cx);
+        cx.notify();
+    }
+
+    /// 把触发器快照推给所有已打开终端。
+    fn apply_triggers_to_terminals(
+        &mut self,
+        triggers: &transom_core::TriggerSettings,
+        cx: &mut Context<Self>,
+    ) {
+        let terminals: Vec<Entity<TerminalView>> = self
+            .state
+            .workspace
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.terminal())
+            .collect();
+        for terminal in terminals {
+            terminal.update(cx, |view, _| view.reload_triggers(triggers));
+        }
+    }
+
+    /// 设置实体要求外壳做的窗口动作统一入队。
+    fn queue_settings_request(&mut self, request: SettingsRequest) {
+        self.state.window_requests.push_settings(request);
     }
 
     /// 执行一条设置实体排队的窗口动作。
