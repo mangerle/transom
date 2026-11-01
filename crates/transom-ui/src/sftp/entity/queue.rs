@@ -11,15 +11,9 @@ use transom_core::{SftpCommand, TransferFilter};
 impl SftpPanelView {
     /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
     pub(crate) fn process_queue(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let SftpPanelView { state, app, .. } = self;
-        let Some((filter_text, max_concurrent)) = read_shell_parts(app, cx, |_shell| {
-            (
-                app_settings(cx).sftp.transfer_filter.clone(),
-                app_settings(cx).sftp.max_concurrent_transfers.clamp(1, 8),
-            )
-        }) else {
-            return;
-        };
+        let state = &mut self.state;
+        let filter_text = app_settings(cx).sftp.transfer_filter.clone();
+        let max_concurrent = app_settings(cx).sftp.max_concurrent_transfers.clamp(1, 8);
         let filter = TransferFilter::from_text(&filter_text);
         let mut commands = Vec::new();
         while state.queue.active_transfers.len() < max_concurrent {
@@ -61,11 +55,9 @@ impl SftpPanelView {
         }
         state.clear_queue_error();
         state.recompute_progress();
-        with_shell_parts(app, cx, |shell, _| {
-            for command in commands {
-                shell.state.send_command(command);
-            }
-        });
+        for command in commands {
+            cx.emit(crate::sftp::SftpPanelEvent::SendCommand(command));
+        }
         cx.notify();
     }
 }
@@ -93,15 +85,7 @@ impl SftpPanelView {
         paths: &[PathBuf],
         cx: &mut Context<Self>,
     ) -> Result<usize, String> {
-        let app = self.app.clone();
-        let Some(connection_id) = read_shell_parts(&app, cx, |shell| {
-            shell
-                .state
-                .workspace
-                .tab(tab_id)
-                .and_then(|tab| tab.connection_id)
-        })
-        .flatten() else {
+        let Some(connection_id) = self.state.main_connection else {
             return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
         };
         let remote_dir = self.state.remote.path.clone();
@@ -123,16 +107,9 @@ impl SftpPanelView {
         if paths.is_empty() {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         }
-        let app = self.app.clone();
-        let Some((verify, verify_mode, algorithm)) = read_shell_parts(&app, cx, |_shell| {
-            (
-                app_settings(cx).sftp.verify_after_transfer,
-                app_settings(cx).sftp.verify_mode,
-                app_settings(cx).sftp.checksum_algorithm,
-            )
-        }) else {
-            return Err(rust_i18n::t!("sftp.upload_file").to_string());
-        };
+        let verify = app_settings(cx).sftp.verify_after_transfer;
+        let verify_mode = app_settings(cx).sftp.verify_mode;
+        let algorithm = app_settings(cx).sftp.checksum_algorithm;
         let tasks = upload_tasks(
             paths,
             remote_dir,
@@ -165,18 +142,9 @@ impl SftpPanelView {
         request: SftpTransferRequest,
         cx: &mut Context<Self>,
     ) {
-        let app = self.app.clone();
-        let Some((verify, verify_mode, checksum_algorithm)) =
-            read_shell_parts(&app, cx, |_shell| {
-                (
-                    app_settings(cx).sftp.verify_after_transfer,
-                    app_settings(cx).sftp.verify_mode,
-                    app_settings(cx).sftp.checksum_algorithm,
-                )
-            })
-        else {
-            return;
-        };
+        let verify = app_settings(cx).sftp.verify_after_transfer;
+        let verify_mode = app_settings(cx).sftp.verify_mode;
+        let checksum_algorithm = app_settings(cx).sftp.checksum_algorithm;
         let mode = if self.state.queue.resume_enabled {
             TransferMode::Resume
         } else {
