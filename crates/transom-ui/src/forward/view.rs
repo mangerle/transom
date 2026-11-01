@@ -180,21 +180,8 @@ impl ForwardView {
         row.into_any_element()
     }
 
-    /// 端口转发新增规则表单渲染。
-    fn render_forward_add_form(
-        &self,
-        tab_id: transom_core::TabId,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let kind = self.state.kind;
-        let panel_error = self.state.error.clone();
-        let name_input = self.state.name_input.clone();
-        let bind_host_input = self.state.bind_host_input.clone();
-        let bind_port_input = self.state.bind_port_input.clone();
-        let target_host_input = self.state.target_host_input.clone();
-        let target_port_input = self.state.target_port_input.clone();
-
+    /// 转发类型三选一：本地/远程/动态。
+    fn render_kind_selector(&self, kind: ForwardKindChoice, cx: &mut Context<Self>) -> AnyElement {
         let local_button = if kind == ForwardKindChoice::Local {
             Button::new("forward-mode-local")
                 .primary()
@@ -240,18 +227,37 @@ impl ForwardView {
             cx.notify();
         }));
 
+        h_flex()
+            .gap_2()
+            .child(local_button)
+            .child(remote_button)
+            .child(dynamic_button)
+            .into_any_element()
+    }
+
+    /// 端口转发新增规则表单渲染。
+    fn render_forward_add_form(
+        &self,
+        tab_id: transom_core::TabId,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let kind = self.state.kind;
+        let panel_error = self.state.error.clone();
+        let name_input = self.state.name_input.clone();
+        let bind_host_input = self.state.bind_host_input.clone();
+        let bind_port_input = self.state.bind_port_input.clone();
+        let target_host_input = self.state.target_host_input.clone();
+        let target_port_input = self.state.target_port_input.clone();
+
+        let kind_buttons = self.render_kind_selector(kind, cx);
+
         let mut add_form = v_flex()
             .p_2()
             .gap_2()
             .border_color(p.divider(p.sidebar_border))
             .divider_edge(DividerEdge::Top, p.divider_width)
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(local_button)
-                    .child(remote_button)
-                    .child(dynamic_button),
-            )
+            .child(kind_buttons)
             .child(Input::new(&name_input).w_full())
             .child(
                 h_flex()
