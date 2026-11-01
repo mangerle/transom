@@ -11,37 +11,12 @@
 //! 渲染搬迁完成后再让实体实现 `Render`。
 
 use super::SettingsModalState;
-use gpui_kit::EventEmitter;
-
-/// 设置弹窗向外壳发出的意图。
-///
-/// 页面只改自身状态与 `Global` 设置；需要持久化、应用主题、开关弹窗等跨域动作时
-/// 发事件，外壳订阅后执行。事件自带数据，外壳处理时不得回读弹窗。
-#[derive(Clone)]
-pub(crate) enum SettingsPanelEvent {
-    /// 布局设置变化后落盘（停靠方向、活动栏显隐等）。
-    PersistLayout,
-    /// 保存并关闭弹窗。
-    Save,
-    /// 取消并关闭弹窗（还原外观预览）。
-    Cancel,
-    /// 恢复默认设置。
-    Reset,
-    /// 外观变化即时应用到当前窗口，取消时还原。
-    PreviewAppearance,
-    /// 终端配色随主题变化同步。
-    SyncTerminalPalette,
-    /// 关闭弹窗（不保存）。
-    Close,
-}
 
 /// 设置弹窗实体。
 pub(crate) struct SettingsView {
     /// 弹窗的输入控件与临时状态。
     pub(crate) state: SettingsModalState,
 }
-
-impl EventEmitter<SettingsPanelEvent> for SettingsView {}
 
 impl SettingsView {
     /// 用已建好的状态创建弹窗实体。
