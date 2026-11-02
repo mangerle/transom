@@ -155,22 +155,25 @@ impl AppShell {
         }) else {
             return;
         };
+        // 先借用会话里的规则做比较：未变化时不必每帧克隆整份转发列表。
         let rules = self
             .state
             .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
-            .map(|session| session.forwards.clone())
+            .map(|session| session.forwards.as_slice())
             .unwrap_or_default();
         let unchanged = {
             let current = view.read(cx);
-            current.rules() == rules.as_slice() && current.statuses() == &statuses
+            current.rules() == rules && current.statuses() == &statuses
         };
         if unchanged {
             return;
         }
-        view.update(cx, |view, _| view.set_session_data(rules, statuses));
+        view.update(cx, |view, _| {
+            view.set_session_data(rules.to_vec(), statuses)
+        });
     }
 
     pub(super) fn handle_sftp_request(
