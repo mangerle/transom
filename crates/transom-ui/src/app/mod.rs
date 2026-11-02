@@ -35,6 +35,8 @@ pub(crate) mod diff_viewer;
 pub(crate) mod editor;
 #[path = "../event_handlers.rs"]
 pub(crate) mod event_handlers;
+#[path = "../event_terminal_ready.rs"]
+mod event_terminal_ready;
 #[path = "../events.rs"]
 pub(crate) mod events;
 #[path = "../forward/mod.rs"]
