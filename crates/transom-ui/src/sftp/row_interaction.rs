@@ -235,7 +235,6 @@ impl SftpPanelView {
         if row.is_parent {
             return;
         }
-        let mut name_input = None;
         match row.side {
             SftpSide::Local => {
                 if event.modifiers.shift {
@@ -292,6 +291,18 @@ impl SftpPanelView {
                 }
             }
         }
+        self.apply_single_click_feedback(row, window, cx);
+        cx.notify();
+    }
+
+    /// 单选后的反馈：多选计数提示与远端名称输入回填。
+    fn apply_single_click_feedback(
+        &mut self,
+        row: &SftpRowContext,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut name_input = None;
         let selected_count = match row.side {
             SftpSide::Local => self.state.selected_local_paths().len(),
             SftpSide::Remote(target) => self.state.selected_remote_paths_pane(target).len(),
