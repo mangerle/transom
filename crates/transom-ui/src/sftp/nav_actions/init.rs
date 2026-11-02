@@ -249,41 +249,24 @@ impl AppShell {
         (quick_paths, local_path, initial_remote_path)
     }
 
-    pub(crate) fn build_sftp_panel(
+    /// 构造面板状态：输入控件、订阅与初始路径一次性装入。
+    fn build_sftp_state(
         &mut self,
-        tab_id: TabId,
-        index: usize,
-        open: bool,
-        window: &mut Window,
+        input: SftpStateInput,
         cx: &mut Context<Self>,
-    ) {
-        let (quick_paths, local_path, initial_remote_path) = self.sftp_initial_paths(index);
-        let inputs = SftpPanelInputs::new(window, cx, &initial_remote_path, &local_path);
-        let remote_enter_sub = cx.subscribe_in(
-            &inputs.path_input,
-            window,
-            move |this, _, event: &InputEvent, _window, cx| {
-                if matches!(event, InputEvent::PressEnter { .. }) {
-                    this.sftp_enter_path_pane(tab_id, SftpRemotePaneRef::Main, cx);
-                }
-            },
-        );
-        let local_enter_sub = cx.subscribe_in(
-            &inputs.local_path_input,
-            window,
-            move |this, _, event: &InputEvent, window, cx| {
-                if matches!(event, InputEvent::PressEnter { .. }) {
-                    this.sftp_local_enter_path(tab_id, window, cx);
-                }
-            },
-        );
-        // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
-        let main_connection = self.state.workspace.tabs[index].connection_id;
-        let command_tx = Some(self.state.services.command_tx.clone());
-        let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
-            return;
-        };
-        let state = SftpPanelState {
+    ) -> SftpPanelState {
+        let SftpStateInput {
+            main_connection,
+            command_tx,
+            inputs,
+            open,
+            initial_remote_path,
+            local_path,
+            quick_paths,
+            remote_enter_sub,
+            local_enter_sub,
+        } = input;
+        SftpPanelState {
             main_connection,
             command_tx,
             editors: Some(self.state.editors.clone()),
@@ -331,6 +314,56 @@ impl AppShell {
             column_widths: ColumnWidthMemory::default(),
             restored_width: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
+        }
+    }
+
+    pub(crate) fn build_sftp_panel(
+        &mut self,
+        tab_id: TabId,
+        index: usize,
+        open: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (quick_paths, local_path, initial_remote_path) = self.sftp_initial_paths(index);
+        let inputs = SftpPanelInputs::new(window, cx, &initial_remote_path, &local_path);
+        let remote_enter_sub = cx.subscribe_in(
+            &inputs.path_input,
+            window,
+            move |this, _, event: &InputEvent, _window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    this.sftp_enter_path_pane(tab_id, SftpRemotePaneRef::Main, cx);
+                }
+            },
+        );
+        let local_enter_sub = cx.subscribe_in(
+            &inputs.local_path_input,
+            window,
+            move |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    this.sftp_local_enter_path(tab_id, window, cx);
+                }
+            },
+        );
+        // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
+        let main_connection = self.state.workspace.tabs[index].connection_id;
+        let command_tx = Some(self.state.services.command_tx.clone());
+        let state = self.build_sftp_state(
+            SftpStateInput {
+                main_connection,
+                command_tx,
+                inputs,
+                open,
+                initial_remote_path: initial_remote_path.clone(),
+                local_path,
+                quick_paths,
+                remote_enter_sub,
+                local_enter_sub,
+            },
+            cx,
+        );
+        let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
+            return;
         };
         let view = cx.new(|_| SftpPanelView::new(state, tab_id));
         let subscription = cx.subscribe(
@@ -360,6 +393,19 @@ impl AppShell {
     ) {
         self.toggle_sftp(window, cx);
     }
+}
+
+/// 面板状态构造输入：连接、输入控件、订阅与初始路径。
+struct SftpStateInput {
+    main_connection: Option<transom_core::ConnectionId>,
+    command_tx: Option<flume::Sender<transom_core::AppCommand>>,
+    inputs: SftpPanelInputs,
+    open: bool,
+    initial_remote_path: String,
+    local_path: std::path::PathBuf,
+    quick_paths: LocalQuickPaths,
+    remote_enter_sub: Subscription,
+    local_enter_sub: Subscription,
 }
 
 /// SFTP 面板创建时用到的输入框集合。
