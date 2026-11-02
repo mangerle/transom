@@ -347,3 +347,6 @@ struct QueueHeaderParams {
     queue_expanded: bool,
     failed_count: usize,
 }
+
+#[cfg(test)]
+mod tests;

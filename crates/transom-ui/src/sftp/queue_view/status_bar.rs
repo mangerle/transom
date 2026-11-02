@@ -191,7 +191,7 @@ fn expanded_progress_bar(percent: f32, total_speed_bps: Option<u64>, p: &Palette
 }
 
 /// 进度百分比与状态文案：活动/暂停计数拼在进度后。
-fn progress_display(props: &SftpStatusBarProps) -> (f32, String) {
+pub(super) fn progress_display(props: &SftpStatusBarProps) -> (f32, String) {
     let Some((transferred, total)) = props.progress else {
         return (0.0, String::new());
     };
