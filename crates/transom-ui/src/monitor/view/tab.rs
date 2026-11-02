@@ -9,7 +9,7 @@ impl MonitorView {
     /// 面板只负责画，避免为了取值而克隆整份会话。
     pub(crate) fn render_monitor_tab_content(
         &mut self,
-        params: MonitorTabParams,
+        params: MonitorTabParams<'_>,
         _window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
@@ -32,13 +32,11 @@ impl MonitorView {
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Bottom, p.divider_width)
             .bg(p.background)
-            .child(tab_title_part(&target_title, &stats, p))
+            .child(tab_title_part(&target_title, stats, p))
             .child(self.render_tab_actions(current_interval, tab_id, target_tab_id, cx));
 
-        let oom_banner = stats
-            .as_ref()
-            .and_then(|stats| crate::monitor::components::oom_banner(stats, p));
-        let content = self.render_tab_body(&stats, oom_banner, cx, p);
+        let oom_banner = stats.and_then(|stats| crate::monitor::components::oom_banner(stats, p));
+        let content = self.render_tab_body(stats, oom_banner, cx, p);
 
         v_flex()
             .size_full()
@@ -61,13 +59,13 @@ impl MonitorView {
     /// 全屏看板主体：有样本时画双列指标 + 进程卡；无样本时显示等待态。
     fn render_tab_body(
         &mut self,
-        stats: &Option<transom_core::SystemStats>,
+        stats: Option<&transom_core::SystemStats>,
         oom_banner: Option<AnyElement>,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
         // 主体内容
-        let content = if let Some(stats) = &stats {
+        let content = if let Some(stats) = stats {
             let left_col = v_flex()
                 .flex_1()
                 .min_w_0()
@@ -117,11 +115,12 @@ impl MonitorView {
 ///
 /// 目标标签的标题与统计快照属于工作区，由外壳读好传入；收成结构体是因为
 /// 平铺参数已超过五个，调用点容易把两个 `TabId` 传反。
-pub(crate) struct MonitorTabParams {
+pub(crate) struct MonitorTabParams<'a> {
     pub(crate) tab_id: TabId,
     pub(crate) target_tab_id: TabId,
     pub(crate) target_title: String,
-    pub(crate) stats: Option<transom_core::SystemStats>,
+    /// 目标标签的统计快照只读借用：看板每帧渲染，克隆整份统计没有必要。
+    pub(crate) stats: Option<&'a transom_core::SystemStats>,
 }
 
 impl MonitorView {
@@ -235,7 +234,7 @@ impl MonitorView {
 /// 全屏看板标题：主机名与核心数/内存/运行时间概要。
 fn tab_title_part(
     target_title: &str,
-    stats: &Option<transom_core::SystemStats>,
+    stats: Option<&transom_core::SystemStats>,
     p: &Palette,
 ) -> AnyElement {
     // 顶栏左侧：图标与标题、主机概要
@@ -255,7 +254,7 @@ fn tab_title_part(
             ),
         );
 
-    if let Some(stats_ref) = &stats {
+    if let Some(stats_ref) = stats {
         let cores = stats_ref.cpu_cores.len();
         let mem_gb = stats_ref.mem_total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
         let days = stats_ref.uptime_secs / 86400;

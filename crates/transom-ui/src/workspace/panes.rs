@@ -241,7 +241,7 @@ impl AppShell {
                 .state
                 .workspace
                 .tab(target_id)
-                .and_then(|tab| tab.system_stats().cloned());
+                .and_then(|tab| tab.system_stats());
             let params = crate::monitor::MonitorTabParams {
                 tab_id,
                 target_tab_id: target_id,
