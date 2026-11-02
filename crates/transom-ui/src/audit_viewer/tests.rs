@@ -26,3 +26,12 @@ fn read_log_content_truncates_at_limit() {
     assert_eq!(content, "abc");
     assert!(truncated);
 }
+
+/// 文件不存在时返回可展示的错误文本，而不是空内容或崩溃。
+#[test]
+fn read_log_content_reports_missing_file() {
+    let path = std::path::Path::new("/definitely/not/a/transom-audit.log");
+    let (content, truncated) = read_log_content(path, 16);
+    assert!(!truncated);
+    assert!(!content.is_empty());
+}
