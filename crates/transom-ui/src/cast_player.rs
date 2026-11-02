@@ -328,34 +328,36 @@ impl CastPlayerView {
             .gap_2()
             .items_center()
             .child(
-                Button::new("player-play-toggle")
-                    .ghost()
-                    .xsmall()
-                    .icon(play_icon)
-                    .tooltip(play_tooltip)
+                crate::widgets::IconButton::new("player-play-toggle", play_icon, play_tooltip)
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle_play(cx);
                     })),
             )
             .child(
-                Button::new("player-backward-5s")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RotateCcw)
-                    .tooltip(rust_i18n::t!("recorder.backward_5s").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.step_backward(5.0, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    "player-backward-5s",
+                    IconName::RotateCcw,
+                    rust_i18n::t!("recorder.backward_5s").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.step_backward(5.0, cx);
+                })),
             )
             .child(
-                Button::new("player-forward-5s")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RotateCw)
-                    .tooltip(rust_i18n::t!("recorder.forward_5s").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.step_forward(5.0, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    "player-forward-5s",
+                    IconName::RotateCw,
+                    rust_i18n::t!("recorder.forward_5s").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.step_forward(5.0, cx);
+                })),
             )
             .into_any_element()
     }
@@ -400,14 +402,16 @@ impl CastPlayerView {
                     })),
             )
             .child(
-                Button::new("player-restart-btn")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RefreshCw)
-                    .tooltip(rust_i18n::t!("recorder.restart").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.restart(cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    "player-restart-btn",
+                    IconName::RefreshCw,
+                    rust_i18n::t!("recorder.restart").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.restart(cx);
+                })),
             )
             .child(
                 div()
