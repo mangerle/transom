@@ -122,10 +122,12 @@ impl AppShell {
             .workspace
             .active_tab
             .and_then(|tab_id| self.state.workspace.tab(tab_id))
-            .and_then(|tab| tab.system_stats().cloned());
-        if self.state.monitor.read(cx).stats() == stats.as_ref() {
+            .and_then(|tab| tab.system_stats());
+        // 先借用比较：快照未变化时避免每帧克隆整份统计。
+        if self.state.monitor.read(cx).stats() == stats {
             return;
         }
+        let stats = stats.cloned();
         self.state
             .monitor
             .update(cx, |view, _| view.set_stats(stats));
