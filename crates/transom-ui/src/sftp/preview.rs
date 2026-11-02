@@ -411,4 +411,16 @@ mod tests {
             _ => panic!("大文本应生成带截断标记的预览"),
         }
     }
+
+    /// CRLF 去掉回车；超长行截断并追加省略号，控制字符转空格。
+    #[test]
+    fn text_preview_lines_normalizes_and_truncates() {
+        let long = "x".repeat(super::PREVIEW_LINE_MAX_CHARS + 8);
+        let bytes = format!("a\r\n\u{7}b\r\n{long}").into_bytes();
+        let (lines, more) = super::text::text_preview_lines(&bytes, false);
+        assert_eq!(lines[0], "a");
+        assert_eq!(lines[1], " b");
+        assert!(lines[2].ends_with('…'));
+        assert!(!more);
+    }
 }
