@@ -156,31 +156,8 @@ impl AppShell {
             cx.notify();
             return;
         }
-        let name = sftp_text_input(window, cx, "", rust_i18n::t!("forward.name").as_ref());
-        let bind_host = sftp_text_input(
-            window,
-            cx,
-            "127.0.0.1",
-            rust_i18n::t!("forward.bind_host").as_ref(),
-        );
-        let bind_port = sftp_text_input(
-            window,
-            cx,
-            "8080",
-            rust_i18n::t!("forward.bind_port").as_ref(),
-        );
-        let target_host = sftp_text_input(
-            window,
-            cx,
-            "127.0.0.1",
-            rust_i18n::t!("forward.target_host").as_ref(),
-        );
-        let target_port = sftp_text_input(
-            window,
-            cx,
-            "80",
-            rust_i18n::t!("forward.target_port").as_ref(),
-        );
+        let (name, bind_host, bind_port, target_host, target_port) =
+            forward_form_inputs(window, cx);
         let view = cx.new(|_| {
             super::ForwardView::new(
                 ForwardPanelState {
@@ -446,4 +423,46 @@ impl AppShell {
     ) {
         self.toggle_forward_panel(window, cx);
     }
+}
+
+/// 转发表单的五个文本输入：名称、绑定地址/端口与目标地址/端口。
+/// 转发表单五个输入框的类型别名。
+type ForwardFormInputs = (
+    gpui_kit::Entity<gpui_kit::component::input::InputState>,
+    gpui_kit::Entity<gpui_kit::component::input::InputState>,
+    gpui_kit::Entity<gpui_kit::component::input::InputState>,
+    gpui_kit::Entity<gpui_kit::component::input::InputState>,
+    gpui_kit::Entity<gpui_kit::component::input::InputState>,
+);
+
+fn forward_form_inputs(
+    window: &mut Window,
+    cx: &mut Context<crate::app::AppShell>,
+) -> ForwardFormInputs {
+    let name = sftp_text_input(window, cx, "", rust_i18n::t!("forward.name").as_ref());
+    let bind_host = sftp_text_input(
+        window,
+        cx,
+        "127.0.0.1",
+        rust_i18n::t!("forward.bind_host").as_ref(),
+    );
+    let bind_port = sftp_text_input(
+        window,
+        cx,
+        "8080",
+        rust_i18n::t!("forward.bind_port").as_ref(),
+    );
+    let target_host = sftp_text_input(
+        window,
+        cx,
+        "127.0.0.1",
+        rust_i18n::t!("forward.target_host").as_ref(),
+    );
+    let target_port = sftp_text_input(
+        window,
+        cx,
+        "80",
+        rust_i18n::t!("forward.target_port").as_ref(),
+    );
+    (name, bind_host, bind_port, target_host, target_port)
 }
