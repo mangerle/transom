@@ -435,4 +435,19 @@ mod tests {
             _ => panic!("不存在的文件应生成错误预览"),
         }
     }
+
+    /// 扩展名判定不区分大小写；未知扩展名不产生预览入口。
+    #[test]
+    fn preview_kind_matches_extensions_case_insensitively() {
+        assert_eq!(
+            super::preview_kind("shot.PNG"),
+            Some(super::PreviewKind::Image)
+        );
+        assert_eq!(
+            super::preview_kind("notes.md"),
+            Some(super::PreviewKind::Text)
+        );
+        assert_eq!(super::preview_kind("archive.bin"), None);
+        assert_eq!(super::preview_kind("no-extension"), None);
+    }
 }
