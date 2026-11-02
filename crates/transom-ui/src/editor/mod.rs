@@ -20,6 +20,7 @@ mod list;
 mod manager;
 mod navigate;
 mod open;
+mod open_support;
 mod ops;
 mod panel;
 mod status;
