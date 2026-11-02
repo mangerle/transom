@@ -1,5 +1,6 @@
 //! 状态栏数值格式化单元测试。
 
+use super::metrics::StatusBarMetricsView;
 use super::{format_compact_size, format_rate};
 
 #[test]
@@ -31,4 +32,13 @@ fn formats_sizes_with_one_decimal_below_hundred() {
     // TB 级磁盘自动进位，不会显示成 `1863G`。
     assert_eq!(format_compact_size(1536 * GIB), "1.5T");
     assert_eq!(format_compact_size(TIB), "1.0T");
+}
+
+/// 空快照与空状态一致；状态文案或 SSH 标记变化时立即判定为不一致。
+#[test]
+fn metrics_snapshot_matches_status_and_mode() {
+    let view = StatusBarMetricsView::new();
+    assert!(view.matches(None, None, false, None));
+    assert!(!view.matches(None, None, false, Some("正在连接")));
+    assert!(!view.matches(None, None, true, None));
 }
