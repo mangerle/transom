@@ -13,52 +13,56 @@ use transom_core::TransferDirection;
 
 impl SftpPanelView {
     /// 触发剪贴板复制（Ctrl+C 或右键复制）。
-    pub(crate) fn copy_selection(&mut self, cx: &mut Context<Self>) {
-        if self.state.active_pane == SftpActivePane::Local {
-            let entries: Vec<SftpClipboardEntry> = if !self.state.local.selection.is_empty() {
-                self.state
-                    .local
-                    .selection
-                    .iter()
-                    .map(|path| SftpClipboardEntry {
-                        is_dir: self
-                            .state
-                            .local
-                            .entries
-                            .iter()
-                            .find(|entry| &entry.path == path)
-                            .is_some_and(|entry| entry.is_dir),
-                        path: path.to_string_lossy().to_string(),
-                    })
-                    .collect()
-            } else if let Some(selected) = &self.state.local.selected {
-                vec![SftpClipboardEntry {
+    /// 复制本地选中项到剪贴板；空选择不覆盖现有剪贴板。
+    fn copy_local_selection(&mut self, cx: &mut Context<Self>) {
+        let entries: Vec<SftpClipboardEntry> = if !self.state.local.selection.is_empty() {
+            self.state
+                .local
+                .selection
+                .iter()
+                .map(|path| SftpClipboardEntry {
                     is_dir: self
                         .state
                         .local
                         .entries
                         .iter()
-                        .find(|entry| &entry.path == selected)
+                        .find(|entry| &entry.path == path)
                         .is_some_and(|entry| entry.is_dir),
-                    path: selected.to_string_lossy().to_string(),
-                }]
-            } else {
-                Vec::new()
-            };
-            if entries.is_empty() {
-                return;
-            }
-            let count = entries.len();
-            self.state.clipboard = Some(SftpClipboardData {
-                source: SftpClipboardSource::Local,
-                entries,
-            });
-            self.state
-                .set_status(rust_i18n::t!("sftp.sidebar.copied_local", count = count).to_string());
-            cx.notify();
+                    path: path.to_string_lossy().to_string(),
+                })
+                .collect()
+        } else if let Some(selected) = &self.state.local.selected {
+            vec![SftpClipboardEntry {
+                is_dir: self
+                    .state
+                    .local
+                    .entries
+                    .iter()
+                    .find(|entry| &entry.path == selected)
+                    .is_some_and(|entry| entry.is_dir),
+                path: selected.to_string_lossy().to_string(),
+            }]
+        } else {
+            Vec::new()
+        };
+        if entries.is_empty() {
             return;
         }
+        let count = entries.len();
+        self.state.clipboard = Some(SftpClipboardData {
+            source: SftpClipboardSource::Local,
+            entries,
+        });
+        self.state
+            .set_status(rust_i18n::t!("sftp.sidebar.copied_local", count = count).to_string());
+        cx.notify();
+    }
 
+    pub(crate) fn copy_selection(&mut self, cx: &mut Context<Self>) {
+        if self.state.active_pane == SftpActivePane::Local {
+            self.copy_local_selection(cx);
+            return;
+        }
         let target = match self.state.active_pane {
             SftpActivePane::Remote => SftpRemotePaneRef::Main,
             SftpActivePane::SideRemote(connection_id) => SftpRemotePaneRef::Side(connection_id),
