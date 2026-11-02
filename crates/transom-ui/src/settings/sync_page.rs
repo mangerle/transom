@@ -156,43 +156,7 @@ impl SettingsView {
                     .child(sync_form_row("sync.directory", form.directory.clone(), p));
             }
             "git" => {
-                let stepper = Self::setting_stepper(&form.git_interval, px(110.0));
-                content = content
-                    .child(sync_form_row("sync.git_remote", form.git_remote.clone(), p))
-                    .child(crate::widgets::setting_frame(
-                        h_flex()
-                            .w_full()
-                            .gap_4()
-                            .items_center()
-                            .child(div().flex_1().child(crate::widgets::form_field(
-                                rust_i18n::t!("sync.git_branch").to_string(),
-                                form.git_branch.clone(),
-                                p,
-                            )))
-                            .child(
-                                h_flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(p.muted_foreground)
-                                            .child(rust_i18n::t!("sync.git_interval").to_string()),
-                                    )
-                                    .child(stepper),
-                            )
-                            .into_any_element(),
-                        p,
-                    ))
-                    .child(crate::widgets::setting_field_row(
-                        crate::widgets::secret_field(
-                            rust_i18n::t!("sync.git_token").to_string(),
-                            form.git_token.clone(),
-                            p,
-                        ),
-                        Some(rust_i18n::t!("sync.git_hint").to_string()),
-                        p,
-                    ));
+                content = content.child(git_sync_fields(form, p));
             }
             _ => {}
         }
@@ -300,4 +264,47 @@ impl SettingsView {
             ))
             .into_any_element()
     }
+}
+
+/// Git 同步字段：远端、分支、间隔与令牌。
+fn git_sync_fields(form: &crate::cloud_sync::SyncFormInputs, p: &Palette) -> AnyElement {
+    let stepper = SettingsView::setting_stepper(&form.git_interval, px(110.0));
+    v_flex()
+        .gap_2()
+        .child(sync_form_row("sync.git_remote", form.git_remote.clone(), p))
+        .child(crate::widgets::setting_frame(
+            h_flex()
+                .w_full()
+                .gap_4()
+                .items_center()
+                .child(div().flex_1().child(crate::widgets::form_field(
+                    rust_i18n::t!("sync.git_branch").to_string(),
+                    form.git_branch.clone(),
+                    p,
+                )))
+                .child(
+                    h_flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("sync.git_interval").to_string()),
+                        )
+                        .child(stepper),
+                )
+                .into_any_element(),
+            p,
+        ))
+        .child(crate::widgets::setting_field_row(
+            crate::widgets::secret_field(
+                rust_i18n::t!("sync.git_token").to_string(),
+                form.git_token.clone(),
+                p,
+            ),
+            Some(rust_i18n::t!("sync.git_hint").to_string()),
+            p,
+        ))
+        .into_any_element()
 }
