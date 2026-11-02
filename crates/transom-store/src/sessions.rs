@@ -24,6 +24,8 @@ struct SessionFileRef<'a> {
     identities: &'a [Identity],
     /// 容器引擎连接：与终端会话共用同一份目录快照，随备份/同步一起流转。
     engines: &'a [ContainerEngineProfile],
+    /// 引擎连接的分组树；与 `engines` 同文件保存，避免重启后连接散落到根层级。
+    engine_folders: &'a [transom_core::EngineFolder],
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,6 +126,7 @@ impl SessionStore for JsonSessionStore {
                 sessions: &catalog.sessions,
                 identities: &catalog.identities,
                 engines: &catalog.engines,
+                engine_folders: &catalog.engine_folders,
             },
         )
     }
@@ -181,6 +184,34 @@ mod tests {
             Some("生产环境 / 数据库")
         );
         assert_eq!(loaded.sessions[1].folder_id, None);
+    }
+
+    #[test]
+    fn engine_profiles_and_folders_round_trip() {
+        use transom_core::{ContainerEngineKind, ContainerEngineRef, EngineFolder};
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("sessions.json");
+        let store = JsonSessionStore::new(&path);
+
+        let mut catalog = SessionCatalog::default();
+        let folder = EngineFolder::new("本机引擎", None);
+        let folder_id = folder.id;
+        catalog.engine_folders.push(folder);
+        let mut profile = ContainerEngineProfile::new(
+            "本机 Docker",
+            ContainerEngineRef::auto(ContainerEngineKind::Docker),
+        );
+        profile.folder_id = Some(folder_id);
+        catalog.engines.push(profile.clone());
+        store.save(&catalog).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.engines, vec![profile]);
+        assert_eq!(loaded.engine_folders.len(), 1);
+        assert_eq!(loaded.engine_folders[0].id, folder_id);
+        assert_eq!(loaded.engine_folders[0].name, "本机引擎");
+        assert_eq!(loaded.engines[0].folder_id, Some(folder_id));
     }
 
     #[test]
