@@ -31,6 +31,23 @@ impl AppShell {
     }
 }
 
+/// 队列与状态栏的渲染数据快照。
+struct SftpQueueStatusData {
+    queue_height: f32,
+    remote_error: Option<String>,
+    status: Option<String>,
+    local_error: Option<String>,
+    queue: Vec<crate::sftp::TransferTask>,
+    total_speed_bps: Option<u64>,
+    resume_enabled: bool,
+    verify_after_transfer: bool,
+    max_concurrent_transfers: usize,
+    queue_expanded: bool,
+    paused_count: usize,
+    active_count: usize,
+    display_progress: Option<(u64, Option<u64>)>,
+}
+
 impl SftpPanelView {
     /// 构建面板内容：状态、列、队列与状态栏都在实体上下文里完成。
     ///
@@ -76,14 +93,12 @@ impl SftpPanelView {
         )
     }
 
-    /// 队列与底部状态栏：进度回退、暂停汇总、速度与传输错误。
-    fn render_queue_and_status(
+    /// 队列与状态栏所需数据：设置、任务快照、活动/暂停计数与显示进度。
+    fn queue_status_data(
         &self,
         state: &super::state::SftpPanelState,
-        tab_id: transom_core::TabId,
-        p: &Palette,
         cx: &mut Context<Self>,
-    ) -> (AnyElement, Option<AnyElement>, bool) {
+    ) -> SftpQueueStatusData {
         let settings = app_settings(cx).sftp.clone();
         let queue_height = state.queue.height;
         let remote_error = state.queue.error.clone();
@@ -142,15 +157,41 @@ impl SftpPanelView {
             progress
         };
 
+        SftpQueueStatusData {
+            queue_height,
+            remote_error,
+            status,
+            local_error,
+            queue,
+            total_speed_bps,
+            resume_enabled,
+            verify_after_transfer,
+            max_concurrent_transfers,
+            queue_expanded,
+            paused_count,
+            active_count,
+            display_progress,
+        }
+    }
+
+    /// 队列与底部状态栏：进度回退、暂停汇总、速度与传输错误。
+    fn render_queue_and_status(
+        &self,
+        state: &super::state::SftpPanelState,
+        tab_id: transom_core::TabId,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> (AnyElement, Option<AnyElement>, bool) {
+        let data = self.queue_status_data(state, cx);
         let queue_pane = self.render_sftp_queue_pane(
             SftpQueuePaneProps {
                 tab_id,
-                queue: &queue,
-                resume_enabled,
-                verify_after_transfer,
-                max_concurrent_transfers,
-                queue_expanded,
-                queue_height,
+                queue: &data.queue,
+                resume_enabled: data.resume_enabled,
+                verify_after_transfer: data.verify_after_transfer,
+                max_concurrent_transfers: data.max_concurrent_transfers,
+                queue_expanded: data.queue_expanded,
+                queue_height: data.queue_height,
             },
             p,
             cx,
@@ -158,20 +199,20 @@ impl SftpPanelView {
         let status_bar_element = self.render_sftp_status_bar(
             SftpStatusBarProps {
                 tab_id,
-                progress: display_progress,
-                active_count,
-                paused_count,
-                queue_expanded,
-                remote_error,
-                local_error,
-                status,
-                total_speed_bps,
+                progress: data.display_progress,
+                active_count: data.active_count,
+                paused_count: data.paused_count,
+                queue_expanded: data.queue_expanded,
+                remote_error: data.remote_error,
+                local_error: data.local_error,
+                status: data.status,
+                total_speed_bps: data.total_speed_bps,
             },
             p,
             cx,
         );
 
-        (queue_pane, status_bar_element, queue_expanded)
+        (queue_pane, status_bar_element, data.queue_expanded)
     }
 
     /// 面板主体装配：本地列、远端列、顶栏、队列与状态栏。
