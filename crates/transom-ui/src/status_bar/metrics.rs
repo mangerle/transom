@@ -59,16 +59,19 @@ pub(crate) enum StatusMetricsEvent {
 pub(crate) struct StatusBarMetricsView {
     snapshot: StatusMetricsSnapshot,
     fallback: String,
+    /// 状态文案为空时使用的版本兜底，只构造一次。
+    version_fallback: String,
 }
 
 impl EventEmitter<StatusMetricsEvent> for StatusBarMetricsView {}
 
 impl StatusBarMetricsView {
     pub(crate) fn new() -> Self {
+        let version_fallback = format!("{} v{}", crate::APP_NAME, crate::APP_VERSION);
         Self {
             snapshot: StatusMetricsSnapshot::default(),
-            // 版本兜底只构造一次；状态文案为空时保持当前值，避免每帧格式化。
-            fallback: format!("{} v{}", crate::APP_NAME, crate::APP_VERSION),
+            fallback: version_fallback.clone(),
+            version_fallback,
         }
     }
 
@@ -79,13 +82,11 @@ impl StatusBarMetricsView {
         status: Option<&str>,
         cx: &mut Context<Self>,
     ) -> bool {
-        let fallback_changed = status.is_some_and(|status| self.fallback != status);
-        let changed = self.snapshot != snapshot || fallback_changed;
+        let expected = status.unwrap_or(&self.version_fallback);
+        let changed = self.snapshot != snapshot || self.fallback != expected;
         if changed {
             self.snapshot = snapshot;
-            if let Some(status) = status {
-                self.fallback = status.to_string();
-            }
+            self.fallback = expected.to_string();
             // 只有快照或状态文案真的变化才重绘指标簇；帧循环每帧都会注入
             // 同一快照，无条件 notify 会让六个徽标每帧重建一次。
             cx.notify();
@@ -104,9 +105,8 @@ impl StatusBarMetricsView {
         if self.snapshot.traffic.as_ref() != traffic || self.snapshot.is_ssh != is_ssh {
             return false;
         }
-        if let Some(status) = status
-            && self.fallback != status
-        {
+        let expected = status.unwrap_or(&self.version_fallback);
+        if self.fallback != expected {
             return false;
         }
         match (self.snapshot.stats.as_ref(), stats) {
