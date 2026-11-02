@@ -46,3 +46,18 @@ impl Read for ChannelReader {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::format_duration;
+
+    /// 秒数格式化为 `mm:ss`，超过一小时补出小时段；负数按 0 处理。
+    #[test]
+    fn formats_durations_across_boundaries() {
+        assert_eq!(format_duration(0.0), "00:00");
+        assert_eq!(format_duration(59.6), "01:00");
+        assert_eq!(format_duration(61.0), "01:01");
+        assert_eq!(format_duration(3600.0), "01:00:00");
+        assert_eq!(format_duration(-5.0), "00:00");
+    }
+}
