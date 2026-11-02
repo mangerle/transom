@@ -82,8 +82,10 @@ impl StatusBarMetricsView {
         if changed {
             self.snapshot = snapshot;
             self.fallback = fallback;
+            // 只有快照真的变化才重绘指标簇；帧循环每帧都会注入同一快照，
+            // 无条件 notify 会让六个徽标每帧重建一次。
+            cx.notify();
         }
-        cx.notify();
         changed
     }
 
