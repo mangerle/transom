@@ -52,6 +52,8 @@ fn finds_session_logs_by_prefix_and_extension() {
     }
     let filtered = find_session_audit_logs(dir.path(), Some("alpha"), Some("host"), false);
     assert_eq!(filtered.len(), 2);
+    // 文件名倒序：最新的 alpha-host-2 排在前面。
+    assert_eq!(filtered[0].file_name, "alpha-host-2.log");
     let all = find_session_audit_logs(dir.path(), None, None, true);
     assert_eq!(all.len(), 3);
 }
