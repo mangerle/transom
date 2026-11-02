@@ -42,3 +42,6 @@ pub(crate) const STATS_HISTORY_LIMIT: usize = 40;
 pub(crate) const LOG_TAIL_DEFAULT: usize = 500;
 /// 日志尾部行数档位：与 Portainer/lazydocker 的取数习惯一致。
 pub(crate) const LOG_TAIL_CHOICES: [usize; 4] = [100, LOG_TAIL_DEFAULT, 5000, 0];
+
+#[cfg(test)]
+mod tests;

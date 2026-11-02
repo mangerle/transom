@@ -237,6 +237,16 @@ enum ContainerCommand {
 
 ## 9. UI 组织
 
+实现归属遵循重构后的界面架构：容器模块通过 `#[path]` 挂在 `app` 之下，顶层状态
+（侧栏开关、表单与请求登记）在 `AppState.containers`，单个工作区状态随
+`TabContent::Containers` 与标签同生共死；不依赖 GPUI 上下文的查询与变更
+（`container_workspace`、`container_workspace_mut`、`container_profile_states`）
+写在 `impl AppState`，渲染、事件路由与需要窗口的动作留在 `AppShell`。容器 UI 按
+事件（`container/events`）、动作（`actions`/`logs_actions`/`stats_actions`/`rename`/
+`compose`/`terminal`/`files_actions`/`engines`/`lifecycle`）、视图（`detail`/`list`/
+`sidebar`/`stats`/`form`/`view`）与状态（`types`）拆分，父模块只负责装配与重导出；
+四个容器弹窗统一进 `dialog_host` 的模态栈，取消/提交/脏拦截语义与其他弹窗一致。
+
 - 活动栏新增「容器」，侧栏在该模式下显示引擎连接列表、新建按钮与「发现本机
   引擎」入口；删除连接是二次确认（第一次点变「再点一次确认删除」，第二次才真删并
   关掉用它打开的标签）；工作区头部的操作回执与错误提示可点 X 关闭；连接行首用状态点表示该连接的工作区是否连通（连通/连接中/失败），
@@ -281,8 +291,9 @@ enum ContainerCommand {
   `reveal_container` 切到容器分类并在新列表到达时按名字选中，避免用户回到列表再搜；
 - 分类切换时排序键自动回落到该分类可用档位，详情页签收回不可用项，选中项与缓存的
   详情一起清空，不给「按大小排数据卷」这类无效组合留入口；
-- 两个容器模态（引擎连接、运行容器）支持点遮罩关闭，对话框本体 `occlude` 挡住
-  命中测试，点在里面不会误关；Esc 依次关「运行容器」→「连接表单」→「全屏」，
+- 四个容器模态（引擎连接、引擎分组、运行容器、拉取镜像/新建卷网络）支持点遮罩
+  关闭，对话框本体 `occlude` 挡住命中测试，点在里面不会误关；Esc 依次关「运行
+  容器」→「连接表单」→「全屏」，
   但全屏视图正处于终端页签时 Esc 不放行给界面，仍然交给容器内的程序（vim 等把
   Esc 当正常输入）；按键回调挂在浮层自身的 Overlay 上下文里，不做全局绑定，
   避免没有浮层时也吃掉这一次按键；
