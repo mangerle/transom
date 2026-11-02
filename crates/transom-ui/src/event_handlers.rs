@@ -23,30 +23,25 @@ struct TerminalReadyFinish {
     focus_handle: gpui_kit::FocusHandle,
 }
 
+/// 终端就绪时一次性取好的启动参数。
+struct TerminalReadySpawnSettings {
+    profile: transom_core::TerminalProfile,
+    interaction: transom_core::TerminalInteraction,
+    key_filter: KeyFilter,
+    audit_path: Option<std::path::PathBuf>,
+    shell_integration_enabled: bool,
+}
+
 impl AppShell {
     /// 连接建立：构造终端视图、挂接订阅与外观覆盖，并处理焦点与启动命令。
     ///
     /// 返回 `false` 表示标签或连接已过期（迟到的完成事件），不触发重绘。
-    pub(crate) fn on_terminal_ready(
-        &mut self,
-        event: TerminalAppEvent,
-        window: &mut Window,
+    /// 终端就绪时的档位快照：配置档、交互、键过滤、审计路径与集成开关。
+    fn terminal_ready_spawn_settings(
+        &self,
+        index: usize,
         cx: &mut Context<Self>,
-    ) -> bool {
-        let TerminalAppEvent::TerminalReady {
-            tab_id,
-            connection_id,
-            io,
-        } = event
-        else {
-            return true;
-        };
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
-            return false;
-        };
-        if self.state.workspace.tabs[index].connection_id != Some(connection_id) {
-            return false;
-        }
+    ) -> TerminalReadySpawnSettings {
         let session_id = self.state.workspace.tabs[index].session_id;
         let mut profile = self
             .state
@@ -79,16 +74,47 @@ impl AppShell {
         );
         let shell_integration_enabled =
             app_settings(cx).block_view.shell_integration && !exec_local;
+        TerminalReadySpawnSettings {
+            profile,
+            interaction,
+            key_filter,
+            audit_path,
+            shell_integration_enabled,
+        }
+    }
+
+    pub(crate) fn on_terminal_ready(
+        &mut self,
+        event: TerminalAppEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let TerminalAppEvent::TerminalReady {
+            tab_id,
+            connection_id,
+            io,
+        } = event
+        else {
+            return true;
+        };
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+            return false;
+        };
+        if self.state.workspace.tabs[index].connection_id != Some(connection_id) {
+            return false;
+        }
+        let session_id = self.state.workspace.tabs[index].session_id;
+        let spawn_settings = self.terminal_ready_spawn_settings(index, cx);
         let terminal = self.spawn_terminal_view(
             window,
             cx,
             TerminalSpawn {
                 io,
-                profile,
-                interaction,
-                key_filter,
-                audit_path,
-                shell_integration_enabled,
+                profile: spawn_settings.profile,
+                interaction: spawn_settings.interaction,
+                key_filter: spawn_settings.key_filter,
+                audit_path: spawn_settings.audit_path,
+                shell_integration_enabled: spawn_settings.shell_integration_enabled,
                 session_id,
             },
         );
