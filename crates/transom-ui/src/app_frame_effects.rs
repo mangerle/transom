@@ -25,11 +25,49 @@ impl AppShell {
             .is_some_and(|panel| panel.local.only);
         let current_session = self.state.workspace.tab(tab_id).map(|tab| tab.session.id);
 
+        // 先只比较连接标识：大多数帧候选不变，此时不必克隆显示名与 cwd。
         let mut seen = std::collections::HashSet::new();
         if !is_local_only && let Some(session_id) = current_session {
             seen.insert(session_id);
         }
-        let mut candidates = Vec::new();
+        let mut candidate_ids = Vec::new();
+        for tab in &self.state.workspace.tabs {
+            if tab.id == tab_id {
+                continue;
+            }
+            let Some(connection_id) = tab.connection_id else {
+                continue;
+            };
+            if Some(connection_id) == current_conn {
+                continue;
+            }
+            if matches!(&tab.session.connection, Connection::Local(_)) {
+                continue;
+            }
+            if !seen.insert(tab.session.id) {
+                continue;
+            }
+            candidate_ids.push(connection_id);
+        }
+        let unchanged = {
+            let view = view.read(cx);
+            let current = view.mount_candidates();
+            !candidate_ids.is_empty()
+                && current.len() == candidate_ids.len()
+                && current
+                    .iter()
+                    .zip(&candidate_ids)
+                    .all(|(old, id)| old.connection_id == *id)
+        };
+        if unchanged {
+            return;
+        }
+
+        let mut seen = std::collections::HashSet::new();
+        if !is_local_only && let Some(session_id) = current_session {
+            seen.insert(session_id);
+        }
+        let mut candidates = Vec::with_capacity(candidate_ids.len());
         for tab in &self.state.workspace.tabs {
             if tab.id == tab_id {
                 continue;
@@ -52,23 +90,6 @@ impl AppShell {
                 view: tab.sftp_view(),
                 cwd: tab.cwd.clone(),
             });
-        }
-        let unchanged = {
-            let view = view.read(cx);
-            view.mount_candidates().len() == candidates.len()
-                && view
-                    .mount_candidates()
-                    .iter()
-                    .zip(&candidates)
-                    .all(|(old, new)| {
-                        old.connection_id == new.connection_id
-                            && old.display_name == new.display_name
-                            && old.cwd == new.cwd
-                    })
-                && !candidates.is_empty()
-        };
-        if unchanged {
-            return;
         }
         view.update(cx, |view, _| view.set_mount_candidates(candidates));
     }
