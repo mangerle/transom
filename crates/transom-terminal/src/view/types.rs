@@ -124,6 +124,8 @@ pub(crate) struct TerminalRenderState {
     /// 尺寸变化先落在这里，等它稳定 `RESIZE_DEBOUNCE` 之后才真正下发，
     /// 免得拖拽与面板动画产生的中间尺寸逐个把远端输出的换行标记写坏。
     pub(crate) pending_resize: parking_lot::Mutex<Option<PendingResize>>,
+    /// 首帧尺寸下发后是否还需要向 Shell 发送一次清屏（容器控制台用）。
+    pub(crate) clear_on_first_resize: std::sync::atomic::AtomicBool,
 }
 
 impl TerminalRenderState {
@@ -142,6 +144,7 @@ impl TerminalRenderState {
             silent_echo: parking_lot::Mutex::new(SilentEcho::default()),
             canvas_hitbox: parking_lot::Mutex::new(None),
             pending_resize: parking_lot::Mutex::new(None),
+            clear_on_first_resize: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }

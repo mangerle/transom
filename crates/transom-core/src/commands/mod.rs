@@ -7,12 +7,12 @@ mod domain_commands;
 mod domain_events;
 
 pub use domain_commands::{
-    ConnectParams, ForwardCommand, HostCommand, SftpCommand, SyncCommand, TerminalCommand,
-    ZmodemCommand,
+    ConnectParams, ContainerCommand, ForwardCommand, HostCommand, SftpCommand, SyncCommand,
+    TerminalCommand, ZmodemCommand,
 };
 pub use domain_events::{
-    DeepLinkRequest, ForwardAppEvent, HostAppEvent, SftpAppEvent, SyncAppEvent, TerminalAppEvent,
-    ZmodemAppEvent,
+    ContainerAppEvent, DeepLinkRequest, ForwardAppEvent, HostAppEvent, SftpAppEvent, SyncAppEvent,
+    TerminalAppEvent, ZmodemAppEvent,
 };
 
 /// 应用顶层命令：按业务领域划分为子枚举。
@@ -23,6 +23,7 @@ pub enum AppCommand {
     Host(HostCommand),
     Sync(SyncCommand),
     Zmodem(ZmodemCommand),
+    Container(ContainerCommand),
 }
 
 impl From<TerminalCommand> for AppCommand {
@@ -61,6 +62,12 @@ impl From<ZmodemCommand> for AppCommand {
     }
 }
 
+impl From<ContainerCommand> for AppCommand {
+    fn from(cmd: ContainerCommand) -> Self {
+        Self::Container(cmd)
+    }
+}
+
 /// 应用顶层事件：按业务领域划分为子枚举。
 pub enum AppEvent {
     Terminal(TerminalAppEvent),
@@ -69,6 +76,7 @@ pub enum AppEvent {
     Host(HostAppEvent),
     Sync(SyncAppEvent),
     Zmodem(ZmodemAppEvent),
+    Container(ContainerAppEvent),
     DeepLink { request: DeepLinkRequest },
 }
 
@@ -105,6 +113,12 @@ impl From<SyncAppEvent> for AppEvent {
 impl From<ZmodemAppEvent> for AppEvent {
     fn from(event: ZmodemAppEvent) -> Self {
         Self::Zmodem(event)
+    }
+}
+
+impl From<ContainerAppEvent> for AppEvent {
+    fn from(event: ContainerAppEvent) -> Self {
+        Self::Container(event)
     }
 }
 

@@ -62,6 +62,14 @@ pub enum ErrorCode {
     CloudSyncConflict,
     /// 云端还没有任何备份：首次拉取属预期状态，界面按提示而非故障处理。
     CloudSyncMissing,
+    /// 本机找不到可用的容器引擎，或引擎端点不可达。
+    ContainerUnavailable,
+    /// 容器引擎返回了非预期状态码或无法解析的响应。
+    ContainerApi,
+    /// 容器、镜像或容器内路径不存在。
+    ContainerNotFound,
+    /// 操作与容器当前状态冲突（如重复启动、运行中强制删除失败）。
+    ContainerConflict,
 }
 
 /// 跨层保留的失败现场。

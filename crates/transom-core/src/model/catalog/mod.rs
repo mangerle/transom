@@ -11,6 +11,7 @@
 //!   也避免序号重复导致的排序不稳定。代价是备份合并时新条目一律追加到末尾，
 //!   以及任何写入都必须显式保持数组顺序（不能依赖按名称字典序渲染）。
 
+mod engine_folders;
 mod folders;
 mod merge;
 mod reorder;
@@ -73,6 +74,31 @@ impl SessionFolder {
     }
 }
 
+/// 容器引擎连接的分组节点。
+///
+/// 与会话文件夹同样使用稳定 ID + 父指针，顺序由数组位置决定；`collapsed`
+/// 是界面状态但一起持久化，保证重启后收纳状态不丢。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct EngineFolder {
+    pub id: FolderId,
+    pub name: String,
+    #[serde(default)]
+    pub parent: Option<FolderId>,
+    #[serde(default)]
+    pub collapsed: bool,
+}
+
+impl EngineFolder {
+    pub fn new(name: impl Into<String>, parent: Option<FolderId>) -> Self {
+        Self {
+            id: FolderId::new(),
+            name: name.into(),
+            parent,
+            collapsed: false,
+        }
+    }
+}
+
 /// 会话与文件夹的完整持久化快照。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SessionCatalog {
@@ -83,6 +109,12 @@ pub struct SessionCatalog {
     /// 凭据模板清单；老目录文件没有该字段时按空清单降级。
     #[serde(default)]
     pub identities: Vec<crate::model::identity::Identity>,
+    /// 容器引擎连接清单；容器表单保存到这里，随备份/同步一起流转。
+    #[serde(default)]
+    pub engines: Vec<crate::model::container::ContainerEngineProfile>,
+    /// 引擎连接的分组树；与 `engines` 一起持久化并参与三路合并。
+    #[serde(default)]
+    pub engine_folders: Vec<EngineFolder>,
 }
 
 /// 拖拽落点的侧向：插到锚点条目之前或之后。
@@ -112,4 +144,10 @@ pub enum CatalogError {
     IdentityInUse(usize),
     #[error("不能将文件夹移动到自身或其子文件夹: {0}")]
     FolderCycle(FolderId),
+    #[error("引擎分组不存在: {0}")]
+    EngineFolderNotFound(FolderId),
+    #[error("引擎连接不存在: {0}")]
+    EngineNotFound(crate::ids::EngineProfileId),
+    #[error("不能将分组移动到自身或其子分组: {0}")]
+    EngineFolderCycle(FolderId),
 }

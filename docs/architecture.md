@@ -26,6 +26,8 @@ apps/transom (组合根 + 控制平面)
   │    └─ transom-core
   ├─ transom-net (SSH / SFTP / 转发 / 串口 / Telnet / 统计解析)
   │    └─ transom-core
+  ├─ transom-container (容器引擎发现 / Docker 兼容 REST / exec 桥 / 归档文件)
+  │    └─ transom-core
   ├─ transom-zmodem (ZMODEM 协议状态机与终端挂载层)
   │    └─ transom-core
   ├─ transom-sync (云同步 WebDAV / S3 / Git 编排)

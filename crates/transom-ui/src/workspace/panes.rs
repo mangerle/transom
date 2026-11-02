@@ -6,6 +6,7 @@ use crate::palette::Palette;
 use crate::pane_tree::LayoutNode;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
@@ -228,6 +229,38 @@ impl AppShell {
         };
         if let Some(player) = self.state.workspace.tabs[index].player() {
             return div().size_full().child(player).into_any_element();
+        }
+        if matches!(
+            &self.state.workspace.tabs[index].content,
+            crate::app::TabContent::Containers(_)
+        ) {
+            if self.state.containers.fullscreen == Some(tab_id) {
+                return v_flex()
+                    .size_full()
+                    .items_center()
+                    .justify_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("container.fullscreen.active").to_string()),
+                    )
+                    .child(
+                        gpui_kit::component::button::Button::new(ElementId::Name(
+                            format!("container-exit-fullscreen-{tab_id}").into(),
+                        ))
+                        .small()
+                        .icon(IconName::Minimize)
+                        .label(rust_i18n::t!("container.fullscreen_exit").to_string())
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.state.containers.fullscreen = None;
+                            cx.notify();
+                        })),
+                    )
+                    .into_any_element();
+            }
+            return self.render_container_tab(tab_id, window, cx, p);
         }
         if let crate::app::TabContent::Monitor(target_id) = self.state.workspace.tabs[index].content
         {

@@ -17,11 +17,18 @@ fn item_keys_match_serialized_names() {
 }
 
 #[test]
-fn default_layout_splits_six_and_five() {
+fn default_layout_splits_top_and_bottom() {
     let layout = ActivityBarLayout::default();
-    assert_eq!(top(&layout), ActivityItemId::DEFAULT_ORDER[..6].to_vec());
-    assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[6..].to_vec());
-    assert_eq!(layout.split_at(), 6);
+    let split = ActivityItemId::DEFAULT_SPLIT_AT;
+    assert_eq!(
+        top(&layout),
+        ActivityItemId::DEFAULT_ORDER[..split].to_vec()
+    );
+    assert_eq!(
+        bottom(&layout),
+        ActivityItemId::DEFAULT_ORDER[split..].to_vec()
+    );
+    assert_eq!(layout.split_at(), split);
 }
 
 #[test]
@@ -112,17 +119,18 @@ fn move_within_top_only_reorders() {
             ActivityItemId::QuickOpen,
             ActivityItemId::Forwards,
             ActivityItemId::Monitor,
+            ActivityItemId::Containers,
         ]
     );
-    assert_eq!(layout.split_at(), 6);
-    assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[6..].to_vec());
+    assert_eq!(layout.split_at(), 7);
+    assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[7..].to_vec());
 }
 
 #[test]
 fn moving_top_to_bottom_start_grows_bottom() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_to_bottom_start(ActivityItemId::Sessions));
-    assert_eq!(layout.split_at(), 5);
+    assert_eq!(layout.split_at(), 6);
     assert_eq!(
         top(&layout),
         vec![
@@ -131,6 +139,7 @@ fn moving_top_to_bottom_start_grows_bottom() {
             ActivityItemId::Forwards,
             ActivityItemId::Sftp,
             ActivityItemId::Monitor,
+            ActivityItemId::Containers,
         ]
     );
     assert_eq!(bottom(&layout)[0], ActivityItemId::Sessions);
@@ -140,8 +149,8 @@ fn moving_top_to_bottom_start_grows_bottom() {
 fn moving_bottom_to_top_end_grows_top() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_to_top_end(ActivityItemId::Settings));
-    assert_eq!(layout.split_at(), 7);
-    assert_eq!(top(&layout)[6], ActivityItemId::Settings);
+    assert_eq!(layout.split_at(), 8);
+    assert_eq!(top(&layout)[7], ActivityItemId::Settings);
     assert!(!bottom(&layout).contains(&ActivityItemId::Settings));
 }
 
@@ -149,7 +158,7 @@ fn moving_bottom_to_top_end_grows_top() {
 fn dropping_on_top_anchor_moves_item_into_top() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_relative_to(ActivityItemId::Keys, ActivityItemId::Sessions, true));
-    assert_eq!(layout.split_at(), 7);
+    assert_eq!(layout.split_at(), 8);
     let top = top(&layout);
     assert_eq!(top[0], ActivityItemId::Sessions);
     assert_eq!(top[1], ActivityItemId::Keys);
@@ -160,8 +169,8 @@ fn dropping_on_top_anchor_moves_item_into_top() {
 fn dropping_on_bottom_anchor_moves_item_into_bottom() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_relative_to(ActivityItemId::Sessions, ActivityItemId::Language, true));
-    assert_eq!(layout.split_at(), 5);
-    assert_eq!(top(&layout).len(), 5);
+    assert_eq!(layout.split_at(), 6);
+    assert_eq!(top(&layout).len(), 6);
     let bottom = bottom(&layout);
     assert_eq!(bottom[0], ActivityItemId::Language);
     assert_eq!(bottom[1], ActivityItemId::Sessions);
@@ -170,7 +179,7 @@ fn dropping_on_bottom_anchor_moves_item_into_bottom() {
 #[test]
 fn moving_to_current_boundary_is_a_no_op() {
     let mut layout = ActivityBarLayout::default();
-    assert!(!layout.move_to_top_end(ActivityItemId::Monitor));
+    assert!(!layout.move_to_top_end(ActivityItemId::Containers));
     assert!(!layout.move_to_bottom_start(ActivityItemId::Language));
     assert!(!layout.move_relative_to(ActivityItemId::Sftp, ActivityItemId::Sftp, true));
     assert_eq!(layout, ActivityBarLayout::default());
@@ -184,7 +193,7 @@ fn pinned_item_cannot_be_hidden_but_can_move() {
     assert!(!layout.set_visible(ActivityItemId::Sftp, false));
     assert!(layout.set_visible(ActivityItemId::Sftp, true));
     assert!(layout.move_to_top_end(ActivityItemId::Settings));
-    assert_eq!(top(&layout)[6], ActivityItemId::Settings);
+    assert_eq!(top(&layout)[7], ActivityItemId::Settings);
 }
 
 #[test]

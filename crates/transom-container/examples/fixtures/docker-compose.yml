@@ -1,0 +1,9 @@
+# 真机冒烟夹具：两个常驻服务，用于验证 Compose 标签聚合（工程名 transom-demo）。
+# 用法：在该目录下 `docker compose -p transom-demo up -d`。
+services:
+  web:
+    image: docker.m.daocloud.io/library/busybox:1.36
+    command: ["sh", "-c", "echo web-started; sleep 3600"]
+  worker:
+    image: docker.m.daocloud.io/library/busybox:1.36
+    command: ["sh", "-c", "echo worker-started; sleep 3600"]

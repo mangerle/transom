@@ -10,12 +10,12 @@ use gpui_kit::*;
 use transom_core::DropSide;
 
 /// 侧栏行快捷操作按钮配置属性。
-pub(super) struct RowActionButtonProps<F> {
-    pub(super) element_id: String,
-    pub(super) icon: IconName,
-    pub(super) tooltip: String,
-    pub(super) idle_color: Hsla,
-    pub(super) on_click: F,
+pub(crate) struct RowActionButtonProps<F> {
+    pub(crate) element_id: String,
+    pub(crate) icon: IconName,
+    pub(crate) tooltip: String,
+    pub(crate) idle_color: Hsla,
+    pub(crate) on_click: F,
 }
 
 /// 行内图标按钮：常驻但弱色，悬停时才加深并垫一层底色。
@@ -31,7 +31,7 @@ pub(super) struct RowActionButtonProps<F> {
 ///   与行首协议图标共用同一套 `is_active` 判断才不各自漂移。
 /// - 代价与局限：图标占据固定布局宽度（不是绝对定位叠加），行名可用宽度比没有
 ///   按钮时少 20px；不这么做的话悬停时行名会跟着抖动，比少 20px 更难接受。
-pub(super) fn row_action_button(
+pub(crate) fn row_action_button(
     props: RowActionButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     _p: &Palette,
 ) -> AnyElement {
@@ -51,13 +51,13 @@ pub(super) fn row_action_button(
 }
 
 /// 拖动时跟随鼠标的轻量预览卡片。
-pub(super) struct SidebarDragPreview {
+pub(crate) struct SidebarDragPreview {
     label: String,
     icon: IconName,
 }
 
 impl SidebarDragPreview {
-    pub(super) fn new(label: String, icon: IconName) -> Self {
+    pub(crate) fn new(label: String, icon: IconName) -> Self {
         Self { label, icon }
     }
 }

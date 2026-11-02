@@ -310,6 +310,8 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         },
         open_modals: crate::dialog_host::OpenModals::default(),
         dialog_hint: None,
+        containers: crate::container::ContainerUiState::default(),
+        toast_seq: 0,
     }
 }
 

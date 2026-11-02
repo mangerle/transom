@@ -76,6 +76,7 @@ impl Demo {
                     key_filter: None,
                     audit_path: None,
                     shell_integration_enabled: false,
+                    clear_on_first_resize: false,
                 },
             )
         });

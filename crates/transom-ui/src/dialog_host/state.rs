@@ -23,6 +23,10 @@ impl ModalKind {
             ModalKind::SftpSearch => shell.state.sftp_modals.search.is_some(),
             ModalKind::SftpSync => shell.state.sftp_modals.sync.is_some(),
             ModalKind::EditorGotoLine => shell.state.sftp_modals.goto_line.is_some(),
+            ModalKind::ContainerForm => shell.state.containers.form.is_some(),
+            ModalKind::ContainerFolderForm => shell.state.containers.engine_folder_form.is_some(),
+            ModalKind::ContainerRunForm => shell.state.containers.run_form.is_some(),
+            ModalKind::ContainerCreate => shell.state.containers.create_dialog.is_some(),
             ModalKind::SessionForm => shell.state.modals.session.form.is_some(),
             ModalKind::FolderForm => shell.state.modals.session.folder_form.is_some(),
             ModalKind::BatchEdit => shell.state.modals.session.batch_edit.is_some(),
@@ -52,6 +56,46 @@ impl ModalKind {
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
         match self {
+            ModalKind::ContainerForm => shell
+                .state
+                .containers
+                .form
+                .as_ref()
+                .map(|form| form.text_values(cx))
+                .unwrap_or_default(),
+            ModalKind::ContainerFolderForm => shell
+                .state
+                .containers
+                .engine_folder_form
+                .as_ref()
+                .map(|form| vec![form.input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            ModalKind::ContainerRunForm => shell
+                .state
+                .containers
+                .run_form
+                .as_ref()
+                .map(|form| form.text_values(cx))
+                .unwrap_or_default(),
+            ModalKind::ContainerCreate => shell
+                .state
+                .containers
+                .create_dialog
+                .as_ref()
+                .map(|dialog| {
+                    let mut values = Vec::new();
+                    if let Some(workspace) = shell.state.container_workspace(dialog.tab_id) {
+                        values.push(workspace.create_input.read(cx).value().to_string());
+                    }
+                    for input in [&dialog.driver, &dialog.subnet, &dialog.gateway]
+                        .into_iter()
+                        .flatten()
+                    {
+                        values.push(input.read(cx).value().to_string());
+                    }
+                    values
+                })
+                .unwrap_or_default(),
             ModalKind::SessionForm => shell
                 .state
                 .modals
@@ -146,6 +190,23 @@ impl ModalKind {
             ModalKind::SftpSync => shell.close_sftp_modal(|hub| hub.sync = None, window, cx),
             ModalKind::EditorGotoLine => {
                 shell.cancel_editor_goto_line(window, cx);
+                true
+            }
+            ModalKind::ContainerForm => {
+                shell.state.containers.form = None;
+                shell.state.containers.form_folder = None;
+                true
+            }
+            ModalKind::ContainerFolderForm => {
+                shell.state.containers.engine_folder_form = None;
+                true
+            }
+            ModalKind::ContainerRunForm => {
+                shell.dismiss_container_run(cx);
+                true
+            }
+            ModalKind::ContainerCreate => {
+                shell.dismiss_container_create(cx);
                 true
             }
             ModalKind::SessionForm => {
@@ -244,6 +305,30 @@ impl ModalKind {
             ModalKind::SftpFilter => shell.save_sftp_filter_modal(window, cx),
             ModalKind::SftpSync => shell.start_sftp_sync(window, cx),
             ModalKind::EditorGotoLine => shell.commit_editor_goto_line(window, cx),
+            ModalKind::ContainerForm => shell.save_container_form(cx),
+            ModalKind::ContainerFolderForm => shell.submit_engine_folder_form(window, cx),
+            ModalKind::ContainerRunForm => {
+                if let Some(tab_id) = shell
+                    .state
+                    .containers
+                    .run_form
+                    .as_ref()
+                    .map(|form| form.tab_id)
+                {
+                    shell.submit_container_run(tab_id, cx);
+                }
+            }
+            ModalKind::ContainerCreate => {
+                if let Some(tab_id) = shell
+                    .state
+                    .containers
+                    .create_dialog
+                    .as_ref()
+                    .map(|dialog| dialog.tab_id)
+                {
+                    shell.submit_container_create(tab_id, window, cx);
+                }
+            }
             ModalKind::SessionForm => shell.save_session_form(cx),
             ModalKind::FolderForm => shell.save_folder_form(cx),
             ModalKind::BatchEdit => shell.save_batch_edit(cx),
@@ -293,6 +378,30 @@ impl ModalKind {
                     .goto_line
                     .as_ref()
                     .map(|modal| modal.input.clone())
+            }),
+            ModalKind::ContainerForm => input_focus(shell, |state| {
+                state.containers.form.as_ref().map(|form| form.name.clone())
+            }),
+            ModalKind::ContainerFolderForm => input_focus(shell, |state| {
+                state
+                    .containers
+                    .engine_folder_form
+                    .as_ref()
+                    .map(|form| form.input.clone())
+            }),
+            ModalKind::ContainerRunForm => input_focus(shell, |state| {
+                state
+                    .containers
+                    .run_form
+                    .as_ref()
+                    .map(|form| form.image.clone())
+            }),
+            ModalKind::ContainerCreate => input_focus(shell, |state| {
+                state.containers.create_dialog.as_ref().and_then(|dialog| {
+                    state
+                        .container_workspace(dialog.tab_id)
+                        .map(|workspace| workspace.create_input.clone())
+                })
             }),
             ModalKind::SessionForm => input_focus(shell, |state| {
                 state

@@ -51,6 +51,7 @@ impl AppShell {
                 .and_then(|tab_id| self.state.workspace.tab(tab_id)?.sftp_view())
                 .is_some_and(|view| view.read(cx).state.open),
             ActivityItemId::Monitor => monitor_open,
+            ActivityItemId::Containers => self.state.containers.sidebar_open,
             ActivityItemId::Keys => self.state.modals.tools.key_wizard.is_some(),
             _ => false,
         }
@@ -214,6 +215,7 @@ impl AppShell {
             ActivityItemId::Sessions => {
                 // 会话树与标签面板共用左侧槽位：点击非当前视图时切过去，
                 // 点击当前视图时收起槽位，与原有的侧栏开关习惯一致。
+                self.state.containers.sidebar_open = false;
                 if self.state.sidebar.visible && !self.state.vertical_tabs_open {
                     self.state.sidebar.visible = false;
                 } else {
@@ -226,6 +228,7 @@ impl AppShell {
                 if app_settings(cx).window.tab_position != TabPosition::Left {
                     return;
                 }
+                self.state.containers.sidebar_open = false;
                 if self.state.sidebar.visible && self.state.vertical_tabs_open {
                     self.state.sidebar.visible = false;
                 } else {
@@ -238,6 +241,15 @@ impl AppShell {
             ActivityItemId::Forwards => self.toggle_forward_panel(window, cx),
             ActivityItemId::Sftp => self.toggle_sftp(window, cx),
             ActivityItemId::Monitor => self.toggle_monitor(window, cx),
+            ActivityItemId::Containers => {
+                let opening = !(self.state.containers.sidebar_open && self.state.sidebar.visible);
+                self.state.containers.sidebar_open = opening;
+                self.state.sidebar.visible = opening;
+                if opening {
+                    self.state.vertical_tabs_open = false;
+                }
+                cx.notify();
+            }
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
             ActivityItemId::KnownHosts => {
@@ -297,6 +309,7 @@ mod labels {
             ActivityItemId::Forwards => IconName::ArrowLeftRight,
             ActivityItemId::Sftp => IconName::Folder,
             ActivityItemId::Monitor => IconName::Activity,
+            ActivityItemId::Containers => IconName::Container,
             ActivityItemId::Language => IconName::Globe,
             ActivityItemId::ImportSshConfig => IconName::Download,
             ActivityItemId::KnownHosts => IconName::ShieldCheck,
@@ -314,6 +327,7 @@ mod labels {
             ActivityItemId::Forwards => "forward.title",
             ActivityItemId::Sftp => "sftp.title",
             ActivityItemId::Monitor => "monitor.title",
+            ActivityItemId::Containers => "container.title",
             ActivityItemId::Language => "activity.language",
             ActivityItemId::ImportSshConfig => "app.import_ssh_config",
             ActivityItemId::KnownHosts => "known_hosts.title",

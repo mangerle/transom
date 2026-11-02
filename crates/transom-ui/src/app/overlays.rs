@@ -109,6 +109,9 @@ impl AppShell {
         if self.state.modals.tools.show_quick_open {
             overlays.push(self.render_command_palette_modal(window, cx, &p));
         }
+        if let Some(tab_id) = self.state.containers.fullscreen {
+            overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
+        }
         overlays
     }
 }
