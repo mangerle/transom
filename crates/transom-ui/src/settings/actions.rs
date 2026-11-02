@@ -77,6 +77,53 @@ impl SettingsView {
         // 界面主题与密度在弹窗内即时预览，取消时凭这份快照恢复。
         self.state.appearance_snapshot = Some(app_settings(cx).appearance.clone());
 
+        self.fill_appearance_inputs(window, cx);
+        let profile = app_settings(cx).terminal_profile.clone();
+        // 旧配置里可能存着“不透明”档：窗口背景现在只有透明与毛玻璃两档，
+        // 直接按透明处理，界面上也不会出现两个按钮都没选中的状态。
+        if app_settings(cx).window.window_background == transom_core::WindowBackgroundMode::Opaque {
+            app_settings_mut(cx).window.window_background =
+                transom_core::WindowBackgroundMode::Transparent;
+        }
+        // 滑块初值跟随当前配置：配置可能在本弹窗之外被改过。
+        let transparency = f32::from(app_settings(cx).window.window_transparency);
+        self.state.window_transparency.update(cx, |state, cx| {
+            state.set_value(transparency, window, cx);
+        });
+        self.state.window_appearance_snapshot = Some(WindowAppearanceSnapshot {
+            transparency: app_settings(cx).window.window_transparency,
+            background: app_settings(cx).window.window_background,
+        });
+        self.state.word_separators.update(cx, |input, cx| {
+            input.set_value(profile.word_separators.clone(), window, cx);
+        });
+        self.state.highlight_keywords.update(cx, |input, cx| {
+            input.set_value(profile.highlight.keywords_joined(), window, cx);
+        });
+        let notify_threshold = app_settings(cx).window.notify_threshold_secs.to_string();
+        self.state.notify_threshold.update(cx, |input, cx| {
+            input.set_value(notify_threshold, window, cx);
+        });
+        let scrollback = app_settings(cx).terminal_profile.scrollback.to_string();
+        self.state.scrollback.update(cx, |input, cx| {
+            input.set_value(&scrollback, window, cx);
+        });
+        let key_bindings = transom_core::TerminalKeyBinding::to_multiline(&profile.key_bindings);
+        self.state.terminal_key_bindings.update(cx, |state, cx| {
+            state.set_value(key_bindings, window, cx);
+        });
+        let block_rows = app_settings(cx).block_view.auto_collapse_rows.to_string();
+        self.state.block_collapse_rows.update(cx, |input, cx| {
+            input.set_value(block_rows, window, cx);
+        });
+        self.fill_sync_form(window, cx);
+        self.fill_proxy_form(window, cx);
+        self.state.open = true;
+        cx.notify();
+    }
+
+    /// 打开弹窗时回填外观输入：字体、字号/行高与分割线档位。
+    fn fill_appearance_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let profile = app_settings(cx).terminal_profile.clone();
         let appearance = app_settings(cx).appearance.clone();
         let mono_default = rust_i18n::t!(MONO_DEFAULT_KEY).to_string();
@@ -121,47 +168,6 @@ impl SettingsView {
         self.state.divider_width.update(cx, |input, cx| {
             input.set_value(divider_width, window, cx);
         });
-        // 旧配置里可能存着“不透明”档：窗口背景现在只有透明与毛玻璃两档，
-        // 直接按透明处理，界面上也不会出现两个按钮都没选中的状态。
-        if app_settings(cx).window.window_background == transom_core::WindowBackgroundMode::Opaque {
-            app_settings_mut(cx).window.window_background =
-                transom_core::WindowBackgroundMode::Transparent;
-        }
-        // 滑块初值跟随当前配置：配置可能在本弹窗之外被改过。
-        let transparency = f32::from(app_settings(cx).window.window_transparency);
-        self.state.window_transparency.update(cx, |state, cx| {
-            state.set_value(transparency, window, cx);
-        });
-        self.state.window_appearance_snapshot = Some(WindowAppearanceSnapshot {
-            transparency: app_settings(cx).window.window_transparency,
-            background: app_settings(cx).window.window_background,
-        });
-        self.state.word_separators.update(cx, |input, cx| {
-            input.set_value(profile.word_separators.clone(), window, cx);
-        });
-        self.state.highlight_keywords.update(cx, |input, cx| {
-            input.set_value(profile.highlight.keywords_joined(), window, cx);
-        });
-        let notify_threshold = app_settings(cx).window.notify_threshold_secs.to_string();
-        self.state.notify_threshold.update(cx, |input, cx| {
-            input.set_value(notify_threshold, window, cx);
-        });
-        let scrollback = app_settings(cx).terminal_profile.scrollback.to_string();
-        self.state.scrollback.update(cx, |input, cx| {
-            input.set_value(&scrollback, window, cx);
-        });
-        let key_bindings = transom_core::TerminalKeyBinding::to_multiline(&profile.key_bindings);
-        self.state.terminal_key_bindings.update(cx, |state, cx| {
-            state.set_value(key_bindings, window, cx);
-        });
-        let block_rows = app_settings(cx).block_view.auto_collapse_rows.to_string();
-        self.state.block_collapse_rows.update(cx, |input, cx| {
-            input.set_value(block_rows, window, cx);
-        });
-        self.fill_sync_form(window, cx);
-        self.fill_proxy_form(window, cx);
-        self.state.open = true;
-        cx.notify();
     }
 
     /// 直接操作型设置（活动栏、状态栏、快捷命令执行模式）的即时落盘入口。
