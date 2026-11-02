@@ -1,4 +1,10 @@
 //! 密钥向导与已知主机弹窗的状态定义。
+//!
+//! 设计原理（Why）：这些状态只随弹窗生死，渲染与动作在 keys 模块内完成；
+//! 与外壳动作分离后，状态字段变更不会牵动外壳文件。
+//!
+//! 代价与局限：仍由 `AppState` 通过 `ModalHub` 持有，尚未升级为独立实体；
+//! 需要窗口/命令通道的动作仍留在外壳。
 
 use super::keygen::{KeyAlgorithm, PublicKeyInfo};
 use gpui_kit::component::input::InputState;
