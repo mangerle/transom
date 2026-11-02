@@ -55,40 +55,15 @@ impl AppShell {
             .workspace
             .active_tab
             .and_then(|tab_id| self.sftp_state(tab_id, cx));
-        let show_sftp = sftp_panel.is_some_and(|panel| panel.open);
-        let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);
+        let sftp_plan = sftp_layout_plan(sftp_panel, rem);
+        let show_sftp = sftp_plan.show;
+        let sftp_width = sftp_plan.width;
+        let sftp_min_width = sftp_plan.min_width;
         let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
-        let collapsed_count = sftp_panel
-            .map(|panel| panel.collapsed_columns_count())
-            .unwrap_or(0);
-        // 全收起时的目标宽度必须包含面板自身边框，否则折叠状态下每次按内容
-        // 宽度回写外层槽位都会少 1px，面板会逐帧向右收缩。
         let sftp_collapsed_width = sftp_panel
             .map(SftpPanelState::all_collapsed_width)
             .unwrap_or(32.0);
         let show_forwards = active_panel.is_some_and(|tab| tab.forwards_view().is_some());
-        let (sftp_width, mut sftp_min_width) = if sftp_all_collapsed {
-            (sftp_collapsed_width, sftp_collapsed_width)
-        } else if sftp_local_only && sftp_panel.is_some_and(|panel| panel.side_remotes.is_empty()) {
-            (
-                rem_px(size::SFTP_LOCAL_PANEL_WIDTH, rem).as_f32(),
-                rem_px(size::SFTP_LOCAL_MIN_WIDTH, rem).as_f32(),
-            )
-        } else {
-            (
-                rem_px(size::SFTP_PANEL_WIDTH, rem).as_f32(),
-                rem_px(size::SFTP_MIN_WIDTH, rem).as_f32(),
-            )
-        };
-        // 有列折叠时允许 SFTP 面板收缩到实际内容宽度：固定的 SFTP_MIN_WIDTH
-        // 会把面板卡在更宽的位置，折叠条右侧就会留出一大片空白。
-        if collapsed_count > 0
-            && !sftp_all_collapsed
-            && let Some(content_width) =
-                sftp_panel.and_then(|panel| panel.collapsed_content_width())
-        {
-            sftp_min_width = sftp_min_width.min(content_width);
-        }
         // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
         // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
         let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
@@ -278,5 +253,52 @@ impl AppShell {
                 .drawer_width()
                 .clamp(360.0, max_drawer_width),
         )
+    }
+}
+
+/// SFTP 列的表面可见性、本地单列与折叠宽度计划。
+struct SftpLayoutPlan {
+    show: bool,
+    width: f32,
+    min_width: f32,
+}
+
+/// 计算 SFTP 面板宽度：全收起按内容宽、本地单列较窄、其余按默认。
+fn sftp_layout_plan(sftp_panel: Option<&SftpPanelState>, rem: Pixels) -> SftpLayoutPlan {
+    let sftp_local_only = sftp_panel.is_some_and(|panel| panel.local.only);
+    let sftp_all_collapsed = sftp_panel.is_some_and(|panel| panel.is_all_collapsed());
+    let collapsed_count = sftp_panel
+        .map(|panel| panel.collapsed_columns_count())
+        .unwrap_or(0);
+    // 全收起时的目标宽度必须包含面板自身边框，否则折叠状态下每次按内容
+    // 宽度回写外层槽位都会少 1px，面板会逐帧向右收缩。
+    let sftp_collapsed_width = sftp_panel
+        .map(SftpPanelState::all_collapsed_width)
+        .unwrap_or(32.0);
+    let (sftp_width, mut sftp_min_width) = if sftp_all_collapsed {
+        (sftp_collapsed_width, sftp_collapsed_width)
+    } else if sftp_local_only && sftp_panel.is_some_and(|panel| panel.side_remotes.is_empty()) {
+        (
+            rem_px(size::SFTP_LOCAL_PANEL_WIDTH, rem).as_f32(),
+            rem_px(size::SFTP_LOCAL_MIN_WIDTH, rem).as_f32(),
+        )
+    } else {
+        (
+            rem_px(size::SFTP_PANEL_WIDTH, rem).as_f32(),
+            rem_px(size::SFTP_MIN_WIDTH, rem).as_f32(),
+        )
+    };
+    // 有列折叠时允许 SFTP 面板收缩到实际内容宽度：固定的 SFTP_MIN_WIDTH
+    // 会把面板卡在更宽的位置，折叠条右侧就会留出一大片空白。
+    if collapsed_count > 0
+        && !sftp_all_collapsed
+        && let Some(content_width) = sftp_panel.and_then(|panel| panel.collapsed_content_width())
+    {
+        sftp_min_width = sftp_min_width.min(content_width);
+    }
+    SftpLayoutPlan {
+        show: sftp_panel.is_some_and(|panel| panel.open),
+        width: sftp_width,
+        min_width: sftp_min_width,
     }
 }
