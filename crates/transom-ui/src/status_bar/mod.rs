@@ -35,6 +35,14 @@ use transom_core::{NetworkTraffic, StatusItemId};
 
 pub(crate) const BADGE_HEIGHT: f32 = 1.25;
 
+/// 状态栏左侧入口元素：可选入口与 ZMODEM 徽章。
+struct StatusBarEntries {
+    snippets: Option<AnyElement>,
+    broadcast: Option<AnyElement>,
+    recording: Option<AnyElement>,
+    zmodem: Option<AnyElement>,
+}
+
 impl AppShell {
     /// 是否有标签正在录制：录制中必须保住停止入口。
     pub(crate) fn is_any_tab_recording(&self, cx: &App) -> bool {
@@ -47,16 +55,8 @@ impl AppShell {
     }
 
     /// 渲染底栏。`divider_x` 为分界线横坐标，`0` 表示侧栏已隐藏、整条不分段。
-    pub(crate) fn render_status_bar(
-        &mut self,
-        p: &Palette,
-        cx: &mut Context<Self>,
-        divider_x: Pixels,
-    ) -> AnyElement {
-        let connection_pill = self.render_connection_pill(p);
-        let app = cx.entity().clone();
-        let metrics = self.state.status_metrics.clone();
-
+    /// 状态栏左侧会话作用域入口：片段、广播、录制与 ZMODEM 徽章。
+    fn status_bar_entries(&mut self, cx: &mut Context<Self>, p: &Palette) -> StatusBarEntries {
         // 三个会话作用域入口（快捷命令、广播、录制）只在存在终端标签时出现：
         // 没有终端时它们点了要么静默返回、要么打开一个没有目标的输入条、要么
         // 到执行步才报错，留着只会误导。判定取"任意标签有终端"而不是"活动标签
@@ -70,19 +70,37 @@ impl AppShell {
             .then(|| self.render_broadcast_trigger(cx));
         let recording_badge = (session_scoped || self.is_any_tab_recording(cx))
             .then(|| self.render_recording_badge(p, cx));
-        let front_zone = metrics::front_drop_zone(&self.state.status_metrics, p);
-        let menu_app = app.clone();
-        // ZMODEM 传输徽章优先于常规状态项：传输进行中用户最关心进度与取消。
-        let zmodem_badge = self
+        let zmodem = self
             .state
             .workspace
             .active_tab
             .and_then(|tab_id| self.render_zmodem_badge(tab_id, p, cx));
+        StatusBarEntries {
+            snippets: snippets_entry,
+            broadcast: broadcast_entry,
+            recording: recording_badge,
+            zmodem,
+        }
+    }
+
+    pub(crate) fn render_status_bar(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+        divider_x: Pixels,
+    ) -> AnyElement {
+        let connection_pill = self.render_connection_pill(p);
+        let app = cx.entity().clone();
+        let metrics = self.state.status_metrics.clone();
+
+        let entries = self.status_bar_entries(cx, p);
+        let front_zone = metrics::front_drop_zone(&self.state.status_metrics, p);
+        let menu_app = app.clone();
         let badges = h_flex()
             .flex_none()
             .gap_2()
             .items_center()
-            .children(zmodem_badge)
+            .children(entries.zmodem)
             .child(metrics);
 
         let mut bar = h_flex()
@@ -108,9 +126,9 @@ impl AppShell {
                 .gap_2()
                 .pr_3()
                 .border_color(p.divider(p.border))
-                .children(snippets_entry)
-                .children(broadcast_entry)
-                .children(recording_badge)
+                .children(entries.snippets)
+                .children(entries.broadcast)
+                .children(entries.recording)
                 .child(front_zone)
                 .child(badges);
             right_segment = right_segment.divider_edge(DividerEdge::Left, p.divider_width);
@@ -136,9 +154,9 @@ impl AppShell {
                     .pr_3()
                     .gap_2()
                     .child(connection_pill)
-                    .children(snippets_entry)
-                    .children(broadcast_entry)
-                    .children(recording_badge)
+                    .children(entries.snippets)
+                    .children(entries.broadcast)
+                    .children(entries.recording)
                     .child(front_zone)
                     .child(badges),
             );
