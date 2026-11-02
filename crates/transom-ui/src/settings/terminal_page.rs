@@ -119,57 +119,49 @@ impl SettingsView {
                 cursor_dropdown,
                 p,
             ))
-            .child(crate::widgets::setting_row(
-                "settings.cursor_blink",
-                Some("settings.cursor_blink_desc"),
-                Switch::new("toggle-cursor-blink")
-                    .small()
-                    .checked(app_settings(cx).terminal_profile.cursor_blink)
-                    .on_click(cx.listener(|_this, &checked, _, cx| {
-                        update_app_settings(cx, |s| s.terminal_profile.cursor_blink = checked);
-                        cx.notify();
-                    }))
-                    .into_any_element(),
+            .child(switch_setting_row(
+                SwitchSettingRow {
+                    key: "settings.cursor_blink",
+                    desc: "settings.cursor_blink_desc",
+                    id: "toggle-cursor-blink",
+                    checked: app_settings(cx).terminal_profile.cursor_blink,
+                    apply: |s, value| s.terminal_profile.cursor_blink = value,
+                },
                 p,
+                cx,
             ))
-            .child(crate::widgets::setting_row(
-                "settings.bold_is_bright",
-                Some("settings.bold_is_bright_desc"),
-                Switch::new("toggle-bold-is-bright")
-                    .small()
-                    .checked(app_settings(cx).terminal_profile.bold_is_bright)
-                    .on_click(cx.listener(|_this, &checked, _, cx| {
-                        update_app_settings(cx, |s| s.terminal_profile.bold_is_bright = checked);
-                        cx.notify();
-                    }))
-                    .into_any_element(),
+            .child(switch_setting_row(
+                SwitchSettingRow {
+                    key: "settings.bold_is_bright",
+                    desc: "settings.bold_is_bright_desc",
+                    id: "toggle-bold-is-bright",
+                    checked: app_settings(cx).terminal_profile.bold_is_bright,
+                    apply: |s, value| s.terminal_profile.bold_is_bright = value,
+                },
                 p,
+                cx,
             ))
-            .child(crate::widgets::setting_row(
-                "settings.alternate_scroll",
-                Some("settings.alternate_scroll_desc"),
-                Switch::new("toggle-alternate-scroll")
-                    .small()
-                    .checked(app_settings(cx).terminal_profile.alternate_scroll)
-                    .on_click(cx.listener(|_this, &checked, _, cx| {
-                        update_app_settings(cx, |s| s.terminal_profile.alternate_scroll = checked);
-                        cx.notify();
-                    }))
-                    .into_any_element(),
+            .child(switch_setting_row(
+                SwitchSettingRow {
+                    key: "settings.alternate_scroll",
+                    desc: "settings.alternate_scroll_desc",
+                    id: "toggle-alternate-scroll",
+                    checked: app_settings(cx).terminal_profile.alternate_scroll,
+                    apply: |s, value| s.terminal_profile.alternate_scroll = value,
+                },
                 p,
+                cx,
             ))
-            .child(crate::widgets::setting_row(
-                "settings.scroll_on_input",
-                Some("settings.scroll_on_input_desc"),
-                Switch::new("toggle-scroll-on-input")
-                    .small()
-                    .checked(app_settings(cx).terminal_profile.scroll_on_input)
-                    .on_click(cx.listener(|_this, &checked, _, cx| {
-                        update_app_settings(cx, |s| s.terminal_profile.scroll_on_input = checked);
-                        cx.notify();
-                    }))
-                    .into_any_element(),
+            .child(switch_setting_row(
+                SwitchSettingRow {
+                    key: "settings.scroll_on_input",
+                    desc: "settings.scroll_on_input_desc",
+                    id: "toggle-scroll-on-input",
+                    checked: app_settings(cx).terminal_profile.scroll_on_input,
+                    apply: |s, value| s.terminal_profile.scroll_on_input = value,
+                },
                 p,
+                cx,
             ))
             .child(crate::widgets::setting_field_row(
                 crate::widgets::form_field(
@@ -246,4 +238,34 @@ impl SettingsView {
             p,
         )
     }
+}
+
+/// 单个开关设置行：标题/说明 + 开关，点击写回终端配置。
+struct SwitchSettingRow {
+    key: &'static str,
+    desc: &'static str,
+    id: &'static str,
+    checked: bool,
+    apply: fn(&mut transom_core::AppSettings, bool),
+}
+
+fn switch_setting_row(
+    row: SwitchSettingRow,
+    p: &Palette,
+    cx: &mut Context<SettingsView>,
+) -> AnyElement {
+    let apply = row.apply;
+    crate::widgets::setting_row(
+        row.key,
+        Some(row.desc),
+        Switch::new(row.id)
+            .small()
+            .checked(row.checked)
+            .on_click(cx.listener(move |_this, &checked, _, cx| {
+                update_app_settings(cx, |s| apply(s, checked));
+                cx.notify();
+            }))
+            .into_any_element(),
+        p,
+    )
 }
