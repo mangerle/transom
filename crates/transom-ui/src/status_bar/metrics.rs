@@ -76,7 +76,7 @@ impl StatusBarMetricsView {
     }
 
     /// 注入最新快照与无数据兜底文案；返回是否真的变化。
-    pub(crate) fn set_snapshot(
+    pub(super) fn set_snapshot(
         &mut self,
         snapshot: StatusMetricsSnapshot,
         status: Option<&str>,
