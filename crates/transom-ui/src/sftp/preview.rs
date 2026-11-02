@@ -396,4 +396,19 @@ mod tests {
             _ => panic!("小文本应生成文本预览"),
         }
     }
+
+    /// 超过上限的文件必须标记截断，避免预览静默吞掉后半段。
+    #[test]
+    fn local_text_preview_marks_truncated_for_large_file() {
+        let dir = tempfile::tempdir().expect("临时目录");
+        let path = dir.path().join("large.txt");
+        let data = "a\n".repeat(super::PREVIEW_TEXT_MAX_BYTES as usize / 2 + 16);
+        std::fs::write(&path, data).expect("写入大样本");
+        let content =
+            super::super::preview_actions::local_text_preview(path.to_str().expect("路径"));
+        match content {
+            crate::sftp::preview::PreviewContent::Text { truncated, .. } => assert!(truncated),
+            _ => panic!("大文本应生成带截断标记的预览"),
+        }
+    }
 }
