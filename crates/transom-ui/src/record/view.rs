@@ -15,6 +15,27 @@ use gpui_kit::*;
 
 impl AppShell {
     /// 渲染底栏录制指示器。
+    /// 录制中的红色指示徽标：点击停止。
+    fn render_recording_indicator(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let stop_tip = rust_i18n::t!("recorder.stop_btn").to_string();
+        // 正在录制：使用 Tag::danger() 规范化徽标
+        let tag = Tag::danger()
+            .h(rems(BADGE_HEIGHT))
+            .rounded(p.radius.md)
+            .gap_1p5()
+            .child(crate::widgets::status_dot_bare(p.danger))
+            .child(rust_i18n::t!("recorder.recording").to_string());
+        div()
+            .id("recording-indicator")
+            .cursor_pointer()
+            .tooltip(move |_window, cx| Tooltip::new(stop_tip.clone()).build(_window, cx))
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.toggle_recording_for_active_tab(window, cx);
+            }))
+            .child(tag)
+            .into_any_element()
+    }
+
     pub(crate) fn render_recording_badge(
         &mut self,
         p: &Palette,
@@ -41,23 +62,7 @@ impl AppShell {
             }))
             .into_any_element()
         } else {
-            let stop_tip = rust_i18n::t!("recorder.stop_btn").to_string();
-            // 正在录制：使用 Tag::danger() 规范化徽标
-            let tag = Tag::danger()
-                .h(rems(BADGE_HEIGHT))
-                .rounded(p.radius.md)
-                .gap_1p5()
-                .child(crate::widgets::status_dot_bare(p.danger))
-                .child(rust_i18n::t!("recorder.recording").to_string());
-            div()
-                .id("recording-indicator")
-                .cursor_pointer()
-                .tooltip(move |_window, cx| Tooltip::new(stop_tip.clone()).build(_window, cx))
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.toggle_recording_for_active_tab(window, cx);
-                }))
-                .child(tag)
-                .into_any_element()
+            self.render_recording_indicator(p, cx)
         };
 
         h_flex()
