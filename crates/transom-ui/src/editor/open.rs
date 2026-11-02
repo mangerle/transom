@@ -254,25 +254,7 @@ impl EditorPanels {
         let viewport = window.viewport_size();
         let (left, top) = cascade_origin(cascade, viewport);
         let (change_sub, caret_sub) = self.subscribe_editor(&editor, cx);
-        let (loaded, phase, pending_op, remote_meta, new_file) = match seed {
-            PanelSeed::Reading { op_id, .. } => {
-                (false, EditorPhase::Reading, Some(op_id), None, false)
-            }
-            // 新建面板：可编辑即可打字；零尺寸指纹让首次保存具备同名覆盖保护。
-            PanelSeed::NewFile => (
-                true,
-                EditorPhase::Idle,
-                None,
-                Some(RemoteTextMeta {
-                    size: 0,
-                    mtime: None,
-                    bom: false,
-                    crlf: false,
-                    transcoded: false,
-                }),
-                true,
-            ),
-        };
+        let (loaded, phase, pending_op, remote_meta, new_file) = panel_seed_state(seed);
         self.manager_mut().panels.push(EditorPanelState {
             tab_id,
             connection_id,
@@ -486,6 +468,35 @@ impl AppShell {
         } else {
             Err(())
         }
+    }
+}
+
+/// 由面板种子推导装载态、阶段、待处理操作与远端元信息。
+fn panel_seed_state(
+    seed: PanelSeed,
+) -> (
+    bool,
+    EditorPhase,
+    Option<transom_core::TransferId>,
+    Option<RemoteTextMeta>,
+    bool,
+) {
+    match seed {
+        PanelSeed::Reading { op_id, .. } => (false, EditorPhase::Reading, Some(op_id), None, false),
+        // 新建面板：可编辑即可打字；零尺寸指纹让首次保存具备同名覆盖保护。
+        PanelSeed::NewFile => (
+            true,
+            EditorPhase::Idle,
+            None,
+            Some(RemoteTextMeta {
+                size: 0,
+                mtime: None,
+                bom: false,
+                crlf: false,
+                transcoded: false,
+            }),
+            true,
+        ),
     }
 }
 
