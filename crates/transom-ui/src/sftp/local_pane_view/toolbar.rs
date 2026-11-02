@@ -8,8 +8,7 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
-use gpui_kit::component::Disableable;
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
@@ -103,15 +102,17 @@ pub(super) fn render_local_toolbar(
                 )
                 .when(remote_available, |this| {
                     this.child(
-                        Button::new("local-diff-remote")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::FileDiff)
-                            .disabled(!diff_ready)
-                            .tooltip(rust_i18n::t!("sftp.nav.diff_with_remote").to_string())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.open_local_diff(cx);
-                            })),
+                        crate::widgets::IconButton::new(
+                            "local-diff-remote",
+                            IconName::FileDiff,
+                            rust_i18n::t!("sftp.nav.diff_with_remote").to_string(),
+                        )
+                        .disabled(!diff_ready)
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_local_diff(cx);
+                        })),
                     )
                 })
                 .when(remote_available, |this| {
@@ -276,34 +277,38 @@ pub(super) fn render_local_toolbar(
                     })),
                 )
                 .child(
-                    Button::new("local-toggle-hidden")
-                        .ghost()
-                        .xsmall()
-                        .icon(if show_hidden {
+                    crate::widgets::IconButton::new(
+                        "local-toggle-hidden",
+                        if show_hidden {
                             IconName::Eye
                         } else {
                             IconName::EyeOff
-                        })
-                        .selected(show_hidden)
-                        .tooltip(if show_hidden {
+                        },
+                        if show_hidden {
                             rust_i18n::t!("sftp.nav.hide_dotfiles").to_string()
                         } else {
                             rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.toggle_local_hidden(cx);
-                        })),
+                        },
+                    )
+                    .selected(show_hidden)
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.toggle_local_hidden(cx);
+                    })),
                 )
                 .child(
-                    Button::new("local-toggle-filter")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Search)
-                        .selected(show_filter)
-                        .tooltip(rust_i18n::t!("sftp.nav.toggle_filter").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.toggle_filter_local(window, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        "local-toggle-filter",
+                        IconName::Search,
+                        rust_i18n::t!("sftp.nav.toggle_filter").to_string(),
+                    )
+                    .selected(show_filter)
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.toggle_filter_local(window, cx);
+                    })),
                 ),
         )
         .when(show_filter, |this| {

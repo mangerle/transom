@@ -293,14 +293,16 @@ impl SftpPanelView {
                 )
             })
             .child(
-                Button::new("sftp-filter-rules")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::ListFilter)
-                    .tooltip(rust_i18n::t!("sftp.queue.filter_rules_tooltip").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.open_filter_modal(window, cx);
-                    })),
+                crate::widgets::IconButton::new(
+                    "sftp-filter-rules",
+                    IconName::ListFilter,
+                    rust_i18n::t!("sftp.queue.filter_rules_tooltip").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_filter_modal(window, cx);
+                })),
             )
             .child(
                 Button::new("clear-queue-done")
