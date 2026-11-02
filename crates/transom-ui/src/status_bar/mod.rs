@@ -156,16 +156,25 @@ impl AppShell {
             .workspace
             .active_tab
             .and_then(|tab_id| self.state.workspace.tab(tab_id));
-        let snapshot = crate::status_bar::StatusMetricsSnapshot {
-            traffic: tab.and_then(|tab| tab.network_traffic()).cloned(),
-            stats: tab
-                .and_then(|tab| tab.system_stats())
-                .map(metrics::StatusMetricsValues::from),
-            is_ssh: tab.is_some_and(|tab| {
-                matches!(tab.session.connection, transom_core::Connection::Ssh(_))
-            }),
-        };
+        let traffic = tab.and_then(|tab| tab.network_traffic());
+        let stats = tab.and_then(|tab| tab.system_stats());
+        let is_ssh = tab
+            .is_some_and(|tab| matches!(tab.session.connection, transom_core::Connection::Ssh(_)));
         let status = self.state.status.as_deref();
+        // 先借用比较：未变化时不构造快照，避免每帧克隆系统名与流量样本。
+        if self
+            .state
+            .status_metrics
+            .read(cx)
+            .matches(traffic, stats, is_ssh, status)
+        {
+            return;
+        }
+        let snapshot = crate::status_bar::StatusMetricsSnapshot {
+            traffic: traffic.cloned(),
+            stats: stats.map(metrics::StatusMetricsValues::from),
+            is_ssh,
+        };
         self.state.status_metrics.update(cx, |view, cx| {
             view.set_snapshot(snapshot, status, cx);
         });

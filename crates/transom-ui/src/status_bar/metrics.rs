@@ -93,6 +93,37 @@ impl StatusBarMetricsView {
         changed
     }
 
+    /// 当前快照是否已与给定数据一致；一致时调用方无需构造快照。
+    pub(crate) fn matches(
+        &self,
+        traffic: Option<&NetworkTraffic>,
+        stats: Option<&SystemStats>,
+        is_ssh: bool,
+        status: Option<&str>,
+    ) -> bool {
+        if self.snapshot.traffic.as_ref() != traffic || self.snapshot.is_ssh != is_ssh {
+            return false;
+        }
+        if let Some(status) = status
+            && self.fallback != status
+        {
+            return false;
+        }
+        match (self.snapshot.stats.as_ref(), stats) {
+            (None, None) => true,
+            (Some(values), Some(stats)) => {
+                values.cpu_percent == stats.cpu_percent
+                    && values.mem_used_bytes == stats.mem_used_bytes
+                    && values.mem_total_bytes == stats.mem_total_bytes
+                    && values.disk_used_bytes == stats.disk_used_bytes
+                    && values.disk_total_bytes == stats.disk_total_bytes
+                    && values.os_name == stats.os_name
+                    && values.uptime_secs == stats.uptime_secs
+            }
+            _ => false,
+        }
+    }
+
     /// 布局已被拖拽或菜单修改：通知外壳持久化并重绘整条栏。
     pub(crate) fn layout_changed(&mut self, cx: &mut Context<Self>) {
         cx.emit(StatusMetricsEvent::LayoutChanged);
