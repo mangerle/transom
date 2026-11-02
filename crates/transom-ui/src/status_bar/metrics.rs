@@ -81,7 +81,7 @@ impl StatusBarMetricsView {
         snapshot: StatusMetricsSnapshot,
         status: Option<&str>,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) {
         let expected = status.unwrap_or(&self.version_fallback);
         let changed = self.snapshot != snapshot || self.fallback != expected;
         if changed {
@@ -91,7 +91,6 @@ impl StatusBarMetricsView {
             // 同一快照，无条件 notify 会让六个徽标每帧重建一次。
             cx.notify();
         }
-        changed
     }
 
     /// 当前快照是否已与给定数据一致；一致时调用方无需构造快照。
