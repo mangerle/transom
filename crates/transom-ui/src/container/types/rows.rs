@@ -25,6 +25,7 @@ pub(crate) enum RowAction {
     Restart,
     Run,
     Rename,
+    EditComposeYaml,
     Remove,
     CopyId,
     CopyName,
@@ -43,6 +44,7 @@ impl RowAction {
             Self::Restart => "container.action.restart",
             Self::Run => "container.run.title",
             Self::Rename => "container.action.rename",
+            Self::EditComposeYaml => "container.compose.edit_yaml",
             Self::Remove => "common.delete",
             Self::CopyId => "container.row.copy_id",
             Self::CopyName => "container.row.copy_name",
@@ -62,6 +64,7 @@ impl RowAction {
             Self::Restart => IconName::RotateCw,
             Self::Run => IconName::Play,
             Self::Rename => IconName::Pen,
+            Self::EditComposeYaml => IconName::FilePen,
             Self::Remove => IconName::Trash,
             Self::CopyId => IconName::Copy,
             Self::CopyName => IconName::Copy,
@@ -82,6 +85,7 @@ impl RowAction {
             Self::Start | Self::Stop | Self::Rename => {
                 matches!(target, RowTarget::Container { .. })
             }
+            Self::EditComposeYaml => matches!(target, RowTarget::Compose(_)),
             // 卷与编排项目没有独立 ID，名称就是唯一标识，不给重复的复制项。
             Self::CopyId => matches!(
                 target,
@@ -99,68 +103,6 @@ pub(crate) fn row_key(target: &RowTarget) -> &str {
     match target {
         RowTarget::Container { id, .. } | RowTarget::Image(id) | RowTarget::Network(id) => id,
         RowTarget::Volume(name) | RowTarget::Compose(name) => name,
-    }
-}
-
-/// 多选集合的翻转：勾选则加入，取消则移除。
-///
-/// 抽成自由函数只是为了能被单测覆盖——它决定批量操作的条数是否正确，
-/// 错一个就等于对用户少发或多发一次命令。
-pub(crate) fn toggle_membership(set: &mut HashSet<String>, id: &str) {
-    if !set.remove(id) {
-        set.insert(id.to_string());
-    }
-}
-
-/// 批量删除的武装状态：第一次点击只武装，第二次才真的下发。
-///
-/// 设计原理（Why）：批量删除一次影响 N 个容器，逐个弹确认条反而更糟；用
-/// 「同一批勾选状态下必须连点两次」达到等价保护，勾选变化即自动解除武装。
-pub(crate) fn arm_or_fire(armed: bool, count: usize) -> (bool, bool) {
-    if armed {
-        (false, count > 0)
-    } else {
-        (true, false)
-    }
-}
-
-/// 批量动作：一次作用在多条勾选上。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ContainerBatchAction {
-    Start,
-    Stop,
-    Remove,
-}
-
-impl ContainerBatchAction {
-    pub(crate) fn label_key(self) -> &'static str {
-        match self {
-            Self::Start => "container.action.start",
-            Self::Stop => "container.action.stop",
-            Self::Remove => "common.delete",
-        }
-    }
-
-    pub(crate) fn lifecycle(self) -> transom_core::ContainerLifecycleAction {
-        match self {
-            Self::Start => transom_core::ContainerLifecycleAction::Start,
-            Self::Stop => transom_core::ContainerLifecycleAction::Stop,
-            // 批量删除用 force：勾选本身就代表「这些我不要了」，
-            // 停止中/僵死的容器用非 force 删除会整批失败。
-            Self::Remove => transom_core::ContainerLifecycleAction::Remove { force: true },
-        }
-    }
-
-    pub(crate) fn is_dangerous(self) -> bool {
-        matches!(self, Self::Remove)
-    }
-
-    pub(crate) fn icon(self) -> gpui_kit::assets::IconName {
-        match self {
-            Self::Start => gpui_kit::assets::IconName::Play,
-            Self::Stop => gpui_kit::assets::IconName::Square,
-            Self::Remove => gpui_kit::assets::IconName::Trash,
-        }
     }
 }
 

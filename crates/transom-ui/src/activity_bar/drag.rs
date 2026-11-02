@@ -3,8 +3,8 @@
 use super::metrics::METRICS;
 use crate::app::AppShell;
 use crate::app::app_settings_mut;
+use crate::app_assets::AppIcon;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -19,11 +19,11 @@ pub(super) struct ActivityDrag(pub(super) ActivityItemId);
 /// 设计原理（Why）：活动栏本身只有图标，预览若带名称会在窄条旁形成更宽的卡片反遮挡落点；
 /// 保持同尺寸图标贴手移动，拖拽时只看落点即可。
 pub(super) struct ActivityDragPreview {
-    icon: IconName,
+    icon: AppIcon,
 }
 
 impl ActivityDragPreview {
-    pub(super) fn new(icon: IconName) -> Self {
+    pub(super) fn new(icon: AppIcon) -> Self {
         Self { icon }
     }
 }

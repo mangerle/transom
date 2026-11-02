@@ -73,8 +73,7 @@ pub(crate) struct ContainerWorkspaceState {
     /// 当前排序键与方向。
     pub(crate) sort_key: ContainerSortKey,
     pub(crate) sort_desc: bool,
-    /// 三栏拖拽状态：菜单/列表宽度由用户拖动决定，随工作区存活。
-    pub(crate) menu_split: Entity<ResizableState>,
+    /// 列表栏拖拽状态：宽度由用户拖动决定，随工作区存活。
     pub(crate) list_split: Entity<ResizableState>,
     pub(crate) containers: Vec<ContainerSummary>,
     pub(crate) images: Vec<ContainerImageSummary>,
@@ -102,6 +101,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) stats: Option<ContainerStats>,
     /// 历史采样：统计页的走势图参考主机监控，只留最后一帧就只能画一个点。
     pub(crate) stats_history: VecDeque<ContainerStats>,
+    /// 上一次把统计样本追加到 UI 的时间；用于按档位节流，不影响后台统计流。
+    pub(crate) stats_last_append: Option<Instant>,
     /// 走势图形态（折线/柱状），与主机监控同一套组件。
     pub(crate) stats_chart: SparklineChartType,
     /// 采样档位：与主机监控相同的 1s/3s/10s。
@@ -118,10 +119,6 @@ pub(crate) struct ContainerWorkspaceState {
     /// 正在建立的终端会话与所选用户：建立前连点页签会重复创建 exec，必须占位拦住。
     pub(crate) terminal_request: Option<(ContainerRequestId, Option<String>)>,
     pub(crate) files: ContainerFilesState,
-    /// 多选：勾选的容器 ID，用于批量启停与删除。
-    pub(crate) checked: HashSet<String>,
-    /// 批量删除的二次确认是否已按下（第一次点只是武装）。
-    pub(crate) batch_armed: bool,
     /// 容器改名条：容器 ID 与输入框；`None` 表示不显示。
     pub(crate) rename_container: Option<(String, Entity<InputState>)>,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
@@ -130,7 +127,7 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) confirm: Option<ContainerConfirm>,
     /// 已按下一次「清理」、等待第二次确认的目标。
     pub(crate) prune_armed: Option<ContainerPruneTarget>,
-    /// 最近一条操作结果/错误提示。
+    /// 待展示的操作提示；渲染帧消费后转为右上角通知并清空。
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
     /// 搜索框变化时触发整壳重绘，过滤结果随输入实时更新。
@@ -172,7 +169,6 @@ impl ContainerWorkspaceState {
             quick_filter: ContainerQuickFilter::All,
             sort_key: ContainerSortKey::default_for(ContainerSection::Containers),
             sort_desc: false,
-            menu_split: cx.new(|_| ResizableState::default()),
             list_split: cx.new(|_| ResizableState::default()),
             containers: Vec::new(),
             images: Vec::new(),
@@ -194,6 +190,7 @@ impl ContainerWorkspaceState {
             logs_request: None,
             stats: None,
             stats_history: VecDeque::with_capacity(STATS_HISTORY_LIMIT),
+            stats_last_append: None,
             stats_chart: SparklineChartType::default(),
             stats_interval: SampleIntervalMode::Normal,
             stats_processes: Vec::new(),
@@ -205,8 +202,6 @@ impl ContainerWorkspaceState {
             terminal: None,
             terminal_request: None,
             rename_container: None,
-            checked: HashSet::default(),
-            batch_armed: false,
             pending_select: None,
             files: ContainerFilesState {
                 new_dir_open: false,
@@ -235,25 +230,6 @@ impl ContainerWorkspaceState {
             }
             self.logs.drain(..cut);
         }
-    }
-
-    /// 切换某个容器的勾选状态，返回切换后的数量。
-    pub(crate) fn toggle_checked(&mut self, id: &str) -> usize {
-        toggle_membership(&mut self.checked, id);
-        // 勾选集合变了就说明「是否删除全部选中」的确认状态不能再沿用。
-        self.batch_armed = false;
-        self.checked.len()
-    }
-
-    /// 已勾选容器的名字，顺序跟随列表；引擎按名字下发启停与删除。
-    pub(crate) fn checked_names(&self) -> Vec<String> {
-        let mut names = Vec::with_capacity(self.checked.len());
-        for item in &self.containers {
-            if self.checked.contains(&item.id) {
-                names.push(item.name.clone());
-            }
-        }
-        names
     }
 
     pub(crate) fn selected_container(&self) -> Option<&ContainerSummary> {
@@ -312,14 +288,13 @@ impl ContainerWorkspaceState {
         self.overview_raw = false;
         self.stats = None;
         self.stats_history.clear();
+        self.stats_last_append = None;
         self.stats_error = None;
         self.stats_processes.clear();
         self.stats_processes_error = None;
         self.stats_processes_loading = false;
         self.confirm = None;
         self.prune_armed = None;
-        self.checked.clear();
-        self.batch_armed = false;
         self.rename_container = None;
         if !ContainerSortKey::for_section(section).contains(&self.sort_key) {
             self.sort_key = ContainerSortKey::default_for(section);

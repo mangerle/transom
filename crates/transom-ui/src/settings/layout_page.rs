@@ -3,6 +3,7 @@
 use crate::activity_bar::{activity_item_icon, activity_item_label};
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
+use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use crate::settings::SettingsView;
 use crate::status_bar::{status_item_icon, status_item_label};
@@ -19,7 +20,7 @@ use transom_core::{ActivityItemId, StatusItemId};
 struct VisibilityRowOptions {
     key: String,
     label: String,
-    icon: IconName,
+    icon: AppIcon,
     visible: bool,
     pinned: bool,
 }
@@ -108,7 +109,7 @@ impl SettingsView {
                 VisibilityRowOptions {
                     key: format!("status-{}", id.key()),
                     label: status_item_label(id),
-                    icon: status_item_icon(id),
+                    icon: status_item_icon(id).into(),
                     visible: !app_settings(cx).status_bar.is_hidden(id),
                     pinned: false,
                 },

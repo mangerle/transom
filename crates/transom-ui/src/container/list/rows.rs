@@ -1,6 +1,7 @@
 //! 列表行数据与行内动作：按分类收集、排序并生成动作集合。
 
 use super::*;
+use std::collections::HashSet;
 
 /// 按分类收集行数据，并套用状态筛选与关键词搜索。
 pub(crate) fn collect_rows(
@@ -8,7 +9,6 @@ pub(crate) fn collect_rows(
     workspace: &ContainerWorkspaceState,
     query: &str,
     filter: ContainerStateFilter,
-    checked: &HashSet<String>,
 ) -> Vec<ListRow> {
     let quick = workspace.quick_filter;
     let cli_backend = workspace.info.as_ref().is_some_and(|info| info.cli_backend);
@@ -42,7 +42,7 @@ pub(crate) fn collect_rows(
                     ],
                 )
             })
-            .map(|item| container_row_spec(item, checked.contains(&item.id)))
+            .map(container_row_spec)
             .collect(),
         ContainerSection::Images => workspace
             .images
@@ -90,7 +90,7 @@ pub(crate) fn collect_rows(
     }
 }
 
-pub(crate) fn container_row_spec(item: &ContainerSummary, checked: bool) -> ListRow {
+pub(crate) fn container_row_spec(item: &ContainerSummary) -> ListRow {
     ListRow {
         key: format!("container-row-{}", item.id),
         title: item.name.clone(),
@@ -99,7 +99,6 @@ pub(crate) fn container_row_spec(item: &ContainerSummary, checked: bool) -> List
         subtitle: None,
         badge: None,
         running: Some(item.state.is_running()),
-        checked: Some(checked),
         target: RowTarget::Container {
             id: item.id.clone(),
             name: item.name.clone(),
@@ -125,7 +124,6 @@ pub(crate) fn image_row_spec(item: &ContainerImageSummary) -> ListRow {
         )),
         badge: None,
         running: None,
-        checked: None,
         target: RowTarget::Image(item.id.clone()),
         fields: SortFields {
             name: item.display_name(),
@@ -149,7 +147,6 @@ pub(crate) fn volume_row_spec(
         // 避免同一件事在一行里说两遍。用量数据拿不到时不画点（不假装有把握）。
         badge: None,
         running: usage_known.then_some(in_use),
-        checked: None,
         target: RowTarget::Volume(item.name.clone()),
         fields: SortFields {
             name: item.name.clone(),
@@ -175,7 +172,6 @@ pub(crate) fn network_row_spec(item: &ContainerNetworkSummary) -> ListRow {
         )),
         badge: None,
         running: None,
-        checked: None,
         target: RowTarget::Network(item.id.clone()),
         fields: SortFields {
             name: item.name.clone(),
@@ -197,7 +193,6 @@ pub(crate) fn compose_row_spec(item: &ComposeProject) -> ListRow {
         )),
         badge: None,
         running: Some(item.total > 0 && item.running == item.total),
-        checked: None,
         target: RowTarget::Compose(item.name.clone()),
         fields: SortFields {
             name: item.name.clone(),
@@ -237,6 +232,9 @@ pub(crate) fn row_actions(row: &ListRow) -> Vec<RowAction> {
     if matches!(row.target, RowTarget::Image(_)) {
         actions.push(RowAction::Run);
     }
+    if matches!(row.target, RowTarget::Compose(_)) {
+        actions.push(RowAction::EditComposeYaml);
+    }
     actions.push(RowAction::CopyName);
     actions.push(RowAction::CopyId);
     actions.push(RowAction::Remove);
@@ -265,7 +263,7 @@ pub(crate) fn quick_actions(row: &ListRow) -> Vec<RowAction> {
         ],
         RowTarget::Image(_) => vec![RowAction::Run, RowAction::Remove],
         RowTarget::Volume(_) | RowTarget::Network(_) => vec![RowAction::Remove],
-        RowTarget::Compose(_) => Vec::new(),
+        RowTarget::Compose(_) => vec![RowAction::EditComposeYaml],
     };
     actions
         .into_iter()

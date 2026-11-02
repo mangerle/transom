@@ -298,24 +298,25 @@ impl AppShell {
 }
 
 mod labels {
+    use crate::app_assets::AppIcon;
     use gpui_kit::assets::IconName;
     use transom_core::ActivityItemId;
 
-    pub(crate) fn activity_item_icon(id: ActivityItemId) -> IconName {
+    pub(crate) fn activity_item_icon(id: ActivityItemId) -> AppIcon {
         match id {
-            ActivityItemId::Sessions => IconName::Server,
-            ActivityItemId::Tabs => IconName::Terminal,
-            ActivityItemId::QuickOpen => IconName::Search,
-            ActivityItemId::Forwards => IconName::ArrowLeftRight,
-            ActivityItemId::Sftp => IconName::Folder,
-            ActivityItemId::Monitor => IconName::Activity,
-            ActivityItemId::Containers => IconName::Container,
-            ActivityItemId::Language => IconName::Globe,
-            ActivityItemId::ImportSshConfig => IconName::Download,
-            ActivityItemId::KnownHosts => IconName::ShieldCheck,
-            ActivityItemId::Keys => IconName::KeyRound,
-            ActivityItemId::Settings => IconName::Settings,
-            ActivityItemId::Unknown => IconName::CircleAlert,
+            ActivityItemId::Sessions => IconName::Server.into(),
+            ActivityItemId::Tabs => IconName::Terminal.into(),
+            ActivityItemId::QuickOpen => IconName::Search.into(),
+            ActivityItemId::Forwards => IconName::ArrowLeftRight.into(),
+            ActivityItemId::Sftp => IconName::Folder.into(),
+            ActivityItemId::Monitor => IconName::Activity.into(),
+            ActivityItemId::Containers => AppIcon::Docker,
+            ActivityItemId::Language => IconName::Globe.into(),
+            ActivityItemId::ImportSshConfig => IconName::Download.into(),
+            ActivityItemId::KnownHosts => IconName::ShieldCheck.into(),
+            ActivityItemId::Keys => IconName::KeyRound.into(),
+            ActivityItemId::Settings => IconName::Settings.into(),
+            ActivityItemId::Unknown => IconName::CircleAlert.into(),
         }
     }
 

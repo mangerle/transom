@@ -44,32 +44,15 @@ struct StatusBarEntries {
 }
 
 impl AppShell {
-    /// 是否有标签正在录制：录制中必须保住停止入口。
-    pub(crate) fn is_any_tab_recording(&self, cx: &App) -> bool {
-        self.state
-            .workspace
-            .tabs
-            .iter()
-            .filter_map(|tab| tab.terminal())
-            .any(|term| term.read(cx).is_recording())
-    }
-
     /// 渲染底栏。`divider_x` 为分界线横坐标，`0` 表示侧栏已隐藏、整条不分段。
     /// 状态栏左侧会话作用域入口：片段、广播、录制与 ZMODEM 徽章。
     fn status_bar_entries(&mut self, cx: &mut Context<Self>, p: &Palette) -> StatusBarEntries {
-        // 三个会话作用域入口（快捷命令、广播、录制）只在存在终端标签时出现：
-        // 没有终端时它们点了要么静默返回、要么打开一个没有目标的输入条、要么
-        // 到执行步才报错，留着只会误导。判定取"任意标签有终端"而不是"活动标签
-        // 有终端"：广播的目标本来就跨标签多选，且图标不该随切换标签跳动。
-        // 三条兜底：已打开的卡片与输入条、以及正在录制的标签，都不允许因为
-        // 图标消失而失去关闭/停止的入口。
-        let session_scoped = self.state.workspace.has_any_terminal();
-        let snippets_entry = (session_scoped || self.state.modals.tools.snippet_panel.open)
-            .then(|| self.render_snippets_popover(p, cx));
-        let broadcast_entry = (session_scoped || self.state.broadcast.open)
-            .then(|| self.render_broadcast_trigger(cx));
-        let recording_badge = (session_scoped || self.is_any_tab_recording(cx))
-            .then(|| self.render_recording_badge(p, cx));
+        // 三个入口都直接作用于当前终端。容器管理、录像回放与主机监控标签没有
+        // 可输入终端，保留入口只会产生无响应点击，所以按活动标签能力显隐。
+        let terminal_scoped = self.state.active_tab_has_terminal();
+        let snippets_entry = terminal_scoped.then(|| self.render_snippets_popover(p, cx));
+        let broadcast_entry = terminal_scoped.then(|| self.render_broadcast_trigger(cx));
+        let recording_badge = terminal_scoped.then(|| self.render_recording_badge(p, cx));
         let zmodem = self
             .state
             .workspace

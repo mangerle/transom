@@ -13,23 +13,6 @@ pub(crate) fn cpu_card(
     if !chrome.waiting {
         content = content.child(usage_bar(stats.cpu_percent / 100.0, color, p));
     }
-    if let Some((one, five, fifteen)) = stats.host_load {
-        content = content.child(
-            h_flex()
-                .justify_between()
-                .text_xs()
-                .child(
-                    div()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.stats.host_load").to_string()),
-                )
-                .child(
-                    div()
-                        .text_color(p.foreground)
-                        .child(format!("{one:.2}, {five:.2}, {fifteen:.2}")),
-                ),
-        );
-    }
     if !stats.cpu_cores.is_empty() {
         content = content.child(
             v_flex()
@@ -67,7 +50,7 @@ pub(crate) fn cpu_card(
             p.muted,
             chrome.chart,
         ));
-    let summary = if chrome.waiting {
+    let cpu_summary = if chrome.waiting {
         summary_text("—".to_string(), p.muted_foreground)
     } else if stats.cpu_count > 0 {
         summary_text(
@@ -80,6 +63,25 @@ pub(crate) fn cpu_card(
         )
     } else {
         summary_text(format!("{:.1}%", stats.cpu_percent), color)
+    };
+    let summary: AnyElement = if let Some((one, five, fifteen)) = stats.host_load {
+        h_flex()
+            .flex_1()
+            .justify_end()
+            .gap_4()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(format!(
+                        "{} {one:.2}, {five:.2}, {fifteen:.2}",
+                        rust_i18n::t!("container.stats.host_load")
+                    )),
+            )
+            .child(cpu_summary)
+            .into_any_element()
+    } else {
+        cpu_summary
     };
     stat_card(
         "container-stats-card-cpu",
@@ -110,36 +112,6 @@ pub(crate) fn memory_card(
         }
     };
     let content = content
-        .child(
-            h_flex()
-                .justify_between()
-                .text_xs()
-                .child(
-                    div()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.stats.rss").to_string()),
-                )
-                .child(
-                    div()
-                        .text_color(p.foreground)
-                        .child(value(stats.memory_rss)),
-                ),
-        )
-        .child(
-            h_flex()
-                .justify_between()
-                .text_xs()
-                .child(
-                    div()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.stats.cache").to_string()),
-                )
-                .child(
-                    div()
-                        .text_color(p.foreground)
-                        .child(value(stats.memory_cache)),
-                ),
-        )
         .child(trend_label(chrome))
         .child(render_percent_sparkline(
             history,
@@ -148,22 +120,49 @@ pub(crate) fn memory_card(
             p.muted,
             chrome.chart,
         ));
+    let summary: AnyElement = if chrome.waiting {
+        summary_text("—".to_string(), p.muted_foreground)
+    } else {
+        h_flex()
+            .flex_1()
+            .justify_end()
+            .gap_4()
+            .text_xs()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("container.stats.rss").to_string()),
+                    )
+                    .child(
+                        div()
+                            .text_color(p.foreground)
+                            .child(value(stats.memory_rss)),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("container.stats.cache").to_string()),
+                    )
+                    .child(
+                        div()
+                            .text_color(p.foreground)
+                            .child(value(stats.memory_cache)),
+                    ),
+            )
+            .into_any_element()
+    };
     stat_card(
         "container-stats-card-memory",
         IconName::Server,
         rust_i18n::t!("container.stats.memory").to_string(),
-        if chrome.waiting {
-            summary_text("—".to_string(), p.muted_foreground)
-        } else {
-            summary_text(
-                format!(
-                    "{} / {}",
-                    crate::format::format_size(stats.memory_used),
-                    crate::format::format_size(stats.memory_limit)
-                ),
-                color,
-            )
-        },
+        summary,
         content.into_any_element(),
         p,
     )
@@ -178,46 +177,33 @@ pub(crate) fn network_card(
     chrome: &StatsChrome,
 ) -> AnyElement {
     let p = chrome.p;
-    let mut content =
-        v_flex()
-            .gap_2()
-            .child(trend_label(chrome))
-            .child(render_network_dual_sparkline(
-                rx_rates,
-                tx_rates,
-                44.0,
-                p.primary,
-                p.sidebar_accent_foreground,
-                p.muted,
-                chrome.chart,
-            ));
+    let content = v_flex()
+        .gap_2()
+        .child(trend_label(chrome))
+        .child(render_network_dual_sparkline(
+            rx_rates,
+            tx_rates,
+            44.0,
+            p.primary,
+            p.sidebar_accent_foreground,
+            p.muted,
+            chrome.chart,
+        ));
+    let mut title = rust_i18n::t!("container.stats.network").to_string();
     if !interfaces.is_empty() {
-        content = content.child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.stats.interfaces").to_string()),
-                )
-                .children(interfaces.iter().map(|(name, rx, tx)| {
-                    h_flex()
-                        .justify_between()
-                        .text_xs()
-                        .child(div().text_color(p.foreground).child(name.clone()))
-                        .child(div().text_color(p.muted_foreground).child(format!(
-                            "↓ {}/s  ↑ {}/s",
-                            crate::format::format_size(*rx),
-                            crate::format::format_size(*tx)
-                        )))
-                })),
-        );
+        let names = interfaces
+            .iter()
+            .take(2)
+            .map(|(name, _, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        title.push_str(" · ");
+        title.push_str(&names);
     }
     stat_card(
         "container-stats-card-network",
         IconName::Network,
-        rust_i18n::t!("container.stats.network").to_string(),
+        title,
         if chrome.waiting {
             summary_text("—".to_string(), p.muted_foreground)
         } else {
@@ -244,13 +230,13 @@ pub(crate) struct StatsChrome<'a> {
     pub(crate) waiting: bool,
 }
 
-/// 历史窗口文案：与采样档位对应（40 个槽位）。
-pub(crate) fn trend_window(interval: SampleIntervalMode) -> String {
-    match interval {
-        SampleIntervalMode::Fast => rust_i18n::t!("container.stats.window_40s").to_string(),
-        SampleIntervalMode::Normal => rust_i18n::t!("container.stats.window_2m").to_string(),
-        SampleIntervalMode::Eco => rust_i18n::t!("container.stats.window_7m").to_string(),
-    }
+/// 历史窗口文案：图表固定保留 40 个采样点，不把点数伪装成固定时长。
+pub(crate) fn trend_window(_interval: SampleIntervalMode) -> String {
+    rust_i18n::t!(
+        "container.stats.window_samples",
+        count = crate::container::types::STATS_HISTORY_LIMIT
+    )
+    .to_string()
 }
 
 pub(crate) fn trend_label(chrome: &StatsChrome) -> AnyElement {

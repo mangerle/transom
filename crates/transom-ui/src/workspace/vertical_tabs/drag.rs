@@ -6,9 +6,9 @@
 //! 标签、分屏布局与焦点。
 
 use crate::app::AppShell;
+use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use crate::workspace::tab_drag::{TabDrag, TabDragPreview, reorder_groups};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_core::GroupId;
@@ -18,7 +18,7 @@ pub(super) fn attach_vertical_tab_drag(
     row: Stateful<Div>,
     group_id: GroupId,
     title: String,
-    icon: IconName,
+    icon: AppIcon,
     app: &Entity<AppShell>,
     p: &Palette,
 ) -> Stateful<Div> {

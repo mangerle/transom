@@ -194,7 +194,6 @@ impl ModalKind {
             }
             ModalKind::ContainerForm => {
                 shell.state.containers.form = None;
-                shell.state.containers.form_folder = None;
                 true
             }
             ModalKind::ContainerFolderForm => {

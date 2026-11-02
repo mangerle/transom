@@ -56,8 +56,8 @@ impl AppShell {
             main = main.child(self.render_reconnect_banner(tab_id, p, cx));
         }
         main = main.child(content);
-        // 广播条贴在终端区底部、状态栏之上；关闭时完全不参与布局。
-        if self.state.broadcast.open {
+        // 广播条贴在终端区底部、状态栏之上；只对当前具备可输入终端的标签显示。
+        if self.state.broadcast.open && self.state.active_tab_has_terminal() {
             main = main.child(self.render_broadcast_bar(cx, p));
         }
         main.into_any_element()

@@ -108,6 +108,14 @@ pub fn recordings_dir() -> PathBuf {
     config_dir().join("recordings")
 }
 
+/// 应用托管的 Compose YAML 目录。
+///
+/// 新建与导入的编排文件统一落在这里，便于备份、排查与右键编辑；用户原始
+/// 工作目录中的文件不搬迁，已有项目仍按 Docker 标签记录的路径打开。
+pub fn compose_dir() -> PathBuf {
+    config_dir().join("compose")
+}
+
 /// 应用运行日志目录。
 ///
 /// 为什么与审计目录分开：审计落的是远端屏幕原始字节（含口令回显，默认关闭、

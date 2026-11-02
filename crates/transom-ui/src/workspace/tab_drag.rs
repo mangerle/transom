@@ -4,8 +4,8 @@
 //! 与标签内容渲染耦合度低，混在 `tab_strip.rs` 会让那个文件超出规模约束。
 
 use crate::app::{AppShell, TabGroup};
+use crate::app_assets::AppIcon;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
@@ -18,12 +18,12 @@ pub(super) struct TabDrag(pub(super) GroupId);
 /// 跟随鼠标的标签预览卡片。
 pub(super) struct TabDragPreview {
     title: String,
-    icon: IconName,
+    icon: AppIcon,
 }
 
 impl TabDragPreview {
     /// 构造跟随鼠标的预览卡片；纵向标签面板复用同一份预览实现。
-    pub(super) fn new(title: String, icon: IconName) -> Self {
+    pub(super) fn new(title: String, icon: AppIcon) -> Self {
         Self { title, icon }
     }
 }
@@ -57,7 +57,7 @@ pub(super) fn attach_tab_drag(
     tab: Stateful<Div>,
     group_id: GroupId,
     title: String,
-    icon: IconName,
+    icon: AppIcon,
     app: &Entity<AppShell>,
     p: &Palette,
 ) -> Stateful<Div> {

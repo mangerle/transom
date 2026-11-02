@@ -208,11 +208,6 @@ impl WorkspaceState {
         self.tab(tab_id).and_then(|tab| tab.terminal())
     }
 
-    /// 是否存在任何终端视图；状态栏据此决定是否显示会话域指标。
-    pub(crate) fn has_any_terminal(&self) -> bool {
-        self.tabs.iter().any(|tab| tab.terminal().is_some())
-    }
-
     /// 关闭活动窗格的端口转发面板；面板句柄由窗格持有。
     pub(crate) fn close_forward_panel(&mut self) {
         if let Some(tab_id) = self.active_tab

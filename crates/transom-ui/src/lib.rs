@@ -10,6 +10,7 @@ pub(crate) const APP_REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 pub(crate) const APP_AUTHORS: &str = "wangle";
 
 mod app;
+mod app_assets;
 mod audit;
 mod brand;
 mod cast_player;
@@ -37,6 +38,7 @@ pub(crate) use app::{
 pub(crate) use app::AppShell;
 pub use app::workspace::WorkspaceState;
 
+use app_assets::AppAssets;
 use gpui_kit::component as gpui_component;
 use gpui_kit::*;
 use std::sync::Arc;
@@ -82,7 +84,7 @@ pub fn run(services: UiServices) {
             .to_filter(),
     );
 
-    application().with_assets(assets::AllAssets).run(move |cx| {
+    application().with_assets(AppAssets).run(move |cx| {
         rust_i18n::extend!(gpui_component);
         init(cx);
         gpui_component::set_locale(&language);

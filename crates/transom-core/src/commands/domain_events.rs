@@ -351,6 +351,11 @@ pub enum ContainerAppEvent {
         container: String,
         stats: ContainerStats,
     },
+    /// 统计流暂时不可用；UI 保留上一帧并显示自动重连状态。
+    StatsUnavailable {
+        request_id: ContainerRequestId,
+        error: String,
+    },
     ProcessesListed {
         request_id: ContainerRequestId,
         processes: Vec<ContainerProcess>,

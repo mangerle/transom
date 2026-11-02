@@ -54,7 +54,7 @@ pub(crate) fn stats_toolbar(
                         .icon(IconName::RefreshCw)
                         .label(rust_i18n::t!("common.retry").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.ensure_container_stats(tab_id, cx);
+                            this.restart_container_stats(tab_id, cx);
                             this.ensure_container_processes(tab_id);
                             cx.notify();
                         })),

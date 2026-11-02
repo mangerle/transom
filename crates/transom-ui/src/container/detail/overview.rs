@@ -9,7 +9,6 @@ use super::*;
 /// 想看原始 JSON 时不必离开页签。
 pub(crate) fn render_container_overview(
     details: Option<&ContainerDetails>,
-    notice: Option<&str>,
     raw: bool,
     p: &Palette,
 ) -> AnyElement {
@@ -35,14 +34,6 @@ pub(crate) fn render_container_overview(
                 .into_any_element()
         };
         rows = rows.child(body);
-        if let Some(notice) = notice {
-            rows = rows.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(notice.to_string()),
-            );
-        }
         return scroll_body(rows, p).into_any_element();
     }
     rows = rows
@@ -132,14 +123,6 @@ pub(crate) fn render_container_overview(
             rust_i18n::t!("container.field.env"),
             details.env.join("\n"),
         ));
-    }
-    if let Some(notice) = notice {
-        rows = rows.child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(notice.to_string()),
-        );
     }
     scroll_body(rows, p).into_any_element()
 }

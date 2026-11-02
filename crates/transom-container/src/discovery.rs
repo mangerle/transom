@@ -86,7 +86,9 @@ fn explicit_candidate(
             Some(EngineTransport::NamedPipe { path: path.clone() }),
             None,
         ),
-        ContainerEndpoint::Tcp { url } => (Some(EngineTransport::Tcp { url: url.clone() }), None),
+        ContainerEndpoint::Tcp { url, .. } => {
+            (Some(EngineTransport::Tcp { url: url.clone() }), None)
+        }
         ContainerEndpoint::Ssh { .. } => (None, None),
         ContainerEndpoint::Wsl { distro } => (
             None,
@@ -177,12 +179,11 @@ pub fn parse_endpoint(value: &str) -> Option<ContainerEndpoint> {
     {
         return Some(ContainerEndpoint::Tcp {
             url: value.to_string(),
+            tls: None,
         });
     }
-    if value.starts_with("ssh://") {
-        return Some(ContainerEndpoint::Ssh {
-            target: value.trim_start_matches("ssh://").to_string(),
-        });
+    if let Some(rest) = value.strip_prefix("ssh://") {
+        return Some(parse_ssh_endpoint(rest));
     }
     if value.starts_with('/') || value.starts_with("~/") {
         return Some(ContainerEndpoint::Unix {
@@ -190,6 +191,43 @@ pub fn parse_endpoint(value: &str) -> Option<ContainerEndpoint> {
         });
     }
     None
+}
+
+/// 解析 SSH 地址字符串（不含 `ssh://` 前缀）。
+///
+/// 支持格式：`host`、`host:port`、`user@host`、`user@host:port`。
+/// 端口必须是合法的 u16，否则整个字符串按 host 处理。
+fn parse_ssh_endpoint(s: &str) -> ContainerEndpoint {
+    // 先分离 user 部分
+    let (user, rest) = if let Some(idx) = s.find('@') {
+        let u = &s[..idx];
+        (
+            if u.is_empty() {
+                None
+            } else {
+                Some(u.to_string())
+            },
+            &s[idx + 1..],
+        )
+    } else {
+        (None, s)
+    };
+    // 再分离 host 和 port
+    let (host, port) = if let Some((h, p)) = rest.rsplit_once(':') {
+        if let Ok(port_num) = p.parse::<u16>() {
+            (h.to_string(), Some(port_num))
+        } else {
+            (rest.to_string(), None)
+        }
+    } else {
+        (rest.to_string(), None)
+    };
+    ContainerEndpoint::Ssh {
+        host,
+        port,
+        user,
+        identity_file: None,
+    }
 }
 
 /// CLI 兜底候选：只有可执行文件存在时才加入，避免无意义的探测。
@@ -324,9 +362,6 @@ fn endpoint_key(endpoint: &ContainerEndpoint) -> String {
 /// 显式端点是否在当前平台可用；用于给会话表单一个提前拒绝的机会。
 pub fn validate_endpoint(endpoint: &ContainerEndpoint) -> Result<(), ContainerError> {
     match endpoint {
-        ContainerEndpoint::Ssh { .. } => Err(ContainerError::Unsupported {
-            operation: "SSH 引擎端点（计划在 P1 提供）".to_string(),
-        }),
         ContainerEndpoint::NamedPipe { .. } if !cfg!(windows) => Err(ContainerError::Unsupported {
             operation: "命名管道仅支持 Windows".to_string(),
         }),
@@ -341,7 +376,7 @@ pub fn validate_endpoint(endpoint: &ContainerEndpoint) -> Result<(), ContainerEr
 
 #[cfg(test)]
 mod tests {
-    use super::{endpoint_key, parse_endpoint};
+    use super::{endpoint_key, parse_endpoint, parse_ssh_endpoint};
     use std::path::PathBuf;
     use transom_core::ContainerEndpoint;
     #[test]
@@ -361,7 +396,8 @@ mod tests {
         assert_eq!(
             parse_endpoint("tcp://127.0.0.1:2375"),
             Some(ContainerEndpoint::Tcp {
-                url: "tcp://127.0.0.1:2375".to_string()
+                url: "tcp://127.0.0.1:2375".to_string(),
+                tls: None,
             })
         );
         assert!(matches!(
@@ -370,6 +406,33 @@ mod tests {
         ));
         assert_eq!(parse_endpoint("   "), None);
         assert_eq!(parse_endpoint("relative/path"), None);
+    }
+
+    #[test]
+    fn parses_ssh_endpoint_formats() {
+        // host only
+        let ep = parse_ssh_endpoint("myhost.example.com");
+        assert!(
+            matches!(&ep, ContainerEndpoint::Ssh { host, port: None, user: None, .. } if host == "myhost.example.com")
+        );
+
+        // user@host
+        let ep = parse_ssh_endpoint("admin@192.168.1.100");
+        assert!(
+            matches!(&ep, ContainerEndpoint::Ssh { host, user: Some(u), port: None, .. } if host == "192.168.1.100" && u == "admin")
+        );
+
+        // host:port
+        let ep = parse_ssh_endpoint("myhost:2222");
+        assert!(
+            matches!(&ep, ContainerEndpoint::Ssh { host, port: Some(2222), user: None, .. } if host == "myhost")
+        );
+
+        // user@host:port
+        let ep = parse_ssh_endpoint("root@10.0.0.1:22");
+        assert!(
+            matches!(&ep, ContainerEndpoint::Ssh { host, port: Some(22), user: Some(u), .. } if host == "10.0.0.1" && u == "root")
+        );
     }
 
     /// 真机回归：`/run/docker.sock` 与 `/var/run/docker.sock` 是同一个文件，

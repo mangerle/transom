@@ -28,6 +28,9 @@ impl AppShell {
         let id = profile.id;
         let name = profile.display_name();
         let description = profile.engine.describe();
+        let icon =
+            crate::session_appearance::session_icon(profile.icon).unwrap_or(IconName::Container);
+        let profile_color = crate::session_appearance::session_color(profile.color);
         let folder_id = profile.folder_id;
         let is_active = active == Some(id);
         let is_selected = selected == Some(id);
@@ -71,9 +74,7 @@ impl AppShell {
             }))
             .on_drag(ContainerSidebarDrag::Engine(id), {
                 let drag_label = name.clone();
-                move |_, _, _, cx| {
-                    cx.new(|_| SidebarDragPreview::new(drag_label.clone(), IconName::Container))
-                }
+                move |_, _, _, cx| cx.new(|_| SidebarDragPreview::new(drag_label.clone(), icon))
             })
             .on_drop({
                 let app = app.clone();
@@ -142,7 +143,7 @@ impl AppShell {
                                         .iter()
                                         .find(|profile| profile.id == id)
                                         .cloned();
-                                    this.open_container_form(profile, window, cx);
+                                    this.open_container_form(profile, None, window, cx);
                                 });
                             }
                         },
@@ -238,9 +239,13 @@ impl AppShell {
         };
         band = band
             .child(
-                Icon::new(IconName::Container)
+                Icon::new(icon)
                     .with_size(ROW_ICON_SIZE)
-                    .text_color(if is_active { action_color } else { p.primary }),
+                    .text_color(if is_active {
+                        action_color
+                    } else {
+                        profile_color.unwrap_or(p.primary)
+                    }),
             )
             .child(
                 v_flex()

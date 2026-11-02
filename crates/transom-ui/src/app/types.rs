@@ -64,7 +64,7 @@ pub(crate) enum TabContent {
     Player(Entity<crate::cast_player::CastPlayerView>),
     /// 全屏独立主机监控看板（携带关联的主机会话 TabId）。
     Monitor(TabId),
-    /// 容器引擎管理工作区（三栏：菜单 / 列表 / 详情）。
+    /// 容器引擎管理工作区（顶部分类标签 + 列表 / 详情双栏）。
     Containers(Box<crate::container::ContainerWorkspaceState>),
 }
 

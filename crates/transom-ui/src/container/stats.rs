@@ -10,10 +10,7 @@
 
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
-use crate::monitor::{
-    SampleIntervalMode, SparklineChartType, render_network_dual_sparkline,
-    render_percent_sparkline, usage_bar, usage_color,
-};
+use crate::monitor::{SampleIntervalMode, SparklineChartType, usage_bar, usage_color};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -26,12 +23,14 @@ mod cards;
 mod ports;
 mod processes;
 mod rates;
+mod sparkline;
 mod toolbar;
 
 pub(crate) use cards::*;
 pub(crate) use ports::*;
 pub(crate) use processes::*;
 pub(crate) use rates::*;
+pub(crate) use sparkline::{render_network_dual_sparkline, render_percent_sparkline};
 pub(crate) use toolbar::*;
 
 /// 进程表最多展示的行数：再多会把统计页拖成一张进程管理器。

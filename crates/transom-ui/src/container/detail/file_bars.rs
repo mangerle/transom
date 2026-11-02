@@ -34,16 +34,15 @@ pub(crate) fn render_rename_bar(
                     .on_click(cx.listener({
                         let input = input.clone();
                         let from = from.clone();
-                        move |this, _, _, cx| {
+                        move |this, _, window, cx| {
                             let value = input.read(cx).value().trim().to_string();
                             if value.is_empty() || value.contains('/') {
-                                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
-                                {
-                                    workspace.notice = Some(
-                                        rust_i18n::t!("container.files.rename_invalid").to_string(),
-                                    );
-                                }
-                                cx.notify();
+                                this.show_toast(
+                                    rust_i18n::t!("container.files.rename_invalid").to_string(),
+                                    false,
+                                    window,
+                                    cx,
+                                );
                                 return;
                             }
                             let parent = parent_path(&from);

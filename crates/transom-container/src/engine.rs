@@ -232,6 +232,19 @@ impl Engine {
         }
     }
 
+    /// 持续输出容器统计。HTTP 后端使用单条 Docker 流，CLI 后端固定节拍采样。
+    ///
+    /// # Errors
+    /// 流建立、读取、解析或 CLI 采样失败时返回错误。
+    pub async fn stream_container_stats(
+        &self,
+        container: &str,
+        cancel: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+        sink: &mut crate::stats::StatsSink<'_>,
+    ) -> Result<(), ContainerError> {
+        crate::stats::stream_container_stats(self, container, cancel, sink).await
+    }
+
     pub async fn list_processes(
         &self,
         container: &str,
@@ -412,7 +425,7 @@ fn transport_for(endpoint: &ContainerEndpoint) -> Option<EngineTransport> {
         ContainerEndpoint::NamedPipe { path } => {
             Some(EngineTransport::NamedPipe { path: path.clone() })
         }
-        ContainerEndpoint::Tcp { url } => Some(EngineTransport::Tcp { url: url.clone() }),
+        ContainerEndpoint::Tcp { url, .. } => Some(EngineTransport::Tcp { url: url.clone() }),
         _ => None,
     }
 }

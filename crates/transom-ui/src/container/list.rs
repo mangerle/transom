@@ -10,22 +10,22 @@
 //! 窄列表下仍要展开菜单；筛选与排序都在前端完成，不额外发请求。
 
 use crate::app::AppShell;
+use crate::container::CONTENT_HEADER_HEIGHT;
 use crate::container::types::{
-    ContainerBatchAction, ContainerPruneTarget, ContainerQuickFilter, ContainerSection,
-    ContainerSortKey, ContainerStateFilter, ContainerWorkspaceState, RowAction, RowTarget,
-    SortFields, compare_fields, image_passes_filter, matches_query, row_key, volume_passes_filter,
+    ContainerPruneTarget, ContainerQuickFilter, ContainerSection, ContainerSortKey,
+    ContainerStateFilter, ContainerWorkspaceState, RowAction, RowTarget, SortFields,
+    compare_fields, image_passes_filter, matches_query, row_key, volume_passes_filter,
 };
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::format::format_size;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenu, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use std::collections::HashSet;
 use transom_core::{
     ComposeProject, ContainerImageSummary, ContainerNetworkSummary, ContainerSummary,
     ContainerVolumeSummary, TabId, short_id,
@@ -67,8 +67,6 @@ pub(crate) struct ListRow {
     pub(crate) badge: Option<String>,
     /// 运行态：容器与编排项目有，静态资源没有。
     pub(crate) running: Option<bool>,
-    /// 多选勾选状态：只有容器分类需要。
-    pub(crate) checked: Option<bool>,
     pub(crate) target: RowTarget,
     pub(crate) fields: SortFields,
 }
@@ -90,14 +88,11 @@ impl AppShell {
         let sort_key = workspace.sort_key;
         let sort_desc = workspace.sort_desc;
         let busy = workspace.busy;
-        let notice = workspace.notice.clone();
         let selected = workspace.selected.clone();
-        let checked = workspace.checked.clone();
-        let batch_armed = workspace.batch_armed;
         let quick = workspace.quick_filter;
         let cli_backend = workspace.info.as_ref().is_some_and(|info| info.cli_backend);
         let query = workspace.query(cx).to_lowercase();
-        let mut rows = collect_rows(section, workspace, &query, state_filter, &checked);
+        let mut rows = collect_rows(section, workspace, &query, state_filter);
         rows.sort_by(|left, right| {
             compare_fields(
                 &left.fields,
@@ -107,24 +102,6 @@ impl AppShell {
             )
         });
 
-        let checked_count = rows
-            .iter()
-            .filter(|row| row.checked.unwrap_or(false))
-            .count();
-        // 信息条常驻：优先显示批量选择，其次显示操作状态；两者都没有时只占位。
-        // 容器分类始终占位（勾选/取消不跳行）；其它分类仅在有状态时才出现，
-        // 不白占一行高度。
-        let batch_bar = (section == ContainerSection::Containers || notice.is_some()).then(|| {
-            render_status_bar(
-                tab_id,
-                section,
-                checked_count,
-                batch_armed,
-                notice.as_deref(),
-                p,
-                cx,
-            )
-        });
         let toolbar = self.render_list_toolbar(
             &ToolbarParams {
                 tab_id,
@@ -140,18 +117,25 @@ impl AppShell {
             cx,
         );
         let body = render_rows(tab_id, &rows, &selected, p, cx);
-        let mut column = v_flex()
-            .h_full()
-            .w_full()
-            .min_w_0()
+        let toolbar_header = h_flex()
+            .h(rems(CONTENT_HEADER_HEIGHT))
+            .flex_none()
+            .px_2()
+            .items_center()
             .overflow_hidden()
-            .gap_1p5()
-            .p_2()
-            .child(toolbar)
-            .children(batch_bar)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
+            .child(div().flex_1().min_w_0().child(toolbar));
+        let mut content = v_flex()
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .overflow_hidden()
+            .px_2()
+            .pb_2()
             .child(body);
         if busy {
-            column = column.child(
+            content = content.child(
                 h_flex()
                     .gap_1()
                     .items_center()
@@ -161,7 +145,14 @@ impl AppShell {
                     .child(rust_i18n::t!("container.loading").to_string()),
             );
         }
-        column.into_any_element()
+        v_flex()
+            .h_full()
+            .w_full()
+            .min_w_0()
+            .overflow_hidden()
+            .child(toolbar_header)
+            .child(content)
+            .into_any_element()
     }
 
     /// 工具条：一行摆下搜索框与状态、快速筛选、排序三个下拉。
@@ -183,6 +174,30 @@ impl AppShell {
             .child(self.render_state_filter_menu(params, cx))
             .child(self.render_quick_filter_menu(params, cx))
             .child(self.render_sort_menu(params, cx));
+        if params.section == ContainerSection::Compose {
+            let tab_id = params.tab_id;
+            controls = controls
+                .child(
+                    Button::new("container-compose-new")
+                        .xsmall()
+                        .ghost()
+                        .icon(IconName::FilePlus)
+                        .label(rust_i18n::t!("container.compose.new_yaml").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.create_local_compose(tab_id, cx);
+                        })),
+                )
+                .child(
+                    Button::new("container-compose-import")
+                        .xsmall()
+                        .ghost()
+                        .icon(IconName::Upload)
+                        .label(rust_i18n::t!("container.compose.import_yaml").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.import_local_compose(tab_id, cx);
+                        })),
+                );
+        }
         // 新增入口收在工具条上：底部常驻一行输入框在三个分类里都占高度却几乎不用。
         // 卷与网络只留加号图标：中栏本来就窄，文字按钮会把搜索框压到不可用。
         if let Some(label) = create_button_label(params.section) {

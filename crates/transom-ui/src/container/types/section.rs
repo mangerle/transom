@@ -1,6 +1,6 @@
 //! 分类、页签、筛选与排序：纯枚举与谓词，不持有界面状态。
 
-/// 左侧功能菜单。
+/// 工作区顶部功能标签。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ContainerSection {
     Compose,
@@ -32,8 +32,8 @@ impl ContainerSection {
     pub(crate) fn icon(self) -> gpui_kit::assets::IconName {
         use gpui_kit::assets::IconName;
         match self {
-            Self::Compose => IconName::Boxes,
-            Self::Containers => IconName::Container,
+            Self::Compose => IconName::Blocks,
+            Self::Containers => IconName::Boxes,
             Self::Images => IconName::Layers,
             Self::Volumes => IconName::Database,
             Self::Networks => IconName::Network,

@@ -21,30 +21,6 @@ fn order(items: &[SortFields], key: ContainerSortKey, desc: bool) -> Vec<String>
 }
 
 #[test]
-fn checkbox_membership_and_batch_arm_toggle() {
-    let mut set = std::collections::HashSet::new();
-    super::toggle_membership(&mut set, "a");
-    assert_eq!(set.len(), 1, "首次点击加入");
-    super::toggle_membership(&mut set, "a");
-    assert!(set.is_empty(), "再次点击移除");
-    super::toggle_membership(&mut set, "b");
-    super::toggle_membership(&mut set, "c");
-    assert_eq!(set.len(), 2);
-
-    assert_eq!(
-        super::arm_or_fire(false, 3),
-        (true, false),
-        "第一次只是武装"
-    );
-    assert_eq!(super::arm_or_fire(true, 3), (false, true), "第二次才下发");
-    assert_eq!(
-        super::arm_or_fire(true, 0),
-        (false, false),
-        "没有选中项就不下发"
-    );
-}
-
-#[test]
 fn quick_filters_only_apply_where_they_mean_something() {
     assert_eq!(
         ContainerQuickFilter::for_section(ContainerSection::Volumes),

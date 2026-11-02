@@ -105,6 +105,17 @@ pub(crate) struct AppState {
 }
 
 impl AppState {
+    /// 当前焦点标签是否承载可输入终端。
+    ///
+    /// 快捷命令、广播与录制都直接作用于终端；容器管理、录像回放与主机监控
+    /// 没有当前终端目标，状态栏据此隐藏这些入口，避免点击后无响应。
+    pub(crate) fn active_tab_has_terminal(&self) -> bool {
+        self.workspace
+            .active_tab
+            .and_then(|tab_id| self.workspace.tab(tab_id))
+            .is_some_and(|tab| tab.terminal().is_some())
+    }
+
     /// 向控制器提交命令：非阻塞 `try_send`，队列满时快速失败。
     pub(crate) fn send_command(&mut self, command: impl Into<AppCommand>) -> bool {
         match self.services.command_tx.try_send(command.into()) {

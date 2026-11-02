@@ -185,13 +185,32 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.state.toast_seq = self.state.toast_seq.wrapping_add(1);
-        let key = format!("transom-toast-{}", self.state.toast_seq);
         let notification = if success {
             Notification::success(message.into())
         } else {
             Notification::error(message.into())
         };
+        self.push_toast(notification, window, cx);
+    }
+
+    /// 右上角中性提示，用于正在执行、传输开始等非成功/失败回执。
+    pub(crate) fn show_info_toast(
+        &mut self,
+        message: impl Into<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.push_toast(Notification::info(message.into()), window, cx);
+    }
+
+    fn push_toast(
+        &mut self,
+        notification: Notification,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.toast_seq = self.state.toast_seq.wrapping_add(1);
+        let key = format!("transom-toast-{}", self.state.toast_seq);
         window.push_notification(
             notification.id1::<ToastMarker>(key.clone()).autohide(false),
             cx,

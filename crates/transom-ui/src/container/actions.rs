@@ -51,7 +51,7 @@ impl AppShell {
         }
     }
 
-    /// 切换左侧分类：清空选中项并拉取该分类列表。
+    /// 切换顶部功能分类：清空选中项并拉取该分类列表。
     pub(crate) fn select_container_section(
         &mut self,
         tab_id: TabId,
@@ -80,6 +80,7 @@ impl AppShell {
             workspace.logs.clear();
             workspace.stats = None;
             workspace.stats_history.clear();
+            workspace.stats_last_append = None;
             workspace.stats_error = None;
             workspace.stats_processes.clear();
             workspace.stats_processes_error = None;
@@ -270,6 +271,12 @@ impl AppShell {
                 };
                 self.open_container_rename(tab_id, id, name, window, cx);
             }
+            RowAction::EditComposeYaml => {
+                let RowTarget::Compose(name) = target else {
+                    return;
+                };
+                self.edit_compose_yaml(tab_id, &name, window, cx);
+            }
             RowAction::CopyId | RowAction::CopyName => {}
         }
     }
@@ -348,51 +355,6 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 切换容器勾选状态（多选）。
-    pub(crate) fn toggle_container_check(
-        &mut self,
-        tab_id: TabId,
-        id: String,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.toggle_checked(&id);
-        }
-        cx.notify();
-    }
-
-    /// 批量下发启停/删除；删除在同一批勾选下必须连点两次，避免误删一片。
-    pub(crate) fn run_container_batch(
-        &mut self,
-        tab_id: TabId,
-        action: ContainerBatchAction,
-        cx: &mut Context<Self>,
-    ) {
-        let names = {
-            let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-                return;
-            };
-            let names = workspace.checked_names();
-            if action.is_dangerous() {
-                let (armed, fire) = arm_or_fire(workspace.batch_armed, names.len());
-                workspace.batch_armed = armed;
-                if !fire {
-                    cx.notify();
-                    return;
-                }
-            }
-            workspace.checked.clear();
-            workspace.batch_armed = false;
-            names
-        };
-        // 每个容器一条独立命令：引擎侧本来就是按容器逐个处理，失败也只影响自己，
-        // 控制层按 request_id 回报，界面不需要额外的批量事务语义。
-        for name in names {
-            self.container_lifecycle(tab_id, name, action.lifecycle(), cx);
-        }
-        cx.notify();
-    }
-
     /// 从编排/卷/网络详情跳到某个容器：必要时先切分类并拉列表。
     pub(crate) fn reveal_container(&mut self, tab_id: TabId, name: String, cx: &mut Context<Self>) {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
@@ -419,14 +381,6 @@ impl AppShell {
         if need_list {
             self.stop_container_streams(tab_id);
             self.refresh_container_section(tab_id);
-        }
-        cx.notify();
-    }
-
-    /// 清掉中栏顶部的状态提示（成功回执与错误都走这一条）。
-    pub(crate) fn dismiss_container_notice(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.notice = None;
         }
         cx.notify();
     }

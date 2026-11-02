@@ -3,7 +3,7 @@
 use super::*;
 
 impl AppShell {
-    pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId, _cx: &mut Context<Self>) {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
@@ -23,7 +23,6 @@ impl AppShell {
         let interval_ms = workspace.stats_interval.interval().as_millis() as u64;
         let request_id = ContainerRequestId::new();
         workspace.stats_request = Some(request_id);
-        workspace.stats = None;
         workspace.stats_error = None;
         log::debug!(
             "请求容器统计，标签: {tab_id}，容器: {container}，间隔: {interval_ms}ms，请求: {request_id}"
@@ -39,33 +38,9 @@ impl AppShell {
                 interval_ms,
             },
         );
-        // 兜底看门狗：请求若因链路异常一直没有回音，12 秒后给出可重试的错误，
-        // 避免界面永远停在「正在采样统计…」。
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_secs(12))
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                let pending = this
-                    .state
-                    .container_workspace(tab_id)
-                    .is_some_and(|workspace| workspace.stats_request == Some(request_id));
-                if !pending {
-                    return;
-                }
-                if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                    workspace.stats_request = None;
-                    workspace.stats_error =
-                        Some(rust_i18n::t!("container.stats.timeout").to_string());
-                }
-                this.cancel_container_request(tab_id, request_id);
-                cx.notify();
-            });
-        })
-        .detach();
     }
 
-    /// 切换采样档位：历史与速率口径都依赖间隔，换档时清空历史重新累积。
+    /// 切换采样档位：保留当前值与已绘制的历史，只按新间隔重启后续采样。
     pub(crate) fn set_container_stats_interval(
         &mut self,
         tab_id: TabId,
@@ -79,16 +54,22 @@ impl AppShell {
             return;
         }
         workspace.stats_interval = interval;
-        workspace.stats_history.clear();
-        let stats_request = workspace.stats_request.take();
-        // 统计页始终采样；换档位时按新间隔重启轮询，不在统计页则只记档位。
-        let should_poll = workspace.detail_tab == ContainerDetailTab::Stats;
-        if let Some(request_id) = stats_request {
+        cx.notify();
+    }
+
+    /// 手动重启统计流；后台断线会自动重连，这里用于用户主动重试。
+    pub(crate) fn restart_container_stats(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let request_id = self
+            .state
+            .container_workspace_mut(tab_id)
+            .and_then(|workspace| {
+                workspace.stats_last_append = None;
+                workspace.stats_request.take()
+            });
+        if let Some(request_id) = request_id {
             self.cancel_container_request(tab_id, request_id);
         }
-        if should_poll {
-            self.ensure_container_stats(tab_id, cx);
-        }
+        self.ensure_container_stats(tab_id, cx);
         cx.notify();
     }
 

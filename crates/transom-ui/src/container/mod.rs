@@ -20,15 +20,15 @@ mod types;
 mod view;
 
 pub(crate) use types::{
-    ContainerBatchAction, ContainerConfirm, ContainerDetailTab, ContainerDiscovery,
-    ContainerFilesState, ContainerSection, ContainerTerminalState, ContainerUiState,
-    ContainerWorkspaceState, ContainerWorkspaceStatus, RowAction, RowTarget,
+    ContainerConfirm, ContainerDetailTab, ContainerDiscovery, ContainerFilesState,
+    ContainerSection, ContainerTerminalState, ContainerUiState, ContainerWorkspaceState,
+    ContainerWorkspaceStatus, RowAction, RowTarget,
 };
 
 use crate::app::{AppShell, AppState, TabContent, TabStatus, TerminalTab, app_settings};
 use crate::container::toast::{command_toast_label, toast_failed, toast_succeeded};
 use crate::container::types::{
-    ContainerCreateDialog, ContainerPruneTarget, STATS_HISTORY_LIMIT, arm_or_fire, row_key,
+    ContainerCreateDialog, ContainerPruneTarget, STATS_HISTORY_LIMIT, row_key,
 };
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
@@ -37,9 +37,24 @@ use std::sync::Arc;
 use transom_core::{
     AppError, Connection, ContainerAppEvent, ContainerCommand, ContainerConnection,
     ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRequestId,
-    Session, TabId, TerminalIo, TerminalSize,
+    DividerWidth, Session, TabId, TerminalIo, TerminalSize,
 };
 use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
+
+/// 容器列表工具条与详情头部的统一高度。
+///
+/// 两块内容位于同一水平带；如果由各自内容高度决定，右侧底边会随按钮数量或
+/// 文字换行而上下漂移。固定高度让两栏的分割线始终落在同一条水平线上。
+pub(crate) const CONTENT_HEADER_HEIGHT: f32 = 3.0;
+
+/// 把分割线档位换算为像素值，供需要精确覆盖父级边框的强调线使用。
+pub(crate) fn divider_width_px(width: DividerWidth) -> f32 {
+    match width {
+        DividerWidth::Hairline | DividerWidth::Unknown => 1.0,
+        DividerWidth::Medium => 2.0,
+        DividerWidth::Thick => 3.0,
+    }
+}
 
 impl AppState {
     /// 按标签取容器工作区状态；不是容器标签时返回 `None`。

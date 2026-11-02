@@ -26,7 +26,7 @@ use tokio::task::JoinHandle;
 use transom_container::{Engine, discover_all};
 use transom_core::{
     AppError, ContainerAppEvent, ContainerCommand, ContainerEngineProfile,
-    ContainerLifecycleAction, ContainerRequestId, ErrorCode, TabId,
+    ContainerLifecycleAction, ContainerRequestId, ContainerStats, ErrorCode, TabId,
 };
 
 /// 一个打开的工作区：引擎实例 + 可取消的长任务。

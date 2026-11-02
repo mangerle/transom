@@ -160,8 +160,6 @@ impl AppShell {
             workspace.files.new_dir_input.clone(),
             workspace.files.scroll.clone(),
         );
-        let status_text = workspace.notice.clone();
-
         let selected_container = containers
             .iter()
             .find(|item| selected.as_deref() == Some(item.id.as_str()))
@@ -219,7 +217,7 @@ impl AppShell {
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
-                render_container_overview(details.as_ref(), status_text.as_deref(), overview_raw, p)
+                render_container_overview(details.as_ref(), overview_raw, p)
             }
             (ContainerSection::Containers, ContainerDetailTab::Logs) => render_logs(
                 ContainerLogsView {

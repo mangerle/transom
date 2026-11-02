@@ -1,6 +1,7 @@
 //! 引擎引用与连接参数：种类、端点、配置档案与会话连接形态。
 
 use crate::ids::EngineProfileId;
+use crate::model::session_appearance::{SessionColor, SessionIcon};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
@@ -62,6 +63,12 @@ pub struct ContainerEngineProfile {
     /// 所属引擎分组；`None` 表示根层级。
     #[serde(default)]
     pub folder_id: Option<crate::ids::FolderId>,
+    /// 用户选择的展示图标；`Auto` 跟随引擎类型。
+    #[serde(default)]
+    pub icon: SessionIcon,
+    /// 环境色；`None` 表示使用主题色。
+    #[serde(default)]
+    pub color: SessionColor,
     /// 最后修改时间（Unix 毫秒），供多端合并判定谁更新。
     #[serde(default)]
     pub updated_at: u64,
@@ -74,6 +81,8 @@ impl ContainerEngineProfile {
             name: name.into(),
             engine,
             folder_id: None,
+            icon: SessionIcon::Auto,
+            color: SessionColor::None,
             updated_at: now_millis(),
         }
     }
@@ -102,6 +111,30 @@ fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
+/// TCP TLS 配置：用于 Docker/Podman 守护进程开启 TLS 监听的远端连接。
+///
+/// 三个文件路径均为宿主机本地绝对路径；留空表示不加载对应证书，
+/// `ca_cert` 留空等价于不验证服务端身份（仅开发/测试场景）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct TlsConfig {
+    /// CA 证书文件路径，用于验证服务端证书链。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ca_cert: String,
+    /// 客户端证书文件路径，用于双向 TLS 认证。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub client_cert: String,
+    /// 客户端私钥文件路径，与 `client_cert` 配对使用。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub client_key: String,
+}
+
+impl TlsConfig {
+    /// 是否为空配置（三个路径均未填写）。
+    pub fn is_empty(&self) -> bool {
+        self.ca_cert.is_empty() && self.client_cert.is_empty() && self.client_key.is_empty()
+    }
+}
+
 /// 引擎接入端点。
 ///
 /// 序列化后随会话落盘，因此字段必须保持向后兼容：新增变体时老版本会因
@@ -116,10 +149,27 @@ pub enum ContainerEndpoint {
     Unix { path: PathBuf },
     /// Windows 命名管道，如 `//./pipe/docker_engine`。
     NamedPipe { path: String },
-    /// TCP 端点（如 `tcp://127.0.0.1:2375`）；仅允许显式配置。
-    Tcp { url: String },
-    /// 远端守护进程，通过 `docker system dial-stdio` 建立原始流。
-    Ssh { target: String },
+    /// TCP 端点（如 `tcp://127.0.0.1:2375`）；支持可选 TLS。
+    Tcp {
+        url: String,
+        /// TLS 配置；`None` 表示明文连接。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tls: Option<TlsConfig>,
+    },
+    /// 远端守护进程，通过 SSH 隧道建立连接（`docker system dial-stdio`）。
+    Ssh {
+        /// 远端主机地址（IP 或域名），不含端口。
+        host: String,
+        /// SSH 端口；`None` 时使用默认的 22。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<u16>,
+        /// 登录用户名；`None` 时使用当前系统用户名。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        user: Option<String>,
+        /// 私钥文件路径；`None` 时按 SSH 默认规则（`~/.ssh/id_*`）查找。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        identity_file: Option<String>,
+    },
     /// WSL 发行版内的 CLI 兜底。
     Wsl { distro: String },
     /// WSLC（WSL containers）CLI 兜底。
@@ -129,14 +179,26 @@ pub enum ContainerEndpoint {
 }
 
 impl ContainerEndpoint {
-    /// 日志与界面摘要；不含任何凭证。
+    /// 日志与界面摘要；不含任何凭证信息。
     pub fn describe(&self) -> String {
         match self {
             Self::Auto => "自动发现".to_string(),
             Self::Unix { path } => format!("unix://{}", path.display()),
             Self::NamedPipe { path } => format!("npipe:{}", display_pipe_path(path)),
-            Self::Tcp { url } => url.clone(),
-            Self::Ssh { target } => format!("ssh://{target}"),
+            Self::Tcp { url, tls } => {
+                if tls.is_some() {
+                    format!("{url} (TLS)")
+                } else {
+                    url.clone()
+                }
+            }
+            Self::Ssh {
+                host, port, user, ..
+            } => {
+                let user_prefix = user.as_deref().map(|u| format!("{u}@")).unwrap_or_default();
+                let port_suffix = port.map(|p| format!(":{p}")).unwrap_or_default();
+                format!("ssh://{user_prefix}{host}{port_suffix}")
+            }
             Self::Wsl { distro } => format!("wsl://{distro}"),
             Self::Wslc => "wslc://default".to_string(),
             Self::Cli { program, .. } => format!("cli://{program}"),
@@ -158,7 +220,6 @@ impl ContainerEndpoint {
     /// 端点与宿主平台不匹配（如在 Linux 上选择命名管道）时返回中文原因。
     pub fn ensure_supported(&self) -> Result<(), String> {
         match self {
-            Self::Ssh { .. } => Err("SSH 引擎端点将在后续版本提供".to_string()),
             Self::NamedPipe { .. } if !cfg!(windows) => Err("命名管道仅支持 Windows".to_string()),
             Self::Wsl { .. } | Self::Wslc if !cfg!(windows) => {
                 Err("WSL/WSLC 端点仅支持 Windows".to_string())

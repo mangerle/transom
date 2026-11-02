@@ -97,8 +97,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.state.containers.form_folder = folder;
-        self.open_container_form(None, window, cx);
+        self.open_container_form(None, folder, window, cx);
     }
 
     pub(crate) fn save_container_profile(
@@ -106,8 +105,6 @@ impl AppShell {
         profile: ContainerEngineProfile,
         cx: &mut Context<Self>,
     ) {
-        let form_folder = self.state.containers.form_folder.take();
-        let mut profile = profile;
         if let Some(existing) = self
             .state
             .catalog
@@ -117,11 +114,6 @@ impl AppShell {
         {
             *existing = profile;
         } else {
-            // 从分组菜单新建的连接直接落到该分组，不需要用户再拖一次。
-            if let Some(folder) = form_folder {
-                profile.folder_id = Some(folder);
-                profile.touch();
-            }
             self.state.catalog.engines.push(profile);
         }
         self.state.persist_catalog();

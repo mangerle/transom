@@ -7,10 +7,13 @@
 //! 代价与局限：只覆盖视觉映射，标签布局仍各按横向/纵向排版。
 
 use crate::app::{AppShell, TerminalTab};
+use crate::app_assets::AppIcon;
 use crate::palette::Palette;
+use crate::session_appearance::{session_color, session_icon};
 use crate::workspace::pane_status_indicator;
 use gpui_kit::assets::IconName;
 use gpui_kit::*;
+use transom_core::{Connection, ContainerEngineKind};
 
 /// 标签图标与图标颜色：播放器/监控看板有专属图标，其余按会话外观回落连接类型。
 pub(crate) fn tab_icon(
@@ -18,17 +21,35 @@ pub(crate) fn tab_icon(
     tab: &TerminalTab,
     active: bool,
     p: &Palette,
-) -> (IconName, Hsla) {
+) -> (AppIcon, Hsla) {
     if tab.is_player() {
-        return (IconName::Disc, p.muted_foreground);
+        return (IconName::Disc.into(), p.muted_foreground);
     }
     if tab.is_monitor() {
-        return (IconName::Gauge, p.primary);
+        return (IconName::Gauge.into(), p.primary);
+    }
+    if let Connection::ContainerEngine(profile) = &tab.session.connection {
+        let icon = session_icon(profile.icon)
+            .map(AppIcon::from)
+            .unwrap_or_else(|| {
+                if profile.engine.kind == ContainerEngineKind::Docker {
+                    AppIcon::Docker
+                } else {
+                    IconName::Container.into()
+                }
+            });
+        let color = session_color(profile.color).unwrap_or(if active {
+            p.sidebar_accent_foreground
+        } else {
+            p.muted_foreground
+        });
+        return (icon, color);
     }
     let appearance = shell.state.session_appearance(tab);
     let icon = appearance
         .icon
-        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection));
+        .map(AppIcon::from)
+        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection).into());
     let color = appearance.color.unwrap_or(if active {
         p.sidebar_accent_foreground
     } else {

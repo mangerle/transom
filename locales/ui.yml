@@ -4924,12 +4924,102 @@ container:
     endpoint:
       en: Endpoint
       zh-CN: 端点
+    endpoint_path:
+      en: Socket path
+      zh-CN: 套接字路径
+    endpoint_url:
+      en: TCP URL
+      zh-CN: TCP 地址
+    endpoint_ssh_target:
+      en: SSH target
+      zh-CN: SSH 目标
+    endpoint_ssh_host:
+      en: SSH host
+      zh-CN: SSH 主机
+    ssh_host_placeholder:
+      en: 192.168.1.100 or server.example.com
+      zh-CN: 192.168.1.100 或 server.example.com
+    ssh_port:
+      en: Port
+      zh-CN: 端口
+    ssh_port_invalid:
+      en: SSH port must be a valid port number (1-65535)
+      zh-CN: SSH 端口必须是有效端口号 (1-65535)
+    ssh_user:
+      en: User
+      zh-CN: 用户
+    ssh_user_placeholder:
+      en: root
+      zh-CN: root
+    ssh_identity:
+      en: Private key path
+      zh-CN: 私钥文件路径
+    ssh_identity_placeholder:
+      en: ~/.ssh/id_rsa or ~/.ssh/id_ed25519
+      zh-CN: ~/.ssh/id_rsa 或 ~/.ssh/id_ed25519
+    local_endpoint:
+      en: Local connection
+      zh-CN: 本地连接
+    remote_endpoint:
+      en: Remote connection
+      zh-CN: 远端连接
+    tls_enable:
+      en: Enable TLS encryption
+      zh-CN: 启用 TLS 加密
+    tls_ca:
+      en: CA certificate path
+      zh-CN: CA 证书路径
+    tls_ca_placeholder:
+      en: /path/to/ca.pem
+      zh-CN: /path/to/ca.pem
+    tls_cert:
+      en: Client certificate path
+      zh-CN: 客户端证书路径
+    tls_cert_placeholder:
+      en: /path/to/cert.pem
+      zh-CN: /path/to/cert.pem
+    tls_key:
+      en: Client key path
+      zh-CN: 客户端私钥路径
+    tls_key_placeholder:
+      en: /path/to/key.pem
+      zh-CN: /path/to/key.pem
+    endpoint_wsl_distro:
+      en: WSL distribution
+      zh-CN: WSL 发行版
     endpoint_value:
       en: Endpoint value
       zh-CN: 端点值
     endpoint_placeholder:
       en: e.g. /var/run/docker.sock or tcp://127.0.0.1:2375
       zh-CN: 例如 /var/run/docker.sock 或 tcp://127.0.0.1:2375
+    unix_placeholder:
+      en: /var/run/docker.sock
+      zh-CN: /var/run/docker.sock
+    named_pipe_placeholder:
+      en: //./pipe/docker_engine
+      zh-CN: //./pipe/docker_engine
+    tcp_placeholder:
+      en: tcp://127.0.0.1:2375
+      zh-CN: tcp://127.0.0.1:2375
+    ssh_placeholder:
+      en: user@host
+      zh-CN: 用户名@主机
+    wsl_placeholder:
+      en: Ubuntu
+      zh-CN: Ubuntu
+    cli_program:
+      en: Program
+      zh-CN: 程序
+    cli_program_placeholder:
+      en: docker
+      zh-CN: docker
+    cli_args:
+      en: Arguments
+      zh-CN: 参数
+    cli_args_placeholder:
+      en: --host unix:///var/run/docker.sock
+      zh-CN: --host unix:///var/run/docker.sock
     name_required:
       en: Name is required
       zh-CN: 请填写名称
@@ -5136,6 +5226,36 @@ container:
       en: 'Remove %{path}?'
       zh-CN: 确认删除 %{path}？
   compose:
+    new_yaml:
+      en: New YAML
+      zh-CN: 新建 YAML
+    import_yaml:
+      en: Import YAML
+      zh-CN: 导入 YAML
+    edit_yaml:
+      en: Edit YAML
+      zh-CN: 编辑 YAML
+    file_task_failed:
+      en: The YAML file operation could not be scheduled
+      zh-CN: 无法调度 YAML 文件操作
+    create_failed:
+      en: 'Failed to create Compose YAML: %{path}'
+      zh-CN: '创建 Compose YAML 失败：%{path}'
+    import_failed:
+      en: 'Failed to import Compose YAML: %{path}'
+      zh-CN: '导入 Compose YAML 失败：%{path}'
+    file_io_failed:
+      en: '%{message}, reason: %{error}'
+      zh-CN: '%{message}，原因：%{error}'
+    yaml_missing:
+      en: This project has no editable Compose YAML file
+      zh-CN: 当前项目没有可编辑的 Compose YAML 文件
+    yaml_outside_root:
+      en: The YAML file is outside the managed or project directory
+      zh-CN: YAML 文件不在受控目录或项目目录内
+    name_invalid:
+      en: Cannot derive a valid project name from the YAML file
+      zh-CN: 无法从 YAML 文件名生成合法项目名
     running:
       en: 'Running compose command: %{action}'
       zh-CN: '正在执行编排命令：%{action}'
@@ -5235,6 +5355,9 @@ container:
     timeout:
       en: Sampling timed out. Please retry
       zh-CN: 采样超时，请重试
+    reconnecting:
+      en: 'Sampling interrupted, reconnecting: %{error}'
+      zh-CN: '采样已中断，正在自动重连：%{error}'
     rss:
       en: Resident memory
       zh-CN: 常驻内存
@@ -5295,6 +5418,9 @@ container:
     window_40s:
       en: 40 seconds
       zh-CN: 40 秒
+    window_samples:
+      en: 'last %{count} samples'
+      zh-CN: '最近 %{count} 个采样点'
     window_2m:
       en: 2 minutes
       zh-CN: 2 分钟

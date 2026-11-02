@@ -1,6 +1,7 @@
 //! 详情区头部：标题、状态与页签动作。
 
 use super::*;
+use crate::container::CONTENT_HEADER_HEIGHT;
 
 /// 详情头部的渲染参数：选中项按分类不同，统一用借用结构体传入。
 pub(crate) struct ContainerHeaderView<'a> {
@@ -307,8 +308,8 @@ impl AppShell {
                 .into_any_element(),
         };
         h_flex()
+            .h(rems(CONTENT_HEADER_HEIGHT))
             .px_3()
-            .py_1p5()
             .gap_3()
             .items_center()
             .justify_between()

@@ -289,12 +289,30 @@ impl AppShell {
                 if let Some(workspace) = self.state.container_workspace_mut(tab_id)
                     && workspace.stats_request == Some(request_id)
                 {
-                    workspace.stats_history.push_back(stats.clone());
-                    while workspace.stats_history.len() > STATS_HISTORY_LIMIT {
-                        workspace.stats_history.pop_front();
+                    let due = workspace
+                        .stats_last_append
+                        .is_none_or(|last| last.elapsed() >= workspace.stats_interval.interval());
+                    if due {
+                        workspace.stats_last_append = Some(std::time::Instant::now());
+                        workspace.stats_history.push_back(stats.clone());
+                        while workspace.stats_history.len() > STATS_HISTORY_LIMIT {
+                            workspace.stats_history.pop_front();
+                        }
+                        workspace.stats = Some(stats);
                     }
-                    workspace.stats = Some(stats);
                     workspace.stats_error = None;
+                }
+            }
+            ContainerAppEvent::StatsUnavailable { request_id, error } => {
+                let Some(tab_id) = self.state.containers.tab_of(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                    && workspace.stats_request == Some(request_id)
+                {
+                    workspace.stats_error = Some(
+                        rust_i18n::t!("container.stats.reconnecting", error = error).to_string(),
+                    );
                 }
             }
             ContainerAppEvent::ProcessesListed {

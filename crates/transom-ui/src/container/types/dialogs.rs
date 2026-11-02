@@ -88,8 +88,6 @@ pub(crate) struct ContainerUiState {
     pub(crate) sidebar_search: Option<Entity<InputState>>,
     /// 引擎分组的新建/重命名弹窗。
     pub(crate) engine_folder_form: Option<EngineFolderForm>,
-    /// 从分组菜单新建连接时暂存目标分组；保存成功后落到新连接上。
-    pub(crate) form_folder: Option<transom_core::FolderId>,
 }
 
 /// 引擎分组表单：只编辑名称，父级与“是否重命名”在打开时确定。
@@ -171,6 +169,29 @@ impl EndpointChoice {
         Self::Cli,
     ];
 
+    /// 当前平台可用的连接类型。
+    ///
+    /// Windows 命名管道、WSL 与 WSLC 只在 Windows 出现，
+    /// Unix 套接字只在类 Unix 平台出现；SSH 与 TCP 在所有平台均可用。
+    pub(crate) fn available() -> Vec<Self> {
+        let mut choices = Vec::with_capacity(Self::ALL.len());
+        choices.push(Self::Auto);
+        if cfg!(unix) {
+            choices.push(Self::Unix);
+        }
+        if cfg!(windows) {
+            choices.push(Self::NamedPipe);
+        }
+        choices.push(Self::Tcp);
+        choices.push(Self::Ssh);
+        if cfg!(windows) {
+            choices.push(Self::Wsl);
+            choices.push(Self::Wslc);
+        }
+        choices.push(Self::Cli);
+        choices
+    }
+
     pub(crate) fn label_key(self) -> &'static str {
         match self {
             Self::Auto => "container.endpoint.auto",
@@ -189,6 +210,31 @@ impl EndpointChoice {
         !matches!(self, Self::Auto | Self::Wslc)
     }
 
+    /// 主输入框标签；不需要输入的档位返回 `None`。
+    pub(crate) fn field_label_key(self) -> Option<&'static str> {
+        match self {
+            Self::Auto | Self::Wslc => None,
+            Self::Unix | Self::NamedPipe => Some("container.form.endpoint_path"),
+            Self::Tcp => Some("container.form.endpoint_url"),
+            Self::Ssh => Some("container.form.endpoint_ssh_host"),
+            Self::Wsl => Some("container.form.endpoint_wsl_distro"),
+            Self::Cli => Some("container.form.cli_program"),
+        }
+    }
+
+    /// 主输入框占位提示。
+    pub(crate) fn placeholder_key(self) -> &'static str {
+        match self {
+            Self::Auto | Self::Wslc => "container.form.endpoint_placeholder",
+            Self::Unix => "container.form.unix_placeholder",
+            Self::NamedPipe => "container.form.named_pipe_placeholder",
+            Self::Tcp => "container.form.tcp_placeholder",
+            Self::Ssh => "container.form.ssh_host_placeholder",
+            Self::Wsl => "container.form.wsl_placeholder",
+            Self::Cli => "container.form.cli_program_placeholder",
+        }
+    }
+
     pub(crate) fn from_endpoint(endpoint: &ContainerEndpoint) -> Self {
         match endpoint {
             ContainerEndpoint::Auto => Self::Auto,
@@ -202,7 +248,27 @@ impl EndpointChoice {
         }
     }
 
-    /// 表单值转端点；空值由调用方在保存前校验。
+    /// 表单主输入框的回填值；SSH 端点只回填 host（其余字段由各自输入框承接）。
+    pub(crate) fn value_for(endpoint: &ContainerEndpoint) -> String {
+        match endpoint {
+            ContainerEndpoint::Auto | ContainerEndpoint::Wslc => String::new(),
+            ContainerEndpoint::Unix { path } => path.display().to_string(),
+            ContainerEndpoint::NamedPipe { path } => path.clone(),
+            ContainerEndpoint::Tcp { url, .. } => url.clone(),
+            ContainerEndpoint::Ssh { host, .. } => host.clone(),
+            ContainerEndpoint::Wsl { distro } => distro.clone(),
+            ContainerEndpoint::Cli { program, args } => {
+                let mut value = program.clone();
+                for arg in args {
+                    value.push(' ');
+                    value.push_str(arg);
+                }
+                value
+            }
+        }
+    }
+
+    /// 将表单值组装回端点；SSH 端点的 port/user/identity_file 由调用方单独传入。
     pub(crate) fn to_endpoint(self, value: &str) -> ContainerEndpoint {
         let value = value.trim();
         match self {
@@ -213,9 +279,13 @@ impl EndpointChoice {
             },
             Self::Tcp => ContainerEndpoint::Tcp {
                 url: value.to_string(),
+                tls: None,
             },
             Self::Ssh => ContainerEndpoint::Ssh {
-                target: value.trim_start_matches("ssh://").to_string(),
+                host: value.to_string(),
+                port: None,
+                user: None,
+                identity_file: None,
             },
             Self::Wsl => ContainerEndpoint::Wsl {
                 distro: value.to_string(),
@@ -229,27 +299,6 @@ impl EndpointChoice {
                     .map(str::to_string)
                     .collect(),
             },
-        }
-    }
-
-    /// 端点的可编辑文本；仅用于表单回填。
-    pub(crate) fn value_for(endpoint: &ContainerEndpoint) -> String {
-        match endpoint {
-            ContainerEndpoint::Auto | ContainerEndpoint::Wslc => String::new(),
-            ContainerEndpoint::Unix { path } => path.display().to_string(),
-            ContainerEndpoint::NamedPipe { path } | ContainerEndpoint::Tcp { url: path } => {
-                path.clone()
-            }
-            ContainerEndpoint::Ssh { target } => target.clone(),
-            ContainerEndpoint::Wsl { distro } => distro.clone(),
-            ContainerEndpoint::Cli { program, args } => {
-                let mut value = program.clone();
-                for arg in args {
-                    value.push(' ');
-                    value.push_str(arg);
-                }
-                value
-            }
         }
     }
 }

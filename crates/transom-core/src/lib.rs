@@ -47,8 +47,8 @@ pub use model::container::{
     ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
     ContainerNetworkSpec, ContainerNetworkSummary, ContainerPort, ContainerPortPublish,
     ContainerProcess, ContainerPruneReport, ContainerState, ContainerStats, ContainerSummary,
-    ContainerVolumeDetails, ContainerVolumeSummary, compose_projects, is_valid_container_name,
-    short_id,
+    ContainerVolumeDetails, ContainerVolumeSummary, TlsConfig, compose_projects,
+    is_valid_container_name, short_id,
 };
 pub use model::file_diff::{DEFAULT_CONTEXT_LINES, DiffHunk, FileDiff, MergeDirection};
 pub use model::forward::{
