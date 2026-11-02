@@ -327,21 +327,6 @@ impl ModalKind {
                 .map_or(ModalFocus::None, |modal| {
                     ModalFocus::Textarea(modal.textarea.clone())
                 }),
-            ModalKind::SftpConfirm
-            | ModalKind::SftpProperties
-            | ModalKind::SftpSync
-            | ModalKind::HostKeyConfirm
-            | ModalKind::ClipboardPrompt
-            | ModalKind::ForwardConfirm
-            | ModalKind::AuditViewer
-            | ModalKind::Replay
-            | ModalKind::BatchEdit
-            | ModalKind::KnownHosts
-            | ModalKind::KeyWizard
-            | ModalKind::BackupPrompt
-            | ModalKind::Settings
-            | ModalKind::DiffViewer
-            | ModalKind::AuthPrompt => ModalFocus::None,
             // 改键录入面板自己持有焦点句柄：录键期间按键要落在这块面板上。
             ModalKind::ShortcutCapture => shell
                 .state
@@ -351,6 +336,7 @@ impl ModalKind {
                 .map_or(ModalFocus::None, |capture| {
                     ModalFocus::Handle(capture.focus.clone())
                 }),
+            _ => ModalFocus::None,
         }
     }
 }
