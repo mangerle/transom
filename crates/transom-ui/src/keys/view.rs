@@ -88,10 +88,6 @@ impl AppShell {
             return div().into_any_element();
         };
         let current_algorithm = state.algorithm;
-        let generating = state.generating;
-        let comment = state.comment.clone();
-        let path = state.path.clone();
-        let passphrase = state.passphrase.clone();
 
         v_flex()
             .gap_3()
@@ -131,51 +127,7 @@ impl AppShell {
                         }),
                     ),
             )
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("keys.comment").to_string(),
-                comment,
-                p,
-            ))
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("keys.path").to_string(),
-                path,
-                p,
-            ))
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("keys.passphrase").to_string(),
-                passphrase,
-                p,
-            ))
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("keys.passphrase_hint").to_string()),
-                    )
-                    .child(
-                        Button::new("generate-key-pair")
-                            .primary()
-                            .small()
-                            .icon(IconName::KeyRound)
-                            .label(if generating {
-                                rust_i18n::t!("keys.generating").to_string()
-                            } else {
-                                rust_i18n::t!("keys.generate").to_string()
-                            })
-                            .disabled(generating)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, _: &ClickEvent, window, cx| {
-                                    this.generate_key(window, cx);
-                                },
-                            )),
-                    ),
-            )
+            .child(key_generate_fields(state, app, p))
             .into_any_element()
     }
 
@@ -463,4 +415,60 @@ fn key_row(
         );
     }
     row.into_any_element()
+}
+
+/// 生成区字段：注释、路径、口令与生成按钮。
+fn key_generate_fields(
+    state: &crate::keys::KeyWizardState,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_3()
+        .child(crate::widgets::form_field(
+            rust_i18n::t!("keys.comment").to_string(),
+            state.comment.clone(),
+            p,
+        ))
+        .child(crate::widgets::form_field(
+            rust_i18n::t!("keys.path").to_string(),
+            state.path.clone(),
+            p,
+        ))
+        .child(crate::widgets::form_field(
+            rust_i18n::t!("keys.passphrase").to_string(),
+            state.passphrase.clone(),
+            p,
+        ))
+        .child(
+            h_flex()
+                .justify_between()
+                .items_center()
+                .gap_3()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("keys.passphrase_hint").to_string()),
+                )
+                .child(
+                    Button::new("generate-key-pair")
+                        .primary()
+                        .small()
+                        .icon(IconName::KeyRound)
+                        .label(if state.generating {
+                            rust_i18n::t!("keys.generating").to_string()
+                        } else {
+                            rust_i18n::t!("keys.generate").to_string()
+                        })
+                        .disabled(state.generating)
+                        .on_click(crate::dialog_host::on_event(
+                            app,
+                            |this, _: &ClickEvent, window, cx| {
+                                this.generate_key(window, cx);
+                            },
+                        )),
+                ),
+        )
+        .into_any_element()
 }
