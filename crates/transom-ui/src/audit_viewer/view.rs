@@ -110,64 +110,11 @@ impl AppShell {
             );
         }
 
-        let has_selected = selected_path.is_some();
-        let selected_path_clone = selected_path.clone();
-
-        if let Some(path) = selected_path_clone {
-            toolbar = toolbar.child(
-                Button::new("reveal-audit-file")
-                    .outline()
-                    .icon(IconName::FolderOpen)
-                    .label(rust_i18n::t!("audit_viewer.reveal").to_string())
-                    .on_click(move |_, _, _| {
-                        crate::audit::reveal_in_file_manager(path.clone());
-                    }),
-            );
-        } else {
-            toolbar = toolbar.child(
-                Button::new("reveal-audit-file")
-                    .outline()
-                    .disabled(true)
-                    .icon(IconName::FolderOpen)
-                    .label(rust_i18n::t!("audit_viewer.reveal").to_string()),
-            );
-        }
-
-        toolbar = toolbar.child(
-            Button::new("delete-current-audit-file")
-                .outline()
-                .disabled(!has_selected)
-                .icon(IconName::Trash)
-                .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        let idx = this
-                            .state
-                            .modals
-                            .tools
-                            .audit_viewer
-                            .as_ref()
-                            .map(|v| v.selected_index)
-                            .unwrap_or(0);
-                        this.delete_audit_log(idx, cx);
-                    },
-                )),
-        );
-
-        toolbar = toolbar.child(
-            Button::new("copy-audit-content")
-                .outline()
-                .disabled(!has_selected || viewer.content.is_empty())
-                .icon(IconName::Copy)
-                .label(rust_i18n::t!("audit_viewer.copy_content").to_string())
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    |this, _: &ClickEvent, _, cx| {
-                        this.copy_audit_viewer_content(cx);
-                    },
-                )),
-        );
+        toolbar = toolbar.children(audit_file_action_buttons(
+            app,
+            selected_path,
+            viewer.content.is_empty(),
+        ));
         toolbar.into_any_element()
     }
 
@@ -368,4 +315,70 @@ fn audit_file_row(
             )),
         )
         .into_any_element()
+}
+
+/// 选中文件动作：定位、删除与复制内容；未选中时定位/删除禁用。
+fn audit_file_action_buttons(
+    app: &Entity<AppShell>,
+    selected_path: Option<std::path::PathBuf>,
+    content_empty: bool,
+) -> Vec<gpui_kit::component::button::Button> {
+    let has_selected = selected_path.is_some();
+    let mut buttons = Vec::with_capacity(3);
+    if let Some(path) = selected_path {
+        buttons.push(
+            Button::new("reveal-audit-file")
+                .outline()
+                .icon(IconName::FolderOpen)
+                .label(rust_i18n::t!("audit_viewer.reveal").to_string())
+                .on_click(move |_, _, _| {
+                    crate::audit::reveal_in_file_manager(path.clone());
+                }),
+        );
+    } else {
+        buttons.push(
+            Button::new("reveal-audit-file")
+                .outline()
+                .disabled(true)
+                .icon(IconName::FolderOpen)
+                .label(rust_i18n::t!("audit_viewer.reveal").to_string()),
+        );
+    }
+
+    buttons.push(
+        Button::new("delete-current-audit-file")
+            .outline()
+            .disabled(!has_selected)
+            .icon(IconName::Trash)
+            .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
+            .on_click(crate::dialog_host::on_event(
+                app,
+                move |this, _: &ClickEvent, _, cx| {
+                    let idx = this
+                        .state
+                        .modals
+                        .tools
+                        .audit_viewer
+                        .as_ref()
+                        .map(|v| v.selected_index)
+                        .unwrap_or(0);
+                    this.delete_audit_log(idx, cx);
+                },
+            )),
+    );
+
+    buttons.push(
+        Button::new("copy-audit-content")
+            .outline()
+            .disabled(!has_selected || content_empty)
+            .icon(IconName::Copy)
+            .label(rust_i18n::t!("audit_viewer.copy_content").to_string())
+            .on_click(crate::dialog_host::on_event(
+                app,
+                |this, _: &ClickEvent, _, cx| {
+                    this.copy_audit_viewer_content(cx);
+                },
+            )),
+    );
+    buttons
 }
