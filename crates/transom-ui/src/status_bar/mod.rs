@@ -165,7 +165,7 @@ impl AppShell {
                 matches!(tab.session.connection, transom_core::Connection::Ssh(_))
             }),
         };
-        let status = self.state.status.clone();
+        let status = self.state.status.as_deref();
         self.state.status_metrics.update(cx, |view, cx| {
             view.set_snapshot(snapshot, status, cx);
         });

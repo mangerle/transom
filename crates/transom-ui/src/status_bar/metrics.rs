@@ -76,17 +76,15 @@ impl StatusBarMetricsView {
     pub(crate) fn set_snapshot(
         &mut self,
         snapshot: StatusMetricsSnapshot,
-        status: Option<String>,
+        status: Option<&str>,
         cx: &mut Context<Self>,
     ) -> bool {
-        let fallback_changed = status
-            .as_ref()
-            .is_some_and(|status| self.fallback != *status);
+        let fallback_changed = status.is_some_and(|status| self.fallback != status);
         let changed = self.snapshot != snapshot || fallback_changed;
         if changed {
             self.snapshot = snapshot;
             if let Some(status) = status {
-                self.fallback = status;
+                self.fallback = status.to_string();
             }
             // 只有快照或状态文案真的变化才重绘指标簇；帧循环每帧都会注入
             // 同一快照，无条件 notify 会让六个徽标每帧重建一次。
