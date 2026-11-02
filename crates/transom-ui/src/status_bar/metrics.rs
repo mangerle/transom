@@ -67,7 +67,8 @@ impl StatusBarMetricsView {
     pub(crate) fn new() -> Self {
         Self {
             snapshot: StatusMetricsSnapshot::default(),
-            fallback: String::new(),
+            // 版本兜底只构造一次；状态文案为空时保持当前值，避免每帧格式化。
+            fallback: format!("{} v{}", crate::APP_NAME, crate::APP_VERSION),
         }
     }
 
@@ -75,15 +76,20 @@ impl StatusBarMetricsView {
     pub(crate) fn set_snapshot(
         &mut self,
         snapshot: StatusMetricsSnapshot,
-        fallback: String,
+        status: Option<String>,
         cx: &mut Context<Self>,
     ) -> bool {
-        let changed = self.snapshot != snapshot || self.fallback != fallback;
+        let fallback_changed = status
+            .as_ref()
+            .is_some_and(|status| self.fallback != *status);
+        let changed = self.snapshot != snapshot || fallback_changed;
         if changed {
             self.snapshot = snapshot;
-            self.fallback = fallback;
-            // 只有快照真的变化才重绘指标簇；帧循环每帧都会注入同一快照，
-            // 无条件 notify 会让六个徽标每帧重建一次。
+            if let Some(status) = status {
+                self.fallback = status;
+            }
+            // 只有快照或状态文案真的变化才重绘指标簇；帧循环每帧都会注入
+            // 同一快照，无条件 notify 会让六个徽标每帧重建一次。
             cx.notify();
         }
         changed

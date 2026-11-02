@@ -165,13 +165,9 @@ impl AppShell {
                 matches!(tab.session.connection, transom_core::Connection::Ssh(_))
             }),
         };
-        let fallback = self
-            .state
-            .status
-            .clone()
-            .unwrap_or_else(|| format!("{} v{}", crate::APP_NAME, crate::APP_VERSION));
+        let status = self.state.status.clone();
         self.state.status_metrics.update(cx, |view, cx| {
-            view.set_snapshot(snapshot, fallback, cx);
+            view.set_snapshot(snapshot, status, cx);
         });
     }
 }
