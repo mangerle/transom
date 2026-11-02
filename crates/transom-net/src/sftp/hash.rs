@@ -1,11 +1,11 @@
 use crate::keys::shell_single_quote;
-use crate::sftp::{SftpClient, sftp_error, sftp_io_error};
+use crate::sftp::{SftpClient, TransferProgressResult, sftp_error, sftp_io_error};
 use md5::Md5;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use transom_core::{AppError, ChecksumAlgorithm, ErrorCode, VerifyMode};
+use transom_core::{AppError, ChecksumAlgorithm, ErrorCode, VerifyMode, VerifyOptions};
 
 /// 快速抽样校验时单段读取的字节数（64 KiB）。
 pub(crate) const SAMPLE_CHUNK: usize = 64 * 1024;
@@ -206,6 +206,41 @@ impl SftpClient {
         Ok(hex_encode(&hasher.finalize()))
     }
 
+    /// 按传输选项校验一次刚完成的传输。
+    ///
+    /// 设计原理（Why）：单文件、目录与同步三条链路此前各自拼装“用哪个算法、
+    /// 能否复用在途哈希”，目录与同步还丢掉了设置里的抽样策略与 MD5 选择。
+    /// 把口径收敛到一处：未开启校验直接通过；在途哈希只在算法为 SHA-256 时
+    /// 可用（传输过程只算 SHA-256），其余算法回退到读盘计算。
+    ///
+    /// # Errors
+    /// 读取失败返回 `ErrorCode::SftpFailed`；两端大小或摘要不一致返回
+    /// `ErrorCode::SftpVerifyFailed`。
+    pub async fn verify_transfer(
+        &self,
+        local_path: &Path,
+        remote_path: &str,
+        result: &TransferProgressResult,
+        options: VerifyOptions,
+    ) -> Result<(), AppError> {
+        if !options.enabled {
+            return Ok(());
+        }
+        let known_local = if options.algorithm == ChecksumAlgorithm::Sha256 {
+            result.local_sha256.as_deref()
+        } else {
+            None
+        };
+        self.verify_file_with_strategy_and_algo(
+            local_path,
+            remote_path,
+            known_local,
+            options.mode,
+            options.algorithm,
+        )
+        .await
+    }
+
     /// 根据指定的校验策略级别执行文件完整性比对（默认 SHA256）。
     pub async fn verify_file_with_strategy(
         &self,
@@ -251,7 +286,7 @@ impl SftpClient {
                     Err(AppError::with_detail(
                         ErrorCode::SftpVerifyFailed,
                         format!(
-                            "快速抽样指纹不一致：本地 {}（{local_sample}），远端 {}（{remote_sample}）。重传时将自动截断覆盖损坏文件",
+                            "快速抽样指纹不一致：本地 {}（{local_sample}），远端 {}（{remote_sample}）",
                             local_path.display(),
                             remote_path
                         ),
@@ -303,7 +338,7 @@ impl SftpClient {
             return Err(AppError::with_detail(
                 ErrorCode::SftpVerifyFailed,
                 format!(
-                    "两端文件大小不匹配：本地 {}（{local_len} 字节），远端 {}（{remote_len} 字节）。重传时将自动截断覆盖损坏文件",
+                    "两端文件大小不一致：本地 {}（{local_len} 字节），远端 {}（{remote_len} 字节）",
                     local_path.display(),
                     remote_path
                 ),
@@ -329,7 +364,7 @@ impl SftpClient {
             Err(AppError::with_detail(
                 ErrorCode::SftpVerifyFailed,
                 format!(
-                    "{label} 哈希校验不匹配：本地 {}（{local_hash}），远端 {}（{remote_hash}）。重传时将自动截断覆盖损坏文件",
+                    "{label} 校验不一致：本地 {}（{local_hash}），远端 {}（{remote_hash}）",
                     local_path.display(),
                     remote_path
                 ),

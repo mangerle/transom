@@ -6,11 +6,13 @@
 //!   1. 面板上传与拖拽上传逻辑统一复用；
 //!   2. 路径校验失败时整体拒绝，避免部分入队造成混淆；
 //!   3. 方便编写单元测试验证路径映射。
+//! - 新任务一律以覆盖为起点：目标端是否已有同名文件与“上次中断的残留”无关，
+//!   断点续传只属于被中断任务自身的进度，由队列控制在重试时决定。
 
+use crate::sftp::TransferTask;
 use crate::sftp::join_remote;
-use crate::sftp::{TransferMode, TransferTask};
 use std::path::PathBuf;
-use transom_core::{ChecksumAlgorithm, ConnectionId, TransferDirection, VerifyMode};
+use transom_core::{ConnectionId, TransferDirection, VerifyOptions};
 
 /// 把本地路径列表转成上传任务；目录与文件走不同的构造分支。
 ///
@@ -18,17 +20,9 @@ use transom_core::{ChecksumAlgorithm, ConnectionId, TransferDirection, VerifyMod
 pub(crate) fn upload_tasks(
     paths: &[PathBuf],
     remote_dir: &str,
-    resume_enabled: bool,
-    verify: bool,
-    verify_mode: VerifyMode,
-    algorithm: ChecksumAlgorithm,
+    verify: VerifyOptions,
     target_connection_id: ConnectionId,
 ) -> Result<Vec<TransferTask>, String> {
-    let mode = if resume_enabled {
-        TransferMode::Resume
-    } else {
-        TransferMode::Overwrite
-    };
     let mut tasks = Vec::with_capacity(paths.len());
     for local_path in paths {
         let Some(file_name) = local_path.file_name().and_then(|name| name.to_str()) else {
@@ -49,7 +43,6 @@ pub(crate) fn upload_tasks(
                 local_path.clone(),
                 remote_path,
                 size,
-                mode,
             )
         } else {
             TransferTask::new(
@@ -57,13 +50,10 @@ pub(crate) fn upload_tasks(
                 local_path.clone(),
                 remote_path,
                 size,
-                mode,
             )
         };
         task.target_connection_id = Some(target_connection_id);
         task.verify = verify;
-        task.verify_mode = verify_mode;
-        task.checksum_algorithm = algorithm;
         tasks.push(task);
     }
     Ok(tasks)

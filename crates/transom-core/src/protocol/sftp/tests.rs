@@ -1,4 +1,5 @@
 use super::path::*;
+use super::transfer::{TransferStart, VerifyOptions};
 use super::types::*;
 
 #[test]
@@ -118,7 +119,6 @@ fn safe_local_join_stays_inside_download_root() {
 #[test]
 fn test_sftp_operation_is_transfer() {
     use super::ops::SftpOperation;
-    use super::transfer::{ChecksumAlgorithm, VerifyMode};
     use std::path::PathBuf;
 
     // 交互操作应判定为非传输
@@ -153,10 +153,8 @@ fn test_sftp_operation_is_transfer() {
         SftpOperation::Download {
             remote_path: "/remote/file".to_string(),
             local_path: PathBuf::from("/local/file"),
-            resume: false,
-            verify: false,
-            mode: VerifyMode::FullSha256,
-            algorithm: ChecksumAlgorithm::Sha256,
+            start: TransferStart::Overwrite,
+            verify: VerifyOptions::default(),
         }
         .is_transfer()
     );
@@ -164,11 +162,16 @@ fn test_sftp_operation_is_transfer() {
         SftpOperation::Upload {
             local_path: PathBuf::from("/local/file"),
             remote_path: "/remote/file".to_string(),
-            resume: false,
-            verify: false,
-            mode: VerifyMode::FullSha256,
-            algorithm: ChecksumAlgorithm::Sha256,
+            start: TransferStart::Continue { offset: 1024 },
+            verify: VerifyOptions::default(),
         }
         .is_transfer()
     );
+}
+
+#[test]
+fn transfer_start_normalizes_overwrite_to_zero_offset() {
+    assert_eq!(TransferStart::Overwrite.offset(), 0);
+    assert_eq!(TransferStart::default(), TransferStart::Overwrite);
+    assert_eq!(TransferStart::Continue { offset: 4096 }.offset(), 4096);
 }

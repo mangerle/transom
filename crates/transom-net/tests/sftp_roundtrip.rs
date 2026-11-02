@@ -6,8 +6,8 @@ use russh::server::{self, Server as _};
 use std::sync::Arc;
 use std::time::Duration;
 use transom_core::{
-    AuthMethod, ConnectionSecrets, DirDiffStatus, SessionOptions, SshConnection, TerminalSize,
-    TransferFilter,
+    AuthMethod, ChecksumAlgorithm, ConnectionSecrets, DirDiffStatus, SessionOptions, SshConnection,
+    TerminalSize, TransferFilter, TransferStart, VerifyOptions,
 };
 use transom_net::{PasswordPrompter, SftpClient, SshSession, connect_ssh};
 use transom_store::JsonKnownHostsStore;
@@ -148,12 +148,43 @@ async fn sftp_list_upload_download_and_mutations() {
         "下载后应保留远端文件修改时间"
     );
 
+    // 覆盖下载：本地存在同名且“尺寸相同但内容不同”的旧文件时，必须整份重写，
+    // 不能被当成已完成的传输而跳过（回归：旧实现按尺寸判定续传直接返回）。
+    let stale_same_size = dir.path().join("stale-same-size.txt");
+    tokio::fs::write(&stale_same_size, b"0123456789")
+        .await
+        .unwrap();
+    let transferred = client
+        .download_resumable(
+            "/uploaded.txt",
+            &stale_same_size,
+            TransferStart::Overwrite,
+            |_, _| {},
+        )
+        .await
+        .expect("覆盖下载同尺寸旧文件");
+    assert_eq!(transferred.transferred, 10);
+    assert_eq!(
+        tokio::fs::read(&stale_same_size).await.unwrap(),
+        b"hello sftp".to_vec(),
+        "同尺寸旧文件必须被远端内容完整覆盖"
+    );
+    client
+        .verify_file(&stale_same_size, "/uploaded.txt")
+        .await
+        .expect("覆盖下载后校验必须通过");
+
     let oversized_local = dir.path().join("oversized-local.txt");
     tokio::fs::write(&oversized_local, b"0123456789ABCDEF")
         .await
         .unwrap();
     let transferred = client
-        .download_resumable("/uploaded.txt", &oversized_local, true, |_, _| {})
+        .download_resumable(
+            "/uploaded.txt",
+            &oversized_local,
+            TransferStart::Overwrite,
+            |_, _| {},
+        )
         .await
         .expect("目标更大时应截断重传");
     assert_eq!(transferred.transferred, 10);
@@ -164,14 +195,65 @@ async fn sftp_list_upload_download_and_mutations() {
     assert_eq!(
         tokio::fs::read(&oversized_local).await.unwrap(),
         b"hello sftp".to_vec(),
-        "下载续传不能保留目标文件多余的尾部"
+        "覆盖下载不能保留目标文件多余的尾部"
+    );
+
+    // 续传下载：本地已有的前缀确实是远端前缀时才从偏移处继续，
+    // 结束后按实际字节数收尾，多出的旧尾部被截断。
+    let resumed_local = dir.path().join("resumed.txt");
+    tokio::fs::write(&resumed_local, b"hello sftpEXTRA")
+        .await
+        .unwrap();
+    let transferred = client
+        .download_resumable(
+            "/uploaded.txt",
+            &resumed_local,
+            TransferStart::Continue { offset: 6 },
+            |_, _| {},
+        )
+        .await
+        .expect("从前缀续传下载");
+    assert_eq!(transferred.transferred, 10);
+    assert!(
+        transferred.local_sha256.is_none(),
+        "续传不产生在途哈希，校验回退到读盘计算"
+    );
+    assert_eq!(
+        tokio::fs::read(&resumed_local).await.unwrap(),
+        b"hello sftp".to_vec(),
+        "续传下载必须补齐尾部并截断本地多余内容"
+    );
+
+    // 续传偏移超出远端长度说明源已变短，断点失效，退回从头覆盖。
+    let invalid_resume = dir.path().join("invalid-resume.txt");
+    tokio::fs::write(&invalid_resume, b"0123456789ABCDEF")
+        .await
+        .unwrap();
+    let transferred = client
+        .download_resumable(
+            "/uploaded.txt",
+            &invalid_resume,
+            TransferStart::Continue { offset: 16 },
+            |_, _| {},
+        )
+        .await
+        .expect("越界续传退回覆盖");
+    assert_eq!(transferred.transferred, 10);
+    assert_eq!(
+        tokio::fs::read(&invalid_resume).await.unwrap(),
+        b"hello sftp".to_vec()
     );
 
     let small_local = dir.path().join("small.txt");
     tokio::fs::write(&small_local, b"small").await.unwrap();
     std::fs::write(dir.path().join("remote-larger.txt"), b"0123456789ABCDEF").unwrap();
     let transferred = client
-        .upload_resumable(&small_local, "/remote-larger.txt", true, |_, _| {})
+        .upload_resumable(
+            &small_local,
+            "/remote-larger.txt",
+            TransferStart::Overwrite,
+            |_, _| {},
+        )
         .await
         .expect("远端更大时应截断重传");
     assert_eq!(transferred.transferred, 5);
@@ -182,7 +264,90 @@ async fn sftp_list_upload_download_and_mutations() {
     assert_eq!(
         std::fs::read(dir.path().join("remote-larger.txt")).unwrap(),
         b"small",
-        "上传续传不能保留远端文件多余的尾部"
+        "覆盖上传不能保留远端文件多余的尾部"
+    );
+
+    // 覆盖上传：远端存在同名且“尺寸相同但内容不同”的旧文件时，必须整份重写并
+    // 通过校验。这是用户报告的核心场景（远端已存在、本地改过内容再上传）。
+    tokio::fs::write(dir.path().join("stale-remote.txt"), b"0123456789")
+        .await
+        .unwrap();
+    tokio::fs::write(&small_local, b"hello sftp").await.unwrap();
+    let transferred = client
+        .upload_resumable(
+            &small_local,
+            "/stale-remote.txt",
+            TransferStart::Overwrite,
+            |_, _| {},
+        )
+        .await
+        .expect("覆盖上传同尺寸旧文件");
+    assert_eq!(transferred.transferred, 10);
+    assert_eq!(
+        std::fs::read(dir.path().join("stale-remote.txt")).unwrap(),
+        b"hello sftp",
+        "同尺寸旧文件必须被本地内容完整覆盖"
+    );
+    client
+        .verify_file(&small_local, "/stale-remote.txt")
+        .await
+        .expect("覆盖上传后校验必须通过");
+
+    // 续传上传：远端已有的是本任务写入的前缀时从偏移处续写。
+    std::fs::write(dir.path().join("resume-remote.txt"), b"hel").unwrap();
+    let transferred = client
+        .upload_resumable(
+            &small_local,
+            "/resume-remote.txt",
+            TransferStart::Continue { offset: 3 },
+            |_, _| {},
+        )
+        .await
+        .expect("从前缀续传上传");
+    assert_eq!(transferred.transferred, 10);
+    assert_eq!(
+        std::fs::read(dir.path().join("resume-remote.txt")).unwrap(),
+        b"hello sftp",
+        "续传上传必须从前缀之后补齐剩余内容"
+    );
+
+    // 远端比源更长时续传：写入结束后必须截断旧尾部。
+    std::fs::write(dir.path().join("resume-trim.txt"), b"hel0123456789AB").unwrap();
+    let transferred = client
+        .upload_resumable(
+            &small_local,
+            "/resume-trim.txt",
+            TransferStart::Continue { offset: 3 },
+            |_, _| {},
+        )
+        .await
+        .expect("续传上传并截断旧尾部");
+    assert_eq!(transferred.transferred, 10);
+    assert_eq!(
+        std::fs::read(dir.path().join("resume-trim.txt")).unwrap(),
+        b"hello sftp",
+        "续传上传必须截断远端残留的旧尾部"
+    );
+
+    // 续传偏移超出远端当前长度说明远端已被清理，断点失效，退回从头覆盖。
+    std::fs::write(dir.path().join("resume-reset.txt"), b"he").unwrap();
+    let transferred = client
+        .upload_resumable(
+            &small_local,
+            "/resume-reset.txt",
+            TransferStart::Continue { offset: 8 },
+            |_, _| {},
+        )
+        .await
+        .expect("越界续传退回覆盖");
+    assert_eq!(transferred.transferred, 10);
+    assert!(
+        transferred.local_sha256.is_some(),
+        "退回覆盖后应产生在途哈希"
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("resume-reset.txt")).unwrap(),
+        b"hello sftp"
     );
 
     // 9 MiB 往返覆盖深预取（单次 READ 约 255 KiB）与跨多个预取窗口的 EOF
@@ -315,7 +480,7 @@ async fn sftp_list_upload_download_and_mutations() {
     let filter = TransferFilter::from_text(".git/\nnode_modules/\n*.tmp");
     let expected_tree_bytes = "fn main() {}\n".len() as u64;
     let summary = client
-        .upload_dir(&local_tree, "/tree", true, &filter, true, |_, _| {})
+        .upload_dir(&local_tree, "/tree", &filter, verify_options(), |_, _| {})
         .await
         .expect("upload directory");
     assert_eq!(summary.transferred, expected_tree_bytes);
@@ -352,7 +517,13 @@ async fn sftp_list_upload_download_and_mutations() {
 
     let downloaded_tree = dir.path().join("downloaded-tree");
     let summary = client
-        .download_dir("/tree", &downloaded_tree, true, &filter, true, |_, _| {})
+        .download_dir(
+            "/tree",
+            &downloaded_tree,
+            &filter,
+            verify_options(),
+            |_, _| {},
+        )
         .await
         .expect("download directory");
     assert_eq!(summary.transferred, expected_tree_bytes);
@@ -373,9 +544,8 @@ async fn sftp_list_upload_download_and_mutations() {
             .upload_dir(
                 &local_tree,
                 "/invalid",
-                true,
                 &invalid_filter,
-                true,
+                verify_options(),
                 |_, _| {}
             )
             .await
@@ -457,7 +627,13 @@ async fn sftp_list_upload_download_and_mutations() {
         .collect::<Vec<_>>();
     let expected_sync_bytes = items.iter().map(|item| item.size).sum::<u64>();
     let summary = client
-        .sync_items(&sync_local, "/sync-remote", &items, true, |_, _| {})
+        .sync_items(
+            &sync_local,
+            "/sync-remote",
+            &items,
+            verify_options(),
+            |_, _| {},
+        )
         .await
         .expect("sync directories");
     assert_eq!(summary.transferred, expected_sync_bytes);
@@ -505,6 +681,14 @@ async fn sftp_list_upload_download_and_mutations() {
     drop(io);
     let _ = tokio::time::timeout(Duration::from_secs(3), join).await;
     server_task.abort();
+}
+
+/// 测试统一使用完整 SHA-256 校验，覆盖目录与同步链路的校验选项传递。
+fn verify_options() -> VerifyOptions {
+    VerifyOptions::enabled(
+        transom_core::VerifyMode::FullSha256,
+        ChecksumAlgorithm::Sha256,
+    )
 }
 
 fn set_modified(path: &std::path::Path, seconds: u64) {

@@ -1,11 +1,13 @@
+use md5::Md5;
 use russh::server::{self, Auth, Msg};
 use russh::{Channel, ChannelId};
 use russh_sftp::protocol::{
     Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode,
 };
 use russh_sftp::server::Handler as SftpHandler;
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -78,6 +80,71 @@ impl server::Handler for TestServerHandler {
         }
         Ok(())
     }
+
+    /// 模拟 Linux 校验命令（sha256sum/md5sum 及其 BSD 变体）。
+    ///
+    /// 设计原理（Why）：客户端会先用 SSH exec 在服务端本地算哈希，失败才降级为
+    /// SFTP 流式读取。若 mock 不响应 exec 请求，每次校验都要等满客户端 30 秒
+    /// 超时，整个往返测试被拖成数分钟且完全在测超时逻辑，而不是被测行为。
+    async fn exec_request(
+        &mut self,
+        channel_id: ChannelId,
+        data: &[u8],
+        session: &mut server::Session,
+    ) -> Result<(), Self::Error> {
+        let command = String::from_utf8_lossy(data);
+        let _ = session.channel_success(channel_id);
+        match checksum_command_output(&command, &self.root) {
+            Some(output) => {
+                let _ = session.data(channel_id, output);
+                let _ = session.exit_status_request(channel_id, 0);
+            }
+            None => {
+                let _ = session.data(channel_id, b"command not found\n".to_vec());
+                let _ = session.exit_status_request(channel_id, 127);
+            }
+        }
+        let _ = session.close(channel_id);
+        Ok(())
+    }
+}
+
+/// 支持的模拟校验工具：命令前缀与算法。
+const CHECKSUM_TOOLS: [(&str, ChecksumKind); 4] = [
+    ("sha256sum -- ", ChecksumKind::Sha256),
+    ("shasum -a 256 -- ", ChecksumKind::Sha256),
+    ("md5sum -- ", ChecksumKind::Md5),
+    ("md5 -q -- ", ChecksumKind::Md5),
+];
+
+#[derive(Clone, Copy)]
+enum ChecksumKind {
+    Sha256,
+    Md5,
+}
+
+/// 解析校验命令并返回与真实工具一致格式的输出行；无法识别时返回 `None`。
+fn checksum_command_output(command: &str, root: &Path) -> Option<Vec<u8>> {
+    let (kind, rest) = CHECKSUM_TOOLS
+        .iter()
+        .find_map(|(prefix, kind)| command.strip_prefix(prefix).map(|rest| (*kind, rest)))?;
+    // 客户端用单引号包裹路径：`sha256sum -- '<path>' 2>/dev/null || ...`
+    let path = rest.split('\'').nth(1)?;
+    let bytes = std::fs::read(root.join(path.trim_start_matches('/'))).ok()?;
+    let digest = match kind {
+        ChecksumKind::Sha256 => Sha256::digest(&bytes).to_vec(),
+        ChecksumKind::Md5 => Md5::digest(&bytes).to_vec(),
+    };
+    Some(format!("{}  {path}\n", hex_encode(&digest)).into_bytes())
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
+    for byte in bytes {
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
 }
 
 struct FsSftp {
@@ -352,10 +419,20 @@ impl SftpHandler for FsSftp {
         path: String,
         attrs: FileAttributes,
     ) -> Result<Status, Self::Error> {
+        let local = self.local(&path);
+        if let Some(size) = attrs.size {
+            // SETSTAT 的 size 语义是截断/扩展文件；续传收尾截断依赖它
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&local)
+                .map_err(|_| StatusCode::Failure)?
+                .set_len(size)
+                .map_err(|_| StatusCode::Failure)?;
+        }
         if let Some(mtime) = attrs.mtime {
             let file = std::fs::OpenOptions::new()
                 .write(true)
-                .open(self.local(&path))
+                .open(&local)
                 .map_err(|_| StatusCode::Failure)?;
             file.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(u64::from(mtime)))
                 .map_err(|_| StatusCode::Failure)?;

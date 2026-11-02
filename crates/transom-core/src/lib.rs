@@ -81,8 +81,9 @@ pub use protocol::proxy::{OutboundProxy, ProxyAuth};
 pub use protocol::sftp::{
     ChecksumAlgorithm, PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata,
     RemoteSearchQuery, RemoteSearchResultItem, RemoteTextMeta, SftpOperation, SudoCapability,
-    SudoUnavailable, TransferDirection, TransferSummary, VerifyMode, format_octal_permissions,
-    format_rwx_permissions, is_safe_file_name, parse_octal_permissions, safe_local_join,
+    SudoUnavailable, TransferDirection, TransferStart, TransferSummary, VerifyMode, VerifyOptions,
+    format_octal_permissions, format_rwx_permissions, is_safe_file_name, parse_octal_permissions,
+    safe_local_join,
 };
 pub use protocol::sftp_filter::{
     DEFAULT_TRANSFER_EXCLUDES, TransferFilter, TransferMatcher, validate_transfer_filter,

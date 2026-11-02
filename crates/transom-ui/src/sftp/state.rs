@@ -179,6 +179,8 @@ pub(crate) struct SftpQueueState {
     /// 当前正在由队列执行的任务集合，支持并行传输。
     pub(crate) active_transfers: HashSet<TransferId>,
     pub(crate) progress: Option<(u64, Option<u64>)>,
+    /// 断点续传开关：只影响“被中断任务重新排队时是否沿用已传进度”，
+    /// 全新任务与目标端已有同名文件无关，永远整份覆盖。
     pub(crate) resume_enabled: bool,
     pub(crate) expanded: bool,
     pub(crate) height: f32,

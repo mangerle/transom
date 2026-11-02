@@ -6,7 +6,7 @@ use crate::sftp::{SftpClient, TransferProgressResult, notify_shared_progress};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use transom_core::AppError;
+use transom_core::{AppError, TransferStart, VerifyOptions};
 
 /// 目录传输单个文件的并发任务上下文。
 ///
@@ -22,8 +22,7 @@ pub(super) struct DirFileTask {
     pub(super) client: SftpClient,
     pub(super) local_path: PathBuf,
     pub(super) remote_path: String,
-    pub(super) resume: bool,
-    pub(super) verify: bool,
+    pub(super) verify: VerifyOptions,
     pub(super) total: u64,
     pub(super) transferred: Arc<AtomicU64>,
     pub(super) progress: SharedProgress,
@@ -51,15 +50,9 @@ impl DirFileTask {
         result: TransferProgressResult,
         last_reported: u64,
     ) -> Result<(), AppError> {
-        if self.verify {
-            self.client
-                .verify_file_with_known_local(
-                    &self.local_path,
-                    &self.remote_path,
-                    result.local_sha256.as_deref(),
-                )
-                .await?;
-        }
+        self.client
+            .verify_transfer(&self.local_path, &self.remote_path, &result, self.verify)
+            .await?;
         let tail = result.transferred.saturating_sub(last_reported);
         if tail > 0 {
             let done = self
@@ -72,6 +65,9 @@ impl DirFileTask {
     }
 
     /// 上传单个文件：进度聚合后按需校验并补齐尾部。
+    ///
+    /// 目录任务没有“整棵树已传字节数”这一概念，每个文件都以覆盖方式写入：
+    /// 目标端已有同名文件属于本次要覆盖的旧版本，不是上次中断的残留。
     pub(super) async fn run_upload(self) -> Result<(), AppError> {
         let mut last_reported = 0u64;
         let result = self
@@ -79,7 +75,7 @@ impl DirFileTask {
             .upload_resumable(
                 &self.local_path,
                 &self.remote_path,
-                self.resume,
+                TransferStart::Overwrite,
                 |current, _| self.note_progress(current, &mut last_reported),
             )
             .await?;
@@ -99,7 +95,7 @@ impl DirFileTask {
             .download_resumable(
                 &self.remote_path,
                 &self.local_path,
-                self.resume,
+                TransferStart::Overwrite,
                 |current, _| self.note_progress(current, &mut last_reported),
             )
             .await?;

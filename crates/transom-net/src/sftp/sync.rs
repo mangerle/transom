@@ -5,8 +5,8 @@ use super::scan::scan_local_snapshot;
 use crate::sftp::SftpClient;
 use std::path::Path;
 use transom_core::{
-    AppError, DirComparison, SyncDirection, SyncItem, TransferFilter, TransferSummary,
-    build_dir_comparison,
+    AppError, DirComparison, SyncDirection, SyncItem, TransferFilter, TransferStart,
+    TransferSummary, VerifyOptions, build_dir_comparison,
 };
 
 impl SftpClient {
@@ -48,7 +48,7 @@ impl SftpClient {
         local_root: &Path,
         remote_root: &str,
         items: &[SyncItem],
-        verify: bool,
+        verify: VerifyOptions,
         mut progress: F,
     ) -> Result<TransferSummary, AppError>
     where
@@ -98,18 +98,17 @@ impl SftpClient {
                     }
                     let base = completed;
                     let result = self
-                        .upload_resumable(&local_path, &remote_path, false, |transferred, _| {
-                            progress(base.saturating_add(transferred), Some(total));
-                        })
-                        .await?;
-                    if verify {
-                        self.verify_file_with_known_local(
+                        .upload_resumable(
                             &local_path,
                             &remote_path,
-                            result.local_sha256.as_deref(),
+                            TransferStart::Overwrite,
+                            |transferred, _| {
+                                progress(base.saturating_add(transferred), Some(total));
+                            },
                         )
                         .await?;
-                    }
+                    self.verify_transfer(&local_path, &remote_path, &result, verify)
+                        .await?;
                     completed = completed.saturating_add(result.transferred);
                 }
                 (SyncDirection::Download, false) => {
@@ -122,18 +121,17 @@ impl SftpClient {
                     }
                     let base = completed;
                     let result = self
-                        .download_resumable(&remote_path, &local_path, false, |transferred, _| {
-                            progress(base.saturating_add(transferred), Some(total));
-                        })
-                        .await?;
-                    if verify {
-                        self.verify_file_with_known_local(
-                            &local_path,
+                        .download_resumable(
                             &remote_path,
-                            result.local_sha256.as_deref(),
+                            &local_path,
+                            TransferStart::Overwrite,
+                            |transferred, _| {
+                                progress(base.saturating_add(transferred), Some(total));
+                            },
                         )
                         .await?;
-                    }
+                    self.verify_transfer(&local_path, &remote_path, &result, verify)
+                        .await?;
                     completed = completed.saturating_add(result.transferred);
                 }
             }
@@ -142,7 +140,7 @@ impl SftpClient {
         Ok(TransferSummary {
             transferred: completed,
             skipped: 0,
-            verified: verify,
+            verified: verify.enabled,
         })
     }
 }

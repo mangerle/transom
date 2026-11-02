@@ -27,8 +27,8 @@ pub(crate) fn status_label(status: &TransferStatus) -> String {
         TransferStatus::Paused => rust_i18n::t!("sftp.paused").to_string(),
         TransferStatus::Completed => rust_i18n::t!("sftp.completed").to_string(),
         TransferStatus::Cancelled => rust_i18n::t!("sftp.cancelled").to_string(),
-        TransferStatus::Failed(reason) => {
-            format!("{}: {reason}", rust_i18n::t!("sftp.failed"))
+        TransferStatus::Failed(failure) => {
+            format!("{}: {}", rust_i18n::t!("sftp.failed"), failure.reason())
         }
     }
 }
@@ -75,7 +75,7 @@ pub(crate) fn is_busy(task: &TransferTask) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{display_name, is_busy, progress_percent};
-    use crate::sftp::{TransferMode, TransferStatus, TransferTask};
+    use crate::sftp::{TransferFailure, TransferStatus, TransferTask};
     use std::path::PathBuf;
     use transom_core::TransferDirection;
 
@@ -90,7 +90,6 @@ mod tests {
             PathBuf::from("/tmp/app.log"),
             "/srv/app.log".to_string(),
             size,
-            TransferMode::Overwrite,
         );
         task.status = status;
         task.transferred = transferred;
@@ -177,7 +176,7 @@ mod tests {
         for status in [
             TransferStatus::Completed,
             TransferStatus::Cancelled,
-            TransferStatus::Failed("失败".to_string()),
+            TransferStatus::Failed(TransferFailure::Interrupted("失败".to_string())),
         ] {
             assert!(!is_busy(&task(
                 TransferDirection::Upload,

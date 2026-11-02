@@ -4,7 +4,7 @@ use super::SftpExecutionContext;
 use super::throttled_progress;
 use crate::controller::sftp_finish::finish_sftp_summary;
 use std::path::PathBuf;
-use transom_core::{SftpAppEvent, SyncItem, TransferFilter};
+use transom_core::{SftpAppEvent, SyncItem, TransferFilter, VerifyOptions};
 pub(super) async fn handle_compare_dirs(
     ctx: &SftpExecutionContext,
     local_path: PathBuf,
@@ -52,7 +52,7 @@ pub(super) async fn handle_sync_dirs(
     local_path: PathBuf,
     remote_path: String,
     items: Vec<SyncItem>,
-    verify: bool,
+    verify: VerifyOptions,
 ) {
     let progress = throttled_progress(
         ctx.event_tx.clone(),

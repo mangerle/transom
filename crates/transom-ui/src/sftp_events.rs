@@ -141,6 +141,35 @@ impl AppShell {
         true
     }
 
+    /// SFTP 校验不一致后的自动恢复：任务回到传输中，进度归零。
+    ///
+    /// 设计原理（Why）：界面在这里只反映“从头重传”这一事实，不自行决定是否
+    /// 重传——控制层已经把所有目标端内容丢掉重新写入，界面若继续显示“校验中”
+    /// 或保留旧进度，会让用户看到一条与事实相反的队列。
+    pub(crate) fn on_sftp_retrying(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
+        let SftpAppEvent::SftpRetrying {
+            tab_id,
+            connection_id,
+            op_id,
+            reason,
+        } = event
+        else {
+            return true;
+        };
+        log::warn!("传输校验不一致，开始从头覆盖重传，任务: {op_id}，原因: {reason}");
+        if let Some(mut panel) = self.sftp_view_mut_for_connection(tab_id, connection_id, cx)
+            && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
+        {
+            task.plan_restart();
+            task.status = TransferStatus::Transferring;
+            task.speed_bps = None;
+            task.eta_secs = None;
+            panel.state.recompute_progress();
+        }
+        self.set_sftp_transient_status(tab_id, rust_i18n::t!("sftp.retrying").to_string(), cx);
+        true
+    }
+
     /// SFTP 属性响应：迟到的响应（标签已关闭）直接忽略且不重绘。
     pub(crate) fn on_sftp_metadata(&mut self, event: SftpAppEvent, cx: &mut Context<Self>) -> bool {
         let SftpAppEvent::SftpMetadata {

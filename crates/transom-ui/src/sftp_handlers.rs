@@ -5,6 +5,7 @@
 
 use crate::app::AppShell;
 use crate::palette::localized_error;
+use crate::sftp::TransferFailure;
 use crate::sftp::TransferStatus;
 use crate::sftp::{format_size, parent_remote, send_desktop_notification};
 use gpui_kit::*;
@@ -272,7 +273,8 @@ impl AppShell {
             let mut failed_transfer = false;
             if let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id) {
                 failed_transfer = true;
-                task.status = TransferStatus::Failed(err_msg.clone());
+                task.status =
+                    TransferStatus::Failed(TransferFailure::from_error(&error, err_msg.clone()));
                 let file_name = task
                     .local_path
                     .file_name()

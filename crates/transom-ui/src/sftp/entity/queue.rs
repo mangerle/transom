@@ -5,8 +5,8 @@
 
 use super::*;
 use crate::sftp::queue_actions::{sftp_operation_for_task, task_connection_id};
-use crate::sftp::{TransferStatus, TransferTask};
-use transom_core::{SftpCommand, TransferFilter};
+use crate::sftp::{TransferFailure, TransferStatus, TransferTask};
+use transom_core::{SftpCommand, TransferFilter, VerifyOptions};
 
 impl SftpPanelView {
     /// 按并发上限启动待处理任务；任一任务完成或取消后再次调用即可补位。
@@ -27,15 +27,17 @@ impl SftpPanelView {
             };
             let task: TransferTask = state.queue.tasks[index].clone();
             let Some(connection_id) = task_connection_id(&task) else {
-                state.queue.tasks[index].status = TransferStatus::Failed(
-                    rust_i18n::t!("sftp.queue_actions.missing_connection").to_string(),
-                );
+                state.queue.tasks[index].status =
+                    TransferStatus::Failed(TransferFailure::Interrupted(
+                        rust_i18n::t!("sftp.queue_actions.missing_connection").to_string(),
+                    ));
                 continue;
             };
             let Some(op) = sftp_operation_for_task(&task, &filter) else {
-                state.queue.tasks[index].status = TransferStatus::Failed(
-                    rust_i18n::t!("sftp.queue_actions.unsupported_task").to_string(),
-                );
+                state.queue.tasks[index].status =
+                    TransferStatus::Failed(TransferFailure::Interrupted(
+                        rust_i18n::t!("sftp.queue_actions.unsupported_task").to_string(),
+                    ));
                 continue;
             };
             state.queue.tasks[index].status = TransferStatus::Transferring;
@@ -63,9 +65,9 @@ impl SftpPanelView {
 }
 
 use crate::app::app_settings;
+use crate::sftp::SftpTransferRequest;
 use crate::sftp::queue_actions::enqueue::upload_tasks;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
-use crate::sftp::{SftpTransferRequest, TransferMode};
 use std::path::PathBuf;
 use transom_core::TransferDirection;
 
@@ -107,22 +109,17 @@ impl SftpPanelView {
         if paths.is_empty() {
             return Err(rust_i18n::t!("sftp.upload_file").to_string());
         }
-        let verify = app_settings(cx).sftp.verify_after_transfer;
-        let verify_mode = app_settings(cx).sftp.verify_mode;
-        let algorithm = app_settings(cx).sftp.checksum_algorithm;
-        let tasks = upload_tasks(
-            paths,
-            remote_dir,
-            self.state.queue.resume_enabled,
-            verify,
-            verify_mode,
-            algorithm,
-            target_connection_id,
-        )?;
+        let verify = VerifyOptions {
+            enabled: app_settings(cx).sftp.verify_after_transfer,
+            mode: app_settings(cx).sftp.verify_mode,
+            algorithm: app_settings(cx).sftp.checksum_algorithm,
+        };
+        let tasks = upload_tasks(paths, remote_dir, verify, target_connection_id)?;
         let count = tasks.len();
         log::info!(
-            "上传任务入队，窗格: {tab_id}，新增 {count} 项，目标目录: {remote_dir}，队列现有 {} 项，校验: {verify}",
-            self.state.queue.tasks.len() + count
+            "上传任务入队，窗格: {tab_id}，新增 {count} 项，目标目录: {remote_dir}，队列现有 {} 项，校验: {}",
+            self.state.queue.tasks.len() + count,
+            verify.enabled
         );
         self.state.queue.tasks.extend(tasks);
         self.state
@@ -142,13 +139,10 @@ impl SftpPanelView {
         request: SftpTransferRequest,
         cx: &mut Context<Self>,
     ) {
-        let verify = app_settings(cx).sftp.verify_after_transfer;
-        let verify_mode = app_settings(cx).sftp.verify_mode;
-        let checksum_algorithm = app_settings(cx).sftp.checksum_algorithm;
-        let mode = if self.state.queue.resume_enabled {
-            TransferMode::Resume
-        } else {
-            TransferMode::Overwrite
+        let verify = VerifyOptions {
+            enabled: app_settings(cx).sftp.verify_after_transfer,
+            mode: app_settings(cx).sftp.verify_mode,
+            algorithm: app_settings(cx).sftp.checksum_algorithm,
         };
         let mut task = if request.is_dir {
             TransferTask::new_directory(
@@ -156,7 +150,6 @@ impl SftpPanelView {
                 request.local_path.clone(),
                 request.remote_path.clone(),
                 None,
-                mode,
             )
         } else {
             TransferTask::new(
@@ -164,7 +157,6 @@ impl SftpPanelView {
                 request.local_path.clone(),
                 request.remote_path.clone(),
                 None,
-                mode,
             )
         };
         match request.direction {
@@ -177,8 +169,6 @@ impl SftpPanelView {
             _ => {}
         }
         task.verify = verify;
-        task.verify_mode = verify_mode;
-        task.checksum_algorithm = checksum_algorithm;
         self.state.queue.tasks.push(task);
         self.state.set_status(match request.direction {
             TransferDirection::Upload => rust_i18n::t!(

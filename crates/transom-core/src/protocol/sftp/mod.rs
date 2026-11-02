@@ -15,7 +15,9 @@ pub use path::{
     safe_local_join,
 };
 pub use search::{RemoteSearchQuery, RemoteSearchResultItem};
-pub use transfer::{ChecksumAlgorithm, TransferDirection, TransferSummary, VerifyMode};
+pub use transfer::{
+    ChecksumAlgorithm, TransferDirection, TransferStart, TransferSummary, VerifyMode, VerifyOptions,
+};
 pub use types::{
     RemoteDeleteTarget, RemoteFile, RemoteMetadata, RemoteTextMeta, SudoCapability, SudoUnavailable,
 };

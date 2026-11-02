@@ -82,6 +82,19 @@ pub enum SftpAppEvent {
         connection_id: ConnectionId,
         op_id: TransferId,
     },
+    /// 校验不一致后的自动恢复：丢弃目标端内容，从头覆盖重传。
+    ///
+    /// 设计原理（Why）：校验的意义是“发现不一致并恢复”，不是只报一个错让
+    /// 用户手点重试。续传前缀可能因为源文件在中断期间被修改而失真，此时唯一
+    /// 正确的恢复方式是从头覆盖；把它做成独立事件，界面才能把任务从
+    /// “校验中”切回“传输中”并把进度归零，而不是停在一条自相矛盾的文案上。
+    SftpRetrying {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        /// 触发重传的不一致原因，供状态栏与日志定位。
+        reason: String,
+    },
     SftpFinished {
         tab_id: TabId,
         connection_id: ConnectionId,

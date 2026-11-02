@@ -46,59 +46,27 @@ pub(crate) async fn execute_sftp_op(ctx: SftpExecutionContext, op: SftpOperation
         SftpOperation::Download {
             remote_path,
             local_path,
-            resume,
+            start,
             verify,
-            mode,
-            algorithm,
-        } => {
-            handle_download(
-                &ctx,
-                remote_path,
-                local_path,
-                resume,
-                verify,
-                mode,
-                algorithm,
-            )
-            .await
-        }
+        } => handle_download(&ctx, remote_path, local_path, start, verify).await,
         SftpOperation::Upload {
             local_path,
             remote_path,
-            resume,
+            start,
             verify,
-            mode,
-            algorithm,
-        } => {
-            handle_upload(
-                &ctx,
-                local_path,
-                remote_path,
-                resume,
-                verify,
-                mode,
-                algorithm,
-            )
-            .await
-        }
+        } => handle_upload(&ctx, local_path, remote_path, start, verify).await,
         SftpOperation::UploadDir {
             local_path,
             remote_path,
-            resume,
             filter,
             verify,
-            mode: _,
-            algorithm: _,
-        } => handle_upload_dir(&ctx, local_path, remote_path, resume, filter, verify).await,
+        } => handle_upload_dir(&ctx, local_path, remote_path, filter, verify).await,
         SftpOperation::DownloadDir {
             remote_path,
             local_path,
-            resume,
             filter,
             verify,
-            mode: _,
-            algorithm: _,
-        } => handle_download_dir(&ctx, remote_path, local_path, resume, filter, verify).await,
+        } => handle_download_dir(&ctx, remote_path, local_path, filter, verify).await,
         SftpOperation::Mkdir { path } => handle_mkdir(&ctx, path).await,
         SftpOperation::Rename { from, to } => handle_rename(&ctx, from, to).await,
         SftpOperation::Delete { path, is_dir } => handle_delete(&ctx, path, is_dir).await,
@@ -155,8 +123,6 @@ pub(crate) async fn execute_sftp_op(ctx: SftpExecutionContext, op: SftpOperation
             remote_path,
             items,
             verify,
-            mode: _,
-            algorithm: _,
         } => handle_sync_dirs(&ctx, local_path, remote_path, items, verify).await,
         SftpOperation::RemoteTransfer { .. } => {}
         SftpOperation::Archive {

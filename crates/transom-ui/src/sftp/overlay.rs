@@ -390,7 +390,7 @@ fn overlay_row(
             |value| format!("{value:.0}% · {}", format_size(task.transferred)),
         ),
         // 浮层空间窄，失败只显示原因，前缀由状态图标表达。
-        TransferStatus::Failed(reason) => reason.clone(),
+        TransferStatus::Failed(failure) => failure.reason().to_string(),
         _ => status_label(&task.status),
     };
     let (icon, icon_color) = match &task.status {

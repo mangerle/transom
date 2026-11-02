@@ -17,7 +17,7 @@ use futures::stream::{self, StreamExt, TryStreamExt};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use transom_core::{AppError, ErrorCode, TransferFilter, TransferSummary};
+use transom_core::{AppError, ErrorCode, TransferFilter, TransferSummary, VerifyOptions};
 
 /// 并发目录传输的聚合进度回调：装箱为具体类型，供嵌套闭包安全捕获。
 type SharedProgress = Arc<std::sync::Mutex<Box<dyn FnMut(u64, Option<u64>) + Send>>>;
@@ -119,6 +119,8 @@ impl SftpClient {
     /// - 代价与局限：扫描与传输之间如果文件被外部修改，总进度可能略有偏差，
     ///   因此进度计算全部使用饱和算术，不追求严格字节守恒；任一文件失败即
     ///   停止调度后续文件（与串行实现的首错即断一致），已完成的文件不回滚。
+    ///   每个文件都以覆盖方式写入：目录任务没有“整棵树已传字节数”，目标端已有
+    ///   同名文件属于本次要覆盖的旧版本，不能当成上次中断的残留来续传。
     ///
     /// # Errors
     /// 排除规则非法、本地目录不可读、远端建目录或文件上传失败时返回
@@ -127,9 +129,8 @@ impl SftpClient {
         &self,
         local_root: &Path,
         remote_root: &str,
-        resume: bool,
         filter: &TransferFilter,
-        verify: bool,
+        verify: VerifyOptions,
         progress: F,
     ) -> Result<TransferSummary, AppError>
     where
@@ -167,7 +168,6 @@ impl SftpClient {
                 client: self.clone(),
                 local_path: local_path_for(local_root, &file.relative_path)?,
                 remote_path: join_remote_path(remote_root, &file.relative_path),
-                resume,
                 verify,
                 total,
                 transferred: transferred.clone(),
@@ -183,7 +183,7 @@ impl SftpClient {
         Ok(TransferSummary {
             transferred: transferred.load(Ordering::Relaxed),
             skipped: scan.skipped,
-            verified: verify,
+            verified: verify.enabled,
         })
     }
 
@@ -191,7 +191,8 @@ impl SftpClient {
     ///
     /// 安全约束：远端返回的文件名会参与本地路径拼接，任何空片段、`.`、`..`
     /// 或路径分隔符都会被拒绝，防止恶意服务端把文件写到目标目录之外。
-    /// 文件按固定并发度并行下载（与上传同构），进度经原子计数聚合。
+    /// 文件按固定并发度并行下载（与上传同构），进度经原子计数聚合，每个文件
+    /// 都以覆盖方式写入本地（理由与 [`Self::upload_dir`] 一致）。
     ///
     /// # Errors
     /// 排除规则非法、远端目录不可读、本地建目录或文件写入失败时返回
@@ -200,9 +201,8 @@ impl SftpClient {
         &self,
         remote_root: &str,
         local_root: &Path,
-        resume: bool,
         filter: &TransferFilter,
-        verify: bool,
+        verify: VerifyOptions,
         progress: F,
     ) -> Result<TransferSummary, AppError>
     where
@@ -234,7 +234,6 @@ impl SftpClient {
                 client: self.clone(),
                 local_path: local_path_for(local_root, &file.relative_path)?,
                 remote_path: join_remote_path(remote_root, &file.relative_path),
-                resume,
                 verify,
                 total,
                 transferred: transferred.clone(),
@@ -250,7 +249,7 @@ impl SftpClient {
         Ok(TransferSummary {
             transferred: transferred.load(Ordering::Relaxed),
             skipped: scan.skipped,
-            verified: verify,
+            verified: verify.enabled,
         })
     }
 

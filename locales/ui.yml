@@ -991,6 +991,9 @@ sftp:
   verifying:
     en: Verifying
     zh-CN: 校验中
+  retrying:
+    en: Checksum mismatch, retransferring from the start
+    zh-CN: 校验不一致，正在从头重传
   paused:
     en: Paused
     zh-CN: 暂停

@@ -2,8 +2,8 @@
 
 use std::path::Path;
 use transom_core::{
-    AppError, AppEvent, ChecksumAlgorithm, ConnectionId, ErrorCode, PreviewMode, SftpAppEvent,
-    TabId, TransferId, TransferSummary, VerifyMode,
+    AppError, AppEvent, ConnectionId, ErrorCode, PreviewMode, SftpAppEvent, TabId, TransferId,
+    TransferSummary, VerifyOptions,
 };
 use transom_net::SftpClient;
 use transom_net::sftp::TransferProgressResult;
@@ -16,17 +16,19 @@ pub(super) struct VerifyContext<'a> {
     pub(super) client: &'a SftpClient,
     pub(super) local_path: &'a Path,
     pub(super) remote_path: &'a str,
-    pub(super) verify: bool,
-    pub(super) mode: VerifyMode,
-    pub(super) algorithm: ChecksumAlgorithm,
+    pub(super) options: VerifyOptions,
 }
 
+/// 按选项校验一次传输结果，返回（已传字节数，是否完成校验）。
+///
+/// 校验口径集中在 [`SftpClient::verify_transfer`]：此处只负责在真正开始校验
+/// 前把任务状态推给界面，事件通道关闭说明应用正在退出，忽略即可。
 pub(super) async fn verify_transfer_result(
     ctx: VerifyContext<'_>,
     result: Result<TransferProgressResult, AppError>,
 ) -> Result<(u64, bool), AppError> {
     let progress = result?;
-    if ctx.verify {
+    if ctx.options.enabled {
         let _ = ctx
             .event_tx
             .send_async(
@@ -38,22 +40,11 @@ pub(super) async fn verify_transfer_result(
                 .into(),
             )
             .await;
-        let known = if ctx.algorithm == ChecksumAlgorithm::Sha256 {
-            progress.local_sha256.as_deref()
-        } else {
-            None
-        };
         ctx.client
-            .verify_file_with_strategy_and_algo(
-                ctx.local_path,
-                ctx.remote_path,
-                known,
-                ctx.mode,
-                ctx.algorithm,
-            )
+            .verify_transfer(ctx.local_path, ctx.remote_path, &progress, ctx.options)
             .await?;
     }
-    Ok((progress.transferred, ctx.verify))
+    Ok((progress.transferred, ctx.options.enabled))
 }
 
 pub(super) async fn finish_sftp(

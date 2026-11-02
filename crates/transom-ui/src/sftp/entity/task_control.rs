@@ -5,8 +5,7 @@
 use super::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
-use crate::sftp::queue_actions::is_verify_failure;
-use crate::sftp::{TransferMode, TransferStatus};
+use crate::sftp::TransferStatus;
 use transom_core::{SftpCommand, TransferId};
 
 impl SftpPanelView {
@@ -35,15 +34,8 @@ impl SftpPanelView {
         let resume_enabled = self.state.queue.resume_enabled;
         let mut retried_count: usize = 0;
         for task in &mut self.state.queue.tasks {
-            if let TransferStatus::Failed(ref reason) = task.status {
-                let is_verify_failure = is_verify_failure(reason);
-                task.status = TransferStatus::Pending;
-                if is_verify_failure {
-                    task.mode = TransferMode::Overwrite;
-                    task.transferred = 0;
-                } else if resume_enabled || task.transferred > 0 {
-                    task.mode = TransferMode::Resume;
-                }
+            if matches!(task.status, TransferStatus::Failed(_)) {
+                task.requeue(resume_enabled);
                 retried_count = retried_count.saturating_add(1);
             }
         }
@@ -86,10 +78,10 @@ impl SftpPanelView {
     /// 继续全部暂停任务。
     pub(crate) fn resume_all(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let mut resumed = 0u32;
+        let resume_enabled = self.state.queue.resume_enabled;
         for task in &mut self.state.queue.tasks {
             if task.status == TransferStatus::Paused {
-                task.status = TransferStatus::Pending;
-                task.mode = TransferMode::Resume;
+                task.requeue(resume_enabled);
                 resumed = resumed.saturating_add(1);
             }
         }
@@ -165,21 +157,12 @@ impl SftpPanelView {
 
     /// 继续单个暂停或失败任务；校验失败强制从头覆盖传输。
     pub(crate) fn resume_task(&mut self, tab_id: TabId, op_id: TransferId, cx: &mut Context<Self>) {
+        let resume_enabled = self.state.queue.resume_enabled;
         if let Some(task) = self.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
             && (task.status == TransferStatus::Paused
                 || matches!(task.status, TransferStatus::Failed(_)))
         {
-            let is_verify_failure = match &task.status {
-                TransferStatus::Failed(reason) => is_verify_failure(reason),
-                _ => false,
-            };
-            task.status = TransferStatus::Pending;
-            if is_verify_failure {
-                task.mode = TransferMode::Overwrite;
-                task.transferred = 0;
-            } else {
-                task.mode = TransferMode::Resume;
-            }
+            task.requeue(resume_enabled);
         }
         self.process_queue(tab_id, cx);
     }
@@ -221,22 +204,18 @@ impl SftpPanelView {
         op_id: TransferId,
         cx: &mut Context<Self>,
     ) {
+        let resume_enabled = self.state.queue.resume_enabled;
         let mut needs_cancel = false;
         if self.state.queue.active_transfers.contains(&op_id)
             && let Some(active_task) = self.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
             && active_task.status == TransferStatus::Transferring
         {
             needs_cancel = true;
-            active_task.status = TransferStatus::Pending;
-            active_task.mode = TransferMode::Resume;
             self.state.queue.active_transfers.remove(&op_id);
         }
         if let Some(pos) = self.state.queue.tasks.iter().position(|t| t.id == op_id) {
             let mut task = self.state.queue.tasks.remove(pos);
-            task.status = TransferStatus::Pending;
-            if task.transferred > 0 {
-                task.mode = TransferMode::Resume;
-            }
+            task.requeue(resume_enabled);
             self.state.queue.tasks.insert(0, task);
             self.state
                 .set_status(rust_i18n::t!("sftp.queue_actions.prioritized").to_string());

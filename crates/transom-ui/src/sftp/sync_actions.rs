@@ -7,7 +7,9 @@ use crate::app::app_settings;
 use crate::sftp::{SftpRemotePaneRef, TransferTask};
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::*;
-use transom_core::{SftpCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId};
+use transom_core::{
+    SftpCommand, SftpOperation, SyncDirection, TabId, TransferFilter, TransferId, VerifyOptions,
+};
 
 impl SftpPanelView {
     /// 以当前双栏路径为根目录发起异步扫描对比。
@@ -154,9 +156,11 @@ impl AppShell {
             items,
             Some(total_size),
         );
-        task.verify = verify;
-        task.verify_mode = app_settings(cx).sftp.verify_mode;
-        task.checksum_algorithm = app_settings(cx).sftp.checksum_algorithm;
+        task.verify = VerifyOptions {
+            enabled: verify,
+            mode: app_settings(cx).sftp.verify_mode,
+            algorithm: app_settings(cx).sftp.checksum_algorithm,
+        };
         task.target_connection_id = Some(modal.connection_id);
         if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
             panel.state.queue.tasks.push(task);

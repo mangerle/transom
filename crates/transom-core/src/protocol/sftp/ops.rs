@@ -1,7 +1,7 @@
 //! SFTP 业务操作枚举定义。
 
 use super::search::RemoteSearchQuery;
-use super::transfer::{ChecksumAlgorithm, VerifyMode};
+use super::transfer::{TransferStart, VerifyOptions};
 use super::types::{RemoteDeleteTarget, RemoteTextMeta};
 use crate::ids::ConnectionId;
 use crate::protocol::sftp_filter::TransferFilter;
@@ -30,38 +30,37 @@ pub enum SftpOperation {
     Download {
         remote_path: String,
         local_path: PathBuf,
-        resume: bool,
-        verify: bool,
-        mode: VerifyMode,
-        algorithm: ChecksumAlgorithm,
+        /// 传输起点：覆盖或从本任务已写入的偏移续传。
+        start: TransferStart,
+        /// 传输后校验选项。
+        verify: VerifyOptions,
     },
     Upload {
         local_path: PathBuf,
         remote_path: String,
-        resume: bool,
-        verify: bool,
-        mode: VerifyMode,
-        algorithm: ChecksumAlgorithm,
+        /// 传输起点：覆盖或从本任务已写入的偏移续传。
+        start: TransferStart,
+        /// 传输后校验选项。
+        verify: VerifyOptions,
     },
     /// 递归上传整棵本地目录；`filter` 在遍历时剪枝被排除的子目录与文件。
+    ///
+    /// 目录任务没有“整棵树已传字节数”这一概念，逐个文件都以覆盖方式写入：
+    /// 目标端已有同名文件属于本次要覆盖的旧版本，不是上次中断的残留。
     UploadDir {
         local_path: PathBuf,
         remote_path: String,
-        resume: bool,
         filter: TransferFilter,
-        verify: bool,
-        mode: VerifyMode,
-        algorithm: ChecksumAlgorithm,
+        /// 传输后校验选项。
+        verify: VerifyOptions,
     },
     /// 递归下载整棵远端目录；`filter` 语义与 `UploadDir` 一致。
     DownloadDir {
         remote_path: String,
         local_path: PathBuf,
-        resume: bool,
         filter: TransferFilter,
-        verify: bool,
-        mode: VerifyMode,
-        algorithm: ChecksumAlgorithm,
+        /// 传输后校验选项。
+        verify: VerifyOptions,
     },
     Mkdir {
         path: String,
@@ -167,9 +166,8 @@ pub enum SftpOperation {
         local_path: PathBuf,
         remote_path: String,
         items: Vec<SyncItem>,
-        verify: bool,
-        mode: VerifyMode,
-        algorithm: ChecksumAlgorithm,
+        /// 传输后校验选项。
+        verify: VerifyOptions,
     },
     /// 跨远端流式互传（单文件或整棵目录树）。
     RemoteTransfer {

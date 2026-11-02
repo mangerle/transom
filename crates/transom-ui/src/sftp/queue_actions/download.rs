@@ -3,9 +3,9 @@
 use crate::app::app_settings;
 use crate::palette::localized_error;
 use crate::sftp::entity::SftpPanelView;
-use crate::sftp::{SftpRemotePaneRef, TransferMode, TransferTask};
+use crate::sftp::{SftpRemotePaneRef, TransferTask};
 use gpui_kit::*;
-use transom_core::TransferDirection;
+use transom_core::{TransferDirection, VerifyOptions};
 
 impl SftpPanelView {
     /// 下载目标远端列当前选中的条目到本地当前目录。
@@ -13,9 +13,11 @@ impl SftpPanelView {
         let Some(main_connection) = self.state.main_connection else {
             return;
         };
-        let verify = app_settings(cx).sftp.verify_after_transfer;
-        let verify_mode = app_settings(cx).sftp.verify_mode;
-        let checksum_algorithm = app_settings(cx).sftp.checksum_algorithm;
+        let verify = VerifyOptions {
+            enabled: app_settings(cx).sftp.verify_after_transfer,
+            mode: app_settings(cx).sftp.verify_mode,
+            algorithm: app_settings(cx).sftp.checksum_algorithm,
+        };
         let Some(source_connection_id) =
             self.state.remote_connection(target, Some(main_connection))
         else {
@@ -25,11 +27,6 @@ impl SftpPanelView {
             }
             cx.notify();
             return;
-        };
-        let mode = if self.state.queue.resume_enabled {
-            TransferMode::Resume
-        } else {
-            TransferMode::Overwrite
         };
         let paths = self.state.selected_remote_paths_pane(target);
         if paths.is_empty() {
@@ -42,10 +39,7 @@ impl SftpPanelView {
         let tasks = match build_download_tasks(DownloadTasksInput {
             paths,
             source_connection_id,
-            mode,
             verify,
-            verify_mode,
-            checksum_algorithm,
             local_dir: &self.state.local.path,
             entries: self
                 .state
@@ -84,11 +78,8 @@ struct DownloadTasksInput<'a> {
     paths: Vec<String>,
     entries: &'a [transom_core::RemoteFile],
     local_dir: &'a std::path::Path,
-    mode: TransferMode,
     source_connection_id: transom_core::ConnectionId,
-    verify: bool,
-    verify_mode: transom_core::VerifyMode,
-    checksum_algorithm: transom_core::ChecksumAlgorithm,
+    verify: VerifyOptions,
 }
 
 /// 把选中远端路径转成下载任务；非法文件名直接返回错误文案。
@@ -97,11 +88,8 @@ fn build_download_tasks(input: DownloadTasksInput<'_>) -> Result<Vec<TransferTas
         paths,
         entries,
         local_dir,
-        mode,
         source_connection_id,
         verify,
-        verify_mode,
-        checksum_algorithm,
     } = input;
     let mut tasks = Vec::with_capacity(paths.len());
     for path in paths {
@@ -118,7 +106,6 @@ fn build_download_tasks(input: DownloadTasksInput<'_>) -> Result<Vec<TransferTas
                 local_path,
                 remote_entry.path.clone(),
                 None,
-                mode,
             )
         } else {
             TransferTask::new(
@@ -126,13 +113,10 @@ fn build_download_tasks(input: DownloadTasksInput<'_>) -> Result<Vec<TransferTas
                 local_path,
                 remote_entry.path.clone(),
                 Some(remote_entry.size),
-                mode,
             )
         };
         task.source_connection_id = Some(source_connection_id);
         task.verify = verify;
-        task.verify_mode = verify_mode;
-        task.checksum_algorithm = checksum_algorithm;
         tasks.push(task);
     }
     Ok(tasks)

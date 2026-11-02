@@ -229,14 +229,14 @@ pub(super) fn render_queue_task_row(
                     .child(rust_i18n::t!("sftp.folder_tag").to_string()),
             )
         })
-        .when(task.verify, |this| {
+        .when(task.verify.enabled, |this| {
             this.child(
                 div()
                     .px_1()
                     .rounded(p.radius.sm)
                     .bg(p.muted)
                     .text_color(p.muted_foreground)
-                    .child(task.checksum_algorithm.label()),
+                    .child(task.verify.algorithm.label()),
             )
         })
         .child(div().flex_1().overflow_hidden().child(file_name))

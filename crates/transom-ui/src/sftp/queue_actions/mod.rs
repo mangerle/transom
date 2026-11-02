@@ -11,7 +11,7 @@ pub(super) mod enqueue;
 mod task_control;
 
 use crate::app::AppShell;
-use crate::sftp::{TransferKind, TransferMode, TransferTask};
+use crate::sftp::{TransferKind, TransferTask};
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{ConnectionId, SftpOperation, TabId, TransferDirection, TransferFilter};
@@ -52,15 +52,6 @@ impl AppShell {
     }
 }
 
-/// 失败原因是否属于校验失败。
-///
-/// 校验失败说明两端数据不一致或损坏，断点续传可能在脏数据后追加导致二次
-/// 损坏，重试时必须强制从头覆盖传输。识别口径集中在这里，实体与队列动作
-/// 共用同一判断。
-pub(super) fn is_verify_failure(reason: &str) -> bool {
-    reason.contains("校验") || reason.contains("verify")
-}
-
 /// 任务执行所需的远端连接；方向决定用哪一端，缺失即视为入队缺陷。
 ///
 /// 不再回退标签主连接或第一列：那会把跨列传输静默送到错误主机。
@@ -78,49 +69,38 @@ pub(super) fn sftp_operation_for_task(
     task: &TransferTask,
     filter: &TransferFilter,
 ) -> Option<SftpOperation> {
-    let resume = task.mode != TransferMode::Overwrite;
+    let verify = task.verify;
+    let start = task.start;
     let op = match (task.kind, task.direction) {
         (TransferKind::Directory, TransferDirection::Upload) => SftpOperation::UploadDir {
             local_path: task.local_path.clone(),
             remote_path: task.remote_path.clone(),
-            resume,
             filter: filter.clone(),
-            verify: task.verify,
-            mode: task.verify_mode,
-            algorithm: task.checksum_algorithm,
+            verify,
         },
         (TransferKind::Directory, TransferDirection::Download) => SftpOperation::DownloadDir {
             remote_path: task.remote_path.clone(),
             local_path: task.local_path.clone(),
-            resume,
             filter: filter.clone(),
-            verify: task.verify,
-            mode: task.verify_mode,
-            algorithm: task.checksum_algorithm,
+            verify,
         },
         (TransferKind::File, TransferDirection::Upload) => SftpOperation::Upload {
             local_path: task.local_path.clone(),
             remote_path: task.remote_path.clone(),
-            resume,
-            verify: task.verify,
-            mode: task.verify_mode,
-            algorithm: task.checksum_algorithm,
+            start,
+            verify,
         },
         (TransferKind::File, TransferDirection::Download) => SftpOperation::Download {
             remote_path: task.remote_path.clone(),
             local_path: task.local_path.clone(),
-            resume,
-            verify: task.verify,
-            mode: task.verify_mode,
-            algorithm: task.checksum_algorithm,
+            start,
+            verify,
         },
         (TransferKind::Sync, TransferDirection::Sync) => SftpOperation::SyncDirs {
             local_path: task.local_path.clone(),
             remote_path: task.remote_path.clone(),
             items: task.sync_items.clone(),
-            verify: task.verify,
-            mode: task.verify_mode,
-            algorithm: task.checksum_algorithm,
+            verify,
         },
         (_, TransferDirection::RemoteCopy) => {
             let source_conn = task.source_connection_id?;
@@ -144,18 +124,12 @@ pub(super) fn sftp_operation_for_task(
 #[cfg(test)]
 mod tests {
     use super::task_connection_id;
-    use crate::sftp::{TransferMode, TransferTask};
+    use crate::sftp::TransferTask;
     use std::path::PathBuf;
     use transom_core::{ConnectionId, TransferDirection};
 
     fn task(direction: TransferDirection) -> TransferTask {
-        TransferTask::new(
-            direction,
-            PathBuf::from("/tmp/a"),
-            "/remote/a".into(),
-            None,
-            TransferMode::Auto,
-        )
+        TransferTask::new(direction, PathBuf::from("/tmp/a"), "/remote/a".into(), None)
     }
 
     /// 上传只认目标端连接：缺失时宁可失败，也不能回退到标签主连接。
