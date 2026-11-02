@@ -50,47 +50,7 @@ impl MonitorView {
             );
 
         // 展开态详细挂载点列表
-        let mut content = v_flex().gap_2();
-
-        if stats.filesystems.is_empty() {
-            content = content.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("monitor.no_data").to_string()),
-            );
-        }
-
-        for filesystem in stats.filesystems.iter().take(8) {
-            let fraction = if filesystem.total_bytes == 0 {
-                0.0
-            } else {
-                filesystem.used_bytes as f32 / filesystem.total_bytes as f32
-            };
-            let color = usage_color(fraction * 100.0, p);
-            content = content.child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .text_xs()
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.foreground)
-                                    .child(filesystem.mount.clone()),
-                            )
-                            .child(div().text_color(p.muted_foreground).child(format!(
-                                "{} / {} ({:.0}%)",
-                                format_size(filesystem.used_bytes),
-                                format_size(filesystem.total_bytes),
-                                fraction * 100.0
-                            ))),
-                    )
-                    .child(usage_bar(fraction, color, p)),
-            );
-        }
+        let content = disk_content(stats, p);
 
         CollapsibleCard::new(
             "card-disk",
@@ -115,4 +75,51 @@ impl MonitorView {
             }),
         )
     }
+}
+
+/// 磁盘内容：空态或最多八个挂载点的占用条。
+fn disk_content(stats: &SystemStats, p: &Palette) -> AnyElement {
+    let mut content = v_flex().gap_2();
+
+    if stats.filesystems.is_empty() {
+        content = content.child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("monitor.no_data").to_string()),
+        );
+    }
+
+    for filesystem in stats.filesystems.iter().take(8) {
+        let fraction = if filesystem.total_bytes == 0 {
+            0.0
+        } else {
+            filesystem.used_bytes as f32 / filesystem.total_bytes as f32
+        };
+        let color = usage_color(fraction * 100.0, p);
+        content = content.child(
+            v_flex()
+                .gap_1()
+                .child(
+                    h_flex()
+                        .justify_between()
+                        .text_xs()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.foreground)
+                                .child(filesystem.mount.clone()),
+                        )
+                        .child(div().text_color(p.muted_foreground).child(format!(
+                            "{} / {} ({:.0}%)",
+                            format_size(filesystem.used_bytes),
+                            format_size(filesystem.total_bytes),
+                            fraction * 100.0
+                        ))),
+                )
+                .child(usage_bar(fraction, color, p)),
+        );
+    }
+
+    content.into_any_element()
 }
