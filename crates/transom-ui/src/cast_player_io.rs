@@ -49,7 +49,8 @@ impl Read for ChannelReader {
 
 #[cfg(test)]
 mod tests {
-    use super::format_duration;
+    use super::{ChannelReader, format_duration};
+    use std::io::Read;
 
     /// 秒数格式化为 `mm:ss`，超过一小时补出小时段；负数按 0 处理。
     #[test]
@@ -59,5 +60,18 @@ mod tests {
         assert_eq!(format_duration(61.0), "01:01");
         assert_eq!(format_duration(3600.0), "01:00:00");
         assert_eq!(format_duration(-5.0), "00:00");
+    }
+
+    /// 通道读尽后返回 EOF，已发送的字节按顺序读出。
+    #[test]
+    fn channel_reader_streams_until_eof() {
+        let (tx, rx) = flume::bounded(2);
+        tx.send(b"abc".to_vec()).unwrap();
+        drop(tx);
+        let mut reader = ChannelReader::new(rx);
+        let mut buffer = [0u8; 8];
+        assert_eq!(reader.read(&mut buffer).unwrap(), 3);
+        assert_eq!(&buffer[..3], b"abc");
+        assert_eq!(reader.read(&mut buffer).unwrap(), 0);
     }
 }
