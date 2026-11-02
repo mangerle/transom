@@ -17,7 +17,7 @@ const UPTIME_VALUE_WIDTH: f32 = 3.0;
 /// 当前活动标签能提供的指标快照。
 pub(super) struct StatusData<'a> {
     traffic: Option<&'a NetworkTraffic>,
-    stats: Option<&'a SystemStats>,
+    stats: Option<&'a super::metrics::StatusMetricsValues>,
     /// SSH 的网络速率来自连接传输层；其余会话（如本地终端）来自本机网卡。
     is_ssh: bool,
 }

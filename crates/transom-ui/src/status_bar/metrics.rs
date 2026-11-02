@@ -16,11 +16,37 @@ use gpui_kit::base::h_flex;
 use gpui_kit::*;
 use transom_core::{NetworkTraffic, SystemStats};
 
+/// 状态栏真正需要用到的统计字段：避免每帧克隆进程/端口等大列表。
+#[derive(Clone, Default, PartialEq)]
+pub(crate) struct StatusMetricsValues {
+    pub(crate) cpu_percent: f32,
+    pub(crate) mem_used_bytes: u64,
+    pub(crate) mem_total_bytes: u64,
+    pub(crate) disk_used_bytes: u64,
+    pub(crate) disk_total_bytes: u64,
+    pub(crate) os_name: String,
+    pub(crate) uptime_secs: u64,
+}
+
+impl From<&SystemStats> for StatusMetricsValues {
+    fn from(stats: &SystemStats) -> Self {
+        Self {
+            cpu_percent: stats.cpu_percent,
+            mem_used_bytes: stats.mem_used_bytes,
+            mem_total_bytes: stats.mem_total_bytes,
+            disk_used_bytes: stats.disk_used_bytes,
+            disk_total_bytes: stats.disk_total_bytes,
+            os_name: stats.os_name.clone(),
+            uptime_secs: stats.uptime_secs,
+        }
+    }
+}
+
 /// 当前活动标签的指标快照，由外壳在数据变化时注入。
 #[derive(Clone, Default, PartialEq)]
 pub(crate) struct StatusMetricsSnapshot {
     pub(crate) traffic: Option<NetworkTraffic>,
-    pub(crate) stats: Option<SystemStats>,
+    pub(crate) stats: Option<StatusMetricsValues>,
     pub(crate) is_ssh: bool,
 }
 

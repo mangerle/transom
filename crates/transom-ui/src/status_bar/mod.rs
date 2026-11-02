@@ -28,7 +28,7 @@ use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{NetworkTraffic, StatusItemId, SystemStats};
+use transom_core::{NetworkTraffic, StatusItemId};
 
 // 数值槽与徽标度量以 rem 表达（标准档 16px 基准），密度切换时随字号等比放大，
 // 大字号下数字不会挤爆固定槽；底栏高度在 theme::tokens::size 集中定义。
@@ -158,7 +158,9 @@ impl AppShell {
             .and_then(|tab_id| self.state.workspace.tab(tab_id));
         let snapshot = crate::status_bar::StatusMetricsSnapshot {
             traffic: tab.and_then(|tab| tab.network_traffic()).cloned(),
-            stats: tab.and_then(|tab| tab.system_stats()).cloned(),
+            stats: tab
+                .and_then(|tab| tab.system_stats())
+                .map(metrics::StatusMetricsValues::from),
             is_ssh: tab.is_some_and(|tab| {
                 matches!(tab.session.connection, transom_core::Connection::Ssh(_))
             }),
