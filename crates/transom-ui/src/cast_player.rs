@@ -79,33 +79,8 @@ impl CastPlayerView {
         let (control, _) = TerminalControlHandle::channel(16);
         let io = TerminalIo::new(reader, writer, control);
 
-        let terminal = cx.new(|cx| {
-            TerminalView::new(
-                window,
-                cx,
-                transom_terminal::TerminalViewParams {
-                    io,
-                    profile,
-                    interaction: TerminalInteraction::default(),
-                    key_filter: None,
-                    audit_path: None,
-                    // 回放是既成事实的录像，不再向会话注入集成脚本。
-                    shell_integration_enabled: false,
-                },
-            )
-        });
-
-        // 提取全部输出事件
-        let mut output_events = Vec::new();
-        for ev in events {
-            if ev.event_type == CastEventType::Output {
-                output_events.push(CastOutputEvent {
-                    time: ev.time,
-                    data: ev.data.into_bytes(),
-                });
-            }
-        }
-        output_events.sort_by(|a, b| a.time.total_cmp(&b.time));
+        let terminal = create_playback_terminal(window, cx, io, profile);
+        let output_events = collect_output_events(events);
 
         let total_duration = output_events.last().map_or(0.0, |e| e.time);
         let max_slider = if total_duration > 0.0 {
@@ -461,4 +436,43 @@ impl Render for CastPlayerView {
             )
             .child(control_bar)
     }
+}
+
+/// 创建只读回放终端：输出通过通道喂给 TerminalView。
+fn create_playback_terminal(
+    window: &mut Window,
+    cx: &mut Context<CastPlayerView>,
+    io: TerminalIo,
+    profile: TerminalProfile,
+) -> Entity<TerminalView> {
+    cx.new(|cx| {
+        TerminalView::new(
+            window,
+            cx,
+            transom_terminal::TerminalViewParams {
+                io,
+                profile,
+                interaction: TerminalInteraction::default(),
+                key_filter: None,
+                audit_path: None,
+                // 回放是既成事实的录像，不再向会话注入集成脚本。
+                shell_integration_enabled: false,
+            },
+        )
+    })
+}
+
+/// 只保留输出事件并按时间排序，作为回放时间轴。
+fn collect_output_events(events: Vec<CastEvent>) -> Vec<CastOutputEvent> {
+    let mut output_events = Vec::with_capacity(events.len());
+    for ev in events {
+        if ev.event_type == CastEventType::Output {
+            output_events.push(CastOutputEvent {
+                time: ev.time,
+                data: ev.data.into_bytes(),
+            });
+        }
+    }
+    output_events.sort_by(|a, b| a.time.total_cmp(&b.time));
+    output_events
 }
