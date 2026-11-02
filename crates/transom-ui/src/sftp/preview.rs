@@ -423,4 +423,16 @@ mod tests {
         assert!(lines[2].ends_with('…'));
         assert!(!more);
     }
+
+    /// 读取失败必须转成错误气泡，而不是静默返回空文本。
+    #[test]
+    fn local_text_preview_reports_missing_file() {
+        let content = super::super::preview_actions::local_text_preview(
+            "/definitely/not/a/real/transom-preview-file",
+        );
+        match content {
+            crate::sftp::preview::PreviewContent::Error(_) => {}
+            _ => panic!("不存在的文件应生成错误预览"),
+        }
+    }
 }
