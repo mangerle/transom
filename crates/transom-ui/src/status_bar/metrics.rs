@@ -124,7 +124,7 @@ impl StatusBarMetricsView {
     }
 
     /// 布局已被拖拽或菜单修改：通知外壳持久化并重绘整条栏。
-    pub(crate) fn layout_changed(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn layout_changed(&mut self, cx: &mut Context<Self>) {
         cx.emit(StatusMetricsEvent::LayoutChanged);
         cx.notify();
     }
