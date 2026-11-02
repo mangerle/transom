@@ -75,7 +75,7 @@ impl StatusBarMetricsView {
         }
     }
 
-    /// 注入最新快照与无数据兜底文案；返回是否真的变化。
+    /// 注入最新快照与状态文案；提升为 super 可见供帧副作用调用。
     pub(super) fn set_snapshot(
         &mut self,
         snapshot: StatusMetricsSnapshot,
@@ -93,6 +93,7 @@ impl StatusBarMetricsView {
         }
     }
 
+    /// 当前快照是否已与给定数据一致；一致时调用方无需构造快照。
     /// 当前快照是否已与给定数据一致；一致时调用方无需构造快照。
     pub(super) fn matches(
         &self,
