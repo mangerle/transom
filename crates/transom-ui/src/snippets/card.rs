@@ -95,27 +95,29 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
                 .gap_1()
                 .items_center()
                 .child(
-                    Button::new(ElementId::Name(format!("snippet-edit-{}", item.id).into()))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Pencil)
-                        .tooltip(rust_i18n::t!("common.edit").to_string())
-                        .on_click(move |_, window, cx| {
-                            cx.stop_propagation();
-                            let item = edit_item.clone();
-                            edit_app.update(cx, |this, cx| {
-                                this.open_snippet_form(window, cx, Some(item));
-                            });
-                        }),
+                    crate::widgets::IconButton::new(
+                        ElementId::Name(format!("snippet-edit-{}", item.id).into()),
+                        IconName::Pencil,
+                        rust_i18n::t!("common.edit").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(move |_, window, cx| {
+                        cx.stop_propagation();
+                        let item = edit_item.clone();
+                        edit_app.update(cx, |this, cx| {
+                            this.open_snippet_form(window, cx, Some(item));
+                        });
+                    }),
                 )
                 .child(
-                    Button::new(ElementId::Name(
-                        format!("snippet-delete-{}", item.id).into(),
-                    ))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Trash)
-                    .tooltip(rust_i18n::t!("common.delete").to_string())
+                    crate::widgets::IconButton::new(
+                        ElementId::Name(format!("snippet-delete-{}", item.id).into()),
+                        IconName::Trash,
+                        rust_i18n::t!("common.delete").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
                     .on_click(move |_, _, cx| {
                         cx.stop_propagation();
                         delete_app.update(cx, |this, cx| this.delete_snippet(item_id, cx));
