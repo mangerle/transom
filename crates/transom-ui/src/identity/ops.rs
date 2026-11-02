@@ -117,23 +117,7 @@ impl SettingsView {
         let Some(edit) = self.state.identity_edit.as_ref() else {
             return;
         };
-        let name = edit.name.read(cx).value().to_string();
-        let username = edit.username.read(cx).value().to_string();
-        let key_path = edit.key_path.read(cx).value().to_string();
-        let password = edit.password.read(cx).value().to_string();
-        let passphrase = edit.passphrase.read(cx).value().to_string();
-        let values = IdentityForm {
-            name: &name,
-            username: &username,
-            auth: edit.auth,
-            key_path: &key_path,
-            save_password: edit.save_password,
-            save_passphrase: edit.save_passphrase,
-            password: &password,
-            passphrase: &passphrase,
-            base: edit.base,
-        };
-        let built = build_identity(&values);
+        let built = build_identity_from_edit(edit, cx);
         let built = match built {
             Ok(built) => built,
             Err(error) => {
@@ -264,4 +248,28 @@ impl SettingsView {
         .detach();
         cx.notify();
     }
+}
+
+/// 从编辑态读取字段并执行校验，返回可写入目录的模板。
+fn build_identity_from_edit(
+    edit: &crate::identity::IdentityEditState,
+    cx: &gpui_kit::App,
+) -> Result<super::types::BuiltIdentity, String> {
+    let name = edit.name.read(cx).value().to_string();
+    let username = edit.username.read(cx).value().to_string();
+    let key_path = edit.key_path.read(cx).value().to_string();
+    let password = edit.password.read(cx).value().to_string();
+    let passphrase = edit.passphrase.read(cx).value().to_string();
+    let values = IdentityForm {
+        name: &name,
+        username: &username,
+        auth: edit.auth,
+        key_path: &key_path,
+        save_password: edit.save_password,
+        save_passphrase: edit.save_passphrase,
+        password: &password,
+        passphrase: &passphrase,
+        base: edit.base,
+    };
+    build_identity(&values)
 }
