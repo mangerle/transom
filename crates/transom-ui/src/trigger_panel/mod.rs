@@ -325,13 +325,16 @@ impl SettingsView {
                         })),
                 )
                 .child(
-                    Button::new(ElementId::Name(format!("trigger-delete-{id}").into()))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Trash)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.delete_trigger_rule(id, cx);
-                        })),
+                    crate::widgets::IconButton::new(
+                        ElementId::Name(format!("trigger-delete-{id}").into()),
+                        IconName::Trash,
+                        rust_i18n::t!("common.delete").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.delete_trigger_rule(id, cx);
+                    })),
                 );
             list = list.child(row);
         }

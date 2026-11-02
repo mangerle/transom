@@ -26,7 +26,6 @@ use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenu, PopupMenuItem};
 use gpui_kit::*;
@@ -217,14 +216,19 @@ impl AppShell {
                 ),
             )
             .child(
-                Button::new("vertical-tabs-new")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Plus)
-                    .tooltip(rust_i18n::t!("app.new_session").to_string())
-                    .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, window, cx| {
+                crate::widgets::IconButton::new(
+                    "vertical-tabs-new",
+                    IconName::Plus,
+                    rust_i18n::t!("app.new_session").to_string(),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .dropdown_menu_with_anchor(
+                    Anchor::TopRight,
+                    move |menu, window, cx| {
                         build_new_session_menu(menu, window, cx, &menu_app, &menu_data)
-                    }),
+                    },
+                ),
             )
             .into_any_element()
     }

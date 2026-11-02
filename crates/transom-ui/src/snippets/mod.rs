@@ -11,10 +11,10 @@ use crate::palette::{Palette, localized_error};
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::*;
 use transom_core::{Snippet, SnippetId};
 
@@ -230,12 +230,14 @@ impl AppShell {
         let items = app_settings(cx).snippets.items.clone();
         let execute_directly = app_settings(cx).snippets.execute_directly;
         let app = cx.entity().clone();
-        let trigger = Button::new("snippets-trigger")
-            .ghost()
-            .xsmall()
-            .icon(IconName::ListChecks)
-            .selected(open)
-            .tooltip(rust_i18n::t!("snippets.title").to_string());
+        let trigger = crate::widgets::IconButton::new(
+            "snippets-trigger",
+            IconName::ListChecks,
+            rust_i18n::t!("snippets.title").to_string(),
+        )
+        .selected(open)
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render();
 
         let app_open = app.clone();
         let card_app = app;

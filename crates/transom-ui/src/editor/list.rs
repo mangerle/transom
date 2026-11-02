@@ -15,8 +15,6 @@ use super::entity::EditorPanels;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Selectable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::EditorState;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -61,16 +59,18 @@ pub(crate) fn render_editor_list_popover(
         .collect();
     let count = rows.len();
     let card_palette = p.clone();
-    let trigger = Button::new("sftp-open-editors")
-        .ghost()
-        .xsmall()
-        .icon(IconName::Files)
-        .selected(open)
-        .tooltip(if count > 0 {
+    let trigger = crate::widgets::IconButton::new(
+        "sftp-open-editors",
+        IconName::Files,
+        if count > 0 {
             rust_i18n::t!("editor.open_editors_tooltip", count = count).to_string()
         } else {
             rust_i18n::t!("editor.open_editors").to_string()
-        });
+        },
+    )
+    .selected(open)
+    .size(crate::widgets::IconButtonSize::Compact)
+    .render();
 
     let open_entity = entity.clone();
     let content_entity = entity.clone();
