@@ -146,69 +146,7 @@ impl MonitorView {
         let click_app = cx.entity();
         let menu_app = cx.entity();
 
-        let list_item = ListItem::new(ElementId::Name(format!("process-row-{pid}").into()))
-            .selected(selected)
-            // 组件自带的 py/px 会让行高偏离申报值，这里全部改写并锁死高度。
-            .py(px(0.0))
-            .px(px(4.0))
-            .h(px(PROCESS_ROW_HEIGHT))
-            .on_click(move |_, _, cx| {
-                click_app.update(cx, |this, cx| {
-                    this.state.selected_process_pid =
-                        if this.state.selected_process_pid == Some(pid) {
-                            None
-                        } else {
-                            Some(pid)
-                        };
-                    cx.notify();
-                });
-            })
-            .child(
-                h_flex()
-                    .w_full()
-                    .gap_2()
-                    .items_center()
-                    .text_xs()
-                    .child(
-                        div()
-                            .w(px(COL_PID))
-                            .text_color(p.muted_foreground)
-                            .child(pid.to_string()),
-                    )
-                    .child(
-                        div()
-                            .w(px(COL_USER))
-                            .truncate()
-                            .text_color(p.foreground)
-                            .child(process.user.clone()),
-                    )
-                    .child(
-                        div()
-                            .w(px(COL_CPU))
-                            .text_color(usage_color(process.cpu_percent, p))
-                            .child(format!("{:.1}", process.cpu_percent)),
-                    )
-                    .child(
-                        div().w(px(COL_MEM)).child(
-                            h_flex()
-                                .gap_1()
-                                .text_color(p.foreground)
-                                .child(format_size(process.rss_bytes))
-                                .child(
-                                    div()
-                                        .text_color(p.muted_foreground)
-                                        .child(format!("({:.1}%)", process.mem_percent)),
-                                ),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .truncate()
-                            .text_color(p.foreground)
-                            .child(process.cmdline.clone()),
-                    ),
-            );
+        let list_item = process_list_item(selected, pid, process, click_app, p);
 
         let bg_color = if index % 2 == 1 {
             p.list_even
@@ -286,4 +224,76 @@ impl MonitorView {
             },
         ))
     }
+}
+
+/// 构建进程虚拟行里的列表项：选中、点击切换与行内单元格。
+fn process_list_item(
+    selected: bool,
+    pid: u32,
+    process: &ProcessInfo,
+    click_app: Entity<MonitorView>,
+    p: &Palette,
+) -> ListItem {
+    ListItem::new(ElementId::Name(format!("process-row-{pid}").into()))
+        .selected(selected)
+        // 组件自带的 py/px 会让行高偏离申报值，这里全部改写并锁死高度。
+        .py(px(0.0))
+        .px(px(4.0))
+        .h(px(PROCESS_ROW_HEIGHT))
+        .on_click(move |_, _, cx| {
+            click_app.update(cx, |this, cx| {
+                this.state.selected_process_pid = if this.state.selected_process_pid == Some(pid) {
+                    None
+                } else {
+                    Some(pid)
+                };
+                cx.notify();
+            });
+        })
+        .child(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .items_center()
+                .text_xs()
+                .child(
+                    div()
+                        .w(px(COL_PID))
+                        .text_color(p.muted_foreground)
+                        .child(pid.to_string()),
+                )
+                .child(
+                    div()
+                        .w(px(COL_USER))
+                        .truncate()
+                        .text_color(p.foreground)
+                        .child(process.user.clone()),
+                )
+                .child(
+                    div()
+                        .w(px(COL_CPU))
+                        .text_color(usage_color(process.cpu_percent, p))
+                        .child(format!("{:.1}", process.cpu_percent)),
+                )
+                .child(
+                    div().w(px(COL_MEM)).child(
+                        h_flex()
+                            .gap_1()
+                            .text_color(p.foreground)
+                            .child(format_size(process.rss_bytes))
+                            .child(
+                                div()
+                                    .text_color(p.muted_foreground)
+                                    .child(format!("({:.1}%)", process.mem_percent)),
+                            ),
+                    ),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .truncate()
+                        .text_color(p.foreground)
+                        .child(process.cmdline.clone()),
+                ),
+        )
 }
