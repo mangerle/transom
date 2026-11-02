@@ -265,69 +265,60 @@ impl ModalKind {
     /// 一律走 `as_ref()` 安全取值：关闭动作可能在对账把弹窗弹出栈之前就把状态
     /// 清空，这一帧仍可能渲染一次；用 `expect` 会把这条正常路径变成 panic。
     pub(super) fn focus_target(self, shell: &AppShell) -> ModalFocus {
-        let input =
-            |entity: Option<Entity<InputState>>| entity.map_or(ModalFocus::None, ModalFocus::Input);
         match self {
-            ModalKind::SftpInput => input(
-                shell
-                    .state
+            ModalKind::SftpInput => input_focus(shell, |state| {
+                state
                     .sftp_modals
                     .input
                     .as_ref()
-                    .map(|modal| modal.input.clone()),
-            ),
-            ModalKind::SftpChmod => input(
-                shell
-                    .state
+                    .map(|modal| modal.input.clone())
+            }),
+            ModalKind::SftpChmod => input_focus(shell, |state| {
+                state
                     .sftp_modals
                     .chmod
                     .as_ref()
-                    .map(|modal| modal.octal_input.clone()),
-            ),
-            ModalKind::SftpSearch => input(
-                shell
-                    .state
+                    .map(|modal| modal.octal_input.clone())
+            }),
+            ModalKind::SftpSearch => input_focus(shell, |state| {
+                state
                     .sftp_modals
                     .search
                     .as_ref()
-                    .map(|modal| modal.input.clone()),
-            ),
-            ModalKind::EditorGotoLine => input(
-                shell
-                    .state
+                    .map(|modal| modal.input.clone())
+            }),
+            ModalKind::EditorGotoLine => input_focus(shell, |state| {
+                state
                     .sftp_modals
                     .goto_line
                     .as_ref()
-                    .map(|modal| modal.input.clone()),
-            ),
-            ModalKind::SessionForm => input(
-                shell
-                    .state
+                    .map(|modal| modal.input.clone())
+            }),
+            ModalKind::SessionForm => input_focus(shell, |state| {
+                state
                     .modals
                     .session
                     .form
                     .as_ref()
-                    .map(|form| form.name.clone()),
-            ),
-            ModalKind::FolderForm => input(
-                shell
-                    .state
+                    .map(|form| form.name.clone())
+            }),
+            ModalKind::FolderForm => input_focus(shell, |state| {
+                state
                     .modals
                     .session
                     .folder_form
                     .as_ref()
-                    .map(|form| form.name.clone()),
-            ),
-            ModalKind::SnippetForm => input(
-                shell
-                    .state
+                    .map(|form| form.name.clone())
+            }),
+            ModalKind::SnippetForm => input_focus(shell, |state| {
+                state
                     .modals
                     .tools
                     .snippet_panel
                     .form
                     .as_ref()
-                    .map(|form| form.name_input()),
-            ),
+                    .map(|form| form.name_input())
+            }),
             ModalKind::SftpFilter => shell
                 .state
                 .sftp_modals
@@ -362,4 +353,12 @@ impl ModalKind {
                 }),
         }
     }
+}
+
+/// 从外壳状态取输入控件作为首帧焦点；缺失时保持无焦点。
+fn input_focus(
+    shell: &AppShell,
+    pick: impl Fn(&crate::app::AppState) -> Option<Entity<InputState>>,
+) -> ModalFocus {
+    pick(&shell.state).map_or(ModalFocus::None, ModalFocus::Input)
 }
