@@ -94,7 +94,7 @@ impl StatusBarMetricsView {
     }
 
     /// 当前快照是否已与给定数据一致；一致时调用方无需构造快照。
-    pub(crate) fn matches(
+    pub(super) fn matches(
         &self,
         traffic: Option<&NetworkTraffic>,
         stats: Option<&SystemStats>,
