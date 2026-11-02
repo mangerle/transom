@@ -25,7 +25,69 @@ use transom_core::{UiThemeMode, preset_themes};
 /// 动作模式前缀：输入 `>` 后只保留可执行条目，避免主机名混进动作列表。
 const ACTION_MODE_PREFIX: char = '>';
 
+/// 命令面板组件构建输入：宿主实体、目标表、占位符与弱化色。
+struct PaletteCommandInput {
+    app: Entity<AppShell>,
+    targets: std::rc::Rc<Vec<Vec<PaletteTarget>>>,
+    placeholder: String,
+    muted: Hsla,
+}
+
 impl AppShell {
+    /// 构建面板命令组件：查询重建、确认应用与取消关闭。
+    fn palette_command(&self, input: PaletteCommandInput) -> Command {
+        let PaletteCommandInput {
+            app,
+            targets,
+            placeholder,
+            muted,
+        } = input;
+        Command::new(&self.state.modals.tools.quick_open_state)
+            .placeholder(placeholder)
+            // 外框由宿主面板提供：组件自带的圆角边框会在直角浮层里套出一层内圆角。
+            .bordered(false)
+            // 过滤在构建期完成：动作模式要剥离 `>` 前缀，本地过滤无法表达。
+            .filterable(false)
+            .empty(move |_, _, _| {
+                div()
+                    .p_4()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(rust_i18n::t!("app.palette_empty").to_string())
+            })
+            .on_query({
+                let app = app.clone();
+                move |_query, _window, cx| {
+                    // 查询变化只影响条目集合，重建由宿主重绘完成。
+                    app.update(cx, |_, cx| cx.notify());
+                }
+            })
+            .on_confirm({
+                let app = app.clone();
+                let targets = targets.clone();
+                move |index_path, window, cx| {
+                    let target = targets
+                        .get(index_path.section)
+                        .and_then(|group| group.get(index_path.row))
+                        .cloned();
+                    app.update(cx, |this, cx| {
+                        this.state.modals.tools.show_quick_open = false;
+                        this.apply_palette_target(target, window, cx);
+                        cx.notify();
+                    });
+                }
+            })
+            .on_cancel({
+                let app = app.clone();
+                move |_window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.state.modals.tools.show_quick_open = false;
+                        cx.notify();
+                    });
+                }
+            })
+    }
+
     pub(crate) fn render_command_palette_modal(
         &mut self,
         _window: &mut Window,
@@ -62,50 +124,12 @@ impl AppShell {
         };
 
         let muted = p.muted_foreground;
-        let mut command = Command::new(&self.state.modals.tools.quick_open_state)
-            .placeholder(placeholder)
-            // 外框由宿主面板提供：组件自带的圆角边框会在直角浮层里套出一层内圆角。
-            .bordered(false)
-            // 过滤在构建期完成：动作模式要剥离 `>` 前缀，本地过滤无法表达。
-            .filterable(false)
-            .empty(move |_, _, _| {
-                div()
-                    .p_4()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(rust_i18n::t!("app.palette_empty").to_string())
-            })
-            .on_query({
-                let app = app_entity.clone();
-                move |_query, _window, cx| {
-                    // 查询变化只影响条目集合，重建由宿主重绘完成。
-                    app.update(cx, |_, cx| cx.notify());
-                }
-            })
-            .on_confirm({
-                let app = app_entity.clone();
-                let targets = targets.clone();
-                move |index_path, window, cx| {
-                    let target = targets
-                        .get(index_path.section)
-                        .and_then(|group| group.get(index_path.row))
-                        .cloned();
-                    app.update(cx, |this, cx| {
-                        this.state.modals.tools.show_quick_open = false;
-                        this.apply_palette_target(target, window, cx);
-                        cx.notify();
-                    });
-                }
-            })
-            .on_cancel({
-                let app = app_entity.clone();
-                move |_window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.state.modals.tools.show_quick_open = false;
-                        cx.notify();
-                    });
-                }
-            });
+        let mut command = self.palette_command(PaletteCommandInput {
+            app: app_entity,
+            targets,
+            placeholder,
+            muted,
+        });
 
         for group in model.groups {
             command = command.group(group);
