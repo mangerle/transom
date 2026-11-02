@@ -30,8 +30,8 @@ impl AppShell {
         if !is_local_only && let Some(session_id) = current_session {
             seen.insert(session_id);
         }
-        let mut candidate_ids = Vec::new();
-        for tab in &self.state.workspace.tabs {
+        let mut candidate_indices = Vec::new();
+        for (index, tab) in self.state.workspace.tabs.iter().enumerate() {
             if tab.id == tab_id {
                 continue;
             }
@@ -47,43 +47,27 @@ impl AppShell {
             if !seen.insert(tab.session.id) {
                 continue;
             }
-            candidate_ids.push(connection_id);
+            candidate_indices.push(index);
         }
         let unchanged = {
             let view = view.read(cx);
             let current = view.mount_candidates();
-            !candidate_ids.is_empty()
-                && current.len() == candidate_ids.len()
-                && current
-                    .iter()
-                    .zip(&candidate_ids)
-                    .all(|(old, id)| old.connection_id == *id)
+            !candidate_indices.is_empty()
+                && current.len() == candidate_indices.len()
+                && current.iter().zip(&candidate_indices).all(|(old, index)| {
+                    self.state.workspace.tabs[*index].connection_id == Some(old.connection_id)
+                })
         };
         if unchanged {
             return;
         }
 
-        let mut seen = std::collections::HashSet::new();
-        if !is_local_only && let Some(session_id) = current_session {
-            seen.insert(session_id);
-        }
-        let mut candidates = Vec::with_capacity(candidate_ids.len());
-        for tab in &self.state.workspace.tabs {
-            if tab.id == tab_id {
-                continue;
-            }
+        let mut candidates = Vec::with_capacity(candidate_indices.len());
+        for index in candidate_indices {
+            let tab = &self.state.workspace.tabs[index];
             let Some(connection_id) = tab.connection_id else {
                 continue;
             };
-            if Some(connection_id) == current_conn {
-                continue;
-            }
-            if matches!(&tab.session.connection, Connection::Local(_)) {
-                continue;
-            }
-            if !seen.insert(tab.session.id) {
-                continue;
-            }
             candidates.push(crate::sftp::SftpMountCandidate {
                 connection_id,
                 display_name: tab.display_name(),
