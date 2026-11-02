@@ -119,47 +119,10 @@ impl SftpPanelView {
     /// 本地终端单栏面板的内容构建；外层容器与监听由实体渲染入口统一挂载。
     pub(crate) fn render_local_only_content(&self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::from(&*cx);
-        let tab_id = self.tab_id;
-        let state = &self.state;
-        let local_path_input = state.local.path_input.clone();
-        let local_filter_input = state.local.filter_input.clone();
-        let local_scroll_handle = state.local.scroll_handle.clone();
-        let quick_paths = state.local.quick_paths.clone();
-        let show_filter = state.local.show_filter;
-        let show_hidden = state.local.show_hidden;
-        let local_error = state.local.error.clone();
-        let status = state.queue.status.clone();
-        let local_filter_query = local_filter_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_ascii_lowercase();
-        let hidden_patterns = app_settings(cx).sftp.panel_hidden_patterns.clone();
-        let local_entries = crate::app::AppState::filter_local_entries(
-            state,
-            show_hidden,
-            &local_filter_query,
-            &hidden_patterns,
-        );
+        let local_error = self.state.local.error.clone();
+        let status = self.state.queue.status.clone();
+        let local_pane = self.render_sftp_local_pane(self.local_only_props(cx), &p, cx);
 
-        let local_pane = self.render_sftp_local_pane(
-            SftpLocalPaneProps {
-                tab_id,
-                show_filter,
-                show_hidden,
-                local_path_input,
-                local_filter_input,
-                local_entries,
-                local_scroll_handle,
-                quick_paths,
-                remote_available: false,
-                local_selection: state.local.selection.clone(),
-                local_primary: state.local.selected.clone(),
-                diff_ready: false,
-            },
-            &p,
-            cx,
-        );
         let mount_btn = self.render_side_remote_mount_button(&p, cx);
         let header = self.render_sftp_panel_header(
             rust_i18n::t!("sftp.local_files_title").to_string(),
@@ -207,6 +170,38 @@ impl SftpPanelView {
             panel = panel.child(status_bar);
         }
         panel.into_any_element()
+    }
+    /// 本地单栏的渲染输入：过滤后的条目、选中集与工具栏开关。
+    fn local_only_props(&self, cx: &mut Context<Self>) -> SftpLocalPaneProps {
+        let state = &self.state;
+        let local_filter_input = state.local.filter_input.clone();
+        let show_hidden = state.local.show_hidden;
+        let local_filter_query = local_filter_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_ascii_lowercase();
+        let hidden_patterns = app_settings(cx).sftp.panel_hidden_patterns.clone();
+        let local_entries = crate::app::AppState::filter_local_entries(
+            state,
+            show_hidden,
+            &local_filter_query,
+            &hidden_patterns,
+        );
+        SftpLocalPaneProps {
+            tab_id: self.tab_id,
+            show_filter: state.local.show_filter,
+            show_hidden,
+            local_path_input: state.local.path_input.clone(),
+            local_filter_input,
+            local_entries,
+            local_scroll_handle: state.local.scroll_handle.clone(),
+            quick_paths: state.local.quick_paths.clone(),
+            remote_available: false,
+            local_selection: state.local.selection.clone(),
+            local_primary: state.local.selected.clone(),
+            diff_ready: false,
+        }
     }
 }
 
