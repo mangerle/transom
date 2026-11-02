@@ -19,7 +19,6 @@ use crate::palette::Palette;
 use crate::status_bar::format_rate;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
@@ -218,22 +217,24 @@ impl AppShell {
                     .child(format!("{summary}{counters}")),
             )
             .child(
-                Button::new(format!("overlay-toggle-{tab_id}"))
-                    .ghost()
-                    .xsmall()
-                    .icon(if expanded {
+                crate::widgets::IconButton::new(
+                    format!("overlay-toggle-{tab_id}"),
+                    if expanded {
                         IconName::ChevronDown
                     } else {
                         IconName::ChevronRight
-                    })
-                    .tooltip(rust_i18n::t!("sftp.overlay_expand"))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
-                            panel.state.queue.drop_overlay.expanded =
-                                !panel.state.queue.drop_overlay.expanded;
-                        }
-                        cx.notify();
-                    })),
+                    },
+                    rust_i18n::t!("sftp.overlay_expand"),
+                )
+                .size(crate::widgets::IconButtonSize::Compact)
+                .render()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
+                        panel.state.queue.drop_overlay.expanded =
+                            !panel.state.queue.drop_overlay.expanded;
+                    }
+                    cx.notify();
+                })),
             )
             .child(
                 crate::widgets::IconButton::new(
@@ -420,27 +421,29 @@ fn overlay_row(
             let is_verifying = task.status == TransferStatus::Verifying;
             this.when(!is_verifying, |this| {
                 this.child(
-                    Button::new(format!("overlay-act-{task_id}-toggle"))
-                        .ghost()
-                        .xsmall()
-                        .icon(if paused {
+                    crate::widgets::IconButton::new(
+                        format!("overlay-act-{task_id}-toggle"),
+                        if paused {
                             IconName::Play
                         } else {
                             IconName::Pause
-                        })
-                        .tooltip(rust_i18n::t!(if paused {
+                        },
+                        rust_i18n::t!(if paused {
                             "sftp.overlay_resume"
                         } else {
                             "sftp.overlay_pause"
-                        }))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if paused {
-                                this.sftp_resume_task(tab_id, task_id, cx);
-                            } else {
-                                this.sftp_pause_task(tab_id, task_id, cx);
-                            }
-                            this.sync_drop_overlay(tab_id, cx);
-                        })),
+                        }),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if paused {
+                            this.sftp_resume_task(tab_id, task_id, cx);
+                        } else {
+                            this.sftp_pause_task(tab_id, task_id, cx);
+                        }
+                        this.sync_drop_overlay(tab_id, cx);
+                    })),
                 )
             })
             .child(
