@@ -36,6 +36,14 @@ pub(super) const COL_MEM: f32 = 88.0;
 
 use crate::monitor::MonitorView;
 
+/// 进程内容渲染输入：排序结果、表头状态与作用域。
+struct ProcessContent {
+    order: Vec<usize>,
+    sort: ProcessSort,
+    ascending: bool,
+    scope: &'static str,
+}
+
 impl MonitorView {
     /// 渲染进程管理监控卡片。
     ///
@@ -66,6 +74,54 @@ impl MonitorView {
             .text_color(p.muted_foreground)
             .child(format!("{matched} / {total}"));
 
+        let content = self.render_process_content(
+            ProcessContent {
+                order,
+                sort,
+                ascending,
+                scope,
+            },
+            cx,
+            p,
+        );
+
+        CollapsibleCard::new(
+            "card-processes",
+            IconName::ListTree,
+            rust_i18n::t!("monitor.processes").to_string(),
+        )
+        .collapsed(collapsed)
+        .summary(summary)
+        .summary_always(true)
+        .content(content)
+        .render(
+            p,
+            cx.listener(|this, _, _, cx| {
+                let expanded = this.toggle_collapse("processes");
+                let collapse = this.collapse_snapshot();
+                cx.notify();
+                cx.emit(crate::monitor::MonitorPanelEvent::CollapseChanged {
+                    collapse,
+                    expanded_processes: expanded,
+                });
+                cx.notify();
+            }),
+        )
+    }
+
+    /// 进程内容：过滤输入、表头、虚拟列表与选中行详情。
+    fn render_process_content(
+        &mut self,
+        content_input: ProcessContent,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let ProcessContent {
+            order,
+            sort,
+            ascending,
+            scope,
+        } = content_input;
         let mut content = v_flex()
             .gap_2()
             .child(Input::new(&self.state.filter).small())
@@ -122,28 +178,7 @@ impl MonitorView {
             content = content.child(detail);
         }
 
-        CollapsibleCard::new(
-            "card-processes",
-            IconName::ListTree,
-            rust_i18n::t!("monitor.processes").to_string(),
-        )
-        .collapsed(collapsed)
-        .summary(summary)
-        .summary_always(true)
-        .content(content)
-        .render(
-            p,
-            cx.listener(|this, _, _, cx| {
-                let expanded = this.toggle_collapse("processes");
-                let collapse = this.collapse_snapshot();
-                cx.notify();
-                cx.emit(crate::monitor::MonitorPanelEvent::CollapseChanged {
-                    collapse,
-                    expanded_processes: expanded,
-                });
-                cx.notify();
-            }),
-        )
+        content.into_any_element()
     }
 
     /// 过滤与排序后的行下标，按“筛选词 + 排序 + 快照版本”缓存。
