@@ -361,6 +361,28 @@ impl AppShell {
         }
     }
 
+    /// 会话行单击：选择模式下切换多选，双击连接，普通单击只标记。
+    fn session_row_click(
+        &mut self,
+        session_id: SessionId,
+        event: &ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.state.sidebar.selection_mode {
+            let selected = self.state.sidebar.selected_sessions.contains(&session_id);
+            self.toggle_session_selection(session_id, !selected, cx);
+        } else if event.click_count() >= 2 {
+            self.connect_session(session_id, window, cx);
+            // 连接入口在会话树，连接完成后用户要看的是终端列表：
+            // 左侧标签模式自动把槽位切到标签面板。
+            self.reveal_vertical_tabs_panel(cx);
+        } else {
+            self.state.sidebar.tree_selection = Some(session_id);
+            cx.notify();
+        }
+    }
+
     pub(crate) fn render_session_row(
         &mut self,
         row: &SessionRow,
@@ -397,18 +419,7 @@ impl AppShell {
             // 单击只负责选中这一行，双击才建立连接：会话行是列表里最容易被顺手点到的
             // 元素，把连接挂在单击上会让"看一眼"和"连上去"没法区分。
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if this.state.sidebar.selection_mode {
-                    let selected = this.state.sidebar.selected_sessions.contains(&session_id);
-                    this.toggle_session_selection(session_id, !selected, cx);
-                } else if event.click_count() >= 2 {
-                    this.connect_session(session_id, window, cx);
-                    // 连接入口在会话树，连接完成后用户要看的是终端列表：
-                    // 左侧标签模式自动把槽位切到标签面板。
-                    this.reveal_vertical_tabs_panel(cx);
-                } else {
-                    this.state.sidebar.tree_selection = Some(session_id);
-                    cx.notify();
-                }
+                this.session_row_click(session_id, event, window, cx);
             }))
             .on_drag(SidebarDrag::Session(session_id), move |_, _, _, cx| {
                 cx.new(|_| SidebarDragPreview::new(drag_label.clone(), drag_icon))
