@@ -265,78 +265,7 @@ impl SettingsView {
         }
 
         for rule in rules {
-            let id = rule.id;
-            let is_enabled = rule.enabled;
-            let action_desc = action_summary(&rule.action);
-
-            let row = h_flex()
-                .id(ElementId::Name(format!("trigger-row-{id}").into()))
-                .px_2()
-                .py_1p5()
-                .gap_2()
-                .items_center()
-                .border_b_1()
-                .border_color(p.border.opacity(0.5))
-                .child(
-                    Switch::new(ElementId::Name(format!("trigger-switch-{id}").into()))
-                        .checked(is_enabled)
-                        .on_click(cx.listener(move |this, &checked, _, cx| {
-                            this.toggle_trigger_enabled(id, checked, cx);
-                        })),
-                )
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .gap_0p5()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(rule.name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .px_1p5()
-                                        .rounded_sm()
-                                        .bg(p.muted)
-                                        .text_color(p.muted_foreground)
-                                        .child(rule.pattern.clone()),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(action_desc),
-                        ),
-                )
-                .child(
-                    Button::new(ElementId::Name(format!("trigger-edit-{id}").into()))
-                        .ghost()
-                        .xsmall()
-                        .label(rust_i18n::t!("common.edit").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_edit_trigger(id, window, cx);
-                        })),
-                )
-                .child(
-                    crate::widgets::IconButton::new(
-                        ElementId::Name(format!("trigger-delete-{id}").into()),
-                        IconName::Trash,
-                        rust_i18n::t!("common.delete").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.delete_trigger_rule(id, cx);
-                    })),
-                );
-            list = list.child(row);
+            list = list.child(trigger_rule_row(rule, p, cx));
         }
 
         list.into_any_element()
@@ -503,4 +432,83 @@ fn trigger_editor_fields(
             p,
         ))
         .into_any_element()
+}
+
+/// 单条触发器行：启用开关、名称/动作摘要与编辑/删除入口。
+fn trigger_rule_row(
+    rule: &transom_core::TriggerRule,
+    p: &Palette,
+    cx: &mut Context<SettingsView>,
+) -> AnyElement {
+    let id = rule.id;
+    let is_enabled = rule.enabled;
+    let action_desc = action_summary(&rule.action);
+    let row = h_flex()
+        .id(ElementId::Name(format!("trigger-row-{id}").into()))
+        .px_2()
+        .py_1p5()
+        .gap_2()
+        .items_center()
+        .border_b_1()
+        .border_color(p.border.opacity(0.5))
+        .child(
+            Switch::new(ElementId::Name(format!("trigger-switch-{id}").into()))
+                .checked(is_enabled)
+                .on_click(cx.listener(move |this, &checked, _, cx| {
+                    this.toggle_trigger_enabled(id, checked, cx);
+                })),
+        )
+        .child(
+            v_flex()
+                .flex_1()
+                .gap_0p5()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(rule.name.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .px_1p5()
+                                .rounded_sm()
+                                .bg(p.muted)
+                                .text_color(p.muted_foreground)
+                                .child(rule.pattern.clone()),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(action_desc),
+                ),
+        )
+        .child(
+            Button::new(ElementId::Name(format!("trigger-edit-{id}").into()))
+                .ghost()
+                .xsmall()
+                .label(rust_i18n::t!("common.edit").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_edit_trigger(id, window, cx);
+                })),
+        )
+        .child(
+            crate::widgets::IconButton::new(
+                ElementId::Name(format!("trigger-delete-{id}").into()),
+                IconName::Trash,
+                rust_i18n::t!("common.delete").to_string(),
+            )
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.delete_trigger_rule(id, cx);
+            })),
+        );
+    row.into_any_element()
 }
