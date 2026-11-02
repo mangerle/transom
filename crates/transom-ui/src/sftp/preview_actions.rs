@@ -34,7 +34,7 @@ struct PreviewImageJob {
 }
 
 /// 本地文本预览：读取头部字节并生成带截断标记的行。
-fn local_text_preview(path: &str) -> PreviewContent {
+pub(super) fn local_text_preview(path: &str) -> PreviewContent {
     match read_local_text_head(Path::new(path), PREVIEW_TEXT_MAX_BYTES) {
         Ok((bytes, truncated)) => {
             let (lines, truncated) = text_preview_lines(&bytes, truncated);

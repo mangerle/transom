@@ -379,4 +379,21 @@ mod tests {
     fn test_decode_thumbnail_rejects_invalid_bytes() {
         assert!(decode_thumbnail(b"not an image", 100, 10, 10).is_err());
     }
+
+    /// 本地文本预览读取文件头部并生成行；正常小文件不应标记截断。
+    #[test]
+    fn local_text_preview_reads_small_file() {
+        let dir = tempfile::tempdir().expect("临时目录");
+        let path = dir.path().join("preview.txt");
+        std::fs::write(&path, "第一行\n第二行\n").expect("写入样本");
+        let content =
+            super::super::preview_actions::local_text_preview(path.to_str().expect("路径"));
+        match content {
+            crate::sftp::preview::PreviewContent::Text { lines, truncated } => {
+                assert!(!truncated);
+                assert!(lines.join("\n").contains("第一行"));
+            }
+            _ => panic!("小文本应生成文本预览"),
+        }
+    }
 }
