@@ -65,28 +65,8 @@ impl SftpPanelView {
             remote_primary,
         } = props;
 
-        let content = if remote_entries.is_empty() && !loading {
-            crate::widgets::empty_state(
-                IconName::FolderOpen,
-                rust_i18n::t!("sftp.empty").to_string(),
-                rust_i18n::t!("sftp.empty_hint").to_string(),
-                p,
-            )
-        } else if remote_entries.is_empty() && loading {
-            div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .gap_2()
-                .child(Spinner::new().color(p.primary))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("sftp.loading").to_string()),
-                )
-                .into_any_element()
+        let content = if remote_entries.is_empty() {
+            remote_placeholder(loading, p)
         } else {
             self.build_remote_virtual_list(
                 RemoteListParams {
@@ -238,4 +218,30 @@ impl SftpPanelView {
         .track_scroll(&remote_scroll_handle)
         .into_any_element()
     }
+}
+
+/// 空目录或加载中的占位内容。
+fn remote_placeholder(loading: bool, p: &Palette) -> AnyElement {
+    if !loading {
+        return crate::widgets::empty_state(
+            IconName::FolderOpen,
+            rust_i18n::t!("sftp.empty").to_string(),
+            rust_i18n::t!("sftp.empty_hint").to_string(),
+            p,
+        );
+    }
+    div()
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap_2()
+        .child(Spinner::new().color(p.primary))
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("sftp.loading").to_string()),
+        )
+        .into_any_element()
 }
