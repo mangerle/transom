@@ -323,6 +323,52 @@ impl SessionForm {
         })
     }
 
+    /// 按认证方式读取内联口令/私钥口令。
+    fn auth_secrets(
+        &self,
+        auth: &AuthMethod,
+        cx: &mut Context<impl Sized>,
+    ) -> (Option<Zeroizing<String>>, Option<Zeroizing<String>>) {
+        let password = match auth {
+            AuthMethod::Password { .. } => {
+                let value = self.password.read(cx).value().to_string();
+                (!value.is_empty()).then(|| Zeroizing::new(value))
+            }
+            _ => None,
+        };
+        let key_passphrase = match auth {
+            AuthMethod::PrivateKey { .. } => {
+                let value = self.passphrase.read(cx).value().to_string();
+                (!value.is_empty()).then(|| Zeroizing::new(value))
+            }
+            _ => None,
+        };
+
+        (password, key_passphrase)
+    }
+
+    /// Mosh 服务端可执行文件与端口；空路径回落默认名，非法端口视为未指定。
+    fn mosh_server_config(&self, cx: &mut Context<impl Sized>) -> (String, Option<u16>) {
+        let server_path = {
+            let p = self.mosh_server_path.read(cx).value().trim().to_string();
+            if p.is_empty() {
+                "mosh-server".to_string()
+            } else {
+                p
+            }
+        };
+        let server_port = self
+            .mosh_server_port
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<u16>()
+            .ok()
+            .filter(|&p| p > 0);
+
+        (server_path, server_port)
+    }
+
     fn build_mosh_connection(
         &self,
         cx: &mut Context<impl Sized>,
@@ -369,38 +415,8 @@ impl SessionForm {
             AuthChoice::Agent => AuthMethod::Agent,
         };
 
-        let password = match auth {
-            AuthMethod::Password { .. } => {
-                let value = self.password.read(cx).value().to_string();
-                (!value.is_empty()).then(|| Zeroizing::new(value))
-            }
-            _ => None,
-        };
-        let key_passphrase = match auth {
-            AuthMethod::PrivateKey { .. } => {
-                let value = self.passphrase.read(cx).value().to_string();
-                (!value.is_empty()).then(|| Zeroizing::new(value))
-            }
-            _ => None,
-        };
-
-        let server_path = {
-            let p = self.mosh_server_path.read(cx).value().trim().to_string();
-            if p.is_empty() {
-                "mosh-server".to_string()
-            } else {
-                p
-            }
-        };
-        let server_port = self
-            .mosh_server_port
-            .read(cx)
-            .value()
-            .trim()
-            .parse::<u16>()
-            .ok()
-            .filter(|&p| p > 0);
-
+        let (password, key_passphrase) = self.auth_secrets(&auth, cx);
+        let (server_path, server_port) = self.mosh_server_config(cx);
         Ok(SshConnectionBuild {
             connection: Connection::Mosh(transom_core::MoshConnection {
                 host,
