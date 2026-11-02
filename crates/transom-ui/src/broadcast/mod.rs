@@ -174,10 +174,8 @@ impl AppShell {
     }
 
     /// 把当前输入发送到所有已选目标；单行补回车，多行按粘贴语义整段发送。
-    pub(crate) fn broadcast_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.state.broadcast.open {
-            return;
-        }
+    /// 读取广播文本并收敛目标集；空文本或无有效目标时返回 None。
+    fn prepare_broadcast(&mut self, cx: &mut Context<Self>) -> Option<(String, Vec<TabId>)> {
         let raw = if self.state.broadcast.multiline {
             self.state.broadcast.textarea.read(cx).value().to_string()
         } else {
@@ -185,7 +183,7 @@ impl AppShell {
         };
         let text = raw.trim_end_matches(['\r', '\n']).to_string();
         if text.trim().is_empty() {
-            return;
+            return None;
         }
         // 目标集合必须仍然落在当前视觉标签内：标签切换或窗格关闭后，残留的
         // 旧目标不能继续收到命令。
@@ -204,9 +202,19 @@ impl AppShell {
         if targets.is_empty() {
             self.state.status = Some(rust_i18n::t!("broadcast.no_targets").to_string());
             cx.notify();
-            return;
+            return None;
         }
 
+        Some((text, targets))
+    }
+
+    pub(crate) fn broadcast_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.state.broadcast.open {
+            return;
+        }
+        let Some((text, targets)) = self.prepare_broadcast(cx) else {
+            return;
+        };
         let multiline = self.state.broadcast.multiline;
         let mut failed = 0usize;
         for tab_id in &targets {
