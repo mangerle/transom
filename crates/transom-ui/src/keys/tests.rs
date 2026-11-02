@@ -1,4 +1,4 @@
-use super::expand_home;
+use super::{default_ssh_dir, expand_home};
 use std::path::PathBuf;
 
 /// `~` 展开是会话表单与密钥向导共用的口径，绝对路径必须原样通过。
@@ -21,4 +21,10 @@ fn expand_home_handles_tilde_and_absolute_paths() {
         PathBuf::from("/etc/ssh/host_key")
     );
     assert_eq!(expand_home("./id_rsa"), PathBuf::from("./id_rsa"));
+}
+
+/// 默认密钥目录必须落在用户主目录的 `.ssh` 下，而不是当前工作目录。
+#[test]
+fn default_ssh_dir_targets_home_ssh() {
+    assert!(default_ssh_dir().ends_with(".ssh"));
 }
