@@ -166,6 +166,20 @@ pub(super) fn render_queue_task_row(
                         this.resume_task(tab_id, task_id, cx);
                     })),
                 )
+                // 失败任务直接可移除：取消只是把状态改成“已取消”，还得再清空
+                // 队列才能清掉失败记录，对只想收起失败项的用户是多余的步骤。
+                .child(
+                    crate::widgets::IconButton::new(
+                        format!("queue-remove-{idx}"),
+                        IconName::Trash,
+                        rust_i18n::t!("sftp.overlay_remove").to_string(),
+                    )
+                    .size(crate::widgets::IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.remove_task(task_id, cx);
+                    })),
+                )
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-cancel-{idx}"),

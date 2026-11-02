@@ -299,6 +299,7 @@ impl AppShell {
                 status: None,
                 error: None,
                 status_task: None,
+                error_task: None,
                 drop_overlay: DropOverlayState::default(),
             },
             side_remotes: Vec::new(),

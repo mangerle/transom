@@ -164,6 +164,8 @@ impl SftpPanelView {
         {
             task.requeue(resume_enabled);
         }
+        // 用户已对失败任务动手，底栏的失败提醒随即收起，原因仍留在任务行上
+        self.state.clear_queue_error();
         self.process_queue(tab_id, cx);
     }
 
@@ -189,10 +191,11 @@ impl SftpPanelView {
         self.process_queue(tab_id, cx);
     }
 
-    /// 从队列移除单个任务（结束态任务的清理入口）。
+    /// 从队列移除单个任务（失败与结束态任务的清理入口）。
     pub(crate) fn remove_task(&mut self, op_id: TransferId, cx: &mut Context<Self>) {
         self.state.queue.active_transfers.remove(&op_id);
         self.state.queue.tasks.retain(|task| task.id != op_id);
+        self.state.clear_queue_error();
         self.state.recompute_progress();
         cx.notify();
     }

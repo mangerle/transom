@@ -263,6 +263,7 @@ impl AppShell {
             return false;
         }
         let mut failed_notify: Option<(String, String)> = None;
+        let mut queue_error: Option<String> = None;
         let main_conn = self
             .state
             .workspace
@@ -285,7 +286,8 @@ impl AppShell {
             if failed_transfer {
                 panel.state.queue.active_transfers.remove(&op_id);
                 panel.state.recompute_progress();
-                panel.state.set_queue_error(err_msg);
+                // 错误提示要挂过期任务，必须等面板借用结束后再回投实体
+                queue_error = Some(err_msg);
             } else if let Some(target) = panel
                 .state
                 .remote_pane_of_connection(connection_id, main_conn)
@@ -296,6 +298,9 @@ impl AppShell {
                 pane.loading = false;
                 pane.error = Some(err_msg);
             }
+        }
+        if let Some(message) = queue_error {
+            self.set_sftp_transient_error(tab_id, message, cx);
         }
         self.sync_drop_overlay(tab_id, cx);
         if let Some((file_name, err_msg)) = failed_notify {

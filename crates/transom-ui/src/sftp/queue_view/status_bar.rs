@@ -67,14 +67,30 @@ impl SftpPanelView {
                     .into_any_element(),
             )
         } else if let Some(error) = props.remote_error.or(props.local_error) {
+            // 错误栏可手动关闭：传输失败的原因同时保留在任务行上，本地操作
+            // 失败则以关闭或下一次成功操作为准，不能变成清不掉的常驻文本。
             Some(
-                div()
+                h_flex()
+                    .justify_between()
+                    .items_center()
                     .px_3()
                     .py_1()
                     .text_xs()
                     .text_color(p.danger)
                     .bg(p.muted)
-                    .child(error)
+                    .child(div().flex_1().overflow_hidden().child(error))
+                    .child(
+                        crate::widgets::IconButton::new(
+                            "sftp-dismiss-error",
+                            IconName::X,
+                            rust_i18n::t!("sftp.dismiss_error").to_string(),
+                        )
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.dismiss_sftp_errors(cx);
+                        })),
+                    )
                     .into_any_element(),
             )
         } else {

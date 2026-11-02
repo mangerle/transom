@@ -190,6 +190,8 @@ pub(crate) struct SftpQueueState {
     pub(crate) error: Option<String>,
     /// 瞬时状态消息的过期任务；替换消息时旧任务被取消。
     pub(super) status_task: Option<Task<()>>,
+    /// 错误提示的过期任务；清除或替换错误时旧任务被取消。
+    pub(super) error_task: Option<Task<()>>,
     /// 终端右下角上传浮层的状态（面板未展开时用它承接进度可见性）。
     pub(crate) drop_overlay: DropOverlayState,
 }
@@ -284,16 +286,17 @@ impl SftpPanelState {
         self.queue.status = None;
     }
 
-    /// 设置传输队列错误消息；由队列错误栏展示，成功路径负责清除。
+    /// 设置传输队列错误消息；由队列错误栏展示，成功路径或过期任务负责清除。
     ///
     /// 远端列自身的操作错误落在对应列的 `error` 上，这里只承载队列/传输语义。
     pub(crate) fn set_queue_error(&mut self, message: impl Into<String>) {
         self.queue.error = Some(message.into());
     }
 
-    /// 清除传输队列错误消息。
+    /// 清除传输队列错误消息，并取消它的过期任务。
     pub(crate) fn clear_queue_error(&mut self) {
         self.queue.error = None;
+        self.queue.error_task = None;
     }
 
     /// 设置本地栏错误消息（本地文件系统操作专用）。

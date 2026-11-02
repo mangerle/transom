@@ -1006,6 +1006,9 @@ sftp:
   failed:
     en: Failed
     zh-CN: 失败
+  dismiss_error:
+    en: Dismiss
+    zh-CN: 关闭提示
   overlay_target:
     en: Upload target folder
     zh-CN: 上传目标目录

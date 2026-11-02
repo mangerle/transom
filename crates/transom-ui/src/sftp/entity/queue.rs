@@ -128,9 +128,9 @@ impl SftpPanelView {
         Ok(count)
     }
 
+    /// 入队校验失败：错误提示同样按瞬时提醒处理，不长期占据底栏。
     fn set_queue_panel_error(&mut self, message: String, cx: &mut Context<Self>) {
-        self.state.set_queue_error(message);
-        cx.notify();
+        self.set_transient_queue_error(message, cx);
     }
 
     /// 把单条上传/下载请求加入队列并立即尝试调度。

@@ -14,7 +14,8 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, sftp_text_input};
-use gpui_kit::base::v_flex;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
@@ -93,6 +94,7 @@ impl AppShell {
                 status: None,
                 error: None,
                 status_task: None,
+                error_task: None,
                 drop_overlay: DropOverlayState::default(),
             },
             side_remotes: Vec::new(),
@@ -131,15 +133,31 @@ impl SftpPanelView {
             cx,
         );
         let status_bar = if let Some(error) = local_error {
+            // 本地操作失败没有任务行可查，提示保持到用户关闭或下一次成功操作；
+            // 因此这里提供关闭入口，而不是让它变成清不掉的常驻文本。
             Some(
-                div()
+                h_flex()
+                    .justify_between()
+                    .items_center()
                     .px_3()
                     .py_1()
                     .text_xs()
                     .text_color(p.danger)
                     .bg(p.muted)
                     .border_color(p.divider(p.sidebar_border))
-                    .child(error)
+                    .child(div().flex_1().overflow_hidden().child(error))
+                    .child(
+                        crate::widgets::IconButton::new(
+                            "local-dismiss-error",
+                            IconName::X,
+                            rust_i18n::t!("sftp.dismiss_error").to_string(),
+                        )
+                        .size(crate::widgets::IconButtonSize::Compact)
+                        .render()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.dismiss_sftp_errors(cx);
+                        })),
+                    )
                     .divider_edge(DividerEdge::Top, p.divider_width)
                     .into_any_element(),
             )
