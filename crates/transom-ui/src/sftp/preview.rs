@@ -459,4 +459,13 @@ mod tests {
         assert_eq!(lines.len(), super::PREVIEW_TEXT_LINES);
         assert!(more);
     }
+
+    /// 非法 UTF-8 按替换字符展示，不能 panic 或丢弃整段预览。
+    #[test]
+    fn text_preview_lines_handles_invalid_utf8() {
+        let (lines, more) = super::text::text_preview_lines(&[0xff, b'a', 0xfe], false);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains('a'));
+        assert!(!more);
+    }
 }
