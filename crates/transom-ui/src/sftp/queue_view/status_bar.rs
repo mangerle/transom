@@ -43,53 +43,12 @@ impl SftpPanelView {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let tab_id = props.tab_id;
-        if let Some((transferred, total)) = props.progress {
-            let percent = if let Some(tot) = total {
-                if tot > 0 {
-                    ((transferred as f64 / tot as f64) * 100.0) as f32
-                } else {
-                    0.0
-                }
-            } else {
-                0.0
-            };
-            let progress_bar = Progress::new("sftp-transfer-progress").value(percent);
-
+        if props.progress.is_some() {
+            let (percent, progress_str) = progress_display(&props);
             if props.queue_expanded {
                 return Some(expanded_progress_bar(percent, props.total_speed_bps, p));
             }
-
-            let progress_str = match total {
-                Some(tot) => format!(
-                    "{} / {} ({:.1}%)",
-                    format_size(transferred),
-                    format_size(tot),
-                    percent
-                ),
-                None => format_size(transferred),
-            };
-            let speed_suffix = props
-                .total_speed_bps
-                .map(|s| format!(" · {}", format_speed(s)))
-                .unwrap_or_default();
-            let progress_str = if props.active_count > 0 {
-                rust_i18n::t!(
-                    "sftp.queue.active_progress",
-                    count = props.active_count,
-                    suffix = speed_suffix.as_str(),
-                    progress = progress_str.as_str()
-                )
-                .to_string()
-            } else if props.paused_count > 0 {
-                rust_i18n::t!(
-                    "sftp.queue.paused_progress",
-                    count = props.paused_count,
-                    progress = progress_str.as_str()
-                )
-                .to_string()
-            } else {
-                progress_str
-            };
+            let progress_bar = Progress::new("sftp-transfer-progress").value(percent);
             let mut header = h_flex()
                 .justify_between()
                 .items_center()
@@ -229,4 +188,47 @@ fn expanded_progress_bar(percent: f32, total_speed_bps: Option<u64>, p: &Palette
             )
         })
         .into_any_element()
+}
+
+/// 进度百分比与状态文案：活动/暂停计数拼在进度后。
+fn progress_display(props: &SftpStatusBarProps) -> (f32, String) {
+    let Some((transferred, total)) = props.progress else {
+        return (0.0, String::new());
+    };
+    let percent = match total {
+        Some(tot) if tot > 0 => ((transferred as f64 / tot as f64) * 100.0) as f32,
+        _ => 0.0,
+    };
+    let progress_str = match total {
+        Some(tot) => format!(
+            "{} / {} ({:.1}%)",
+            format_size(transferred),
+            format_size(tot),
+            percent
+        ),
+        None => format_size(transferred),
+    };
+    let speed_suffix = props
+        .total_speed_bps
+        .map(|s| format!(" · {}", format_speed(s)))
+        .unwrap_or_default();
+    let progress_str = if props.active_count > 0 {
+        rust_i18n::t!(
+            "sftp.queue.active_progress",
+            count = props.active_count,
+            suffix = speed_suffix.as_str(),
+            progress = progress_str.as_str()
+        )
+        .to_string()
+    } else if props.paused_count > 0 {
+        rust_i18n::t!(
+            "sftp.queue.paused_progress",
+            count = props.paused_count,
+            progress = progress_str.as_str()
+        )
+        .to_string()
+    } else {
+        progress_str
+    };
+    (percent, progress_str)
 }
