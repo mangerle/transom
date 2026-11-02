@@ -1,6 +1,6 @@
 //! 状态栏数值格式化单元测试。
 
-use super::metrics::StatusBarMetricsView;
+use super::metrics::{StatusBarMetricsView, StatusMetricsValues};
 use super::{format_compact_size, format_rate};
 
 #[test]
@@ -41,4 +41,27 @@ fn metrics_snapshot_matches_status_and_mode() {
     assert!(view.matches(None, None, false, None));
     assert!(!view.matches(None, None, false, Some("正在连接")));
     assert!(!view.matches(None, None, true, None));
+}
+
+/// 轻量快照只复制状态栏真正消费的字段，数值与系统名必须原样保留。
+#[test]
+fn metrics_values_keep_consumed_fields() {
+    let stats = transom_core::SystemStats {
+        cpu_percent: 42.5,
+        mem_used_bytes: 7,
+        mem_total_bytes: 9,
+        disk_used_bytes: 3,
+        disk_total_bytes: 5,
+        os_name: "Transom Linux".to_string(),
+        uptime_secs: 11,
+        ..Default::default()
+    };
+    let values = StatusMetricsValues::from(&stats);
+    assert!((values.cpu_percent - 42.5).abs() < f32::EPSILON);
+    assert_eq!(values.mem_used_bytes, 7);
+    assert_eq!(values.mem_total_bytes, 9);
+    assert_eq!(values.disk_used_bytes, 3);
+    assert_eq!(values.disk_total_bytes, 5);
+    assert_eq!(values.os_name, "Transom Linux");
+    assert_eq!(values.uptime_secs, 11);
 }
