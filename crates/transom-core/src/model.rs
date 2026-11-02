@@ -6,6 +6,7 @@
 
 pub mod catalog;
 pub mod color;
+pub mod container;
 pub mod file_diff;
 pub mod forward;
 pub mod history;

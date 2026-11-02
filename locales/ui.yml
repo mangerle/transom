@@ -158,6 +158,9 @@ common:
   reconnect:
     en: Reconnect
     zh-CN: 重连
+  retry:
+    en: Retry
+    zh-CN: 重试
   copy:
     en: Copy
     zh-CN: 复制
@@ -4522,3 +4525,830 @@ sidebar:
   host_copied:
     en: 'Host address copied: %{host}'
     zh-CN: '已复制主机地址: %{host}'
+container:
+  toast:
+    succeeded:
+      en: '%{action} succeeded'
+      zh-CN: '%{action} 成功'
+    failed:
+      en: '%{action} failed: %{error}'
+      zh-CN: '%{action} 失败：%{error}'
+  notice:
+    dismiss:
+      en: Dismiss
+      zh-CN: 关闭提示
+  badge:
+    in_use:
+      en: In use
+      zh-CN: 在用
+    free:
+      en: Unused
+      zh-CN: 空闲
+  title:
+    en: Containers
+    zh-CN: 容器
+  linked:
+    none:
+      en: None
+      zh-CN: 无
+  rename:
+    label:
+      en: New name
+      zh-CN: 新名称
+    invalid:
+      en: 'Name cannot be empty or unchanged: %{name}'
+      zh-CN: '名称不能为空，也不能与原名称相同: %{name}'
+  batch:
+    selected:
+      en: '%{count} selected'
+      zh-CN: '已选 %{count} 项'
+    confirm:
+      en: 'Confirm delete %{count}'
+      zh-CN: '确认删除 %{count} 项'
+    clear:
+      en: Clear
+      zh-CN: 清空
+  run:
+    title:
+      en: Run a container
+      zh-CN: 运行容器
+    submit:
+      en: Run
+      zh-CN: 运行
+    submitting:
+      en: Creating container…
+      zh-CN: 正在创建容器…
+    image:
+      en: Image
+      zh-CN: 镜像
+    image_placeholder:
+      en: nginx:1.27
+      zh-CN: nginx:1.27
+    name:
+      en: Container name
+      zh-CN: 容器名
+    name_placeholder:
+      en: Leave empty to let the engine generate one
+      zh-CN: 留空由引擎生成随机名
+    command:
+      en: Command
+      zh-CN: 启动命令
+    command_placeholder:
+      en: nginx -g daemon off (space separated)
+      zh-CN: nginx -g daemon off（空格分隔）
+    ports:
+      en: Ports
+      zh-CN: 端口映射
+    ports_placeholder:
+      en: 8080:80, 53:53/udp
+      zh-CN: 8080:80, 53:53/udp
+    binds:
+      en: Mounts
+      zh-CN: 挂载
+    binds_placeholder:
+      en: data:/var/lib/data:ro
+      zh-CN: data:/var/lib/data:ro
+    env:
+      en: Environment
+      zh-CN: 环境变量
+    env_placeholder:
+      en: FOO=bar,BAZ=1
+      zh-CN: FOO=bar,BAZ=1
+    health:
+      en: Health check
+      zh-CN: 健康检查
+    health_placeholder:
+      en: pg_isready (shell form; empty means none)
+      zh-CN: pg_isready（Shell 形式；留空表示不配置）
+    health_interval:
+      en: Health interval (seconds)
+      zh-CN: 健康检查间隔（秒）
+    health_interval_placeholder:
+      en: empty uses the engine default of 30s
+      zh-CN: 留空用引擎默认 30 秒
+    memory:
+      en: Memory limit (MB)
+      zh-CN: 内存上限（MB）
+    memory_placeholder:
+      en: empty means unlimited
+      zh-CN: 留空表示不限制
+    cpus:
+      en: CPU limit (cores)
+      zh-CN: CPU 上限（核）
+    cpus_placeholder:
+      en: 0.5 means half a core
+      zh-CN: 0.5 表示半核
+    restart:
+      en: Restart policy
+      zh-CN: 重启策略
+    port_format:
+      en: 'Port mapping must be host:container, got: %{item}'
+      zh-CN: '端口映射要写成 宿主端口:容器端口，收到: %{item}'
+    port_number:
+      en: 'Port is not a number: %{value}'
+      zh-CN: '端口不是数字: %{value}'
+  search:
+    en: Search containers, images, volumes or networks
+    zh-CN: 搜索容器、镜像、数据卷或网络
+  create_dialog:
+    volume:
+      en: New volume
+      zh-CN: 新建数据卷
+    network:
+      en: New network
+      zh-CN: 新建网络
+    driver_placeholder:
+      en: Leave empty for the engine default
+      zh-CN: 留空使用引擎默认
+    subnet_placeholder:
+      en: 'CIDR such as 172.28.0.0/16; leave empty for the engine default'
+      zh-CN: 如 172.28.0.0/16；留空由引擎分配
+    gateway_placeholder:
+      en: 'Gateway without mask; leave empty for the engine default'
+      zh-CN: 网关不带掩码；留空由引擎分配
+    internal:
+      en: Host-internal only (no outbound NAT)
+      zh-CN: 仅宿主机内部访问（不做出站 NAT）
+    name_required:
+      en: Name is required
+      zh-CN: 名称不能为空
+  prune:
+    volumes:
+      en: Prune unused volumes
+      zh-CN: 清理未使用卷
+    images:
+      en: Prune dangling images
+      zh-CN: 清理悬空镜像
+    confirm:
+      en: Click again to confirm
+      zh-CN: 再点一次确认清理
+    hint:
+      en: Removes every volume not referenced by a container; cannot be undone
+      zh-CN: 删除所有未被容器引用的数据卷，不可恢复
+    images_hint:
+      en: Removes untagged images not referenced by any other image; cannot be undone
+      zh-CN: 删除没有标签且不被其他镜像引用的镜像，不可恢复
+    done:
+      en: 'Pruned %{count} unused volumes'
+      zh-CN: '已清理 %{count} 个未使用数据卷'
+    images_done:
+      en: 'Pruned %{count} dangling images'
+      zh-CN: '已清理 %{count} 个悬空镜像'
+    none:
+      en: No unused volumes to prune
+      zh-CN: 没有需要清理的未使用卷
+    images_none:
+      en: No dangling images to prune
+      zh-CN: 没有需要清理的悬空镜像
+  create_placeholder:
+    en: Name or image reference
+    zh-CN: 名称或镜像引用
+  create:
+    en: Create
+    zh-CN: 新建
+  pull:
+    en: Pull
+    zh-CN: 拉取
+  loading:
+    en: Loading…
+    zh-CN: 加载中…
+  fullscreen_exit:
+    en: Exit fullscreen
+    zh-CN: 退出全屏
+  filter:
+    running:
+      en: Running
+      zh-CN: 运行中
+    all:
+      en: All
+      zh-CN: 全部
+    stopped:
+      en: Stopped
+      zh-CN: 已停止
+    unused:
+      en: Unused volumes
+      zh-CN: 仅未使用卷
+    unused_unavailable:
+      en: CLI backend reports no mount details, so volume usage cannot be told apart
+      zh-CN: CLI 兜底后端拿不到挂载明细，无法判断卷是否在用
+    dangling:
+      en: Dangling images
+      zh-CN: 仅无标签镜像
+  sort:
+    name:
+      en: Name
+      zh-CN: 名称
+    state:
+      en: State
+      zh-CN: 状态
+    created:
+      en: Created
+      zh-CN: 创建时间
+    size:
+      en: Size
+      zh-CN: 大小
+    ascending:
+      en: Ascending
+      zh-CN: 升序
+    descending:
+      en: Descending
+      zh-CN: 降序
+  list:
+    none:
+      en: No matching items
+      zh-CN: 没有匹配的条目
+    matching:
+      en: 'Matching %{shown} of %{total}'
+      zh-CN: '匹配 %{shown} / %{total} 条'
+  row:
+    copy_id:
+      en: Copy ID
+      zh-CN: 复制 ID
+    copy_name:
+      en: Copy name
+      zh-CN: 复制名称
+    copied:
+      en: 'Copied: %{value}'
+      zh-CN: '已复制：%{value}'
+  section:
+    compose:
+      en: Compose
+      zh-CN: 编排
+    containers:
+      en: Containers
+      zh-CN: 容器
+    images:
+      en: Images
+      zh-CN: 镜像
+    volumes:
+      en: Volumes
+      zh-CN: 数据卷
+    networks:
+      en: Networks
+      zh-CN: 网络
+  detail:
+    overview:
+      en: Overview
+      zh-CN: 基础信息
+    no_inspect:
+      en: No raw inspect data for this item
+      zh-CN: 该条目没有原始 inspect 数据
+    layer_list:
+      en: 'Image layers (%{count})'
+      zh-CN: '镜像层（%{count} 层）'
+    logs:
+      en: Logs
+      zh-CN: 日志
+    terminal:
+      en: Terminal
+      zh-CN: 终端
+    stats:
+      en: Stats
+      zh-CN: 统计
+    files:
+      en: Files
+      zh-CN: 文件
+    no_selection:
+      en: Nothing selected
+      zh-CN: 未选择项目
+    loading:
+      en: Loading details…
+      zh-CN: 正在加载详情…
+  bool:
+    yes:
+      en: 'Yes'
+      zh-CN: '是'
+    no:
+      en: 'No'
+      zh-CN: '否'
+  state:
+    connecting:
+      en: Connecting to engine…
+      zh-CN: 正在连接引擎…
+    failed:
+      en: Connection failed
+      zh-CN: 连接失败
+    disconnected:
+      en: Engine disconnected
+      zh-CN: 引擎已断开
+  sidebar:
+    search:
+      en: Search engine connections
+      zh-CN: 搜索引擎连接
+    no_match:
+      en: No matching connections
+      zh-CN: 没有匹配的连接
+    new_folder:
+      en: New group
+      zh-CN: 新建分组
+    folder_new_title:
+      en: New group
+      zh-CN: 新建分组
+    folder_edit_title:
+      en: Rename group
+      zh-CN: 重命名分组
+    folder_name:
+      en: Group name
+      zh-CN: 分组名称
+    folder_parent:
+      en: 'Parent: %{path}'
+      zh-CN: '上级：%{path}'
+    folder_deleted:
+      en: 'Group deleted: %{name}'
+      zh-CN: '已删除分组：%{name}'
+    open:
+      en: Open workspace
+      zh-CN: 打开工作区
+    rename:
+      en: Rename group
+      zh-CN: 重命名分组
+    move_to_root:
+      en: Move to top level
+      zh-CN: 移到根层级
+    copy_endpoint:
+      en: Copy endpoint
+      zh-CN: 复制端点
+    copy_name:
+      en: Copy name
+      zh-CN: 复制名称
+    endpoint_copied:
+      en: 'Endpoint copied: %{endpoint}'
+      zh-CN: '已复制端点：%{endpoint}'
+    name_copied:
+      en: 'Name copied: %{name}'
+      zh-CN: '已复制名称：%{name}'
+    new_engine_here:
+      en: New connection in this group
+      zh-CN: 在此分组新建连接
+    new_subfolder:
+      en: New subgroup
+      zh-CN: 新建子分组
+    delete_folder:
+      en: Delete group
+      zh-CN: 删除分组
+    empty:
+      en: No engine connections yet. Discover local engines or create one manually.
+      zh-CN: 还没有引擎连接。可以自动发现本机引擎，或手动新建一个。
+    new:
+      en: New engine connection
+      zh-CN: 新建引擎连接
+    discover:
+      en: Discover engines
+      zh-CN: 发现引擎
+  discovery:
+    title:
+      en: Engines found on this machine
+      zh-CN: 本机发现的引擎
+    add:
+      en: Add
+      zh-CN: 添加
+    none:
+      en: No usable engine found
+      zh-CN: 未发现可用引擎
+  form:
+    new_title:
+      en: New engine connection
+      zh-CN: 新建引擎连接
+    edit_title:
+      en: Edit engine connection
+      zh-CN: 编辑引擎连接
+    name:
+      en: Name
+      zh-CN: 名称
+    name_placeholder:
+      en: Local Docker
+      zh-CN: 本机 Docker
+    kind:
+      en: Engine
+      zh-CN: 引擎
+    endpoint:
+      en: Endpoint
+      zh-CN: 端点
+    endpoint_value:
+      en: Endpoint value
+      zh-CN: 端点值
+    endpoint_placeholder:
+      en: e.g. /var/run/docker.sock or tcp://127.0.0.1:2375
+      zh-CN: 例如 /var/run/docker.sock 或 tcp://127.0.0.1:2375
+    name_required:
+      en: Name is required
+      zh-CN: 请填写名称
+    endpoint_required:
+      en: Endpoint value is required for this type
+      zh-CN: 当前端点类型需要填写具体值
+    test:
+      en: Test connection
+      zh-CN: 测试连接
+    testing:
+      en: Testing…
+      zh-CN: 正在测试…
+    test_ok:
+      en: 'Connected: %{platform} %{version}'
+      zh-CN: '连接成功：%{platform} %{version}'
+    test_failed:
+      en: Connection failed
+      zh-CN: 连接失败
+  endpoint:
+    auto:
+      en: Auto detect
+      zh-CN: 自动发现
+    unix:
+      en: Unix socket
+      zh-CN: Unix socket
+    named_pipe:
+      en: Named pipe
+      zh-CN: 命名管道
+    tcp:
+      en: TCP
+      zh-CN: TCP
+    ssh:
+      en: SSH
+      zh-CN: SSH
+    wsl:
+      en: WSL distro
+      zh-CN: WSL 发行版
+    wslc:
+      en: WSLC
+      zh-CN: WSLC
+    cli:
+      en: Custom CLI
+      zh-CN: 自定义 CLI
+  field:
+    health:
+      en: Health
+      zh-CN: 健康状态
+    containers:
+      en: Containers
+      zh-CN: 成员容器
+    id:
+      en: ID
+      zh-CN: ID
+    image:
+      en: Image
+      zh-CN: 镜像
+    state:
+      en: State
+      zh-CN: 状态
+    command:
+      en: Command
+      zh-CN: 命令
+    entrypoint:
+      en: Entrypoint
+      zh-CN: 入口
+    user:
+      en: User
+      zh-CN: 用户
+    working_dir:
+      en: Working directory
+      zh-CN: 工作目录
+    restart:
+      en: Restart policy
+      zh-CN: 重启策略
+    created:
+      en: Created
+      zh-CN: 创建时间
+    started_at:
+      en: Started at
+      zh-CN: 启动时间
+    exit_code:
+      en: Exit code
+      zh-CN: 退出码
+    ports:
+      en: Ports
+      zh-CN: 端口
+    mounts:
+      en: Mounts
+      zh-CN: 挂载
+    env:
+      en: Environment
+      zh-CN: 环境变量
+    inspect:
+      en: Raw inspect
+      zh-CN: 原始 inspect
+    config_files:
+      en: Compose files
+      zh-CN: Compose 文件
+    tags:
+      en: Tags
+      zh-CN: 标签
+    size:
+      en: Size
+      zh-CN: 大小
+    os_arch:
+      en: OS / architecture
+      zh-CN: 系统 / 架构
+    layers:
+      en: Layers
+      zh-CN: 层数
+    name:
+      en: Name
+      zh-CN: 名称
+    driver:
+      en: Driver
+      zh-CN: 驱动
+    mountpoint:
+      en: Mountpoint
+      zh-CN: 挂载点
+    labels:
+      en: Labels
+      zh-CN: 标签
+    used_by:
+      en: Used by containers
+      zh-CN: 使用它的容器
+    scope:
+      en: Scope
+      zh-CN: 作用域
+    subnet:
+      en: Subnet
+      zh-CN: 子网
+    gateway:
+      en: Gateway
+      zh-CN: 网关
+    connected:
+      en: Connected containers
+      zh-CN: 已连接容器
+    options:
+      en: Driver options
+      zh-CN: 驱动选项
+    internal:
+      en: Host-internal only
+      zh-CN: 仅内部访问
+    attachable:
+      en: Attachable
+      zh-CN: 允许动态接入
+    enable_ipv6:
+      en: IPv6 enabled
+      zh-CN: 启用 IPv6
+    repo_digests:
+      en: Repo digests
+      zh-CN: 仓库摘要
+    parent:
+      en: Parent image
+      zh-CN: 父镜像
+    virtual_size:
+      en: Virtual size
+      zh-CN: 虚拟大小
+  action:
+    compose_up:
+      en: Redeploy from files
+      zh-CN: 按文件重新部署
+    compose_down:
+      en: Stop and remove project
+      zh-CN: 停止并删除项目
+    rename:
+      en: Rename
+      zh-CN: 重命名
+    start:
+      en: Start
+      zh-CN: 启动
+    stop:
+      en: Stop
+      zh-CN: 停止
+    restart:
+      en: Restart
+      zh-CN: 重启
+    start_all:
+      en: Start all
+      zh-CN: 全部启动
+    stop_all:
+      en: Stop all
+      zh-CN: 全部停止
+    running:
+      en: '%{action} in progress…'
+      zh-CN: 正在%{action}…
+  confirm:
+    compose_down:
+      en: 'Stop and remove the compose project %{name}? Its containers and networks will be deleted.'
+      zh-CN: '确认停止并删除编排项目 %{name}？它创建的容器与网络都会被删掉。'
+    remove_container:
+      en: 'Remove container %{name}?'
+      zh-CN: 确认删除容器 %{name}？
+    remove_image:
+      en: 'Remove image %{name}?'
+      zh-CN: 确认删除镜像 %{name}？
+    remove_volume:
+      en: 'Remove volume %{name}?'
+      zh-CN: 确认删除数据卷 %{name}？
+    remove_network:
+      en: 'Remove network %{name}?'
+      zh-CN: 确认删除网络 %{name}？
+    remove_path:
+      en: 'Remove %{path}?'
+      zh-CN: 确认删除 %{path}？
+  compose:
+    running:
+      en: 'Running compose command: %{action}'
+      zh-CN: '正在执行编排命令：%{action}'
+    no_containers:
+      en: No containers belong to this project
+      zh-CN: 该项目下没有容器
+  logs:
+    tail_all:
+      en: All
+      zh-CN: 全量
+    timestamps:
+      en: Timestamps
+      zh-CN: 时间戳
+    copy:
+      en: Copy all
+      zh-CN: 复制全部
+    reverse:
+      en: Newest first
+      zh-CN: 最新在前
+    follow:
+      en: Follow
+      zh-CN: 跟随
+    clear:
+      en: Clear
+      zh-CN: 清空
+    empty:
+      en: No log output yet
+      zh-CN: 暂无日志
+  terminal:
+    hint:
+      en: Open an interactive shell inside this container.
+      zh-CN: 在该容器内打开交互式终端。
+    open:
+      en: Open terminal
+      zh-CN: 打开终端
+    as_user:
+      en: Choose the user to open the shell as
+      zh-CN: 选择进入终端所用的用户
+    current_user:
+      en: 'Current user: %{user}'
+      zh-CN: '当前用户：%{user}'
+    current_default_user:
+      en: 'Current user: the image default user'
+      zh-CN: '当前用户：镜像默认用户'
+    as_root:
+      en: Open as root
+      zh-CN: 以 root 进入
+    as_default:
+      en: Open as the image default user
+      zh-CN: 以镜像默认用户进入
+    closed:
+      en: Terminal session ended
+      zh-CN: 终端会话已结束
+  stats:
+    not_running:
+      en: The container is not running, so stats cannot be sampled
+      zh-CN: 容器未运行，无法采样统计
+    waiting:
+      en: Collecting stats…
+      zh-CN: 正在采样统计…
+    cpu:
+      en: CPU
+      zh-CN: CPU
+    memory:
+      en: Memory
+      zh-CN: 内存
+    network:
+      en: Network I/O
+      zh-CN: 网络 IO
+    block:
+      en: Block I/O
+      zh-CN: 块 IO
+    pids:
+      en: Processes
+      zh-CN: 进程数
+    disk:
+      en: Disk
+      zh-CN: 磁盘
+    ports:
+      en: Ports
+      zh-CN: 端口映射
+    processes:
+      en: Processes
+      zh-CN: 进程
+    core_usage:
+      en: 'Per-core usage (%{count})'
+      zh-CN: '每核占用（%{count} 核）'
+    core_count:
+      en: '%{count} cores'
+      zh-CN: '%{count} 核'
+    host_load:
+      en: Host load average
+      zh-CN: 宿主负载
+    select_first:
+      en: Select a container first
+      zh-CN: 先选择一个容器
+    timeout:
+      en: Sampling timed out. Please retry
+      zh-CN: 采样超时，请重试
+    rss:
+      en: Resident memory
+      zh-CN: 常驻内存
+    cache:
+      en: Page cache
+      zh-CN: 页缓存
+    interfaces:
+      en: Interfaces
+      zh-CN: 网卡
+    writable_layer:
+      en: Writable layer
+      zh-CN: 可写层
+    image_size:
+      en: Image layers
+      zh-CN: 镜像大小
+    mounts:
+      en: Mounts
+      zh-CN: 挂载
+    published:
+      en: Published
+      zh-CN: 已发布
+    exposed:
+      en: Exposed by the image
+      zh-CN: 镜像暴露
+    no_ports:
+      en: No port mappings
+      zh-CN: 没有端口映射
+    unpublished_port:
+      en: '%{port} (not published)'
+      zh-CN: '%{port}（未发布）'
+    loading:
+      en: Loading…
+      zh-CN: 加载中…
+    process_loading:
+      en: Loading processes…
+      zh-CN: 正在加载进程…
+    process_empty:
+      en: No process data
+      zh-CN: 没有进程数据
+    process_refresh:
+      en: Refresh processes
+      zh-CN: 刷新进程
+    process_limit:
+      en: 'Showing the first %{count} processes'
+      zh-CN: '仅显示前 %{count} 个进程'
+    process_user:
+      en: User
+      zh-CN: 用户
+    process_mem:
+      en: Memory
+      zh-CN: 内存
+    process_command:
+      en: Command
+      zh-CN: 命令
+    trend:
+      en: 'Trend (%{window})'
+      zh-CN: '走势（%{window}）'
+    window_40s:
+      en: 40 seconds
+      zh-CN: 40 秒
+    window_2m:
+      en: 2 minutes
+      zh-CN: 2 分钟
+    window_7m:
+      en: about 7 minutes
+      zh-CN: 约 7 分钟
+    ports_summary:
+      en: '%{published} published · %{exposed} exposed'
+      zh-CN: '%{published} 已发布 · %{exposed} 暴露'
+    oom_title:
+      en: Out of memory
+      zh-CN: 内存不足（OOM）
+    oom_detail:
+      en: The container was killed by the kernel OOM killer. Check its memory limit.
+      zh-CN: 容器上次退出被内核 OOM 终止，请检查内存上限。
+  files:
+    new_dir:
+      en: New folder
+      zh-CN: 新建目录
+    new_dir_placeholder:
+      en: Folder name
+      zh-CN: 目录名称
+    new_dir_invalid:
+      en: Folder name cannot be empty or contain / and ..
+      zh-CN: 目录名称不能为空，也不能包含 / 或 ..
+    upload:
+      en: Upload
+      zh-CN: 上传
+    download:
+      en: Download
+      zh-CN: 下载
+    open:
+      en: Open folder
+      zh-CN: 打开目录
+    preview:
+      en: Preview
+      zh-CN: 预览
+    empty:
+      en: This directory is empty
+      zh-CN: 目录为空
+    truncated:
+      en: Preview truncated
+      zh-CN: 预览已截断
+    rename:
+      en: Rename
+      zh-CN: 重命名
+    rename_invalid:
+      en: Enter a file name without slashes
+      zh-CN: 请输入不含斜杠的文件名
+  transfer:
+    start:
+      en: Transfer started
+      zh-CN: 传输已开始
+  fullscreen:
+    active:
+      en: This workspace is displayed in fullscreen.
+      zh-CN: 该工作区正在全屏显示。

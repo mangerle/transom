@@ -61,6 +61,14 @@ pub(crate) enum ModalKind {
     SftpSync,
     /// 编辑器跳转到行。
     EditorGotoLine,
+    /// 容器引擎连接表单。
+    ContainerForm,
+    /// 引擎分组新建/重命名表单。
+    ContainerFolderForm,
+    /// 运行容器表单。
+    ContainerRunForm,
+    /// 拉取镜像 / 新建卷与网络的弹窗。
+    ContainerCreate,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -119,6 +127,10 @@ impl ModalKind {
         ModalKind::SftpSync,
         ModalKind::EditorGotoLine,
         ModalKind::DiffViewer,
+        ModalKind::ContainerForm,
+        ModalKind::ContainerFolderForm,
+        ModalKind::ContainerRunForm,
+        ModalKind::ContainerCreate,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -151,6 +163,20 @@ impl ModalKind {
             ModalKind::EditorGotoLine => (
                 Some(crate::theme::tokens::dialog::EDITOR),
                 "editor-goto-line",
+            ),
+            ModalKind::ContainerForm => {
+                (Some(crate::theme::tokens::dialog::FILTER), "container-form")
+            }
+            ModalKind::ContainerFolderForm => (
+                Some(crate::theme::tokens::dialog::INPUT),
+                "container-folder-form",
+            ),
+            ModalKind::ContainerRunForm => {
+                (Some(crate::theme::tokens::dialog::FILTER), "container-run")
+            }
+            ModalKind::ContainerCreate => (
+                Some(crate::theme::tokens::dialog::CONFIRM),
+                "container-create",
             ),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
@@ -249,6 +275,12 @@ impl ModalKind {
             ModalKind::SftpSearch => shell.render_sftp_search_body(app, cx, p),
             ModalKind::SftpSync => shell.render_sftp_sync_body(app, cx, p),
             ModalKind::EditorGotoLine => shell.render_editor_goto_line_body(app, cx, p),
+            ModalKind::ContainerForm => shell.render_container_form_body(app, window, cx, p),
+            ModalKind::ContainerFolderForm => shell.render_engine_folder_form_body(app, cx, p),
+            ModalKind::ContainerRunForm => shell.render_container_run_form_body(app, window, cx, p),
+            ModalKind::ContainerCreate => {
+                shell.render_container_create_dialog_body(app, window, cx, p)
+            }
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -286,6 +318,10 @@ mod tests {
         ModalKind::SftpSearch,
         ModalKind::SftpSync,
         ModalKind::EditorGotoLine,
+        ModalKind::ContainerForm,
+        ModalKind::ContainerFolderForm,
+        ModalKind::ContainerRunForm,
+        ModalKind::ContainerCreate,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

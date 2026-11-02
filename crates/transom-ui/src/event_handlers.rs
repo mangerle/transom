@@ -281,6 +281,7 @@ impl AppShell {
                     key_filter: Some(key_filter),
                     audit_path,
                     shell_integration_enabled,
+                    clear_on_first_resize: false,
                 },
             )
         });

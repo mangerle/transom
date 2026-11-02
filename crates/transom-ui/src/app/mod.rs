@@ -27,6 +27,8 @@ pub(crate) mod cloud_sync;
 pub(crate) mod command_palette;
 #[path = "../connection/mod.rs"]
 pub(crate) mod connection;
+#[path = "../container/mod.rs"]
+pub(crate) mod container;
 #[path = "../dialog_host/mod.rs"]
 pub(crate) mod dialog_host;
 #[path = "../diff_viewer/mod.rs"]
@@ -135,8 +137,10 @@ use crate::UiServices;
 use crate::keymap;
 use crate::keymap::ShortcutRecordingState;
 use crate::palette::localized_error;
+use gpui_kit::component::WindowExt;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
@@ -163,7 +167,46 @@ pub(crate) struct AppShell {
     state: AppState,
 }
 
+/// 提示通知的类型标记：只用于给 `Notification::id1` 与 `remove_notification1`
+/// 配对，让定时器精确关闭自己那一条，不参与任何业务逻辑。
+struct ToastMarker;
+
 impl AppShell {
+    /// 右上角操作结果提示，3 秒后自动收起。
+    ///
+    /// 设计原理（Why）：上游通知组件的自动隐藏时长写死 5 秒，不接受这个与
+    /// 需求不符的时长，改成 `autohide(false)` + 显式定时器关闭，保证看到的
+    /// 与实际发生的一致。定时器只有关闭自己这一步，句柄显式 `detach`，
+    /// 不给每条提示再养一个字段。
+    pub(crate) fn show_toast(
+        &mut self,
+        message: impl Into<String>,
+        success: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.toast_seq = self.state.toast_seq.wrapping_add(1);
+        let key = format!("transom-toast-{}", self.state.toast_seq);
+        let notification = if success {
+            Notification::success(message.into())
+        } else {
+            Notification::error(message.into())
+        };
+        window.push_notification(
+            notification.id1::<ToastMarker>(key.clone()).autohide(false),
+            cx,
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(3))
+                .await;
+            let _ = this.update_in(cx, |_, window, cx| {
+                window.remove_notification1::<ToastMarker>(key, cx);
+            });
+        })
+        .detach();
+    }
+
     /// 打开偏好设置弹窗；`page` 为 `Some` 时直接定位到指定页。
     ///
     /// 回填与预览快照都归设置实体，外壳只负责把目录快照推进去并请求打开；

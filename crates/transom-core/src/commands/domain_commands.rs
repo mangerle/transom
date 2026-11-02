@@ -8,7 +8,11 @@
 //! - SyncCommand: CloudSyncPush, CloudSyncPull, GitSync
 //! - ZmodemCommand: ZmodemUpload, ZmodemCancel
 
-use crate::ids::{ConnectionId, ForwardId, TabId, TransferId};
+use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
+use crate::model::container::{
+    ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec,
+    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec,
+};
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
 use crate::model::session::Session;
@@ -123,4 +127,225 @@ pub enum SyncCommand {
 pub enum ZmodemCommand {
     ZmodemUpload { tab_id: TabId, files: Vec<PathBuf> },
     ZmodemCancel { tab_id: TabId },
+}
+
+/// 容器管理工作区命令。
+///
+/// 工作区以 [`TabId`] 作为引擎会话句柄：`Connect` 成功后，后续查询都带
+/// 同一个 `tab_id`；[`ContainerRequestId`] 只用于关联单次请求的多条事件。
+pub enum ContainerCommand {
+    /// 打开引擎工作区：解析并探测连接配置。
+    Connect {
+        tab_id: TabId,
+        profile: ContainerEngineProfile,
+    },
+    /// 关闭工作区：中止订阅与 exec 会话，不停止容器。
+    Disconnect { tab_id: TabId },
+    /// 容器表单的“测试连接”：只探测，不建立工作区。
+    TestConnection {
+        request_id: ContainerRequestId,
+        profile: ContainerEngineProfile,
+    },
+    /// 编排项目命令（up/down）；只能走宿主机 CLI。
+    RunCompose {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        project: Box<ComposeProject>,
+        action: ComposeAction,
+    },
+    /// 发现本机引擎：让用户不必手填 socket/管道路径就能添加连接。
+    Discover { request_id: ContainerRequestId },
+    ListContainers {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    InspectContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+    },
+    /// 容器启停删。
+    Lifecycle {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        action: ContainerLifecycleAction,
+    },
+    /// 在容器内打开交互式终端；容器与执行参数都在 `options` 里。
+    ExecTerminal {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        options: ContainerConnection,
+        size: crate::transport::TerminalSize,
+    },
+    ListImages {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    InspectImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        image: String,
+    },
+    PullImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        /// `repo:tag` 或镜像摘要。
+        reference: String,
+    },
+    RemoveImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        image: String,
+        force: bool,
+    },
+    ListVolumes {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    InspectVolume {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        name: String,
+    },
+    CreateVolume {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        name: String,
+        driver: Option<String>,
+    },
+    RemoveVolume {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        name: String,
+        force: bool,
+    },
+    ListNetworks {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    InspectNetwork {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        network: String,
+    },
+    CreateNetwork {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        spec: ContainerNetworkSpec,
+    },
+    RemoveNetwork {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        network: String,
+    },
+    /// Compose 项目列表（按容器标签聚合）。
+    ListComposeProjects {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    /// 读取容器日志；`follow` 为真时持续推送到取消或容器结束。
+    Logs {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        tail: usize,
+        follow: bool,
+        /// 是否让引擎附带服务端时间戳（`tail=0` 表示全量）。
+        timestamps: bool,
+    },
+    /// 开启/关闭统计轮询；同一容器重复开启会替换旧订阅。
+    Stats {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        enabled: bool,
+        /// 轮询间隔（毫秒）：界面提供 1s/3s/10s 三档，0 按 3s 处理。
+        interval_ms: u64,
+    },
+    /// 容器内进程列表：进程数与 CPU/内存占用，用于统计页的进程表。
+    ListProcesses {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+    },
+    /// 取消进行中的日志跟随、上传或下载。
+    Cancel {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    ListDir {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        /// 容器内绝对路径。
+        path: String,
+    },
+    ReadFile {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        /// 预览上限；超出部分截断并标记。
+        max_bytes: usize,
+    },
+    Download {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        local_path: PathBuf,
+    },
+    Upload {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        /// 容器内目标路径（含文件名）。
+        path: String,
+        local_path: PathBuf,
+    },
+    RemovePath {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        recursive: bool,
+    },
+    Rename {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        from: String,
+        to: String,
+    },
+    /// 重命名容器。
+    RenameContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        name: String,
+    },
+    /// 创建并启动容器（把镜像跑起来）。
+    CreateContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        spec: ContainerCreateSpec,
+    },
+    /// 在容器内创建目录：归档接口只能写入已存在的目录，上传前先建目录才可用。
+    CreateDir {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+    },
+    /// 清理未被任何容器使用的数据卷。
+    PruneVolumes {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    /// 清理悬空镜像。
+    PruneImages {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
 }

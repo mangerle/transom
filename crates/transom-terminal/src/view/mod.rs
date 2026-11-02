@@ -139,6 +139,10 @@ pub struct TerminalViewParams {
     /// 随会话创建参数带入，而不是让视图回头去读设置：视图诞生时必须已经知道
     /// 要不要集成，否则会先发一次探针再被设置关掉，探针本身是可见的。
     pub shell_integration_enabled: bool,
+    /// 首帧尺寸下发后清屏一次：容器内的 `sh` 收到 SIGWINCH 会把提示符重新
+    /// 打印到新行（真机复现：每次 resize 多一行 `#`）。控制台会话没有登录欢迎
+    /// 信息，清掉这些重复提示符即可；普通终端标签保持原样，不能抹掉 banner。
+    pub clear_on_first_resize: bool,
 }
 
 impl TerminalView {
@@ -150,6 +154,7 @@ impl TerminalView {
             key_filter,
             audit_path,
             shell_integration_enabled,
+            clear_on_first_resize,
         } = params;
         cx.bind_keys([
             KeyBinding::new("tab", SendTab, Some(CONTEXT)),
@@ -161,6 +166,9 @@ impl TerminalView {
         let renderer = TerminalRenderer::new(&profile, window, cx);
         let engine = TerminalEngine::new(TerminalSize::new(80, 24), &profile, event_tx.clone());
         let state = Arc::new(TerminalRenderState::new(engine, renderer));
+        state
+            .clear_on_first_resize
+            .store(clear_on_first_resize, std::sync::atomic::Ordering::Relaxed);
         let custom_keys = build_custom_keys(&profile.key_bindings);
 
         let recorder = RecorderHandle::new();

@@ -67,6 +67,8 @@ pub(crate) struct AppState {
     pub(in crate::app) probe_badges: HashMap<SessionId, ProbeBadge>,
     /// 主机监控看板与进程管理器状态。
     pub(in crate::app) monitor: Entity<crate::monitor::MonitorView>,
+    /// 容器引擎连接侧栏、表单与工作区顶层状态。
+    pub(in crate::app) containers: crate::container::ContainerUiState,
     /// 远端文本编辑面板实体：面板集合、关闭拦截与渲染都归它。
     pub(in crate::app) editors: Entity<EditorPanels>,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
@@ -98,6 +100,8 @@ pub(crate) struct AppState {
     pub(in crate::app) open_modals: OpenModals,
     /// 弹窗内的一次性提示：脏表单被拦下不关时，说明为什么按键没有反应。
     pub(in crate::app) dialog_hint: Option<String>,
+    /// 右上角操作结果提示的自增序号：用作通知 key，定时关闭时只关自己那一条。
+    pub(in crate::app) toast_seq: u64,
 }
 
 impl AppState {

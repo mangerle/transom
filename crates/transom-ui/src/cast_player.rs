@@ -457,6 +457,7 @@ fn create_playback_terminal(
                 audit_path: None,
                 // 回放是既成事实的录像，不再向会话注入集成脚本。
                 shell_integration_enabled: false,
+                clear_on_first_resize: false,
             },
         )
     })

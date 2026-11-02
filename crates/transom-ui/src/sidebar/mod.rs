@@ -28,6 +28,9 @@ use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::SessionId;
 pub(crate) use tree::SidebarRow;
+pub(crate) use tree::{
+    BAND_HEIGHT, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SidebarDragPreview, indent_padding,
+};
 use tree::{SidebarDrag, SidebarTarget, build_rows};
 
 impl AppState {

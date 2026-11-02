@@ -7,6 +7,7 @@ members = [
     "crates/transom-store",
     "crates/transom-desktop",
     "crates/transom-net",
+    "crates/transom-container",
     "crates/transom-sync",
     "crates/transom-terminal",
     "crates/transom-zmodem",
@@ -109,6 +110,7 @@ transom-crypto = { path = "crates/transom-crypto" }
 transom-store = { path = "crates/transom-store" }
 transom-desktop = { path = "crates/transom-desktop" }
 transom-net = { path = "crates/transom-net" }
+transom-container = { path = "crates/transom-container" }
 transom-sync = { path = "crates/transom-sync" }
 transom-terminal = { path = "crates/transom-terminal" }
 transom-zmodem = { path = "crates/transom-zmodem" }

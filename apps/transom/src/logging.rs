@@ -102,7 +102,9 @@ fn install_panic_hook() {
             .map(|text| (*text).to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "非文本负载".to_string());
-        log::error!("线程发生 panic，位置: {location}，原因: {payload}");
+        // 回溯与 panic 信息一起落盘：默认 hook 的 stderr 在桌面启动时经常丢失。
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        log::error!("线程发生 panic，位置: {location}，原因: {payload}\n回溯:\n{backtrace}");
         default_hook(info);
     }));
 }

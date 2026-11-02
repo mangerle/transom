@@ -24,20 +24,32 @@ pub use backup::{
     SecretRestoreReport, collect_catalog_secrets,
 };
 pub use commands::{
-    AppCommand, AppEvent, ConnectParams, DeepLinkRequest, ForwardAppEvent, ForwardCommand,
-    HostAppEvent, HostCommand, SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats,
-    TerminalAppEvent, TerminalCommand, ZmodemAppEvent, ZmodemCommand,
+    AppCommand, AppEvent, ConnectParams, ContainerAppEvent, ContainerCommand, DeepLinkRequest,
+    ForwardAppEvent, ForwardCommand, HostAppEvent, HostCommand, SftpAppEvent, SftpCommand,
+    SyncAppEvent, SyncCommand, SystemStats, TerminalAppEvent, TerminalCommand, ZmodemAppEvent,
+    ZmodemCommand,
 };
 pub use error::{AppError, ErrorCode, ErrorContext};
 pub use ids::{
-    ConnectionId, FolderId, ForwardId, GroupId, IdentityId, SessionId, SnippetId, SplitId, TabId,
-    TransferId, TriggerId,
+    ConnectionId, ContainerRequestId, EngineProfileId, FolderId, ForwardId, GroupId, IdentityId,
+    SessionId, SnippetId, SplitId, TabId, TransferId, TriggerId,
 };
 pub use model::catalog::{
-    CatalogError, DropSide, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH, MergePreference,
-    SessionCatalog, SessionFolder, SyncMergeReport, merge_catalogs,
+    CatalogError, DropSide, EngineFolder, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH,
+    MergePreference, SessionCatalog, SessionFolder, SyncMergeReport, merge_catalogs,
 };
 pub use model::color::Rgb;
+pub use model::container::{
+    ComposeAction, ComposeProject, ContainerBlockDeviceIo, ContainerConnection,
+    ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
+    ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
+    ContainerFileKind, ContainerImageDetails, ContainerImageSummary, ContainerInterfaceIo,
+    ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
+    ContainerNetworkSpec, ContainerNetworkSummary, ContainerPort, ContainerPortPublish,
+    ContainerProcess, ContainerPruneReport, ContainerState, ContainerStats, ContainerSummary,
+    ContainerVolumeDetails, ContainerVolumeSummary, compose_projects, is_valid_container_name,
+    short_id,
+};
 pub use model::file_diff::{DEFAULT_CONTEXT_LINES, DiffHunk, FileDiff, MergeDirection};
 pub use model::forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,

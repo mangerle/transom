@@ -134,6 +134,55 @@ impl SessionCatalog {
             }
         }
 
+        // 引擎分组与引擎连接的孤儿引用同样要清理，否则界面渲染会拿不到父节点。
+        let mut seen_engine_folders = HashSet::with_capacity(self.engine_folders.len());
+        self.engine_folders
+            .retain(|folder| seen_engine_folders.insert(folder.id));
+        let engine_folder_ids: HashSet<FolderId> =
+            self.engine_folders.iter().map(|folder| folder.id).collect();
+        for folder in &mut self.engine_folders {
+            if folder
+                .parent
+                .is_some_and(|parent| parent == folder.id || !engine_folder_ids.contains(&parent))
+            {
+                folder.parent = None;
+            }
+        }
+        let engine_parents: HashMap<FolderId, Option<FolderId>> = self
+            .engine_folders
+            .iter()
+            .map(|folder| (folder.id, folder.parent))
+            .collect();
+        let mut engine_cycle_roots = Vec::new();
+        for folder in &self.engine_folders {
+            let mut visited = HashSet::new();
+            let mut current = Some(folder.id);
+            while let Some(id) = current {
+                if !visited.insert(id) {
+                    engine_cycle_roots.push(folder.id);
+                    break;
+                }
+                current = engine_parents.get(&id).copied().flatten();
+            }
+        }
+        for id in engine_cycle_roots {
+            if let Some(folder) = self
+                .engine_folders
+                .iter_mut()
+                .find(|folder| folder.id == id)
+            {
+                folder.parent = None;
+            }
+        }
+        for profile in &mut self.engines {
+            if profile
+                .folder_id
+                .is_some_and(|id| !engine_folder_ids.contains(&id))
+            {
+                profile.folder_id = None;
+            }
+        }
+
         let mut seen_identities = HashSet::with_capacity(self.identities.len());
         self.identities
             .retain(|identity| seen_identities.insert(identity.id));
