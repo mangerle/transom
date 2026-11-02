@@ -175,18 +175,8 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn start_connection(
-        &mut self,
-        tab_id: TabId,
-        session: Session,
-        cx: &mut Context<Self>,
-    ) {
-        let connection_id = ConnectionId::new();
-        log::info!(
-            "开始建立连接，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
-            session.name,
-            describe_target(&session)
-        );
+    /// 新连接建立前清空旧通道残留：连接标识、cwd 与面板快照。
+    fn reset_tab_connection(&mut self, tab_id: TabId, connection_id: ConnectionId) {
         if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
             tab.connection_id = Some(connection_id);
             // 新通道上的 Shell 还没上报 OSC 7，旧目录不再代表当前 cwd；
@@ -199,13 +189,23 @@ impl AppShell {
                 pane._startup_task = None;
             }
         }
-        if !matches!(
-            session.connection,
-            Connection::Ssh(_)
-                | Connection::Local(_)
-                | Connection::Serial(_)
-                | Connection::Telnet(_)
-        ) {
+    }
+
+    pub(crate) fn start_connection(
+        &mut self,
+        tab_id: TabId,
+        session: Session,
+        cx: &mut Context<Self>,
+    ) {
+        let connection_id = ConnectionId::new();
+        log::info!(
+            "开始建立连接，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
+            session.name,
+            describe_target(&session)
+        );
+        self.reset_tab_connection(tab_id, connection_id);
+
+        if !connection_supported(&session) {
             self.state
                 .set_error(rust_i18n::t!("error.configuration").to_string());
             return;
@@ -320,4 +320,12 @@ impl AppShell {
             log::warn!("保存最近打开会话失败，原因: {error}");
         }
     }
+}
+
+/// 当前支持通过界面建立的连接类型；未知类型在派发前拒绝。
+fn connection_supported(session: &Session) -> bool {
+    matches!(
+        session.connection,
+        Connection::Ssh(_) | Connection::Local(_) | Connection::Serial(_) | Connection::Telnet(_)
+    )
 }
