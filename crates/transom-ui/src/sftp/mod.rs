@@ -20,6 +20,7 @@ pub(crate) use panel_event::SftpPanelEvent;
 mod filters;
 mod nav_actions;
 mod overlay;
+mod panel_status;
 mod panel_view;
 mod preview;
 mod preview_actions;
