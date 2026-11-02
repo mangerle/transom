@@ -53,12 +53,8 @@ pub(super) fn render_vertical_tab_row(
     // 纵向面板是“切换正在运行的东西”，与顶部标签显示同一名字才不会让人
     // 以为两处指向不同会话；会话身份由副标题的连接目标承担。
     let title = tab.tab_label();
-    let labeled = if serial > 0 {
-        format!("{title} #{serial}")
-    } else {
-        title.clone()
-    };
-    let subtitle = crate::connection::display_compact(&tab.session.connection);
+    let labeled = crate::workspace::tab_presentation::tab_title(tab, serial);
+    let subtitle = crate::workspace::tab_presentation::tab_subtitle(tab);
     let is_local = matches!(tab.session.connection, Connection::Local(_));
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
     let (icon, icon_color) = crate::workspace::tab_presentation::tab_icon(shell, tab, active, p);

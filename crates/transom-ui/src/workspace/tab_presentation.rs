@@ -49,3 +49,18 @@ pub(crate) fn tab_status_dot(tab: &TerminalTab, p: &Palette) -> Hsla {
     }
     pane_status_indicator(&tab.status, p).0
 }
+
+/// 标签显示标题：会话标题优先，分屏序号大于零时追加 `#N`。
+pub(crate) fn tab_title(tab: &TerminalTab, serial: usize) -> String {
+    let title = tab.tab_label();
+    if serial > 0 {
+        format!("{title} #{serial}")
+    } else {
+        title
+    }
+}
+
+/// 标签副标题：连接类型的紧凑描述（本地/SSH/串口等）。
+pub(crate) fn tab_subtitle(tab: &TerminalTab) -> String {
+    crate::connection::display_compact(&tab.session.connection)
+}

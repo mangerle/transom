@@ -114,11 +114,7 @@ pub(super) fn render_tab_entry(
     // 标签之间的竖向分隔线跟随分割线设置；放在状态分支之后，避免各分支重写。
     tab_element = tab_element.divider_edge(DividerEdge::Right, p.divider_width);
 
-    let labeled = if is_extra {
-        format!("{title} #{serial}")
-    } else {
-        title.clone()
-    };
+    let labeled = crate::workspace::tab_presentation::tab_title(tab, serial);
     let tooltip_title = if pane_count > 1 {
         rust_i18n::t!("tab.pane_count", title = labeled, count = pane_count).to_string()
     } else {
