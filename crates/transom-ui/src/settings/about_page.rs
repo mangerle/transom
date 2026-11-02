@@ -124,28 +124,7 @@ impl SettingsView {
             rust_i18n::t!("settings.about_build_release").to_string()
         };
 
-        let header = h_flex()
-            .gap_4()
-            .items_center()
-            .pb_2()
-            .child(brand::logo_mark(LOGO_SIZE, window, cx))
-            .child(
-                v_flex()
-                    .gap_0p5()
-                    .child(
-                        div()
-                            .text_base()
-                            .font_weight(FontWeight::BOLD)
-                            .child(format!("{} v{}", crate::APP_NAME, crate::APP_VERSION)),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("settings.about_summary").to_string()),
-                    ),
-            )
-            .into_any_element();
+        let header = about_header(window, p, cx);
 
         v_flex()
             .gap_2()
@@ -195,4 +174,30 @@ impl SettingsView {
             ))
             .into_any_element()
     }
+}
+
+/// 关于页头部：品牌标识、名称版本与简介。
+fn about_header(window: &mut Window, p: &Palette, cx: &mut Context<SettingsView>) -> AnyElement {
+    h_flex()
+        .gap_4()
+        .items_center()
+        .pb_2()
+        .child(brand::logo_mark(LOGO_SIZE, window, cx))
+        .child(
+            v_flex()
+                .gap_0p5()
+                .child(
+                    div()
+                        .text_base()
+                        .font_weight(FontWeight::BOLD)
+                        .child(format!("{} v{}", crate::APP_NAME, crate::APP_VERSION)),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("settings.about_summary").to_string()),
+                ),
+        )
+        .into_any_element()
 }
