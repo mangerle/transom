@@ -450,4 +450,13 @@ mod tests {
         assert_eq!(super::preview_kind("archive.bin"), None);
         assert_eq!(super::preview_kind("no-extension"), None);
     }
+
+    /// 行数上限后必须标记 more，避免预览悄悄吞掉剩余行。
+    #[test]
+    fn text_preview_lines_marks_more_after_limit() {
+        let text = "line\n".repeat(super::PREVIEW_TEXT_LINES + 3);
+        let (lines, more) = super::text::text_preview_lines(text.as_bytes(), false);
+        assert_eq!(lines.len(), super::PREVIEW_TEXT_LINES);
+        assert!(more);
+    }
 }
