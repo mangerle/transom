@@ -125,6 +125,31 @@ pub(crate) struct MonitorTabParams<'a> {
 
 impl MonitorView {
     /// 全屏看板右上角动作：采样档位、刷新、停靠抽屉与关闭。
+    /// 单个采样档位按钮：点击后切换档位并请求重启采样。
+    fn render_sample_mode_button(
+        &mut self,
+        mode: crate::monitor::SampleIntervalMode,
+        current: crate::monitor::SampleIntervalMode,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::component::button::Button {
+        let id = match mode {
+            crate::monitor::SampleIntervalMode::Fast => "tab-sample-rate-fast",
+            crate::monitor::SampleIntervalMode::Normal => "tab-sample-rate-normal",
+            crate::monitor::SampleIntervalMode::Eco => "tab-sample-rate-eco",
+        };
+        Button::new(id)
+            .xsmall()
+            .label(mode.label())
+            .selected(current == mode)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if this.set_interval_mode(mode) {
+                    cx.notify();
+                    let interval = this.interval_mode().interval();
+                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(interval));
+                }
+            }))
+    }
+
     fn render_tab_actions(
         &mut self,
         current_interval: crate::monitor::SampleIntervalMode,
@@ -139,51 +164,21 @@ impl MonitorView {
             .child(
                 h_flex()
                     .gap_0p5()
-                    .child(
-                        Button::new("tab-sample-rate-fast")
-                            .xsmall()
-                            .label(SampleIntervalMode::Fast.label())
-                            .selected(current_interval == SampleIntervalMode::Fast)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Fast) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new("tab-sample-rate-normal")
-                            .xsmall()
-                            .label(SampleIntervalMode::Normal.label())
-                            .selected(current_interval == SampleIntervalMode::Normal)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Normal) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new("tab-sample-rate-eco")
-                            .xsmall()
-                            .label(SampleIntervalMode::Eco.label())
-                            .selected(current_interval == SampleIntervalMode::Eco)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.set_interval_mode(SampleIntervalMode::Eco) {
-                                    cx.notify();
-                                    let interval = this.interval_mode().interval();
-                                    cx.emit(crate::monitor::MonitorPanelEvent::RestartSampling(
-                                        interval,
-                                    ));
-                                }
-                            })),
-                    ),
+                    .child(self.render_sample_mode_button(
+                        SampleIntervalMode::Fast,
+                        current_interval,
+                        cx,
+                    ))
+                    .child(self.render_sample_mode_button(
+                        SampleIntervalMode::Normal,
+                        current_interval,
+                        cx,
+                    ))
+                    .child(self.render_sample_mode_button(
+                        SampleIntervalMode::Eco,
+                        current_interval,
+                        cx,
+                    )),
             )
             .child(
                 crate::widgets::IconButton::new(
