@@ -401,7 +401,6 @@ impl SettingsView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let is_new = edit_state.base_id.is_none();
         let action_kind = edit_state.action_kind;
 
         let mut form = v_flex()
@@ -411,26 +410,7 @@ impl SettingsView {
             .border_color(p.border)
             .bg(p.popover)
             .gap_2p5()
-            .child(
-                div().text_sm().font_weight(FontWeight::BOLD).child(
-                    rust_i18n::t!(if is_new {
-                        "trigger.new_rule_title"
-                    } else {
-                        "trigger.edit_rule_title"
-                    })
-                    .to_string(),
-                ),
-            )
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("trigger.rule_name").to_string(),
-                edit_state.name.clone(),
-                p,
-            ))
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("trigger.rule_pattern").to_string(),
-                edit_state.pattern.clone(),
-                p,
-            ))
+            .child(trigger_editor_fields(&edit_state, p))
             .child(
                 h_flex()
                     .gap_2()
@@ -492,4 +472,35 @@ impl SettingsView {
 
         form.into_any_element()
     }
+}
+
+/// 编辑器头部：标题、规则名与匹配模式字段。
+fn trigger_editor_fields(
+    edit_state: &crate::trigger_panel::TriggerEditState,
+    p: &Palette,
+) -> AnyElement {
+    let is_new = edit_state.base_id.is_none();
+    v_flex()
+        .gap_2p5()
+        .child(
+            div().text_sm().font_weight(FontWeight::BOLD).child(
+                rust_i18n::t!(if is_new {
+                    "trigger.new_rule_title"
+                } else {
+                    "trigger.edit_rule_title"
+                })
+                .to_string(),
+            ),
+        )
+        .child(crate::widgets::form_field(
+            rust_i18n::t!("trigger.rule_name").to_string(),
+            edit_state.name.clone(),
+            p,
+        ))
+        .child(crate::widgets::form_field(
+            rust_i18n::t!("trigger.rule_pattern").to_string(),
+            edit_state.pattern.clone(),
+            p,
+        ))
+        .into_any_element()
 }
