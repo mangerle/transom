@@ -1,0 +1,120 @@
+//! 容器动作/传输结果与非传输失败：统一收尾工作区状态并给出右上角提示。
+
+use super::*;
+
+impl AppShell {
+    pub(super) fn on_container_action_finished(
+        &mut self,
+        request_id: ContainerRequestId,
+        error: Option<AppError>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let label = self.state.containers.label_of(request_id);
+        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+            return;
+        };
+        let mut refresh = false;
+        let toast = match &error {
+            Some(error) => Some((
+                toast_failed(label.as_deref(), &localized_error(error)),
+                false,
+            )),
+            None => {
+                refresh = true;
+                label.map(|label| (toast_succeeded(&label), true))
+            }
+        };
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.busy = false;
+            workspace.confirm = None;
+            workspace.rename_container = None;
+            workspace.notice = None;
+        }
+        if let Some((message, success)) = toast {
+            self.show_toast(message, success, window, cx);
+        }
+        if refresh {
+            self.refresh_container_section(tab_id);
+        }
+    }
+
+    pub(super) fn on_container_transfer_finished(
+        &mut self,
+        request_id: ContainerRequestId,
+        error: Option<AppError>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let label = self.state.containers.label_of(request_id);
+        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+            return;
+        };
+        let toast = match &error {
+            Some(error) => Some((
+                toast_failed(label.as_deref(), &localized_error(error)),
+                false,
+            )),
+            None => label.map(|label| (toast_succeeded(&label), true)),
+        };
+        let mut refresh_files = None;
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.notice = None;
+            if error.is_none() {
+                refresh_files = Some(workspace.files.path.clone());
+            }
+        }
+        if let Some((message, success)) = toast {
+            self.show_toast(message, success, window, cx);
+        }
+        if let Some(path) = refresh_files
+            && !path.is_empty()
+        {
+            self.load_container_dir(tab_id, path);
+        }
+    }
+
+    pub(super) fn on_container_failed(
+        &mut self,
+        request_id: ContainerRequestId,
+        error: AppError,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let label = self.state.containers.label_of(request_id);
+        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+            return;
+        };
+        let message = toast_failed(label.as_deref(), &localized_error(&error));
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.busy = false;
+            workspace.files.loading = false;
+            workspace.notice = None;
+            if workspace.logs_request == Some(request_id) {
+                workspace.logs_request = None;
+                workspace.logs_follow = false;
+            }
+            if workspace.stats_request == Some(request_id) {
+                workspace.stats_request = None;
+                workspace.stats_error = Some(message.clone());
+            }
+            if workspace.stats_processes_request == Some(request_id) {
+                workspace.stats_processes_request = None;
+                workspace.stats_processes_loading = false;
+                workspace.stats_processes_error = Some(message.clone());
+            }
+            if workspace.files.request == Some(request_id) {
+                workspace.files.request = None;
+                workspace.files.loading = false;
+            }
+            if workspace
+                .terminal_request
+                .as_ref()
+                .is_some_and(|(pending, _)| *pending == request_id)
+            {
+                workspace.terminal_request = None;
+            }
+        }
+        self.show_toast(message, false, window, cx);
+    }
+}

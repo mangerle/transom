@@ -1,0 +1,158 @@
+//! 引擎连接的发现、保存、删除与工作区打开。
+
+use super::*;
+
+impl AppShell {
+    /// 打开（或聚焦）一个引擎连接的工作区标签。
+    pub(crate) fn open_engine_workspace(
+        &mut self,
+        profile: ContainerEngineProfile,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(existing) =
+            self.state
+                .workspace
+                .tabs
+                .iter()
+                .find_map(|tab| match &tab.session.connection {
+                    Connection::ContainerEngine(existing) if existing.id == profile.id => {
+                        Some(tab.id)
+                    }
+                    _ => None,
+                })
+        {
+            self.activate_tab(existing, window, cx);
+            return;
+        }
+        let tab_id = TabId::new();
+        let session = Session::new(
+            profile.display_name(),
+            Connection::ContainerEngine(profile.clone()),
+        );
+        self.state.workspace.create_group(tab_id, session.id);
+        let mut tab = TerminalTab::pending(tab_id, session);
+        tab.status = TabStatus::Connecting;
+        tab.title = profile.display_name();
+        tab.content = TabContent::Containers(Box::new(ContainerWorkspaceState::new(
+            profile.clone(),
+            window,
+            cx,
+        )));
+        self.state.workspace.tabs.push(tab);
+        self.state.workspace.active_tab = Some(tab_id);
+        self.state.present_active_group();
+        self.state
+            .send_command(ContainerCommand::Connect { tab_id, profile });
+        cx.notify();
+    }
+
+    /// 保存引擎连接配置（新建或更新）。
+    /// 发起一次本机引擎发现：用户不必手填 socket/管道路径。
+    pub(crate) fn discover_engines(&mut self, cx: &mut Context<Self>) {
+        if self.state.containers.discovering {
+            return;
+        }
+        self.state.containers.discovering = true;
+        self.state.containers.discovery = None;
+        self.state.send_command(ContainerCommand::Discover {
+            request_id: ContainerRequestId::new(),
+        });
+        cx.notify();
+    }
+
+    /// 收起发现结果面板。
+    pub(crate) fn dismiss_container_discovery(&mut self, cx: &mut Context<Self>) {
+        self.state.containers.discovery = None;
+        cx.notify();
+    }
+
+    /// 添加一个发现的引擎：同种类同端点已保存时不再重复入库，直接打开工作区。
+    pub(crate) fn add_discovered_engine(
+        &mut self,
+        profile: ContainerEngineProfile,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let duplicated = self.state.catalog.engines.iter().any(|saved| {
+            saved.engine.kind == profile.engine.kind
+                && saved.engine.endpoint.describe() == profile.engine.endpoint.describe()
+        });
+        if !duplicated {
+            self.state.catalog.engines.push(profile.clone());
+            self.state.persist_catalog();
+        }
+        if let Some(discovery) = self.state.containers.discovery.as_mut() {
+            discovery.candidates.retain(|candidate| {
+                candidate.engine.endpoint.describe() != profile.engine.endpoint.describe()
+            });
+        }
+        self.open_engine_workspace(profile, window, cx);
+    }
+
+    /// 新建连接并放进指定分组（`None` 为根层级）。
+    pub(crate) fn open_new_container_in_folder(
+        &mut self,
+        folder: Option<transom_core::FolderId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.containers.form_folder = folder;
+        self.open_container_form(None, window, cx);
+    }
+
+    pub(crate) fn save_container_profile(
+        &mut self,
+        profile: ContainerEngineProfile,
+        cx: &mut Context<Self>,
+    ) {
+        let form_folder = self.state.containers.form_folder.take();
+        let mut profile = profile;
+        if let Some(existing) = self
+            .state
+            .catalog
+            .engines
+            .iter_mut()
+            .find(|existing| existing.id == profile.id)
+        {
+            *existing = profile;
+        } else {
+            // 从分组菜单新建的连接直接落到该分组，不需要用户再拖一次。
+            if let Some(folder) = form_folder {
+                profile.folder_id = Some(folder);
+                profile.touch();
+            }
+            self.state.catalog.engines.push(profile);
+        }
+        self.state.persist_catalog();
+        cx.notify();
+    }
+
+    /// 删除引擎连接配置并关闭其工作区标签。
+    pub(crate) fn delete_container_profile(
+        &mut self,
+        id: transom_core::EngineProfileId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state
+            .catalog
+            .engines
+            .retain(|profile| profile.id != id);
+        self.state.persist_catalog();
+        let tabs: Vec<TabId> = self
+            .state
+            .workspace
+            .tabs
+            .iter()
+            .filter_map(|tab| match &tab.session.connection {
+                Connection::ContainerEngine(profile) if profile.id == id => Some(tab.id),
+                _ => None,
+            })
+            .collect();
+        for tab_id in tabs {
+            self.close_tab(tab_id, window, cx);
+        }
+        cx.notify();
+    }
+}
