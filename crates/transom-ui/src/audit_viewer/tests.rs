@@ -1,6 +1,8 @@
 //! 审计日志查看器单元测试。
 
-use super::types::{format_file_size, read_log_content, strip_ansi_escapes};
+use super::types::{
+    find_session_audit_logs, format_file_size, read_log_content, strip_ansi_escapes,
+};
 
 #[test]
 fn test_strip_ansi_escapes() {
@@ -34,4 +36,22 @@ fn read_log_content_reports_missing_file() {
     let (content, truncated) = read_log_content(path, 16);
     assert!(!truncated);
     assert!(!content.is_empty());
+}
+
+/// 默认只看当前会话的日志前缀；show_all 时列出全部 .log 并忽略其它扩展名。
+#[test]
+fn finds_session_logs_by_prefix_and_extension() {
+    let dir = tempfile::tempdir().expect("临时目录");
+    for name in [
+        "alpha-host-1.log",
+        "alpha-host-2.log",
+        "beta-other-1.log",
+        "notes.txt",
+    ] {
+        std::fs::write(dir.path().join(name), "x").expect("写入样本");
+    }
+    let filtered = find_session_audit_logs(dir.path(), Some("alpha"), Some("host"), false);
+    assert_eq!(filtered.len(), 2);
+    let all = find_session_audit_logs(dir.path(), None, None, true);
+    assert_eq!(all.len(), 3);
 }
