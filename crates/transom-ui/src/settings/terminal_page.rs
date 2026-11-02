@@ -85,40 +85,9 @@ impl SettingsView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let cursor_shape = app_settings(cx).terminal_profile.cursor_shape;
-        let cursor_options = vec![
-            (
-                TerminalCursorShape::Block,
-                rust_i18n::t!("settings.cursor_block").to_string(),
-            ),
-            (
-                TerminalCursorShape::Bar,
-                rust_i18n::t!("settings.cursor_bar").to_string(),
-            ),
-            (
-                TerminalCursorShape::Underline,
-                rust_i18n::t!("settings.cursor_underline").to_string(),
-            ),
-        ];
-        let cursor_dropdown = Self::setting_dropdown(
-            "dropdown-cursor-shape",
-            cursor_shape,
-            cursor_options,
-            |_this, shape, cx| {
-                update_app_settings(cx, |s| s.terminal_profile.cursor_shape = shape);
-                cx.notify();
-            },
-            cx,
-        );
-
         v_flex()
             .gap_2()
-            .child(crate::widgets::setting_row(
-                "settings.cursor_shape",
-                Some("settings.cursor_shape_desc"),
-                cursor_dropdown,
-                p,
-            ))
+            .child(self.render_cursor_shape_row(p, cx))
             .child(switch_setting_row(
                 SwitchSettingRow {
                     key: "settings.cursor_blink",
@@ -173,6 +142,42 @@ impl SettingsView {
                 p,
             ))
             .into_any_element()
+    }
+
+    /// 光标形状下拉行：块/竖线/下划线三档。
+    fn render_cursor_shape_row(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let cursor_shape = app_settings(cx).terminal_profile.cursor_shape;
+        let cursor_options = vec![
+            (
+                TerminalCursorShape::Block,
+                rust_i18n::t!("settings.cursor_block").to_string(),
+            ),
+            (
+                TerminalCursorShape::Bar,
+                rust_i18n::t!("settings.cursor_bar").to_string(),
+            ),
+            (
+                TerminalCursorShape::Underline,
+                rust_i18n::t!("settings.cursor_underline").to_string(),
+            ),
+        ];
+        let cursor_dropdown = Self::setting_dropdown(
+            "dropdown-cursor-shape",
+            cursor_shape,
+            cursor_options,
+            |_this, shape, cx| {
+                update_app_settings(cx, |s| s.terminal_profile.cursor_shape = shape);
+                cx.notify();
+            },
+            cx,
+        );
+
+        crate::widgets::setting_row(
+            "settings.cursor_shape",
+            Some("settings.cursor_shape_desc"),
+            cursor_dropdown,
+            p,
+        )
     }
 
     /// 关键词高亮组：命中高亮开关与关键词列表。
