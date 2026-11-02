@@ -18,8 +18,9 @@ impl AppShell {
         let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
-        let Some((collapsed, desired)) = self.sftp_state(tab_id, cx).map(|panel| {
+        let Some((visible, collapsed, desired)) = self.sftp_state(tab_id, cx).map(|panel| {
             (
+                panel.open,
                 panel.collapsed_columns_count() > 0,
                 if panel.collapsed_columns_count() > 0 {
                     sftp_columns_content_width(panel)
@@ -31,6 +32,12 @@ impl AppShell {
             self.state.sftp_panel_width_target = None;
             return;
         };
+        if !visible {
+            // 面板当前不在分组里，固定索引位可能已被别的面板占用（例如监控抽屉）。
+            // 继续按索引调整会把那个面板改宽，因此先清掉目标并放弃本帧同步。
+            self.state.sftp_panel_width_target = None;
+            return;
+        }
         let Some(index) = self.sftp_resizable_index(app_settings(cx)) else {
             return;
         };

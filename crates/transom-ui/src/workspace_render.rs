@@ -164,8 +164,11 @@ impl AppShell {
         } else {
             h_resizable(resizable_id).with_state(panels_state)
         };
+        // 抽屉之前的面板数：只有尺寸表已经包含抽屉槽位时，最后一项才是抽屉宽度。
+        let mut panels_before_drawer = 0usize;
         if !self.state.immersive {
             resizable_group = resizable_group.child(sidebar_panel);
+            panels_before_drawer += 1;
         }
         if !self.state.immersive && side_left {
             // 停靠左：SFTP 与转发整体挪到主面板之前，贴着侧栏。
@@ -177,6 +180,7 @@ impl AppShell {
                         .fixed()
                         .child(self.render_sftp_panel_element()),
                 );
+                panels_before_drawer += 1;
             }
             if show_forwards {
                 resizable_group = resizable_group.child(
@@ -185,10 +189,12 @@ impl AppShell {
                         .fixed()
                         .child(self.forward_view_element(cx)),
                 );
+                panels_before_drawer += 1;
             }
         }
         resizable_group =
             resizable_group.child(resizable_panel().child(self.render_main(window, cx, p)));
+        panels_before_drawer += 1;
         if !self.state.immersive && !side_left {
             if show_sftp {
                 resizable_group = resizable_group.child(
@@ -198,6 +204,7 @@ impl AppShell {
                         .fixed()
                         .child(self.render_sftp_panel_element()),
                 );
+                panels_before_drawer += 1;
             }
             if show_forwards {
                 resizable_group = resizable_group.child(
@@ -206,16 +213,22 @@ impl AppShell {
                         .fixed()
                         .child(self.forward_view_element(cx)),
                 );
+                panels_before_drawer += 1;
             }
         }
 
-        if let Some(monitor_width) = self.monitor_drawer_width(window, cx, panels_state) {
+        if let Some(monitor_width) =
+            self.monitor_drawer_width(window, cx, panels_state, panels_before_drawer)
+        {
             resizable_group = resizable_group.child(
                 resizable_panel()
                     .size(px(monitor_width))
                     .size_range(
                         px(360.0)..px((window.viewport_size().width.as_f32() * 0.75).max(520.0)),
                     )
+                    // 与侧栏、SFTP 一样属于用户定宽的固定面板：窗口缩放时由主面板
+                    // 吸收差额，抽屉宽度不被按比例重新分配。
+                    .fixed()
                     .child(self.state.monitor.clone()),
             );
         }
@@ -224,17 +237,31 @@ impl AppShell {
     }
 
     /// 监控抽屉宽度：同步实测宽度到状态与设置，返回到布局使用的宽度。
+    ///
+    /// `panels_before_drawer` 是本帧抽屉之前的面板数。尺寸表按面板索引记录宽度，
+    /// 抽屉关闭时它没有槽位，最后一项是 SFTP 或主面板；只有确认尺寸表已经包含
+    /// 抽屉槽位，最后一项才能当抽屉宽度回写。否则打开抽屉的第一帧会拿相邻面板
+    /// 的宽度当抽屉宽度，抽屉先按错误宽度出现一帧再跳回来。
     pub(super) fn monitor_drawer_width(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
         panels_state: &Entity<ResizableState>,
+        panels_before_drawer: usize,
     ) -> Option<f32> {
         if self.state.immersive || !self.state.monitor.read(cx).is_open() {
             return None;
         }
         let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(520.0);
-        if let Some(actual_w) = panels_state.read(cx).sizes().last().copied() {
+        // 只借用尺寸表取一次末项，避免为一次判断克隆整张表
+        let measured = {
+            let state = panels_state.read(cx);
+            let sizes = state.sizes();
+            drawer_slot_measured(sizes.len(), panels_before_drawer)
+                .then(|| sizes.last().copied())
+                .flatten()
+        };
+        if let Some(actual_w) = measured {
             let actual_f32 = actual_w.as_f32();
             if actual_f32 >= 360.0
                 && actual_f32 <= max_drawer_width
@@ -254,6 +281,15 @@ impl AppShell {
                 .clamp(360.0, max_drawer_width),
         )
     }
+}
+
+/// 尺寸表的最后一项是否就是抽屉槽位。
+///
+/// 设计原理（Why）：`ResizableState` 按面板索引记录尺寸，抽屉没打开时它没有
+/// 槽位，最后一项属于 SFTP 或主面板。只有长度正好是“抽屉之前的面板数 + 1”
+/// 时，最后一项才是抽屉自己的宽度；这同样是单帧跳动的根因，必须显式判断。
+fn drawer_slot_measured(sizes_len: usize, panels_before_drawer: usize) -> bool {
+    sizes_len == panels_before_drawer + 1
 }
 
 /// SFTP 列的表面可见性、本地单列与折叠宽度计划。
@@ -300,5 +336,28 @@ fn sftp_layout_plan(sftp_panel: Option<&SftpPanelState>, rem: Pixels) -> SftpLay
         show: sftp_panel.is_some_and(|panel| panel.open),
         width: sftp_width,
         min_width: sftp_min_width,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::drawer_slot_measured;
+
+    /// 尺寸表没补上抽屉槽位之前，末项属于别的面板，不能当抽屉宽度回写。
+    ///
+    /// 回归：抽屉打开的瞬间尺寸表仍是“侧栏 + 主面板 + SFTP”，末项是 SFTP 的
+    /// 实测宽度，曾被当成抽屉宽度写回状态与设置，抽屉因此先按错误宽度出现
+    /// 一帧再跳回来。
+    #[test]
+    fn drawer_width_is_not_taken_from_neighbour_panel() {
+        // 三个面板、抽屉刚打开：尺寸表还没有抽屉槽位
+        assert!(!drawer_slot_measured(3, 3));
+        // 下一帧布局补上抽屉槽位
+        assert!(drawer_slot_measured(4, 3));
+        // 没有 SFTP 时同理：侧栏 + 主面板
+        assert!(!drawer_slot_measured(2, 2));
+        assert!(drawer_slot_measured(3, 2));
+        // 抽屉关闭后尺寸表被截断，不能再回写
+        assert!(!drawer_slot_measured(3, 3));
     }
 }
