@@ -237,33 +237,7 @@ impl AppShell {
                             .child(rust_i18n::t!("backup.include_secrets").to_string()),
                     ),
             );
-        if prompt.encrypt {
-            content = content.child(crate::widgets::form_field(
-                rust_i18n::t!("backup.passphrase").to_string(),
-                prompt.passphrase.clone(),
-                p,
-            ));
-            if let Some(confirm) = &prompt.confirm {
-                content = content.child(crate::widgets::form_field(
-                    rust_i18n::t!("backup.confirm").to_string(),
-                    confirm.clone(),
-                    p,
-                ));
-            }
-            content = content.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("backup.passphrase_hint").to_string()),
-            );
-        } else {
-            content = content.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("backup.plain_hint").to_string()),
-            );
-        }
+        content = content.child(export_passphrase_fields(prompt, p));
         if prompt.include_secrets {
             content = content.child(
                 div()
@@ -367,4 +341,37 @@ impl AppShell {
             );
         footer.into_any_element()
     }
+}
+
+/// 导出加密区：口令与确认输入，或未加密提示。
+fn export_passphrase_fields(prompt: &crate::backup::BackupPromptState, p: &Palette) -> AnyElement {
+    let mut content = v_flex().gap_3();
+    if prompt.encrypt {
+        content = content.child(crate::widgets::form_field(
+            rust_i18n::t!("backup.passphrase").to_string(),
+            prompt.passphrase.clone(),
+            p,
+        ));
+        if let Some(confirm) = &prompt.confirm {
+            content = content.child(crate::widgets::form_field(
+                rust_i18n::t!("backup.confirm").to_string(),
+                confirm.clone(),
+                p,
+            ));
+        }
+        content = content.child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("backup.passphrase_hint").to_string()),
+        );
+    } else {
+        content = content.child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("backup.plain_hint").to_string()),
+        );
+    }
+    content.into_any_element()
 }
