@@ -205,40 +205,46 @@ impl AppShell {
                     )),
             );
         if self.state.sidebar.selection_mode {
-            let selected_count = self.state.sidebar.selected_sessions.len();
-            header = header.child(
-                h_flex()
-                    .w_full()
-                    .justify_between()
-                    .items_center()
-                    .child(div().text_xs().text_color(p.muted_foreground).child(
-                        rust_i18n::t!("batch.selected_count", count = selected_count).to_string(),
-                    ))
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .child(
-                                Button::new("batch-select-all")
-                                    .ghost()
-                                    .xsmall()
-                                    .label(rust_i18n::t!("batch.select_all").to_string())
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.select_all_sessions(cx);
-                                    })),
-                            )
-                            .child(
-                                Button::new("batch-open")
-                                    .primary()
-                                    .xsmall()
-                                    .label(rust_i18n::t!("batch.edit").to_string())
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.open_batch_edit(window, cx);
-                                    })),
-                            ),
-                    ),
-            );
+            header = header.child(self.render_batch_selection_bar(p, cx));
         }
         header.into_any_element()
+    }
+
+    /// 批量选择状态条：已选数量、全选与批量编辑入口。
+    fn render_batch_selection_bar(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let selected_count = self.state.sidebar.selected_sessions.len();
+        h_flex()
+            .w_full()
+            .justify_between()
+            .items_center()
+            .child(
+                div().text_xs().text_color(p.muted_foreground).child(
+                    rust_i18n::t!("batch.selected_count", count = selected_count).to_string(),
+                ),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new("batch-select-all")
+                            .ghost()
+                            .xsmall()
+                            .label(rust_i18n::t!("batch.select_all").to_string())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.select_all_sessions(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("batch-open")
+                            .primary()
+                            .xsmall()
+                            .label(rust_i18n::t!("batch.edit").to_string())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_batch_edit(window, cx);
+                            })),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn render_sidebar_empty(&self, query: &str, p: &Palette) -> AnyElement {
