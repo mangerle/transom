@@ -10,19 +10,21 @@ impl MonitorView {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let stats = self.stats().cloned();
+        // 只读借用：卡片渲染全部接收 &self，克隆整份统计会让每帧多一次
+        // 进程/端口/网络列表的深拷贝。
+        let stats = self.stats();
 
         let mut body = v_flex().gap_2p5().p_2p5();
 
         // 1. 异常前哨感知横幅（OOM 告警横幅）
-        if let Some(stats_ref) = &stats
+        if let Some(stats_ref) = stats
             && let Some(banner) = crate::monitor::components::oom_banner(stats_ref, p)
         {
             body = body.child(banner);
         }
 
         // 2. 各板块按需组装
-        if let Some(stats) = &stats {
+        if let Some(stats) = stats {
             body = body
                 .child(self.render_cpu_section_card(stats, cx, p))
                 .child(self.render_memory_section_card(stats, cx, p))
