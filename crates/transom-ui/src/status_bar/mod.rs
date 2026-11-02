@@ -55,7 +55,6 @@ impl AppShell {
     ) -> AnyElement {
         let connection_pill = self.render_connection_pill(p);
         let app = cx.entity().clone();
-        self.refresh_status_metrics(cx);
         let metrics = self.state.status_metrics.clone();
 
         // 三个会话作用域入口（快捷命令、广播、录制）只在存在终端标签时出现：

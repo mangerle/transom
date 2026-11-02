@@ -233,6 +233,7 @@ impl AppShell {
         self.refresh_sftp_mount_candidates(cx);
         self.refresh_forward_panel_data(cx);
         self.refresh_monitor_stats(cx);
+        self.refresh_status_metrics(cx);
         self.flush_window_requests(window, cx);
     }
 }
