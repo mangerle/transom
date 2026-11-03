@@ -658,6 +658,17 @@ impl DockerApi {
                 format!("/containers/{encoded}/unpause"),
                 "恢复容器",
             ),
+            ContainerLifecycleAction::Kill { signal } => {
+                let query = signal
+                    .as_deref()
+                    .map(|sig| format!("?signal={}", http::percent_encode(sig)))
+                    .unwrap_or_default();
+                (
+                    Method::POST,
+                    format!("/containers/{encoded}/kill{query}"),
+                    "强制终止容器",
+                )
+            }
             ContainerLifecycleAction::Remove { force } => (
                 Method::DELETE,
                 format!("/containers/{encoded}?v=1&force={}", u8::from(force)),

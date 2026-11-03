@@ -17,7 +17,7 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
     match command {
         C::Lifecycle {
             container, action, ..
-        } => Some(verb_object(lifecycle_verb_key(*action), container)),
+        } => Some(verb_object(lifecycle_verb_key(action), container)),
         C::PullImage { reference, .. } => Some(verb_object("container.pull", reference)),
         C::RemoveImage { image, .. } => Some(verb_object("common.delete", image)),
         C::CreateVolume { name, .. } => Some(verb_object("container.create", name)),
@@ -84,13 +84,14 @@ fn verb_object(verb_key: &str, object: &str) -> String {
     format!("{} {}", rust_i18n::t!(verb_key), object)
 }
 
-fn lifecycle_verb_key(action: ContainerLifecycleAction) -> &'static str {
+fn lifecycle_verb_key(action: &ContainerLifecycleAction) -> &'static str {
     match action {
         ContainerLifecycleAction::Start => "container.action.start",
         ContainerLifecycleAction::Stop => "container.action.stop",
         ContainerLifecycleAction::Restart => "container.action.restart",
         ContainerLifecycleAction::Pause => "container.action.pause",
         ContainerLifecycleAction::Unpause => "container.action.unpause",
+        ContainerLifecycleAction::Kill { .. } => "container.action.kill",
         ContainerLifecycleAction::Remove { .. } => "common.delete",
     }
 }

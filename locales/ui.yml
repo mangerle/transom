@@ -5206,6 +5206,9 @@ container:
     update:
       en: Update
       zh-CN: 更新配置
+    kill:
+      en: Force Kill
+      zh-CN: 强制终止
     start_all:
       en: Start all
       zh-CN: 全部启动

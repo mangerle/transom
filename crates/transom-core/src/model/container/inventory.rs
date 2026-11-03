@@ -556,7 +556,7 @@ pub struct ContainerFileEntry {
 }
 
 /// 容器生命周期动作。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum ContainerLifecycleAction {
     Start,
@@ -564,6 +564,10 @@ pub enum ContainerLifecycleAction {
     Restart,
     Pause,
     Unpause,
+    Kill {
+        #[serde(default)]
+        signal: Option<String>,
+    },
     Remove {
         #[serde(default)]
         force: bool,
@@ -572,13 +576,14 @@ pub enum ContainerLifecycleAction {
 
 impl ContainerLifecycleAction {
     /// 日志与 UI 使用的动作名。
-    pub fn label(self) -> &'static str {
+    pub fn label(&self) -> &'static str {
         match self {
             Self::Start => "启动",
             Self::Stop => "停止",
             Self::Restart => "重启",
             Self::Pause => "暂停",
             Self::Unpause => "恢复",
+            Self::Kill { .. } => "强制终止",
             Self::Remove { .. } => "删除",
         }
     }

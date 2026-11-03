@@ -172,6 +172,24 @@ impl AppShell {
                                             );
                                         }
                                     })),
+                            )
+                            .child(
+                                Button::new("container-kill")
+                                    .xsmall()
+                                    .danger()
+                                    .icon(IconName::CircleAlert)
+                                    .label(rust_i18n::t!("container.action.kill").to_string())
+                                    .on_click(cx.listener({
+                                        let name = name.clone();
+                                        move |this, _, _, cx| {
+                                            this.container_lifecycle(
+                                                tab_id,
+                                                name.clone(),
+                                                transom_core::ContainerLifecycleAction::Kill { signal: None },
+                                                cx,
+                                            );
+                                        }
+                                    })),
                             );
                     } else {
                         actions = actions.child(

@@ -25,6 +25,7 @@ pub(crate) enum RowAction {
     Restart,
     Pause,
     Unpause,
+    Kill,
     Run,
     Rename,
     EditComposeYaml,
@@ -46,6 +47,7 @@ impl RowAction {
             Self::Restart => "container.action.restart",
             Self::Pause => "container.action.pause",
             Self::Unpause => "container.action.unpause",
+            Self::Kill => "container.action.kill",
             Self::Run => "container.run.title",
             Self::Rename => "container.action.rename",
             Self::EditComposeYaml => "container.compose.edit_yaml",
@@ -68,6 +70,7 @@ impl RowAction {
             Self::Restart => IconName::RotateCw,
             Self::Pause => IconName::Pause,
             Self::Unpause => IconName::Play,
+            Self::Kill => IconName::CircleAlert,
             Self::Run => IconName::Play,
             Self::Rename => IconName::Pen,
             Self::EditComposeYaml => IconName::FilePen,
@@ -79,7 +82,7 @@ impl RowAction {
 
     /// 破坏性动作在菜单里要用危险色，与确认条保持一致。
     pub(crate) fn is_danger(self) -> bool {
-        matches!(self, Self::Remove)
+        matches!(self, Self::Remove | Self::Kill)
     }
 
     /// 该动作适用于哪类条目：右键菜单按目标类型生成，避免出现无意义项。
@@ -88,7 +91,7 @@ impl RowAction {
             Self::Logs | Self::Terminal | Self::Stats | Self::Files | Self::Restart => {
                 matches!(target, RowTarget::Container { .. })
             }
-            Self::Start | Self::Stop | Self::Pause | Self::Unpause | Self::Rename => {
+            Self::Start | Self::Stop | Self::Pause | Self::Unpause | Self::Kill | Self::Rename => {
                 matches!(target, RowTarget::Container { .. })
             }
             Self::EditComposeYaml => matches!(target, RowTarget::Compose(_)),

@@ -232,6 +232,9 @@ pub(crate) fn row_actions(row: &ListRow) -> Vec<RowAction> {
             RowAction::Start
         });
         actions.push(RowAction::Restart);
+        if row.running == Some(true) {
+            actions.push(RowAction::Kill);
+        }
         actions.push(RowAction::Rename);
     }
     if matches!(row.target, RowTarget::Image(_)) {

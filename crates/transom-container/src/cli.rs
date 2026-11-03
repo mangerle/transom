@@ -169,22 +169,28 @@ impl CliBackend {
         container: &str,
         action: transom_core::ContainerLifecycleAction,
     ) -> Result<(), ContainerError> {
-        let mut args = Vec::with_capacity(3);
+        let mut args: Vec<String> = Vec::with_capacity(4);
         match action {
-            transom_core::ContainerLifecycleAction::Start => args.push("start"),
-            transom_core::ContainerLifecycleAction::Stop => args.push("stop"),
-            transom_core::ContainerLifecycleAction::Restart => args.push("restart"),
-            transom_core::ContainerLifecycleAction::Pause => args.push("pause"),
-            transom_core::ContainerLifecycleAction::Unpause => args.push("unpause"),
+            transom_core::ContainerLifecycleAction::Start => args.push("start".to_string()),
+            transom_core::ContainerLifecycleAction::Stop => args.push("stop".to_string()),
+            transom_core::ContainerLifecycleAction::Restart => args.push("restart".to_string()),
+            transom_core::ContainerLifecycleAction::Pause => args.push("pause".to_string()),
+            transom_core::ContainerLifecycleAction::Unpause => args.push("unpause".to_string()),
+            transom_core::ContainerLifecycleAction::Kill { signal } => {
+                args.push("kill".to_string());
+                if let Some(sig) = signal {
+                    args.push("-s".to_string());
+                    args.push(sig);
+                }
+            }
             transom_core::ContainerLifecycleAction::Remove { force } => {
-                args.push("rm");
+                args.push("rm".to_string());
                 if force {
-                    args.push("-f");
+                    args.push("-f".to_string());
                 }
             }
         }
-        args.push(container);
-        let args = args.into_iter().map(str::to_string).collect::<Vec<_>>();
+        args.push(container.to_string());
         self.run_checked(&args).await.map(|_| ())
     }
 
