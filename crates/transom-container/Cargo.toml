@@ -32,6 +32,10 @@ http-body-util = "0.1"
 tar = "0.4"
 # inspect 返回的时间是 RFC3339 字符串，需要解析成 Unix 秒供界面排序/展示。
 chrono.workspace = true
+# TCP TLS 通信支持（连接启用 mTLS 鉴权的远端 Docker 引擎）。
+tokio-rustls = "0.26"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-pki-types = "1"
 
 [dev-dependencies]
 tempfile.workspace = true

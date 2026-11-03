@@ -86,9 +86,13 @@ fn explicit_candidate(
             Some(EngineTransport::NamedPipe { path: path.clone() }),
             None,
         ),
-        ContainerEndpoint::Tcp { url, .. } => {
-            (Some(EngineTransport::Tcp { url: url.clone() }), None)
-        }
+        ContainerEndpoint::Tcp { url, tls } => (
+            Some(EngineTransport::Tcp {
+                url: url.clone(),
+                tls: tls.clone(),
+            }),
+            None,
+        ),
         ContainerEndpoint::Ssh {
             host,
             port,

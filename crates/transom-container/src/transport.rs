@@ -28,8 +28,11 @@ pub enum EngineTransport {
     Unix { path: PathBuf },
     /// Windows 命名管道。
     NamedPipe { path: String },
-    /// TCP 端点（`tcp://host:port`）。
-    Tcp { url: String },
+    /// TCP 端点（`tcp://host:port`），支持可选 TLS。
+    Tcp {
+        url: String,
+        tls: Option<transom_core::TlsConfig>,
+    },
     /// 子进程 stdio：WSL 的 `docker system dial-stdio` 等场景复用同一条
     /// HTTP 客户端，不为此再写一套 CLI 解析。
     Stdio { program: String, args: Vec<String> },
@@ -41,7 +44,13 @@ impl EngineTransport {
         match self {
             Self::Unix { path } => format!("unix://{}", path.display()),
             Self::NamedPipe { path } => format!("npipe:{path}"),
-            Self::Tcp { url } => url.clone(),
+            Self::Tcp { url, tls } => {
+                if tls.as_ref().is_some_and(|c| !c.is_empty()) {
+                    format!("{url} (TLS)")
+                } else {
+                    url.clone()
+                }
+            }
             Self::Stdio { program, args } => {
                 if args.is_empty() {
                     format!("stdio://{program}")
@@ -111,14 +120,8 @@ impl EngineTransport {
                     })
                 }
             }
-            Self::Tcp { url } => {
+            Self::Tcp { url, tls } => {
                 let address = strip_tcp_scheme(url);
-                if address.starts_with("https://") || address.starts_with("tls://") {
-                    return Err(ContainerError::Unsupported {
-                        operation: "TLS 端点尚未支持，请改用本机 socket 或后续版本的证书配置"
-                            .to_string(),
-                    });
-                }
                 let socket =
                     tokio::time::timeout(CONNECT_TIMEOUT, tokio::net::TcpStream::connect(&address))
                         .await
@@ -131,7 +134,14 @@ impl EngineTransport {
                             source,
                         })?;
                 socket.set_nodelay(true).ok();
-                Ok(Box::new(socket))
+
+                if let Some(tls_cfg) = tls.as_ref().filter(|c| !c.is_empty()) {
+                    let host = extract_host(&address);
+                    let tls_stream = crate::tls::connect_tls(socket, &host, tls_cfg).await?;
+                    Ok(Box::new(tls_stream))
+                } else {
+                    Ok(Box::new(socket))
+                }
             }
             Self::Stdio { program, args } => {
                 let mut command = tokio::process::Command::new(program);
@@ -182,9 +192,23 @@ impl fmt::Display for EngineTransport {
     }
 }
 
-/// 去掉 `tcp://` 前缀，保留 `host:port`。
+/// 去掉 `tcp://`、`tls://` 等前缀，保留 `host:port`。
 fn strip_tcp_scheme(url: &str) -> String {
-    url.strip_prefix("tcp://").unwrap_or(url).to_string()
+    url.strip_prefix("tcp://")
+        .or_else(|| url.strip_prefix("tls://"))
+        .or_else(|| url.strip_prefix("https://"))
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url)
+        .to_string()
+}
+
+/// 从 `host:port` 或 IPv6 中提取纯主机名或 IP。
+fn extract_host(address: &str) -> String {
+    if let Some((host, _)) = address.rsplit_once(':') {
+        host.trim_start_matches('[').trim_end_matches(']').to_string()
+    } else {
+        address.to_string()
+    }
 }
 
 /// 子进程 stdio 的双向流。
@@ -237,11 +261,21 @@ impl AsyncWrite for ChildStream {
 
 #[cfg(test)]
 mod tests {
-    use super::strip_tcp_scheme;
+    use super::{extract_host, strip_tcp_scheme};
 
     #[test]
     fn tcp_scheme_is_stripped_for_tokio_connect() {
         assert_eq!(strip_tcp_scheme("tcp://127.0.0.1:2375"), "127.0.0.1:2375");
+        assert_eq!(strip_tcp_scheme("tls://127.0.0.1:2376"), "127.0.0.1:2376");
+        assert_eq!(strip_tcp_scheme("https://my-docker.local:2376"), "my-docker.local:2376");
         assert_eq!(strip_tcp_scheme("127.0.0.1:2375"), "127.0.0.1:2375");
+    }
+
+    #[test]
+    fn host_is_extracted_from_address() {
+        assert_eq!(extract_host("127.0.0.1:2376"), "127.0.0.1");
+        assert_eq!(extract_host("docker.lan:2376"), "docker.lan");
+        assert_eq!(extract_host("[::1]:2376"), "::1");
+        assert_eq!(extract_host("docker.lan"), "docker.lan");
     }
 }

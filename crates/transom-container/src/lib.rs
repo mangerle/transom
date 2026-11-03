@@ -18,6 +18,7 @@ mod logs;
 mod models;
 mod service;
 mod stats;
+mod tls;
 mod transport;
 
 pub use discovery::{find_in_path, parse_endpoint, validate_endpoint};

@@ -405,12 +405,15 @@ pub async fn probe_explicit(
     endpoint: &ContainerEndpoint,
 ) -> Result<Engine, ContainerError> {
     discovery::validate_endpoint(endpoint)?;
-    let candidate = EngineCandidate {
-        kind,
-        endpoint: endpoint.clone(),
-        transport: transport_for(endpoint),
-        cli: cli_for(kind, endpoint),
-    };
+    let candidate = discovery::candidates(kind, endpoint)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| EngineCandidate {
+            kind,
+            endpoint: endpoint.clone(),
+            transport: transport_for(endpoint),
+            cli: cli_for(kind, endpoint),
+        });
     tokio::time::timeout(PROBE_TIMEOUT, Engine::probe(candidate))
         .await
         .map_err(|_| ContainerError::Http {
@@ -425,7 +428,10 @@ fn transport_for(endpoint: &ContainerEndpoint) -> Option<EngineTransport> {
         ContainerEndpoint::NamedPipe { path } => {
             Some(EngineTransport::NamedPipe { path: path.clone() })
         }
-        ContainerEndpoint::Tcp { url, .. } => Some(EngineTransport::Tcp { url: url.clone() }),
+        ContainerEndpoint::Tcp { url, tls } => Some(EngineTransport::Tcp {
+            url: url.clone(),
+            tls: tls.clone(),
+        }),
         _ => None,
     }
 }
