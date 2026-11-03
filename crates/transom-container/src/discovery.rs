@@ -89,7 +89,21 @@ fn explicit_candidate(
         ContainerEndpoint::Tcp { url, .. } => {
             (Some(EngineTransport::Tcp { url: url.clone() }), None)
         }
-        ContainerEndpoint::Ssh { .. } => (None, None),
+        ContainerEndpoint::Ssh {
+            host,
+            port,
+            user,
+            identity_file,
+        } => {
+            let args = build_ssh_dial_stdio_args(kind, host, *port, user.as_deref(), identity_file.as_deref());
+            (
+                Some(EngineTransport::Stdio {
+                    program: "ssh".to_string(),
+                    args,
+                }),
+                None,
+            )
+        }
         ContainerEndpoint::Wsl { distro } => (
             None,
             Some(CliSpec {
@@ -228,6 +242,41 @@ fn parse_ssh_endpoint(s: &str) -> ContainerEndpoint {
         user,
         identity_file: None,
     }
+}
+
+/// 构造通过 SSH 远程执行 `docker system dial-stdio` 的子进程参数。
+fn build_ssh_dial_stdio_args(
+    kind: ContainerEngineKind,
+    host: &str,
+    port: Option<u16>,
+    user: Option<&str>,
+    identity_file: Option<&str>,
+) -> Vec<String> {
+    let mut args = vec![
+        "-T".to_string(),
+        "-o".to_string(),
+        "BatchMode=yes".to_string(),
+        "-o".to_string(),
+        "ConnectTimeout=10".to_string(),
+    ];
+    if let Some(port) = port {
+        args.push("-p".to_string());
+        args.push(port.to_string());
+    }
+    if let Some(identity) = identity_file {
+        args.push("-i".to_string());
+        args.push(identity.to_string());
+    }
+    let target = if let Some(user) = user {
+        format!("{user}@{host}")
+    } else {
+        host.to_string()
+    };
+    args.push(target);
+    args.push(kind.cli_program().to_string());
+    args.push("system".to_string());
+    args.push("dial-stdio".to_string());
+    args
 }
 
 /// CLI 兜底候选：只有可执行文件存在时才加入，避免无意义的探测。
@@ -457,5 +506,32 @@ mod tests {
             }),
             format!("unix://{}", missing.display())
         );
+    }
+
+    #[test]
+    fn ssh_endpoint_constructs_stdio_transport() {
+        use crate::transport::EngineTransport;
+        use transom_core::ContainerEngineKind;
+
+        let ep = ContainerEndpoint::Ssh {
+            host: "example.com".to_string(),
+            port: Some(2222),
+            user: Some("ubuntu".to_string()),
+            identity_file: Some("/home/ubuntu/.ssh/id_ed25519".to_string()),
+        };
+        let cands = super::candidates(ContainerEngineKind::Docker, &ep);
+        assert_eq!(cands.len(), 1);
+        let cand = &cands[0];
+        assert_eq!(cand.kind, ContainerEngineKind::Docker);
+        let Some(EngineTransport::Stdio { program, args }) = &cand.transport else {
+            panic!("必须构造出 Stdio 通道");
+        };
+        assert_eq!(program, "ssh");
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"2222".to_string()));
+        assert!(args.contains(&"-i".to_string()));
+        assert!(args.contains(&"/home/ubuntu/.ssh/id_ed25519".to_string()));
+        assert!(args.contains(&"ubuntu@example.com".to_string()));
+        assert!(args.contains(&"dial-stdio".to_string()));
     }
 }
