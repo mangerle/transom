@@ -108,18 +108,32 @@ fn explicit_candidate(
                 None,
             )
         }
-        ContainerEndpoint::Wsl { distro } => (
-            None,
-            Some(CliSpec {
-                program: "wsl.exe".to_string(),
-                prefix: vec![
-                    "-d".to_string(),
-                    distro.clone(),
-                    "-e".to_string(),
-                    kind.cli_program().to_string(),
-                ],
-            }),
-        ),
+        ContainerEndpoint::Wsl { distro } => {
+            let transport_args = vec![
+                "-d".to_string(),
+                distro.clone(),
+                "-e".to_string(),
+                kind.cli_program().to_string(),
+                "system".to_string(),
+                "dial-stdio".to_string(),
+            ];
+            let cli_prefix = vec![
+                "-d".to_string(),
+                distro.clone(),
+                "-e".to_string(),
+                kind.cli_program().to_string(),
+            ];
+            (
+                Some(EngineTransport::Stdio {
+                    program: "wsl.exe".to_string(),
+                    args: transport_args,
+                }),
+                Some(CliSpec {
+                    program: "wsl.exe".to_string(),
+                    prefix: cli_prefix,
+                }),
+            )
+        }
         ContainerEndpoint::Wslc => (None, Some(wslc_spec())),
         ContainerEndpoint::Cli { program, args } => (
             None,
@@ -537,5 +551,28 @@ mod tests {
         assert!(args.contains(&"/home/ubuntu/.ssh/id_ed25519".to_string()));
         assert!(args.contains(&"ubuntu@example.com".to_string()));
         assert!(args.contains(&"dial-stdio".to_string()));
+    }
+
+    #[test]
+    fn wsl_endpoint_constructs_stdio_transport_and_cli() {
+        use crate::transport::EngineTransport;
+        use transom_core::ContainerEngineKind;
+
+        let ep = ContainerEndpoint::Wsl {
+            distro: "Ubuntu-24.04".to_string(),
+        };
+        let cands = super::candidates(ContainerEngineKind::Docker, &ep);
+        assert_eq!(cands.len(), 1);
+        let cand = &cands[0];
+        let Some(EngineTransport::Stdio { program, args }) = &cand.transport else {
+            panic!("WSL 必须包含 Stdio 通道");
+        };
+        assert_eq!(program, "wsl.exe");
+        assert_eq!(args, &["-d", "Ubuntu-24.04", "-e", "docker", "system", "dial-stdio"]);
+        let Some(cli) = &cand.cli else {
+            panic!("WSL 必须保留 CLI 兜底配置");
+        };
+        assert_eq!(cli.program, "wsl.exe");
+        assert_eq!(cli.prefix, &["-d", "Ubuntu-24.04", "-e", "docker"]);
     }
 }

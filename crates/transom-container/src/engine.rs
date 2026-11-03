@@ -40,23 +40,35 @@ impl Engine {
     pub async fn probe(candidate: EngineCandidate) -> Result<Self, ContainerError> {
         if let Some(transport) = candidate.transport.clone() {
             let api = DockerApi::new(transport, None);
-            let probed = api.probe(candidate.kind).await?;
-            let api = api.with_api_version(&probed.api_version);
-            let info = ContainerEngineInfo {
-                engine: ContainerEngineRef::explicit(candidate.kind, candidate.endpoint),
-                version: if probed.version.is_empty() {
-                    "未知版本".to_string()
-                } else {
-                    probed.version
-                },
-                api_version: probed.api_version,
-                platform: probed.platform,
-                cli_backend: false,
-            };
-            return Ok(Self {
-                info,
-                backend: EngineBackend::Http(api),
-            });
+            match api.probe(candidate.kind).await {
+                Ok(probed) => {
+                    let api = api.with_api_version(&probed.api_version);
+                    let info = ContainerEngineInfo {
+                        engine: ContainerEngineRef::explicit(candidate.kind, candidate.endpoint),
+                        version: if probed.version.is_empty() {
+                            "未知版本".to_string()
+                        } else {
+                            probed.version
+                        },
+                        api_version: probed.api_version,
+                        platform: probed.platform,
+                        cli_backend: false,
+                    };
+                    return Ok(Self {
+                        info,
+                        backend: EngineBackend::Http(api),
+                    });
+                }
+                Err(error) => {
+                    if candidate.cli.is_none() {
+                        return Err(error);
+                    }
+                    log::warn!(
+                        "传输通道探测失败，降级到 CLI 兜底，端点: {}，原因: {error}",
+                        candidate.endpoint.describe()
+                    );
+                }
+            }
         }
         if let Some(spec) = candidate.cli {
             let cli = CliBackend::new(candidate.kind, spec);
