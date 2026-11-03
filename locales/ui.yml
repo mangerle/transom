@@ -5310,6 +5310,9 @@ container:
       en: 'Remove %{path}?'
       zh-CN: 确认删除 %{path}？
   compose:
+    logs:
+      en: Project logs
+      zh-CN: 查看联合日志
     new_yaml:
       en: New YAML
       zh-CN: 新建 YAML

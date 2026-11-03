@@ -10,27 +10,54 @@ impl AppShell {
         if workspace.logs_request.is_some() {
             return;
         }
-        let Some(container) = workspace.selected_container_name() else {
-            return;
-        };
         let follow = workspace.logs_follow;
         let tail = workspace.logs_tail;
         let timestamps = workspace.logs_timestamps;
         workspace.logs.clear();
         let request_id = ContainerRequestId::new();
         workspace.logs_request = Some(request_id);
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::Logs {
+
+        if workspace.section == ContainerSection::Compose {
+            let Some(project) = workspace.selected_compose() else {
+                return;
+            };
+            let project_name = project.name.clone();
+            let member_containers: Vec<String> = workspace
+                .containers
+                .iter()
+                .filter(|c| c.compose_project.as_deref() == Some(&project_name))
+                .map(|c| c.name.clone())
+                .collect();
+            self.send_tracked(
                 tab_id,
                 request_id,
-                container,
-                tail,
-                follow,
-                timestamps,
-            },
-        );
+                ContainerCommand::ProjectLogs {
+                    tab_id,
+                    request_id,
+                    project: project_name,
+                    containers: member_containers,
+                    tail,
+                    follow,
+                    timestamps,
+                },
+            );
+        } else {
+            let Some(container) = workspace.selected_container_name() else {
+                return;
+            };
+            self.send_tracked(
+                tab_id,
+                request_id,
+                ContainerCommand::Logs {
+                    tab_id,
+                    request_id,
+                    container,
+                    tail,
+                    follow,
+                    timestamps,
+                },
+            );
+        }
     }
 
     /// 重开日志流：跟随、尾部行数与时间戳都要改才能生效，先取消旧流再拉新流。

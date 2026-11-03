@@ -222,7 +222,7 @@ impl AppShell {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
                 render_container_overview(details.as_ref(), overview_raw, p)
             }
-            (ContainerSection::Containers, ContainerDetailTab::Logs) => render_logs(
+            (ContainerSection::Containers | ContainerSection::Compose, ContainerDetailTab::Logs) => render_logs(
                 ContainerLogsView {
                     tab_id,
                     logs: &logs,

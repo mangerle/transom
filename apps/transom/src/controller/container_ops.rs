@@ -130,6 +130,7 @@ pub(super) fn handle_container_command(
         ContainerCommand::Cancel { .. }
         | ContainerCommand::ExecTerminal { .. }
         | ContainerCommand::Logs { .. }
+        | ContainerCommand::ProjectLogs { .. }
         | ContainerCommand::Stats { .. }
         | ContainerCommand::ListProcesses { .. } => streams::handle(state, ctx, command),
         ContainerCommand::ListDir { .. }

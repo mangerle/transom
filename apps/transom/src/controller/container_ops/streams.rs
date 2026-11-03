@@ -71,6 +71,42 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 },
             );
         }
+        ContainerCommand::ProjectLogs {
+            tab_id,
+            request_id,
+            project: _,
+            containers,
+            tail,
+            follow,
+            timestamps,
+        } => {
+            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                return;
+            };
+            let event_tx = ctx.event_tx.clone();
+            spawn_long(
+                state,
+                ctx,
+                tab_id,
+                request_id,
+                Arc::clone(&cancel),
+                async move {
+                    let mut sink = |bytes: Vec<u8>| {
+                        let _ = event_tx
+                            .try_send(ContainerAppEvent::LogsChunk { request_id, bytes }.into());
+                    };
+                    let result = transom_container::stream_project_logs(
+                        &engine, containers, tail, follow, timestamps, &cancel, &mut sink,
+                    )
+                    .await;
+                    match result {
+                        Ok(()) | Err(transom_container::ContainerError::Cancelled) => {}
+                        Err(error) => send_failed(&event_tx, request_id, error).await,
+                    }
+                    send_event(&event_tx, ContainerAppEvent::LogsClosed { request_id }).await;
+                },
+            );
+        }
         ContainerCommand::Stats {
             tab_id,
             request_id,

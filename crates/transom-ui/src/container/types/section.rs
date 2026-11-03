@@ -50,7 +50,7 @@ impl ContainerSection {
                 ContainerDetailTab::Stats,
                 ContainerDetailTab::Files,
             ],
-            Self::Compose => &[ContainerDetailTab::Overview],
+            Self::Compose => &[ContainerDetailTab::Overview, ContainerDetailTab::Logs],
             Self::Images => &[ContainerDetailTab::Overview],
             Self::Volumes => &[ContainerDetailTab::Overview, ContainerDetailTab::Files],
             Self::Networks => &[ContainerDetailTab::Overview],

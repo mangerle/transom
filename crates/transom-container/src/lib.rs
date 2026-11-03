@@ -32,6 +32,6 @@ pub use files::{
     create_dir, download, list_dir, read_file, remove as remove_path, rename as rename_path,
     upload, validate_container_path,
 };
-pub use logs::{LogSink, stream_logs};
+pub use logs::{LogSink, stream_logs, stream_project_logs};
 pub use service::ContainerService;
 pub use volume_files::{download_volume_file, list_volume_dir, read_volume_file};

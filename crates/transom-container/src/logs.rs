@@ -95,6 +95,108 @@ pub async fn stream_logs(
     Ok(())
 }
 
+/// 针对单条流为每行开头注入服务/容器前缀。
+#[derive(Debug)]
+pub struct LinePrefixer {
+    prefix: Vec<u8>,
+    at_line_start: bool,
+}
+
+impl LinePrefixer {
+    /// 构造带容器/服务名前缀的行格式化器。
+    pub fn new(name: &str) -> Self {
+        Self {
+            prefix: format!("[{name}] ").into_bytes(),
+            at_line_start: true,
+        }
+    }
+
+    /// 处理输入的原始字节块，返回每行注入前缀后的字节块。
+    pub fn process(&mut self, input: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(input.len() + 64);
+        for &byte in input {
+            if self.at_line_start {
+                out.extend_from_slice(&self.prefix);
+                self.at_line_start = false;
+            }
+            out.push(byte);
+            if byte == b'\n' {
+                self.at_line_start = true;
+            }
+        }
+        out
+    }
+}
+
+/// 聚合拉取多个容器的联合日志；多路流合并推送到单一输出端，每行带容器名前缀。
+///
+/// # Errors
+/// 引擎错误或协议异常时返回 [`ContainerError`]。
+pub async fn stream_project_logs(
+    engine: &Engine,
+    containers: Vec<String>,
+    tail: usize,
+    follow: bool,
+    timestamps: bool,
+    cancel: &Arc<AtomicBool>,
+    sink: &mut LogSink<'_>,
+) -> Result<(), ContainerError> {
+    if containers.is_empty() {
+        return Ok(());
+    }
+
+    let (tx, rx) = flume::bounded::<Vec<u8>>(64);
+    let mut handles = Vec::with_capacity(containers.len());
+
+    for name in containers {
+        let engine = engine.clone();
+        let cancel = Arc::clone(cancel);
+        let tx = tx.clone();
+        let handle = tokio::spawn(async move {
+            let mut prefixer = LinePrefixer::new(&name);
+            let mut sub_sink = |chunk: Vec<u8>| {
+                let formatted = prefixer.process(&chunk);
+                let _ = tx.send(formatted);
+            };
+            let _ = stream_logs(
+                &engine,
+                &name,
+                tail,
+                follow,
+                timestamps,
+                &cancel,
+                &mut sub_sink,
+            )
+            .await;
+        });
+        handles.push(handle);
+    }
+    drop(tx);
+
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        let item = tokio::select! {
+            recv = rx.recv_async() => recv,
+            _ = tokio::time::sleep(CANCEL_TICK) => continue,
+        };
+        match item {
+            Ok(chunk) => {
+                if !chunk.is_empty() {
+                    sink(chunk);
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    for handle in handles {
+        handle.abort();
+    }
+    Ok(())
+}
+
 /// 多路复用解帧器。
 struct Demux {
     raw: bool,
@@ -312,5 +414,18 @@ mod tests {
     fn zero_tail_means_all_lines() {
         assert_eq!(tail_token(0), "all");
         assert_eq!(tail_token(200), "200");
+    }
+
+    #[test]
+    fn line_prefixer_injects_tag() {
+        let mut prefixer = super::LinePrefixer::new("web-1");
+        let result = prefixer.process(b"line 1\nline 2\n");
+        assert_eq!(result, b"[web-1] line 1\n[web-1] line 2\n");
+
+        let mut split_prefixer = super::LinePrefixer::new("db");
+        let part1 = split_prefixer.process(b"hello ");
+        let part2 = split_prefixer.process(b"world\nnext\n");
+        assert_eq!(part1, b"[db] hello ");
+        assert_eq!(part2, b"world\n[db] next\n");
     }
 }

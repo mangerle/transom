@@ -293,6 +293,16 @@ pub enum ContainerCommand {
         /// 是否让引擎附带服务端时间戳（`tail=0` 表示全量）。
         timestamps: bool,
     },
+    /// 读取编排项目多容器联合日志。
+    ProjectLogs {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        project: String,
+        containers: Vec<String>,
+        tail: usize,
+        follow: bool,
+        timestamps: bool,
+    },
     /// 开启/关闭统计轮询；同一容器重复开启会替换旧订阅。
     Stats {
         tab_id: TabId,

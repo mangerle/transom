@@ -19,8 +19,23 @@ pub(crate) fn render_compose_detail(
         .iter()
         .filter(|item| item.compose_project.as_deref() == Some(project.name.as_str()))
         .collect();
+    let log_bar = h_flex().pb_1().child(
+        Button::new("compose-project-logs")
+            .primary()
+            .small()
+            .icon(IconName::FileText)
+            .label(rust_i18n::t!("container.compose.logs").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(w) = this.state.container_workspace_mut(tab_id) {
+                    w.detail_tab = ContainerDetailTab::Logs;
+                }
+                this.ensure_container_logs(tab_id);
+                cx.notify();
+            })),
+    );
     let mut rows = v_flex().gap_1p5();
     rows = rows
+        .child(log_bar)
         .child(kv(
             p,
             rust_i18n::t!("container.field.state"),
