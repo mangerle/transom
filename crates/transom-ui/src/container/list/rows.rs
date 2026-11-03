@@ -239,6 +239,7 @@ pub(crate) fn row_actions(row: &ListRow) -> Vec<RowAction> {
     }
     if matches!(row.target, RowTarget::Image(_)) {
         actions.push(RowAction::Run);
+        actions.push(RowAction::Tag);
     }
     if matches!(row.target, RowTarget::Compose(_)) {
         actions.push(RowAction::EditComposeYaml);

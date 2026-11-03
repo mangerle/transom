@@ -20,6 +20,13 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         } => Some(verb_object(lifecycle_verb_key(action), container)),
         C::PullImage { reference, .. } => Some(verb_object("container.pull", reference)),
         C::RemoveImage { image, .. } => Some(verb_object("common.delete", image)),
+        C::TagImage { image, repo, tag, .. } => {
+            let target = match tag {
+                Some(t) if !t.is_empty() => format!("{repo}:{t}"),
+                _ => repo.clone(),
+            };
+            Some(verb_object("container.action.tag", &format!("{image} -> {target}")))
+        }
         C::CreateVolume { name, .. } => Some(verb_object("container.create", name)),
         C::CreateNetwork { spec, .. } => Some(verb_object("container.create", &spec.name)),
         C::RemoveVolume { name, .. } | C::RemoveNetwork { network: name, .. } => {

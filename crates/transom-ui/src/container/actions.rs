@@ -280,6 +280,12 @@ impl AppShell {
                 };
                 self.open_container_rename(tab_id, id, name, window, cx);
             }
+            RowAction::Tag => {
+                let RowTarget::Image(id) = target else {
+                    return;
+                };
+                self.open_image_tag(tab_id, id, window, cx);
+            }
             RowAction::EditComposeYaml => {
                 let RowTarget::Compose(name) = target else {
                     return;

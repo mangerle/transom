@@ -65,7 +65,82 @@ pub(crate) fn render_image_detail(
                 crate::format::format_size(details.virtual_size),
             ));
         }
-        if !details.layer_digests.is_empty() {
+        if !details.history.is_empty() {
+            let mut history_box = v_flex().gap_1p5().child(
+                div().text_xs().text_color(p.muted_foreground).child(
+                    rust_i18n::t!(
+                        "container.detail.history_list",
+                        count = details.history.len()
+                    )
+                    .to_string(),
+                ),
+            );
+            for (index, item) in details.history.iter().enumerate() {
+                let size_str = if item.size == 0 {
+                    "0 B".to_string()
+                } else {
+                    crate::format::format_size(item.size)
+                };
+                let cmd = if item.created_by.is_empty() {
+                    item.comment.clone()
+                } else {
+                    item.created_by.clone()
+                };
+                let cmd_display = cmd.trim().strip_prefix("/bin/sh -c #(nop) ").unwrap_or(cmd.trim()).to_string();
+                let tags_str = if !item.tags.is_empty() {
+                    format!(" [{}]", item.tags.join(", "))
+                } else {
+                    String::new()
+                };
+                history_box = history_box.child(
+                    v_flex()
+                        .gap_0p5()
+                        .p_1p5()
+                        .rounded_md()
+                        .bg(p.muted)
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .w(px(24.0))
+                                        .flex_none()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(format!("#{}", index + 1)),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if item.size > 0 { p.primary } else { p.muted_foreground })
+                                        .child(size_str),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(format_unix(item.created)),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(tags_str),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(p.mono_font_family.clone())
+                                .text_color(p.foreground)
+                                .child(cmd_display),
+                        ),
+                );
+            }
+            rows = rows.child(history_box);
+        } else if !details.layer_digests.is_empty() {
             let mut layers = v_flex().gap_1().child(
                 div().text_xs().text_color(p.muted_foreground).child(
                     rust_i18n::t!(

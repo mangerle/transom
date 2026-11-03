@@ -323,12 +323,26 @@ impl AppShell {
             }
             ContainerSection::Images => {
                 if let Some(image) = image {
-                    actions = actions.child(delete_button(
-                        "image-delete",
-                        cx,
-                        tab_id,
-                        ContainerConfirm::Image(image.id.clone()),
-                    ));
+                    let image_id = image.id.clone();
+                    actions = actions
+                        .child(
+                            Button::new("image-tag")
+                                .xsmall()
+                                .icon(IconName::TagPlus)
+                                .label(rust_i18n::t!("container.action.tag").to_string())
+                                .on_click(cx.listener({
+                                    let image_id = image_id.clone();
+                                    move |this, _, window, cx| {
+                                        this.open_image_tag(tab_id, image_id.clone(), window, cx);
+                                    }
+                                })),
+                        )
+                        .child(delete_button(
+                            "image-delete",
+                            cx,
+                            tab_id,
+                            ContainerConfirm::Image(image.id.clone()),
+                        ));
                 }
             }
             ContainerSection::Volumes => {

@@ -113,6 +113,7 @@ pub(super) fn handle_container_command(
         | ContainerCommand::Lifecycle { .. }
         | ContainerCommand::PullImage { .. }
         | ContainerCommand::RemoveImage { .. }
+        | ContainerCommand::TagImage { .. }
         | ContainerCommand::CreateVolume { .. }
         | ContainerCommand::RemoveVolume { .. }
         | ContainerCommand::CreateNetwork { .. }

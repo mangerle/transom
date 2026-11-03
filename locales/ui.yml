@@ -4796,6 +4796,9 @@ container:
     layer_list:
       en: 'Image layers (%{count})'
       zh-CN: '镜像层（%{count} 层）'
+    history_list:
+      en: 'Build history (%{count} layers)'
+      zh-CN: '构建历史层（共 %{count} 层）'
     logs:
       en: Logs
       zh-CN: 日志
@@ -5209,6 +5212,9 @@ container:
     kill:
       en: Force Kill
       zh-CN: 强制终止
+    tag:
+      en: Tag
+      zh-CN: 打标签
     start_all:
       en: Start all
       zh-CN: 全部启动
@@ -5218,6 +5224,16 @@ container:
     running:
       en: '%{action} in progress…'
       zh-CN: 正在%{action}…
+  tag:
+    label:
+      en: 'Add Tag:'
+      zh-CN: '添加标签:'
+    placeholder:
+      en: 'New image tag (e.g. repo:tag)'
+      zh-CN: '新镜像标签(如 repo:tag)'
+    invalid:
+      en: Please enter a valid image name and tag
+      zh-CN: 请输入合法的镜像名称与标签
   update_resources:
     label:
       en: 'Resources:'

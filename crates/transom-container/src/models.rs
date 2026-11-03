@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 use serde::de::Deserializer;
 use std::collections::HashMap;
 use transom_core::{
-    ContainerBlockDeviceIo, ContainerDetails, ContainerImageDetails, ContainerImageSummary,
-    ContainerInterfaceIo, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
-    ContainerNetworkSummary, ContainerPort, ContainerProcess, ContainerState, ContainerStats,
-    ContainerSummary, ContainerVolumeSummary, short_id,
+    ContainerBlockDeviceIo, ContainerDetails, ContainerImageDetails, ContainerImageLayer,
+    ContainerImageSummary, ContainerInterfaceIo, ContainerMount, ContainerNetworkAttachment,
+    ContainerNetworkDetails, ContainerNetworkSummary, ContainerPort, ContainerProcess,
+    ContainerState, ContainerStats, ContainerSummary, ContainerVolumeSummary, short_id,
 };
 
 /// 把线格式里的 `null` 收敛成空集合。
@@ -677,6 +677,37 @@ impl ImageInspect {
             architecture: self.architecture,
             layers: layer_digests.len(),
             layer_digests,
+            history: Vec::new(),
+        }
+    }
+}
+
+/// `GET /images/{name}/history` 响应单项。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ImageHistoryItem {
+    #[serde(rename = "Id", default)]
+    pub id: String,
+    #[serde(rename = "Created", default)]
+    pub created: i64,
+    #[serde(rename = "CreatedBy", default)]
+    pub created_by: String,
+    #[serde(rename = "Tags", default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(rename = "Size", default)]
+    pub size: u64,
+    #[serde(rename = "Comment", default)]
+    pub comment: String,
+}
+
+impl ImageHistoryItem {
+    pub fn into_layer(self) -> ContainerImageLayer {
+        ContainerImageLayer {
+            id: self.id,
+            created: self.created,
+            created_by: self.created_by,
+            size: self.size,
+            comment: self.comment,
+            tags: self.tags.unwrap_or_default(),
         }
     }
 }

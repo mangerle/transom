@@ -215,6 +215,7 @@ impl AppShell {
         let confirm_bar = confirm.map(|confirm| render_confirm_bar(tab_id, confirm, p, cx));
         let rename_bar = self.render_container_rename_bar(tab_id, p, cx);
         let update_bar = self.render_container_update_bar(tab_id, p, cx);
+        let tag_bar = self.render_image_tag_bar(tab_id, p, cx);
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
@@ -298,6 +299,7 @@ impl AppShell {
             .child(header)
             .children(rename_bar)
             .children(update_bar)
+            .children(tag_bar)
             .children(confirm_bar)
             .child(div().flex_1().min_h_0().overflow_hidden().child(content))
             .into_any_element()

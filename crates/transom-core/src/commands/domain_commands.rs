@@ -206,6 +206,13 @@ pub enum ContainerCommand {
         image: String,
         force: bool,
     },
+    TagImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        image: String,
+        repo: String,
+        tag: Option<String>,
+    },
     ListVolumes {
         tab_id: TabId,
         request_id: ContainerRequestId,

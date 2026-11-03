@@ -123,6 +123,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) rename_container: Option<(String, Entity<InputState>)>,
     /// 容器配置更新条：容器名与 (内存MB输入框, CPU输入框)；`None` 表示不显示。
     pub(crate) update_container: Option<(String, Entity<InputState>, Entity<InputState>)>,
+    /// 镜像打标签条：镜像 ID 与新 tag 输入框；`None` 表示不显示。
+    pub(crate) tag_image: Option<(String, Entity<InputState>)>,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
     /// 待确认的删除动作。
@@ -205,6 +207,7 @@ impl ContainerWorkspaceState {
             terminal_request: None,
             rename_container: None,
             update_container: None,
+            tag_image: None,
             pending_select: None,
             files: ContainerFilesState {
                 new_dir_open: false,

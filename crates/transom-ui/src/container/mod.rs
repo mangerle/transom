@@ -14,6 +14,7 @@ mod rename;
 mod sidebar;
 mod stats;
 mod stats_actions;
+mod tag;
 mod terminal;
 mod toast;
 mod types;

@@ -27,6 +27,7 @@ pub(crate) enum RowAction {
     Unpause,
     Kill,
     Run,
+    Tag,
     Rename,
     EditComposeYaml,
     Remove,
@@ -49,6 +50,7 @@ impl RowAction {
             Self::Unpause => "container.action.unpause",
             Self::Kill => "container.action.kill",
             Self::Run => "container.run.title",
+            Self::Tag => "container.action.tag",
             Self::Rename => "container.action.rename",
             Self::EditComposeYaml => "container.compose.edit_yaml",
             Self::Remove => "common.delete",
@@ -72,6 +74,7 @@ impl RowAction {
             Self::Unpause => IconName::Play,
             Self::Kill => IconName::CircleAlert,
             Self::Run => IconName::Play,
+            Self::Tag => IconName::TagPlus,
             Self::Rename => IconName::Pen,
             Self::EditComposeYaml => IconName::FilePen,
             Self::Remove => IconName::Trash,
@@ -100,8 +103,8 @@ impl RowAction {
                 target,
                 RowTarget::Container { .. } | RowTarget::Image(_) | RowTarget::Network(_)
             ),
-            // 只有镜像能「跑起来」；卷与网络没有运行语义。
-            Self::Run => matches!(target, RowTarget::Image(_)),
+            // 只有镜像能「跑起来」与打标签；卷与网络没有运行语义。
+            Self::Run | Self::Tag => matches!(target, RowTarget::Image(_)),
             Self::Overview | Self::Remove | Self::CopyName => true,
         }
     }

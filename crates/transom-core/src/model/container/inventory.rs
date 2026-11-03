@@ -340,6 +340,26 @@ pub struct ContainerImageDetails {
     /// 原始 inspect JSON：界面「原始 JSON」视图用，引擎未返回时为空串。
     #[serde(default)]
     pub inspect: String,
+    /// 镜像构建历史层。
+    #[serde(default)]
+    pub history: Vec<ContainerImageLayer>,
+}
+
+/// 镜像单层构建历史记录。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContainerImageLayer {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub created: i64,
+    #[serde(default)]
+    pub created_by: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub comment: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// 数据卷摘要。

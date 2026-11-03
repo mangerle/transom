@@ -11,7 +11,7 @@ use crate::transport::EngineTransport;
 use std::time::Duration;
 use transom_core::{
     ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
-    ContainerEngineRef, ContainerImageDetails, ContainerImageSummary, ContainerLifecycleAction,
+    ContainerEngineRef, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerStats,
     ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
 };
@@ -143,6 +143,28 @@ impl Engine {
         match &self.backend {
             EngineBackend::Http(api) => api.inspect_image(image).await,
             EngineBackend::Cli(cli) => cli.inspect_image(image).await,
+        }
+    }
+
+    pub async fn image_history(
+        &self,
+        image: &str,
+    ) -> Result<Vec<ContainerImageLayer>, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.image_history(image).await,
+            EngineBackend::Cli(cli) => cli.image_history(image).await,
+        }
+    }
+
+    pub async fn tag_image(
+        &self,
+        image: &str,
+        repo: &str,
+        tag: Option<&str>,
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.tag_image(image, repo, tag).await,
+            EngineBackend::Cli(cli) => cli.tag_image(image, repo, tag).await,
         }
     }
 

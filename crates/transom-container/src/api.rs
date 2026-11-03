@@ -8,7 +8,7 @@ use crate::error::ContainerError;
 use crate::http::{self, RawResponse};
 use crate::models::{
     ContainerInspect, ContainerListItem, ContainerUpdateRequest, ExecCreateResponse,
-    ExecInspectResponse, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
+    ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
     NetworkItem, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
     VolumeListResponse, VolumePruneResponse,
 };
@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use transom_core::ContainerEngineKind;
 use transom_core::{
-    ContainerDetails, ContainerImageDetails, ContainerImageSummary, ContainerLifecycleAction,
+    ContainerDetails, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
     ContainerStats, ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails,
     ContainerVolumeSummary,
@@ -246,7 +246,42 @@ impl DockerApi {
                 "检视镜像",
             )
             .await?;
-        Ok(inspect.into_details(raw))
+        let history = self.image_history(image).await.unwrap_or_default();
+        let mut details = inspect.into_details(raw);
+        details.history = history;
+        Ok(details)
+    }
+
+    /// 获取镜像构建历史层。
+    pub async fn image_history(
+        &self,
+        image: &str,
+    ) -> Result<Vec<ContainerImageLayer>, ContainerError> {
+        let suffix = format!("/images/{}/history", http::percent_encode(image));
+        let items: Vec<ImageHistoryItem> = self.get_json(&suffix, "获取镜像历史层").await?;
+        Ok(items.into_iter().map(ImageHistoryItem::into_layer).collect())
+    }
+
+    /// 为镜像附加新标签（Tag）。
+    pub async fn tag_image(
+        &self,
+        image: &str,
+        repo: &str,
+        tag: Option<&str>,
+    ) -> Result<(), ContainerError> {
+        let encoded_image = http::percent_encode(image);
+        let encoded_repo = http::percent_encode(repo);
+        let tag_query = tag
+            .filter(|t| !t.is_empty())
+            .map(|t| format!("&tag={}", http::percent_encode(t)))
+            .unwrap_or_default();
+        let path = format!("/images/{encoded_image}/tag?repo={encoded_repo}{tag_query}");
+        let response = self.send(Method::POST, &path, None, "镜像打标签").await?;
+        if response.status.is_success() {
+            return Ok(());
+        }
+        let body = http::read_body_text(response.body, 8192).await;
+        Err(http::status_error(response.status, "镜像打标签", body, image))
     }
 
     /// 取一份 JSON 对象，同时把原文留一份格式化副本。

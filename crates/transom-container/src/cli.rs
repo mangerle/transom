@@ -303,7 +303,50 @@ impl CliBackend {
                 image.to_string(),
             ])
             .await?;
-        Ok(inspect.into_details(raw))
+        let history = self.image_history(image).await.unwrap_or_default();
+        let mut details = inspect.into_details(raw);
+        details.history = history;
+        Ok(details)
+    }
+
+    /// 获取镜像构建历史层。
+    pub async fn image_history(
+        &self,
+        image: &str,
+    ) -> Result<Vec<transom_core::ContainerImageLayer>, ContainerError> {
+        let args = vec![
+            "history".to_string(),
+            "--no-trunc".to_string(),
+            "--format={{json .}}".to_string(),
+            image.to_string(),
+        ];
+        let stdout = self.run_checked(&args).await?;
+        let mut layers = Vec::new();
+        for line in stdout.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(item) = serde_json::from_str::<crate::models::ImageHistoryItem>(line) {
+                layers.push(item.into_layer());
+            }
+        }
+        Ok(layers)
+    }
+
+    /// 为镜像附加新标签（Tag）。
+    pub async fn tag_image(
+        &self,
+        image: &str,
+        repo: &str,
+        tag: Option<&str>,
+    ) -> Result<(), ContainerError> {
+        let target = match tag {
+            Some(t) if !t.is_empty() => format!("{repo}:{t}"),
+            _ => repo.to_string(),
+        };
+        let args = vec!["tag".to_string(), image.to_string(), target];
+        self.run_checked(&args).await.map(|_| ())
     }
 
     /// 容器内进程列表。

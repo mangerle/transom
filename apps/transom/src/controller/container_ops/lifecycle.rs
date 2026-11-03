@@ -106,6 +106,15 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
             engine.remove_image(&image, force).await
         }),
+        ContainerCommand::TagImage {
+            tab_id,
+            request_id,
+            image,
+            repo,
+            tag,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            engine.tag_image(&image, &repo, tag.as_deref()).await
+        }),
         ContainerCommand::CreateVolume {
             tab_id,
             request_id,
