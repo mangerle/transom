@@ -115,6 +115,40 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
             engine.tag_image(&image, &repo, tag.as_deref()).await
         }),
+        ContainerCommand::PushImage {
+            tab_id,
+            request_id,
+            image,
+            tag,
+            auth,
+        } => {
+            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                return;
+            };
+            let event_tx = ctx.event_tx.clone();
+            spawn_long(state, ctx, tab_id, request_id, cancel, async move {
+                let mut progress = |current: u64, total: Option<u64>| {
+                    let _ = event_tx.try_send(
+                        ContainerAppEvent::TransferProgress {
+                            request_id,
+                            transferred: current,
+                            total,
+                        }
+                        .into(),
+                    );
+                };
+                let error = engine
+                    .push_image(&image, tag.as_deref(), auth.as_ref(), &mut progress)
+                    .await
+                    .err()
+                    .map(AppError::from);
+                send_event(
+                    &event_tx,
+                    ContainerAppEvent::ActionFinished { request_id, error },
+                )
+                .await;
+            });
+        }
         ContainerCommand::CreateVolume {
             tab_id,
             request_id,

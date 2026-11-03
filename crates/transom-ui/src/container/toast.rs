@@ -27,6 +27,13 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
             };
             Some(verb_object("container.action.tag", &format!("{image} -> {target}")))
         }
+        C::PushImage { image, tag, .. } => {
+            let target = match tag {
+                Some(t) if !t.is_empty() => format!("{image}:{t}"),
+                _ => image.clone(),
+            };
+            Some(verb_object("container.action.push", &target))
+        }
         C::CreateVolume { name, .. } => Some(verb_object("container.create", name)),
         C::CreateNetwork { spec, .. } => Some(verb_object("container.create", &spec.name)),
         C::RemoveVolume { name, .. } | C::RemoveNetwork { network: name, .. } => {

@@ -362,6 +362,19 @@ pub struct ContainerImageLayer {
     pub tags: Vec<String>,
 }
 
+/// 容器 Registry 认证凭据。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContainerRegistryAuth {
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub server_address: Option<String>,
+    #[serde(default)]
+    pub identity_token: Option<String>,
+}
+
 /// 数据卷摘要。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ContainerVolumeSummary {

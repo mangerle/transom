@@ -5,6 +5,7 @@
 //! discovery；控制器只面对 [`ContainerService`] 与 [`Engine`]。
 
 mod api;
+pub mod auth;
 mod bridge;
 mod cli;
 pub mod compose;

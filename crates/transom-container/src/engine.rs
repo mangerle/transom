@@ -12,7 +12,7 @@ use std::time::Duration;
 use transom_core::{
     ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
     ContainerEngineRef, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
-    ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerStats,
+    ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerRegistryAuth, ContainerStats,
     ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
 };
 
@@ -350,6 +350,26 @@ impl Engine {
         match &self.backend {
             EngineBackend::Http(api) => api.pull_image(reference, progress).await,
             EngineBackend::Cli(cli) => cli.pull_image(reference).await,
+        }
+    }
+
+    /// 推送镜像；HTTP 后端流式上报进度与处理鉴权，CLI 后端执行 docker push。
+    pub async fn push_image(
+        &self,
+        image: &str,
+        tag: Option<&str>,
+        auth: Option<&ContainerRegistryAuth>,
+        progress: &mut (dyn FnMut(u64, Option<u64>) + Send),
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.push_image(image, tag, auth, progress).await,
+            EngineBackend::Cli(cli) => {
+                let ref_str = match tag {
+                    Some(t) if !t.is_empty() => format!("{image}:{t}"),
+                    _ => image.to_string(),
+                };
+                cli.push_image(&ref_str).await
+            }
         }
     }
 

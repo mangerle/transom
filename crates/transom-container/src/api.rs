@@ -24,7 +24,7 @@ use transom_core::ContainerEngineKind;
 use transom_core::{
     ContainerDetails, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
-    ContainerStats, ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails,
+    ContainerRegistryAuth, ContainerStats, ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails,
     ContainerVolumeSummary,
 };
 
@@ -814,6 +814,46 @@ impl DockerApi {
         if !status.is_success() {
             let body = http::read_body_text(response.body, 8192).await;
             return Err(http::status_error(status, "拉取镜像", body, reference));
+        }
+        consume_pull_stream(response.body, progress).await
+    }
+
+    /// 推送镜像；支持自动或显式鉴权，流式上报进度。
+    pub async fn push_image(
+        &self,
+        image: &str,
+        tag: Option<&str>,
+        auth: Option<&ContainerRegistryAuth>,
+        progress: &mut (dyn FnMut(u64, Option<u64>) + Send),
+    ) -> Result<(), ContainerError> {
+        let (name, default_tag) = split_reference(image);
+        let effective_tag = tag.or(default_tag.as_deref());
+        let mut path = format!("/images/{}/push", http::percent_encode(&name));
+        if let Some(tag) = effective_tag {
+            path.push_str(&format!("?tag={}", http::percent_encode(tag)));
+        }
+        let auth_header = crate::auth::resolve_auth_header(image, auth);
+        let mut extra_headers = Vec::new();
+        if let Some(h) = auth_header.as_deref() {
+            extra_headers.push(("X-Registry-Auth", h));
+        }
+
+        let full_path = self.path(&path);
+        let response = http::request_with_headers(
+            &self.transport,
+            Method::POST,
+            &full_path,
+            Bytes::new(),
+            None,
+            &extra_headers,
+        )
+        .await
+        .inspect_err(|error| log_request_error("推送镜像", error))?;
+
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, "推送镜像", body, image));
         }
         consume_pull_stream(response.body, progress).await
     }

@@ -245,6 +245,12 @@ impl CliBackend {
             .map(|_| ())
     }
 
+    pub async fn push_image(&self, reference: &str) -> Result<(), ContainerError> {
+        self.run_checked(&["push".to_string(), reference.to_string()])
+            .await
+            .map(|_| ())
+    }
+
     pub async fn remove_image(&self, image: &str, force: bool) -> Result<(), ContainerError> {
         let mut args = vec!["rmi".to_string()];
         if force {

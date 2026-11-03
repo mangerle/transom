@@ -5215,6 +5215,9 @@ container:
     tag:
       en: Tag
       zh-CN: 打标签
+    push:
+      en: Push
+      zh-CN: 推送
     start_all:
       en: Start all
       zh-CN: 全部启动

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::container::CONTENT_HEADER_HEIGHT;
+use transom_core::{ContainerCommand, ContainerRequestId};
 
 /// 详情头部的渲染参数：选中项按分类不同，统一用借用结构体传入。
 pub(crate) struct ContainerHeaderView<'a> {
@@ -324,6 +325,7 @@ impl AppShell {
             ContainerSection::Images => {
                 if let Some(image) = image {
                     let image_id = image.id.clone();
+                    let push_ref = image.display_name();
                     actions = actions
                         .child(
                             Button::new("image-tag")
@@ -334,6 +336,33 @@ impl AppShell {
                                     let image_id = image_id.clone();
                                     move |this, _, window, cx| {
                                         this.open_image_tag(tab_id, image_id.clone(), window, cx);
+                                    }
+                                })),
+                        )
+                        .child(
+                            Button::new("image-push")
+                                .xsmall()
+                                .icon(IconName::Upload)
+                                .label(rust_i18n::t!("container.action.push").to_string())
+                                .on_click(cx.listener({
+                                    let push_ref = push_ref.clone();
+                                    move |this, _, _, cx| {
+                                        let request_id = ContainerRequestId::new();
+                                        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                                            workspace.busy = true;
+                                        }
+                                        this.send_tracked(
+                                            tab_id,
+                                            request_id,
+                                            ContainerCommand::PushImage {
+                                                tab_id,
+                                                request_id,
+                                                image: push_ref.clone(),
+                                                tag: None,
+                                                auth: None,
+                                            },
+                                        );
+                                        cx.notify();
                                     }
                                 })),
                         )

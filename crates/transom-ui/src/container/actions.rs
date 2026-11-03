@@ -286,6 +286,38 @@ impl AppShell {
                 };
                 self.open_image_tag(tab_id, id, window, cx);
             }
+            RowAction::Push => {
+                let RowTarget::Image(id) = target else {
+                    return;
+                };
+                let reference = self
+                    .state
+                    .container_workspace(tab_id)
+                    .and_then(|workspace| {
+                        workspace
+                            .images
+                            .iter()
+                            .find(|item| item.id == id)
+                            .map(|item| item.display_name())
+                    })
+                    .unwrap_or_else(|| id.clone());
+                let request_id = ContainerRequestId::new();
+                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                    workspace.busy = true;
+                }
+                self.send_tracked(
+                    tab_id,
+                    request_id,
+                    ContainerCommand::PushImage {
+                        tab_id,
+                        request_id,
+                        image: reference,
+                        tag: None,
+                        auth: None,
+                    },
+                );
+                cx.notify();
+            }
             RowAction::EditComposeYaml => {
                 let RowTarget::Compose(name) = target else {
                     return;

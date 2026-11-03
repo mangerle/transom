@@ -8420,6 +8420,7 @@ dependencies = [
 name = "transom-container"
 version = "1.5.1"
 dependencies = [
+ "base64 0.22.1",
  "bytes",
  "chrono",
  "flume",

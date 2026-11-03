@@ -60,6 +60,18 @@ pub async fn request(
     body: Bytes,
     content_type: Option<&str>,
 ) -> Result<RawResponse, ContainerError> {
+    request_with_headers(transport, method, path, body, content_type, &[]).await
+}
+
+/// 支持携带额外请求头的 HTTP 请求（如 Registry 认证头 X-Registry-Auth）。
+pub async fn request_with_headers(
+    transport: &EngineTransport,
+    method: Method,
+    path: &str,
+    body: Bytes,
+    content_type: Option<&str>,
+    extra_headers: &[(&str, &str)],
+) -> Result<RawResponse, ContainerError> {
     let operation = format!("{method} {path}");
     let stream = transport.connect().await?;
     let (mut sender, connection) = tokio::time::timeout(
@@ -76,7 +88,15 @@ pub async fn request(
         message: error.to_string(),
     })?;
     let driver = tokio::spawn(connection);
-    let request = build_request(method, path, body, content_type, false)?;
+    let mut request = build_request(method, path, body, content_type, false)?;
+    for (name, value) in extra_headers {
+        if let (Ok(h_name), Ok(h_val)) = (
+            hyper::header::HeaderName::from_bytes(name.as_bytes()),
+            hyper::header::HeaderValue::from_str(value),
+        ) {
+            request.headers_mut().insert(h_name, h_val);
+        }
+    }
     let response = tokio::time::timeout(REQUEST_TIMEOUT, sender.send_request(request))
         .await
         .map_err(|_| ContainerError::Http {

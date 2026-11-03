@@ -114,6 +114,7 @@ pub(super) fn handle_container_command(
         | ContainerCommand::PullImage { .. }
         | ContainerCommand::RemoveImage { .. }
         | ContainerCommand::TagImage { .. }
+        | ContainerCommand::PushImage { .. }
         | ContainerCommand::CreateVolume { .. }
         | ContainerCommand::RemoveVolume { .. }
         | ContainerCommand::CreateNetwork { .. }

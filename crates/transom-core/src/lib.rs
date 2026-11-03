@@ -46,7 +46,7 @@ pub use model::container::{
     ContainerFileKind, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerInterfaceIo,
     ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
     ContainerNetworkSpec, ContainerNetworkSummary, ContainerPort, ContainerPortPublish,
-    ContainerProcess, ContainerPruneReport, ContainerState, ContainerStats, ContainerSummary,
+    ContainerProcess, ContainerPruneReport, ContainerRegistryAuth, ContainerState, ContainerStats, ContainerSummary,
     ContainerVolumeDetails, ContainerVolumeSummary, ContainerUpdateSpec, TlsConfig, compose_projects,
     is_valid_container_name, short_id,
 };

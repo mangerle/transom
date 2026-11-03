@@ -11,7 +11,7 @@
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
     ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec,
-    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerUpdateSpec,
+    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRegistryAuth, ContainerUpdateSpec,
 };
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
@@ -212,6 +212,13 @@ pub enum ContainerCommand {
         image: String,
         repo: String,
         tag: Option<String>,
+    },
+    PushImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        image: String,
+        tag: Option<String>,
+        auth: Option<ContainerRegistryAuth>,
     },
     ListVolumes {
         tab_id: TabId,
