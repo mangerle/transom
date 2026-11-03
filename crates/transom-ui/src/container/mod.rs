@@ -17,6 +17,7 @@ mod stats_actions;
 mod terminal;
 mod toast;
 mod types;
+mod update;
 mod view;
 
 pub(crate) use types::{

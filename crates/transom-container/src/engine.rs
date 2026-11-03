@@ -13,7 +13,7 @@ use transom_core::{
     ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
     ContainerEngineRef, ContainerImageDetails, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerStats,
-    ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
+    ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
 };
 
 /// 探测单个候选的超时：发现是交互触发的，不能让一个坏端点拖住整页。
@@ -282,6 +282,18 @@ impl Engine {
         match &self.backend {
             EngineBackend::Http(api) => api.lifecycle(container, action).await,
             EngineBackend::Cli(cli) => cli.lifecycle(container, action).await,
+        }
+    }
+
+    /// 动态更新容器配置。
+    pub async fn update_container(
+        &self,
+        container: &str,
+        spec: &ContainerUpdateSpec,
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.update_container(container, spec).await,
+            EngineBackend::Cli(cli) => cli.update_container(container, spec).await,
         }
     }
 

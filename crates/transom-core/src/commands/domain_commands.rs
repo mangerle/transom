@@ -11,7 +11,7 @@
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
     ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec,
-    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec,
+    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerUpdateSpec,
 };
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
@@ -170,6 +170,13 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         container: String,
         action: ContainerLifecycleAction,
+    },
+    /// 动态更新容器配置（CPU/内存限制与重启策略）。
+    UpdateContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        spec: ContainerUpdateSpec,
     },
     /// 在容器内打开交互式终端；容器与执行参数都在 `options` 里。
     ExecTerminal {

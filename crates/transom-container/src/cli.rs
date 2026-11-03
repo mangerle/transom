@@ -188,6 +188,27 @@ impl CliBackend {
         self.run_checked(&args).await.map(|_| ())
     }
 
+    /// CLI 兜底的动态更新容器配置：`<程序> update [选项] <容器>`。
+    pub async fn update_container(
+        &self,
+        container: &str,
+        spec: &transom_core::ContainerUpdateSpec,
+    ) -> Result<(), ContainerError> {
+        let mut args = vec!["update".to_string()];
+        if let Some(mem) = spec.memory_bytes {
+            args.push(format!("--memory={mem}"));
+        }
+        if let Some(cpus) = spec.nano_cpus {
+            let cores = cpus as f64 / 1_000_000_000.0;
+            args.push(format!("--cpus={cores:.2}"));
+        }
+        if let Some(restart) = &spec.restart_policy {
+            args.push(format!("--restart={restart}"));
+        }
+        args.push(container.to_string());
+        self.run_checked(&args).await.map(|_| ())
+    }
+
     /// CLI 兜底的重命名：`<程序> rename <容器> <新名>`。
     ///
     /// # Errors

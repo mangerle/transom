@@ -5203,6 +5203,9 @@ container:
     unpause:
       en: Unpause
       zh-CN: 恢复
+    update:
+      en: Update
+      zh-CN: 更新配置
     start_all:
       en: Start all
       zh-CN: 全部启动
@@ -5212,6 +5215,16 @@ container:
     running:
       en: '%{action} in progress…'
       zh-CN: 正在%{action}…
+  update_resources:
+    label:
+      en: 'Resources:'
+      zh-CN: '动态配额:'
+    memory_placeholder:
+      en: Memory limit (MB, e.g. 512)
+      zh-CN: 内存上限(MB，如 512)
+    cpu_placeholder:
+      en: CPU quota (cores, e.g. 1.0)
+      zh-CN: CPU配额(核数，如 1.0)
   confirm:
     compose_down:
       en: 'Stop and remove the compose project %{name}? Its containers and networks will be deleted.'

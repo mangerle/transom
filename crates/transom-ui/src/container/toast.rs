@@ -29,6 +29,9 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
             Some(verb_object("container.action.rename", &path_basename(from)))
         }
         C::RenameContainer { name, .. } => Some(verb_object("container.action.rename", name)),
+        C::UpdateContainer { container, .. } => {
+            Some(verb_object("container.action.update", container))
+        }
         C::CreateContainer { spec, .. } => Some(verb_object(
             "container.run.title",
             if spec.name.is_empty() {

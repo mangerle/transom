@@ -7,9 +7,10 @@
 use crate::error::ContainerError;
 use crate::http::{self, RawResponse};
 use crate::models::{
-    ContainerInspect, ContainerListItem, ExecCreateResponse, ExecInspectResponse, ImageInspect,
-    ImageListItem, ImagePruneResponse, ImagePullEvent, NetworkItem, StatsResponse, TopResponse,
-    VersionResponse, VolumeItem, VolumeListResponse, VolumePruneResponse,
+    ContainerInspect, ContainerListItem, ContainerUpdateRequest, ExecCreateResponse,
+    ExecInspectResponse, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
+    NetworkItem, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
+    VolumeListResponse, VolumePruneResponse,
 };
 use crate::transport::EngineTransport;
 use bytes::Bytes;
@@ -23,7 +24,8 @@ use transom_core::ContainerEngineKind;
 use transom_core::{
     ContainerDetails, ContainerImageDetails, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
-    ContainerStats, ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary,
+    ContainerStats, ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails,
+    ContainerVolumeSummary,
 };
 
 /// 小体积 JSON 响应的上限：超过视为异常响应，避免误读巨型对象。
@@ -669,6 +671,44 @@ impl DockerApi {
         let status = response.status;
         let body = http::read_body_text(response.body, 8192).await;
         http::ensure_success(status, operation, body, Some(container))
+    }
+
+    /// 动态更新容器资源配置（CPU、内存配额与重启策略）。
+    ///
+    /// # Errors
+    /// 容器不存在、参数非法或引擎更新失败时返回 [`ContainerError`]。
+    pub async fn update_container(
+        &self,
+        container: &str,
+        spec: &ContainerUpdateSpec,
+    ) -> Result<(), ContainerError> {
+        let encoded = http::percent_encode(container);
+        let path = format!("/containers/{encoded}/update");
+        let body = ContainerUpdateRequest {
+            memory: spec.memory_bytes,
+            nano_cpus: spec.nano_cpus,
+            restart_policy: spec.restart_policy.as_ref().map(|name| RestartPolicyUpdate {
+                name: name.clone(),
+            }),
+        };
+        let payload = serde_json::to_vec(&body).map_err(|error| ContainerError::Http {
+            operation: "序列化更新容器参数".to_string(),
+            message: error.to_string(),
+        })?;
+        let response = self
+            .send(
+                Method::POST,
+                &path,
+                Some(payload),
+                "更新容器配置",
+            )
+            .await?;
+        if response.status.is_success() {
+            return Ok(());
+        }
+        let status = response.status;
+        let body = http::read_body_text(response.body, 8192).await;
+        http::ensure_success(status, "更新容器配置", body, Some(container))
     }
 
     /// 重命名容器。

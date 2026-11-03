@@ -192,10 +192,21 @@ impl AppShell {
                                 })),
                         );
                     }
-                    // 头部不再放「终端」按钮：页签已经并到同一行，再放一个是同一
-                    // 件事的两个入口。
-                    actions = actions.child(
-                        Button::new("container-remove")
+                    actions = actions
+                        .child(
+                            Button::new("container-update")
+                                .xsmall()
+                                .icon(IconName::Settings)
+                                .label(rust_i18n::t!("container.action.update").to_string())
+                                .on_click(cx.listener({
+                                    let name = name.clone();
+                                    move |this, _, window, cx| {
+                                        this.open_container_update(tab_id, name.clone(), window, cx);
+                                    }
+                                })),
+                        )
+                        .child(
+                            Button::new("container-remove")
                             .danger()
                             .xsmall()
                             .icon(IconName::Trash)

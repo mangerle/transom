@@ -119,6 +119,7 @@ pub(super) fn handle_container_command(
         | ContainerCommand::RemoveNetwork { .. }
         | ContainerCommand::Rename { .. }
         | ContainerCommand::RenameContainer { .. }
+        | ContainerCommand::UpdateContainer { .. }
         | ContainerCommand::CreateContainer { .. } => lifecycle::handle(state, ctx, command),
         ContainerCommand::Cancel { .. }
         | ContainerCommand::ExecTerminal { .. }

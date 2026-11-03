@@ -584,6 +584,20 @@ impl ContainerLifecycleAction {
     }
 }
 
+/// 容器动态更新配置。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContainerUpdateSpec {
+    /// 内存上限（字节）；None 表示不修改。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_bytes: Option<u64>,
+    /// CPU 配额（以 1e9 为 1 个核）；None 表示不修改。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nano_cpus: Option<u64>,
+    /// 重启策略；None 表示不修改。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart_policy: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ContainerImageSummary, shorten_reference};

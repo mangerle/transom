@@ -3,7 +3,7 @@
 //! 原则（Why）：外部 JSON 只在本模块出现一次，立即收敛为
 //! `transom-core` 的强类型；引擎字段增删或大小写差异不会扩散到控制器与界面。
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde::de::Deserializer;
 use std::collections::HashMap;
 use transom_core::{
@@ -340,6 +340,25 @@ pub struct HostConfig {
 pub struct RestartPolicy {
     #[serde(rename = "Name", default)]
     pub name: Option<String>,
+}
+
+/// `POST /containers/{id}/update` 请求体。
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "PascalCase")]
+pub struct ContainerUpdateRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory: Option<u64>,
+    #[serde(rename = "NanoCPUs", skip_serializing_if = "Option::is_none")]
+    pub nano_cpus: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restart_policy: Option<RestartPolicyUpdate>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "PascalCase")]
+pub struct RestartPolicyUpdate {
+    #[serde(rename = "Name")]
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

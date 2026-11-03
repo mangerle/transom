@@ -39,6 +39,38 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 更新容器资源配置（内存、CPU、重启策略）。
+    pub(crate) fn update_container_resources(
+        &mut self,
+        tab_id: TabId,
+        container: String,
+        spec: transom_core::ContainerUpdateSpec,
+        cx: &mut Context<Self>,
+    ) {
+        let request_id = ContainerRequestId::new();
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.busy = true;
+            workspace.notice = Some(
+                rust_i18n::t!(
+                    "container.action.running",
+                    action = rust_i18n::t!("container.action.update")
+                )
+                .to_string(),
+            );
+        }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::UpdateContainer {
+                tab_id,
+                request_id,
+                container,
+                spec,
+            },
+        );
+        cx.notify();
+    }
+
     /// 删除镜像/卷/网络。
     pub(crate) fn apply_container_confirm(
         &mut self,
