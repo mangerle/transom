@@ -46,8 +46,23 @@ pub(crate) fn render_volume_detail(
         .map(|(key, value)| format!("{key}={value}"))
         .collect::<Vec<_>>()
         .join("\n");
+    let browse_bar = h_flex().pb_1().child(
+        Button::new("browse-volume-files")
+            .primary()
+            .small()
+            .icon(IconName::FolderOpen)
+            .label(rust_i18n::t!("container.files.browse").to_string())
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(w) = this.state.container_workspace_mut(tab_id) {
+                    w.detail_tab = ContainerDetailTab::Files;
+                }
+                this.load_container_dir(tab_id, "/".to_string());
+                cx.notify();
+            })),
+    );
     let rows = v_flex()
         .gap_1p5()
+        .child(browse_bar)
         .child(kv(p, rust_i18n::t!("container.field.name"), name))
         .child(kv(p, rust_i18n::t!("container.field.driver"), driver))
         .child(kv(p, rust_i18n::t!("container.field.options"), options))

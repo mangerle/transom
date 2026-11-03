@@ -260,6 +260,10 @@ impl ContainerWorkspaceState {
         self.volumes.iter().find(|item| item.name == name)
     }
 
+    pub(crate) fn selected_volume_name(&self) -> Option<String> {
+        self.selected_volume().map(|item| item.name.clone())
+    }
+
     pub(crate) fn selected_network(&self) -> Option<&ContainerNetworkSummary> {
         let id = self.selected.as_deref()?;
         self.networks.iter().find(|item| item.id == id)

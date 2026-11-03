@@ -5554,6 +5554,9 @@ container:
     rename_invalid:
       en: Enter a file name without slashes
       zh-CN: 请输入不含斜杠的文件名
+    browse:
+      en: Browse volume files
+      zh-CN: 浏览卷文件
   transfer:
     start:
       en: Transfer started

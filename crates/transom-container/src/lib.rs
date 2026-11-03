@@ -22,6 +22,7 @@ mod service;
 mod stats;
 mod tls;
 mod transport;
+pub mod volume_files;
 
 pub use discovery::{find_in_path, parse_endpoint, validate_endpoint};
 pub use engine::{Engine, discover_all, probe_explicit};
@@ -33,3 +34,4 @@ pub use files::{
 };
 pub use logs::{LogSink, stream_logs};
 pub use service::ContainerService;
+pub use volume_files::{download_volume_file, list_volume_dir, read_volume_file};

@@ -26,6 +26,28 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 },
             )
         }
+        ContainerCommand::ListVolumeDir {
+            tab_id,
+            request_id,
+            volume,
+            path,
+        } => {
+            let reply_path = path.clone();
+            one_shot(
+                state,
+                ctx,
+                tab_id,
+                request_id,
+                move |engine| async move {
+                    transom_container::list_volume_dir(&engine, &volume, &path).await
+                },
+                move |request_id, entries| ContainerAppEvent::DirListed {
+                    request_id,
+                    path: reply_path,
+                    entries,
+                },
+            )
+        }
         ContainerCommand::ReadFile {
             tab_id,
             request_id,
@@ -51,6 +73,31 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 },
             )
         }
+        ContainerCommand::ReadVolumeFile {
+            tab_id,
+            request_id,
+            volume,
+            path,
+            max_bytes,
+        } => {
+            let reply_path = path.clone();
+            one_shot(
+                state,
+                ctx,
+                tab_id,
+                request_id,
+                move |engine| async move {
+                    transom_container::read_volume_file(&engine, &volume, &path, max_bytes).await
+                },
+                move |request_id, (bytes, truncated, size)| ContainerAppEvent::FilePreview {
+                    request_id,
+                    path: reply_path,
+                    content: String::from_utf8_lossy(&bytes).to_string(),
+                    truncated,
+                    size,
+                },
+            )
+        }
         ContainerCommand::Download {
             tab_id,
             request_id,
@@ -66,6 +113,30 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 transom_container::download(
                     &engine,
                     &container,
+                    &path,
+                    &local_path,
+                    cancel,
+                    progress,
+                )
+                .await
+                .map(|_| ())
+            },
+        ),
+        ContainerCommand::DownloadVolumeFile {
+            tab_id,
+            request_id,
+            volume,
+            path,
+            local_path,
+        } => transfer(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine, cancel, progress| async move {
+                transom_container::download_volume_file(
+                    &engine,
+                    &volume,
                     &path,
                     &local_path,
                     cancel,

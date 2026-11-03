@@ -320,6 +320,13 @@ pub enum ContainerCommand {
         /// 容器内绝对路径。
         path: String,
     },
+    /// 列出数据卷内的文件与目录。
+    ListVolumeDir {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        volume: String,
+        path: String,
+    },
     ReadFile {
         tab_id: TabId,
         request_id: ContainerRequestId,
@@ -328,10 +335,26 @@ pub enum ContainerCommand {
         /// 预览上限；超出部分截断并标记。
         max_bytes: usize,
     },
+    /// 读取数据卷内文件文本预览。
+    ReadVolumeFile {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        volume: String,
+        path: String,
+        max_bytes: usize,
+    },
     Download {
         tab_id: TabId,
         request_id: ContainerRequestId,
         container: String,
+        path: String,
+        local_path: PathBuf,
+    },
+    /// 从数据卷下载文件到本地。
+    DownloadVolumeFile {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        volume: String,
         path: String,
         local_path: PathBuf,
     },

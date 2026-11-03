@@ -256,22 +256,26 @@ impl AppShell {
                     cx,
                 )
             }
-            (ContainerSection::Containers, ContainerDetailTab::Files) => render_files(
-                tab_id,
-                ContainerFilesView {
-                    path: &files.0,
-                    entries: &files.1,
-                    preview: files.2.as_ref(),
-                    loading: files.3,
-                    rename_from: files.4.as_deref(),
-                    rename_input: files.5.as_ref(),
-                    new_dir_open: files.6,
-                    new_dir_input: files.7.as_ref(),
-                    scroll: &files.8,
-                },
-                p,
-                cx,
-            ),
+            (ContainerSection::Containers | ContainerSection::Volumes, ContainerDetailTab::Files) => {
+                let is_volume = section == ContainerSection::Volumes;
+                render_files(
+                    tab_id,
+                    ContainerFilesView {
+                        path: &files.0,
+                        entries: &files.1,
+                        preview: files.2.as_ref(),
+                        loading: files.3,
+                        rename_from: files.4.as_deref(),
+                        rename_input: files.5.as_ref(),
+                        new_dir_open: files.6,
+                        new_dir_input: files.7.as_ref(),
+                        scroll: &files.8,
+                        readonly: is_volume,
+                    },
+                    p,
+                    cx,
+                )
+            }
             (ContainerSection::Compose, _) => {
                 render_compose_detail(tab_id, selected_compose.as_ref(), &containers, p, cx)
             }

@@ -13,6 +13,7 @@ pub(crate) struct ContainerFilesView<'a> {
     pub(super) new_dir_open: bool,
     pub(super) new_dir_input: Option<&'a Entity<InputState>>,
     pub(super) scroll: &'a ScrollHandle,
+    pub(super) readonly: bool,
 }
 
 pub(crate) fn render_files(
@@ -31,6 +32,7 @@ pub(crate) fn render_files(
         new_dir_open,
         new_dir_input,
         scroll,
+        readonly,
     } = view;
     let current_path = if path.is_empty() { "/" } else { path };
     let parent = parent_path(current_path);
@@ -66,30 +68,32 @@ pub(crate) fn render_files(
                 }
             })),
     );
-    crumbs = crumbs.child(
-        Button::new("container-file-upload")
-            .ghost()
-            .xsmall()
-            .icon(IconName::Upload)
-            .label(rust_i18n::t!("container.files.upload").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.upload_container_file(tab_id);
-                cx.notify();
-            })),
-    );
-    crumbs = crumbs.child(
-        Button::new("container-file-mkdir")
-            .ghost()
-            .xsmall()
-            .icon(IconName::FolderPlus)
-            .label(rust_i18n::t!("container.files.new_dir").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.toggle_container_mkdir(tab_id, window, cx);
-            })),
-    );
+    if !readonly {
+        crumbs = crumbs.child(
+            Button::new("container-file-upload")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Upload)
+                .label(rust_i18n::t!("container.files.upload").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.upload_container_file(tab_id);
+                    cx.notify();
+                })),
+        );
+        crumbs = crumbs.child(
+            Button::new("container-file-mkdir")
+                .ghost()
+                .xsmall()
+                .icon(IconName::FolderPlus)
+                .label(rust_i18n::t!("container.files.new_dir").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.toggle_container_mkdir(tab_id, window, cx);
+                })),
+        );
+    }
 
-    let rename_bar = render_rename_bar(tab_id, rename_from, rename_input, p, cx);
-    let mkdir_bar = new_dir_open.then(|| render_new_dir_bar(tab_id, new_dir_input, p, cx));
+    let rename_bar = (!readonly).then(|| render_rename_bar(tab_id, rename_from, rename_input, p, cx)).flatten();
+    let mkdir_bar = (!readonly && new_dir_open).then(|| render_new_dir_bar(tab_id, new_dir_input, p, cx));
 
     // 目录优先、再按名称：归档接口按 tar 顺序返回，用户习惯是先看目录。
     let mut ordered: Vec<&ContainerFileEntry> = entries.iter().collect();
@@ -233,41 +237,43 @@ pub(crate) fn render_files(
                     })),
                 );
         }
-        row = row.child(
-            Button::new(ElementId::Name(
-                format!("container-file-rename-{entry_path}").into(),
-            ))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Pen)
-            .on_click(cx.listener({
-                let entry_path = entry_path.clone();
-                let entry_name = entry_name.clone();
-                move |this, _, window, cx| {
-                    this.begin_container_file_rename(
-                        tab_id,
-                        entry_path.clone(),
-                        entry_name.clone(),
-                        window,
-                        cx,
-                    );
-                }
-            })),
-        );
-        row = row.child(
-            Button::new(ElementId::Name(
-                format!("container-file-delete-{entry_path}").into(),
-            ))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Trash)
-            .on_click(cx.listener({
-                let entry_path = entry_path.clone();
-                move |this, _, _, cx| {
-                    this.request_remove_container_path(tab_id, entry_path.clone(), is_dir, cx);
-                }
-            })),
-        );
+        if !readonly {
+            row = row.child(
+                Button::new(ElementId::Name(
+                    format!("container-file-rename-{entry_path}").into(),
+                ))
+                .ghost()
+                .xsmall()
+                .icon(IconName::Pen)
+                .on_click(cx.listener({
+                    let entry_path = entry_path.clone();
+                    let entry_name = entry_name.clone();
+                    move |this, _, window, cx| {
+                        this.begin_container_file_rename(
+                            tab_id,
+                            entry_path.clone(),
+                            entry_name.clone(),
+                            window,
+                            cx,
+                        );
+                    }
+                })),
+            );
+            row = row.child(
+                Button::new(ElementId::Name(
+                    format!("container-file-delete-{entry_path}").into(),
+                ))
+                .ghost()
+                .xsmall()
+                .icon(IconName::Trash)
+                .on_click(cx.listener({
+                    let entry_path = entry_path.clone();
+                    move |this, _, _, cx| {
+                        this.request_remove_container_path(tab_id, entry_path.clone(), is_dir, cx);
+                    }
+                })),
+            );
+        }
         // 文件行右键菜单：与 SFTP 面板同样把「打开/预览、下载、改名、删除」收进来，
         // 窄窗下不必再去找行尾那一排小图标。
         let menu_app = app.clone();
@@ -321,31 +327,31 @@ pub(crate) fn render_files(
                         },
                     ));
                 }
-                let app = menu_app.clone();
-                let path = menu_path.clone();
-                let name = menu_name.clone();
-                menu = menu.item(crate::widgets::menu_item(
-                    rust_i18n::t!("container.files.rename").to_string(),
-                    IconName::Pen,
-                    move |_, window, cx| {
-                        let app = app.clone();
-                        let path = path.clone();
-                        let name = name.clone();
-                        app.update(cx, |this, cx| {
-                            this.begin_container_file_rename(
-                                tab_id,
-                                path.clone(),
-                                name.clone(),
-                                window,
-                                cx,
-                            );
-                        });
-                    },
-                ));
-                let app = menu_app.clone();
-                let path = menu_path.clone();
-                menu.item(PopupMenuItem::separator())
-                    .item(crate::widgets::menu_item(
+                if !readonly {
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    let name = menu_name.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("container.files.rename").to_string(),
+                        IconName::Pen,
+                        move |_, window, cx| {
+                            let app = app.clone();
+                            let path = path.clone();
+                            let name = name.clone();
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_rename(
+                                    tab_id,
+                                    path.clone(),
+                                    name.clone(),
+                                    window,
+                                    cx,
+                                );
+                            });
+                        },
+                    ));
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(PopupMenuItem::separator()).item(crate::widgets::menu_item(
                         rust_i18n::t!("common.delete").to_string(),
                         IconName::Trash,
                         move |_, _, cx| {
@@ -360,7 +366,9 @@ pub(crate) fn render_files(
                                 );
                             });
                         },
-                    ))
+                    ));
+                }
+                menu
             })
             .into_any_element();
         list = list.child(row);

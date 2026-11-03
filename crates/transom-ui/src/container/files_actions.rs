@@ -17,7 +17,13 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
-        let Some(container) = workspace.selected_container_name() else {
+        let is_volume = workspace.section == ContainerSection::Volumes;
+        let target = if is_volume {
+            workspace.selected_volume_name()
+        } else {
+            workspace.selected_container_name()
+        };
+        let Some(target) = target else {
             return;
         };
         workspace.files.loading = true;
@@ -26,42 +32,62 @@ impl AppShell {
         if let Some(previous) = workspace.files.request.replace(request_id) {
             self.cancel_container_request(tab_id, previous);
         }
-        log::info!("打开容器目录，容器: {container}，路径: {path}，请求: {request_id}");
-        self.send_tracked(
-            tab_id,
-            request_id,
+        let command = if is_volume {
+            log::info!("打开数据卷目录，卷: {target}，路径: {path}，请求: {request_id}");
+            ContainerCommand::ListVolumeDir {
+                tab_id,
+                request_id,
+                volume: target,
+                path,
+            }
+        } else {
+            log::info!("打开容器目录，容器: {target}，路径: {path}，请求: {request_id}");
             ContainerCommand::ListDir {
                 tab_id,
                 request_id,
-                container,
+                container: target,
                 path,
-            },
-        );
+            }
+        };
+        self.send_tracked(tab_id, request_id, command);
     }
 
-    /// 预览容器内文本文件。
+    /// 预览容器或数据卷内文本文件。
     pub(crate) fn preview_container_file(&mut self, tab_id: TabId, path: String) {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
-        let Some(container) = workspace.selected_container_name() else {
+        let is_volume = workspace.section == ContainerSection::Volumes;
+        let target = if is_volume {
+            workspace.selected_volume_name()
+        } else {
+            workspace.selected_container_name()
+        };
+        let Some(target) = target else {
             return;
         };
         let request_id = ContainerRequestId::new();
-        self.send_tracked(
-            tab_id,
-            request_id,
+        let command = if is_volume {
+            ContainerCommand::ReadVolumeFile {
+                tab_id,
+                request_id,
+                volume: target,
+                path,
+                max_bytes: 1024 * 1024,
+            }
+        } else {
             ContainerCommand::ReadFile {
                 tab_id,
                 request_id,
-                container,
+                container: target,
                 path,
                 max_bytes: 1024 * 1024,
-            },
-        );
+            }
+        };
+        self.send_tracked(tab_id, request_id, command);
     }
 
-    /// 下载容器内文件。
+    /// 下载容器或数据卷内文件。
     pub(crate) fn download_container_file(&mut self, tab_id: TabId, path: String) {
         let Some(local_path) = rfd::FileDialog::new()
             .set_file_name(path.rsplit('/').next().unwrap_or("download"))
@@ -72,22 +98,35 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
-        let Some(container) = workspace.selected_container_name() else {
+        let is_volume = workspace.section == ContainerSection::Volumes;
+        let target = if is_volume {
+            workspace.selected_volume_name()
+        } else {
+            workspace.selected_container_name()
+        };
+        let Some(target) = target else {
             return;
         };
         let request_id = ContainerRequestId::new();
         workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        self.send_tracked(
-            tab_id,
-            request_id,
+        let command = if is_volume {
+            ContainerCommand::DownloadVolumeFile {
+                tab_id,
+                request_id,
+                volume: target,
+                path,
+                local_path,
+            }
+        } else {
             ContainerCommand::Download {
                 tab_id,
                 request_id,
-                container,
+                container: target,
                 path,
                 local_path,
-            },
-        );
+            }
+        };
+        self.send_tracked(tab_id, request_id, command);
     }
 
     /// 打开文件重命名条：按钮与右键菜单共用同一份输入状态。

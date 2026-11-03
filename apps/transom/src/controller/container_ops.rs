@@ -133,8 +133,11 @@ pub(super) fn handle_container_command(
         | ContainerCommand::Stats { .. }
         | ContainerCommand::ListProcesses { .. } => streams::handle(state, ctx, command),
         ContainerCommand::ListDir { .. }
+        | ContainerCommand::ListVolumeDir { .. }
         | ContainerCommand::ReadFile { .. }
+        | ContainerCommand::ReadVolumeFile { .. }
         | ContainerCommand::Download { .. }
+        | ContainerCommand::DownloadVolumeFile { .. }
         | ContainerCommand::Upload { .. }
         | ContainerCommand::RemovePath { .. }
         | ContainerCommand::CreateDir { .. } => files::handle(state, ctx, command),

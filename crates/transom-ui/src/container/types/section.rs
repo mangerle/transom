@@ -52,7 +52,7 @@ impl ContainerSection {
             ],
             Self::Compose => &[ContainerDetailTab::Overview],
             Self::Images => &[ContainerDetailTab::Overview],
-            Self::Volumes => &[ContainerDetailTab::Overview],
+            Self::Volumes => &[ContainerDetailTab::Overview, ContainerDetailTab::Files],
             Self::Networks => &[ContainerDetailTab::Overview],
         }
     }
