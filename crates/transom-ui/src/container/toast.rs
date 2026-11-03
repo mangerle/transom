@@ -43,6 +43,12 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::RemoveVolume { name, .. } | C::RemoveNetwork { network: name, .. } => {
             Some(verb_object("common.delete", name))
         }
+        C::ConnectNetwork { network, container, .. } => {
+            Some(verb_object("container.action.connect_network", &format!("{container} -> {network}")))
+        }
+        C::DisconnectNetwork { network, container, .. } => {
+            Some(verb_object("container.action.disconnect_network", &format!("{container} -/-> {network}")))
+        }
         C::Rename { from, .. } => {
             Some(verb_object("container.action.rename", &path_basename(from)))
         }

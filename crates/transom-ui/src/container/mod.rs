@@ -10,6 +10,7 @@ mod form;
 mod lifecycle;
 mod list;
 mod logs_actions;
+mod network_connect;
 mod rename;
 mod sidebar;
 mod stats;

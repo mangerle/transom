@@ -5233,6 +5233,12 @@ container:
     build:
       en: Build
       zh-CN: 构建镜像
+    connect_network:
+      en: Connect
+      zh-CN: 连接网络
+    disconnect_network:
+      en: Disconnect
+      zh-CN: 断开网络
     start_all:
       en: Start all
       zh-CN: 全部启动
@@ -5242,6 +5248,16 @@ container:
     running:
       en: '%{action} in progress…'
       zh-CN: 正在%{action}…
+  network_connect:
+    label:
+      en: 'Connect Container:'
+      zh-CN: '连接容器:'
+    placeholder:
+      en: 'Container name or ID'
+      zh-CN: '容器名称或 ID'
+    invalid:
+      en: Please enter a valid container name or ID
+      zh-CN: 请输入有效的容器名称或 ID
   tag:
     label:
       en: 'Add Tag:'

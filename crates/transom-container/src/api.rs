@@ -608,6 +608,58 @@ impl DockerApi {
         http::ensure_success(status, "删除网络", body, Some(network))
     }
 
+    /// 将容器连接到网络。
+    pub async fn connect_network(
+        &self,
+        network: &str,
+        container: &str,
+    ) -> Result<(), ContainerError> {
+        let path = format!("/networks/{}/connect", http::percent_encode(network));
+        let payload = serde_json::json!({
+            "Container": container,
+        });
+        let body = serde_json::to_vec(&payload).map_err(|error| ContainerError::Decode {
+            operation: "构造连接网络请求".to_string(),
+            message: error.to_string(),
+        })?;
+        let response = self
+            .send(Method::POST, &path, Some(body), "连接网络")
+            .await?;
+        if response.status.is_success() {
+            return Ok(());
+        }
+        let status = response.status;
+        let body = http::read_body_text(response.body, 8192).await;
+        http::ensure_success(status, "连接网络", body, Some(network))
+    }
+
+    /// 将容器从网络断开。
+    pub async fn disconnect_network(
+        &self,
+        network: &str,
+        container: &str,
+        force: bool,
+    ) -> Result<(), ContainerError> {
+        let path = format!("/networks/{}/disconnect", http::percent_encode(network));
+        let payload = serde_json::json!({
+            "Container": container,
+            "Force": force,
+        });
+        let body = serde_json::to_vec(&payload).map_err(|error| ContainerError::Decode {
+            operation: "构造断开网络请求".to_string(),
+            message: error.to_string(),
+        })?;
+        let response = self
+            .send(Method::POST, &path, Some(body), "断开网络")
+            .await?;
+        if response.status.is_success() {
+            return Ok(());
+        }
+        let status = response.status;
+        let body = http::read_body_text(response.body, 8192).await;
+        http::ensure_success(status, "断开网络", body, Some(network))
+    }
+
     /// 容器内进程列表（`ps aux` 口径）。
     pub async fn list_processes(
         &self,
@@ -1247,5 +1299,20 @@ mod tests {
             split_reference("alpine@sha256:abc"),
             ("alpine@sha256:abc".to_string(), None)
         );
+    }
+
+    #[test]
+    fn network_connect_and_disconnect_payload_structures() {
+        let connect_payload = serde_json::json!({
+            "Container": "my-web-1",
+        });
+        assert_eq!(connect_payload["Container"], "my-web-1");
+
+        let disconnect_payload = serde_json::json!({
+            "Container": "my-web-1",
+            "Force": false,
+        });
+        assert_eq!(disconnect_payload["Container"], "my-web-1");
+        assert_eq!(disconnect_payload["Force"], false);
     }
 }

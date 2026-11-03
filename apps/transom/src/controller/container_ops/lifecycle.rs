@@ -210,6 +210,23 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
             engine.remove_network(&network).await
         }),
+        ContainerCommand::ConnectNetwork {
+            tab_id,
+            request_id,
+            network,
+            container,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            engine.connect_network(&network, &container).await
+        }),
+        ContainerCommand::DisconnectNetwork {
+            tab_id,
+            request_id,
+            network,
+            container,
+            force,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            engine.disconnect_network(&network, &container, force).await
+        }),
         ContainerCommand::Rename {
             tab_id,
             request_id,

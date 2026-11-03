@@ -125,6 +125,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) update_container: Option<(String, Entity<InputState>, Entity<InputState>)>,
     /// 镜像打标签条：镜像 ID 与新 tag 输入框；`None` 表示不显示。
     pub(crate) tag_image: Option<(String, Entity<InputState>)>,
+    /// 网络连接容器条：网络 ID 与待连接容器名输入框；`None` 表示不显示。
+    pub(crate) connect_network: Option<(String, Entity<InputState>)>,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
     /// 待确认的删除动作。
@@ -208,6 +210,7 @@ impl ContainerWorkspaceState {
             rename_container: None,
             update_container: None,
             tag_image: None,
+            connect_network: None,
             pending_select: None,
             files: ContainerFilesState {
                 new_dir_open: false,

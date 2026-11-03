@@ -1,6 +1,7 @@
 //! 网络详情。
 
 use super::*;
+use transom_core::{ContainerCommand, ContainerRequestId};
 
 pub(crate) fn render_network_detail(
     tab_id: TabId,
@@ -35,13 +36,13 @@ pub(crate) fn render_network_detail(
             p,
         );
     };
-    let connected_items = connected
+    let connected_items: Vec<(String, String)> = connected
         .iter()
         .map(|item| (item.name.clone(), item.ipv4.clone().unwrap_or_default()))
         .collect();
     let mut rows = v_flex()
         .gap_1p5()
-        .child(kv(p, rust_i18n::t!("container.field.id"), id))
+        .child(kv(p, rust_i18n::t!("container.field.id"), id.clone()))
         .child(kv(p, rust_i18n::t!("container.field.name"), name))
         .child(kv(p, rust_i18n::t!("container.field.driver"), driver))
         .child(kv(p, rust_i18n::t!("container.field.scope"), scope))
@@ -80,12 +81,80 @@ pub(crate) fn render_network_detail(
             ))
             .child(kv(p, rust_i18n::t!("container.field.labels"), labels));
     }
-    rows = rows.child(linked_containers(
-        tab_id,
-        rust_i18n::t!("container.field.connected").to_string(),
-        connected_items,
-        p,
-        cx,
-    ));
+    let disconnect_net_id = id.clone();
+    let mut connected_block = v_flex()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.field.connected").to_string()),
+        );
+    if connected_items.is_empty() {
+        connected_block = connected_block.child(
+            div()
+                .text_sm()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.linked.none").to_string()),
+        );
+    } else {
+        for (name, hint) in connected_items {
+            let reveal_name = name.clone();
+            let disconnect_name = name.clone();
+            let net_id = disconnect_net_id.clone();
+            let mut row = h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    Icon::new(IconName::Container)
+                        .xsmall()
+                        .text_color(p.muted_foreground),
+                )
+                .child(
+                    Button::new(ElementId::Name(
+                        format!("network-container-link-{name}-{tab_id}").into(),
+                    ))
+                    .ghost()
+                    .xsmall()
+                    .label(name.clone())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.reveal_container(tab_id, reveal_name.clone(), cx);
+                    })),
+                );
+            if !hint.is_empty() {
+                row = row.child(div().text_xs().text_color(p.muted_foreground).child(hint));
+            }
+            row = row.child(div().flex_1());
+            row = row.child(
+                Button::new(ElementId::Name(
+                    format!("network-disconnect-{name}-{tab_id}").into(),
+                ))
+                .ghost()
+                .xsmall()
+                .icon(IconName::Close)
+                .tooltip(rust_i18n::t!("container.action.disconnect_network").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let request_id = ContainerRequestId::new();
+                    if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                        workspace.busy = true;
+                    }
+                    this.send_tracked(
+                        tab_id,
+                        request_id,
+                        ContainerCommand::DisconnectNetwork {
+                            tab_id,
+                            request_id,
+                            network: net_id.clone(),
+                            container: disconnect_name.clone(),
+                            force: false,
+                        },
+                    );
+                    cx.notify();
+                })),
+            );
+            connected_block = connected_block.child(row);
+        }
+    }
+    rows = rows.child(connected_block);
     scroll_body(rows, p).into_any_element()
 }

@@ -255,6 +255,29 @@ impl Engine {
         }
     }
 
+    pub async fn connect_network(
+        &self,
+        network: &str,
+        container: &str,
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.connect_network(network, container).await,
+            EngineBackend::Cli(cli) => cli.connect_network(network, container).await,
+        }
+    }
+
+    pub async fn disconnect_network(
+        &self,
+        network: &str,
+        container: &str,
+        force: bool,
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.disconnect_network(network, container, force).await,
+            EngineBackend::Cli(cli) => cli.disconnect_network(network, container, force).await,
+        }
+    }
+
     pub async fn container_stats(
         &self,
         container: &str,

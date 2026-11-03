@@ -617,6 +617,36 @@ impl CliBackend {
             .map(|_| ())
     }
 
+    pub async fn connect_network(
+        &self,
+        network: &str,
+        container: &str,
+    ) -> Result<(), ContainerError> {
+        self.run_checked(&[
+            "network".to_string(),
+            "connect".to_string(),
+            network.to_string(),
+            container.to_string(),
+        ])
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn disconnect_network(
+        &self,
+        network: &str,
+        container: &str,
+        force: bool,
+    ) -> Result<(), ContainerError> {
+        let mut args = vec!["network".to_string(), "disconnect".to_string()];
+        if force {
+            args.push("-f".to_string());
+        }
+        args.push(network.to_string());
+        args.push(container.to_string());
+        self.run_checked(&args).await.map(|_| ())
+    }
+
     /// CLI 统计是单次快照；解析人类可读字段。
     pub async fn container_stats(
         &self,

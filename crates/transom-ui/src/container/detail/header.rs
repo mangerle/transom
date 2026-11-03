@@ -386,12 +386,26 @@ impl AppShell {
             }
             ContainerSection::Networks => {
                 if let Some(network) = network {
-                    actions = actions.child(delete_button(
-                        "network-delete",
-                        cx,
-                        tab_id,
-                        ContainerConfirm::Network(network.id.clone()),
-                    ));
+                    let network_id = network.id.clone();
+                    actions = actions
+                        .child(
+                            Button::new("network-connect")
+                                .xsmall()
+                                .icon(IconName::Link)
+                                .label(rust_i18n::t!("container.action.connect_network").to_string())
+                                .on_click(cx.listener({
+                                    let network_id = network_id.clone();
+                                    move |this, _, window, cx| {
+                                        this.open_network_connect(tab_id, network_id.clone(), window, cx);
+                                    }
+                                })),
+                        )
+                        .child(delete_button(
+                            "network-delete",
+                            cx,
+                            tab_id,
+                            ContainerConfirm::Network(network.id.clone()),
+                        ));
                 }
             }
         }

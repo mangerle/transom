@@ -120,6 +120,8 @@ pub(super) fn handle_container_command(
         | ContainerCommand::RemoveVolume { .. }
         | ContainerCommand::CreateNetwork { .. }
         | ContainerCommand::RemoveNetwork { .. }
+        | ContainerCommand::ConnectNetwork { .. }
+        | ContainerCommand::DisconnectNetwork { .. }
         | ContainerCommand::Rename { .. }
         | ContainerCommand::RenameContainer { .. }
         | ContainerCommand::UpdateContainer { .. }

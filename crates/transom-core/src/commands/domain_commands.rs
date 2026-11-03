@@ -265,6 +265,19 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         network: String,
     },
+    ConnectNetwork {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        network: String,
+        container: String,
+    },
+    DisconnectNetwork {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        network: String,
+        container: String,
+        force: bool,
+    },
     /// Compose 项目列表（按容器标签聚合）。
     ListComposeProjects {
         tab_id: TabId,
