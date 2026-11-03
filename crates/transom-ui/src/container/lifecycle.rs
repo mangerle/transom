@@ -333,6 +333,7 @@ impl AppShell {
         let command = match target {
             ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },
             ContainerPruneTarget::Images => ContainerCommand::PruneImages { tab_id, request_id },
+            ContainerPruneTarget::Networks => ContainerCommand::PruneNetworks { tab_id, request_id },
         };
         self.send_tracked(tab_id, request_id, command);
         cx.notify();

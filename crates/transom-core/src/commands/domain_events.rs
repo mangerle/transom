@@ -318,6 +318,11 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         report: ContainerPruneReport,
     },
+    /// 清理未使用网络的结果。
+    NetworksPruned {
+        request_id: ContainerRequestId,
+        report: ContainerPruneReport,
+    },
     NetworksListed {
         request_id: ContainerRequestId,
         networks: Vec<ContainerNetworkSummary>,

@@ -132,6 +132,14 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             |engine| async move { engine.prune_images().await },
             |request_id, report| ContainerAppEvent::ImagesPruned { request_id, report },
         ),
+        ContainerCommand::PruneNetworks { tab_id, request_id } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            |engine| async move { engine.prune_networks().await },
+            |request_id, report| ContainerAppEvent::NetworksPruned { request_id, report },
+        ),
         _ => {}
     }
 }

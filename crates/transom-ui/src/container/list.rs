@@ -219,10 +219,11 @@ impl AppShell {
                 this.open_container_create_dialog(tab_id, section, window, cx);
             })));
         }
-        // 卷与镜像都有「清理」视角：卷清未使用，镜像清悬空且无标签的那批。
+        // 卷、镜像与网络都有「清理」视角：清未使用或悬空条目。
         let prune_target = match params.section {
             ContainerSection::Volumes => Some(ContainerPruneTarget::Volumes),
             ContainerSection::Images => Some(ContainerPruneTarget::Images),
+            ContainerSection::Networks => Some(ContainerPruneTarget::Networks),
             _ => None,
         };
         if let Some(target) = prune_target {

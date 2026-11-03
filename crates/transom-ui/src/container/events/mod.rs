@@ -415,6 +415,19 @@ impl AppShell {
                 self.show_toast(message, true, window, cx);
                 self.refresh_container_section(tab_id);
             }
+            ContainerAppEvent::NetworksPruned { request_id, report } => {
+                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                    return;
+                };
+                let target = ContainerPruneTarget::Networks;
+                let message = if report.deleted.is_empty() {
+                    rust_i18n::t!(target.none_key()).to_string()
+                } else {
+                    rust_i18n::t!(target.done_key(), count = report.deleted.len()).to_string()
+                };
+                self.show_toast(message, true, window, cx);
+                self.refresh_container_section(tab_id);
+            }
             ContainerAppEvent::ActionFinished { request_id, error } => {
                 self.on_container_action_finished(request_id, error, window, cx)
             }

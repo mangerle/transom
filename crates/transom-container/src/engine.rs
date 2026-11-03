@@ -278,6 +278,14 @@ impl Engine {
         }
     }
 
+    /// 清理未使用的容器网络。
+    pub async fn prune_networks(&self) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.prune_networks().await,
+            EngineBackend::Cli(cli) => cli.prune_networks().await,
+        }
+    }
+
     pub async fn container_stats(
         &self,
         container: &str,

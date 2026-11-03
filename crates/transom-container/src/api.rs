@@ -9,7 +9,7 @@ use crate::http::{self, RawResponse};
 use crate::models::{
     ContainerInspect, ContainerListItem, ContainerUpdateRequest, ExecCreateResponse,
     ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
-    NetworkItem, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
+    NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
     VolumeListResponse, VolumePruneResponse,
 };
 use crate::transport::EngineTransport;
@@ -658,6 +658,27 @@ impl DockerApi {
         let status = response.status;
         let body = http::read_body_text(response.body, 8192).await;
         http::ensure_success(status, "断开网络", body, Some(network))
+    }
+
+    /// 清理未使用的容器网络。
+    pub async fn prune_networks(&self) -> Result<ContainerPruneReport, ContainerError> {
+        const OPERATION: &str = "清理未使用网络";
+        let response = self.send(Method::POST, "/networks/prune", None, OPERATION).await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, OPERATION, body, "networks"));
+        }
+        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let report: NetworkPruneResponse =
+            serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
+                operation: OPERATION.to_string(),
+                message: error.to_string(),
+            })?;
+        Ok(ContainerPruneReport {
+            deleted: report.networks_deleted,
+            reclaimed: 0,
+        })
     }
 
     /// 容器内进程列表（`ps aux` 口径）。

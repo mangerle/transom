@@ -387,4 +387,9 @@ pub enum ContainerCommand {
         tab_id: TabId,
         request_id: ContainerRequestId,
     },
+    /// 清理未使用的容器网络。
+    PruneNetworks {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
 }

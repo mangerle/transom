@@ -108,7 +108,8 @@ pub(super) fn handle_container_command(
         | ContainerCommand::InspectNetwork { .. }
         | ContainerCommand::ListComposeProjects { .. }
         | ContainerCommand::PruneVolumes { .. }
-        | ContainerCommand::PruneImages { .. } => query::handle(state, ctx, command),
+        | ContainerCommand::PruneImages { .. }
+        | ContainerCommand::PruneNetworks { .. } => query::handle(state, ctx, command),
         ContainerCommand::RunCompose { .. }
         | ContainerCommand::Lifecycle { .. }
         | ContainerCommand::PullImage { .. }

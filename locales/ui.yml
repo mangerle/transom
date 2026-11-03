@@ -4682,6 +4682,9 @@ container:
     images:
       en: Prune dangling images
       zh-CN: 清理悬空镜像
+    networks:
+      en: Prune unused networks
+      zh-CN: 清理未使用网络
     confirm:
       en: Click again to confirm
       zh-CN: 再点一次确认清理
@@ -4691,18 +4694,27 @@ container:
     images_hint:
       en: Removes untagged images not referenced by any other image; cannot be undone
       zh-CN: 删除没有标签且不被其他镜像引用的镜像，不可恢复
+    networks_hint:
+      en: Removes all networks not used by at least one container; cannot be undone
+      zh-CN: 删除所有未被任何容器使用的网络，不可恢复
     done:
       en: 'Pruned %{count} unused volumes'
       zh-CN: '已清理 %{count} 个未使用数据卷'
     images_done:
       en: 'Pruned %{count} dangling images'
       zh-CN: '已清理 %{count} 个悬空镜像'
+    networks_done:
+      en: 'Pruned %{count} unused networks'
+      zh-CN: '已清理 %{count} 个未使用网络'
     none:
       en: No unused volumes to prune
       zh-CN: 没有需要清理的未使用卷
     images_none:
       en: No dangling images to prune
       zh-CN: 没有需要清理的悬空镜像
+    networks_none:
+      en: No unused networks to prune
+      zh-CN: 没有需要清理的未使用网络
   create_placeholder:
     en: Name or image reference
     zh-CN: 名称或镜像引用

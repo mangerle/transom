@@ -647,6 +647,37 @@ impl CliBackend {
         self.run_checked(&args).await.map(|_| ())
     }
 
+    pub async fn prune_networks(
+        &self,
+    ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        let stdout = self
+            .run_checked(&[
+                "network".to_string(),
+                "prune".to_string(),
+                "-f".to_string(),
+            ])
+            .await?;
+        let mut deleted = Vec::new();
+        let mut capturing = false;
+        for line in stdout.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if trimmed.contains("Deleted Networks:") {
+                capturing = true;
+                continue;
+            }
+            if capturing {
+                deleted.push(trimmed.to_string());
+            }
+        }
+        Ok(transom_core::ContainerPruneReport {
+            deleted,
+            reclaimed: 0,
+        })
+    }
+
     /// CLI 统计是单次快照；解析人类可读字段。
     pub async fn container_stats(
         &self,

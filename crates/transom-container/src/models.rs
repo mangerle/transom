@@ -486,6 +486,14 @@ pub struct VolumePruneResponse {
     pub space_reclaimed: u64,
 }
 
+/// `POST /networks/prune` 响应。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct NetworkPruneResponse {
+    /// 清理掉的网络名列表；没有可删条目时是 `null`。
+    #[serde(rename = "NetworksDeleted", default, deserialize_with = "null_as_empty")]
+    pub networks_deleted: Vec<String>,
+}
+
 /// `GET /volumes` 响应。
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct VolumeListResponse {

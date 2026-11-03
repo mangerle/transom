@@ -29,6 +29,7 @@ pub(crate) struct ContainerCreateDialog {
 pub(crate) enum ContainerPruneTarget {
     Volumes,
     Images,
+    Networks,
 }
 
 impl ContainerPruneTarget {
@@ -37,6 +38,7 @@ impl ContainerPruneTarget {
         match self {
             Self::Volumes => "container.prune.volumes",
             Self::Images => "container.prune.images",
+            Self::Networks => "container.prune.networks",
         }
     }
 
@@ -44,6 +46,7 @@ impl ContainerPruneTarget {
         match self {
             Self::Volumes => "container.prune.hint",
             Self::Images => "container.prune.images_hint",
+            Self::Networks => "container.prune.networks_hint",
         }
     }
 
@@ -52,6 +55,7 @@ impl ContainerPruneTarget {
         match self {
             Self::Volumes => "container.prune.done",
             Self::Images => "container.prune.images_done",
+            Self::Networks => "container.prune.networks_done",
         }
     }
 
@@ -59,6 +63,7 @@ impl ContainerPruneTarget {
         match self {
             Self::Volumes => "container.prune.none",
             Self::Images => "container.prune.images_none",
+            Self::Networks => "container.prune.networks_none",
         }
     }
 }
