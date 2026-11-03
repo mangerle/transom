@@ -378,6 +378,11 @@ pub enum ContainerAppEvent {
         transferred: u64,
         total: Option<u64>,
     },
+    /// 镜像构建输出行（实时显示当前构建步骤或日志）。
+    BuildProgress {
+        request_id: ContainerRequestId,
+        line: String,
+    },
     /// 启停删、拉取、卷/网络操作完成；`error` 为 `None` 表示成功。
     ActionFinished {
         request_id: ContainerRequestId,

@@ -172,6 +172,8 @@ impl AppShell {
         let driver = read_input(&dialog.and_then(|dialog| dialog.driver.clone()));
         let subnet = read_input(&dialog.and_then(|dialog| dialog.subnet.clone()));
         let gateway = read_input(&dialog.and_then(|dialog| dialog.gateway.clone()));
+        let dockerfile = read_input(&dialog.and_then(|dialog| dialog.dockerfile.clone()));
+        let tag = read_input(&dialog.and_then(|dialog| dialog.tag.clone()));
         let internal = dialog.is_some_and(|dialog| dialog.internal);
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
@@ -189,11 +191,19 @@ impl AppShell {
         }
         let request_id = ContainerRequestId::new();
         let command = match section {
-            ContainerSection::Images => ContainerCommand::PullImage {
-                tab_id,
-                request_id,
-                reference: value,
-            },
+            ContainerSection::Images => {
+                let tags = tag.map(|t| vec![t]).unwrap_or_default();
+                ContainerCommand::BuildImage {
+                    tab_id,
+                    request_id,
+                    spec: transom_core::ContainerBuildSpec {
+                        context_path: value,
+                        dockerfile,
+                        tags,
+                        no_cache: false,
+                    },
+                }
+            }
             ContainerSection::Volumes => ContainerCommand::CreateVolume {
                 tab_id,
                 request_id,
@@ -265,12 +275,27 @@ impl AppShell {
                 )
             })
         });
+        let is_image = section == ContainerSection::Images;
+        let dockerfile = is_image.then(|| {
+            cx.new(|cx| {
+                InputState::new(window, cx).placeholder("Dockerfile".to_string())
+            })
+        });
+        let tag = is_image.then(|| {
+            cx.new(|cx| {
+                InputState::new(window, cx).placeholder(
+                    rust_i18n::t!("container.create_dialog.tag_placeholder").to_string(),
+                )
+            })
+        });
         self.state.containers.create_dialog = Some(ContainerCreateDialog {
             tab_id,
             section,
             driver,
             subnet,
             gateway,
+            dockerfile,
+            tag,
             internal: false,
         });
         cx.notify();

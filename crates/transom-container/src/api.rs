@@ -858,6 +858,15 @@ impl DockerApi {
         consume_pull_stream(response.body, progress).await
     }
 
+    /// 构建镜像；流式上报构建进度行。
+    pub async fn build_image(
+        &self,
+        spec: &transom_core::ContainerBuildSpec,
+        progress: &mut (dyn FnMut(String) + Send),
+    ) -> Result<(), ContainerError> {
+        crate::build::build_image_http(self, spec, progress).await
+    }
+
     /// 删除镜像。
     pub async fn remove_image(&self, image: &str, force: bool) -> Result<(), ContainerError> {
         let path = format!(

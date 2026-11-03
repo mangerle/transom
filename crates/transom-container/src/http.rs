@@ -72,6 +72,28 @@ pub async fn request_with_headers(
     content_type: Option<&str>,
     extra_headers: &[(&str, &str)],
 ) -> Result<RawResponse, ContainerError> {
+    request_with_timeout(
+        transport,
+        method,
+        path,
+        body,
+        content_type,
+        extra_headers,
+        REQUEST_TIMEOUT,
+    )
+    .await
+}
+
+/// 支持自定义超时与额外请求头的 HTTP 请求（用于镜像构建等长耗时操作）。
+pub async fn request_with_timeout(
+    transport: &EngineTransport,
+    method: Method,
+    path: &str,
+    body: Bytes,
+    content_type: Option<&str>,
+    extra_headers: &[(&str, &str)],
+    timeout: Duration,
+) -> Result<RawResponse, ContainerError> {
     let operation = format!("{method} {path}");
     let stream = transport.connect().await?;
     let (mut sender, connection) = tokio::time::timeout(
@@ -97,7 +119,7 @@ pub async fn request_with_headers(
             request.headers_mut().insert(h_name, h_val);
         }
     }
-    let response = tokio::time::timeout(REQUEST_TIMEOUT, sender.send_request(request))
+    let response = tokio::time::timeout(timeout, sender.send_request(request))
         .await
         .map_err(|_| ContainerError::Http {
             operation: operation.clone(),

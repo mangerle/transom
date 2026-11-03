@@ -40,7 +40,7 @@ pub use model::catalog::{
 };
 pub use model::color::Rgb;
 pub use model::container::{
-    ComposeAction, ComposeProject, ContainerBlockDeviceIo, ContainerConnection,
+    ComposeAction, ComposeProject, ContainerBlockDeviceIo, ContainerBuildSpec, ContainerConnection,
     ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
     ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
     ContainerFileKind, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerInterfaceIo,

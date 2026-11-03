@@ -16,6 +16,10 @@ pub(crate) struct ContainerCreateDialog {
     /// 子网与网关：只有网络需要；留空由引擎分配。
     pub(crate) subnet: Option<Entity<InputState>>,
     pub(crate) gateway: Option<Entity<InputState>>,
+    /// Dockerfile 相对路径：镜像构建时使用。
+    pub(crate) dockerfile: Option<Entity<InputState>>,
+    /// 镜像标签：镜像构建时使用。
+    pub(crate) tag: Option<Entity<InputState>>,
     /// 仅宿主机内部可见（`--internal`）。
     pub(crate) internal: bool,
 }

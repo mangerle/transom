@@ -636,6 +636,22 @@ pub struct ContainerUpdateSpec {
     pub restart_policy: Option<String>,
 }
 
+/// 镜像构建参数。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContainerBuildSpec {
+    /// 构建上下文所在的本地目录路径。
+    pub context_path: String,
+    /// 相对上下文路径的 Dockerfile 路径（默认为 "Dockerfile"）。
+    #[serde(default)]
+    pub dockerfile: Option<String>,
+    /// 构建生成的标签列表（如 `["myapp:v1", "myapp:latest"]`）。
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// 是否不使用缓存进行构建。
+    #[serde(default)]
+    pub no_cache: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ContainerImageSummary, shorten_reference};

@@ -174,10 +174,10 @@ impl AppShell {
 /// 工具条「新增」按钮的文案；容器与编排分类没有这一档。
 pub(crate) fn create_button_label(section: ContainerSection) -> Option<String> {
     let key = match section {
-        // 镜像拉取入口暂时收掉：先把列表、运行与详情打磨好，避免工具条继续变宽。
-        ContainerSection::Images | ContainerSection::Containers | ContainerSection::Compose => {
+        ContainerSection::Containers | ContainerSection::Compose => {
             return None;
         }
+        ContainerSection::Images => "container.action.build",
         ContainerSection::Volumes => "container.create_dialog.volume",
         ContainerSection::Networks => "container.create_dialog.network",
     };

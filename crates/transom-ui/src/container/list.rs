@@ -209,7 +209,7 @@ impl AppShell {
                 .icon(IconName::Plus);
             let button = if matches!(
                 section,
-                ContainerSection::Volumes | ContainerSection::Networks
+                ContainerSection::Volumes | ContainerSection::Networks | ContainerSection::Images
             ) {
                 button.tooltip(label)
             } else {

@@ -251,6 +251,14 @@ impl CliBackend {
             .map(|_| ())
     }
 
+    pub async fn build_image(
+        &self,
+        spec: &transom_core::ContainerBuildSpec,
+        progress: &mut (dyn FnMut(String) + Send),
+    ) -> Result<(), ContainerError> {
+        crate::build::build_image_cli(self, spec, progress).await
+    }
+
     pub async fn remove_image(&self, image: &str, force: bool) -> Result<(), ContainerError> {
         let mut args = vec!["rmi".to_string()];
         if force {

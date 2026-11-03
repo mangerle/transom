@@ -18,7 +18,7 @@ impl AppShell {
         let title = create_button_label(dialog.section)
             .unwrap_or_else(|| rust_i18n::t!("container.create").to_string());
         let name_label = if dialog.section == ContainerSection::Images {
-            rust_i18n::t!("container.run.image").to_string()
+            rust_i18n::t!("container.field.context_path").to_string()
         } else {
             rust_i18n::t!("container.field.name").to_string()
         };
@@ -30,6 +30,20 @@ impl AppShell {
             v_flex()
                 .gap_3()
                 .child(crate::widgets::form_field(name_label, create_input, p));
+        if let Some(dockerfile) = dialog.dockerfile.clone() {
+            content = content.child(crate::widgets::form_field(
+                rust_i18n::t!("container.field.dockerfile").to_string(),
+                dockerfile,
+                p,
+            ));
+        }
+        if let Some(tag) = dialog.tag.clone() {
+            content = content.child(crate::widgets::form_field(
+                rust_i18n::t!("container.field.tag").to_string(),
+                tag,
+                p,
+            ));
+        }
         if let Some(driver) = dialog.driver.clone() {
             content = content.child(crate::widgets::form_field(
                 rust_i18n::t!("container.field.driver").to_string(),

@@ -4669,6 +4669,9 @@ container:
     internal:
       en: Host-internal only (no outbound NAT)
       zh-CN: 仅宿主机内部访问（不做出站 NAT）
+    tag_placeholder:
+      en: 'Image tag, e.g. my-app:latest'
+      zh-CN: '镜像标签，如 my-app:latest'
     name_required:
       en: Name is required
       zh-CN: 名称不能为空
@@ -5067,6 +5070,15 @@ container:
       en: Custom CLI
       zh-CN: 自定义 CLI
   field:
+    context_path:
+      en: Context path
+      zh-CN: 上下文路径
+    dockerfile:
+      en: Dockerfile
+      zh-CN: Dockerfile
+    tag:
+      en: Image tag
+      zh-CN: 镜像标签
     health:
       en: Health
       zh-CN: 健康状态
@@ -5218,6 +5230,9 @@ container:
     push:
       en: Push
       zh-CN: 推送
+    build:
+      en: Build
+      zh-CN: 构建镜像
     start_all:
       en: Start all
       zh-CN: 全部启动

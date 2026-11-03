@@ -34,6 +34,10 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
             };
             Some(verb_object("container.action.push", &target))
         }
+        C::BuildImage { spec, .. } => {
+            let target = spec.tags.first().cloned().unwrap_or_else(|| spec.context_path.clone());
+            Some(verb_object("container.action.build", &target))
+        }
         C::CreateVolume { name, .. } => Some(verb_object("container.create", name)),
         C::CreateNetwork { spec, .. } => Some(verb_object("container.create", &spec.name)),
         C::RemoveVolume { name, .. } | C::RemoveNetwork { network: name, .. } => {

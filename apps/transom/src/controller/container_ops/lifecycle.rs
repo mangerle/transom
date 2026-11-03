@@ -149,6 +149,37 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 .await;
             });
         }
+        ContainerCommand::BuildImage {
+            tab_id,
+            request_id,
+            spec,
+        } => {
+            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                return;
+            };
+            let event_tx = ctx.event_tx.clone();
+            spawn_long(state, ctx, tab_id, request_id, cancel, async move {
+                let mut progress = |line: String| {
+                    let _ = event_tx.try_send(
+                        ContainerAppEvent::BuildProgress {
+                            request_id,
+                            line,
+                        }
+                        .into(),
+                    );
+                };
+                let error = engine
+                    .build_image(&spec, &mut progress)
+                    .await
+                    .err()
+                    .map(AppError::from);
+                send_event(
+                    &event_tx,
+                    ContainerAppEvent::ActionFinished { request_id, error },
+                )
+                .await;
+            });
+        }
         ContainerCommand::CreateVolume {
             tab_id,
             request_id,

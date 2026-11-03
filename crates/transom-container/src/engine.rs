@@ -10,7 +10,7 @@ use crate::error::ContainerError;
 use crate::transport::EngineTransport;
 use std::time::Duration;
 use transom_core::{
-    ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
+    ComposeProject, ContainerBuildSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
     ContainerEngineRef, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerRegistryAuth, ContainerStats,
     ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
@@ -370,6 +370,18 @@ impl Engine {
                 };
                 cli.push_image(&ref_str).await
             }
+        }
+    }
+
+    /// 构建镜像；HTTP 与 CLI 后端均支持流式进度上报。
+    pub async fn build_image(
+        &self,
+        spec: &ContainerBuildSpec,
+        progress: &mut (dyn FnMut(String) + Send),
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.build_image(spec, progress).await,
+            EngineBackend::Cli(cli) => cli.build_image(spec, progress).await,
         }
     }
 

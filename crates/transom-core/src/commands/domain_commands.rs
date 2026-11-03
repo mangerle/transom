@@ -10,7 +10,7 @@
 
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
-    ComposeAction, ComposeProject, ContainerConnection, ContainerCreateSpec,
+    ComposeAction, ComposeProject, ContainerBuildSpec, ContainerConnection, ContainerCreateSpec,
     ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRegistryAuth, ContainerUpdateSpec,
 };
 use crate::model::forward::ForwardRule;
@@ -219,6 +219,11 @@ pub enum ContainerCommand {
         image: String,
         tag: Option<String>,
         auth: Option<ContainerRegistryAuth>,
+    },
+    BuildImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        spec: ContainerBuildSpec,
     },
     ListVolumes {
         tab_id: TabId,

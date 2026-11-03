@@ -381,6 +381,14 @@ impl AppShell {
                     });
                 }
             }
+            ContainerAppEvent::BuildProgress { request_id, line } => {
+                let Some(tab_id) = self.state.containers.tab_of(request_id) else {
+                    return;
+                };
+                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                    workspace.notice = Some(line);
+                }
+            }
             ContainerAppEvent::VolumesPruned { request_id, report } => {
                 let Some(tab_id) = self.state.containers.take_tab(request_id) else {
                     return;
