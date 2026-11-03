@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::container::CONTENT_HEADER_HEIGHT;
-use transom_core::{ContainerCommand, ContainerRequestId};
 
 /// 详情头部的渲染参数：选中项按分类不同，统一用借用结构体传入。
 pub(crate) struct ContainerHeaderView<'a> {
@@ -247,131 +246,19 @@ impl AppShell {
             }
             ContainerSection::Compose => {
                 if let Some(project) = compose {
-                    let names: Vec<String> = all_containers
-                        .iter()
-                        .filter(|item| {
-                            item.compose_project.as_deref() == Some(project.name.as_str())
-                        })
-                        .map(|item| item.name.clone())
-                        .collect();
-                    let start_names = names.clone();
-                    let stop_names = names;
-                    actions = actions
-                        .child(
-                            Button::new("compose-start-all")
-                                .xsmall()
-                                .icon(IconName::Play)
-                                .label(rust_i18n::t!("container.action.start_all").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    for name in &start_names {
-                                        this.container_lifecycle(
-                                            tab_id,
-                                            name.clone(),
-                                            transom_core::ContainerLifecycleAction::Start,
-                                            cx,
-                                        );
-                                    }
-                                })),
-                        )
-                        .child(
-                            Button::new("compose-stop-all")
-                                .xsmall()
-                                .icon(IconName::Square)
-                                .label(rust_i18n::t!("container.action.stop_all").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    for name in &stop_names {
-                                        this.container_lifecycle(
-                                            tab_id,
-                                            name.clone(),
-                                            transom_core::ContainerLifecycleAction::Stop,
-                                            cx,
-                                        );
-                                    }
-                                })),
-                        );
-                    let compose_name = project.name.clone();
-                    let up_name = compose_name.clone();
-                    actions = actions
-                        .child(
-                            Button::new("compose-up")
-                                .xsmall()
-                                .icon(IconName::RotateCw)
-                                .label(rust_i18n::t!("container.action.compose_up").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.run_compose(
-                                        tab_id,
-                                        up_name.clone(),
-                                        transom_core::ComposeAction::Up,
-                                        cx,
-                                    );
-                                })),
-                        )
-                        .child(
-                            Button::new("compose-down")
-                                .xsmall()
-                                .icon(IconName::Trash)
-                                .label(rust_i18n::t!("container.action.compose_down").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.run_compose(
-                                        tab_id,
-                                        compose_name.clone(),
-                                        transom_core::ComposeAction::Down,
-                                        cx,
-                                    );
-                                })),
-                        );
+                    actions = actions.children(super::header_actions::compose_header_actions(
+                        tab_id,
+                        project,
+                        all_containers,
+                        cx,
+                    ));
                 }
             }
             ContainerSection::Images => {
                 if let Some(image) = image {
-                    let image_id = image.id.clone();
-                    let push_ref = image.display_name();
-                    actions = actions
-                        .child(
-                            Button::new("image-tag")
-                                .xsmall()
-                                .icon(IconName::TagPlus)
-                                .label(rust_i18n::t!("container.action.tag").to_string())
-                                .on_click(cx.listener({
-                                    let image_id = image_id.clone();
-                                    move |this, _, window, cx| {
-                                        this.open_image_tag(tab_id, image_id.clone(), window, cx);
-                                    }
-                                })),
-                        )
-                        .child(
-                            Button::new("image-push")
-                                .xsmall()
-                                .icon(IconName::Upload)
-                                .label(rust_i18n::t!("container.action.push").to_string())
-                                .on_click(cx.listener({
-                                    let push_ref = push_ref.clone();
-                                    move |this, _, _, cx| {
-                                        let request_id = ContainerRequestId::new();
-                                        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                                            workspace.busy = true;
-                                        }
-                                        this.send_tracked(
-                                            tab_id,
-                                            request_id,
-                                            ContainerCommand::PushImage {
-                                                tab_id,
-                                                request_id,
-                                                image: push_ref.clone(),
-                                                tag: None,
-                                                auth: None,
-                                            },
-                                        );
-                                        cx.notify();
-                                    }
-                                })),
-                        )
-                        .child(delete_button(
-                            "image-delete",
-                            cx,
-                            tab_id,
-                            ContainerConfirm::Image(image.id.clone()),
-                        ));
+                    actions = actions.children(super::header_actions::image_header_actions(
+                        tab_id, image, cx,
+                    ));
                 }
             }
             ContainerSection::Volumes => {
@@ -386,26 +273,9 @@ impl AppShell {
             }
             ContainerSection::Networks => {
                 if let Some(network) = network {
-                    let network_id = network.id.clone();
-                    actions = actions
-                        .child(
-                            Button::new("network-connect")
-                                .xsmall()
-                                .icon(IconName::Link)
-                                .label(rust_i18n::t!("container.action.connect_network").to_string())
-                                .on_click(cx.listener({
-                                    let network_id = network_id.clone();
-                                    move |this, _, window, cx| {
-                                        this.open_network_connect(tab_id, network_id.clone(), window, cx);
-                                    }
-                                })),
-                        )
-                        .child(delete_button(
-                            "network-delete",
-                            cx,
-                            tab_id,
-                            ContainerConfirm::Network(network.id.clone()),
-                        ));
+                    actions = actions.children(super::header_actions::network_header_actions(
+                        tab_id, network, cx,
+                    ));
                 }
             }
         }

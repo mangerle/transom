@@ -473,6 +473,12 @@ pub enum ComposeAction {
     Up,
     /// 停止并删除该项目创建的容器与网络。
     Down,
+    /// 重启项目下所有容器。
+    Restart,
+    /// 构建项目下定义的镜像。
+    Build,
+    /// 拉取项目下引用的最新镜像。
+    Pull,
 }
 
 impl ComposeAction {
@@ -481,6 +487,9 @@ impl ComposeAction {
         match self {
             Self::Up => "启动",
             Self::Down => "停止并删除",
+            Self::Restart => "重启",
+            Self::Build => "构建",
+            Self::Pull => "拉取",
         }
     }
 
@@ -489,6 +498,9 @@ impl ComposeAction {
         match self {
             Self::Up => "up",
             Self::Down => "down",
+            Self::Restart => "restart",
+            Self::Build => "build",
+            Self::Pull => "pull",
         }
     }
 
@@ -497,6 +509,9 @@ impl ComposeAction {
         match self {
             Self::Up => &["up", "-d"],
             Self::Down => &["down"],
+            Self::Restart => &["restart"],
+            Self::Build => &["build"],
+            Self::Pull => &["pull"],
         }
     }
 

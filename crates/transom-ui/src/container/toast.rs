@@ -75,14 +75,16 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::RemovePath { path, .. } => Some(verb_object("common.delete", path)),
         C::RunCompose {
             project, action, ..
-        } => Some(verb_object(
-            if matches!(action, transom_core::ComposeAction::Up) {
-                "container.action.compose_up"
-            } else {
-                "container.action.compose_down"
-            },
-            &project.name,
-        )),
+        } => {
+            let key = match action {
+                transom_core::ComposeAction::Up => "container.action.compose_up",
+                transom_core::ComposeAction::Down => "container.action.compose_down",
+                transom_core::ComposeAction::Restart => "container.action.compose_restart",
+                transom_core::ComposeAction::Build => "container.action.compose_build",
+                transom_core::ComposeAction::Pull => "container.action.compose_pull",
+            };
+            Some(verb_object(key, &project.name))
+        }
         // 连接、列表、inspect、日志、统计、终端、取消：成功时不打扰用户。
         _ => None,
     }

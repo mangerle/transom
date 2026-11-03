@@ -5212,6 +5212,15 @@ container:
     compose_down:
       en: Stop and remove project
       zh-CN: 停止并删除项目
+    compose_restart:
+      en: Restart project
+      zh-CN: 重启项目
+    compose_build:
+      en: Build project images
+      zh-CN: 构建项目镜像
+    compose_pull:
+      en: Pull project images
+      zh-CN: 拉取项目镜像
     rename:
       en: Rename
       zh-CN: 重命名

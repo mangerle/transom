@@ -23,6 +23,7 @@ mod confirm;
 mod file_bars;
 mod files;
 mod header;
+mod header_actions;
 mod image;
 mod logs;
 mod network;
