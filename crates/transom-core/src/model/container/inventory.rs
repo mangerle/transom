@@ -562,6 +562,8 @@ pub enum ContainerLifecycleAction {
     Start,
     Stop,
     Restart,
+    Pause,
+    Unpause,
     Remove {
         #[serde(default)]
         force: bool,
@@ -575,6 +577,8 @@ impl ContainerLifecycleAction {
             Self::Start => "启动",
             Self::Stop => "停止",
             Self::Restart => "重启",
+            Self::Pause => "暂停",
+            Self::Unpause => "恢复",
             Self::Remove { .. } => "删除",
         }
     }

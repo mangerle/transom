@@ -23,6 +23,8 @@ pub(crate) enum RowAction {
     Start,
     Stop,
     Restart,
+    Pause,
+    Unpause,
     Run,
     Rename,
     EditComposeYaml,
@@ -42,6 +44,8 @@ impl RowAction {
             Self::Start => "container.action.start",
             Self::Stop => "container.action.stop",
             Self::Restart => "container.action.restart",
+            Self::Pause => "container.action.pause",
+            Self::Unpause => "container.action.unpause",
             Self::Run => "container.run.title",
             Self::Rename => "container.action.rename",
             Self::EditComposeYaml => "container.compose.edit_yaml",
@@ -62,6 +66,8 @@ impl RowAction {
             Self::Start => IconName::Play,
             Self::Stop => IconName::Square,
             Self::Restart => IconName::RotateCw,
+            Self::Pause => IconName::Pause,
+            Self::Unpause => IconName::Play,
             Self::Run => IconName::Play,
             Self::Rename => IconName::Pen,
             Self::EditComposeYaml => IconName::FilePen,
@@ -82,7 +88,7 @@ impl RowAction {
             Self::Logs | Self::Terminal | Self::Stats | Self::Files | Self::Restart => {
                 matches!(target, RowTarget::Container { .. })
             }
-            Self::Start | Self::Stop | Self::Rename => {
+            Self::Start | Self::Stop | Self::Pause | Self::Unpause | Self::Rename => {
                 matches!(target, RowTarget::Container { .. })
             }
             Self::EditComposeYaml => matches!(target, RowTarget::Compose(_)),

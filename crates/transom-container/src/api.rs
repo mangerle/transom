@@ -646,6 +646,16 @@ impl DockerApi {
                 format!("/containers/{encoded}/restart?t=10"),
                 "重启容器",
             ),
+            ContainerLifecycleAction::Pause => (
+                Method::POST,
+                format!("/containers/{encoded}/pause"),
+                "暂停容器",
+            ),
+            ContainerLifecycleAction::Unpause => (
+                Method::POST,
+                format!("/containers/{encoded}/unpause"),
+                "恢复容器",
+            ),
             ContainerLifecycleAction::Remove { force } => (
                 Method::DELETE,
                 format!("/containers/{encoded}?v=1&force={}", u8::from(force)),

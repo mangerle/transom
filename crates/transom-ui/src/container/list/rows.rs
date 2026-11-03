@@ -222,6 +222,11 @@ pub(crate) fn row_actions(row: &ListRow) -> Vec<RowAction> {
             RowAction::Files,
         ]);
         actions.push(if row.running == Some(true) {
+            RowAction::Pause
+        } else {
+            RowAction::Unpause
+        });
+        actions.push(if row.running == Some(true) {
             RowAction::Stop
         } else {
             RowAction::Start

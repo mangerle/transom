@@ -86,6 +86,8 @@ fn lifecycle_verb_key(action: ContainerLifecycleAction) -> &'static str {
         ContainerLifecycleAction::Start => "container.action.start",
         ContainerLifecycleAction::Stop => "container.action.stop",
         ContainerLifecycleAction::Restart => "container.action.restart",
+        ContainerLifecycleAction::Pause => "container.action.pause",
+        ContainerLifecycleAction::Unpause => "container.action.unpause",
         ContainerLifecycleAction::Remove { .. } => "common.delete",
     }
 }

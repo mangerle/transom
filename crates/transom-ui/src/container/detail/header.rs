@@ -102,8 +102,43 @@ impl AppShell {
                     }
                     let name = container.name.clone();
                     let running = container.state.is_running();
-                    if running {
+                    if container.state == transom_core::ContainerState::Paused {
+                        actions = actions.child(
+                            Button::new("container-unpause")
+                                .xsmall()
+                                .icon(IconName::Play)
+                                .label(rust_i18n::t!("container.action.unpause").to_string())
+                                .on_click(cx.listener({
+                                    let name = name.clone();
+                                    move |this, _, _, cx| {
+                                        this.container_lifecycle(
+                                            tab_id,
+                                            name.clone(),
+                                            transom_core::ContainerLifecycleAction::Unpause,
+                                            cx,
+                                        );
+                                    }
+                                })),
+                        );
+                    } else if running {
                         actions = actions
+                            .child(
+                                Button::new("container-pause")
+                                    .xsmall()
+                                    .icon(IconName::Pause)
+                                    .label(rust_i18n::t!("container.action.pause").to_string())
+                                    .on_click(cx.listener({
+                                        let name = name.clone();
+                                        move |this, _, _, cx| {
+                                            this.container_lifecycle(
+                                                tab_id,
+                                                name.clone(),
+                                                transom_core::ContainerLifecycleAction::Pause,
+                                                cx,
+                                            );
+                                        }
+                                    })),
+                            )
                             .child(
                                 Button::new("container-stop")
                                     .xsmall()

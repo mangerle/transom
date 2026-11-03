@@ -174,6 +174,8 @@ impl CliBackend {
             transom_core::ContainerLifecycleAction::Start => args.push("start"),
             transom_core::ContainerLifecycleAction::Stop => args.push("stop"),
             transom_core::ContainerLifecycleAction::Restart => args.push("restart"),
+            transom_core::ContainerLifecycleAction::Pause => args.push("pause"),
+            transom_core::ContainerLifecycleAction::Unpause => args.push("unpause"),
             transom_core::ContainerLifecycleAction::Remove { force } => {
                 args.push("rm");
                 if force {

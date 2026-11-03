@@ -224,11 +224,18 @@ impl AppShell {
             RowAction::Files => {
                 self.set_container_detail_tab(tab_id, ContainerDetailTab::Files, window, cx);
             }
-            RowAction::Start | RowAction::Stop | RowAction::Restart => {
+            RowAction::Start
+            | RowAction::Stop
+            | RowAction::Restart
+            | RowAction::Pause
+            | RowAction::Unpause => {
                 let Some(name) = container else { return };
                 let action = match action {
                     RowAction::Start => ContainerLifecycleAction::Start,
                     RowAction::Stop => ContainerLifecycleAction::Stop,
+                    RowAction::Restart => ContainerLifecycleAction::Restart,
+                    RowAction::Pause => ContainerLifecycleAction::Pause,
+                    RowAction::Unpause => ContainerLifecycleAction::Unpause,
                     _ => ContainerLifecycleAction::Restart,
                 };
                 self.container_lifecycle(tab_id, name, action, cx);

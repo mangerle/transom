@@ -5197,6 +5197,12 @@ container:
     restart:
       en: Restart
       zh-CN: 重启
+    pause:
+      en: Pause
+      zh-CN: 暂停
+    unpause:
+      en: Unpause
+      zh-CN: 恢复
     start_all:
       en: Start all
       zh-CN: 全部启动
