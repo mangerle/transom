@@ -93,6 +93,8 @@ pub(crate) enum ModalKind {
     ContainerPush,
     /// 全局系统磁盘用量看板与空间体检。
     ContainerSystemDf,
+    /// 从 Dockerfile 构建镜像。
+    ContainerBuild,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -167,6 +169,7 @@ impl ModalKind {
         ModalKind::ContainerHub,
         ModalKind::ContainerPush,
         ModalKind::ContainerSystemDf,
+        ModalKind::ContainerBuild,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -256,6 +259,10 @@ impl ModalKind {
             ModalKind::ContainerSystemDf => (
                 Some(crate::theme::tokens::dialog::AUDIT),
                 "container-system-df",
+            ),
+            ModalKind::ContainerBuild => (
+                Some(crate::theme::tokens::dialog::AUDIT),
+                "container-build",
             ),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
@@ -378,33 +385,26 @@ impl ModalKind {
             ModalKind::ContainerFileNewDir => {
                 shell.render_container_file_new_dir_dialog_body(app, cx, p)
             }
-            ModalKind::ContainerHub => {
-                if let Some((tab_id, _)) =
-                    shell.find_container_modal_tab(|ws| ws.hub_dialog.is_some())
-                {
+            ModalKind::ContainerHub => shell
+                .find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
                     shell.render_container_hub_dialog_body(tab_id, app, window, cx, p)
-                } else {
-                    div().into_any_element()
-                }
-            }
-            ModalKind::ContainerPush => {
-                if let Some((tab_id, _)) =
-                    shell.find_container_modal_tab(|ws| ws.push_dialog.is_some())
-                {
+                }),
+            ModalKind::ContainerPush => shell
+                .find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
                     shell.render_container_push_dialog_body(tab_id, app, window, cx, p)
-                } else {
-                    div().into_any_element()
-                }
-            }
-            ModalKind::ContainerSystemDf => {
-                if let Some((tab_id, _)) =
-                    shell.find_container_modal_tab(|ws| ws.system_df_dialog_open)
-                {
+                }),
+            ModalKind::ContainerSystemDf => shell
+                .find_container_modal_tab(|ws| ws.system_df_dialog_open)
+                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
                     shell.render_container_system_df_dialog_body(tab_id, app, window, cx, p)
-                } else {
-                    div().into_any_element()
-                }
-            }
+                }),
+            ModalKind::ContainerBuild => shell
+                .find_container_modal_tab(|ws| ws.build_dialog.is_some())
+                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
+                    shell.render_container_build_dialog_body(tab_id, app, window, cx, p)
+                }),
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -458,6 +458,7 @@ mod tests {
         ModalKind::ContainerHub,
         ModalKind::ContainerPush,
         ModalKind::ContainerSystemDf,
+        ModalKind::ContainerBuild,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

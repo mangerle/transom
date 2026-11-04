@@ -47,6 +47,9 @@ impl ModalKind {
             ModalKind::ContainerSystemDf => shell
                 .find_container_modal_tab(|ws| ws.system_df_dialog_open)
                 .is_some(),
+            ModalKind::ContainerBuild => shell
+                .find_container_modal_tab(|ws| ws.build_dialog.is_some())
+                .is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -163,6 +166,17 @@ impl ModalKind {
                 }
                 Some(true)
             }
+            ModalKind::ContainerBuild => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.build_dialog.is_some())
+                {
+                    if let Some(ws) = shell.state.container_workspace_mut(tab_id) {
+                        ws.build_dialog = None;
+                    }
+                    cx.notify();
+                }
+                Some(true)
+            }
             _ => None,
         }
     }
@@ -265,6 +279,14 @@ impl ModalKind {
                 }
                 Some(())
             }
+            ModalKind::ContainerBuild => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.build_dialog.is_some())
+                {
+                    shell.submit_container_build_dialog(tab_id, cx);
+                }
+                Some(())
+            }
             _ => None,
         }
     }
@@ -316,6 +338,11 @@ impl ModalKind {
                 .find_container_modal_tab(|ws| ws.push_dialog.is_some())
                 .and_then(|(_, ws)| ws.push_dialog.as_ref())
                 .map(|push| ModalFocus::Input(push.target_repo.clone()))
+                .unwrap_or(ModalFocus::None),
+            ModalKind::ContainerBuild => shell
+                .find_container_modal_tab(|ws| ws.build_dialog.is_some())
+                .and_then(|(_, ws)| ws.build_dialog.as_ref())
+                .map(|build| ModalFocus::Input(build.context_path.clone()))
                 .unwrap_or(ModalFocus::None),
             ModalKind::ContainerConfirm
             | ModalKind::ContainerExportConfig
@@ -390,6 +417,17 @@ impl ModalKind {
                     vec![
                         push.target_repo.read(cx).value().to_string(),
                         push.target_tag.read(cx).value().to_string(),
+                    ]
+                })
+                .unwrap_or_default(),
+            ModalKind::ContainerBuild => shell
+                .find_container_modal_tab(|ws| ws.build_dialog.is_some())
+                .and_then(|(_, ws)| ws.build_dialog.as_ref())
+                .map(|build| {
+                    vec![
+                        build.context_path.read(cx).value().to_string(),
+                        build.dockerfile.read(cx).value().to_string(),
+                        build.tag.read(cx).value().to_string(),
                     ]
                 })
                 .unwrap_or_default(),

@@ -163,6 +163,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) hub_dialog: Option<ContainerHubDialog>,
     /// 镜像推送到远端仓库弹窗状态。
     pub(crate) push_dialog: Option<ContainerPushDialog>,
+    /// 从 Dockerfile 构建镜像弹窗状态。
+    pub(crate) build_dialog: Option<ContainerBuildDialog>,
     pub(crate) prune_armed: Option<ContainerPruneTarget>,
     /// 系统全局磁盘用量分析数据。
     pub(crate) system_df: Option<transom_core::ContainerSystemDiskUsage>,
@@ -295,6 +297,7 @@ impl ContainerWorkspaceState {
             pull_drawer_open: false,
             hub_dialog: None,
             push_dialog: None,
+            build_dialog: None,
             prune_armed: None,
             system_df: None,
             system_df_loading: false,

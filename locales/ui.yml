@@ -4545,7 +4545,58 @@ container:
       zh-CN: '容器 %{name} 异常退出，退出码: %{code}'
     oom_killed:
       en: 'Container %{name} was killed due to out of memory (OOM)'
-      zh-CN: '容器 %{name} 发生内存溢出被强制杀死 (OOMKilled)'
+  build:
+    title:
+      en: Build Image from Dockerfile
+      zh-CN: 从 Dockerfile 构建镜像
+    context_path:
+      en: Context Directory
+      zh-CN: 构建上下文目录
+    context_placeholder:
+      en: Absolute path to build context directory…
+      zh-CN: 请输入或选择构建上下文目录的绝对路径…
+    browse:
+      en: Browse…
+      zh-CN: 浏览…
+    dockerfile:
+      en: Dockerfile Relative Path
+      zh-CN: Dockerfile 相对路径
+    dockerfile_placeholder:
+      en: Default is Dockerfile
+      zh-CN: 默认为 Dockerfile
+    tag:
+      en: Image Tag
+      zh-CN: 镜像标签 (Tag)
+    tag_placeholder:
+      en: 'e.g. myapp:latest'
+      zh-CN: '例如 myapp:latest'
+    no_cache:
+      en: Do not use cache (--no-cache)
+      zh-CN: 免缓存构建 (--no-cache)
+    start_build:
+      en: Start Build
+      zh-CN: 开始构建
+    building:
+      en: Building…
+      zh-CN: 正在构建…
+    success:
+      en: 'Image %{tag} built successfully'
+      zh-CN: '镜像 %{tag} 构建成功'
+    failed:
+      en: 'Build failed: %{error}'
+      zh-CN: '构建失败：%{error}'
+    logs_title:
+      en: Build Output
+      zh-CN: 构建输出日志
+    waiting_logs:
+      en: Waiting for build output…
+      zh-CN: 等待构建输出…
+    empty_context:
+      en: Context directory cannot be empty
+      zh-CN: 构建上下文目录不能为空
+    empty_tag:
+      en: Image tag cannot be empty
+      zh-CN: 镜像标签不能为空
   changes:
     search_placeholder:
       en: Filter change path…
@@ -5372,6 +5423,9 @@ container:
     clone:
       en: Clone Container
       zh-CN: 克隆容器
+    build_image:
+      en: Build Image
+      zh-CN: 构建镜像
     start_all:
       en: Start all
       zh-CN: 全部启动

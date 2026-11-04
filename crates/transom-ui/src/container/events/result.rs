@@ -29,6 +29,16 @@ impl AppShell {
             workspace.confirm = None;
             workspace.rename_container = None;
             workspace.notice = None;
+            if let Some(build) = workspace.build_dialog.as_mut() {
+                if build.request_id == Some(request_id) {
+                    build.building = false;
+                    if let Some(err) = &error {
+                        build.error = Some(localized_error(err));
+                    } else {
+                        build.success = true;
+                    }
+                }
+            }
             if workspace.files.preview_saving {
                 workspace.files.preview_saving = false;
                 if error.is_none() {

@@ -1,6 +1,7 @@
 //! 容器引擎管理工作区：状态、命令与事件路由。
 
 mod actions;
+mod build_dialog;
 mod commit;
 mod compose;
 mod detail;
@@ -32,7 +33,7 @@ mod view;
 
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
-    ContainerConfirm, ContainerDetailTab, ContainerDiscovery, ContainerFilesState,
+    ContainerBuildDialog, ContainerConfirm, ContainerDetailTab, ContainerDiscovery, ContainerFilesState,
     ContainerHubDialog, ContainerPushDialog, ContainerSection, ContainerTerminalState,
     ContainerUiState, ContainerWorkspaceState, ContainerWorkspaceStatus, RowAction, RowTarget,
 };

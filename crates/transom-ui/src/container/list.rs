@@ -241,6 +241,16 @@ impl AppShell {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.load_image(tab_id, cx);
                         })),
+                )
+                .child(
+                    Button::new("container-image-build")
+                        .xsmall()
+                        .ghost()
+                        .icon(IconName::FileText)
+                        .tooltip(rust_i18n::t!("container.build.title").to_string())
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_container_build_dialog(tab_id, window, cx);
+                        })),
                 );
         }
         // 卷、镜像与网络都有「清理」视角：清未使用或悬空条目。

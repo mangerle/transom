@@ -444,11 +444,13 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::BuildProgress { request_id, line } => {
-                let Some(tab_id) = self.state.containers.tab_of(request_id) else {
-                    return;
-                };
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                    workspace.notice = Some(line);
+                if let Some(tab_id) = self.state.containers.tab_of(request_id)
+                    && let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                {
+                    workspace.notice = Some(line.clone());
+                    if let Some(b) = workspace.build_dialog.as_mut().filter(|b| b.request_id == Some(request_id)) {
+                        b.logs.push(line);
+                    }
                 }
             }
             ContainerAppEvent::VolumesPruned { request_id, report } => {
