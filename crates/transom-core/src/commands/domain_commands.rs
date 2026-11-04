@@ -242,6 +242,12 @@ pub enum ContainerCommand {
         image: String,
         local_path: std::path::PathBuf,
     },
+    /// 从本地 Tar 归档文件导入镜像（Load）。
+    LoadImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        local_path: std::path::PathBuf,
+    },
     ListVolumes {
         tab_id: TabId,
         request_id: ContainerRequestId,

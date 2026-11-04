@@ -278,6 +278,21 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     .map(|_| ())
             },
         ),
+        ContainerCommand::LoadImage {
+            tab_id,
+            request_id,
+            local_path,
+        } => transfer(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine, cancel, progress| async move {
+                transom_container::load_image(&engine, &local_path, cancel, progress)
+                    .await
+                    .map(|_| ())
+            },
+        ),
         _ => {}
     }
 }

@@ -214,6 +214,171 @@ pub async fn save_image(
     }
 }
 
+/// 基于 REST API 导入本地 Tar 归档镜像包（Load）。
+async fn load_image_api(
+    api: &DockerApi,
+    source: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: flume::Sender<(u64, Option<u64>)>,
+) -> Result<u64, ContainerError> {
+    let metadata = std::fs::metadata(source).map_err(|error| ContainerError::File {
+        path: source.display().to_string(),
+        message: format!("无法读取本地镜像文件: {error}"),
+    })?;
+    if !metadata.is_file() {
+        return Err(ContainerError::File {
+            path: source.display().to_string(),
+            message: "指定的镜像归档必须是普通文件".to_string(),
+        });
+    }
+    let total = metadata.len();
+    let (sender, receiver) = flume::bounded::<Result<Vec<u8>, std::io::Error>>(8);
+    let sender_cancel = Arc::clone(&cancel);
+    let sender_progress = progress.clone();
+    let source_path = source.to_path_buf();
+
+    let reader_task = tokio::task::spawn_blocking(move || {
+        let mut file = std::fs::File::open(&source_path)?;
+        let mut buffer = vec![0u8; 64 * 1024];
+        let mut transferred = 0u64;
+        loop {
+            if sender_cancel.load(Ordering::Relaxed) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "操作已取消",
+                ));
+            }
+            let count = file.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            transferred = transferred.saturating_add(count as u64);
+            let _ = sender_progress.send((transferred, Some(total)));
+            if sender.send(Ok(buffer[..count].to_vec())).is_err() {
+                break;
+            }
+        }
+        Ok(())
+    });
+
+    use futures::StreamExt;
+    use http_body_util::StreamBody;
+    use hyper::body::Frame;
+
+    let stream = futures::stream::unfold(receiver, |receiver| async move {
+        receiver
+            .recv_async()
+            .await
+            .ok()
+            .map(|item| (item, receiver))
+    });
+    let body = StreamBody::new(stream.map(|item| match item {
+        Ok(bytes) => Ok(Frame::data(Bytes::from(bytes))),
+        Err(error) => Err(error),
+    }));
+
+    let response = http::request_stream(
+        api.transport_ref(),
+        Method::POST,
+        &api.versioned_path("/images/load?quiet=false"),
+        body,
+        Some("application/x-tar"),
+    )
+    .await;
+
+    let reader_result = reader_task.await.map_err(|error| ContainerError::File {
+        path: source.display().to_string(),
+        message: format!("镜像读取线程失败: {error}"),
+    })?;
+
+    if cancel.load(Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
+    if let Err(err) = reader_result {
+        if err.kind() == std::io::ErrorKind::Interrupted {
+            return Err(ContainerError::Cancelled);
+        }
+        return Err(ContainerError::File {
+            path: source.display().to_string(),
+            message: format!("读取镜像文件失败: {err}"),
+        });
+    }
+
+    let response = response?;
+    let body_text = http::read_body_text(response.body, 64 * 1024).await;
+    if !response.status.is_success() {
+        return Err(ContainerError::Api {
+            operation: "导入镜像 (Load)".to_string(),
+            status: response.status.as_u16(),
+            body: body_text,
+        });
+    }
+
+    // 检查响应 JSON 行中是否存在错误信息
+    for line in body_text.lines() {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line)
+            && let Some(err) = val.get("error").and_then(|v| v.as_str())
+        {
+            return Err(ContainerError::Api {
+                operation: "导入镜像 (Load)".to_string(),
+                status: 400,
+                body: err.to_string(),
+            });
+        }
+    }
+
+    Ok(total)
+}
+
+/// 基于 Docker CLI 导入本地 Tar 归档镜像包（Load）。
+async fn load_image_cli(
+    cli: &CliBackend,
+    source: &Path,
+    cancel: &Arc<AtomicBool>,
+    progress: &flume::Sender<(u64, Option<u64>)>,
+) -> Result<u64, ContainerError> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
+
+    let total = std::fs::metadata(source).map(|m| m.len()).unwrap_or(0);
+    let _ = progress.send((0, Some(total)));
+
+    let source_str = source.display().to_string();
+    let result = cli
+        .run_checked(&["load".to_string(), "-i".to_string(), source_str])
+        .await;
+
+    if cancel.load(Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
+
+    result?;
+    let _ = progress.send((total, Some(total)));
+    Ok(total)
+}
+
+/// 从本地 Tar 归档文件导入镜像（Load）。
+///
+/// # Errors
+/// 本地文件不存在、网络上传中断、Docker 载入失败或用户取消时返回 [`ContainerError`]。
+pub async fn load_image(
+    engine: &Engine,
+    source: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: flume::Sender<(u64, Option<u64>)>,
+) -> Result<u64, ContainerError> {
+    if let Ok(api) = engine.http() {
+        load_image_api(api, source, cancel, progress).await
+    } else if let Some(cli) = engine.cli_backend_ref() {
+        load_image_cli(cli, source, &cancel, &progress).await
+    } else {
+        Err(ContainerError::Unsupported {
+            operation: "镜像导入 (Load)".to_string(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

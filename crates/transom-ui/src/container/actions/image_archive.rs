@@ -47,4 +47,29 @@ impl AppShell {
         );
         cx.notify();
     }
+
+    /// 从本地 Tar 归档文件导入镜像（Load）。
+    pub(crate) fn load_image(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(local_path) = rfd::FileDialog::new()
+            .add_filter("Docker Image", &["tar", "tar.gz", "tgz"])
+            .pick_file()
+        else {
+            return;
+        };
+
+        let request_id = ContainerRequestId::new();
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::LoadImage {
+                tab_id,
+                request_id,
+                local_path,
+            },
+        );
+        cx.notify();
+    }
 }

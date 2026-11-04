@@ -41,6 +41,13 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::SaveImage { image, .. } => {
             Some(verb_object("container.action.save_image", image))
         }
+        C::LoadImage { local_path, .. } => {
+            let name = local_path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| local_path.display().to_string());
+            Some(verb_object("container.action.load_image", &name))
+        }
         C::CreateVolume { name, .. } => Some(verb_object("container.create", name)),
         C::CreateNetwork { spec, .. } => Some(verb_object("container.create", &spec.name)),
         C::RemoveVolume { name, .. } | C::RemoveNetwork { network: name, .. } => {

@@ -33,7 +33,7 @@ pub use files::{
     create_dir, download, list_dir, read_file, remove as remove_path, rename as rename_path,
     upload, validate_container_path, write_file_bytes,
 };
-pub use image_archive::save_image;
+pub use image_archive::{load_image, save_image};
 pub use logs::{LogSink, stream_logs, stream_project_logs};
 pub use service::ContainerService;
 pub use volume_files::{

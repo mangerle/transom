@@ -145,7 +145,8 @@ pub(super) fn handle_container_command(
         | ContainerCommand::CreateDir { .. }
         | ContainerCommand::SaveFile { .. }
         | ContainerCommand::SaveVolumeFile { .. }
-        | ContainerCommand::SaveImage { .. } => files::handle(state, ctx, command),
+        | ContainerCommand::SaveImage { .. }
+        | ContainerCommand::LoadImage { .. } => files::handle(state, ctx, command),
     }
 }
 

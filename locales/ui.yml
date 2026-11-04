@@ -5260,6 +5260,9 @@ container:
     save_image:
       en: Export as Tar
       zh-CN: 导出为 Tar (Save)
+    load_image:
+      en: Import from Tar
+      zh-CN: 导入镜像 (Load)
     connect_network:
       en: Connect
       zh-CN: 连接网络

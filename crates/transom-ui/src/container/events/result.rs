@@ -70,16 +70,23 @@ impl AppShell {
             None => label.map(|label| (toast_succeeded(&label), true)),
         };
         let mut refresh_files = None;
+        let mut refresh_images = false;
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.notice = None;
             if error.is_none() {
-                refresh_files = Some(workspace.files.path.clone());
+                if workspace.section == ContainerSection::Images {
+                    refresh_images = true;
+                } else {
+                    refresh_files = Some(workspace.files.path.clone());
+                }
             }
         }
         if let Some((message, success)) = toast {
             self.show_toast(message, success, window, cx);
         }
-        if let Some(path) = refresh_files
+        if refresh_images {
+            self.refresh_container_section(tab_id);
+        } else if let Some(path) = refresh_files
             && !path.is_empty()
         {
             self.load_container_dir(tab_id, path);
