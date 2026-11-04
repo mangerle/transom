@@ -128,8 +128,25 @@ impl AppShell {
                         inspect_first = Some(first.id.clone());
                     }
                 }
+                let mut re_inspect_id = None;
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    if inspect_first.is_none() && let Some(selected_id) = &workspace.selected {
+                        re_inspect_id = Some(selected_id.clone());
+                    }
+                }
                 if let Some(id) = inspect_first {
                     self.select_container_item(tab_id, id);
+                } else if let Some(id) = re_inspect_id {
+                    let request_id = ContainerRequestId::new();
+                    self.send_tracked(
+                        tab_id,
+                        request_id,
+                        ContainerCommand::InspectContainer {
+                            tab_id,
+                            request_id,
+                            container: id,
+                        },
+                    );
                 }
             }
             ContainerAppEvent::ContainerInspected {
@@ -155,15 +172,11 @@ impl AppShell {
                         .selected
                         .as_deref()
                         .is_some_and(|id| workspace.images.iter().any(|item| item.id == id));
-                    let mut inspect_id = None;
                     if !valid {
                         workspace.selected = workspace.images.first().map(|item| item.id.clone());
                         workspace.image_details = None;
                     }
-                    if workspace.image_details.is_none() {
-                        inspect_id = workspace.selected.clone();
-                    }
-                    if let Some(id) = inspect_id {
+                    if let Some(id) = workspace.selected.clone() {
                         let request_id = ContainerRequestId::new();
                         self.send_tracked(
                             tab_id,
@@ -208,6 +221,18 @@ impl AppShell {
                             workspace.volumes.first().map(|item| item.name.clone());
                         workspace.volume_details = None;
                     }
+                    if let Some(name) = workspace.selected.clone() {
+                        let request_id = ContainerRequestId::new();
+                        self.send_tracked(
+                            tab_id,
+                            request_id,
+                            ContainerCommand::InspectVolume {
+                                tab_id,
+                                request_id,
+                                name,
+                            },
+                        );
+                    }
                 }
             }
             ContainerAppEvent::VolumeInspected {
@@ -239,6 +264,18 @@ impl AppShell {
                     if !valid {
                         workspace.selected = workspace.networks.first().map(|item| item.id.clone());
                         workspace.network_details = None;
+                    }
+                    if let Some(id) = workspace.selected.clone() {
+                        let request_id = ContainerRequestId::new();
+                        self.send_tracked(
+                            tab_id,
+                            request_id,
+                            ContainerCommand::InspectNetwork {
+                                tab_id,
+                                request_id,
+                                network: id,
+                            },
+                        );
                     }
                 }
             }

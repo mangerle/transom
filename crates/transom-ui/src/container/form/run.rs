@@ -204,6 +204,7 @@ impl AppShell {
             },
         );
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.apply_section(ContainerSection::Containers);
             workspace.notice = Some(rust_i18n::t!("container.run.submitting").to_string());
         }
         cx.notify();
