@@ -243,6 +243,7 @@ pub(crate) fn row_actions(row: &ListRow) -> Vec<RowAction> {
         actions.push(RowAction::Run);
         actions.push(RowAction::Tag);
         actions.push(RowAction::Push);
+        actions.push(RowAction::Save);
     }
     if matches!(row.target, RowTarget::Compose(_)) {
         actions.push(RowAction::EditComposeYaml);

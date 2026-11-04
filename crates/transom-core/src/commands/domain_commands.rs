@@ -235,6 +235,13 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         spec: ContainerBuildSpec,
     },
+    /// 导出镜像为本地 Tar 归档文件（Save）。
+    SaveImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        image: String,
+        local_path: std::path::PathBuf,
+    },
     ListVolumes {
         tab_id: TabId,
         request_id: ContainerRequestId,

@@ -144,7 +144,8 @@ pub(super) fn handle_container_command(
         | ContainerCommand::RemovePath { .. }
         | ContainerCommand::CreateDir { .. }
         | ContainerCommand::SaveFile { .. }
-        | ContainerCommand::SaveVolumeFile { .. } => files::handle(state, ctx, command),
+        | ContainerCommand::SaveVolumeFile { .. }
+        | ContainerCommand::SaveImage { .. } => files::handle(state, ctx, command),
     }
 }
 

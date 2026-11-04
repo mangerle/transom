@@ -77,7 +77,7 @@ impl CliBackend {
         })
     }
 
-    async fn run_checked(&self, args: &[String]) -> Result<String, ContainerError> {
+    pub(crate) async fn run_checked(&self, args: &[String]) -> Result<String, ContainerError> {
         let output = self.run(args).await?;
         if !output.success {
             return Err(ContainerError::Cli {

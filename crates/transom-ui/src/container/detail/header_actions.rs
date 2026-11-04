@@ -151,6 +151,17 @@ pub(super) fn image_header_actions(
                 }
             }))
             .into_any_element(),
+        Button::new("image-save")
+            .xsmall()
+            .icon(IconName::Download)
+            .label(rust_i18n::t!("container.action.save_image").to_string())
+            .on_click(cx.listener({
+                let image_id = image_id.clone();
+                move |this, _, _, cx| {
+                    this.save_image(tab_id, image_id.clone(), cx);
+                }
+            }))
+            .into_any_element(),
         delete_button(
             "image-delete",
             cx,

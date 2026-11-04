@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod image_archive;
 mod requests;
 
 impl AppShell {
@@ -329,6 +330,12 @@ impl AppShell {
                     },
                 );
                 cx.notify();
+            }
+            RowAction::Save => {
+                let RowTarget::Image(id) = target else {
+                    return;
+                };
+                self.save_image(tab_id, id, cx);
             }
             RowAction::EditComposeYaml => {
                 let RowTarget::Compose(name) = target else {
