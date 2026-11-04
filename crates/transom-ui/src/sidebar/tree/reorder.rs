@@ -2,6 +2,7 @@
 
 use super::{SidebarDrag, SidebarTarget};
 use crate::app::AppShell;
+use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
@@ -53,12 +54,15 @@ pub(crate) fn row_action_button(
 /// 拖动时跟随鼠标的轻量预览卡片。
 pub(crate) struct SidebarDragPreview {
     label: String,
-    icon: IconName,
+    icon: AppIcon,
 }
 
 impl SidebarDragPreview {
-    pub(crate) fn new(label: String, icon: IconName) -> Self {
-        Self { label, icon }
+    pub(crate) fn new(label: String, icon: impl Into<AppIcon>) -> Self {
+        Self {
+            label,
+            icon: icon.into(),
+        }
     }
 }
 

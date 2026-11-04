@@ -19,6 +19,7 @@ mod item;
 
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
+use crate::app_assets::AppIcon;
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::session_icon;
@@ -78,7 +79,7 @@ impl AppState {
                     session.name.clone()
                 },
                 icon: session_icon(session.icon)
-                    .unwrap_or_else(|| crate::connection::icon(&session.connection)),
+                    .unwrap_or_else(|| crate::connection::icon(&session.connection).into()),
             };
             let Some(folder_id) = session.folder_id else {
                 root.push(entry);
@@ -261,7 +262,7 @@ impl AppShell {
 struct NewSessionEntry {
     session_id: SessionId,
     label: String,
-    icon: IconName,
+    icon: AppIcon,
 }
 
 /// "新增会话"菜单的文件夹分组。

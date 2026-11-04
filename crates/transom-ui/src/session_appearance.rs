@@ -5,6 +5,7 @@
 //! 同一份定义，不会出现"表单里选了数据库、标签栏画成服务器"的分裂。
 
 use crate::app::TerminalTab;
+use crate::app_assets::AppIcon;
 use gpui_kit::assets::IconName;
 use gpui_kit::*;
 use transom_core::{SessionColor, SessionIcon};
@@ -13,13 +14,13 @@ use transom_core::{SessionColor, SessionIcon};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct SessionAppearance {
     /// 专属图标；`None` 表示按连接类型取默认图标。
-    pub(crate) icon: Option<IconName>,
+    pub(crate) icon: Option<AppIcon>,
     /// 环境色；`None` 表示不染色。
     pub(crate) color: Option<Hsla>,
 }
 
 /// 表单里可选的会话图标（不含"跟随连接类型"）。
-pub(crate) const SESSION_ICON_CHOICES: [SessionIcon; 8] = [
+pub(crate) const SESSION_ICON_CHOICES: [SessionIcon; 10] = [
     SessionIcon::Server,
     SessionIcon::Database,
     SessionIcon::Container,
@@ -28,6 +29,8 @@ pub(crate) const SESSION_ICON_CHOICES: [SessionIcon; 8] = [
     SessionIcon::Globe,
     SessionIcon::Shield,
     SessionIcon::Storage,
+    SessionIcon::Docker,
+    SessionIcon::Podman,
 ];
 
 /// 表单里可选的环境色（不含"不染色"）。
@@ -42,17 +45,19 @@ pub(crate) const SESSION_COLOR_CHOICES: [SessionColor; 7] = [
 ];
 
 /// 会话图标对应的界面图标；`Auto` 返回 `None`，由调用方按连接类型取默认图标。
-pub(crate) fn session_icon(icon: SessionIcon) -> Option<IconName> {
+pub(crate) fn session_icon(icon: SessionIcon) -> Option<AppIcon> {
     match icon {
         SessionIcon::Auto => None,
-        SessionIcon::Server => Some(IconName::Server),
-        SessionIcon::Database => Some(IconName::Database),
-        SessionIcon::Container => Some(IconName::Container),
-        SessionIcon::Cloud => Some(IconName::Cloud),
-        SessionIcon::Terminal => Some(IconName::Terminal),
-        SessionIcon::Globe => Some(IconName::Globe),
-        SessionIcon::Shield => Some(IconName::Shield),
-        SessionIcon::Storage => Some(IconName::HardDrive),
+        SessionIcon::Server => Some(IconName::Server.into()),
+        SessionIcon::Database => Some(IconName::Database.into()),
+        SessionIcon::Container => Some(IconName::Container.into()),
+        SessionIcon::Cloud => Some(IconName::Cloud.into()),
+        SessionIcon::Terminal => Some(IconName::Terminal.into()),
+        SessionIcon::Globe => Some(IconName::Globe.into()),
+        SessionIcon::Shield => Some(IconName::Shield.into()),
+        SessionIcon::Storage => Some(IconName::HardDrive.into()),
+        SessionIcon::Docker => Some(AppIcon::Docker),
+        SessionIcon::Podman => Some(AppIcon::Podman),
     }
 }
 

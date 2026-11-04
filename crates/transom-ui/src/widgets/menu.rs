@@ -1,6 +1,6 @@
 //! 右键菜单项的统一样式入口。
 
-use gpui_kit::assets::IconName;
+use crate::app_assets::AppIcon;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::*;
 
@@ -11,15 +11,15 @@ use gpui_kit::*;
 /// 会藏掉组件库对动作的关联逻辑。
 pub(crate) struct MenuItem {
     label: String,
-    icon: IconName,
+    icon: AppIcon,
     disabled: bool,
 }
 
 impl MenuItem {
-    pub(crate) fn new(label: impl Into<SharedString>, icon: IconName) -> Self {
+    pub(crate) fn new(label: impl Into<SharedString>, icon: impl Into<AppIcon>) -> Self {
         Self {
             label: label.into().to_string(),
-            icon,
+            icon: icon.into(),
             disabled: false,
         }
     }
@@ -52,7 +52,7 @@ impl MenuItem {
 /// `.icon(...).on_click(...)` 的重复，并保证图标与文案顺序一致。
 pub(crate) fn menu_item(
     label: impl Into<SharedString>,
-    icon: IconName,
+    icon: impl Into<AppIcon>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> PopupMenuItem {
     MenuItem::new(label, icon).render(on_click)

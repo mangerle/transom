@@ -29,6 +29,10 @@ pub enum SessionIcon {
     Shield,
     /// 存储与中间件。
     Storage,
+    /// Docker 容器引擎。
+    Docker,
+    /// Podman 容器引擎。
+    Podman,
 }
 
 /// 会话环境色；`None` 表示不染色。

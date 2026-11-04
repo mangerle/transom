@@ -12,6 +12,7 @@
 
 use crate::app::AppShell;
 use crate::app::app_settings;
+use crate::app_assets::AppIcon;
 use crate::brand;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
@@ -174,7 +175,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let session_id = session.id;
-        let default_icon = crate::connection::icon(&session.connection);
+        let default_icon: AppIcon = crate::connection::icon(&session.connection).into();
         let detail_text = crate::connection::display_compact(&session.connection);
 
         let icon = session_icon(session.icon).unwrap_or(default_icon);
@@ -255,12 +256,13 @@ impl AppShell {
 /// 快捷卡片的基础样式外壳。
 fn empty_card_shell(
     id: ElementId,
-    icon: IconName,
+    icon: impl Into<AppIcon>,
     icon_color: Hsla,
     title: String,
     subtitle: String,
     p: &Palette,
 ) -> Stateful<Div> {
+    let icon = icon.into();
     div()
         .id(id)
         .relative()

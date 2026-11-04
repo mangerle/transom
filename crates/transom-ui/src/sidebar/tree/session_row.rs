@@ -7,6 +7,7 @@ use super::{
     BAND_HEIGHT, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget, indent_padding,
 };
 use crate::app::AppShell;
+use crate::app_assets::AppIcon;
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
@@ -23,7 +24,7 @@ struct SessionBandParams {
     session_id: SessionId,
     title: String,
     detail: String,
-    icon: gpui_kit::assets::IconName,
+    icon: AppIcon,
     icon_color: Option<Hsla>,
     is_active: bool,
     selection_mode: bool,
@@ -269,14 +270,14 @@ fn session_context_menu(
 struct SessionRowVisuals {
     is_ssh: bool,
     menu_host: Option<String>,
-    icon_name: IconName,
+    icon_name: AppIcon,
     detail_text: String,
     icon_color: Option<Hsla>,
     is_active: bool,
     selection_mode: bool,
     is_selected: bool,
     drag_label: String,
-    drag_icon: IconName,
+    drag_icon: AppIcon,
     is_selected_row: bool,
     fill: Hsla,
 }
@@ -348,7 +349,7 @@ impl AppShell {
         let detail_text = crate::connection::display_compact(&session.connection);
         // 会话专属图标覆盖连接类型图标；环境色直接染在图标上。
         let icon_color = session_color(session.color);
-        let icon_name = session_icon(session.icon).unwrap_or(icon_name);
+        let icon_name = session_icon(session.icon).unwrap_or(icon_name.into());
         let is_active = active_session == Some(session_id);
         let selection_mode = self.state.sidebar.selection_mode;
         let is_selected = self.state.sidebar.selected_sessions.contains(&session_id);

@@ -11,12 +11,15 @@ use std::borrow::Cow;
 
 /// 应用自有 Docker 品牌图标在资产源中的路径。
 pub(crate) const DOCKER_ICON_PATH: &str = "icons/docker.svg";
+/// 应用自有 Podman 品牌图标在资产源中的路径。
+pub(crate) const PODMAN_ICON_PATH: &str = "icons/podman.svg";
 
-/// 应用层图标：默认使用 `gpui-kit` 图标，Docker 相关入口使用品牌图标。
+/// 应用层图标：默认使用 `gpui-kit` 图标，Docker/Podman 相关入口使用品牌图标。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AppIcon {
     Named(IconName),
     Docker,
+    Podman,
 }
 
 impl From<IconName> for AppIcon {
@@ -30,6 +33,7 @@ impl IconNamed for AppIcon {
         match self {
             Self::Named(icon) => icon.path(),
             Self::Docker => DOCKER_ICON_PATH.into(),
+            Self::Podman => PODMAN_ICON_PATH.into(),
         }
     }
 }
@@ -45,6 +49,11 @@ impl AssetSource for AppAssets {
                 "../assets/icons/docker.svg"
             ))));
         }
+        if path == PODMAN_ICON_PATH {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../assets/icons/podman.svg"
+            ))));
+        }
         AllAssets.load(path)
     }
 
@@ -53,13 +62,16 @@ impl AssetSource for AppAssets {
         if DOCKER_ICON_PATH.starts_with(path) {
             paths.push(DOCKER_ICON_PATH.into());
         }
+        if PODMAN_ICON_PATH.starts_with(path) {
+            paths.push(PODMAN_ICON_PATH.into());
+        }
         Ok(paths)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AppAssets, AssetSource, DOCKER_ICON_PATH};
+    use super::{AppAssets, AssetSource, DOCKER_ICON_PATH, PODMAN_ICON_PATH};
 
     #[test]
     fn app_assets_serves_docker_icon_and_delegates_builtin_icons() {
@@ -69,6 +81,11 @@ mod tests {
             .expect("读取 Docker 图标")
             .expect("图标存在");
         assert!(std::str::from_utf8(&docker).is_ok_and(|svg| svg.contains("viewBox")));
+        let podman = assets
+            .load(PODMAN_ICON_PATH)
+            .expect("读取 Podman 图标")
+            .expect("图标存在");
+        assert!(std::str::from_utf8(&podman).is_ok_and(|svg| svg.contains("viewBox")));
         assert!(
             assets
                 .load("icons/search.svg")
@@ -81,6 +98,13 @@ mod tests {
                 .expect("列出 Docker 图标")
                 .iter()
                 .any(|path| path.as_ref() == DOCKER_ICON_PATH)
+        );
+        assert!(
+            assets
+                .list("icons/podman")
+                .expect("列出 Podman 图标")
+                .iter()
+                .any(|path| path.as_ref() == PODMAN_ICON_PATH)
         );
     }
 }

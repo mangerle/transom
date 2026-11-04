@@ -28,8 +28,8 @@ impl AppShell {
         let id = profile.id;
         let name = profile.display_name();
         let description = profile.engine.describe();
-        let icon =
-            crate::session_appearance::session_icon(profile.icon).unwrap_or(IconName::Container);
+        let icon = crate::session_appearance::session_icon(profile.icon)
+            .unwrap_or(crate::app_assets::AppIcon::Named(IconName::Boxes));
         let profile_color = crate::session_appearance::session_color(profile.color);
         let folder_id = profile.folder_id;
         let is_active = active == Some(id);

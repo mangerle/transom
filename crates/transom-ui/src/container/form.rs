@@ -10,6 +10,7 @@
 //! - 动态扩展字段卡：根据端点档位追加 SSH / TLS / CLI 参数字段
 
 use crate::app::AppShell;
+use crate::app_assets::AppIcon;
 use crate::container::list::create_button_label;
 use crate::container::types::{
     ContainerFormState, ContainerRunForm, ContainerSection, EndpointChoice,
