@@ -236,6 +236,18 @@ impl AppShell {
                                 })),
                         )
                         .child(
+                            Button::new("container-commit")
+                                .xsmall()
+                                .icon(IconName::Layers)
+                                .label(rust_i18n::t!("container.action.commit").to_string())
+                                .on_click(cx.listener({
+                                    let name = name.clone();
+                                    move |this, _, window, cx| {
+                                        this.open_container_commit(tab_id, name.clone(), window, cx);
+                                    }
+                                })),
+                        )
+                        .child(
                             Button::new("container-remove")
                             .danger()
                             .xsmall()

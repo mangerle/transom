@@ -66,6 +66,26 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
             engine.update_container(&container, &spec).await
         }),
+        ContainerCommand::CommitContainer {
+            tab_id,
+            request_id,
+            container,
+            repo,
+            tag,
+            comment,
+            author,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            engine
+                .commit_container(
+                    &container,
+                    &repo,
+                    tag.as_deref(),
+                    comment.as_deref(),
+                    author.as_deref(),
+                )
+                .await
+                .map(|_| ())
+        }),
         ContainerCommand::PullImage {
             tab_id,
             request_id,

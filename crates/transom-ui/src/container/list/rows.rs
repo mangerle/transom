@@ -237,6 +237,7 @@ pub(crate) fn row_actions(row: &ListRow) -> Vec<RowAction> {
         }
         actions.push(RowAction::Rename);
         actions.push(RowAction::ExportConfig);
+        actions.push(RowAction::Commit);
     }
     if matches!(row.target, RowTarget::Image(_)) {
         actions.push(RowAction::Run);

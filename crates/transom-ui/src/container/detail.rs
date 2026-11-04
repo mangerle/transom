@@ -235,6 +235,7 @@ impl AppShell {
         let tag_bar = self.render_image_tag_bar(tab_id, p, cx);
         let network_connect_bar = self.render_network_connect_bar(tab_id, p, cx);
         let export_bar = self.render_container_export_bar(tab_id, p, cx);
+        let commit_bar = self.render_container_commit_bar(tab_id, p, cx);
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
@@ -330,6 +331,7 @@ impl AppShell {
             .children(tag_bar)
             .children(network_connect_bar)
             .children(export_bar)
+            .children(commit_bar)
             .children(confirm_bar)
             .child(div().flex_1().min_h_0().overflow_hidden().child(content))
             .into_any_element()

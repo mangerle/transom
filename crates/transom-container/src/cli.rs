@@ -215,6 +215,38 @@ impl CliBackend {
         self.run_checked(&args).await.map(|_| ())
     }
 
+    /// CLI 兜底的容器提交：`<程序> commit [选项] <容器> [repo[:tag]]`。
+    pub async fn commit_container(
+        &self,
+        container: &str,
+        repo: &str,
+        tag: Option<&str>,
+        comment: Option<&str>,
+        author: Option<&str>,
+    ) -> Result<String, ContainerError> {
+        let mut args = vec!["commit".to_string()];
+        if let Some(comment) = comment {
+            if !comment.is_empty() {
+                args.push("-m".to_string());
+                args.push(comment.to_string());
+            }
+        }
+        if let Some(author) = author {
+            if !author.is_empty() {
+                args.push("-a".to_string());
+                args.push(author.to_string());
+            }
+        }
+        args.push(container.to_string());
+        let reference = match tag {
+            Some(t) if !t.is_empty() => format!("{repo}:{t}"),
+            _ => repo.to_string(),
+        };
+        args.push(reference);
+        let output = self.run_checked(&args).await?;
+        Ok(output.trim().to_string())
+    }
+
     /// CLI 兜底的重命名：`<程序> rename <容器> <新名>`。
     ///
     /// # Errors

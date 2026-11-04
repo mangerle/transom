@@ -5266,6 +5266,9 @@ container:
     export_config:
       en: Export Config
       zh-CN: 导出配置
+    commit:
+      en: Commit as Image
+      zh-CN: 提交为镜像
     start_all:
       en: Start all
       zh-CN: 全部启动
@@ -5311,6 +5314,22 @@ container:
     invalid:
       en: Please enter a valid image name and tag
       zh-CN: 请输入合法的镜像名称与标签
+  commit:
+    label:
+      en: 'Commit Container to Image:'
+      zh-CN: '提交容器为镜像:'
+    repo_placeholder:
+      en: 'Image repository name (e.g. my-app)'
+      zh-CN: '镜像仓库名（例如 my-app）'
+    tag_placeholder:
+      en: 'Tag (e.g. snapshot-latest)'
+      zh-CN: '标签（例如 snapshot-latest）'
+    comment_placeholder:
+      en: 'Commit comment (optional)'
+      zh-CN: '提交说明（可选）'
+    repo_required:
+      en: Image repository name is required
+      zh-CN: 请输入镜像仓库名
   update_resources:
     label:
       en: 'Resources:'

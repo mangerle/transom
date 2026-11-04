@@ -178,6 +178,16 @@ pub enum ContainerCommand {
         container: String,
         spec: ContainerUpdateSpec,
     },
+    /// 将容器当前状态就地提交为新镜像（Commit）。
+    CommitContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        repo: String,
+        tag: Option<String>,
+        comment: Option<String>,
+        author: Option<String>,
+    },
     /// 在容器内打开交互式终端；容器与执行参数都在 `options` 里。
     ExecTerminal {
         tab_id: TabId,

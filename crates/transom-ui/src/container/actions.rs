@@ -286,6 +286,12 @@ impl AppShell {
                 };
                 self.open_container_export(tab_id, name, cx);
             }
+            RowAction::Commit => {
+                let RowTarget::Container { name, .. } = target else {
+                    return;
+                };
+                self.open_container_commit(tab_id, name, window, cx);
+            }
             RowAction::Tag => {
                 let RowTarget::Image(id) = target else {
                     return;

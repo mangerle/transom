@@ -830,6 +830,58 @@ impl DockerApi {
         http::ensure_success(status, "更新容器配置", body, Some(container))
     }
 
+    /// 将容器就地提交为新镜像（Commit）。
+    ///
+    /// # Errors
+    /// 容器不存在或引擎提交失败时返回 [`ContainerError`]。
+    pub async fn commit_container(
+        &self,
+        container: &str,
+        repo: &str,
+        tag: Option<&str>,
+        comment: Option<&str>,
+        author: Option<&str>,
+    ) -> Result<String, ContainerError> {
+        let mut query = vec![
+            format!("container={}", http::percent_encode(container)),
+            format!("repo={}", http::percent_encode(repo)),
+        ];
+        if let Some(tag) = tag {
+            if !tag.is_empty() {
+                query.push(format!("tag={}", http::percent_encode(tag)));
+            }
+        }
+        if let Some(comment) = comment {
+            if !comment.is_empty() {
+                query.push(format!("comment={}", http::percent_encode(comment)));
+            }
+        }
+        if let Some(author) = author {
+            if !author.is_empty() {
+                query.push(format!("author={}", http::percent_encode(author)));
+            }
+        }
+        let path = format!("/commit?{}", query.join("&"));
+        let response = self
+            .send(Method::POST, &path, None, "提交容器镜像")
+            .await?;
+        let status = response.status;
+        let body = http::read_body_text(response.body, 8192).await;
+        if status.is_success() {
+            let id = serde_json::from_str::<serde_json::Value>(&body)
+                .ok()
+                .and_then(|v| {
+                    v.get("Id")
+                        .and_then(|id| id.as_str())
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or_default();
+            return Ok(id);
+        }
+        http::ensure_success(status, "提交容器镜像", body, Some(container))?;
+        Ok(String::new())
+    }
+
     /// 重命名容器。
     ///
     /// 设计原理（Why）：引擎只有 `POST /containers/{id}/rename?name=` 这一条

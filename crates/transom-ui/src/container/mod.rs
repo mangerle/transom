@@ -1,6 +1,7 @@
 //! 容器引擎管理工作区：状态、命令与事件路由。
 
 mod actions;
+mod commit;
 mod compose;
 mod detail;
 mod engines;

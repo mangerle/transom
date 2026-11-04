@@ -59,6 +59,9 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::UpdateContainer { container, .. } => {
             Some(verb_object("container.action.update", container))
         }
+        C::CommitContainer { container, repo, .. } => {
+            Some(verb_object("container.action.commit", &format!("{container} -> {repo}")))
+        }
         C::CreateContainer { spec, .. } => Some(verb_object(
             "container.run.title",
             if spec.name.is_empty() {

@@ -350,6 +350,25 @@ impl Engine {
         }
     }
 
+    /// 将容器就地提交为新镜像（Commit）。
+    pub async fn commit_container(
+        &self,
+        container: &str,
+        repo: &str,
+        tag: Option<&str>,
+        comment: Option<&str>,
+        author: Option<&str>,
+    ) -> Result<String, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => {
+                api.commit_container(container, repo, tag, comment, author).await
+            }
+            EngineBackend::Cli(cli) => {
+                cli.commit_container(container, repo, tag, comment, author).await
+            }
+        }
+    }
+
     /// 创建并启动容器；返回新容器 ID。
     ///
     /// 设计原理（Why）：只有 REST 后端能给出结构化的创建请求（端口、挂载、重启
