@@ -5554,6 +5554,9 @@ container:
     preview:
       en: Preview
       zh-CN: 预览
+    edit:
+      en: Edit
+      zh-CN: 编辑
     empty:
       en: This directory is empty
       zh-CN: 目录为空

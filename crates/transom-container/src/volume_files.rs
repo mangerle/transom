@@ -11,7 +11,7 @@
 use crate::api::DockerApi;
 use crate::engine::Engine;
 use crate::error::ContainerError;
-use crate::files::{download, list_dir, read_file, validate_container_path};
+use crate::files::{download, list_dir, read_file, validate_container_path, write_file_bytes};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -194,6 +194,29 @@ pub async fn download_volume_file(
             )
             .await
         }
+        Err(e) => Err(e),
+    };
+    if target.is_temporary {
+        cleanup_temporary(&api, &target.container_id).await;
+    }
+    result
+}
+
+/// 向数据卷内指定路径直接写入文件字节数据。
+///
+/// # Errors
+/// 路径非法、无可用挂载容器且创建探针容器失败、或归档写入失败时返回 [`ContainerError`]。
+pub async fn write_volume_file_bytes(
+    engine: &Engine,
+    volume: &str,
+    path: &str,
+    data: Vec<u8>,
+) -> Result<(), ContainerError> {
+    let api = engine.http()?.clone();
+    let target = resolve_volume_target(&api, volume).await?;
+    let container_path = map_volume_path(&target.mount_path, path);
+    let result = match container_path {
+        Ok(c_path) => write_file_bytes(engine, &target.container_id, &c_path, data).await,
         Err(e) => Err(e),
     };
     if target.is_temporary {

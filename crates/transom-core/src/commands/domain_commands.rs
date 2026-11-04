@@ -383,6 +383,22 @@ pub enum ContainerCommand {
         path: String,
         recursive: bool,
     },
+    /// 就地保存/写入容器内文本文件。
+    SaveFile {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        content: String,
+    },
+    /// 就地保存/写入数据卷内文本文件。
+    SaveVolumeFile {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        volume: String,
+        path: String,
+        content: String,
+    },
     Rename {
         tab_id: TabId,
         request_id: ContainerRequestId,

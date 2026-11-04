@@ -6,7 +6,7 @@
 
 use crate::monitor::{SampleIntervalMode, SparklineChartType};
 use gpui_kit::Entity;
-use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{HashMap, VecDeque};

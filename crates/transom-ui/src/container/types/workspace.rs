@@ -32,6 +32,10 @@ pub(crate) struct ContainerFilesState {
     pub(crate) request: Option<ContainerRequestId>,
     /// 当前预览：路径、内容、是否截断。
     pub(crate) preview: Option<(String, String, bool)>,
+    /// 就地编辑状态：当用户点击“编辑”时保存该 TextareaState。
+    pub(crate) preview_editor: Option<Entity<TextareaState>>,
+    /// 编辑器是否正在保存。
+    pub(crate) preview_saving: bool,
     /// 正在重命名的源路径；`None` 表示不显示重命名条。
     pub(crate) rename_from: Option<String>,
     /// 重命名输入框；首次点击重命名时创建，之后复用。

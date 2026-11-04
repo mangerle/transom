@@ -1,12 +1,15 @@
 //! 文件页签：目录行、上传与预览入口。
 
 use super::*;
+use gpui_kit::component::input::TextareaState;
 
 /// 文件页签的渲染参数：字段多且都是借用，收敛为结构体避免长参数列表。
 pub(crate) struct ContainerFilesView<'a> {
     pub(super) path: &'a str,
     pub(super) entries: &'a [ContainerFileEntry],
     pub(super) preview: Option<&'a (String, String, bool)>,
+    pub(super) preview_editor: Option<&'a Entity<TextareaState>>,
+    pub(super) preview_saving: bool,
     pub(super) loading: bool,
     pub(super) rename_from: Option<&'a str>,
     pub(super) rename_input: Option<&'a Entity<InputState>>,
@@ -26,6 +29,8 @@ pub(crate) fn render_files(
         path,
         entries,
         preview,
+        preview_editor,
+        preview_saving,
         loading,
         rename_from,
         rename_input,
@@ -407,44 +412,16 @@ pub(crate) fn render_files(
             .p_2()
             .child(list),
     );
-    if let Some((path, content, truncated)) = preview {
-        let mut header = h_flex().gap_2().items_center().justify_between().child(
-            div()
-                .text_sm()
-                .font_weight(FontWeight::BOLD)
-                .child(path.clone()),
-        );
-        if *truncated {
-            header = header.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("container.files.truncated").to_string()),
-            );
-        }
-        body = body.child(
-            v_flex()
-                .flex_1()
-                .min_h_0()
-                .p_2()
-                .gap_1()
-                .border_color(p.divider(p.border))
-                .divider_edge(DividerEdge::Top, p.divider_width)
-                .child(header)
-                .child(
-                    div()
-                        .id("container-preview-scroll")
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .p_2()
-                        .rounded(p.radius.md)
-                        .bg(p.muted.opacity(0.3))
-                        .font_family(p.mono_font_family.clone())
-                        .text_size(p.mono_font_size)
-                        .child(content.clone()),
-                ),
-        );
+    if let Some(preview) = preview {
+        body = body.child(super::file_preview::render_file_preview(
+            tab_id,
+            preview,
+            preview_editor,
+            preview_saving,
+            readonly,
+            p,
+            cx,
+        ));
     }
     body.into_any_element()
 }

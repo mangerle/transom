@@ -52,6 +52,9 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::Rename { from, .. } => {
             Some(verb_object("container.action.rename", &path_basename(from)))
         }
+        C::SaveFile { path, .. } | C::SaveVolumeFile { path, .. } => {
+            Some(verb_object("common.save", &path_basename(path)))
+        }
         C::RenameContainer { name, .. } => Some(verb_object("container.action.rename", name)),
         C::UpdateContainer { container, .. } => {
             Some(verb_object("container.action.update", container))

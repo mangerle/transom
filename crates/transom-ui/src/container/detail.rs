@@ -21,6 +21,7 @@ use transom_core::{
 mod compose;
 mod confirm;
 mod file_bars;
+mod file_preview;
 mod files;
 mod header;
 mod header_actions;
@@ -155,6 +156,8 @@ impl AppShell {
             workspace.files.path.clone(),
             workspace.files.entries.clone(),
             workspace.files.preview.clone(),
+            workspace.files.preview_editor.clone(),
+            workspace.files.preview_saving,
             workspace.files.loading,
             workspace.files.rename_from.clone(),
             workspace.files.rename_input.clone(),
@@ -267,12 +270,14 @@ impl AppShell {
                         path: &files.0,
                         entries: &files.1,
                         preview: files.2.as_ref(),
-                        loading: files.3,
-                        rename_from: files.4.as_deref(),
-                        rename_input: files.5.as_ref(),
-                        new_dir_open: files.6,
-                        new_dir_input: files.7.as_ref(),
-                        scroll: &files.8,
+                        preview_editor: files.3.as_ref(),
+                        preview_saving: files.4,
+                        loading: files.5,
+                        rename_from: files.6.as_deref(),
+                        rename_input: files.7.as_ref(),
+                        new_dir_open: files.8,
+                        new_dir_input: files.9.as_ref(),
+                        scroll: &files.10,
                         readonly: is_volume,
                     },
                     p,

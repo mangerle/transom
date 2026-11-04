@@ -257,6 +257,85 @@ pub async fn upload(
     Ok(total)
 }
 
+/// 向容器内指定路径写入文件字节数据（基于 Docker 归档 API 的 tar 包流式回写）。
+///
+/// 设计原理（Why）：
+/// - 不在容器内启动进程执行 `cat > path`，避免依赖容器内 Shell 或命令工具，即使是 scratch 或 distroless 容器亦可正常回写；
+/// - 直接在内存中构建仅包含目标单文件的 GNU tar 归档，调用 Docker 归档 PUT 接口解包到父目录；
+/// - 遵循 RESTful 协议契约，原子性与宿主环境无关。
+///
+/// # Errors
+/// 路径非法、父目录解析失败或 Docker 归档 API 返回错误时返回 [`ContainerError`]。
+pub async fn write_file_bytes(
+    engine: &Engine,
+    container: &str,
+    path: &str,
+    data: Vec<u8>,
+) -> Result<(), ContainerError> {
+    let api = engine.http()?.clone();
+    let path = validate_container_path(path)?;
+    let (parent, name) = match path.rfind('/') {
+        Some(0) => ("/".to_string(), path[1..].to_string()),
+        Some(index) => (path[..index].to_string(), path[index + 1..].to_string()),
+        None => {
+            return Err(ContainerError::InvalidPath {
+                path,
+                reason: "缺少文件名".to_string(),
+            });
+        }
+    };
+    if name.is_empty() {
+        return Err(ContainerError::InvalidPath {
+            path,
+            reason: "缺少文件名".to_string(),
+        });
+    }
+
+    let tar_bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, std::io::Error> {
+        let mut tar_buf = Vec::with_capacity(data.len() + 1024);
+        {
+            let mut builder = tar::Builder::new(&mut tar_buf);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(data.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder.append_data(&mut header, &name, data.as_slice())?;
+            builder.finish()?;
+        }
+        Ok(tar_buf)
+    })
+    .await
+    .map_err(|e| ContainerError::File {
+        path: path.clone(),
+        message: format!("生成 tar 任务失败: {e}"),
+    })?
+    .map_err(|e| ContainerError::File {
+        path: path.clone(),
+        message: format!("打包归档失败: {e}"),
+    })?;
+
+    let suffix = format!(
+        "/containers/{}/archive?path={}",
+        http::percent_encode(container),
+        http::percent_encode(&parent)
+    );
+    let response = http::request(
+        api.transport_ref(),
+        hyper::Method::PUT,
+        &api.versioned_path(&suffix),
+        Bytes::from(tar_bytes),
+        Some("application/x-tar"),
+    )
+    .await?;
+
+    if !response.status.is_success() {
+        let status = response.status;
+        let body = http::read_body_text(response.body, 8192).await;
+        http::ensure_success(status, "写入容器文件", body, Some(&path))?;
+    }
+    Ok(())
+}
+
 /// 在容器内创建目录（`mkdir -p`）。
 ///
 /// 设计原理（Why）：归档 API 只能把 tar 解到已存在的目录里，父目录不存在时上传

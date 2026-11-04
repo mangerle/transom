@@ -224,6 +224,44 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 },
             );
         }
+        ContainerCommand::SaveFile {
+            tab_id,
+            request_id,
+            container,
+            path,
+            content,
+        } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine| async move {
+                transom_container::write_file_bytes(&engine, &container, &path, content.into_bytes()).await
+            },
+            |request_id, _| ContainerAppEvent::ActionFinished {
+                request_id,
+                error: None,
+            },
+        ),
+        ContainerCommand::SaveVolumeFile {
+            tab_id,
+            request_id,
+            volume,
+            path,
+            content,
+        } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine| async move {
+                transom_container::write_volume_file_bytes(&engine, &volume, &path, content.into_bytes()).await
+            },
+            |request_id, _| ContainerAppEvent::ActionFinished {
+                request_id,
+                error: None,
+            },
+        ),
         _ => {}
     }
 }
