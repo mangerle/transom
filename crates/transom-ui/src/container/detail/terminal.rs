@@ -13,77 +13,77 @@ pub(crate) fn populate_terminal_menu(
     let app3 = app.clone();
     let app4 = app.clone();
     let app5 = app;
-    menu.item(
-        PopupMenuItem::new(rust_i18n::t!("container.terminal.as_root_bash").to_string())
-            .icon(IconName::Terminal)
-            .on_click(move |_, _, cx| {
-                let app = app1.clone();
-                app.update(cx, |this, cx| {
-                    this.open_container_terminal_as(
-                        tab_id,
-                        Some("root".to_string()),
-                        Some("/bin/bash".to_string()),
-                        cx,
-                    );
-                });
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("container.terminal.as_root_sh").to_string())
-            .icon(IconName::Terminal)
-            .on_click(move |_, _, cx| {
-                let app = app2.clone();
-                app.update(cx, |this, cx| {
-                    this.open_container_terminal_as(
-                        tab_id,
-                        Some("root".to_string()),
-                        Some("/bin/sh".to_string()),
-                        cx,
-                    );
-                });
-            }),
-    )
-    .item(PopupMenuItem::separator())
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("container.terminal.as_default_bash").to_string())
-            .icon(IconName::Terminal)
-            .on_click(move |_, _, cx| {
-                let app = app3.clone();
-                app.update(cx, |this, cx| {
-                    this.open_container_terminal_as(
-                        tab_id,
-                        None,
-                        Some("/bin/bash".to_string()),
-                        cx,
-                    );
-                });
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("container.terminal.as_default_sh").to_string())
-            .icon(IconName::Terminal)
-            .on_click(move |_, _, cx| {
-                let app = app4.clone();
-                app.update(cx, |this, cx| {
-                    this.open_container_terminal_as(
-                        tab_id,
-                        None,
-                        Some("/bin/sh".to_string()),
-                        cx,
-                    );
-                });
-            }),
-    )
-    .item(
-        PopupMenuItem::new(rust_i18n::t!("container.terminal.as_default").to_string())
-            .icon(IconName::Terminal)
-            .on_click(move |_, _, cx| {
-                let app = app5.clone();
-                app.update(cx, |this, cx| {
-                    this.open_container_terminal_as(tab_id, None, None, cx);
-                });
-            }),
-    )
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("container.terminal.as_root_bash").to_string(),
+        IconName::Terminal,
+        move |_, _, cx| {
+            let app = app1.clone();
+            app.update(cx, |this, cx| {
+                this.open_container_terminal_as(
+                    tab_id,
+                    Some("root".to_string()),
+                    Some("/bin/bash".to_string()),
+                    cx,
+                );
+            });
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("container.terminal.as_root_sh").to_string(),
+        IconName::Terminal,
+        move |_, _, cx| {
+            let app = app2.clone();
+            app.update(cx, |this, cx| {
+                this.open_container_terminal_as(
+                    tab_id,
+                    Some("root".to_string()),
+                    Some("/bin/sh".to_string()),
+                    cx,
+                );
+            });
+        },
+    ))
+    .item(gpui_kit::component::menu::PopupMenuItem::separator())
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("container.terminal.as_default_bash").to_string(),
+        IconName::Terminal,
+        move |_, _, cx| {
+            let app = app3.clone();
+            app.update(cx, |this, cx| {
+                this.open_container_terminal_as(
+                    tab_id,
+                    None,
+                    Some("/bin/bash".to_string()),
+                    cx,
+                );
+            });
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("container.terminal.as_default_sh").to_string(),
+        IconName::Terminal,
+        move |_, _, cx| {
+            let app = app4.clone();
+            app.update(cx, |this, cx| {
+                this.open_container_terminal_as(
+                    tab_id,
+                    None,
+                    Some("/bin/sh".to_string()),
+                    cx,
+                );
+            });
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("container.terminal.as_default").to_string(),
+        IconName::Terminal,
+        move |_, _, cx| {
+            let app = app5.clone();
+            app.update(cx, |this, cx| {
+                this.open_container_terminal_as(tab_id, None, None, cx);
+            });
+        },
+    ))
 }
 
 pub(crate) fn render_terminal(
